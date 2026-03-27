@@ -75,7 +75,7 @@ services:
         - NO_PROXY=${NO_PROXY}
     container_name: chainlit-frontend
     ports:
-      - "${CHAINLIT_FRONTEND_PORT}:8500"
+      - ${CHAINLIT_FRONTEND_PORT:-8500}:8500
     networks:
       - agent-network
     environment:
@@ -89,7 +89,6 @@ services:
       - NODE_EXTRA_CA_CERTS=${CERT_FILE}
     volumes:
       - ./shared:/app/shared
-      - ${LOCAL_CERT_FILE}:/${CERT_FILE}
     depends_on:
       litellm:
         condition: service_healthy
@@ -133,7 +132,6 @@ services:
         condition: service_started
     volumes:
       - ./shared:/app/shared
-      - ${LOCAL_CERT_FILE}:/${CERT_FILE}
     restart: unless-stopped
 
 networks:
