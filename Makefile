@@ -25,7 +25,13 @@ ifneq ($(AGENT_COMPOSE_FILES),)
 COMPOSE_FILES += -f $(ACTIVE_AGENTS_COMPOSE)
 endif
 
-.PHONY: all up down build logs ps generate clean-generated restart restart-fg help
+# No-generate compose flags: include agents compose only if it already exists on disk.
+COMPOSE_FILES_NG := -f $(COMPOSE_BASE)
+ifneq ($(wildcard $(ACTIVE_AGENTS_COMPOSE)),)
+COMPOSE_FILES_NG += -f $(ACTIVE_AGENTS_COMPOSE)
+endif
+
+.PHONY: all up down build logs ps generate clean-generated restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg help
 
 all: help
 
@@ -66,6 +72,22 @@ restart: generate
 restart-fg: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) up
 
+## Start all services without regenerating agents compose (uses existing file if present).
+ng-up:
+	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up --build -d
+
+## Start all services without regenerating (foreground).
+ng-up-fg:
+	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up --build
+
+## Restart without rebuilding or regenerating.
+ng-restart:
+	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up -d
+
+## Restart without rebuilding or regenerating (foreground).
+ng-restart-fg:
+	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up
+
 ## Stop all services.
 down:
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) down
@@ -99,8 +121,12 @@ help:
 	@echo "  generate        Regenerate agents compose from checked-out agents"
 	@echo "  up              Build and start all services (detached)"
 	@echo "  up-fg           Build and start all services (foreground)"
+	@echo "  ng-up           Like 'up' but skip generate (use existing agents compose)"
+	@echo "  ng-up-fg        Like 'up-fg' but skip generate"
 	@echo "  restart         Restart all services without rebuilding (detached)"
 	@echo "  restart-fg      Restart all services without rebuilding (foreground)"
+	@echo "  ng-restart      Like 'restart' but skip generate"
+	@echo "  ng-restart-fg   Like 'restart-fg' but skip generate"
 	@echo "  down            Stop all services"
 	@echo "  down-v          Stop all services and remove volumes"
 	@echo "  build           Build images without starting"
