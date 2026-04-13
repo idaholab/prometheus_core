@@ -5,8 +5,10 @@
 # To exclude an agent, remove its directory.
 CONTAINER_RUNTIME := $(if $(shell which podman-compose 2>/dev/null),podman-compose,docker compose)
 
-COMPOSE_BASE := docker-compose.yml
-COMPOSE_AGENTS := docker-compose.agents.yml
+UNAME := $(shell uname)
+
+COMPOSE_BASE    := docker-compose.yml
+COMPOSE_AGENTS  := docker-compose.agents.yml
 COMPOSE_AGENTS_PODMAN := docker-compose.agents.podman.yml
 
 # All per-agent compose files found on disk (checked-out submodules only).
@@ -31,9 +33,44 @@ ifneq ($(wildcard $(ACTIVE_AGENTS_COMPOSE)),)
 COMPOSE_FILES_NG += -f $(ACTIVE_AGENTS_COMPOSE)
 endif
 
-.PHONY: all up down build logs ps generate clean-generated restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg help
+##@
+##@ Help
+##@
 
-all: help
+.PHONY: help
+help: ##@ (Default) Print listing of key targets with their descriptions
+	@printf "\nUsage: make <command>\n"
+ifeq ($(UNAME), Linux)
+	@grep -F -h "##@" $(MAKEFILE_LIST) | grep -F -v grep -F | sed -e 's/\\$$//' | awk 'BEGIN {FS = ":*[[:space:]]*##@[[:space:]]*"}; \
+	{ \
+			if($$2 == "") \
+					pass; \
+			else if($$0 ~ /^#/) \
+					printf "\n\n%s\n", $$2; \
+			else if($$1 == "") \
+					printf "     %-20s%s\n", "", $$2; \
+			else \
+					printf "\n    \033[34m%-20s\033[0m %s", $$1, $$2; \
+	}'
+	@printf "\n\n"
+else ifeq ($(UNAME), Darwin)
+	@grep -F -h "##@" $(MAKEFILE_LIST) | grep -F -v grep -F | sed -e 's/\\$$//' | awk 'BEGIN {FS = ":*[[:space:]]*##@[[:space:]]*"}; \
+	{ \
+			if($$2 == "") \
+					next; \
+			else if($$0 ~ /^#/) \
+					printf "\n\n%s\n", $$2; \
+			else if($$1 == "") \
+					printf "     %-20s%s\n", "", $$2; \
+			else \
+					printf "\n    \033[34m%-20s\033[0m %s", $$1, $$2; \
+	}'
+	@printf "\n\n"
+else
+	@printf "\nmake help not supported on $(UNAME)\n"
+endif
+
+.PHONY: all up down build logs ps generate clean-generated restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg help
 
 ## Generate the agents compose file from discovered agent compose files.
 generate: $(ACTIVE_AGENTS_COMPOSE)
@@ -48,6 +85,25 @@ $(COMPOSE_AGENTS): $(AGENT_COMPOSE_FILES)
 	@echo "Generated $(COMPOSE_AGENTS) with $(words $(AGENT_COMPOSE_FILES)) agent(s):"
 	@for f in $(AGENT_COMPOSE_FILES); do echo "  $$f"; done
 
+##@
+##@ Tests
+##@
+
+.PHONY: test-static test-integration test-infra
+
+test-static: ##@ Run static infrastructure tests (no Docker needed)
+	cd tests && uv run pytest -m "not integration" -v
+
+test-integration: ##@ Run integration tests (containers must be running)
+	cd tests && uv run pytest -m integration -v
+
+test-infra: ##@ Run all infrastructure tests
+	cd tests && uv run pytest -v
+  
+##@
+##@ Compose
+##@
+
 # podman-compose: produce a merged file with explicit build contexts and
 # project-root-relative paths (podman-compose does not resolve 'include:' paths
 # relative to the included file).
@@ -56,80 +112,49 @@ $(COMPOSE_AGENTS_PODMAN): $(AGENT_COMPOSE_FILES) scripts/generate-agents-compose
 	@echo "Generated $(COMPOSE_AGENTS_PODMAN) with $(words $(AGENT_COMPOSE_FILES)) agent(s):"
 	@for f in $(AGENT_COMPOSE_FILES); do echo "  $$f"; done
 
-## Start all services (generates compose file first).
+up: ##@ Build and start all services (detached)
 up: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) up --build -d
 
-## Start all services in the foreground.
+up-fg: ##@ Build and start all services (foreground)
 up-fg: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) up --build
 
-## Restart all services without rebuilding.
+restart: ##@ Restart all services without rebuilding.
 restart: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) up -d
 
-## Restart all services without rebuilding (foreground).
+restart-fg: ##@ Restart all services without rebuilding (foreground).
 restart-fg: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) up
 
-## Start all services without regenerating agents compose (uses existing file if present).
-ng-up:
+ng-up: ##@ Start all services without regenerating agents compose (uses existing file if present).
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up --build -d
 
-## Start all services without regenerating (foreground).
-ng-up-fg:
+ng-up-fg: ##@ Start all services without regenerating (foreground).
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up --build
 
-## Restart without rebuilding or regenerating.
-ng-restart:
+ng-restart: ##@ Restart without rebuilding or regenerating.
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up -d
 
-## Restart without rebuilding or regenerating (foreground).
-ng-restart-fg:
+ng-restart-fg: ##@ Restart without rebuilding or regenerating (foreground).
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES_NG) up
 
-## Stop all services.
-down:
+down: ##@ Stop all services
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) down
 
-## Stop all services and remove volumes.
-down-v:
+down-v: ##@ Stop all services and remove volumes
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) down -v
 
-## Build all images without starting.
+build: ##@ Build images without starting
 build: generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) build
 
-## Tail logs for all services (or pass SERVICE=<name> to filter).
-logs:
+logs: ##@ Tail logs for all services (SERVICE=<name> to filter)
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) logs -f $(SERVICE)
 
-## Show running service status.
-ps:
+ps: ##@ Show running service status
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) ps
 
-## Remove the generated agents compose file.
-clean-generated:
+clean-generated: ##@ Remove the generated agents compose file.
 	rm -f $(COMPOSE_AGENTS) $(COMPOSE_AGENTS_PODMAN)
-
-help:
-	@echo "Usage: make <target>"
-	@echo ""
-	@echo "  Runtime: $(CONTAINER_RUNTIME)"
-	@echo ""
-	@echo "Targets:"
-	@echo "  generate        Regenerate agents compose from checked-out agents"
-	@echo "  up              Build and start all services (detached)"
-	@echo "  up-fg           Build and start all services (foreground)"
-	@echo "  ng-up           Like 'up' but skip generate (use existing agents compose)"
-	@echo "  ng-up-fg        Like 'up-fg' but skip generate"
-	@echo "  restart         Restart all services without rebuilding (detached)"
-	@echo "  restart-fg      Restart all services without rebuilding (foreground)"
-	@echo "  ng-restart      Like 'restart' but skip generate"
-	@echo "  ng-restart-fg   Like 'restart-fg' but skip generate"
-	@echo "  down            Stop all services"
-	@echo "  down-v          Stop all services and remove volumes"
-	@echo "  build           Build images without starting"
-	@echo "  logs            Tail logs (SERVICE=<name> to filter)"
-	@echo "  ps              Show service status"
-	@echo "  clean-generated Remove generated compose files"

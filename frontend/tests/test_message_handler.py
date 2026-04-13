@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from components import message_handler as handler
+from utils.a2a_client import ConversationResponse
 
 
 def _install_message_spy(monkeypatch):
@@ -28,44 +29,41 @@ def _install_message_spy(monkeypatch):
     return sent_messages
 
 
+class DummyUserSession:
+    def __init__(self, initial: dict | None = None):
+        self._store = dict(initial or {})
+
+    def get(self, key, default=None):
+        return self._store.get(key, default)
+
+    def set(self, key, value):
+        self._store[key] = value
+
+
+class DummyStep:
+    def __init__(self, name="", type="tool"):
+        self.name = name
+        self.type = type
+        self.output = ""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def update(self):
+        return None
+
+
 @pytest.mark.asyncio
-async def test_message_handler_exodus_upload_sends_messages(monkeypatch):
+async def test_message_handler_plugin_upload_sends_processed_elements(monkeypatch):
     sent_messages = _install_message_spy(monkeypatch)
-    dataset = SimpleNamespace(
-        metadata={
-            "num_timesteps": 2,
-            "num_nodes": 10,
-            "num_elements": 5,
-            "nodal_variables": [],
-            "element_variables": [],
-        },
-        to_chainlit_element=lambda: "viewer",
-    )
-    process_exodus = AsyncMock(return_value=dataset)
-    monkeypatch.setattr(handler, "process_exodus_upload", process_exodus)
 
-    message = SimpleNamespace(
-        content="",
-        elements=[SimpleNamespace(name="model.exo", path="/tmp/model.exo")],
-    )
-
-    await handler.message_handler(message)
-
-    process_exodus.assert_awaited_once_with(Path("/tmp/model.exo"))
-    assert any("Processing Exodus file" in msg.content for msg in sent_messages)
-    assert any("Exodus File Loaded" in msg.content for msg in sent_messages)
-
-
-@pytest.mark.asyncio
-async def test_message_handler_ifc_upload_sends_messages(monkeypatch):
-    sent_messages = _install_message_spy(monkeypatch)
-    dataset = SimpleNamespace(
-        file_size=1024,
-        to_chainlit_element=lambda: "viewer",
-    )
-    process_ifc = AsyncMock(return_value=dataset)
-    monkeypatch.setattr(handler, "process_ifc_upload", process_ifc)
-    monkeypatch.setattr(handler, "format_file_size", lambda size: "1.0 KB")
+    find_plugin = MagicMock(return_value=object())
+    process_upload = AsyncMock(return_value=("Upload rendered", ["viewer"]))
+    monkeypatch.setattr(handler._plugins, "find_plugin_for_upload", find_plugin)
+    monkeypatch.setattr(handler._plugins, "process_upload", process_upload)
 
     message = SimpleNamespace(
         content="",
@@ -74,44 +72,88 @@ async def test_message_handler_ifc_upload_sends_messages(monkeypatch):
 
     await handler.message_handler(message)
 
-    process_ifc.assert_awaited_once_with(Path("/tmp/model.ifc"))
-    assert any("Processing IFC file" in msg.content for msg in sent_messages)
-    assert any("IFC File Loaded" in msg.content for msg in sent_messages)
+    find_plugin.assert_called_once_with(Path("/tmp/model.ifc"))
+    process_upload.assert_awaited_once_with(Path("/tmp/model.ifc"))
+    assert sent_messages[0].content == "Processing **model.ifc**…"
+    assert sent_messages[1].content == "Upload rendered"
+    assert sent_messages[1].elements == ["viewer"]
 
 
 @pytest.mark.asyncio
-async def test_message_handler_text_message_routes_to_backend(monkeypatch):
+async def test_message_handler_plugin_upload_failure_is_reported(monkeypatch):
     sent_messages = _install_message_spy(monkeypatch)
-    response = MagicMock()
-    response.json.return_value = {"response": "hi"}
-    post = MagicMock(return_value=response)
-    monkeypatch.setattr(handler.requests, "post", post)
-    monkeypatch.setattr(handler, "settings", SimpleNamespace(platform_url="http://backend"))
 
-    message = SimpleNamespace(content="hello", elements=[])
+    monkeypatch.setattr(handler._plugins, "find_plugin_for_upload", MagicMock(return_value=object()))
+    monkeypatch.setattr(handler._plugins, "process_upload", AsyncMock(side_effect=RuntimeError("boom")))
+
+    message = SimpleNamespace(
+        content="",
+        elements=[SimpleNamespace(name="model.ifc", path="/tmp/model.ifc")],
+    )
 
     await handler.message_handler(message)
 
-    post.assert_called_once_with(
-        "http://backend/api/chat",
-        json={"message": "hello", "user_id": "user_123", "context": {}, "files": []},
-    )
-    assert any(msg.content == "Received: hi" for msg in sent_messages)
+    assert sent_messages[0].content == "Processing **model.ifc**…"
+    assert "Failed to process **model.ifc**: boom" in sent_messages[1].content
 
 
 @pytest.mark.asyncio
-async def test_message_handler_workflow_calls_runner(monkeypatch):
-    _install_message_spy(monkeypatch)
-    response = MagicMock()
-    response.json.return_value = {"type": "workflow", "session_id": "sess-123"}
-    post = MagicMock(return_value=response)
-    monkeypatch.setattr(handler.requests, "post", post)
-    monkeypatch.setattr(handler, "settings", SimpleNamespace(platform_url="http://backend"))
-    runner = AsyncMock()
-    monkeypatch.setattr(handler, "_run_demo_workflow", runner)
+async def test_message_handler_pdf_upload_falls_back_to_chainlit_pdf(monkeypatch):
+    sent_messages = _install_message_spy(monkeypatch)
+    monkeypatch.setattr(handler._plugins, "find_plugin_for_upload", MagicMock(return_value=None))
 
-    message = SimpleNamespace(content="run", elements=[])
+    created_pdfs = []
+
+    class DummyPdf:
+        def __init__(self, name, display, path):
+            self.name = name
+            self.display = display
+            self.path = path
+            created_pdfs.append(self)
+
+    monkeypatch.setattr(handler.cl, "Pdf", DummyPdf)
+
+    message = SimpleNamespace(
+        content="",
+        elements=[SimpleNamespace(name="report.pdf", path="/tmp/report.pdf")],
+    )
 
     await handler.message_handler(message)
 
-    runner.assert_awaited_once_with("run", "sess-123")
+    assert len(created_pdfs) == 1
+    assert created_pdfs[0].name == "report.pdf"
+    assert created_pdfs[0].display == "inline"
+    assert created_pdfs[0].path == "/tmp/report.pdf"
+    assert sent_messages[0].content == "**PDF loaded:** report.pdf"
+    assert sent_messages[0].elements == [created_pdfs[0]]
+
+
+@pytest.mark.asyncio
+async def test_message_handler_text_query_uses_a2a_client(monkeypatch):
+    _install_message_spy(monkeypatch)
+    session = DummyUserSession(initial={"artifacts": [{"name": "prior"}]})
+    monkeypatch.setattr(handler.cl, "user_session", session)
+    monkeypatch.setattr(handler.cl, "Step", DummyStep)
+    monkeypatch.setattr(handler.uuid, "uuid4", lambda: "conv-123")
+
+    response = ConversationResponse(
+        conversation_id="conv-123",
+        status="completed",
+        message="ok",
+    )
+    client = SimpleNamespace(send=AsyncMock(return_value=response))
+    handle_response = AsyncMock()
+    monkeypatch.setattr(handler, "_get_a2a_client", lambda: client)
+    monkeypatch.setattr(handler, "_handle_response", handle_response)
+
+    await handler.message_handler(SimpleNamespace(content="hello", elements=[]))
+
+    assert session.get("conversation_id") == "conv-123"
+    client.send.assert_awaited_once_with(
+        query="hello",
+        conversation_id="conv-123",
+        artifacts=[{"name": "prior"}],
+        on_status=client.send.await_args.kwargs["on_status"],
+    )
+    assert callable(client.send.await_args.kwargs["on_status"])
+    handle_response.assert_awaited_once_with(client, response, "hello", "conv-123")

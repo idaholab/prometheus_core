@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -83,24 +82,26 @@ async def test_configure_settings_includes_debug_tab(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_settings_debug_options_form(monkeypatch):
+@pytest.mark.parametrize(
+    ("debug_feature", "expected_message"),
+    [
+        ("Exodus File", "Upload an Exodus file to test the viewer."),
+        ("IFC File", "Upload an IFC file to test the viewer."),
+    ],
+)
+async def test_settings_debug_options_prompts_expected_upload_message(
+    monkeypatch,
+    debug_feature,
+    expected_message,
+):
     sent_messages = _install_message_spy(monkeypatch)
+    await handler.settings_debug_options({"debug_feature": debug_feature})
+    assert len(sent_messages) == 1
+    assert sent_messages[0].content == expected_message
 
-    class DummyCustomElement:
-        def __init__(self, name, display=None, props=None):
-            self.name = name
-            self.display = display
-            self.props = props
 
-    response = MagicMock()
-    response.json.return_value = {"fields": []}
-    get = MagicMock(return_value=response)
-
-    monkeypatch.setattr(handler.cl, "CustomElement", DummyCustomElement)
-    monkeypatch.setattr(handler.requests, "get", get)
-    monkeypatch.setattr(handler, "app_settings", SimpleNamespace(platform_url="http://backend"))
-
-    await handler.settings_debug_options({"debug_feature": "Form"})
-
-    get.assert_called_once_with("http://backend/demo/autodone")
-    assert any(msg.elements and msg.elements[0].name == "DynamicForm" for msg in sent_messages)
+@pytest.mark.asyncio
+async def test_settings_debug_options_none_sends_no_message(monkeypatch):
+    sent_messages = _install_message_spy(monkeypatch)
+    await handler.settings_debug_options({"debug_feature": "None"})
+    assert sent_messages == []

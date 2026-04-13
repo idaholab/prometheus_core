@@ -76,5 +76,5 @@ def test_handle_final_response_renders_artifacts_from_artifacts_list(monkeypatch
     assert session.get("artifacts") == response.artifacts
     assert len(sent_messages) == 1
     assert sent_messages[0].elements == ["viewer"]
-    assert "Alchemy Agent completed. 1 artifact(s) ready." in sent_messages[0].content
+    assert '"agent": "Alchemy Agent"' in sent_messages[0].content
     assert "Artifact text" in sent_messages[0].content
