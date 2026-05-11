@@ -1,0 +1,27 @@
+core:
+  name: Muninn
+  model_provider: openai
+  host: "__OPENAI_API_BASE__"
+  pre_host: "__OPENAI_API_BASE__"
+  emb_host: "__OPENAI_API_BASE__"
+  model: "__MODEL_NAME__"
+  preconditioner: "__PRECONDITIONER_MODEL__"
+  embeddings: "__EMBEDDINGS_MODEL__"
+  completion_tokens: 2048
+  temperature: 0.2
+
+rag:
+  vector_dir: "vector_data"
+  matches: 8
+
+agent:
+  agent_profile: raven
+  agent_max_iterations: 20
+  agent_modify_max_iterations: 10
+
+domains:
+  raven:
+    raven_execution_mode: "mcp"
+    raven_plan_mode: "off"
+    raven_mcp_url: "__RAVEN_MCP_URL__"
+    raven_mcp_timeout: __RAVEN_MCP_TIMEOUT__

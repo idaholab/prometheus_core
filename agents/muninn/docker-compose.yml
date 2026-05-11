@@ -1,0 +1,52 @@
+services:
+  muninn:
+    build:
+      dockerfile: Dockerfile
+      ssh:
+        - default
+      args:
+        - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
+        - MUNINN_GIT_REF=${MUNINN_GIT_REF}
+        - HTTP_PROXY=${HTTP_PROXY-}
+        - HTTPS_PROXY=${HTTPS_PROXY-}
+        - NO_PROXY=${NO_PROXY-}
+    container_name: muninn
+    hostname: muninn
+    ports:
+      - "${MUNINN_AGENT_PORT:-8012}:8000"
+    networks:
+      - agent-network
+    environment:
+      AGENT_PORT: 8000
+      MODEL_NAME: ${MODEL_NAME:-claude-sonnet-4-6}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-https://api.openai.com/v1}
+      MUNINN_PRECONDITIONER_MODEL: ${MUNINN_PRECONDITIONER_MODEL:-}
+      MUNINN_EMBEDDINGS_MODEL: ${MUNINN_EMBEDDINGS_MODEL:-}
+      MUNINN_RAVEN_MCP_URL: ${MUNINN_RAVEN_MCP_URL:-http://host.docker.internal:18111}
+      MUNINN_RAVEN_MCP_TIMEOUT: ${MUNINN_RAVEN_MCP_TIMEOUT:-120}
+      AGENT_SECRET: ${AGENT_SECRET}
+      SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.pem
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.pem
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-bundle.pem
+      LITELLM_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
+      PYTHONDONTWRITEBYTECODE: 1
+      MUNINN_PROMETHEUS_UPLOAD_TO_DEEPLYNX: ${MUNINN_PROMETHEUS_UPLOAD_TO_DEEPLYNX:-false}
+      DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
+      DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
+      DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
+      DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+    depends_on:
+      litellm:
+        condition: service_healthy
+    volumes:
+      - ../../certs/ca-bundle.pem:/etc/ssl/certs/ca-bundle.pem
+      - ../../shared:/app/shared
+      - ../../runtime/muninn/vector_data:/app/vector_data
+      - ../../runtime/muninn/.moosenger_fs:/app/.moosenger_fs
+    restart: unless-stopped

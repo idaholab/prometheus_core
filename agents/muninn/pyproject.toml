@@ -1,0 +1,6 @@
+[project]
+name = "muninn-agent"
+version = "0.1.0"
+description = "Prometheus Platform packaging for the Muninn specialist agent"
+requires-python = ">=3.12"
+dependencies = []

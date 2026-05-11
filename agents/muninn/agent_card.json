@@ -1,0 +1,91 @@
+{
+  "name": "Muninn",
+  "description": "RAVEN specialist agent for question answering, workflow creation, and workflow execution.",
+  "url": "http://localhost:8000",
+  "version": "0.1.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "raven_general_qa",
+      "name": "RAVEN General Q&A",
+      "description": "Answer questions about RAVEN concepts, workflows, inputs, outputs, and execution guidance without running analyses.",
+      "usage_notes": "Use for explanatory RAVEN questions, workflow guidance, schema questions, and artifact inspection. This skill should not create or execute workflows.",
+      "tags": ["raven", "qa", "documentation", "workflow-guidance", "schema"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The user's RAVEN question or request for guidance."
+          }
+        },
+        "required": ["message"]
+      }
+    },
+    {
+      "id": "raven_workflow_create",
+      "name": "RAVEN Workflow Create",
+      "description": "Create or configure a runnable RAVEN workflow from a user request and return a stable workflow reference.",
+      "usage_notes": "Use when the user wants a RAVEN workflow created or configured. This skill should end with a runnable RAVEN XML artifact and return workflow_ref.",
+      "tags": ["raven", "workflow", "create", "configure", "poem", "xml"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Natural-language description of the RAVEN workflow to create."
+          },
+          "create_mode": {
+            "type": "string",
+            "enum": ["template_configure", "raven_generate", "poem_generate"],
+            "description": "Optional create strategy override. Use template_configure for template-based configuration, raven_generate for direct RAVEN generation, or poem_generate for POEM-assisted generation that must still end in runnable RAVEN XML."
+          },
+          "model_input_file": {
+            "type": "string",
+            "description": "Optional model input file path to use while configuring the workflow."
+          },
+          "workflow_ref": {
+            "type": "string",
+            "description": "Optional existing workflow reference to use as the starting point for template_configure."
+          },
+          "artifact_id": {
+            "type": "string",
+            "description": "Optional workflow artifact id to use as the starting point for template_configure."
+          }
+        },
+        "required": ["message"]
+      }
+    },
+    {
+      "id": "raven_workflow_execute",
+      "name": "RAVEN Workflow Execute",
+      "description": "Execute a prepared RAVEN workflow and return outputs, logs, and parsed result artifacts.",
+      "usage_notes": "Use when the user asks to run a previously created RAVEN workflow. Prefer workflow_ref; artifact_id is supported for advanced callers.",
+      "tags": ["raven", "workflow", "execute", "simulation", "results"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Optional execution request or result-summary instructions."
+          },
+          "workflow_ref": {
+            "type": "string",
+            "description": "Workflow reference returned by raven_workflow_create."
+          },
+          "artifact_id": {
+            "type": "string",
+            "description": "Direct artifact identifier for the workflow XML, when known."
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Optional execution timeout in seconds."
+          }
+        }
+      }
+    }
+  ]
+}

@@ -23,6 +23,11 @@ CLEAR_COMPOSE_FILES ?= $(COMPOSE_FILES_NG)
 PROMETHEUS_API_BASE_IMAGE_HASH ?= b7e0b55
 export PROMETHEUS_API_BASE_IMAGE_HASH
 
+# Temporary pin for the external Muninn fork used by agents/muninn until the
+# Prometheus packaging changes are merged upstream.
+MUNINN_GIT_REF ?= 166efc1bae2b55133a83e13e5ef304370bf8e079
+export MUNINN_GIT_REF
+
 # Set DEBUG_AGENTS=true (in .env or on the command line) to also include
 # agents/debug-agents/*/docker-compose.yml (one extra directory level deep).
 # Default: false.

@@ -39,3 +39,9 @@ docker-compose.override.yml
 # ignore agents that have their own repos
 agents/requirements_agent
 agents/bim_agent
+agents/muninn/.env
+agents/muninn/__pycache__/
+runtime/muninn/vector_data/*
+!runtime/muninn/vector_data/.gitkeep
+runtime/muninn/.moosenger_fs/*
+!runtime/muninn/.moosenger_fs/.gitkeep
