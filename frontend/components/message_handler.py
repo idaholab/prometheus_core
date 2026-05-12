@@ -19,6 +19,29 @@ from utils.uri_resolver import resolve_to_local_path  # noqa: E402
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
+CAD_EXTENSION_MIMETYPES = {
+    ".stp": "model/step",
+    ".step": "model/step",
+}
+
+CAD_FILE_MIMETYPES = {
+    "model/step",
+    "model/step+xml",
+    "model/step+zip",
+    "application/step",
+    "application/x-step",
+    "application/step+xml",
+    "application/step+zip",
+}
+
+
+def _guess_upload_mime(filename: str, element_mime: Optional[str] = None) -> str:
+    """Return a stable MIME type for uploaded files, including CAD extensions."""
+    suffix = Path(filename).suffix.lower()
+    if suffix in CAD_EXTENSION_MIMETYPES:
+        return CAD_EXTENSION_MIMETYPES[suffix]
+    return element_mime or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
 
 async def _capture_uploaded_file(element: Any, file_path: Path) -> Optional[Dict[str, Any]]:
     """Read one Chainlit upload into the payload shape expected by the agent."""
@@ -30,11 +53,7 @@ async def _capture_uploaded_file(element: Any, file_path: Path) -> Optional[Dict
             ).send()
             return None
 
-        mime = (
-            getattr(element, "mime", None)
-            or mimetypes.guess_type(element.name)[0]
-            or "application/octet-stream"
-        )
+        mime = _guess_upload_mime(element.name, getattr(element, "mime", None))
         content_b64 = base64.b64encode(file_path.read_bytes()).decode()
         return {
             "name": element.name,
@@ -534,7 +553,7 @@ def _classify_artifact(mime_type: str) -> str:
         "application/octet-stream",
         "application/zip",
         "application/gzip",
-    ):
+    ) or mime_type in CAD_FILE_MIMETYPES:
         return "file"
 
     return "unknown"

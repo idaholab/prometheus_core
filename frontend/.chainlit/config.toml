@@ -63,7 +63,7 @@ reaction_on_message_received = false
     # 3. For specific file extensions:
     #    accept = { "application/octet-stream" = [".xyz", ".pdb"] }
     # Note: Using "*/*" is not recommended as it may cause browser warnings
-    accept = { "application/octet-stream" = [".ifc", ".exo", ".e"], "image/*" = [], "application/pdf" = [] }
+    accept = { "application/octet-stream" = [".ifc", ".exo", ".e", ".stp", ".step"], "image/*" = [], "application/pdf" = [] }
     max_files = 1
     max_size_mb = 500
 

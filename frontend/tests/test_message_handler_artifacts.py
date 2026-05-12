@@ -60,7 +60,7 @@ def test_render_artifacts_downloads_remote_json_file(monkeypatch, tmp_path: Path
             assert uri == "http://example.test/output.json"
             return _FakeResponse(b'{\"status\":\"ok\"}\n')
 
-    monkeypatch.setattr(handler.cl, "File", DummyFile)
+    monkeypatch.setattr(handler.cl, "File", DummyFile, raising=False)
     monkeypatch.setattr("components.message_handler.httpx.AsyncClient", _FakeAsyncClient)
 
     elements, text = asyncio.run(
@@ -82,3 +82,44 @@ def test_render_artifacts_downloads_remote_json_file(monkeypatch, tmp_path: Path
     assert created[0].name == "output.json"
     assert Path(created[0].path).exists()
     assert "Generated ANL JSON intermediate output." in text
+
+
+def test_render_artifacts_treats_step_as_downloadable_file(monkeypatch, tmp_path: Path) -> None:
+    created = []
+
+    class DummyFile:
+        def __init__(self, *, name: str, path: str, display: str, mime: str = ""):
+            self.name = name
+            self.path = path
+            self.display = display
+            self.mime = mime
+            created.append(self)
+
+    monkeypatch.setattr(handler.cl, "File", DummyFile, raising=False)
+
+    async def _no_plugin(artifact):
+        return None
+
+    monkeypatch.setattr(handler._plugins, "render_artifact", _no_plugin)
+
+    step_file = tmp_path / "bracket.stp"
+    step_file.write_text("ISO-10303-21;\nEND-ISO-10303-21;\n")
+
+    elements, text = asyncio.run(
+        handler.render_artifacts(
+            [
+                {
+                    "name": "bracket.stp",
+                    "mime_type": "model/step",
+                    "uri": f"file://{step_file}",
+                    "description": "STEP CAD model.",
+                }
+            ],
+            tmp_path,
+        )
+    )
+
+    assert len(elements) == 1
+    assert created[0].name == "bracket.stp"
+    assert created[0].mime == "model/step"
+    assert "no viewer available" not in text

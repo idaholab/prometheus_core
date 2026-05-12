@@ -513,6 +513,21 @@ def test_invoke_agent_generic_passes_artifact_catalog_to_skill(monkeypatch) -> N
     ]
 
 
+def test_find_tool_for_skill_uses_runtime_tool_cache(monkeypatch) -> None:
+    tool = SimpleNamespace(name="create_svg_artifact")
+
+    monkeypatch.setattr(agent_module._runtime, "_tools_cache", [tool])
+
+    result = asyncio.run(
+        agent_module.find_tool_for_skill(
+            "create_svg_artifact",
+            refresh_on_miss=False,
+        )
+    )
+
+    assert result is tool
+
+
 def test_invoke_skill_validates_nested_required_paths(monkeypatch) -> None:
     capability = SimpleNamespace(
         input_schema={

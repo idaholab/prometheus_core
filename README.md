@@ -227,6 +227,7 @@ _TBD — common issues and fixes will be collected here as they come up._
 ## Documentation
 
 - [Architecture](docs/docs/dev-docs/architecture.md)
+- [Client-agent developer guide](agents/client-agent/README.md)
 - [Adding agents](docs/docs/dev-docs/adding-agents.md)
 - [Artifacts](docs/docs/dev-docs/artifacts.md)
 - [Visualization plugins](docs/docs/dev-docs/visualization-plugins.md)

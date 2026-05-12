@@ -43,6 +43,12 @@ def _install_message_spy(monkeypatch):
     return sent_messages
 
 
+def test_guess_upload_mime_normalizes_step_extensions() -> None:
+    assert handler._guess_upload_mime("bracket.stp") == "model/step"
+    assert handler._guess_upload_mime("bracket.step") == "model/step"
+    assert handler._guess_upload_mime("bracket.stp", "application/octet-stream") == "model/step"
+
+
 class DummyUserSession:
     def __init__(self, initial: dict | None = None):
         self._store = dict(initial or {})
