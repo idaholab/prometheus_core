@@ -2,7 +2,7 @@
 name = "prometheus-infra-tests"
 version = "0.1.0"
 description = "Infrastructure tests for Prometheus Platform Docker services"
-requires-python = "~=3.12.0"
+requires-python = ">=3.12"
 dependencies = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.25.0",
@@ -11,15 +11,8 @@ dependencies = [
     "httpx>=0.27.0",
     "redis>=5.0.0",
     "docker>=7.0.0",
-    # Cross-repo A2A contract tests exercise the real prometheus_api request
-    # parsing against the client-agent's and frontend's request builders.
-    "prometheus-api",
     "langchain-core>=0.3.0",  # imported by client-agent tool_discovery
 ]
-
-[tool.uv.sources]
-# TODO: re-pin to main (or a version tag) once prometheus_api fable5_review merges.
-prometheus-api = { git = "https://github.inl.gov/genesis/prometheus_api.git", branch = "fable5_review" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

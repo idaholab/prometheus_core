@@ -1,0 +1,81 @@
+name: Test
+
+on:
+  # To test changing this action on a pull request, create a PR on
+  # genesis/prometheus_platform (not from a fork) and add the
+  # name to the push branches (temporarily)
+  push:
+    branches: [dev, actions]
+  # pull_request_target can be dangerous because it enables
+  # secrets by default. Thus, every job should depend on
+  # the "authorize" job which is used as a gate. After that,
+  # every step must explicitly checkout the PR ref because
+  # by deafult it will checkout the base branch instead.
+  pull_request_target:
+    branches: [dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+env:
+  REGISTRY_URL: containers.github.inl.gov
+
+jobs:
+  # Gate for jobs that need to run with secrets. Because we need to pull
+  # from other repositories, we need to access a secret. This will require
+  # maintainer approval on fork PRs.
+  authorize:
+    name: Authorize
+    environment: >-
+      ${{
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name != github.repository &&
+        'external' || 'internal'
+      }}
+    runs-on:
+      group: genesis
+    steps:
+      - run: "true"
+
+  test:
+    name: "Test ${{ matrix.platform }}"
+    needs: authorize
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - amd64
+          - arm64
+    runs-on:
+      group: genesis
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Registry login
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            docker login "$REGISTRY_URL" \
+              --username "${{ github.actor }}" \
+              --password-stdin
+      - name: Test
+        shell: bash
+        run: |
+
+          cat << 'EOF' > run.bash
+          #!/bin/bash
+          set -e
+          cd tests
+          uv sync --frozen
+          uv run -m pytest --color=yes
+          EOF
+
+          docker run \
+            --mount "type=bind,source=${{ github.workspace }},target=${{ github.workspace }}" \
+            --workdir "${{ github.workspace }}" \
+            --platform "linux/${{ matrix.platform }}" \
+            --rm \
+            containers.github.inl.gov/genesis/prometheus_api:20260629-291afda \
+            /bin/bash run.bash
