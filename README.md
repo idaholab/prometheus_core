@@ -62,7 +62,7 @@ make up      # build + start everything (detached)
 make logs    # tail all services (SERVICE=<name> to filter)
 make ps      # show running services
 make down    # stop everything (down-v also drops volumes)
-make clear-litellm-db  # stop services + remove only LiteLLM's Postgres volume
+make down-v  # stop services + remove only LiteLLM's Postgres volume
 ```
 
 `make up` runs `make generate` first, which scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`. **Do not hand-edit that file** — re-run `make generate` after adding or removing an agent (or use `make ng-up` to skip regeneration).
