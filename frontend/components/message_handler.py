@@ -150,6 +150,26 @@ def _get_a2a_client() -> A2AClient:
     )
 
 
+def _get_user_token() -> Optional[str]:
+    """Mint a short-lived platform JWT for the current Chainlit session user.
+
+    Returns ``None`` when ``USER_IDENTITY_SECRET`` is not configured so that
+    single-user / dev deployments without identity config still work
+    (agents must be started with ``USER_IDENTITY_REQUIRED=false`` in that case).
+    """
+    if not settings.user_identity_secret:
+        return None
+    user_id: Optional[str] = cl.user_session.get("user_id")
+    if not user_id:
+        return None
+    try:
+        from prometheus_api.agent.identity import mint_user_token
+        return mint_user_token(user_id, ttl_seconds=settings.user_identity_ttl)
+    except Exception as exc:
+        logger.warning("Failed to mint user token for %r: %s", user_id, exc)
+        return None
+
+
 async def message_handler(message: cl.Message):
     # --- File upload handling ---
     uploaded_files: List[Dict] = []
@@ -162,6 +182,7 @@ async def message_handler(message: cl.Message):
         conversation_id = str(uuid.uuid4())
         cl.user_session.set("conversation_id", conversation_id)
     client = _get_a2a_client()
+    user_token = _get_user_token()
 
     if message.elements:
         for element in message.elements:
@@ -249,6 +270,7 @@ async def message_handler(message: cl.Message):
             artifacts=artifacts_catalog,
             uploaded_files=uploaded_files or None,
             on_status=_on_status,
+            user_token=user_token,
         )
 
         await status_step.__aexit__(None, None, None)

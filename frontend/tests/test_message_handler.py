@@ -364,6 +364,7 @@ async def test_message_handler_text_query_uses_a2a_client(monkeypatch):
         artifacts=[{"name": "prior"}],
         uploaded_files=None,
         on_status=client.send.await_args.kwargs["on_status"],
+        user_token=None,
     )
     assert callable(client.send.await_args.kwargs["on_status"])
     handle_response.assert_awaited_once_with(client, response, "hello", "conv-123")

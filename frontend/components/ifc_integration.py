@@ -29,8 +29,19 @@ class IFCDataset:
 
     @property
     def file_url(self) -> str:
-        """URL path for accessing the IFC file."""
-        return f"/public/ifc-data/{self.dataset_id}/{self.filename}"
+        """URL path for accessing the IFC file.
+
+        Derived from the actual ``output_dir`` relative to the ``ifc_data_dir``
+        so that per-user namespaced paths (e.g.
+        ``ifc-data/{user_id}/{dataset_id}``) produce the correct URL without
+        hardcoding the directory structure.
+        """
+        try:
+            rel = self.output_dir.relative_to(settings.ifc_data_dir)
+            return f"/public/ifc-data/{rel}/{self.filename}"
+        except ValueError:
+            # Fallback: output_dir is outside ifc_data_dir (shouldn't happen)
+            return f"/public/ifc-data/{self.dataset_id}/{self.filename}"
 
     def to_props(self) -> dict[str, Any]:
         """Convert to props dict for IFCViewer component."""
@@ -64,7 +75,10 @@ class IFCDataset:
         }
 
 
-async def process_ifc_upload(file_path: Path) -> IFCDataset:
+async def process_ifc_upload(
+    file_path: Path,
+    output_dir: Path | None = None,
+) -> IFCDataset:
     """
     Process an uploaded IFC file for visualization.
 
@@ -72,6 +86,10 @@ async def process_ifc_upload(file_path: Path) -> IFCDataset:
 
     Args:
         file_path: Path to the uploaded IFC file.
+        output_dir: Optional custom output directory.  Defaults to
+            ``public/ifc-data/{dataset_id}``.  Pass a per-user namespaced path
+            (e.g. ``public/ifc-data/{user_id}/{dataset_id}``) so that one user
+            cannot access another user's dataset by guessing the URL.
 
     Returns:
         IFCDataset instance ready for visualization.
@@ -83,7 +101,8 @@ async def process_ifc_upload(file_path: Path) -> IFCDataset:
     dataset_id = str(uuid.uuid4())[:8]
 
     # Create output directory
-    output_dir = settings.ifc_data_dir / dataset_id
+    if output_dir is None:
+        output_dir = settings.ifc_data_dir / dataset_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Get filename and file size

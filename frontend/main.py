@@ -26,7 +26,21 @@ def oauth_callback(
     raw_user_data: Dict[str, str],
     default_user: cl.User,
 ) -> Optional[cl.User]:
+    # For OIDC/OAuth2 providers, prefer the 'sub' claim as the canonical user_id
+    # since it is stable across token refreshes.  Fall back to the default identifier
+    # (typically email or username depending on the provider) if sub is absent.
+    sub = raw_user_data.get("sub") or raw_user_data.get("user_id")
+    if sub:
+        return cl.User(
+            identifier=sub,
+            metadata={
+                "display_name": raw_user_data.get("name") or raw_user_data.get("email") or sub,
+                "email": raw_user_data.get("email", ""),
+                "provider": provider_id,
+            },
+        )
     return default_user
+
 
 @cl.password_auth_callback
 def auth_callback(username: str, password: str):
@@ -74,6 +88,13 @@ async def on_chat_start():
     cl.user_session.set("conversation_id", conversation_id)
     cl.user_session.set("artifacts", [])
 
+    # Capture the authenticated user_id for identity propagation.
+    # cl.user_session.get("user") is set by Chainlit after authentication;
+    # it is a cl.User object with an .identifier attribute.
+    user = cl.user_session.get("user")
+    user_id: Optional[str] = getattr(user, "identifier", None) if user else None
+    cl.user_session.set("user_id", user_id)
+
     # Start the single per-session subscriber that posts background-task results
     # out-of-band on completion. Started here so it inherits a live session, and
     # retained in user_session as a strong ref so it isn't garbage-collected.
@@ -105,12 +126,20 @@ async def on_chat_end():
 
 
 async def _handle_conversation_history():
-    """Display recent conversation history from Redis."""
+    """Display recent conversation history from Redis.
+
+    Scoped to the current user when a user_id is available so that one user
+    cannot browse another user's conversation history.
+    """
     if not _conversation_state_client.available:
         await cl.Message(content="History unavailable (Redis not connected).").send()
         return
 
-    conversations = _conversation_state_client.get_conversation_history(limit=20)
+    user_id: Optional[str] = cl.user_session.get("user_id")
+    conversations = _conversation_state_client.get_conversation_history(
+        limit=20,
+        user_id=user_id,
+    )
     if not conversations:
         await cl.Message(content="No conversation history found.").send()
         return

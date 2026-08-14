@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     max_upload_bytes: int = get_max_upload_bytes(data)
     debug: bool = data.get("debug", True)
     auto_approve_steps: bool = data.get("auto-approve-steps", False)
+    # Identity settings: the frontend mints a short-lived internal JWT for every
+    # turn and attaches it to the A2A request.  Agents verify this token.
+    user_identity_secret: str = os.environ.get("USER_IDENTITY_SECRET", "")
+    user_identity_alg: str = os.environ.get("USER_IDENTITY_ALG", "HS256")
+    user_identity_iss: str = os.environ.get("USER_IDENTITY_ISS", "prometheus-platform")
+    user_identity_aud: str = os.environ.get("USER_IDENTITY_AUD", "prometheus-agents")
+    user_identity_ttl: int = int(os.environ.get("USER_IDENTITY_TTL", "7200"))
 
 settings = Settings()
 

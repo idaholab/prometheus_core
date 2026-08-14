@@ -1,7 +1,7 @@
 """Redis-backed client for browsing persisted conversation state."""
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 try:
     import redis
@@ -34,13 +34,35 @@ class ConversationStateClient:
     def available(self) -> bool:
         return self.client is not None
 
-    def get_conversation_history(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Retrieve recent conversation summaries from Redis."""
+    def get_conversation_history(
+        self,
+        limit: int = 20,
+        user_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve recent conversation summaries from Redis.
+
+        When *user_id* is provided, only conversations owned by that user are
+        returned (using the ``user:convs:{user_id}`` per-user index).  When
+        *user_id* is absent, falls back to the legacy global ``conversation:*``
+        scan — this path is only used when ownership records do not exist yet
+        (e.g. conversations created before the multi-user migration).
+        """
         client = self.client
         if client is None:
             return []
         try:
-            keys = client.keys("conversation:*")
+            if user_id:
+                try:
+                    conv_ids = client.smembers(f"user:convs:{user_id}")
+                    raw_ids = [
+                        m.decode("utf-8") if isinstance(m, bytes) else m
+                        for m in (conv_ids or [])
+                    ]
+                    keys = [f"conversation:{cid}" for cid in raw_ids][:limit]
+                except Exception:
+                    keys = []
+            else:
+                keys = client.keys("conversation:*")
             conversations = []
             for key in keys[:limit]:
                 data = client.get(key)

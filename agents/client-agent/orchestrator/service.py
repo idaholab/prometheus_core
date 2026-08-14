@@ -138,12 +138,18 @@ class OrchestratorAgent(PrometheusAgent):
                 pass
             return JSONResponse({"error": f"Failed to stage upload: {exc}"}, status_code=500)
 
+        # Stamp the verified user_id into metadata so uploads can be rejected
+        # when a different user attempts to consume them.
+        from prometheus_api.agent.identity import current_user_id as _current_user_id
+        staged_user_id = _current_user_id() or ""
+
         payload = {
             "upload_id": upload_id,
             "name": name,
             "mime_type": mime_type,
             "size_bytes": size,
             "conversation_id": conversation_id,
+            "user_id": staged_user_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         write_staged_upload_metadata(upload_id, payload)
@@ -409,8 +415,11 @@ class OrchestratorAgent(PrometheusAgent):
         await emit_upload_status(f"Uploading {len(uploaded_files)} file(s) to DeepLynx.")
 
         try:
+            from prometheus_api.agent.identity import current_user_id as _current_user_id
+            _upload_user_id = _current_user_id() or None
             refs = await upload_files_to_deeplynx(
                 self, uploaded_files, descriptions, context, event_queue, storage_config,
+                user_id=_upload_user_id,
             )
         except Exception as exc:
             print(f"[WARN] Uploaded file persistence failed: {exc}")
@@ -455,6 +464,24 @@ class OrchestratorAgent(PrometheusAgent):
                 or str(uuid.uuid4())
             )
         conversation_id = str(request_payload.get("conversation_id") or context.context_id or "")
+        user_id: str = str(request_payload.get("user_id") or "")
+
+        # Enforce conversation ownership: the verified user_id (injected into
+        # params["user_id"] by PrometheusAgentExecutor._extract_params after
+        # JWT verification) must own this conversation.  On first touch, record
+        # the ownership so subsequent turns can be verified.
+        if user_id and conversation_id:
+            try:
+                from prometheus_api.agent.ownership import (
+                    assert_conversation_owner,
+                    record_conversation_owner,
+                )
+                assert_conversation_owner(conversation_id, user_id)
+                record_conversation_owner(conversation_id, user_id)
+            except PermissionError as exc:
+                return {"status": "error", "message": str(exc)}
+            except Exception as exc:
+                print(f"[WARN] Ownership check failed (non-fatal): {exc}")
 
         # Snapshot artifact IDs before this turn so we can diff new_artifacts at the end.
         # Must happen before _handle_uploaded_files so uploaded files appear in new_artifacts.

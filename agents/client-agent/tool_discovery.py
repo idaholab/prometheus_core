@@ -420,7 +420,21 @@ async def call_a2a_agent(
 
     logger.debug("[A2A] Calling agent at %s, skill: %s", agent_url, skill_id)
 
-    # Build A2A JSON-RPC message
+    # Build A2A JSON-RPC message.
+    # Propagate the current user's identity token alongside the skillId so that
+    # downstream specialist agents can verify who is calling them.
+    message_metadata: Dict[str, Any] = {"skillId": skill_id}
+    try:
+        from prometheus_api.agent.identity import (
+            get_current_identity,
+            USER_TOKEN_METADATA_KEY,
+        )
+        identity = get_current_identity()
+        if identity and identity.raw_token:
+            message_metadata[USER_TOKEN_METADATA_KEY] = identity.raw_token
+    except ImportError:
+        pass  # prometheus_api not available; identity metadata omitted
+
     message = {
         "jsonrpc": "2.0",
         "id": request_id,
@@ -430,7 +444,7 @@ async def call_a2a_agent(
                 "messageId": message_id,
                 "role": "ROLE_USER",
                 "parts": [],
-                "metadata": {"skillId": skill_id},
+                "metadata": message_metadata,
             },
             "configuration": {
                 "returnImmediately": False,

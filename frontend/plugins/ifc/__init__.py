@@ -61,6 +61,19 @@ async def inspect_upload(context: UploadContext) -> UploadMatch | None:
     return None
 
 
+def _user_ifc_output_dir(dataset_id: str) -> "Optional[Path]":
+    """Return a per-user namespaced output directory for this IFC dataset."""
+    try:
+        import chainlit as cl
+        from utils.settings import settings
+        user_id: Optional[str] = cl.user_session.get("user_id")
+        if user_id:
+            return settings.ifc_data_dir / user_id / dataset_id
+    except Exception:
+        pass
+    return None
+
+
 async def render_artifact(artifact: dict) -> Optional[Any]:
     uri = artifact.get("uri") or ""
     name = artifact.get("name", "model.ifc")
@@ -68,7 +81,9 @@ async def render_artifact(artifact: dict) -> Optional[Any]:
     file_path = _resolve_path(uri)
     if file_path and file_path.exists():
         from components.ifc_integration import process_ifc_upload
-        dataset = await process_ifc_upload(file_path)
+        import uuid as _uuid
+        output_dir = _user_ifc_output_dir(str(_uuid.uuid4())[:8])
+        dataset = await process_ifc_upload(file_path, output_dir=output_dir)
         return dataset.to_chainlit_element()
 
     if uri.startswith("http"):
@@ -79,7 +94,9 @@ async def render_artifact(artifact: dict) -> Optional[Any]:
             tmp_path = Path(tmp_dir) / Path(name).name
             tmp_path.write_bytes(response.content)
             from components.ifc_integration import process_ifc_upload
-            dataset = await process_ifc_upload(tmp_path)
+            import uuid as _uuid
+            output_dir = _user_ifc_output_dir(str(_uuid.uuid4())[:8])
+            dataset = await process_ifc_upload(tmp_path, output_dir=output_dir)
         return dataset.to_chainlit_element()
 
     return None
@@ -87,6 +104,8 @@ async def render_artifact(artifact: dict) -> Optional[Any]:
 
 async def process_upload(context: UploadContext) -> UploadRenderResult:
     from components.ifc_integration import process_ifc_upload, format_file_size
-    dataset = await process_ifc_upload(context.file_path)
+    import uuid as _uuid
+    output_dir = _user_ifc_output_dir(str(_uuid.uuid4())[:8])
+    dataset = await process_ifc_upload(context.file_path, output_dir=output_dir)
     desc = f"**IFC model loaded:** {context.display_name} ({format_file_size(dataset.file_size)})"
     return UploadRenderResult(desc, [dataset.to_chainlit_element()])

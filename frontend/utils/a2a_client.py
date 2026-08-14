@@ -62,9 +62,13 @@ class A2AClient:
     def _auth_headers(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.agent_secret}"}
 
-    def start_chat(self, conversation_id: Optional[str] = None) -> "ChatSession":
+    def start_chat(
+        self,
+        conversation_id: Optional[str] = None,
+        user_token: Optional[str] = None,
+    ) -> "ChatSession":
         """Create a stateful local handle for one platform conversation."""
-        return ChatSession(self, conversation_id or str(uuid.uuid4()))
+        return ChatSession(self, conversation_id or str(uuid.uuid4()), user_token=user_token)
 
     async def list_artifacts(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Return artifact references for one conversation."""
@@ -189,6 +193,7 @@ class A2AClient:
         workflow_id: Optional[str] = None,
         uploaded_files: Optional[List[Dict]] = None,
         on_status: Optional[Callable[[str], Coroutine]] = None,
+        user_token: Optional[str] = None,
     ) -> ConversationResponse:
         """Send a message to the client-agent via A2A JSON-RPC streaming."""
         request_id = str(uuid.uuid4())
@@ -212,6 +217,12 @@ class A2AClient:
         if uploaded_files:
             payload["uploaded_files"] = uploaded_files
 
+        # Build message-level metadata.  The verified user token is carried
+        # here so agents can extract and validate the caller's identity.
+        message_metadata: Dict[str, Any] = {}
+        if user_token:
+            message_metadata["userToken"] = user_token
+
         # A2A JSON-RPC envelope
         message = {
             "jsonrpc": "2.0",
@@ -224,6 +235,7 @@ class A2AClient:
                     # contextId is the A2A-spec conversation scope; the a2a-sdk
                     # exposes it to the client-agent as RequestContext.context_id.
                     "contextId": conversation_id,
+                    "metadata": message_metadata,
                     "parts": [
                         {
                             "text": json.dumps(payload),
@@ -321,10 +333,11 @@ class A2AClient:
 class ChatSession:
     """Stateful Python interface for submitting and streaming chat turns."""
 
-    def __init__(self, client: A2AClient, conversation_id: str):
+    def __init__(self, client: A2AClient, conversation_id: str, user_token: Optional[str] = None):
         self._client = client
         self.conversation_id = conversation_id
         self._artifacts: List[Dict[str, Any]] = []
+        self._user_token = user_token
 
     @property
     def artifacts(self) -> List[Dict[str, Any]]:
@@ -338,6 +351,7 @@ class ChatSession:
         plan_approved: bool = False,
         plan_rejected: bool = False,
         on_status: Optional[Callable[[str], Coroutine]] = None,
+        user_token: Optional[str] = None,
     ) -> ConversationResponse:
         """Submit one turn and return its terminal response."""
         response = await self._client.send(
@@ -348,6 +362,7 @@ class ChatSession:
             plan_approved=plan_approved,
             plan_rejected=plan_rejected,
             on_status=on_status,
+            user_token=user_token or self._user_token,
         )
         if response.artifacts is not None:
             self._artifacts = list(response.artifacts)

@@ -19,7 +19,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -122,12 +122,25 @@ def _normalize_mime_type(mime_type: str | None) -> str:
     return (mime_type or "").split(";", 1)[0].strip().lower()
 
 
-def resolve_staged_upload(uploaded_file: UploadedFile) -> Path:
-    """Validate request metadata for a staged upload and return the byte path."""
+def resolve_staged_upload(uploaded_file: UploadedFile, user_id: Optional[str] = None) -> Path:
+    """Validate request metadata for a staged upload and return the byte path.
+
+    When *user_id* is provided, the upload is rejected if it was created by a
+    different user, preventing cross-user upload retrieval.
+    """
     source_path, _ = staged_upload_paths(uploaded_file.upload_id)
     metadata = read_staged_upload_metadata(uploaded_file.upload_id)
     if not source_path.exists():
         raise FileNotFoundError(f"Staged upload {uploaded_file.upload_id} file is missing")
+
+    # Cross-user upload retrieval prevention: reject if a different user_id
+    # staged this upload.  Skip the check when either side has no user_id
+    # (dev mode or legacy uploads without a stamped owner).
+    staged_user_id = metadata.get("user_id") or ""
+    if user_id and staged_user_id and staged_user_id != user_id:
+        raise PermissionError(
+            f"Staged upload {uploaded_file.upload_id} was created by a different user"
+        )
 
     actual_size = source_path.stat().st_size
     if actual_size > MAX_UPLOAD_BYTES:
@@ -297,13 +310,14 @@ async def upload_files_to_deeplynx(
     context: "RequestContext",
     event_queue: "EventQueue",
     storage_config: "ConnectionConfig",
+    user_id: Optional[str] = None,
 ) -> List["ArtifactReference"]:
     """Resolve each staged file, upload to DeepLynx, and return refs."""
     refs = []
     for f in files:
         description = descriptions.get(f.name) or _fallback_description(f)
         try:
-            source_path = resolve_staged_upload(f)
+            source_path = resolve_staged_upload(f, user_id=user_id)
 
             ref = await agent.send_deeplynx_artifact(
                 context=context,

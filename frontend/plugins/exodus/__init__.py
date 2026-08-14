@@ -70,18 +70,43 @@ async def inspect_upload(context: UploadContext) -> UploadMatch | None:
     )
 
 
+def _user_mesh_output_dir(dataset_id: str) -> "Optional[Path]":
+    """Return a per-user namespaced output directory for this dataset.
+
+    When a user_id is available from the Chainlit session, mesh data is placed
+    under ``public/mesh-data/{user_id}/{dataset_id}`` rather than the shared
+    ``public/mesh-data/{dataset_id}`` path, preventing one user from guessing
+    another user's dataset URL.
+    """
+    try:
+        import chainlit as cl
+        from utils.settings import settings
+        user_id: Optional[str] = cl.user_session.get("user_id")
+        if user_id:
+            return settings.mesh_data_dir / user_id / dataset_id
+    except Exception:
+        pass
+    return None
+
+
 async def render_artifact(artifact: dict) -> Optional[Any]:
     file_path = _resolve_path(artifact.get("uri") or "")
     if not file_path or not file_path.exists():
         return None
     from components.exodus_integration import process_exodus_upload
-    dataset = await process_exodus_upload(file_path)
+    import uuid as _uuid
+    dataset_id = str(_uuid.uuid4())[:8]
+    output_dir = _user_mesh_output_dir(dataset_id)
+    dataset = await process_exodus_upload(file_path, output_dir=output_dir)
     return dataset.to_chainlit_element()
 
 
 async def process_upload(context: UploadContext) -> UploadRenderResult:
     from components.exodus_integration import process_exodus_upload
-    dataset = await process_exodus_upload(context.file_path)
+    import uuid as _uuid
+    dataset_id = str(_uuid.uuid4())[:8]
+    output_dir = _user_mesh_output_dir(dataset_id)
+    dataset = await process_exodus_upload(context.file_path, output_dir=output_dir)
     meta = dataset.metadata or {}
     name = context.display_name
     lines = [f"**Exodus mesh loaded:** `{name}`"]

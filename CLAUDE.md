@@ -136,3 +136,8 @@ All services share the `agent-network` bridge.
 - `docs/docs/dev-docs/artifacts.md` — artifact reference model and rendering rules
 - `docs/docs/dev-docs/visualization-plugins.md` — JSX viewer components and triggers
 - `docs/docs/dev-docs/migration.md` — what changed when `multi_agent_testbed` was merged in (and why)
+- `docs/docs/dev-docs/multi-user-setup.md` — multi-user configuration, credential broker, isolation (operator + developer guide)
+
+## Further reading (prometheus_api repo)
+
+- `prometheus_api/docs/agent/MULTI_USER.md` — identity JWT flow, credential broker backends, per-user worker pool, conversation ownership (agent author reference)
