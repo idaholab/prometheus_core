@@ -128,6 +128,23 @@ secret/data/slurm/{user_id}      →  {"token": "user-slurm-token", "user": "hpc
 See `prometheus_api/docs/agent/MULTI_USER.md` § Vault broker for the full Vault
 policy HCL.
 
+### Third-party agent providers
+
+If an external team or vendor registers an agent with your platform, **use RS256**.
+Give them only the `USER_IDENTITY_PUBLIC_KEY` — they can verify that incoming JWTs
+were signed by your platform without being able to forge tokens.
+
+With HS256 you would have to share `USER_IDENTITY_SECRET`, which lets them
+impersonate any user.  Never do this.
+
+A JWKS endpoint (`GET /.well-known/jwks.json`) is the cleanest long-term solution:
+third-party agents fetch the current public key automatically and key rotation
+requires no manual coordination.  The endpoint is not yet served by the platform;
+until it is, distribute the public key as a PEM file.
+
+See `prometheus_api/docs/agent/IDENTITY_KEY_MANAGEMENT.md` for the full key
+distribution table, key generation steps, and rotation guide.
+
 ---
 
 ## Per-user dataset isolation
