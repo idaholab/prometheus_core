@@ -137,10 +137,11 @@ were signed by your platform without being able to forge tokens.
 With HS256 you would have to share `USER_IDENTITY_SECRET`, which lets them
 impersonate any user.  Never do this.
 
-A JWKS endpoint (`GET /.well-known/jwks.json`) is the cleanest long-term solution:
-third-party agents fetch the current public key automatically and key rotation
-requires no manual coordination.  The endpoint is not yet served by the platform;
-until it is, distribute the public key as a PEM file.
+Every `PrometheusAgent` now serves `GET /.well-known/jwks.json` — the RSA public
+key as a JSON Web Key Set.  Third-party agents set `JWKS_URL` to this endpoint
+and `verify_user_token` fetches and caches the key automatically, with transparent
+key rotation via the JWT `kid` header.  No private key or shared secret needs to
+leave your organisation.
 
 See `prometheus_api/docs/agent/IDENTITY_KEY_MANAGEMENT.md` for the full key
 distribution table, key generation steps, and rotation guide.
