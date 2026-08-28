@@ -56,6 +56,7 @@ skill sequences, input bindings, and execution order.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
@@ -97,6 +98,8 @@ from planner_models import (
 )
 from workflow_library.naming import workflow_tool_name
 from orchestrator import runtime
+
+logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 
@@ -394,6 +397,10 @@ async def decompose_task(
         raise PlanningContractError(
             "Task decomposition must call decompose_task exactly once."
         )
+    logger.warning(
+        "[PLANNER][DEBUG] decompose_task raw args: %s",
+        json.dumps(calls[0].get("args"), default=str),
+    )
     try:
         parsed = DecomposeTaskInput.model_validate(calls[0].get("args"))
     except ValidationError as exc:
@@ -497,6 +504,10 @@ async def decompose_task(
             raise PlanningContractError(
                 "Dependency assignment must call assign_dependencies exactly once."
             )
+        logger.warning(
+            "[PLANNER][DEBUG] assign_dependencies raw args: %s",
+            json.dumps(dependency_calls[0].get("args"), default=str),
+        )
         try:
             assigned = AssignDependenciesInput.model_validate(
                 dependency_calls[0].get("args")
