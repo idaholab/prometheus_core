@@ -664,11 +664,16 @@ def test_decomposition_assigns_stable_ids_and_dependencies(monkeypatch) -> None:
     assert result.operations[1].depends_on == ["op_1"]
     prompt = fake_llm.calls[0][0][1]["content"]
     assert "Available capabilities" not in prompt
+    assert fake_llm.calls[0][1]["tools"][0]["function"]["strict"] is True
     decomposition_schema = fake_llm.calls[0][1]["tools"][0]["function"]["parameters"]
     assert "depends_on" not in json.dumps(decomposition_schema)
+    assert fake_llm.calls[1][1]["tools"][0]["function"]["strict"] is True
     dependency_schema = fake_llm.calls[1][1]["tools"][0]["function"]["parameters"]
     dependency_properties = dependency_schema["properties"]["dependencies"]["properties"]
-    assert dependency_properties["op_1"]["maxItems"] == 0
+    # maxItems/uniqueItems are stripped from the wire schema for OpenAI strict-mode
+    # compatibility; op_1 (no earlier ops) is left with an unconstrained items type.
+    assert "maxItems" not in dependency_properties["op_1"]
+    assert dependency_properties["op_1"]["items"] == {"type": "string"}
     assert dependency_properties["op_2"]["items"]["enum"] == ["op_1"]
 
 

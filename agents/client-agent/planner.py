@@ -356,6 +356,57 @@ async def resolve_turn(
     )
 
 
+_STRICT_UNSUPPORTED_SCHEMA_KEYWORDS = {
+    "minLength",
+    "maxLength",
+    "pattern",
+    "format",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+    "minProperties",
+    "maxProperties",
+    "patternProperties",
+    "propertyNames",
+    "unevaluatedProperties",
+}
+
+
+def _strip_unsupported_strict_keywords(schema: Any) -> Any:
+    """Recursively drop JSON-Schema keywords unsupported by OpenAI strict tool-call mode.
+
+    Pydantic still enforces the dropped constraints locally in ``model_validate``;
+    this only affects the schema advertised to the model.
+    """
+    if isinstance(schema, dict):
+        return {
+            key: _strip_unsupported_strict_keywords(value)
+            for key, value in schema.items()
+            if key not in _STRICT_UNSUPPORTED_SCHEMA_KEYWORDS
+        }
+    if isinstance(schema, list):
+        return [_strip_unsupported_strict_keywords(item) for item in schema]
+    return schema
+
+
+def _strict_tool_schema(name: str, description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Build an OpenAI strict-mode tool schema from a (possibly Pydantic-derived) parameters schema."""
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": _strip_unsupported_strict_keywords(parameters),
+            "strict": True,
+        },
+    }
+
+
 async def decompose_task(
     *,
     query: str,
@@ -375,14 +426,11 @@ async def decompose_task(
             "content": f"Standalone user task:\n{query}",
         },
     ]
-    tool_schema = {
-        "type": "function",
-        "function": {
-            "name": "decompose_task",
-            "description": "Return the exact capability-neutral task decomposition.",
-            "parameters": DecomposeTaskInput.model_json_schema(),
-        },
-    }
+    tool_schema = _strict_tool_schema(
+        "decompose_task",
+        "Return the exact capability-neutral task decomposition.",
+        DecomposeTaskInput.model_json_schema(),
+    )
 
     async with runtime.create_llm() as llm:
         response = await llm.medium(
@@ -441,28 +489,23 @@ async def decompose_task(
                 "uniqueItems": True,
                 "maxItems": len(earlier_ids),
             }
-        dependency_tool = {
-            "type": "function",
-            "function": {
-                "name": "assign_dependencies",
-                "description": (
-                    "Assign dependencies among the frozen ordered operations."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "dependencies": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": dependency_properties,
-                            "required": operation_ids,
-                        }
-                    },
-                    "required": ["dependencies"],
+        dependency_tool = _strict_tool_schema(
+            "assign_dependencies",
+            "Assign dependencies among the frozen ordered operations.",
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "dependencies": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": dependency_properties,
+                        "required": operation_ids,
+                    }
                 },
+                "required": ["dependencies"],
             },
-        }
+        )
         frozen_operations = [
             {"operation_id": operation_id, "description": description}
             for operation_id, description in zip(
