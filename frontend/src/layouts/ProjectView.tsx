@@ -8,6 +8,7 @@ import { Chat } from "../components/Chat";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { Header } from "../components/Header";
 import { LeftPanel } from "../components/LeftPanel";
+import { DashboardHome } from "../components/dashboard/DashboardHome";
 
 type TabId = "chat" | "dashboard" | "artifacts" | "agents" | "admin";
 
@@ -93,8 +94,10 @@ export function ProjectView({ onLogout }: Props) {
             <Chat scrollContainerRef={chatScrollRef} />
           </div>
           {activeTab === "dashboard" && (
-            <div className="flex flex-1 items-center justify-center text-base-content/40 text-sm">
-              Dashboard coming soon
+            <div className="flex flex-1 overflow-hidden">
+              {/* Launching from dashboard-home drops the user into the chat tab.
+                  Seeding the conversation with the prompt is a follow-up. */}
+              <DashboardHome onStart={() => setActiveTab("chat")} />
             </div>
           )}
           {activeTab === "artifacts" && (
