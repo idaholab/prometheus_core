@@ -555,7 +555,7 @@ def test_turn_resolution_rejects_unknown_invocation_reference(monkeypatch) -> No
 
     with pytest.raises(
         planner.PlanningContractError,
-        match="unavailable prior invocation 'invocation_99'",
+        match="'invocation_99' is not an available prior invocation",
     ):
         asyncio.run(
             planner.resolve_turn(
@@ -564,6 +564,40 @@ def test_turn_resolution_rejects_unknown_invocation_reference(monkeypatch) -> No
                 context={},
             )
         )
+
+    # The reference check is a semantic check inside the retry loop, so the model
+    # gets one corrective re-ask before the turn is failed.
+    assert len(fake_llm.calls) == 2
+    assert any(
+        "is not an available prior invocation" in message.get("content", "")
+        for message in fake_llm.calls[1][0]
+    )
+
+
+def test_turn_resolution_recovers_from_unknown_invocation_reference(monkeypatch) -> None:
+    bad_reference = {
+        "resolution_kind": "repeat_prior_task_with_changes",
+        "standalone_request": "Search the literature for chloride salts.",
+        "referenced_invocation_id": "invocation_99",
+        "message": "",
+    }
+    fake_llm = _DecompositionLLM(
+        [_turn_resolution_call(bad_reference)],
+        [[_turn_resolution_call({**bad_reference, "referenced_invocation_id": "invocation_1"})]],
+    )
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    resolution = asyncio.run(
+        planner.resolve_turn(
+            query="what about chloride salts?",
+            history=_literature_history(),
+            context={},
+        )
+    )
+
+    assert resolution.resolution_kind == "repeat_prior_task_with_changes"
+    assert resolution.referenced_invocation_id == "invocation_1"
+    assert len(fake_llm.calls) == 2
 
 
 def test_turn_resolution_rejects_contradictory_new_task_payload(monkeypatch) -> None:
@@ -628,13 +662,9 @@ def test_decomposition_assigns_stable_ids_and_dependencies(monkeypatch) -> None:
         [
             _decomposition_call(
                 {
-                    "operations": [
-                        {
-                            "description": "Re-author the valve with twice the hole diameter",
-                        },
-                        {
-                            "description": "Mesh the newly authored CAD with about 30000 tetrahedra",
-                        },
+                    "operation_descriptions": [
+                        "Re-author the valve with twice the hole diameter",
+                        "Mesh the newly authored CAD with about 30000 tetrahedra",
                     ],
                 }
             )
@@ -643,7 +673,7 @@ def test_decomposition_assigns_stable_ids_and_dependencies(monkeypatch) -> None:
             [
                 _dependency_call(
                     {
-                        "dependencies": {
+                        "depends_on_by_operation": {
                             "op_1": [],
                             "op_2": ["op_1"],
                         }
@@ -669,7 +699,9 @@ def test_decomposition_assigns_stable_ids_and_dependencies(monkeypatch) -> None:
     assert "depends_on" not in json.dumps(decomposition_schema)
     assert fake_llm.calls[1][1]["tools"][0]["function"]["strict"] is True
     dependency_schema = fake_llm.calls[1][1]["tools"][0]["function"]["parameters"]
-    dependency_properties = dependency_schema["properties"]["dependencies"]["properties"]
+    dependency_properties = dependency_schema["properties"]["depends_on_by_operation"][
+        "properties"
+    ]
     # maxItems/uniqueItems are stripped from the wire schema for OpenAI strict-mode
     # compatibility; op_1 (no earlier ops) is left with an unconstrained items type.
     assert "maxItems" not in dependency_properties["op_1"]
@@ -682,7 +714,7 @@ def test_single_operation_decomposition_does_not_ask_for_dependencies(monkeypatc
         [
             _decomposition_call(
                 {
-                    "operations": [{"description": "Remesh the attached CAD"}],
+                    "operation_descriptions": ["Remesh the attached CAD"],
                 }
             )
         ]
@@ -706,47 +738,206 @@ def test_single_operation_decomposition_does_not_ask_for_dependencies(monkeypatc
     assert "depends_on" not in json.dumps(decomposition_schema)
 
 
-def test_dependency_assignment_rejects_self_dependencies(monkeypatch) -> None:
+# Tool-arg shape drift observed (or plausibly reachable) when the provider does
+# not enforce constrained tool-call decoding. Every entry must be repaired in
+# place, without spending a corrective retry.
+_DECOMPOSITION_DRIFT = [
+    pytest.param(
+        {"operation_descriptions": ["Remesh the attached CAD"]},
+        id="canonical",
+    ),
+    pytest.param(
+        # The reported failure: the property holds a JSON *string* of itself.
+        {
+            "operation_descriptions": json.dumps(
+                {"operation_descriptions": ["Remesh the attached CAD"]}
+            )
+        },
+        id="json-string-of-self",
+    ),
+    pytest.param(
+        {"operation_descriptions": {"operation_descriptions": ["Remesh the attached CAD"]}},
+        id="nested-in-self",
+    ),
+    pytest.param(
+        {"operation_descriptions": json.dumps(["Remesh the attached CAD"])},
+        id="json-string-of-value",
+    ),
+    pytest.param(
+        {"input": {"operation_descriptions": ["Remesh the attached CAD"]}},
+        id="stray-wrapper-key",
+    ),
+    pytest.param(["Remesh the attached CAD"], id="bare-list-no-wrapper"),
+]
+
+
+@pytest.mark.parametrize("arguments", _DECOMPOSITION_DRIFT)
+def test_decomposition_repairs_tool_arg_shape_drift(monkeypatch, arguments) -> None:
+    fake_llm = _DecompositionLLM([_decomposition_call(arguments)])
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    result = asyncio.run(planner.decompose_task(query="Remesh it with half the element size."))
+
+    assert result.operations == [_operation("op_1", "Remesh the attached CAD", [])]
+    # Repaired in place: one decomposition call, no corrective retry.
+    assert len(fake_llm.calls) == 1
+
+
+_DEPENDENCY_DRIFT = [
+    pytest.param(
+        {"depends_on_by_operation": {"op_1": [], "op_2": ["op_1"]}},
+        id="canonical",
+    ),
+    pytest.param(
+        # The originally reported failure, under the renamed wrapper property.
+        {"depends_on_by_operation": {"depends_on_by_operation": {"op_1": [], "op_2": ["op_1"]}}},
+        id="nested-in-self",
+    ),
+    pytest.param(
+        {"depends_on_by_operation": json.dumps({"op_1": [], "op_2": ["op_1"]})},
+        id="json-string-of-value",
+    ),
+    pytest.param(
+        {"arguments": {"depends_on_by_operation": {"op_1": [], "op_2": ["op_1"]}}},
+        id="stray-wrapper-key",
+    ),
+    pytest.param({"op_1": [], "op_2": ["op_1"]}, id="bare-map-no-wrapper"),
+]
+
+
+@pytest.mark.parametrize("arguments", _DEPENDENCY_DRIFT)
+def test_dependency_assignment_repairs_tool_arg_shape_drift(monkeypatch, arguments) -> None:
     fake_llm = _DecompositionLLM(
         [
             _decomposition_call(
                 {
-                    "operations": [
-                        {"description": "Create CAD geometry"},
-                        {"description": "Mesh the created CAD"},
+                    "operation_descriptions": [
+                        "Ingest the attached valve geometry",
+                        "Hex mesh the ingested valve geometry",
                     ],
                 }
             )
         ],
+        [[_dependency_call(arguments)]],
+    )
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    result = asyncio.run(planner.decompose_task(query="Hex mesh the attached valve geometry"))
+
+    assert result.operations[1].depends_on == ["op_1"]
+    # decompose_task + one dependency call; repair needs no corrective retry.
+    assert len(fake_llm.calls) == 2
+
+
+def _two_operation_decomposition():
+    return [
+        _decomposition_call(
+            {
+                "operation_descriptions": [
+                    "Create CAD geometry",
+                    "Mesh the created CAD",
+                ],
+            }
+        )
+    ]
+
+
+def test_dependency_assignment_retries_on_unrepairable_args(monkeypatch) -> None:
+    # String values in place of lists are not a wrapper problem, so no candidate
+    # in the coercion ladder can fix them — this must earn a corrective retry.
+    fake_llm = _DecompositionLLM(
+        _two_operation_decomposition(),
         [
-            [
-                _dependency_call(
-                    {
-                        "dependencies": {
-                            "op_1": ["op_1"],
-                            "op_2": [],
-                        }
-                    }
-                )
-            ]
+            [_dependency_call({"depends_on_by_operation": {"op_1": "", "op_2": "op_1"}})],
+            [_dependency_call({"depends_on_by_operation": {"op_1": [], "op_2": ["op_1"]}})],
         ],
+    )
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    result = asyncio.run(planner.decompose_task(query="Create CAD and mesh it."))
+
+    assert result.operations[1].depends_on == ["op_1"]
+    # decompose_task call + first (bad) dependency call + retry.
+    assert len(fake_llm.calls) == 3
+    retry_messages = fake_llm.calls[2][0]
+    corrections = [
+        message
+        for message in retry_messages
+        if message.get("role") == "user" and "was rejected" in message.get("content", "")
+    ]
+    assert len(corrections) == 1
+    assert "depends_on_by_operation" in corrections[0]["content"]
+
+
+def test_dependency_assignment_retries_on_semantic_violation(monkeypatch) -> None:
+    # A self-dependency satisfies the schema but not the ordering rule; semantic
+    # checks live inside the retry loop, so this recovers rather than aborting.
+    fake_llm = _DecompositionLLM(
+        _two_operation_decomposition(),
+        [
+            [_dependency_call({"depends_on_by_operation": {"op_1": ["op_1"], "op_2": []}})],
+            [_dependency_call({"depends_on_by_operation": {"op_1": [], "op_2": ["op_1"]}})],
+        ],
+    )
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    result = asyncio.run(planner.decompose_task(query="Create CAD and mesh it."))
+
+    assert result.operations[1].depends_on == ["op_1"]
+    assert len(fake_llm.calls) == 3
+    assert any(
+        "may only depend on earlier operations" in message.get("content", "")
+        for message in fake_llm.calls[2][0]
+    )
+
+
+def test_dependency_assignment_raises_after_exhausting_retries(monkeypatch) -> None:
+    bad_batch = [_dependency_call({"depends_on_by_operation": {"op_1": "", "op_2": "op_1"}})]
+    fake_llm = _DecompositionLLM(
+        _two_operation_decomposition(),
+        [bad_batch, bad_batch],
     )
     monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
 
     with pytest.raises(
         planner.PlanningContractError,
-        match="operation 1 references non-earlier dependencies: op_1",
+        match="Dependency assignment violates its schema",
     ):
-        asyncio.run(
-            planner.decompose_task(
-                query="Create CAD and mesh it.",
-            )
-        )
+        asyncio.run(planner.decompose_task(query="Create CAD and mesh it."))
+
+
+def test_dependency_assignment_raises_after_repeated_semantic_violation(monkeypatch) -> None:
+    bad_batch = [_dependency_call({"depends_on_by_operation": {"op_1": ["op_1"], "op_2": []}})]
+    fake_llm = _DecompositionLLM(
+        _two_operation_decomposition(),
+        [bad_batch, bad_batch],
+    )
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    with pytest.raises(
+        planner.PlanningContractError,
+        match="may only depend on earlier operations",
+    ):
+        asyncio.run(planner.decompose_task(query="Create CAD and mesh it."))
+
+
+def test_decomposition_raises_after_unrepairable_args(monkeypatch) -> None:
+    bad_batch = [_decomposition_call({"operation_descriptions": [{"description": "Mesh CAD"}]})]
+    fake_llm = _DecompositionLLM(bad_batch, [bad_batch])
+    monkeypatch.setattr(runtime, "create_llm", lambda: fake_llm)
+
+    with pytest.raises(
+        planner.PlanningContractError,
+        match="Task decomposition violates its schema",
+    ):
+        asyncio.run(planner.decompose_task(query="Mesh the CAD."))
+
+    assert len(fake_llm.calls) == 2
 
 
 def test_decomposition_rejects_more_than_one_tool_call(monkeypatch) -> None:
     arguments = {
-        "operations": [{"description": "Mesh CAD", "depends_on": []}],
+        "operation_descriptions": ["Mesh CAD"],
     }
     fake_llm = _DecompositionLLM(
         [_decomposition_call(arguments, "one"), _decomposition_call(arguments, "two")]
@@ -781,13 +972,9 @@ def test_compile_plan_routes_resolved_elliptical_followup(monkeypatch) -> None:
             [
                 _decomposition_call(
                     {
-                        "operations": [
-                            {
-                                "description": (
-                                    "Search the literature for suitable wall materials "
-                                    "for chloride molten salt reactors"
-                                )
-                            }
+                        "operation_descriptions": [
+                            "Search the literature for suitable wall materials "
+                            "for chloride molten salt reactors"
                         ]
                     }
                 )

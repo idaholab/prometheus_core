@@ -8,12 +8,6 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DecomposedOperationInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    description: str = Field(min_length=1)
-
-
 class NewTaskResolutionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -55,15 +49,30 @@ class TurnResolution(BaseModel):
 
 
 class DecomposeTaskInput(BaseModel):
+    """Flat decomposition payload.
+
+    ``operation_descriptions`` is a list of plain strings rather than a list of
+    single-field objects: the flat form keeps ``$defs``/``$ref`` out of the
+    advertised tool schema and gives the model one less nesting level to get
+    wrong.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    operations: List[DecomposedOperationInput] = Field(min_length=1)
+    operation_descriptions: List[str] = Field(min_length=1)
 
 
 class AssignDependenciesInput(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    """Dependency edges keyed by operation id.
 
-    dependencies: Dict[str, List[str]]
+    The wrapper property is deliberately *not* named ``dependencies``: a payload
+    named the same as its wrapper invites the model to repeat the key
+    (``{"dependencies": {"dependencies": {...}}}``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    depends_on_by_operation: Dict[str, List[str]]
 
 
 class RequestedOperation(BaseModel):

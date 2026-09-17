@@ -49,10 +49,8 @@ class _FakePlannerLLM:
                         "name": "decompose_task",
                         "arguments": json.dumps(
                             {
-                                "operations": [
-                                    {
-                                        "description": "Analyze the material's thermal behavior",
-                                    }
+                                "operation_descriptions": [
+                                    "Analyze the material's thermal behavior",
                                 ],
                             }
                         ),

@@ -62,7 +62,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from langchain_core.tools import StructuredTool
 from prometheus_api import load_prompt
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from artifact_handling import collect_chain_required_paths
 from capability_cache import AgentCapability
@@ -311,35 +311,30 @@ async def resolve_turn(
             }
         )
 
-    async with runtime.create_llm() as llm:
-        response = await llm.medium(
-            messages,
-            temperature=0,
-            max_tokens=2048,
-            tools=resolution_tools,
-        )
+    def _check_invocation_reference(_tool_name: str, parsed: Any) -> Optional[str]:
+        referenced = getattr(parsed, "referenced_invocation_id", None)
+        if referenced and referenced not in invocation_ids:
+            return (
+                f"referenced_invocation_id '{referenced}' is not an available prior "
+                f"invocation; choose one of {invocation_ids or '(none available)'}"
+            )
+        return None
 
-    _, calls = _planning_tool_calls(response.raw)
-    if len(calls) != 1 or calls[0].get("name") not in resolution_models:
-        raise PlanningContractError(
-            "Turn resolution must call exactly one provided resolution function."
-        )
-    tool_name = str(calls[0]["name"])
-    try:
-        parsed = resolution_models[tool_name].model_validate(calls[0].get("args"))
-    except ValidationError as exc:
-        raise PlanningContractError(
-            f"Turn resolution violates its schema: {exc}"
-        ) from exc
+    tool_name, parsed = await _call_planning_tool(
+        messages=messages,
+        tools=resolution_tools,
+        expected=resolution_models,
+        error_prefix="Turn resolution violates its schema",
+        shape_hint=(
+            "Arguments must be a flat object holding only that function's own "
+            "properties, with no extra nesting and no JSON encoded as a string."
+        ),
+        semantic_check=_check_invocation_reference,
+    )
 
     standalone_request = str(getattr(parsed, "standalone_request", "")).strip()
     message = str(getattr(parsed, "message", "")).strip()
     referenced_invocation_id = getattr(parsed, "referenced_invocation_id", None)
-    if referenced_invocation_id and referenced_invocation_id not in invocation_ids:
-        raise PlanningContractError(
-            "Turn resolution references unavailable prior invocation "
-            f"'{referenced_invocation_id}'."
-        )
 
     resolution_kinds = {
         "resolve_new_task": "new_task",
@@ -395,7 +390,12 @@ def _strip_unsupported_strict_keywords(schema: Any) -> Any:
 
 
 def _strict_tool_schema(name: str, description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Build an OpenAI strict-mode tool schema from a (possibly Pydantic-derived) parameters schema."""
+    """Build an OpenAI strict-mode tool schema from a (possibly Pydantic-derived) parameters schema.
+
+    ``strict`` is advisory: OpenAI honors it as constrained decoding, but the
+    registry/LiteLLM proxy and non-OpenAI providers ignore it. Correctness must
+    therefore never depend on it — ``_call_planning_tool`` repairs and re-asks.
+    """
     return {
         "type": "function",
         "function": {
@@ -405,6 +405,195 @@ def _strict_tool_schema(name: str, description: str, parameters: Dict[str, Any])
             "strict": True,
         },
     }
+
+
+_TOOL_ARG_UNWRAP_LIMIT = 4
+
+
+def _json_or_none(value: Any) -> Any:
+    """Parse ``value`` as JSON when it is a non-empty string, else return ``None``."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _repair_tool_arg_fields(
+    payload: Mapping[str, Any], field_names: set[str]
+) -> Dict[str, Any]:
+    """Unwrap JSON-string values and self-named nesting for each known field.
+
+    Handles the two observed drifts: a field carrying a JSON *string* instead of
+    the structure, and a field repeated inside itself
+    (``{"operations": {"operations": [...]}}``).
+    """
+    repaired = dict(payload)
+    for name in field_names & set(repaired):
+        value = repaired[name]
+        for _ in range(_TOOL_ARG_UNWRAP_LIMIT):
+            parsed = _json_or_none(value)
+            if parsed is not None:
+                value = parsed
+                continue
+            if isinstance(value, Mapping) and set(value.keys()) == {name}:
+                value = value[name]
+                continue
+            break
+        repaired[name] = value
+    return repaired
+
+
+def _coerce_tool_args(
+    raw_args: Any, model: type[BaseModel], raw_arguments: str = ""
+) -> List[Any]:
+    """Return candidate payloads for ``model``, most faithful first.
+
+    The untouched tool args are always the first candidate, so a payload that
+    already satisfies the model is never rewritten. Later candidates repair the
+    shape drift that appears when the provider does not enforce constrained
+    tool-call decoding (see ``_strict_tool_schema``): the whole payload arriving
+    as a JSON string, a payload hidden under a stray wrapper key, a property
+    repeated inside itself, or the wrapper omitted entirely.
+    """
+    candidates: List[Any] = [raw_args]
+
+    def add(candidate: Any) -> None:
+        if not any(candidate == existing for existing in candidates):
+            candidates.append(candidate)
+
+    field_names = set(model.model_fields)
+    single_field = next(iter(field_names)) if len(field_names) == 1 else None
+
+    roots: List[Any] = [raw_args]
+    for source in (raw_args, raw_arguments):
+        parsed_root = _json_or_none(source)
+        if parsed_root is not None:
+            roots.append(parsed_root)
+
+    for root in roots:
+        if not isinstance(root, Mapping):
+            # A bare structure with no wrapper object at all.
+            if single_field is not None and root is not None:
+                add({single_field: root})
+            continue
+
+        payload = dict(root)
+        if root is not raw_args:
+            add(payload)
+
+        # Payload hidden under a single stray key ("input", "args", ...).
+        if len(payload) == 1:
+            only_key, only_value = next(iter(payload.items()))
+            if only_key not in field_names:
+                inner = _json_or_none(only_value)
+                if inner is None:
+                    inner = only_value
+                if isinstance(inner, Mapping):
+                    add(_repair_tool_arg_fields(inner, field_names))
+                elif single_field is not None:
+                    add({single_field: inner})
+
+        add(_repair_tool_arg_fields(payload, field_names))
+
+        # The wrapper was omitted and the payload sits at the top level.
+        if single_field is not None and single_field not in payload:
+            add({single_field: payload})
+
+    return candidates
+
+
+async def _call_planning_tool(
+    *,
+    messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    expected: Mapping[str, type[BaseModel]],
+    error_prefix: str,
+    shape_hint: str,
+    max_tokens: int = 2048,
+    max_attempts: int = 2,
+    semantic_check: Optional[Callable[[str, Any], Optional[str]]] = None,
+) -> tuple[str, Any]:
+    """Run one single-tool planning phase, repairing and re-asking as needed.
+
+    Every planning phase that expects exactly one tool call goes through here so
+    they share the same tolerance. A rejected call — wrong call count, unusable
+    argument shape, or a ``semantic_check`` failure — is re-asked once with the
+    reason fed back, and only a genuinely unrecoverable answer raises
+    ``PlanningContractError``.
+
+    Returns the ``(tool_name, parsed_model)`` pair of the accepted call.
+    """
+    attempt_messages = list(messages)
+    tool_names = sorted(expected)
+    attempts = max(1, max_attempts)
+    last_error = "no attempts made"
+
+    for attempt in range(1, attempts + 1):
+        async with runtime.create_llm() as llm:
+            response = await llm.medium(
+                attempt_messages,
+                temperature=0,
+                max_tokens=max_tokens,
+                tools=tools,
+            )
+        _, calls = _planning_tool_calls(response.raw)
+
+        if len(calls) != 1 or str(calls[0].get("name")) not in expected:
+            called = [str(call.get("name")) for call in calls]
+            last_error = (
+                f"{' or '.join(tool_names)} must be called exactly once; got "
+                f"{called if called else 'no tool calls'}"
+            )
+        else:
+            call = calls[0]
+            tool_name = str(call["name"])
+            model = expected[tool_name]
+            decode_error = str(call.get("args_error") or "")
+            logger.warning(
+                "[PLANNER][DEBUG] %s raw args (attempt %d): %s",
+                tool_name,
+                attempt,
+                json.dumps(call.get("args"), default=str),
+            )
+
+            parsed: Any = None
+            for candidate in _coerce_tool_args(
+                call.get("args"), model, str(call.get("raw_arguments") or "")
+            ):
+                try:
+                    parsed = model.model_validate(candidate)
+                except ValidationError as exc:
+                    last_error = str(exc)
+                    parsed = None
+                    continue
+                break
+
+            if parsed is None and decode_error:
+                last_error = f"tool-call arguments were not valid JSON ({decode_error})"
+            elif parsed is not None:
+                problem = semantic_check(tool_name, parsed) if semantic_check else None
+                if problem is None:
+                    return tool_name, parsed
+                last_error = problem
+
+        if attempt < attempts:
+            attempt_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Your previous tool call was rejected: {last_error}\n"
+                        f"Call {' or '.join(tool_names)} exactly once, with no prose. "
+                        f"{shape_hint}"
+                    ),
+                }
+            )
+
+    raise PlanningContractError(f"{error_prefix}: {last_error}")
 
 
 async def decompose_task(
@@ -432,42 +621,31 @@ async def decompose_task(
         DecomposeTaskInput.model_json_schema(),
     )
 
-    async with runtime.create_llm() as llm:
-        response = await llm.medium(
-            messages,
-            temperature=0,
-            max_tokens=2048,
-            tools=[tool_schema],
-        )
+    def _check_descriptions(_tool_name: str, parsed: Any) -> Optional[str]:
+        for index, description in enumerate(parsed.operation_descriptions, 1):
+            if not str(description).strip():
+                return f"operation {index} has an empty description"
+        return None
 
-    _, calls = _planning_tool_calls(response.raw)
-    if len(calls) != 1 or calls[0].get("name") != "decompose_task":
-        raise PlanningContractError(
-            "Task decomposition must call decompose_task exactly once."
-        )
-    logger.warning(
-        "[PLANNER][DEBUG] decompose_task raw args: %s",
-        json.dumps(calls[0].get("args"), default=str),
+    _, decomposed = await _call_planning_tool(
+        messages=messages,
+        tools=[tool_schema],
+        expected={"decompose_task": DecomposeTaskInput},
+        error_prefix="Task decomposition violates its schema",
+        shape_hint=(
+            'Arguments must be shaped as {"operation_descriptions": '
+            '["<first outcome>", "<second outcome>", ...]} — a flat list of '
+            "plain strings, one per requested outcome, with no extra nesting."
+        ),
+        semantic_check=_check_descriptions,
     )
-    try:
-        parsed = DecomposeTaskInput.model_validate(calls[0].get("args"))
-    except ValidationError as exc:
-        raise PlanningContractError(
-            f"Task decomposition violates its schema: {exc}"
-        ) from exc
 
-    operation_descriptions: List[str] = []
-    for index, operation in enumerate(parsed.operations, 1):
-        description = operation.description.strip()
-        if not description:
-            raise PlanningContractError(
-                f"Decomposed operation {index} has an empty description."
-            )
-        operation_descriptions.append(description)
+    operation_descriptions: List[str] = [
+        str(description).strip() for description in decomposed.operation_descriptions
+    ]
 
-    dependency_map = {
-        f"op_{index}": []
-        for index in range(1, len(operation_descriptions) + 1)
+    dependency_map: Dict[str, List[str]] = {
+        f"op_{index}": [] for index in range(1, len(operation_descriptions) + 1)
     }
     if len(operation_descriptions) > 1:
         if status_callback:
@@ -496,14 +674,14 @@ async def decompose_task(
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "dependencies": {
+                    "depends_on_by_operation": {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": dependency_properties,
                         "required": operation_ids,
                     }
                 },
-                "required": ["dependencies"],
+                "required": ["depends_on_by_operation"],
             },
         )
         frozen_operations = [
@@ -532,58 +710,48 @@ async def decompose_task(
                 ),
             },
         ]
-        async with runtime.create_llm() as llm:
-            dependency_response = await llm.medium(
-                dependency_messages,
-                temperature=0,
-                max_tokens=1024,
-                tools=[dependency_tool],
-            )
-        _, dependency_calls = _planning_tool_calls(dependency_response.raw)
-        if (
-            len(dependency_calls) != 1
-            or dependency_calls[0].get("name") != "assign_dependencies"
-        ):
-            raise PlanningContractError(
-                "Dependency assignment must call assign_dependencies exactly once."
-            )
-        logger.warning(
-            "[PLANNER][DEBUG] assign_dependencies raw args: %s",
-            json.dumps(dependency_calls[0].get("args"), default=str),
+
+        def _check_dependencies(_tool_name: str, parsed: Any) -> Optional[str]:
+            """Validate the edges themselves, so semantic drift also earns a retry."""
+            assignment = parsed.depends_on_by_operation
+            if set(assignment) != set(operation_ids):
+                return (
+                    "the assignment must contain exactly one entry for each of "
+                    f"{operation_ids}"
+                )
+            for position, operation_id in enumerate(operation_ids):
+                dependencies = assignment[operation_id]
+                if len(set(dependencies)) != len(dependencies):
+                    return f"{operation_id} lists duplicate dependencies"
+                earlier_ids = operation_ids[:position]
+                invalid = [item for item in dependencies if item not in earlier_ids]
+                if invalid:
+                    return (
+                        f"{operation_id} may only depend on earlier operations "
+                        f"{earlier_ids or '(none)'}; got {invalid}"
+                    )
+            return None
+
+        _, assigned = await _call_planning_tool(
+            messages=dependency_messages,
+            tools=[dependency_tool],
+            expected={"assign_dependencies": AssignDependenciesInput},
+            error_prefix="Dependency assignment violates its schema",
+            shape_hint=(
+                'Arguments must be shaped as {"depends_on_by_operation": '
+                '{"<operation_id>": ["<earlier_operation_id>", ...]}} — one entry '
+                f"for each of {operation_ids}, values are lists (empty if the "
+                "operation depends on nothing), with no extra nesting."
+            ),
+            max_tokens=1024,
+            semantic_check=_check_dependencies,
         )
-        try:
-            assigned = AssignDependenciesInput.model_validate(
-                dependency_calls[0].get("args")
-            )
-        except ValidationError as exc:
-            raise PlanningContractError(
-                f"Dependency assignment violates its schema: {exc}"
-            ) from exc
-        if set(assigned.dependencies) != set(operation_ids):
-            raise PlanningContractError(
-                "Dependency assignment must contain exactly the frozen operation IDs."
-            )
-        dependency_map = assigned.dependencies
+        dependency_map = assigned.depends_on_by_operation
 
     operations: List[RequestedOperation] = []
     for index, description in enumerate(operation_descriptions, 1):
         operation_id = f"op_{index}"
         dependencies = dependency_map[operation_id]
-        if len(set(dependencies)) != len(dependencies):
-            raise PlanningContractError(
-                f"Decomposed operation {index} has duplicate dependencies."
-            )
-        earlier_ids = {f"op_{earlier}" for earlier in range(1, index)}
-        invalid_dependencies = [
-            dependency
-            for dependency in dependencies
-            if dependency not in earlier_ids
-        ]
-        if invalid_dependencies:
-            raise PlanningContractError(
-                f"Decomposed operation {index} references non-earlier dependencies: "
-                + ", ".join(str(item) for item in invalid_dependencies)
-            )
         operations.append(
             RequestedOperation(
                 operation_id=operation_id,
@@ -1280,20 +1448,34 @@ def _planning_tool_calls(raw: Any) -> tuple[Dict[str, Any], List[Dict[str, Any]]
         function = _value(call, "function", {}) or {}
         name = str(_value(function, "name", ""))
         arguments = _value(function, "arguments", {})
+        args_error = ""
         if isinstance(arguments, str):
             try:
                 parsed_arguments = json.loads(arguments)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                # Keep args empty so tool invocation still sees a mapping, but
+                # record why: otherwise truncated JSON is indistinguishable from
+                # an empty call and surfaces as a misleading "field required".
                 parsed_arguments = {}
+                args_error = str(exc)
             wire_arguments = arguments
         elif isinstance(arguments, Mapping):
             parsed_arguments = dict(arguments)
             wire_arguments = json.dumps(parsed_arguments)
         else:
             parsed_arguments = {}
+            args_error = f"arguments had unusable type {type(arguments).__name__}"
             wire_arguments = "{}"
         call_id = str(_value(call, "id", ""))
-        tool_calls.append({"name": name, "args": parsed_arguments, "id": call_id})
+        tool_calls.append(
+            {
+                "name": name,
+                "args": parsed_arguments,
+                "id": call_id,
+                "raw_arguments": wire_arguments,
+                "args_error": args_error,
+            }
+        )
         assistant_calls.append(
             {
                 "id": call_id,
