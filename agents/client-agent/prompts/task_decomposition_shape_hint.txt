@@ -1,0 +1,1 @@
+Arguments must be shaped as {"operation_descriptions": ["<first outcome>", "<second outcome>", ...]} — a flat list of plain strings, one per requested outcome, with no extra nesting.

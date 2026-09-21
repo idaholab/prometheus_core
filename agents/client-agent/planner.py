@@ -112,6 +112,58 @@ TASK_DECOMPOSITION_SYSTEM_PROMPT = load_prompt(
     "task_decomposition_system.txt",
     prompts_dir=PROMPTS_DIR,
 )
+DEPENDENCY_ASSIGNMENT_SYSTEM_PROMPT = load_prompt(
+    "dependency_assignment_system.txt",
+    prompts_dir=PROMPTS_DIR,
+)
+
+# Retry instruction and per-stage shape hints fed back to the model when a
+# schema-bound tool call is rejected (see `_call_planning_tool`).
+PLANNING_TOOL_RETRY_PROMPT = load_prompt(
+    "planning_tool_retry.txt",
+    prompts_dir=PROMPTS_DIR,
+)
+TURN_RESOLUTION_SHAPE_HINT = load_prompt(
+    "turn_resolution_shape_hint.txt",
+    prompts_dir=PROMPTS_DIR,
+)
+TASK_DECOMPOSITION_SHAPE_HINT = load_prompt(
+    "task_decomposition_shape_hint.txt",
+    prompts_dir=PROMPTS_DIR,
+)
+DEPENDENCY_ASSIGNMENT_SHAPE_HINT = load_prompt(
+    "dependency_assignment_shape_hint.txt",
+    prompts_dir=PROMPTS_DIR,
+)
+
+# JSON-Schema keywords that OpenAI strict tool-call mode rejects outright; they
+# are stripped from every advertised schema by `_strip_unsupported_strict_keywords`.
+_STRICT_UNSUPPORTED_SCHEMA_KEYWORDS = {
+    "minLength",
+    "maxLength",
+    "pattern",
+    "format",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "multipleOf",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+    "minProperties",
+    "maxProperties",
+    "patternProperties",
+    "propertyNames",
+    "unevaluatedProperties",
+}
+
+# How many layers of drift `_repair_tool_arg_fields` will peel off one field.
+# Each pass removes exactly one layer: a JSON-encoded string, or a field nested
+# inside itself. Two layers is the worst combination seen in practice (a JSON
+# string whose object repeats the field name); 4 leaves headroom for a
+# double-encoded variant while keeping the loop bounded on pathological input.
+_TOOL_ARG_UNWRAP_LIMIT = 4
 
 
 class PlanningContractError(RuntimeError):
@@ -325,10 +377,7 @@ async def resolve_turn(
         tools=resolution_tools,
         expected=resolution_models,
         error_prefix="Turn resolution violates its schema",
-        shape_hint=(
-            "Arguments must be a flat object holding only that function's own "
-            "properties, with no extra nesting and no JSON encoded as a string."
-        ),
+        shape_hint=TURN_RESOLUTION_SHAPE_HINT,
         semantic_check=_check_invocation_reference,
     )
 
@@ -349,27 +398,6 @@ async def resolve_turn(
         referenced_invocation_id=referenced_invocation_id,
         message=message,
     )
-
-
-_STRICT_UNSUPPORTED_SCHEMA_KEYWORDS = {
-    "minLength",
-    "maxLength",
-    "pattern",
-    "format",
-    "minimum",
-    "maximum",
-    "exclusiveMinimum",
-    "exclusiveMaximum",
-    "multipleOf",
-    "minItems",
-    "maxItems",
-    "uniqueItems",
-    "minProperties",
-    "maxProperties",
-    "patternProperties",
-    "propertyNames",
-    "unevaluatedProperties",
-}
 
 
 def _strip_unsupported_strict_keywords(schema: Any) -> Any:
@@ -407,11 +435,14 @@ def _strict_tool_schema(name: str, description: str, parameters: Dict[str, Any])
     }
 
 
-_TOOL_ARG_UNWRAP_LIMIT = 4
+def _json_from_string(value: Any) -> Any:
+    """Parse ``value`` as JSON when it is a non-empty string, else return ``None``.
 
-
-def _json_or_none(value: Any) -> Any:
-    """Parse ``value`` as JSON when it is a non-empty string, else return ``None``."""
+    Callers pass values that are just as often already-decoded structure (a
+    ``dict`` or ``list``) as text, so every non-string input returns ``None``:
+    "already decoded" and "not parseable as JSON" are the same answer here —
+    there is nothing left to unwrap.
+    """
     if not isinstance(value, str):
         return None
     text = value.strip()
@@ -436,7 +467,7 @@ def _repair_tool_arg_fields(
     for name in field_names & set(repaired):
         value = repaired[name]
         for _ in range(_TOOL_ARG_UNWRAP_LIMIT):
-            parsed = _json_or_none(value)
+            parsed = _json_from_string(value)
             if parsed is not None:
                 value = parsed
                 continue
@@ -449,9 +480,13 @@ def _repair_tool_arg_fields(
 
 
 def _coerce_tool_args(
-    raw_args: Any, model: type[BaseModel], raw_arguments: str = ""
+    decoded_args: Any, model: type[BaseModel], arguments_json: str = ""
 ) -> List[Any]:
     """Return candidate payloads for ``model``, most faithful first.
+
+    ``decoded_args`` is the tool call's arguments as the provider decoded them;
+    ``arguments_json`` is the original argument JSON text, retried as a fallback
+    root when that decoding produced something unusable.
 
     The untouched tool args are always the first candidate, so a payload that
     already satisfies the model is never rewritten. Later candidates repair the
@@ -460,7 +495,7 @@ def _coerce_tool_args(
     as a JSON string, a payload hidden under a stray wrapper key, a property
     repeated inside itself, or the wrapper omitted entirely.
     """
-    candidates: List[Any] = [raw_args]
+    candidates: List[Any] = [decoded_args]
 
     def add(candidate: Any) -> None:
         if not any(candidate == existing for existing in candidates):
@@ -469,9 +504,9 @@ def _coerce_tool_args(
     field_names = set(model.model_fields)
     single_field = next(iter(field_names)) if len(field_names) == 1 else None
 
-    roots: List[Any] = [raw_args]
-    for source in (raw_args, raw_arguments):
-        parsed_root = _json_or_none(source)
+    roots: List[Any] = [decoded_args]
+    for source in (decoded_args, arguments_json):
+        parsed_root = _json_from_string(source)
         if parsed_root is not None:
             roots.append(parsed_root)
 
@@ -483,14 +518,14 @@ def _coerce_tool_args(
             continue
 
         payload = dict(root)
-        if root is not raw_args:
+        if root is not decoded_args:
             add(payload)
 
         # Payload hidden under a single stray key ("input", "args", ...).
         if len(payload) == 1:
             only_key, only_value = next(iter(payload.items()))
             if only_key not in field_names:
-                inner = _json_or_none(only_value)
+                inner = _json_from_string(only_value)
                 if inner is None:
                     inner = only_value
                 if isinstance(inner, Mapping):
@@ -585,10 +620,10 @@ async def _call_planning_tool(
             attempt_messages.append(
                 {
                     "role": "user",
-                    "content": (
-                        f"Your previous tool call was rejected: {last_error}\n"
-                        f"Call {' or '.join(tool_names)} exactly once, with no prose. "
-                        f"{shape_hint}"
+                    "content": PLANNING_TOOL_RETRY_PROMPT.format(
+                        last_error=last_error,
+                        tool_names=" or ".join(tool_names),
+                        shape_hint=shape_hint,
                     ),
                 }
             )
@@ -632,11 +667,7 @@ async def decompose_task(
         tools=[tool_schema],
         expected={"decompose_task": DecomposeTaskInput},
         error_prefix="Task decomposition violates its schema",
-        shape_hint=(
-            'Arguments must be shaped as {"operation_descriptions": '
-            '["<first outcome>", "<second outcome>", ...]} — a flat list of '
-            "plain strings, one per requested outcome, with no extra nesting."
-        ),
+        shape_hint=TASK_DECOMPOSITION_SHAPE_HINT,
         semantic_check=_check_descriptions,
     )
 
@@ -693,13 +724,7 @@ async def decompose_task(
         dependency_messages = [
             {
                 "role": "system",
-                "content": (
-                    "Assign dependencies among the frozen operations. Call "
-                    "assign_dependencies exactly once and return no prose. Every operation "
-                    "must be present. Dependencies may reference only operation IDs allowed "
-                    "by the tool schema. Prior conversation state and artifacts are context, "
-                    "not operations in this request."
-                ),
+                "content": DEPENDENCY_ASSIGNMENT_SYSTEM_PROMPT,
             },
             {
                 "role": "user",
@@ -737,11 +762,8 @@ async def decompose_task(
             tools=[dependency_tool],
             expected={"assign_dependencies": AssignDependenciesInput},
             error_prefix="Dependency assignment violates its schema",
-            shape_hint=(
-                'Arguments must be shaped as {"depends_on_by_operation": '
-                '{"<operation_id>": ["<earlier_operation_id>", ...]}} — one entry '
-                f"for each of {operation_ids}, values are lists (empty if the "
-                "operation depends on nothing), with no extra nesting."
+            shape_hint=DEPENDENCY_ASSIGNMENT_SHAPE_HINT.format(
+                operation_ids=operation_ids
             ),
             max_tokens=1024,
             semantic_check=_check_dependencies,

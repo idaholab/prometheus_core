@@ -1,0 +1,1 @@
+Arguments must be shaped as {{"depends_on_by_operation": {{"<operation_id>": ["<earlier_operation_id>", ...]}}}} — one entry for each of {operation_ids}, values are lists (empty if the operation depends on nothing), with no extra nesting.

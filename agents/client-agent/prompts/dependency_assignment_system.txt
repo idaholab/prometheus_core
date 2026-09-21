@@ -1,0 +1,1 @@
+Assign dependencies among the frozen operations. Call assign_dependencies exactly once and return no prose. Every operation must be present. Dependencies may reference only operation IDs allowed by the tool schema. Prior conversation state and artifacts are context, not operations in this request.
