@@ -56,7 +56,6 @@ skill sequences, input bindings, and execution order.
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
@@ -98,8 +97,6 @@ from planner_models import (
 )
 from workflow_library.naming import workflow_tool_name
 from orchestrator import runtime
-
-logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).with_name("prompts")
 
@@ -589,12 +586,6 @@ async def _call_planning_tool(
             tool_name = str(call["name"])
             model = expected[tool_name]
             decode_error = str(call.get("args_error") or "")
-            logger.warning(
-                "[PLANNER][DEBUG] %s raw args (attempt %d): %s",
-                tool_name,
-                attempt,
-                json.dumps(call.get("args"), default=str),
-            )
 
             parsed: Any = None
             for candidate in _coerce_tool_args(
