@@ -83,6 +83,8 @@ _JSON_MIMETYPES = {"application/json"}
 # branch, message_handler.py:855). Kept out of _FILE_MIMETYPES so these render
 # inline rather than downloading (A-1).
 _REPORT_MIMETYPES = {"text/markdown", "text/plain"}
+# YAML → inline-rendered source (not Markdown: comments/indentation would mangle).
+_CODE_MIMETYPES = {"application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml"}
 # CAD step MIMEs (message_handler.py:33) + archives + CSV → downloadable file.
 # CSV lives here, not with JSON (A-9): the JSONViewer can't parse CSV, so hand it to
 # the download path (until a table viewer exists) rather than error the viewer.
@@ -118,6 +120,8 @@ _EXTENSION_HINTS: dict[str, RenderHint] = {
     ".json": "json",
     ".csv": "file",  # A-9: CSV downloads, not JSONViewer
     ".md": "report",
+    ".yaml": "code",
+    ".yml": "code",
     ".txt": "file",
     ".log": "file",
     ".inp": "file",
@@ -166,13 +170,25 @@ def artifact_identity(artifact: dict[str, Any]) -> str:
     return "art-" + hashlib.sha256(basis.encode("utf-8", "replace")).hexdigest()[:16]
 
 
+def _extension_hint(artifact: dict[str, Any]) -> Optional[RenderHint]:
+    """Render hint from the file extension of ``uri``, then ``name``, or ``None``."""
+    for source in (artifact.get("uri"), artifact.get("name")):
+        if not source:
+            continue
+        suffix = Path(str(source)).suffix.lower()
+        hint = _EXTENSION_HINTS.get(suffix)
+        if hint is not None:
+            return hint
+    return None
+
+
 def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
     """Derive the frontend ``render_hint`` for one artifact.
 
     First match wins, in this order:
 
     1. ``json_type`` — explicit semantic type (highest priority).
-    2. **Specific** ``mime_type`` (ifc/mesh/mermaid/image/pdf/json/report).
+    2. **Specific** ``mime_type`` (ifc/mesh/mermaid/image/pdf/json/code/report).
     3. ``tags`` — explicit routing hints.
     4. file ``extension`` (of ``uri`` or ``name``).
     5. **Generic downloadable** ``mime_type`` (octet-stream/zip/csv/step).
@@ -206,8 +222,12 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
             return "pdf"
         if mime in _JSON_MIMETYPES:
             return "json"
+        if mime in _CODE_MIMETYPES:
+            return "code"
         if mime in _REPORT_MIMETYPES:
-            return "report"
+            # A YAML file mislabeled text/plain still gets the source viewer, not
+            # Markdown (which would mangle its comments/indentation).
+            return "code" if _extension_hint(artifact) == "code" else "report"
 
     # 3. tags — explicit routing hints (only when a specific MIME didn't decide).
     tags = artifact.get("tags")
@@ -218,13 +238,9 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
                 return hint
 
     # 4. extension — of the URI first, then the name.
-    for source in (artifact.get("uri"), artifact.get("name")):
-        if not source:
-            continue
-        suffix = Path(str(source)).suffix.lower()
-        hint = _EXTENSION_HINTS.get(suffix)
-        if hint is not None:
-            return hint
+    hint = _extension_hint(artifact)
+    if hint is not None:
+        return hint
 
     # 5. generic downloadable MIME — after tags/extension so it can't mask a tag.
     if mime in _FILE_MIMETYPES:
@@ -245,9 +261,9 @@ def artifact_download_payload(
 
     Ports ``_artifact_download_payload`` (message_handler.py:978): a ``json_body``
     becomes pretty-printed ``.json``; otherwise the first non-empty ``content`` /
-    ``text`` / ``description`` becomes ``.md`` (when markdown) or ``.txt``. Returns
-    ``(bytes, extension, mime_type)`` or ``None`` when there is nothing inline to
-    serve.
+    ``text`` / ``description`` becomes ``.yaml`` (when YAML), ``.md`` (when markdown),
+    or ``.txt``. Returns ``(bytes, extension, mime_type)`` or ``None`` when there is
+    nothing inline to serve.
     """
     if artifact.get("json_body") is not None:
         content = json.dumps(artifact["json_body"], indent=2).encode("utf-8")
@@ -257,7 +273,12 @@ def artifact_download_payload(
         value = artifact.get(key)
         if value:
             effective_mime = mime_type or "text/plain"
-            extension = ".md" if effective_mime == "text/markdown" else ".txt"
+            if effective_mime == "text/markdown":
+                extension = ".md"
+            elif effective_mime in _CODE_MIMETYPES:
+                extension = ".yaml"
+            else:
+                extension = ".txt"
             return str(value).encode("utf-8"), extension, effective_mime
 
     return None

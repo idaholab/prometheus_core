@@ -175,6 +175,7 @@ RenderHint = Literal[
     "mermaid",  # Mermaid diagram → MermaidViewer
     "thermal",  # prometheus.thermal_analysis.result.v1 → ThermalAnalysisViewer
     "report",  # markdown / plain-text report → markdown renderer (rendered inline, not downloaded)
+    "code",  # YAML / config source → CodeViewer (rendered inline as plain text, not Markdown)
     "reference",  # citation / external reference (frontend formats from ``ArtifactMeta.citation``)
     "file",  # generic downloadable file (CAD/step, archives, octet-stream)
     "unknown",  # no viewer; offer download

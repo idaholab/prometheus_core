@@ -140,6 +140,19 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
         },
       };
 
+    case "code":
+      return {
+        ...base,
+        type: "custom",
+        name: "CodeViewer",
+        // Inline body when present; otherwise CodeElement fetches source from `url`.
+        props: {
+          source: typeof artifact.json_body === "string" ? artifact.json_body : "",
+          title: artifact.name,
+          url,
+        },
+      };
+
     case "reference":
       return {
         ...base,

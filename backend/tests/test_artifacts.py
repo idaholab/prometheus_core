@@ -51,6 +51,14 @@ from app.services.artifacts import (
         ({"mime_type": "application/octet-stream"}, "file"),
         ({"mime_type": "text/markdown"}, "report"),  # A-1: rendered inline, not downloaded
         ({"mime_type": "text/plain"}, "report"),  # A-1: old app rendered plain text inline too
+        ({"mime_type": "application/yaml"}, "code"),
+        ({"mime_type": "application/x-yaml"}, "code"),
+        ({"mime_type": "text/yaml"}, "code"),
+        ({"mime_type": "text/x-yaml"}, "code"),
+        ({"name": "config.yaml"}, "code"),  # extension fallback
+        ({"name": "config.yml"}, "code"),  # extension fallback
+        # text/plain + a .yaml/.yml name still gets the source viewer, not Markdown.
+        ({"mime_type": "text/plain", "name": "config.yaml"}, "code"),
         ({"mime_type": "model/step"}, "file"),  # CAD → downloadable file
         ({"mime_type": "application/x-ipynb+json"}, "file"),  # notebook → downloadable file
         ({"name": "analysis.ipynb"}, "file"),  # notebook extension fallback
@@ -120,6 +128,11 @@ def test_download_payload_json_body():
 def test_download_payload_text_prefers_markdown_extension():
     content, ext, mime = artifact_download_payload({"text": "# hi"}, mime_type="text/markdown")
     assert ext == ".md" and mime == "text/markdown" and content == b"# hi"
+
+
+def test_download_payload_text_prefers_yaml_extension():
+    content, ext, mime = artifact_download_payload({"text": "a: 1\n"}, mime_type="application/yaml")
+    assert ext == ".yaml" and mime == "application/yaml" and content == b"a: 1\n"
 
 
 def test_download_payload_none_when_nothing_inline():

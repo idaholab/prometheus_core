@@ -152,6 +152,13 @@ _ARTIFACT_MATRIX = [
     ("data-tag", {"artifact_id": "d3", "tags": ["data"]}, "json"),
     ("report-pdf", {"artifact_id": "r1", "mime_type": "application/pdf", "tags": ["report"]}, "pdf"),
     ("report-markdown", {"artifact_id": "r2", "mime_type": "text/markdown"}, "report"),
+    ("code-yaml-mime", {"artifact_id": "y1", "mime_type": "application/yaml"}, "code"),
+    ("code-yaml-ext", {"artifact_id": "y2", "name": "config.yml"}, "code"),
+    (
+        "code-plaintext-yaml-name",
+        {"artifact_id": "y3", "mime_type": "text/plain", "name": "config.yaml"},
+        "code",
+    ),
     ("file-zip", {"artifact_id": "f1", "mime_type": "application/octet-stream", "name": "logs.zip"}, "file"),
     ("file-inp", {"artifact_id": "f2", "name": "model.inp"}, "file"),
     ("ifc-mime", {"artifact_id": "i1", "mime_type": "application/ifc"}, "ifc"),

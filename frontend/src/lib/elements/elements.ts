@@ -30,6 +30,7 @@ export type ElementKind =
   | "mermaid"        // Mermaid custom element
   | "thermal"        // ThermalAnalysisViewer custom element
   | "report"         // markdown report rendered inline (render_hint === "report")
+  | "code"           // plain source text, e.g. YAML (render_hint === "code")
   | "reference"      // citation card (render_hint === "reference")
   | "unknown";
 
@@ -105,6 +106,7 @@ export function classifyElement(el: AnyElement): ElementKind {
       // (see prometheus.thermal_analysis.result.v1 plugin __init__.py).
       case "ThermalAnalysisViewer": return "thermal";
       case "ReportViewer":        return "report";
+      case "CodeViewer":          return "code";
       case "ReferenceViewer":     return "reference";
       case "SVGViewer":           return "image";
       default:                    return "unknown";
@@ -164,6 +166,7 @@ import { FollowUpSuggestionsElement }      from "../../viewers/FollowUpSuggestio
 import { PlanViewerElement }               from "../../viewers/PlanViewerElement";
 import { ThermalAnalysisElement }          from "../../viewers/ThermalAnalysisElement";
 import { ReportElement }                   from "../../viewers/ReportElement";
+import { CodeElement }                     from "../../viewers/CodeElement";
 import { ReferenceElement }                from "../../viewers/ReferenceElement";
 
 export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null>> = {
@@ -178,6 +181,7 @@ export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null
   mermaid:      MermaidElement,
   thermal:      ThermalAnalysisElement,
   report:       ReportElement,
+  code:         CodeElement,
   reference:    ReferenceElement,
   unknown:      null,
 };
