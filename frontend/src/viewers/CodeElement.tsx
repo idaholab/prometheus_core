@@ -87,27 +87,36 @@ export function CodeElement({ element }: ViewerProps) {
           )}
         </div>
       </div>
-      <div className="bg-base-100 px-4 py-3 text-sm">
-        {loadState === "loading" && <span className="text-xs text-base-content/50">Loading…</span>}
-        {loadState === "error" && (
+      {loadState === "loading" && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
+          <span className="text-xs text-base-content/50">Loading…</span>
+        </div>
+      )}
+      {loadState === "error" && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
           <span className="text-xs text-error inline-flex items-center gap-1.5">
             <AlertCircle size={13} />
             Couldn't load this file.
           </span>
-        )}
-        {loadState === "idle" && text && (
-          <pre className="code-viewer bg-base-300 rounded p-3 overflow-x-auto max-h-96">
-            {highlighted !== null ? (
-              <code
-                className={`hljs language-${language} whitespace-pre text-sm leading-5`}
-                dangerouslySetInnerHTML={{ __html: highlighted }}
-              />
-            ) : (
-              <code className="whitespace-pre text-sm leading-5">{text}</code>
-            )}
-          </pre>
-        )}
-      </div>
+        </div>
+      )}
+      {loadState === "idle" && text && (
+        // No padding/background here: the card's rounded-lg + overflow-hidden on the
+        // outer div clips this to match, so the code block's own background (the vs/
+        // vs2015 theme's white/#1E1E1E, or bg-base-100 for the plain-text fallback)
+        // sits flush against the card edges instead of showing as a mismatched inset
+        // box nested inside another background.
+        <pre className="code-viewer m-0 overflow-x-auto max-h-96">
+          {highlighted !== null ? (
+            <code
+              className={`hljs language-${language} whitespace-pre text-sm leading-5`}
+              dangerouslySetInnerHTML={{ __html: highlighted }}
+            />
+          ) : (
+            <code className="block bg-base-100 px-4 py-3 whitespace-pre text-sm leading-5">{text}</code>
+          )}
+        </pre>
+      )}
     </div>
   );
 }
