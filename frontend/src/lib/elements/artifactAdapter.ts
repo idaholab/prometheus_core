@@ -28,6 +28,7 @@
 
 import { api } from "@/lib/api/client";
 import type { ArtifactMeta } from "@/lib/api/types";
+import { languageFor } from "@/lib/highlight";
 import type { AnyElement } from "./elements";
 
 /** Best-effort mermaid diagram source from an inline body (string or `{diagram|chart|content}`). */
@@ -150,6 +151,7 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
           source: typeof artifact.json_body === "string" ? artifact.json_body : "",
           title: artifact.name,
           url,
+          language: languageFor(artifact.name, artifact.mime_type),
         },
       };
 

@@ -84,7 +84,9 @@ _JSON_MIMETYPES = {"application/json"}
 # inline rather than downloading (A-1).
 _REPORT_MIMETYPES = {"text/markdown", "text/plain"}
 # YAML → inline-rendered source (not Markdown: comments/indentation would mangle).
-_CODE_MIMETYPES = {"application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml"}
+# text/x-moose is a vendor type (not IANA-registered) for MOOSE input files; agents may
+# set it so a MOOSE input without a ".i" name still routes to the source viewer.
+_CODE_MIMETYPES = {"application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml", "text/x-moose"}
 # CAD step MIMEs (message_handler.py:33) + archives + CSV → downloadable file.
 # CSV lives here, not with JSON (A-9): the JSONViewer can't parse CSV, so hand it to
 # the download path (until a table viewer exists) rather than error the viewer.
@@ -122,10 +124,10 @@ _EXTENSION_HINTS: dict[str, RenderHint] = {
     ".md": "report",
     ".yaml": "code",
     ".yml": "code",
+    ".i": "code",  # MOOSE input file (HIT/GetPot syntax)
     ".txt": "file",
     ".log": "file",
-    ".inp": "file",
-    ".i": "file",
+    ".inp": "file",  # ambiguous (Abaqus/MCNP/etc.) — stays a download
     ".zip": "file",
     ".tar": "file",
     ".gz": "file",
@@ -261,9 +263,9 @@ def artifact_download_payload(
 
     Ports ``_artifact_download_payload`` (message_handler.py:978): a ``json_body``
     becomes pretty-printed ``.json``; otherwise the first non-empty ``content`` /
-    ``text`` / ``description`` becomes ``.yaml`` (when YAML), ``.md`` (when markdown),
-    or ``.txt``. Returns ``(bytes, extension, mime_type)`` or ``None`` when there is
-    nothing inline to serve.
+    ``text`` / ``description`` becomes ``.yaml`` (YAML), ``.i`` (MOOSE), ``.md``
+    (markdown), or ``.txt``. Returns ``(bytes, extension, mime_type)`` or ``None`` when
+    there is nothing inline to serve.
     """
     if artifact.get("json_body") is not None:
         content = json.dumps(artifact["json_body"], indent=2).encode("utf-8")
@@ -275,6 +277,8 @@ def artifact_download_payload(
             effective_mime = mime_type or "text/plain"
             if effective_mime == "text/markdown":
                 extension = ".md"
+            elif effective_mime == "text/x-moose":
+                extension = ".i"
             elif effective_mime in _CODE_MIMETYPES:
                 extension = ".yaml"
             else:

@@ -59,6 +59,11 @@ from app.services.artifacts import (
         ({"name": "config.yml"}, "code"),  # extension fallback
         # text/plain + a .yaml/.yml name still gets the source viewer, not Markdown.
         ({"mime_type": "text/plain", "name": "config.yaml"}, "code"),
+        ({"mime_type": "text/x-moose"}, "code"),  # vendor MIME, no registered IANA type
+        ({"name": "input.i"}, "code"),  # MOOSE input extension fallback
+        # text/plain + a .i name still gets the source viewer, not Markdown.
+        ({"mime_type": "text/plain", "name": "input.i"}, "code"),
+        ({"name": "model.inp"}, "file"),  # .inp is ambiguous (Abaqus/MCNP/etc.) — stays a download
         ({"mime_type": "model/step"}, "file"),  # CAD → downloadable file
         ({"mime_type": "application/x-ipynb+json"}, "file"),  # notebook → downloadable file
         ({"name": "analysis.ipynb"}, "file"),  # notebook extension fallback
@@ -133,6 +138,11 @@ def test_download_payload_text_prefers_markdown_extension():
 def test_download_payload_text_prefers_yaml_extension():
     content, ext, mime = artifact_download_payload({"text": "a: 1\n"}, mime_type="application/yaml")
     assert ext == ".yaml" and mime == "application/yaml" and content == b"a: 1\n"
+
+
+def test_download_payload_text_prefers_moose_extension():
+    content, ext, mime = artifact_download_payload({"text": "[Mesh]\n[]\n"}, mime_type="text/x-moose")
+    assert ext == ".i" and mime == "text/x-moose" and content == b"[Mesh]\n[]\n"
 
 
 def test_download_payload_none_when_nothing_inline():

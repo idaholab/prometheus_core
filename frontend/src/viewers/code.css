@@ -1,0 +1,61 @@
+/* Token colours for CodeElement's highlight.js output, built on daisyUI variables so
+   dark/light `data-theme` switching needs no second stylesheet. Two palettes:
+   - a shared default (currently just YAML) using daisyUI's semantic colours directly.
+   - a MOOSE-specific override (`.language-moose`), ported from the Prism "okaidia"
+     theme (prism.min.css), since MOOSE reuses `symbol`/`property`/`attr` with
+     different intent than the default palette.
+*/
+
+.code-viewer .hljs-comment {
+  color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  font-style: italic;
+}
+.code-viewer .hljs-attr,
+.code-viewer .hljs-section {
+  color: var(--color-primary);
+}
+.code-viewer .hljs-string {
+  color: var(--color-success);
+}
+.code-viewer .hljs-number,
+.code-viewer .hljs-literal {
+  color: var(--color-warning);
+}
+.code-viewer .hljs-meta,
+.code-viewer .hljs-bullet,
+.code-viewer .hljs-type {
+  color: var(--color-secondary);
+}
+.code-viewer .hljs-subst,
+.code-viewer .hljs-variable {
+  color: var(--color-accent);
+}
+
+/* MOOSE input files (.i) — overrides the shared palette above. */
+.code-viewer .language-moose .hljs-comment {
+  color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  font-style: normal;
+}
+.code-viewer .language-moose .hljs-keyword {
+  color: var(--color-info); /* block names, `type` */
+}
+.code-viewer .language-moose .hljs-title,
+.code-viewer .language-moose .hljs-function {
+  color: var(--color-warning); /* [object] names, type = Class */
+}
+.code-viewer .language-moose .hljs-symbol,
+.code-viewer .language-moose .hljs-property {
+  color: var(--color-error); /* FIRST, LAGRANGE, QUAD4, execute_on flags, bare words */
+}
+.code-viewer .language-moose .hljs-number,
+.code-viewer .language-moose .hljs-literal {
+  color: var(--color-accent); /* numbers, true/false */
+}
+.code-viewer .language-moose .hljs-built_in {
+  color: var(--color-success); /* sin, max, pow, ... */
+}
+.code-viewer .language-moose .hljs-attr,
+.code-viewer .language-moose .hljs-operator,
+.code-viewer .language-moose .hljs-punctuation {
+  color: inherit; /* parameter names: unstyled in okaidia */
+}

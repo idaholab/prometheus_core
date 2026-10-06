@@ -9,11 +9,17 @@
  * (`GET /api/artifacts/{id}/content`). A fetch failure degrades to a "couldn't load"
  * line + download link rather than dropping the artifact. The code block styling and
  * copy-button behavior mirror `CodeBlock` in `@/components/Markdown`.
+ *
+ * When `language` is recognized by `lib/highlight`, the body is syntax-highlighted
+ * (currently YAML and MOOSE input files); otherwise it renders as plain text. Copy
+ * always copies the raw, unhighlighted source.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, Copy, FileDown, FileText } from "lucide-react";
 import type { ViewerProps } from "@/lib/elements/elements";
+import { highlightToHtml } from "@/lib/highlight";
+import "./code.css";
 
 interface CodeProps {
   source?: string;
@@ -25,12 +31,14 @@ interface CodeProps {
 type LoadState = "idle" | "loading" | "error";
 
 export function CodeElement({ element }: ViewerProps) {
-  const { source = "", title, url = "" } = (element.props ?? {}) as CodeProps;
+  const { source = "", title, url = "", language } = (element.props ?? {}) as CodeProps;
   const name = title || element.name || "Code";
 
   const [text, setText] = useState(source);
   const [loadState, setLoadState] = useState<LoadState>(source || !url ? "idle" : "loading");
   const [copied, setCopied] = useState(false);
+
+  const highlighted = useMemo(() => highlightToHtml(text, language), [text, language]);
 
   useEffect(() => {
     if (source || !url) return;
@@ -88,8 +96,15 @@ export function CodeElement({ element }: ViewerProps) {
           </span>
         )}
         {loadState === "idle" && text && (
-          <pre className="bg-base-300 rounded p-3 overflow-x-auto max-h-96">
-            <code className="whitespace-pre text-sm leading-5">{text}</code>
+          <pre className="code-viewer bg-base-300 rounded p-3 overflow-x-auto max-h-96">
+            {highlighted !== null ? (
+              <code
+                className={`hljs language-${language} whitespace-pre text-sm leading-5`}
+                dangerouslySetInnerHTML={{ __html: highlighted }}
+              />
+            ) : (
+              <code className="whitespace-pre text-sm leading-5">{text}</code>
+            )}
           </pre>
         )}
       </div>

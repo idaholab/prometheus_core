@@ -159,6 +159,7 @@ _ARTIFACT_MATRIX = [
         {"artifact_id": "y3", "mime_type": "text/plain", "name": "config.yaml"},
         "code",
     ),
+    ("code-moose-ext", {"artifact_id": "y4", "name": "input.i"}, "code"),
     ("file-zip", {"artifact_id": "f1", "mime_type": "application/octet-stream", "name": "logs.zip"}, "file"),
     ("file-inp", {"artifact_id": "f2", "name": "model.inp"}, "file"),
     ("ifc-mime", {"artifact_id": "i1", "mime_type": "application/ifc"}, "ifc"),

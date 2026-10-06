@@ -245,7 +245,7 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 | `mermaid` | MermaidViewer | `text/x-mermaid` |
 | `thermal` | ThermalAnalysisViewer | `json_type == prometheus.thermal_analysis.result.v1` |
 | `report` | markdown (rendered inline) | `text/markdown`, `text/plain`, `.md` |
-| `code` | source text (rendered inline, not Markdown) | `application/yaml`, `text/yaml`, `.yaml`/`.yml` (also wins over `report` when `text/plain` is paired with a `.yaml`/`.yml` name) |
+| `code` | source text, syntax-highlighted (rendered inline, not Markdown) | `application/yaml`, `text/yaml`, `.yaml`/`.yml`; MOOSE input via `.i` or the vendor `text/x-moose` MIME (also wins over `report` when `text/plain` is paired with a `.yaml`/`.yml`/`.i` name) |
 | `reference` | citation card | `reference`/`citation` tag; source/section/page in `citation` |
 | `file` | download | CAD/STEP, `application/octet-stream`, zip/gzip |
 | `unknown` | download fallback | anything unclassified |
