@@ -1,15 +1,32 @@
 /* Token colours for CodeElement's highlight.js output.
  *
- * These are faithful ports of highlight.js's own bundled "vs" (light) and
- * "vs2015" (dark) themes — copied verbatim from
+ * The token colours are faithful ports of highlight.js's own bundled "vs"
+ * (light) and "vs2015" (dark) themes — copied verbatim from
  * node_modules/highlight.js/styles/{vs,vs2015}.css (hljs 11.12.0) and rescoped
  * under `html[data-theme="…"] .code-viewer` instead of the bare `.hljs` the
  * package ships, so only this viewer is affected and the right one applies as
- * the app's `data-theme` attribute (see lib/useTheme.ts) switches. Unlike the
- * daisyUI-token approach this replaces, each theme owns its own fixed
- * background/text colour (vs: white/black, vs2015: #1E1E1E/#DCDCDC) rather than
- * tracking --color-base-300 — that's how these editor themes are meant to look,
- * and it's what the highlight.js demo site shows when you pick one.
+ * the app's `data-theme` attribute (see lib/useTheme.ts) switches.
+ *
+ * The BACKGROUND is not a port, though: those themes' own literal white/#1E1E1E
+ * read as an odd, mismatched patch against the rest of the app (which never
+ * uses literal white or near-black — see --color-base-300 in index.css, a soft
+ * blue-gray in light and a dark navy in dark, not pure white/black). So `.hljs`
+ * uses `--color-base-300`/`--color-base-content` — the same tokens the rest of
+ * the chat UI sits on — instead of the theme's own colours. One rule adapts to
+ * both themes since those vars resolve per-theme already.
+ *
+ * That swap cost some contrast in the light theme specifically: base-300-light
+ * is noticeably dimmer than pure white (0.78 vs 1.0 relative luminance), so a
+ * few vs.css tokens that were already only borderline-legible against white
+ * (symbol #00b0e8 at 2.5:1, meta #2b91af at 3.6:1, attr #f00 at 4.0:1, doctag
+ * #808080 at 4.0:1 — all below the 4.5:1 WCAG AA target even on white) dropped
+ * further. `attr` and `symbol` are two of the most-used scopes in both
+ * grammars here (YAML keys, MOOSE parameter names and ORDER/FAMILY/execute_on
+ * flags), so this isn't cosmetic. Those four are blended toward
+ * --color-base-content with `color-mix` (same technique as the comment-color
+ * convention below) until they clear 4.5:1 against base-300-light with margin;
+ * every dark-theme vs2015 token already cleared 4.5:1 against base-300-dark
+ * untouched, so the dark palette below is the literal vs2015 hex, unchanged.
  *
  * `.code-viewer code.hljs` is `display: block`, so it paints over the parent
  * `<pre>`'s own background (Tailwind's `bg-base-300` in CodeElement.tsx) for any
@@ -18,11 +35,11 @@
  *
  * Both grammars this app registers (YAML, the ported MOOSE input grammar) use
  * only hljs scope names these themes already define — nothing MOOSE-specific
- * needed anymore (contrast this with the color-mix palette it replaced, which
- * needed a separate `.language-moose` override block). A few scopes neither
- * theme defines (`function`, `operator`, `punctuation`, `property`, and
- * `number` in "vs") fall back to the theme's plain text colour — that's the
- * original themes' own behaviour, not a gap introduced here.
+ * needed (contrast this with the color-mix palette this replaced originally,
+ * which needed a separate `.language-moose` override block). A few scopes
+ * neither theme defines (`function`, `operator`, `punctuation`, `property`,
+ * and `number` in "vs") fall back to the theme's plain text colour — that's
+ * the original themes' own behaviour, not a gap introduced here.
  */
 
 .code-viewer code.hljs {
@@ -33,8 +50,8 @@
 
 /* "vs" (light) */
 html[data-theme="light"] .code-viewer .hljs {
-  background: #fff;
-  color: #000;
+  background: var(--color-base-300);
+  color: var(--color-base-content);
 }
 html[data-theme="light"] .code-viewer .hljs-comment,
 html[data-theme="light"] .code-viewer .hljs-quote,
@@ -63,24 +80,31 @@ html[data-theme="light"] .code-viewer .hljs-deletion,
 html[data-theme="light"] .code-viewer .hljs-selector-attr,
 html[data-theme="light"] .code-viewer .hljs-selector-pseudo,
 html[data-theme="light"] .code-viewer .hljs-meta {
-  color: #2b91af;
+  /* #2b91af was 3.6:1 against vs.css's own white, 2.9:1 against base-300-light */
+  color: color-mix(in oklch, #2b91af 65%, var(--color-base-content) 35%);
 }
 html[data-theme="light"] .code-viewer .hljs-doctag {
-  color: #808080;
+  /* #808080 was 4.0:1 against vs.css's own white, 3.1:1 against base-300-light */
+  color: color-mix(in oklch, #808080 70%, var(--color-base-content) 30%);
 }
 html[data-theme="light"] .code-viewer .hljs-attr {
-  color: #f00;
+  /* #f00 was 4.0:1 against vs.css's own white, 3.2:1 against base-300-light;
+     one of the most-used scopes here (YAML keys, MOOSE parameter names) */
+  color: color-mix(in oklch, #f00 75%, var(--color-base-content) 25%);
 }
 html[data-theme="light"] .code-viewer .hljs-symbol,
 html[data-theme="light"] .code-viewer .hljs-bullet,
 html[data-theme="light"] .code-viewer .hljs-link {
-  color: #00b0e8;
+  /* #00b0e8 was already a weak 2.5:1 against vs.css's own white, 2.0:1 against
+     base-300-light; MOOSE's ORDER/FAMILY/elem_type/execute_on/output_on flags
+     all use this scope, so it needs the most correction of the four */
+  color: color-mix(in oklch, #00b0e8 55%, var(--color-base-content) 45%);
 }
 
 /* "vs2015" (dark) */
 html[data-theme="dark"] .code-viewer .hljs {
-  background: #1e1e1e;
-  color: #dcdcdc;
+  background: var(--color-base-300);
+  color: var(--color-base-content);
 }
 html[data-theme="dark"] .code-viewer .hljs-keyword,
 html[data-theme="dark"] .code-viewer .hljs-literal,
@@ -113,7 +137,8 @@ html[data-theme="dark"] .code-viewer .hljs-function,
 html[data-theme="dark"] .code-viewer .hljs-title,
 html[data-theme="dark"] .code-viewer .hljs-params,
 html[data-theme="dark"] .code-viewer .hljs-formula {
-  color: #dcdcdc;
+  /* same as the base text colour in vs2015 — unstyled by design, not a gap */
+  color: var(--color-base-content);
 }
 html[data-theme="dark"] .code-viewer .hljs-comment,
 html[data-theme="dark"] .code-viewer .hljs-quote {
