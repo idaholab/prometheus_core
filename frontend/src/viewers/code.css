@@ -1,88 +1,167 @@
 /* Token colours for CodeElement's highlight.js output.
  *
- * daisyUI's semantic colours (--color-primary/secondary/accent/info/success/
- * warning/error) are the SAME fixed values in both the "light" and "dark" themes
- * here (see index.css) -- they're tuned to pair with their own `-content` colour
- * as a button/badge background, not to sit as foreground text on a surface
- * (--color-base-300) that itself flips from near-white to near-black between
- * themes. Used directly, most of them read fine in exactly one theme and are
- * close to unreadable in the other (--color-accent on dark --color-base-300 is a
- * 1.3:1 contrast ratio -- effectively invisible; --color-warning on light
- * --color-base-300 is 1.3:1 too). That was the bug: code blocks were legible in
- * only one theme at a time.
+ * These are faithful ports of highlight.js's own bundled "vs" (light) and
+ * "vs2015" (dark) themes — copied verbatim from
+ * node_modules/highlight.js/styles/{vs,vs2015}.css (hljs 11.12.0) and rescoped
+ * under `html[data-theme="…"] .code-viewer` instead of the bare `.hljs` the
+ * package ships, so only this viewer is affected and the right one applies as
+ * the app's `data-theme` attribute (see lib/useTheme.ts) switches. Unlike the
+ * daisyUI-token approach this replaces, each theme owns its own fixed
+ * background/text colour (vs: white/black, vs2015: #1E1E1E/#DCDCDC) rather than
+ * tracking --color-base-300 — that's how these editor themes are meant to look,
+ * and it's what the highlight.js demo site shows when you pick one.
  *
- * Fix: blend each token toward --color-base-content (near-black in "light", near-
- * white in "dark") with `color-mix`. Because --color-base-content resolves per
- * theme already, one rule adapts automatically -- no `[data-theme=...]` branches
- * needed. The mix ratios below were chosen (see the WCAG contrast check this was
- * verified against) so every token clears 4.5:1 against --color-base-300 in BOTH
- * themes with margin, while keeping enough of the original hue to stay visually
- * distinct. Keep this property if you add a token: pick a ratio, don't reuse a
- * bare --color-* value.
+ * `.code-viewer code.hljs` is `display: block`, so it paints over the parent
+ * `<pre>`'s own background (Tailwind's `bg-base-300` in CodeElement.tsx) for any
+ * recognized language; a `code` artifact with no registered language keeps
+ * that plain `bg-base-300` card look instead of a half-applied editor theme.
  *
- * Two palettes:
- * - a shared default (currently just YAML).
- * - a MOOSE-specific override (`.language-moose`), ported from the Prism
- *   "okaidia" theme (prism.min.css) and remapped onto this same color-mix scheme,
- *   since MOOSE reuses `symbol`/`property`/`attr` with different intent than the
- *   default palette.
+ * Both grammars this app registers (YAML, the ported MOOSE input grammar) use
+ * only hljs scope names these themes already define — nothing MOOSE-specific
+ * needed anymore (contrast this with the color-mix palette it replaced, which
+ * needed a separate `.language-moose` override block). A few scopes neither
+ * theme defines (`function`, `operator`, `punctuation`, `property`, and
+ * `number` in "vs") fall back to the theme's plain text colour — that's the
+ * original themes' own behaviour, not a gap introduced here.
  */
 
-.code-viewer .hljs-comment {
-  color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
-  font-style: italic;
-}
-.code-viewer .hljs-attr,
-.code-viewer .hljs-section {
-  color: color-mix(in oklch, var(--color-primary) 75%, var(--color-base-content) 25%);
-}
-.code-viewer .hljs-string {
-  color: color-mix(in oklch, var(--color-success) 60%, var(--color-base-content) 40%);
-}
-.code-viewer .hljs-number,
-.code-viewer .hljs-literal {
-  color: color-mix(in oklch, var(--color-warning) 50%, var(--color-base-content) 50%);
-}
-.code-viewer .hljs-meta,
-.code-viewer .hljs-bullet,
-.code-viewer .hljs-type {
-  color: color-mix(in oklch, var(--color-secondary) 60%, var(--color-base-content) 40%);
-}
-.code-viewer .hljs-subst,
-.code-viewer .hljs-variable {
-  color: color-mix(in oklch, var(--color-accent) 45%, var(--color-base-content) 55%);
+.code-viewer code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
 }
 
-/* MOOSE input files (.i) — overrides the shared palette above. */
-.code-viewer .language-moose .hljs-comment {
-  color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
-  font-style: normal;
+/* "vs" (light) */
+html[data-theme="light"] .code-viewer .hljs {
+  background: #fff;
+  color: #000;
 }
-.code-viewer .language-moose .hljs-keyword {
-  /* block names, `type` */
-  color: color-mix(in oklch, var(--color-info) 65%, var(--color-base-content) 35%);
+html[data-theme="light"] .code-viewer .hljs-comment,
+html[data-theme="light"] .code-viewer .hljs-quote,
+html[data-theme="light"] .code-viewer .hljs-variable {
+  color: #008000;
 }
-.code-viewer .language-moose .hljs-title,
-.code-viewer .language-moose .hljs-function {
-  /* [object] names, type = Class */
-  color: color-mix(in oklch, var(--color-warning) 50%, var(--color-base-content) 50%);
+html[data-theme="light"] .code-viewer .hljs-keyword,
+html[data-theme="light"] .code-viewer .hljs-selector-tag,
+html[data-theme="light"] .code-viewer .hljs-built_in,
+html[data-theme="light"] .code-viewer .hljs-name,
+html[data-theme="light"] .code-viewer .hljs-tag {
+  color: #00f;
 }
-.code-viewer .language-moose .hljs-symbol,
-.code-viewer .language-moose .hljs-property {
-  /* FIRST, LAGRANGE, QUAD4, execute_on flags, bare words */
-  color: color-mix(in oklch, var(--color-error) 55%, var(--color-base-content) 45%);
+html[data-theme="light"] .code-viewer .hljs-string,
+html[data-theme="light"] .code-viewer .hljs-title,
+html[data-theme="light"] .code-viewer .hljs-section,
+html[data-theme="light"] .code-viewer .hljs-attribute,
+html[data-theme="light"] .code-viewer .hljs-literal,
+html[data-theme="light"] .code-viewer .hljs-template-tag,
+html[data-theme="light"] .code-viewer .hljs-template-variable,
+html[data-theme="light"] .code-viewer .hljs-type,
+html[data-theme="light"] .code-viewer .hljs-addition {
+  color: #a31515;
 }
-.code-viewer .language-moose .hljs-number,
-.code-viewer .language-moose .hljs-literal {
-  /* numbers, true/false */
-  color: color-mix(in oklch, var(--color-accent) 45%, var(--color-base-content) 55%);
+html[data-theme="light"] .code-viewer .hljs-deletion,
+html[data-theme="light"] .code-viewer .hljs-selector-attr,
+html[data-theme="light"] .code-viewer .hljs-selector-pseudo,
+html[data-theme="light"] .code-viewer .hljs-meta {
+  color: #2b91af;
 }
-.code-viewer .language-moose .hljs-built_in {
-  /* sin, max, pow, ... */
-  color: color-mix(in oklch, var(--color-success) 60%, var(--color-base-content) 40%);
+html[data-theme="light"] .code-viewer .hljs-doctag {
+  color: #808080;
 }
-.code-viewer .language-moose .hljs-attr,
-.code-viewer .language-moose .hljs-operator,
-.code-viewer .language-moose .hljs-punctuation {
-  color: inherit; /* parameter names: unstyled in okaidia */
+html[data-theme="light"] .code-viewer .hljs-attr {
+  color: #f00;
+}
+html[data-theme="light"] .code-viewer .hljs-symbol,
+html[data-theme="light"] .code-viewer .hljs-bullet,
+html[data-theme="light"] .code-viewer .hljs-link {
+  color: #00b0e8;
+}
+
+/* "vs2015" (dark) */
+html[data-theme="dark"] .code-viewer .hljs {
+  background: #1e1e1e;
+  color: #dcdcdc;
+}
+html[data-theme="dark"] .code-viewer .hljs-keyword,
+html[data-theme="dark"] .code-viewer .hljs-literal,
+html[data-theme="dark"] .code-viewer .hljs-symbol,
+html[data-theme="dark"] .code-viewer .hljs-name {
+  color: #569cd6;
+}
+html[data-theme="dark"] .code-viewer .hljs-link {
+  color: #569cd6;
+  text-decoration: underline;
+}
+html[data-theme="dark"] .code-viewer .hljs-built_in,
+html[data-theme="dark"] .code-viewer .hljs-type {
+  color: #4ec9b0;
+}
+html[data-theme="dark"] .code-viewer .hljs-number,
+html[data-theme="dark"] .code-viewer .hljs-class {
+  color: #b8d7a3;
+}
+html[data-theme="dark"] .code-viewer .hljs-string,
+html[data-theme="dark"] .code-viewer .hljs-meta .hljs-string {
+  color: #d69d85;
+}
+html[data-theme="dark"] .code-viewer .hljs-regexp,
+html[data-theme="dark"] .code-viewer .hljs-template-tag {
+  color: #9a5334;
+}
+html[data-theme="dark"] .code-viewer .hljs-subst,
+html[data-theme="dark"] .code-viewer .hljs-function,
+html[data-theme="dark"] .code-viewer .hljs-title,
+html[data-theme="dark"] .code-viewer .hljs-params,
+html[data-theme="dark"] .code-viewer .hljs-formula {
+  color: #dcdcdc;
+}
+html[data-theme="dark"] .code-viewer .hljs-comment,
+html[data-theme="dark"] .code-viewer .hljs-quote {
+  color: #57a64a;
+  font-style: italic;
+}
+html[data-theme="dark"] .code-viewer .hljs-doctag {
+  color: #608b4e;
+}
+html[data-theme="dark"] .code-viewer .hljs-meta,
+html[data-theme="dark"] .code-viewer .hljs-meta .hljs-keyword,
+html[data-theme="dark"] .code-viewer .hljs-tag {
+  color: #9b9b9b;
+}
+html[data-theme="dark"] .code-viewer .hljs-variable,
+html[data-theme="dark"] .code-viewer .hljs-template-variable {
+  color: #bd63c5;
+}
+html[data-theme="dark"] .code-viewer .hljs-attr,
+html[data-theme="dark"] .code-viewer .hljs-attribute {
+  color: #9cdcfe;
+}
+html[data-theme="dark"] .code-viewer .hljs-section {
+  color: gold;
+}
+html[data-theme="dark"] .code-viewer .hljs-bullet,
+html[data-theme="dark"] .code-viewer .hljs-selector-tag,
+html[data-theme="dark"] .code-viewer .hljs-selector-id,
+html[data-theme="dark"] .code-viewer .hljs-selector-class,
+html[data-theme="dark"] .code-viewer .hljs-selector-attr,
+html[data-theme="dark"] .code-viewer .hljs-selector-pseudo {
+  color: #d7ba7d;
+}
+html[data-theme="dark"] .code-viewer .hljs-addition {
+  background-color: #144212;
+  display: inline-block;
+  width: 100%;
+}
+html[data-theme="dark"] .code-viewer .hljs-deletion {
+  background-color: #600;
+  display: inline-block;
+  width: 100%;
+}
+
+/* shared, theme-independent */
+.code-viewer .hljs-emphasis {
+  font-style: italic;
+}
+.code-viewer .hljs-strong {
+  font-weight: bold;
 }
