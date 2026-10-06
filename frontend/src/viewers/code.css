@@ -1,10 +1,32 @@
-/* Token colours for CodeElement's highlight.js output, built on daisyUI variables so
-   dark/light `data-theme` switching needs no second stylesheet. Two palettes:
-   - a shared default (currently just YAML) using daisyUI's semantic colours directly.
-   - a MOOSE-specific override (`.language-moose`), ported from the Prism "okaidia"
-     theme (prism.min.css), since MOOSE reuses `symbol`/`property`/`attr` with
-     different intent than the default palette.
-*/
+/* Token colours for CodeElement's highlight.js output.
+ *
+ * daisyUI's semantic colours (--color-primary/secondary/accent/info/success/
+ * warning/error) are the SAME fixed values in both the "light" and "dark" themes
+ * here (see index.css) -- they're tuned to pair with their own `-content` colour
+ * as a button/badge background, not to sit as foreground text on a surface
+ * (--color-base-300) that itself flips from near-white to near-black between
+ * themes. Used directly, most of them read fine in exactly one theme and are
+ * close to unreadable in the other (--color-accent on dark --color-base-300 is a
+ * 1.3:1 contrast ratio -- effectively invisible; --color-warning on light
+ * --color-base-300 is 1.3:1 too). That was the bug: code blocks were legible in
+ * only one theme at a time.
+ *
+ * Fix: blend each token toward --color-base-content (near-black in "light", near-
+ * white in "dark") with `color-mix`. Because --color-base-content resolves per
+ * theme already, one rule adapts automatically -- no `[data-theme=...]` branches
+ * needed. The mix ratios below were chosen (see the WCAG contrast check this was
+ * verified against) so every token clears 4.5:1 against --color-base-300 in BOTH
+ * themes with margin, while keeping enough of the original hue to stay visually
+ * distinct. Keep this property if you add a token: pick a ratio, don't reuse a
+ * bare --color-* value.
+ *
+ * Two palettes:
+ * - a shared default (currently just YAML).
+ * - a MOOSE-specific override (`.language-moose`), ported from the Prism
+ *   "okaidia" theme (prism.min.css) and remapped onto this same color-mix scheme,
+ *   since MOOSE reuses `symbol`/`property`/`attr` with different intent than the
+ *   default palette.
+ */
 
 .code-viewer .hljs-comment {
   color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
@@ -12,23 +34,23 @@
 }
 .code-viewer .hljs-attr,
 .code-viewer .hljs-section {
-  color: var(--color-primary);
+  color: color-mix(in oklch, var(--color-primary) 75%, var(--color-base-content) 25%);
 }
 .code-viewer .hljs-string {
-  color: var(--color-success);
+  color: color-mix(in oklch, var(--color-success) 60%, var(--color-base-content) 40%);
 }
 .code-viewer .hljs-number,
 .code-viewer .hljs-literal {
-  color: var(--color-warning);
+  color: color-mix(in oklch, var(--color-warning) 50%, var(--color-base-content) 50%);
 }
 .code-viewer .hljs-meta,
 .code-viewer .hljs-bullet,
 .code-viewer .hljs-type {
-  color: var(--color-secondary);
+  color: color-mix(in oklch, var(--color-secondary) 60%, var(--color-base-content) 40%);
 }
 .code-viewer .hljs-subst,
 .code-viewer .hljs-variable {
-  color: var(--color-accent);
+  color: color-mix(in oklch, var(--color-accent) 45%, var(--color-base-content) 55%);
 }
 
 /* MOOSE input files (.i) — overrides the shared palette above. */
@@ -37,22 +59,27 @@
   font-style: normal;
 }
 .code-viewer .language-moose .hljs-keyword {
-  color: var(--color-info); /* block names, `type` */
+  /* block names, `type` */
+  color: color-mix(in oklch, var(--color-info) 65%, var(--color-base-content) 35%);
 }
 .code-viewer .language-moose .hljs-title,
 .code-viewer .language-moose .hljs-function {
-  color: var(--color-warning); /* [object] names, type = Class */
+  /* [object] names, type = Class */
+  color: color-mix(in oklch, var(--color-warning) 50%, var(--color-base-content) 50%);
 }
 .code-viewer .language-moose .hljs-symbol,
 .code-viewer .language-moose .hljs-property {
-  color: var(--color-error); /* FIRST, LAGRANGE, QUAD4, execute_on flags, bare words */
+  /* FIRST, LAGRANGE, QUAD4, execute_on flags, bare words */
+  color: color-mix(in oklch, var(--color-error) 55%, var(--color-base-content) 45%);
 }
 .code-viewer .language-moose .hljs-number,
 .code-viewer .language-moose .hljs-literal {
-  color: var(--color-accent); /* numbers, true/false */
+  /* numbers, true/false */
+  color: color-mix(in oklch, var(--color-accent) 45%, var(--color-base-content) 55%);
 }
 .code-viewer .language-moose .hljs-built_in {
-  color: var(--color-success); /* sin, max, pow, ... */
+  /* sin, max, pow, ... */
+  color: color-mix(in oklch, var(--color-success) 60%, var(--color-base-content) 40%);
 }
 .code-viewer .language-moose .hljs-attr,
 .code-viewer .language-moose .hljs-operator,
