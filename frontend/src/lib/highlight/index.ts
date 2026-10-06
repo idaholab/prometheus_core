@@ -64,7 +64,10 @@ function extensionOf(name: string): string {
 }
 
 /** Best-effort language for a `code` artifact, from its MIME type then its filename. */
-export function languageFor(name: string | undefined, mimeType: string | undefined): string | undefined {
+export function languageFor(
+  name: string | null | undefined,
+  mimeType: string | null | undefined,
+): string | undefined {
   const mime = (mimeType ?? "").split(";", 1)[0].trim().toLowerCase();
   if (mime && MIME_LANGUAGES[mime]) return MIME_LANGUAGES[mime];
   if (name) return EXTENSION_LANGUAGES[extensionOf(name)];

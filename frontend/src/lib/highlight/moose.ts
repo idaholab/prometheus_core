@@ -54,7 +54,7 @@ export default function moose(): Language {
           /\b0(?:[bB](?:_?[01])+|[oO](?:_?[0-7])+|[xX](?:_?[a-fA-F0-9])+)\b|(?:\b\d+(?:_\d+)*(?:\.(?:\d+(?:_\d+)*)?)?|\B\.\d+(?:_\d+)*)(?:[eE][+-]?\d+(?:_\d+)*)?[jJ]?(?!\w)/,
       },
       { scope: "literal", begin: `\\b(?:${alt("false|true")})\\b` },
-      { scope: "operator", begin: /[+*\/^%-]/, relevance: 0 },
+      { scope: "operator", begin: /[+*/^%-]/, relevance: 0 },
       { scope: "punctuation", begin: /['"]/, relevance: 0 },
       { scope: "property", begin: /\w+\b(?!\s*=)/, relevance: 0 },
     ],
