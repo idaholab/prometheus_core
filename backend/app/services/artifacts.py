@@ -363,10 +363,10 @@ def artifact_download_payload(
         return content + b"\n", ".json", "application/json"
 
     effective_mime = mime_type or "text/plain"
-    if effective_mime == "text/markdown":
+    normalized = _normalize_mime(effective_mime)
+    if normalized == "text/markdown":
         extension = ".md"
     else:
-        normalized = _normalize_mime(effective_mime)
         extension = _CODE_MIME_EXTENSIONS.get(normalized) or _TABLE_MIME_EXTENSIONS.get(normalized, ".txt")
 
     # ``text_body`` is the catalog's inline-text field. Check it by presence, not

@@ -97,7 +97,9 @@ def parse_lines(raw: Any) -> Optional[int]:
         value = float(str(raw))
     except ValueError as exc:
         raise ValueError("lines must be an integer") from exc
-    if value != int(value):
+    # is_integer() is False for inf and nan too, which int() would reject with a
+    # different exception type than the ValueError callers handle.
+    if not value.is_integer():
         raise ValueError("lines must be an integer")
     count = int(value)
     if not 0 <= count <= MAX_LINES:

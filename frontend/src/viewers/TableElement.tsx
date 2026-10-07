@@ -12,9 +12,10 @@
  */
 
 import { useMemo, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, Check, Copy, FileDown, Table as TableIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Table as TableIcon } from "lucide-react";
 import type { ViewerProps } from "@/lib/elements/elements";
 import { numericColumns, parseDelimited, sortRows } from "@/lib/table/csv";
+import { ArtifactTextCard } from "./ArtifactTextCard";
 import { useArtifactText } from "./useArtifactText";
 
 interface TableProps {
@@ -43,7 +44,6 @@ export function TableElement({ element }: ViewerProps) {
   const [chosenMode, setMode] = useState<Mode>("table");
   const mode: Mode = tooLarge ? "raw" : chosenMode;
   const [sort, setSort] = useState<SortState>(null);
-  const [copied, setCopied] = useState(false);
 
   const parsed = useMemo(
     () => (tooLarge || !text ? null : parseDelimited(text, delimiter)),
@@ -55,13 +55,6 @@ export function TableElement({ element }: ViewerProps) {
     [parsed, sort],
   );
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   // none -> ascending -> descending -> none
   const cycleSort = (column: number) =>
     setSort((current) => {
@@ -69,81 +62,50 @@ export function TableElement({ element }: ViewerProps) {
       return current.direction === "asc" ? { column, direction: "desc" } : null;
     });
 
-  const ready = loadState === "idle" && text !== "";
+  const toggle = !tooLarge && (
+    <div className="join" role="group" aria-label="View mode">
+      {(["table", "raw"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => setMode(m)}
+          className={`btn btn-xs join-item ${mode === m ? "btn-active" : ""}`}
+          aria-pressed={mode === m}
+        >
+          {m === "table" ? "Table" : "Raw"}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">
-      <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60">
-        <p className="text-sm font-medium text-base-content truncate flex items-center gap-1.5">
-          <TableIcon size={13} className="text-base-content/50 shrink-0" />
-          {name}
-          {ready && parsed && (
-            <span className="badge badge-ghost badge-sm font-normal shrink-0">
-              {fmt.format(parsed.rows.length)} rows × {parsed.header.length} cols
-            </span>
-          )}
-        </p>
-        <div className="flex items-center gap-1 shrink-0">
-          {ready && !tooLarge && (
-            <div className="join" role="group" aria-label="View mode">
-              {(["table", "raw"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`btn btn-xs join-item ${mode === m ? "btn-active" : ""}`}
-                  aria-pressed={mode === m}
-                >
-                  {m === "table" ? "Table" : "Raw"}
-                </button>
-              ))}
-            </div>
-          )}
-          {ready && (
-            <button onClick={handleCopy} className="btn btn-ghost btn-xs" aria-label="Copy source">
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </button>
-          )}
-          {url && (
-            <a href={url} download={name} className="btn btn-ghost btn-xs" aria-label={`Download ${name}`}>
-              <FileDown size={13} />
-              Download
-            </a>
-          )}
-        </div>
-      </div>
-
-      {loadState === "loading" && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-base-content/50">Loading…</span>
-        </div>
-      )}
-      {loadState === "error" && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-error inline-flex items-center gap-1.5">
-            <AlertCircle size={13} />
-            Couldn't load this file.
+    <ArtifactTextCard
+      name={name}
+      icon={TableIcon}
+      url={url}
+      text={text}
+      loadState={loadState}
+      badge={
+        parsed && (
+          <span className="badge badge-ghost badge-sm font-normal shrink-0">
+            {fmt.format(parsed.rows.length)} rows × {parsed.header.length} cols
           </span>
-        </div>
-      )}
-      {loadState === "idle" && text === "" && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-base-content/50">Empty file</span>
-        </div>
-      )}
-
-      {ready && tooLarge && (
+        )
+      }
+      actions={toggle}
+    >
+      {tooLarge && (
         <div className="bg-base-100 px-4 py-2 text-xs text-base-content/60 border-b border-base-300">
           Too large to show as a table — showing the raw text. Download the file to open it elsewhere.
         </div>
       )}
 
-      {ready && mode === "raw" && (
+      {mode === "raw" && (
         <pre className="m-0 overflow-auto max-h-96">
           <code className="block bg-base-100 px-4 py-3 whitespace-pre text-sm leading-5">{text}</code>
         </pre>
       )}
 
-      {ready && mode === "table" && parsed && (
+      {mode === "table" && parsed && (
         <>
           <div className="overflow-auto max-h-96 bg-base-100">
             <table className="table table-xs table-zebra table-pin-rows">
@@ -198,7 +160,7 @@ export function TableElement({ element }: ViewerProps) {
           )}
         </>
       )}
-    </div>
+    </ArtifactTextCard>
   );
 }
 

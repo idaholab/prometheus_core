@@ -1,11 +1,12 @@
 /**
  * src/viewers/useArtifactText.ts
  *
- * Shared text loading for the inline-text viewers (`CodeElement`, `TableElement`): use
- * the inline `source` when the element carries one, otherwise fetch the body from the
- * artifact content proxy (`GET /api/artifacts/{id}/content`) with the session cookie.
- * A fetch failure surfaces as `loadState === "error"` so the viewer can degrade to a
- * "couldn't load" line (the download link still works) instead of dropping the artifact.
+ * Shared text loading for the inline-text viewers (`CodeElement`, `TableElement`,
+ * `ReportElement`): use the inline `source` when the element carries one, otherwise
+ * fetch the body from the artifact content proxy (`GET /api/artifacts/{id}/content`)
+ * with the session cookie. A fetch failure surfaces as `loadState === "error"` so the
+ * viewer can degrade to a "couldn't load" line (the download link still works) instead
+ * of dropping the artifact.
  */
 
 import { useEffect, useState } from "react";

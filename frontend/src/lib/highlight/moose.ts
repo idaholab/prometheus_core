@@ -1,6 +1,4 @@
 // highlight.js grammar ported from the MOOSE Prism fork (zachmprince/prism).
-// Tested by diffing token output against the Prism grammar on sample .i files (hljs 10.7.3).
-// Uses `scope` (the v11 name; v10's `className` is accepted as an alias but this targets v11).
 import type { Language } from "highlight.js";
 
 export default function moose(): Language {

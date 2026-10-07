@@ -20,26 +20,24 @@
  * few vs.css tokens that were already only borderline-legible against white
  * (symbol #00b0e8 at 2.5:1, meta #2b91af at 3.6:1, attr #f00 at 4.0:1, doctag
  * #808080 at 4.0:1 — all below the 4.5:1 WCAG AA target even on white) dropped
- * further. `attr` and `symbol` are two of the most-used scopes in both
- * grammars here (YAML keys, MOOSE parameter names and ORDER/FAMILY/execute_on
+ * further. `attr` and `symbol` are two of the most-used scopes in the YAML and
+ * MOOSE grammars (YAML keys, MOOSE parameter names and ORDER/FAMILY/execute_on
  * flags), so this isn't cosmetic. Those four are blended toward
  * --color-base-content with `color-mix` (same technique as the comment-color
  * convention below) until they clear 4.5:1 against base-300-light with margin;
  * every dark-theme vs2015 token already cleared 4.5:1 against base-300-dark
  * untouched, so the dark palette below is the literal vs2015 hex, unchanged.
  *
- * `.code-viewer code.hljs` is `display: block`, so it paints over the parent
- * `<pre>`'s own background (Tailwind's `bg-base-300` in CodeElement.tsx) for any
- * recognized language; a `code` artifact with no registered language keeps
- * that plain `bg-base-300` card look instead of a half-applied editor theme.
+ * `.code-viewer code.hljs` is `display: block`, so it fills the parent `<pre>`
+ * with the theme background for any recognized language; a `code` artifact with
+ * no registered language renders the plain `bg-base-100` fallback `<code>` in
+ * CodeElement.tsx instead of a half-applied editor theme.
  *
- * Both grammars this app registers (YAML, the ported MOOSE input grammar) use
- * only hljs scope names these themes already define — nothing MOOSE-specific
- * needed (contrast this with the color-mix palette this replaced originally,
- * which needed a separate `.language-moose` override block). A few scopes
- * neither theme defines (`function`, `operator`, `punctuation`, `property`,
- * and `number` in "vs") fall back to the theme's plain text colour — that's
- * the original themes' own behaviour, not a gap introduced here.
+ * Every grammar registered in lib/highlight emits standard hljs scope names,
+ * so no per-language rules are needed. A few scopes neither theme defines
+ * (`function`, `operator`, `punctuation`, `property`, and `number` in "vs")
+ * fall back to the theme's plain text colour — that's the original themes' own
+ * behaviour, not a gap introduced here.
  */
 
 .code-viewer code.hljs {

@@ -32,7 +32,7 @@ test("handles CRLF, CR, a BOM and a missing trailing newline", () => {
     ["3", "4"],
   ]);
   assert.deepEqual(parseDelimited("a,b\r1,2\r3,4\r").rows.length, 2);
-  const t = parseDelimited("﻿a,b\n1,2\n");
+  const t = parseDelimited("\uFEFFa,b\n1,2\n");
   assert.deepEqual(t.header, ["a", "b"]);
 });
 

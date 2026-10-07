@@ -131,7 +131,7 @@ def test_csv_rows_all_have_the_header_column_count(lines):
         assert len(rows) == lines  # no quoted line breaks, so records == lines
 
 
-def test_csv_is_routed_to_the_table_viewer_not_the_code_viewer():
+def test_csv_sample_is_named_and_typed_for_the_table_viewer():
     ref = _run("render_csv_sample").registered
     assert ref.name == "sample.csv" and ref.mime_type == "text/csv"
 
@@ -172,7 +172,8 @@ def test_max_lines_is_accepted_and_past_the_highlight_cutoff():
 
 @pytest.mark.parametrize("skill_id", ALL_SKILLS)
 def test_routing_both_is_the_default(skill_id):
-    assert _run(skill_id, routing="both").registered.name == _run(skill_id).registered.name
+    both, default = _run(skill_id, routing="both").registered, _run(skill_id).registered
+    assert (default.name, default.mime_type) == (both.name, both.mime_type)
 
 
 @pytest.mark.parametrize("skill_id", ALL_SKILLS)
@@ -194,7 +195,7 @@ def test_routing_mime_errors_when_no_mime_routes_to_code(skill_id):
     run.agent.register_artifact_reference.assert_not_called()
 
 
-@pytest.mark.parametrize("bad", [-1, MAX_LINES + 1, "abc", 1.5, True])
+@pytest.mark.parametrize("bad", [-1, MAX_LINES + 1, "abc", 1.5, True, "inf", "-inf", "nan", "1e999"])
 def test_invalid_lines_is_an_error_and_emits_nothing(bad):
     run = _run("render_python_sample", lines=bad)
     assert run.result["status"] == "error"
@@ -218,3 +219,6 @@ def test_parse_lines():
     assert parse_lines(0) == 0
     assert parse_lines("12") == 12
     assert parse_lines(12.0) == 12
+    for bad in ("inf", "nan", "1e999"):  # not integers, and must not escape as OverflowError
+        with pytest.raises(ValueError, match="integer"):
+            parse_lines(bad)

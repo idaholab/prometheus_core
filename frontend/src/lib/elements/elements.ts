@@ -13,6 +13,7 @@
  */
 
 import { lazy, type ComponentType } from "react";
+import { normalizeMime } from "../mime";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,10 +75,6 @@ const IMAGE_MIME_TYPES = new Set([
 ]);
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"];
-
-function normalizeMime(mime?: string): string {
-  return (mime ?? "").split(";", 1)[0].trim().toLowerCase();
-}
 
 function isImageFile(el: AnyElement): boolean {
   const mime = normalizeMime(el.mime);
@@ -160,6 +157,8 @@ const MeshViewerElement = import.meta.env.DEV
 // worker, no long-lived render window), so re-suspending on HMR is harmless
 // here — no DEV/prod branch needed.
 const MermaidElement = lazy(() => import("../../viewers/MermaidElement"));
+// Lazy so highlight.js and its grammars load only when a code artifact is shown.
+const CodeElement = lazy(() => import("../../viewers/CodeElement"));
 import { PdfViewerElement }                from "../../viewers/PdfViewerElement";
 import { FileDownloadElement }             from "../../viewers/FileDownloadElement";
 import { ImageViewerElement }              from "../../viewers/ImageViewerElement";
@@ -168,7 +167,6 @@ import { FollowUpSuggestionsElement }      from "../../viewers/FollowUpSuggestio
 import { PlanViewerElement }               from "../../viewers/PlanViewerElement";
 import { ThermalAnalysisElement }          from "../../viewers/ThermalAnalysisElement";
 import { ReportElement }                   from "../../viewers/ReportElement";
-import { CodeElement }                     from "../../viewers/CodeElement";
 import { TableElement }                    from "../../viewers/TableElement";
 import { ReferenceElement }                from "../../viewers/ReferenceElement";
 

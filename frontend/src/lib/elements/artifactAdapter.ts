@@ -28,7 +28,7 @@
 
 import { api } from "@/lib/api/client";
 import type { ArtifactMeta } from "@/lib/api/types";
-import { languageFor } from "@/lib/highlight";
+import { languageForArtifact } from "@/lib/highlight/language";
 import { delimiterFor } from "@/lib/table/csv";
 import type { AnyElement } from "./elements";
 
@@ -152,7 +152,7 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
           source: typeof artifact.json_body === "string" ? artifact.json_body : "",
           title: artifact.name,
           url,
-          language: languageFor(artifact.name, artifact.mime_type),
+          language: languageForArtifact(artifact),
         },
       };
 

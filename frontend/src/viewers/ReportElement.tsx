@@ -10,10 +10,10 @@
  * rather than dropping the artifact.
  */
 
-import { useEffect, useState } from "react";
 import { AlertCircle, FileDown, FileText } from "lucide-react";
 import { Markdown } from "@/components/Markdown";
 import type { ViewerProps } from "@/lib/elements/elements";
+import { useArtifactText } from "./useArtifactText";
 
 interface ReportProps {
   markdown?: string;
@@ -21,33 +21,11 @@ interface ReportProps {
   url?: string;
 }
 
-type LoadState = "idle" | "loading" | "error";
-
 export function ReportElement({ element }: ViewerProps) {
   const { markdown = "", title, url = "" } = (element.props ?? {}) as ReportProps;
   const name = title || element.name || "Report";
 
-  const [text, setText] = useState(markdown);
-  const [loadState, setLoadState] = useState<LoadState>(markdown || !url ? "idle" : "loading");
-
-  useEffect(() => {
-    if (markdown || !url) return;
-    let cancelled = false;
-    setLoadState("loading");
-    fetch(url, { credentials: "include" })
-      .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then((body) => {
-        if (cancelled) return;
-        setText(body);
-        setLoadState("idle");
-      })
-      .catch(() => {
-        if (!cancelled) setLoadState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [markdown, url]);
+  const { text, loadState } = useArtifactText(markdown, url);
 
   return (
     <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">

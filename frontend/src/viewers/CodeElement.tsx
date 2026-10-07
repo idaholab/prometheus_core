@@ -15,10 +15,11 @@
  * always copies the raw, unhighlighted source.
  */
 
-import { useMemo, useState } from "react";
-import { AlertCircle, Check, Copy, FileDown, FileText } from "lucide-react";
+import { useMemo } from "react";
+import { FileText } from "lucide-react";
 import type { ViewerProps } from "@/lib/elements/elements";
 import { highlightToHtml } from "@/lib/highlight";
+import { ArtifactTextCard } from "./ArtifactTextCard";
 import { useArtifactText } from "./useArtifactText";
 import "./code.css";
 
@@ -34,74 +35,25 @@ export function CodeElement({ element }: ViewerProps) {
   const name = title || element.name || "Code";
 
   const { text, loadState } = useArtifactText(source, url);
-  const [copied, setCopied] = useState(false);
-
   const highlighted = useMemo(() => highlightToHtml(text, language), [text, language]);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   return (
-    <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">
-      <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60">
-        <p className="text-sm font-medium text-base-content truncate flex items-center gap-1.5">
-          <FileText size={13} className="text-base-content/50 shrink-0" />
-          {name}
-        </p>
-        <div className="flex items-center gap-1 shrink-0">
-          {loadState === "idle" && text && (
-            <button onClick={handleCopy} className="btn btn-ghost btn-xs" aria-label="Copy source">
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </button>
-          )}
-          {url && (
-            <a href={url} download={name} className="btn btn-ghost btn-xs" aria-label={`Download ${name}`}>
-              <FileDown size={13} />
-              Download
-            </a>
-          )}
-        </div>
-      </div>
-      {loadState === "loading" && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-base-content/50">Loading…</span>
-        </div>
-      )}
-      {loadState === "error" && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-error inline-flex items-center gap-1.5">
-            <AlertCircle size={13} />
-            Couldn't load this file.
-          </span>
-        </div>
-      )}
-      {loadState === "idle" && !text && (
-        <div className="bg-base-100 px-4 py-3 text-sm">
-          <span className="text-xs text-base-content/50">Empty file</span>
-        </div>
-      )}
-      {loadState === "idle" && text && (
-        // No padding/background here: the card's rounded-lg + overflow-hidden on the
-        // outer div clips this to match, so the code block's own background (base-300
-        // for highlighted code, see code.css; bg-base-100 for the plain-text fallback)
-        // sits flush against the card edges instead of showing as a mismatched inset
-        // box nested inside another background.
-        <pre className="code-viewer m-0 overflow-x-auto max-h-96">
-          {highlighted !== null ? (
-            <code
-              className={`hljs language-${language} whitespace-pre text-sm leading-5`}
-              dangerouslySetInnerHTML={{ __html: highlighted }}
-            />
-          ) : (
-            <code className="block bg-base-100 px-4 py-3 whitespace-pre text-sm leading-5">{text}</code>
-          )}
-        </pre>
-      )}
-    </div>
+    <ArtifactTextCard name={name} icon={FileText} url={url} text={text} loadState={loadState}>
+      {/* No padding/background here: the card's rounded-lg + overflow-hidden clips this to
+          match, so the code block's own background (base-300 for highlighted code, see
+          code.css; bg-base-100 for the plain-text fallback) sits flush against the card
+          edges instead of showing as a mismatched inset box nested inside another one. */}
+      <pre className="code-viewer m-0 overflow-x-auto max-h-96">
+        {highlighted !== null ? (
+          <code
+            className={`hljs language-${language} whitespace-pre text-sm leading-5`}
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
+        ) : (
+          <code className="block bg-base-100 px-4 py-3 whitespace-pre text-sm leading-5">{text}</code>
+        )}
+      </pre>
+    </ArtifactTextCard>
   );
 }
 

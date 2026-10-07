@@ -9,6 +9,8 @@
  * trailing newline, blank lines, and ragged rows.
  */
 
+import { normalizeMime } from "../mime.ts";
+
 export interface ParsedTable {
   header: string[];
   rows: string[][];
@@ -26,8 +28,7 @@ export function delimiterFor(
   name: string | null | undefined,
   mimeType: string | null | undefined,
 ): string | undefined {
-  const mime = (mimeType ?? "").split(";", 1)[0].trim().toLowerCase();
-  if (mime === "text/tab-separated-values") return "\t";
+  if (normalizeMime(mimeType) === "text/tab-separated-values") return "\t";
   if (name && name.toLowerCase().endsWith(".tsv")) return "\t";
   return undefined;
 }

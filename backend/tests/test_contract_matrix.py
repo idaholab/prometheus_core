@@ -141,8 +141,8 @@ async def test_map_response_unknown_status_collapses_to_answer_not_500(session_s
 # --------------------------------------------------------------------------- #
 
 # Keyed by the artifact "type" vocabulary in docs/docs/dev-docs/artifacts.md. The
-# doc's classifier types collapse onto our RenderHint set: "data" → json (JSON/CSV
-# share the JSONViewer) and markdown/plain "report" → report (rendered inline; A-1),
+# doc's classifier types collapse onto our RenderHint set: "data" → json (the tag
+# folds into the JSON viewer; CSV/TSV is its own "table" hint) and markdown/plain "report" → report (rendered inline; A-1),
 # while a report tagged onto a concrete PDF stays pdf. Each row is a realistic catalog
 # dict as an agent emits it.
 _ARTIFACT_MATRIX = [

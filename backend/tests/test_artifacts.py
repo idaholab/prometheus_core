@@ -101,6 +101,8 @@ from app.services.artifacts import (
         # the name "artifact.txt" with a text/plain or text/markdown MIME.
         ({"mime_type": "text/plain", "name": "artifact.txt"}, "report"),
         ({"mime_type": "text/markdown", "name": "notes.txt"}, "report"),
+        # A non-source extension keeps report too: only code/table names override the MIME.
+        ({"mime_type": "text/plain", "name": "scan.pdf"}, "report"),
         # JSON keeps the interactive tree viewer.
         ({"name": "data.json"}, "json"),
         ({"mime_type": "application/json", "name": "data.json"}, "json"),
@@ -169,6 +171,12 @@ def test_download_payload_json_body():
     content, ext, mime = artifact_download_payload({"json_body": {"a": 1}})
     assert ext == ".json" and mime == "application/json"
     assert b'"a": 1' in content
+
+
+def test_download_payload_markdown_extension_ignores_mime_parameters():
+    content, ext, mime = artifact_download_payload({"text": "# hi"}, mime_type="text/markdown; charset=utf-8")
+    assert ext == ".md" and content == b"# hi"
+    assert mime == "text/markdown; charset=utf-8"  # the returned media type is unchanged
 
 
 def test_download_payload_text_prefers_markdown_extension():

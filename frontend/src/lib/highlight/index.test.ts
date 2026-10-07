@@ -1,41 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { highlightToHtml, languageFor } from "./index.ts";
-
-test("MIME wins over the file name", () => {
-  assert.equal(languageFor("notes.txt", "text/x-python"), "python");
-  assert.equal(languageFor("sample", "application/toml; charset=utf-8"), "ini");
-});
-
-test("file name routes by extension, case-insensitively", () => {
-  assert.equal(languageFor("solver.py", null), "python");
-  assert.equal(languageFor("kernel.F90", undefined), "fortran");
-  assert.equal(languageFor("mesh.xdmf", ""), "xml");
-  assert.equal(languageFor("pyproject.toml", "text/plain"), "ini");
-});
-
-test("whole file names beat the extension", () => {
-  assert.equal(languageFor("CMakeLists.txt", null), "cmake");
-  assert.equal(languageFor("Dockerfile", null), "dockerfile");
-  assert.equal(languageFor("build/Makefile", null), "makefile");
-  assert.equal(languageFor("notes.txt", null), "plaintext");
-});
-
-test("a dot in a directory name is not an extension", () => {
-  assert.equal(languageFor("v1.2/Makefile", null), "makefile");
-  assert.equal(languageFor("v1.2/README", null), undefined);
-});
-
-test("application/json is not routed here; .jsonc is", () => {
-  assert.equal(languageFor("data.json", "application/json"), undefined);
-  assert.equal(languageFor("settings.jsonc", null), "json");
-});
-
-test("unknown input has no language", () => {
-  assert.equal(languageFor(null, null), undefined);
-  assert.equal(languageFor("archive.zip", "application/zip"), undefined);
-});
+import { highlightToHtml } from "./index.ts";
 
 const SAMPLES: Record<string, string> = {
   bash: "#!/bin/bash\necho \"hi\"\n",
@@ -62,6 +28,11 @@ test("every registered language highlights", () => {
   for (const [language, code] of Object.entries(SAMPLES)) {
     const html = highlightToHtml(code, language);
     assert.notEqual(html, null, `${language} should highlight`);
+    // A grammar that matches nothing still returns a string (escaped text), so also
+    // require at least one token span. plaintext has no tokens by design.
+    if (language !== "plaintext") {
+      assert.match(html ?? "", /<span class="hljs-/, `${language} should emit tokens`);
+    }
   }
 });
 
@@ -70,4 +41,6 @@ test("unregistered, empty and oversized input is not highlighted", () => {
   assert.equal(highlightToHtml("x", undefined), null);
   assert.equal(highlightToHtml("", "python"), null);
   assert.equal(highlightToHtml("x".repeat(200_001), "python"), null);
+  // The cutoff is exact: 200,000 characters still highlight, one more does not.
+  assert.notEqual(highlightToHtml("x".repeat(200_000), "python"), null);
 });
