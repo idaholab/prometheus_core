@@ -160,6 +160,18 @@ _ARTIFACT_MATRIX = [
         "code",
     ),
     ("code-moose-ext", {"artifact_id": "y4", "name": "input.i"}, "code"),
+    ("code-python-mime", {"artifact_id": "y5", "mime_type": "text/x-python"}, "code"),
+    ("code-toml-ext", {"artifact_id": "y6", "name": "pyproject.toml"}, "code"),
+    ("code-xml-mime", {"artifact_id": "y7", "mime_type": "application/xml"}, "code"),
+    ("code-dockerfile-basename", {"artifact_id": "y8", "name": "Dockerfile"}, "code"),
+    (
+        "code-cmake-plaintext-basename",
+        {"artifact_id": "y9", "mime_type": "text/plain", "name": "CMakeLists.txt"},
+        "code",
+    ),
+    ("code-log-ext", {"artifact_id": "y10", "name": "run.log"}, "code"),
+    # Agent text parts default to "artifact.txt" + text/plain: must stay a report.
+    ("report-plaintext-default-name", {"artifact_id": "r3", "mime_type": "text/plain", "name": "artifact.txt"}, "report"),
     ("file-zip", {"artifact_id": "f1", "mime_type": "application/octet-stream", "name": "logs.zip"}, "file"),
     ("file-inp", {"artifact_id": "f2", "name": "model.inp"}, "file"),
     ("ifc-mime", {"artifact_id": "i1", "mime_type": "application/ifc"}, "ifc"),

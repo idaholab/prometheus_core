@@ -100,10 +100,15 @@ export function CodeElement({ element }: ViewerProps) {
           </span>
         </div>
       )}
+      {loadState === "idle" && !text && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
+          <span className="text-xs text-base-content/50">Empty file</span>
+        </div>
+      )}
       {loadState === "idle" && text && (
         // No padding/background here: the card's rounded-lg + overflow-hidden on the
-        // outer div clips this to match, so the code block's own background (the vs/
-        // vs2015 theme's white/#1E1E1E, or bg-base-100 for the plain-text fallback)
+        // outer div clips this to match, so the code block's own background (base-300
+        // for highlighted code, see code.css; bg-base-100 for the plain-text fallback)
         // sits flush against the card edges instead of showing as a mismatched inset
         // box nested inside another background.
         <pre className="code-viewer m-0 overflow-x-auto max-h-96">

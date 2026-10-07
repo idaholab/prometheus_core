@@ -83,10 +83,46 @@ _JSON_MIMETYPES = {"application/json"}
 # branch, message_handler.py:855). Kept out of _FILE_MIMETYPES so these render
 # inline rather than downloading (A-1).
 _REPORT_MIMETYPES = {"text/markdown", "text/plain"}
-# YAML → inline-rendered source (not Markdown: comments/indentation would mangle).
+# Source / config text → inline-rendered, syntax-highlighted source (not Markdown:
+# comments/indentation would mangle). Maps MIME → the extension used when inline text is
+# served without a file name. Keep in step with MIME_LANGUAGES in
+# frontend/src/lib/highlight/index.ts. ``application/json`` is deliberately absent: it
+# keeps the interactive JSON tree viewer.
 # text/x-moose is a vendor type (not IANA-registered) for MOOSE input files; agents may
 # set it so a MOOSE input without a ".i" name still routes to the source viewer.
-_CODE_MIMETYPES = {"application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml", "text/x-moose"}
+_CODE_MIME_EXTENSIONS: dict[str, str] = {
+    "application/yaml": ".yaml",
+    "application/x-yaml": ".yaml",
+    "text/yaml": ".yaml",
+    "text/x-yaml": ".yaml",
+    "text/x-moose": ".i",
+    "application/toml": ".toml",
+    "application/xml": ".xml",
+    "text/xml": ".xml",
+    "text/x-python": ".py",
+    "text/x-script.python": ".py",
+    "application/x-python": ".py",
+    "text/x-c": ".c",
+    "text/x-csrc": ".c",
+    "text/x-chdr": ".h",
+    "text/x-c++src": ".cpp",
+    "text/x-c++hdr": ".hpp",
+    "text/x-fortran": ".f90",
+    "text/x-cmake": ".cmake",
+    "text/x-makefile": ".mk",
+    "application/x-sh": ".sh",
+    "text/x-shellscript": ".sh",
+    "text/x-dockerfile": ".dockerfile",
+    "application/sql": ".sql",
+    "text/x-sql": ".sql",
+    "text/javascript": ".js",
+    "application/javascript": ".js",
+    "application/typescript": ".ts",
+    "text/x-typescript": ".ts",
+    "text/x-diff": ".diff",
+    "text/x-patch": ".patch",
+}
+_CODE_MIMETYPES = set(_CODE_MIME_EXTENSIONS)
 # CAD step MIMEs (message_handler.py:33) + archives + CSV → downloadable file.
 # CSV lives here, not with JSON (A-9): the JSONViewer can't parse CSV, so hand it to
 # the download path (until a table viewer exists) rather than error the viewer.
@@ -122,11 +158,23 @@ _EXTENSION_HINTS: dict[str, RenderHint] = {
     ".json": "json",
     ".csv": "file",  # A-9: CSV downloads, not JSONViewer
     ".md": "report",
-    ".yaml": "code",
-    ".yml": "code",
     ".i": "code",  # MOOSE input file (HIT/GetPot syntax)
-    ".txt": "file",
-    ".log": "file",
+    **{
+        ext: "code"
+        for ext in (
+            ".yaml", ".yml", ".jsonc", ".toml", ".ini", ".cfg", ".conf",
+            ".xml", ".xsd", ".xdmf", ".xmf",
+            ".py", ".pyi",
+            ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx",
+            ".f", ".f90", ".f95", ".f03", ".f08", ".for",
+            ".cmake", ".mk", ".dockerfile",
+            ".sh", ".bash", ".zsh",
+            ".sql",
+            ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".mts",
+            ".diff", ".patch",
+            ".txt", ".log",
+        )
+    },
     ".inp": "file",  # ambiguous (Abaqus/MCNP/etc.) — stays a download
     ".zip": "file",
     ".tar": "file",
@@ -134,6 +182,25 @@ _EXTENSION_HINTS: dict[str, RenderHint] = {
     ".ipynb": "file",
     ".xlsx": "file",
 }
+
+# Well-known source files identified by their whole file name rather than an extension.
+# Checked before the extension, so ``CMakeLists.txt`` is cmake, not plain text.
+_BASENAME_HINTS: dict[str, RenderHint] = {
+    name: "code"
+    for name in (
+        "Dockerfile",
+        "Containerfile",
+        "Makefile",
+        "makefile",
+        "GNUmakefile",
+        "CMakeLists.txt",
+    )
+}
+# ``.txt`` / ``.log`` only route to ``code`` when nothing else decided. Agent text parts
+# default to the name ``artifact.txt`` (prometheus_api ArtifactReference), so letting
+# them override a text/plain or text/markdown MIME would pull every plain agent reply
+# out of the report viewer.
+_PLAINTEXT_EXTENSIONS = {".txt", ".log"}
 
 
 def _is_conversation_message(artifact: dict[str, Any]) -> bool:
@@ -172,12 +239,22 @@ def artifact_identity(artifact: dict[str, Any]) -> str:
     return "art-" + hashlib.sha256(basis.encode("utf-8", "replace")).hexdigest()[:16]
 
 
-def _extension_hint(artifact: dict[str, Any]) -> Optional[RenderHint]:
-    """Render hint from the file extension of ``uri``, then ``name``, or ``None``."""
+def _extension_hint(artifact: dict[str, Any], *, include_plaintext: bool = True) -> Optional[RenderHint]:
+    """Render hint from the file name of ``uri``, then ``name``, or ``None``.
+
+    A well-known whole file name (``Dockerfile``) wins over the extension. With
+    ``include_plaintext=False`` the generic ``.txt`` / ``.log`` extensions are ignored.
+    """
     for source in (artifact.get("uri"), artifact.get("name")):
         if not source:
             continue
-        suffix = Path(str(source)).suffix.lower()
+        path = Path(str(source))
+        hint = _BASENAME_HINTS.get(path.name)
+        if hint is not None:
+            return hint
+        suffix = path.suffix.lower()
+        if not include_plaintext and suffix in _PLAINTEXT_EXTENSIONS:
+            continue
         hint = _EXTENSION_HINTS.get(suffix)
         if hint is not None:
             return hint
@@ -227,9 +304,10 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
         if mime in _CODE_MIMETYPES:
             return "code"
         if mime in _REPORT_MIMETYPES:
-            # A YAML file mislabeled text/plain still gets the source viewer, not
-            # Markdown (which would mangle its comments/indentation).
-            return "code" if _extension_hint(artifact) == "code" else "report"
+            # A source file mislabeled text/plain still gets the source viewer, not
+            # Markdown (which would mangle its comments/indentation). Generic
+            # .txt/.log names don't count: they'd capture every plain-text reply.
+            return "code" if _extension_hint(artifact, include_plaintext=False) == "code" else "report"
 
     # 3. tags — explicit routing hints (only when a specific MIME didn't decide).
     tags = artifact.get("tags")
@@ -262,8 +340,9 @@ def artifact_download_payload(
     """Serialize inline artifact content for the content proxy (task 07).
 
     Ports ``_artifact_download_payload`` (message_handler.py:978): a ``json_body``
-    becomes pretty-printed ``.json``; otherwise the first non-empty ``content`` /
-    ``text`` / ``description`` becomes ``.yaml`` (YAML), ``.i`` (MOOSE), ``.md``
+    becomes pretty-printed ``.json``; otherwise ``text_body`` (even when empty), or the
+    first non-empty ``content`` / ``text`` / ``description``, is served with an
+    extension chosen by MIME (``.yaml``, ``.i``, ``.py``, ...), ``.md``
     (markdown), or ``.txt``. Returns ``(bytes, extension, mime_type)`` or ``None`` when
     there is nothing inline to serve.
     """
@@ -271,18 +350,22 @@ def artifact_download_payload(
         content = json.dumps(artifact["json_body"], indent=2).encode("utf-8")
         return content + b"\n", ".json", "application/json"
 
+    effective_mime = mime_type or "text/plain"
+    if effective_mime == "text/markdown":
+        extension = ".md"
+    else:
+        extension = _CODE_MIME_EXTENSIONS.get(_normalize_mime(effective_mime), ".txt")
+
+    # ``text_body`` is the catalog's inline-text field. Check it by presence, not
+    # truthiness: an empty file is still a file and must serve as 200 / zero bytes
+    # rather than falling through to ``description``.
+    text_body = artifact.get("text_body")
+    if text_body is not None:
+        return str(text_body).encode("utf-8"), extension, effective_mime
+
     for key in ("content", "text", "description"):
         value = artifact.get(key)
         if value:
-            effective_mime = mime_type or "text/plain"
-            if effective_mime == "text/markdown":
-                extension = ".md"
-            elif effective_mime == "text/x-moose":
-                extension = ".i"
-            elif effective_mime in _CODE_MIMETYPES:
-                extension = ".yaml"
-            else:
-                extension = ".txt"
             return str(value).encode("utf-8"), extension, effective_mime
 
     return None

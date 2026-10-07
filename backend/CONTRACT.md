@@ -245,7 +245,7 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 | `mermaid` | MermaidViewer | `text/x-mermaid` |
 | `thermal` | ThermalAnalysisViewer | `json_type == prometheus.thermal_analysis.result.v1` |
 | `report` | markdown (rendered inline) | `text/markdown`, `text/plain`, `.md` |
-| `code` | source text, syntax-highlighted (rendered inline, not Markdown) | `application/yaml`, `text/yaml`, `.yaml`/`.yml`; MOOSE input via `.i` or the vendor `text/x-moose` MIME (also wins over `report` when `text/plain` is paired with a `.yaml`/`.yml`/`.i` name) |
+| `code` | source text, syntax-highlighted (rendered inline, not Markdown) | YAML (`application/yaml`, `application/x-yaml`, `text/yaml`, `text/x-yaml`, `.yaml`/`.yml`); MOOSE input (`.i` or the vendor `text/x-moose` MIME); and source/config files by MIME or extension: Python, TOML, INI/`.cfg`/`.conf`, XML (`.xml`/`.xsd`/`.xdmf`), C/C++, Fortran, CMake, Makefile, shell, Dockerfile, SQL, JavaScript/TypeScript, diff/patch, `.jsonc`. Whole file names `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `CMakeLists.txt` also route here. A source name or extension wins over `text/plain`/`text/markdown` (which would otherwise be `report`), except the generic `.txt`/`.log` names: those reach `code` only when no MIME is given, so default-named text replies (`artifact.txt`) stay `report`. `application/json` / `.json` stay `json`. |
 | `reference` | citation card | `reference`/`citation` tag; source/section/page in `citation` |
 | `file` | download | CAD/STEP, `application/octet-stream`, zip/gzip |
 | `unknown` | download fallback | anything unclassified |
