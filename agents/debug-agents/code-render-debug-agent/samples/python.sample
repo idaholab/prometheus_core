@@ -1,0 +1,34 @@
+"""Heat flux helpers (Python sample)."""
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Iterable
+
+STEFAN_BOLTZMANN = 5.670_374_419e-8  # W / (m^2 K^4)
+
+
+@dataclass(frozen=True)
+class Surface:
+    area: float
+    emissivity: float = 0.85
+
+    def radiated_power(self, temperature: float) -> float:
+        """Net power radiated at ``temperature`` (K)."""
+        return self.emissivity * STEFAN_BOLTZMANN * self.area * temperature**4
+
+
+def mean(values: Iterable[float]) -> float:
+    items = list(values)
+    if not items:
+        raise ValueError("mean() of empty sequence")
+    return math.fsum(items) / len(items)
+
+
+@decorator_example
+async def main(argv: list[str] | None = None) -> int:
+    surface = Surface(area=2.5)
+    label = f"P = {surface.radiated_power(600.0):.2f} W — Δ → ü ✓"
+    print(label, 0x1F, 1_000, 3.14e-2, None, True)
+    # A deliberately very long line to check horizontal scrolling: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    return 0

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack at a glance
 
-Multi-agent platform for nuclear engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, form-filler, artifact-debug) through a **LiteLLM proxy** that doubles as the agent registry/gateway and the LLM proxy. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus and the artifact registry via the Redis-compatible protocol. Postgres backs LiteLLM's persistent agent registrations, and separately the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
+Multi-agent platform for nuclear engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, form-filler, plus the debug agents artifact-debug and code-render-debug) through a **LiteLLM proxy** that doubles as the agent registry/gateway and the LLM proxy. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus and the artifact registry via the Redis-compatible protocol. Postgres backs LiteLLM's persistent agent registrations, and separately the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
 
 The `frontend/` is a Node/TypeScript app (React + Vite). The `backend/` runs Python 3.12+ (also 3.13); the client-agent and infra tests use 3.13.
 
@@ -97,7 +97,7 @@ The client-agent still falls back to each agent's `/.well-known/agent.json` for 
 
 Every specialist subclasses `PrometheusAgent` (provided by the prebuilt `prometheus_api` base image; see `agents/<name>/Dockerfile`). The base class handles HTTP serving, Bearer auth (`AGENT_SECRET`), agent-card serving, LiteLLM registration on startup, A2A JSON-RPC parsing, task lifecycle, and auto-wrapping the `process_analysis()` return value as a JSON artifact. To add a new agent see `docs/docs/dev-docs/adding-agents.md` — the short version: create `agents/<name>/{agent.py, agent_card.json, Dockerfile, docker-compose.yml, pyproject.toml}` and `make generate` will pick it up.
 
-Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiation-agent`, `thermal-agent`, `data-agent`, `synthesis-agent`, `osti-research-agent`, `form-filler-agent`, `artifact-debug-agent`.
+Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiation-agent`, `thermal-agent`, `data-agent`, `synthesis-agent`, `osti-research-agent`, `form-filler-agent`, `artifact-debug-agent`, `code-render-debug-agent` (debug agents, included with `DEBUG_AGENTS=true`; the latter returns fixed sample files per language to exercise the `code` viewer).
 
 ### Artifacts
 

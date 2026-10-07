@@ -1,0 +1,11 @@
+Plain text sample
+=================
+
+This file has no syntax to highlight. It checks that ordinary text renders
+cleanly in the code viewer: spacing is preserved,    runs of spaces stay,
+and unicode like Δ → ü ✓ displays correctly.
+
+  * An indented bullet
+  * Another one
+
+A deliberately very long line to check horizontal scrolling: the quick brown fox jumps over the lazy dog, again and again and again and again and again.

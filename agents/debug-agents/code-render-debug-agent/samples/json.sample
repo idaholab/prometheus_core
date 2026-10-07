@@ -1,0 +1,12 @@
+{
+  "assembly": "A-07",
+  "enrichment": 4.95,
+  "active": true,
+  "notes": null,
+  "rods": [
+    {"id": 1, "radius_mm": 4.1, "clad": "Zircaloy-4"},
+    {"id": 2, "radius_mm": 4.1, "clad": "Zircaloy-4"}
+  ],
+  "unicode": "Δ → ü ✓",
+  "long_line": "This is one deliberately very long line used to check horizontal scrolling in the code viewer: the quick brown fox jumps over the lazy dog, again and again and again."
+}

@@ -1,0 +1,20 @@
+# Reactor coolant loop configuration (YAML sample)
+version: 2
+name: "primary-loop"
+enabled: true
+tolerance: 1.0e-6
+pumps:
+  - id: P-101
+    flow_rate: 4.5      # kg/s
+    curve: &pump_curve
+      head: [12.0, 10.5, 8.0]
+      flow: [0.0, 2.5, 5.0]
+  - id: P-102
+    curve: *pump_curve
+materials:
+  steel: {k: 16.2, cp: 500, label: "SS316"}
+  notes: |
+    Multi-line literal block.
+      Indentation is preserved — Δ T → 25 °C ✓
+empty_value: null
+long_line: "This is one deliberately very long line used to check horizontal scrolling in the code viewer: the quick brown fox jumps over the lazy dog, again and again and again."

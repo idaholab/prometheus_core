@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Run a simulation sweep (Bash sample)
+set -euo pipefail
+
+readonly OUT_DIR="${1:-results}"
+declare -a TEMPS=(300 450 600)
+
+log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+mkdir -p "$OUT_DIR"
+for t in "${TEMPS[@]}"; do
+  if [[ -f "$OUT_DIR/run_${t}.csv" ]]; then
+    log "skipping T=${t} (exists)"
+    continue
+  fi
+  log "running T=${t} — Δ → ü ✓"
+  ./solver --temperature "$t" --output "$OUT_DIR/run_${t}.csv" | tee "$OUT_DIR/run_${t}.log"
+done
+echo 'A deliberately very long line to check horizontal scrolling: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'

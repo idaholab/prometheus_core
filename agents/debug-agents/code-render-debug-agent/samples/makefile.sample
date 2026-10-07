@@ -1,0 +1,26 @@
+# Build rules (Makefile sample)
+CC      ?= gcc
+CFLAGS  := -O2 -Wall -Wextra
+SRC     := $(wildcard src/*.c)
+OBJ     := $(SRC:src/%.c=build/%.o)
+TARGET  := build/demo
+
+.PHONY: all clean test
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+build/%.o: src/%.c | build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build:
+	mkdir -p $@
+
+test: $(TARGET)
+	@echo "Running tests — Δ → ü ✓"
+	./$(TARGET) --self-test
+
+clean:
+	rm -rf build

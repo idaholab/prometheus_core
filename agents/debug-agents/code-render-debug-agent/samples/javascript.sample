@@ -1,0 +1,23 @@
+// Fetch and summarise readings (JavaScript sample)
+import { mean } from "./stats.js";
+
+const API = "https://example.org/api";
+
+/** Load readings and return their mean. */
+export async function summarise(sensorId, { limit = 100 } = {}) {
+  const res = await fetch(`${API}/sensors/${sensorId}?limit=${limit}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const { readings = [] } = await res.json();
+  const pattern = /^T-(\d+)$/i;
+  const ids = readings.map((r) => r.id).filter((id) => pattern.test(id));
+  return { count: ids.length, mean: mean(readings.map((r) => r.value)), label: "Δ → ü ✓" };
+}
+
+class Cache extends Map {
+  static #hits = 0;
+  get(key) {
+    Cache.#hits += 1;
+    return super.get(key) ?? null;
+  }
+}
+// A deliberately very long line to check horizontal scrolling: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

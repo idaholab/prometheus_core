@@ -1,0 +1,22 @@
+! 1-D heat conduction, explicit scheme (Fortran sample)
+program heat
+  implicit none
+  integer, parameter :: n = 50
+  real(kind=8), parameter :: alpha = 1.0d-4, dx = 0.02d0, dt = 0.1d0
+  real(kind=8) :: t(n), t_new(n)
+  integer :: i, step
+
+  t = 300.0d0
+  t(1) = 500.0d0
+
+  do step = 1, 200
+     do i = 2, n - 1
+        t_new(i) = t(i) + alpha * dt / dx**2 * (t(i+1) - 2.0d0*t(i) + t(i-1))
+     end do
+     t(2:n-1) = t_new(2:n-1)
+  end do
+
+  if (t(n/2) > 301.0d0) then
+     print *, 'Midpoint T = ', t(n/2), ' K  (delta -> u)'
+  end if
+end program heat

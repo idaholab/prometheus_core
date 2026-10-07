@@ -1,0 +1,25 @@
+/* Vector kernel (C sample) */
+#include <stdio.h>
+#include <stdlib.h>
+
+#define N 8
+#define SQUARE(x) ((x) * (x))
+
+typedef struct {
+    double x, y, z;
+} vec3;
+
+static double dot(const vec3 *a, const vec3 *b) {
+    return a->x * b->x + a->y * b->y + a->z * b->z;
+}
+
+int main(int argc, char **argv) {
+    vec3 v = {1.0, 2.0, 3.0};
+    const char *msg = "norm^2 = %.3f\n"; // Δ → ü ✓
+    for (int i = 0; i < N; ++i) {
+        if (i % 2 == 0) continue;
+        printf(msg, SQUARE(dot(&v, &v)) * 0x1F);
+    }
+    /* A deliberately very long line to check horizontal scrolling: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa */
+    return EXIT_SUCCESS;
+}

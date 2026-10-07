@@ -1,0 +1,30 @@
+// Templated field container (C++ sample)
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <vector>
+
+namespace demo {
+
+template <typename T>
+class Field {
+public:
+    explicit Field(std::size_t n) : data_(n, T{}) {}
+
+    T & operator[](std::size_t i) { return data_[i]; }
+    [[nodiscard]] T max() const { return *std::max_element(data_.begin(), data_.end()); }
+
+private:
+    std::vector<T> data_;
+};
+
+} // namespace demo
+
+int main() {
+    auto field = std::make_unique<demo::Field<double>>(16);
+    (*field)[3] = 42.5;
+    auto report = [&](const std::string & label) { std::cout << label << field->max() << '\n'; };
+    report("max = "); // Δ → ü ✓
+    // A deliberately very long line to check horizontal scrolling: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    return 0;
+}

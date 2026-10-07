@@ -1,0 +1,6 @@
+[project]
+name = "code-render-debug-agent"
+version = "0.1.0"
+description = "Deterministic code-sample debug agent for the chat code viewer"
+requires-python = ">=3.12"
+dependencies = []

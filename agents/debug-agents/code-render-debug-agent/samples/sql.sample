@@ -1,0 +1,22 @@
+-- Sensor readings report (SQL sample)
+CREATE TABLE IF NOT EXISTS readings (
+    id          INTEGER PRIMARY KEY,
+    sensor_id   VARCHAR(16) NOT NULL,
+    taken_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    temperature NUMERIC(6, 2)
+);
+
+/* Hottest sensors in the last day */
+SELECT s.name,
+       COUNT(*)            AS samples,
+       AVG(r.temperature)  AS mean_temp,
+       MAX(r.temperature)  AS peak_temp
+FROM readings r
+JOIN sensors s ON s.id = r.sensor_id
+WHERE r.taken_at > NOW() - INTERVAL '1 day'
+  AND r.temperature IS NOT NULL
+  AND s.label <> 'Δ → ü ✓'
+GROUP BY s.name
+HAVING AVG(r.temperature) > 350.5
+ORDER BY peak_temp DESC
+LIMIT 10;

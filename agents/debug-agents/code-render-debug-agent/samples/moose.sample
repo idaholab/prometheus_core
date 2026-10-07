@@ -1,0 +1,48 @@
+# Transient heat conduction (MOOSE input sample)
+[Mesh]
+  type = GeneratedMesh
+  dim = 2
+  nx = 20
+  ny = 20
+  elem_type = QUAD4
+[]
+
+[Variables]
+  [T]
+    order = FIRST
+    family = LAGRANGE
+    initial_condition = 300.0
+  []
+[]
+
+[Kernels]
+  [diffusion]
+    type = ADHeatConduction
+    variable = T
+  []
+  [time]
+    type = ADHeatConductionTimeDerivative
+    variable = T
+  []
+[]
+
+[BCs]
+  [left]
+    type = DirichletBC
+    variable = T
+    boundary = left
+    value = 500.0
+  []
+[]
+
+[Executioner]
+  type = Transient
+  solve_type = NEWTON
+  end_time = 10
+  dt = 0.5
+[]
+
+[Outputs]
+  exodus = true
+  execute_on = 'initial timestep_end'
+[]

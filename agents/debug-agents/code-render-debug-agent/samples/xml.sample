@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mesh description (XML sample) -->
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology TopologyType="Quadrilateral" NumberOfElements="400"/>
+      <Geometry GeometryType="XY">
+        <DataItem Format="HDF" Dimensions="441 2">mesh.h5:/geometry</DataItem>
+      </Geometry>
+      <Attribute Name="T" Center="Node" AttributeType="Scalar">
+        <DataItem Format="HDF" Dimensions="441">mesh.h5:/T</DataItem>
+      </Attribute>
+      <Information Name="note"><![CDATA[Raw <text> & symbols: Δ → ü ✓]]></Information>
+    </Grid>
+  </Domain>
+</Xdmf>

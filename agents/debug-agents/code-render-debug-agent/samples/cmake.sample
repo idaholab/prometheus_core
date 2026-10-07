@@ -1,0 +1,22 @@
+# Build configuration (CMake sample)
+cmake_minimum_required(VERSION 3.20)
+project(demo VERSION 1.2.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+option(DEMO_BUILD_TESTS "Build the unit tests" ON)
+
+find_package(Threads REQUIRED)
+
+add_library(core STATIC src/core.cpp src/field.cpp)
+target_include_directories(core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(core PRIVATE Threads::Threads)
+
+add_executable(demo src/main.cpp)
+target_link_libraries(demo PRIVATE core)
+
+if(DEMO_BUILD_TESTS)
+  enable_testing()
+  add_test(NAME demo_smoke COMMAND demo --self-test)
+endif()
+
+message(STATUS "Configured demo ${PROJECT_VERSION} — Δ → ü ✓")

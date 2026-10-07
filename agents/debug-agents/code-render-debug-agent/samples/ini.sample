@@ -1,0 +1,14 @@
+; Solver settings (INI sample)
+[general]
+name = demo-run
+verbose = true
+workers = 4
+
+[solver]
+tolerance = 1e-6
+max_iterations = 500
+preconditioner = ilu   # inline comment
+
+[paths]
+output = /var/data/results
+label = "Δ → ü ✓"

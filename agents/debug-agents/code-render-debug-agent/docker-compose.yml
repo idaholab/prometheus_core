@@ -1,0 +1,38 @@
+services:
+  code-render-debug-agent:
+    build:
+      context: .
+      args:
+        - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-}
+    container_name: code-render-debug-agent
+    ports:
+      - "${CODE_RENDER_DEBUG_PORT:-8010}:8000"
+    networks:
+      - agent-network
+    environment:
+      AGENT_PORT: 8000
+      AGENT_SECRET: ${AGENT_SECRET}
+      REGISTRY_URL: ${REGISTRY_URL:-http://litellm:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
+      # Multi-user identity plane (RS256 only): this agent verifies with the
+      # public key or JWKS_URL -- it never holds the private key. JWKS_URL
+      # defaults to the backend's own endpoint, reachable by container name on
+      # this network, so an admin-generated/rotated signing key (Admin >
+      # Signing Keys) verifies with no USER_IDENTITY_PUBLIC_KEY at all. See
+      # docs/dev-docs/multi-user-setup.md.
+      JWKS_URL: ${JWKS_URL:-http://backend:8000/.well-known/jwks.json}
+      USER_IDENTITY_PUBLIC_KEY: ${USER_IDENTITY_PUBLIC_KEY:-}
+      USER_IDENTITY_ISS: ${USER_IDENTITY_ISS:-prometheus-platform}
+      USER_IDENTITY_AUD: ${USER_IDENTITY_AUD:-prometheus-agents}
+      USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
+      PYTHONDONTWRITEBYTECODE: 1
+    depends_on:
+      litellm:
+        condition: service_healthy
+    restart: unless-stopped

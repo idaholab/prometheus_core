@@ -1,0 +1,12 @@
+2026-10-07T09:14:02Z INFO  solver: starting run id=run-0042 workers=4
+2026-10-07T09:14:02Z DEBUG mesh: 400 elements, 441 nodes
+2026-10-07T09:14:03Z INFO  step=1 t=0.5 residual=1.2e-02
+2026-10-07T09:14:03Z INFO  step=2 t=1.0 residual=3.4e-04
+2026-10-07T09:14:04Z WARN  step=3 t=1.5 residual=2.1e-04 (slow convergence)
+2026-10-07T09:14:05Z ERROR step=4 diverged: NaN in field T at node 217
+Traceback (most recent call last):
+  File "solver.py", line 88, in advance
+    raise FloatingPointError("NaN")
+FloatingPointError: NaN
+2026-10-07T09:14:05Z INFO  shutting down — Δ → ü ✓
+2026-10-07T09:14:05Z INFO  a deliberately very long line to check horizontal scrolling: the quick brown fox jumps over the lazy dog, again and again and again and again.

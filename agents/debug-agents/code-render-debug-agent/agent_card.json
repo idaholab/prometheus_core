@@ -1,0 +1,611 @@
+{
+  "name": "Code Render Debug Agent",
+  "description": "Returns deterministic sample files per language so the chat UI's code viewer (highlighting and artifact routing) can be inspected visually.",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "render_yaml_sample",
+      "name": "Render YAML Sample",
+      "description": "Return a fixed YAML sample as an inline text artifact named sample.yaml so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/yaml only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_moose_sample",
+      "name": "Render MOOSE input Sample",
+      "description": "Return a fixed MOOSE input sample as an inline text artifact named input.i so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-moose only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_python_sample",
+      "name": "Render Python Sample",
+      "description": "Return a fixed Python sample as an inline text artifact named sample.py so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-python only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_json_sample",
+      "name": "Render JSON (with the .jsonc extension) Sample",
+      "description": "Return a fixed JSON (with the .jsonc extension) sample as an inline text artifact named sample.jsonc so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type). 'mime' is not available for this language: no MIME type routes it to the code viewer."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_toml_sample",
+      "name": "Render TOML Sample",
+      "description": "Return a fixed TOML sample as an inline text artifact named sample.toml so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/toml only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_xml_sample",
+      "name": "Render XML Sample",
+      "description": "Return a fixed XML sample as an inline text artifact named sample.xml so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/xml only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_c_sample",
+      "name": "Render C Sample",
+      "description": "Return a fixed C sample as an inline text artifact named sample.c so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-csrc only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_cpp_sample",
+      "name": "Render C++ Sample",
+      "description": "Return a fixed C++ sample as an inline text artifact named sample.cpp so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-c++src only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_fortran_sample",
+      "name": "Render Fortran Sample",
+      "description": "Return a fixed Fortran sample as an inline text artifact named sample.f90 so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-fortran only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_cmake_sample",
+      "name": "Render CMake Sample",
+      "description": "Return a fixed CMake sample as an inline text artifact named CMakeLists.txt so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-cmake only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_makefile_sample",
+      "name": "Render Makefile Sample",
+      "description": "Return a fixed Makefile sample as an inline text artifact named Makefile so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-makefile only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_bash_sample",
+      "name": "Render Bash Sample",
+      "description": "Return a fixed Bash sample as an inline text artifact named sample.sh so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/x-sh only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_dockerfile_sample",
+      "name": "Render Dockerfile Sample",
+      "description": "Return a fixed Dockerfile sample as an inline text artifact named Dockerfile so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-dockerfile only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_ini_sample",
+      "name": "Render INI Sample",
+      "description": "Return a fixed INI sample as an inline text artifact named sample.ini so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type). 'mime' is not available for this language: no MIME type routes it to the code viewer."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_sql_sample",
+      "name": "Render SQL Sample",
+      "description": "Return a fixed SQL sample as an inline text artifact named sample.sql so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/sql only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_javascript_sample",
+      "name": "Render JavaScript Sample",
+      "description": "Return a fixed JavaScript sample as an inline text artifact named sample.js so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/javascript only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_typescript_sample",
+      "name": "Render TypeScript Sample",
+      "description": "Return a fixed TypeScript sample as an inline text artifact named sample.ts so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type application/typescript only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_diff_sample",
+      "name": "Render unified diff Sample",
+      "description": "Return a fixed unified diff sample as an inline text artifact named sample.diff so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/x-diff only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_log_sample",
+      "name": "Render log file Sample",
+      "description": "Return a fixed log file sample as an inline text artifact named sample.log so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type). 'mime' is not available for this language: no MIME type routes it to the code viewer."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "render_text_sample",
+      "name": "Render plain text Sample",
+      "description": "Return a fixed plain text sample as an inline text artifact named sample.txt so the chat code viewer's rendering can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count. Omit for the sample's natural length. 0 returns an empty file; a smaller value cuts the sample; a larger value pads it with numbered filler lines (up to 20000, enough to pass the viewer's 200 KB highlight cutoff)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type). 'mime' is not available for this language: no MIME type routes it to the code viewer."
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}
