@@ -1,0 +1,16 @@
+timestamp,step,temperature_K,residual,note,label
+2026-10-07T09:00:00Z,1,300.0,1.200e-02,initial state,Δ start
+2026-10-07T09:00:05Z,2,312.5,3.400e-03,"ramp, stage one",ü ramp
+2026-10-07T09:00:10Z,3,330.25,8.100e-04,"said ""stable"" early",✓ ok
+2026-10-07T09:00:15Z,4,355.0,2.100e-04,,→ blank note
+2026-10-07T09:00:20Z,5,391.75,6.700e-05,steady,Δ steady
+2026-10-07T09:00:25Z,6,430.0,1.900e-05,"ramp, stage two",ü ramp
+2026-10-07T09:00:30Z,7,468.5,4.400e-06,steady,Δ steady
+2026-10-07T09:00:35Z,8,502.0,9.800e-07,"quote "" in the middle",✓ ok
+2026-10-07T09:00:40Z,9,530.0,2.300e-07,steady,→ plateau
+2026-10-07T09:00:45Z,10,551.25,5.100e-08,,→ blank note
+2026-10-07T09:00:50Z,11,566.0,1.200e-08,steady,Δ steady
+2026-10-07T09:00:55Z,12,575.5,2.800e-09,"cool-down, begins",ü cool
+2026-10-07T09:01:00Z,13,571.0,6.300e-10,steady,Δ steady
+2026-10-07T09:01:05Z,14,560.0,1.400e-10,"long note: the quick brown fox jumps over the lazy dog, again and again and again and again and again and again",✓ wide
+2026-10-07T09:01:10Z,15,548.5,3.000e-11,converged,✓ done

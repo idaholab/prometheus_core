@@ -169,13 +169,14 @@ def normalize_followup_questions(questions: list[dict[str, Any]]) -> list[FormFi
 RenderHint = Literal[
     "pdf",  # PDF → PdfViewer
     "image",  # raster image or SVG → ImageViewer (SVG folds into image; no separate svg hint)
-    "json",  # JSON/CSV → JSONViewer (CollapsibleJson)
+    "json",  # JSON → JSONViewer (CollapsibleJson)
     "ifc",  # IFC → IFCViewer
     "mesh",  # Exodus/STL → MeshViewer (shared VTK viewer)
     "mermaid",  # Mermaid diagram → MermaidViewer
     "thermal",  # prometheus.thermal_analysis.result.v1 → ThermalAnalysisViewer
     "report",  # markdown / plain-text report → markdown renderer (rendered inline, not downloaded)
     "code",  # YAML / config source → CodeViewer (rendered inline as plain text, not Markdown)
+    "table",  # CSV / TSV → TableViewer (sortable table, raw-text toggle)
     "reference",  # citation / external reference (frontend formats from ``ArtifactMeta.citation``)
     "file",  # generic downloadable file (CAD/step, archives, octet-stream)
     "unknown",  # no viewer; offer download

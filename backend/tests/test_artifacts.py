@@ -45,7 +45,15 @@ from app.services.artifacts import (
         ({"mime_type": "text/x-mermaid"}, "mermaid"),
         ({"mime_type": "application/pdf"}, "pdf"),
         ({"mime_type": "application/json"}, "json"),
-        ({"mime_type": "text/csv"}, "file"),  # A-9: CSV downloads, not JSONViewer
+        ({"mime_type": "text/csv"}, "table"),  # A-9: not the JSONViewer; the table viewer
+        ({"mime_type": "application/csv"}, "table"),
+        ({"mime_type": "text/tab-separated-values"}, "table"),
+        ({"mime_type": "text/csv; charset=utf-8"}, "table"),
+        ({"name": "results.csv"}, "table"),
+        ({"name": "results.TSV"}, "table"),
+        ({"mime_type": "text/plain", "name": "results.csv"}, "table"),  # mislabeled CSV
+        ({"mime_type": "text/markdown", "name": "results.tsv"}, "table"),
+        ({"mime_type": "text/csv", "tags": ["data"]}, "table"),  # MIME outranks the tag
         ({"mime_type": "image/png"}, "image"),
         ({"mime_type": "image/svg+xml"}, "image"),  # SVG folds into image (React)
         ({"mime_type": "application/octet-stream"}, "file"),
@@ -194,6 +202,20 @@ def test_download_payload_text_prefers_moose_extension():
 def test_download_payload_text_extension_per_mime(mime, ext):
     _, got_ext, got_mime = artifact_download_payload({"text": "x"}, mime_type=mime)
     assert got_ext == ext and got_mime == mime
+
+
+@pytest.mark.parametrize(
+    ("mime", "ext"),
+    [
+        ("text/csv", ".csv"),
+        ("application/csv", ".csv"),
+        ("text/csv; charset=utf-8", ".csv"),
+        ("text/tab-separated-values", ".tsv"),
+    ],
+)
+def test_download_payload_table_extension_per_mime(mime, ext):
+    content, got_ext, got_mime = artifact_download_payload({"text_body": "a,b\n1,2\n"}, mime_type=mime)
+    assert got_ext == ext and got_mime == mime and content == b"a,b\n1,2\n"
 
 
 def test_download_payload_serves_text_body_not_description():

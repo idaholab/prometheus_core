@@ -11,14 +11,15 @@
  * copy-button behavior mirror `CodeBlock` in `@/components/Markdown`.
  *
  * When `language` is recognized by `lib/highlight`, the body is syntax-highlighted
- * (currently YAML and MOOSE input files); otherwise it renders as plain text. Copy
+ * (YAML, MOOSE, Python, XML, C/C++, ...); otherwise it renders as plain text. Copy
  * always copies the raw, unhighlighted source.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertCircle, Check, Copy, FileDown, FileText } from "lucide-react";
 import type { ViewerProps } from "@/lib/elements/elements";
 import { highlightToHtml } from "@/lib/highlight";
+import { useArtifactText } from "./useArtifactText";
 import "./code.css";
 
 interface CodeProps {
@@ -28,36 +29,14 @@ interface CodeProps {
   language?: string;
 }
 
-type LoadState = "idle" | "loading" | "error";
-
 export function CodeElement({ element }: ViewerProps) {
   const { source = "", title, url = "", language } = (element.props ?? {}) as CodeProps;
   const name = title || element.name || "Code";
 
-  const [text, setText] = useState(source);
-  const [loadState, setLoadState] = useState<LoadState>(source || !url ? "idle" : "loading");
+  const { text, loadState } = useArtifactText(source, url);
   const [copied, setCopied] = useState(false);
 
   const highlighted = useMemo(() => highlightToHtml(text, language), [text, language]);
-
-  useEffect(() => {
-    if (source || !url) return;
-    let cancelled = false;
-    setLoadState("loading");
-    fetch(url, { credentials: "include" })
-      .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then((body) => {
-        if (cancelled) return;
-        setText(body);
-        setLoadState("idle");
-      })
-      .catch(() => {
-        if (!cancelled) setLoadState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [source, url]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {

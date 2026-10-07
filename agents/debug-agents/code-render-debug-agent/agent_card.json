@@ -128,6 +128,36 @@
       }
     },
     {
+      "id": "render_csv_sample",
+      "name": "Render CSV Sample",
+      "description": "Return a fixed CSV sample as an inline text artifact named sample.csv so the chat table viewer's rendering (sorting, quoting, row cap) can be inspected.",
+      "usage_notes": "Debug only. Deterministic content; use 'lines' to test empty (0), short, or very large files.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "JSON with status, artifact_id, artifact_name, mime_type, line_count and sha256",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20000,
+            "description": "Optional exact line count, header included. Omit for the sample's natural length (16 lines). 0 returns an empty file and 1 returns only the header; a smaller value cuts the data rows; a larger value adds numbered rows (up to 20000; past 1000 data rows the viewer shows its row-cap footer)."
+          },
+          "routing": {
+            "type": "string",
+            "enum": [
+              "both",
+              "extension",
+              "mime"
+            ],
+            "description": "Which signals the backend routes on: 'both' (default; real file name and MIME type), 'extension' (file name only, no MIME type), or 'mime' (MIME type text/csv only, neutral name 'sample')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "id": "render_toml_sample",
       "name": "Render TOML Sample",
       "description": "Return a fixed TOML sample as an inline text artifact named sample.toml so the chat code viewer's rendering can be inspected.",

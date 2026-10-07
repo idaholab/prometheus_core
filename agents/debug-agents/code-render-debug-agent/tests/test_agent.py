@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import importlib.util
+import io
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -116,6 +118,22 @@ def test_lines_gives_exactly_n_lines(skill_id, lines):
 def test_json_stays_valid_json_for_any_nonzero_line_count(lines):
     body = _run("render_json_sample", lines=lines).registered.text_body
     json.loads(body)
+
+
+@pytest.mark.parametrize("lines", [None, 1, 2, 5, 15, 16, 40, 1500])
+def test_csv_rows_all_have_the_header_column_count(lines):
+    params = {} if lines is None else {"lines": lines}
+    body = _run("render_csv_sample", **params).registered.text_body
+    rows = list(csv.reader(io.StringIO(body)))
+    assert rows[0] == ["timestamp", "step", "temperature_K", "residual", "note", "label"]
+    assert {len(row) for row in rows} == {len(rows[0])}
+    if lines is not None:
+        assert len(rows) == lines  # no quoted line breaks, so records == lines
+
+
+def test_csv_is_routed_to_the_table_viewer_not_the_code_viewer():
+    ref = _run("render_csv_sample").registered
+    assert ref.name == "sample.csv" and ref.mime_type == "text/csv"
 
 
 def test_json_natural_sample_is_valid_json():

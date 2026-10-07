@@ -148,7 +148,13 @@ async def test_map_response_unknown_status_collapses_to_answer_not_500(session_s
 _ARTIFACT_MATRIX = [
     ("pdf", {"artifact_id": "p", "mime_type": "application/pdf"}, "pdf"),
     ("data-json", {"artifact_id": "d1", "mime_type": "application/json"}, "json"),
-    ("data-csv", {"artifact_id": "d2", "mime_type": "text/csv"}, "file"),  # A-9: CSV → download
+    ("table-csv-mime", {"artifact_id": "d2", "mime_type": "text/csv"}, "table"),  # A-9: CSV → table viewer
+    ("table-tsv-ext", {"artifact_id": "d4", "name": "results.tsv"}, "table"),
+    (
+        "table-plaintext-csv-name",
+        {"artifact_id": "d5", "mime_type": "text/plain", "name": "results.csv"},
+        "table",
+    ),
     ("data-tag", {"artifact_id": "d3", "tags": ["data"]}, "json"),
     ("report-pdf", {"artifact_id": "r1", "mime_type": "application/pdf", "tags": ["report"]}, "pdf"),
     ("report-markdown", {"artifact_id": "r2", "mime_type": "text/markdown"}, "report"),

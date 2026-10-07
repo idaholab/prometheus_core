@@ -28,6 +28,7 @@ export type RenderHint =
   | "thermal"
   | "report"
   | "code"
+  | "table"
   | "reference"
   | "file"
   | "unknown";

@@ -123,11 +123,18 @@ _CODE_MIME_EXTENSIONS: dict[str, str] = {
     "text/x-patch": ".patch",
 }
 _CODE_MIMETYPES = set(_CODE_MIME_EXTENSIONS)
-# CAD step MIMEs (message_handler.py:33) + archives + CSV → downloadable file.
-# CSV lives here, not with JSON (A-9): the JSONViewer can't parse CSV, so hand it to
-# the download path (until a table viewer exists) rather than error the viewer.
+# CSV / TSV → inline table viewer. Maps MIME → download extension (used when inline text
+# is served without a file name). Keep in step with the delimiter handling in
+# frontend/src/lib/table/csv.ts.
+_TABLE_MIME_EXTENSIONS: dict[str, str] = {
+    "text/csv": ".csv",
+    "application/csv": ".csv",
+    "text/tab-separated-values": ".tsv",
+}
+_TABLE_MIMETYPES = set(_TABLE_MIME_EXTENSIONS)
+# CAD step MIMEs (message_handler.py:33) + archives → downloadable file. CSV is not
+# here: it has its own table viewer (the JSONViewer can't parse it — A-9).
 _FILE_MIMETYPES = {
-    "text/csv",
     "application/octet-stream",
     "application/zip",
     "application/gzip",
@@ -156,7 +163,8 @@ _EXTENSION_HINTS: dict[str, RenderHint] = {
     ".svg": "image",
     ".pdf": "pdf",
     ".json": "json",
-    ".csv": "file",  # A-9: CSV downloads, not JSONViewer
+    ".csv": "table",  # A-9: not the JSONViewer; rendered by the table viewer
+    ".tsv": "table",
     ".md": "report",
     ".i": "code",  # MOOSE input file (HIT/GetPot syntax)
     **{
@@ -267,10 +275,10 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
     First match wins, in this order:
 
     1. ``json_type`` — explicit semantic type (highest priority).
-    2. **Specific** ``mime_type`` (ifc/mesh/mermaid/image/pdf/json/code/report).
+    2. **Specific** ``mime_type`` (ifc/mesh/mermaid/image/pdf/json/code/table/report).
     3. ``tags`` — explicit routing hints.
     4. file ``extension`` (of ``uri`` or ``name``).
-    5. **Generic downloadable** ``mime_type`` (octet-stream/zip/csv/step).
+    5. **Generic downloadable** ``mime_type`` (octet-stream/zip/step).
     6. a bare-``json_body`` fallback.
 
     A concrete MIME outranks tags (A-2): an artifact tagged ``data`` but typed
@@ -303,11 +311,15 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
             return "json"
         if mime in _CODE_MIMETYPES:
             return "code"
+        if mime in _TABLE_MIMETYPES:
+            return "table"
         if mime in _REPORT_MIMETYPES:
             # A source file mislabeled text/plain still gets the source viewer, not
-            # Markdown (which would mangle its comments/indentation). Generic
-            # .txt/.log names don't count: they'd capture every plain-text reply.
-            return "code" if _extension_hint(artifact, include_plaintext=False) == "code" else "report"
+            # Markdown (which would mangle its comments/indentation), and a CSV/TSV
+            # mislabeled text/plain still gets the table viewer. Generic .txt/.log
+            # names don't count: they'd capture every plain-text reply.
+            hint = _extension_hint(artifact, include_plaintext=False)
+            return hint if hint in ("code", "table") else "report"
 
     # 3. tags — explicit routing hints (only when a specific MIME didn't decide).
     tags = artifact.get("tags")
@@ -354,7 +366,8 @@ def artifact_download_payload(
     if effective_mime == "text/markdown":
         extension = ".md"
     else:
-        extension = _CODE_MIME_EXTENSIONS.get(_normalize_mime(effective_mime), ".txt")
+        normalized = _normalize_mime(effective_mime)
+        extension = _CODE_MIME_EXTENSIONS.get(normalized) or _TABLE_MIME_EXTENSIONS.get(normalized, ".txt")
 
     # ``text_body`` is the catalog's inline-text field. Check it by presence, not
     # truthiness: an empty file is still a file and must serve as 200 / zero bytes

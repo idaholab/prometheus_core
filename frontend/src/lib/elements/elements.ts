@@ -31,6 +31,7 @@ export type ElementKind =
   | "thermal"        // ThermalAnalysisViewer custom element
   | "report"         // markdown report rendered inline (render_hint === "report")
   | "code"           // plain source text, e.g. YAML (render_hint === "code")
+  | "table"          // CSV / TSV sortable table (render_hint === "table")
   | "reference"      // citation card (render_hint === "reference")
   | "unknown";
 
@@ -107,6 +108,7 @@ export function classifyElement(el: AnyElement): ElementKind {
       case "ThermalAnalysisViewer": return "thermal";
       case "ReportViewer":        return "report";
       case "CodeViewer":          return "code";
+      case "TableViewer":         return "table";
       case "ReferenceViewer":     return "reference";
       case "SVGViewer":           return "image";
       default:                    return "unknown";
@@ -167,6 +169,7 @@ import { PlanViewerElement }               from "../../viewers/PlanViewerElement
 import { ThermalAnalysisElement }          from "../../viewers/ThermalAnalysisElement";
 import { ReportElement }                   from "../../viewers/ReportElement";
 import { CodeElement }                     from "../../viewers/CodeElement";
+import { TableElement }                    from "../../viewers/TableElement";
 import { ReferenceElement }                from "../../viewers/ReferenceElement";
 
 export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null>> = {
@@ -182,6 +185,7 @@ export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null
   thermal:      ThermalAnalysisElement,
   report:       ReportElement,
   code:         CodeElement,
+  table:        TableElement,
   reference:    ReferenceElement,
   unknown:      null,
 };

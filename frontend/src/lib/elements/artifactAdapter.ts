@@ -29,6 +29,7 @@
 import { api } from "@/lib/api/client";
 import type { ArtifactMeta } from "@/lib/api/types";
 import { languageFor } from "@/lib/highlight";
+import { delimiterFor } from "@/lib/table/csv";
 import type { AnyElement } from "./elements";
 
 /** Best-effort mermaid diagram source from an inline body (string or `{diagram|chart|content}`). */
@@ -152,6 +153,21 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
           title: artifact.name,
           url,
           language: languageFor(artifact.name, artifact.mime_type),
+        },
+      };
+
+    case "table":
+      return {
+        ...base,
+        type: "custom",
+        name: "TableViewer",
+        // Inline body when present; otherwise TableElement fetches the text from `url`.
+        props: {
+          source: typeof artifact.json_body === "string" ? artifact.json_body : "",
+          title: artifact.name,
+          url,
+          // Only TSV is known up front; CSV-ish delimiters are detected from the content.
+          delimiter: delimiterFor(artifact.name, artifact.mime_type),
         },
       };
 

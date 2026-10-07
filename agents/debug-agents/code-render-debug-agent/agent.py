@@ -2,8 +2,9 @@
 Code Render Debug Agent.
 
 Purpose:
-- Return a fixed, hand-written sample file per language so the chat UI's code viewer
-  (syntax highlighting, language detection, artifact routing) can be inspected by eye.
+- Return a fixed, hand-written sample file per file type so the chat UI's viewers (code
+  syntax highlighting and language detection, the CSV table, artifact routing) can be
+  inspected by eye.
 - Stay deterministic: file bodies come from checked-in ``samples/`` files (no LLM, clock
   or randomness). Only artifact ids are random uuid4 values.
 
@@ -62,6 +63,8 @@ _SPECS = (
     # .json / application/json route to the interactive JSON viewer, so the code viewer's
     # JSON is reached by the .jsonc extension, and no MIME type routes to it.
     SampleSpec("json", "sample.jsonc", None, ""),
+    # CSV routes to the table viewer (render_hint "table"), not the code viewer.
+    SampleSpec("csv", "sample.csv", "text/csv", ""),
     SampleSpec("toml", "sample.toml", "application/toml", "# padding line {n:05d}"),
     SampleSpec("xml", "sample.xml", "application/xml", "<!-- padding line {n:05d} -->"),
     SampleSpec("c", "sample.c", "text/x-csrc", "// padding line {n:05d}"),
@@ -120,11 +123,32 @@ def _json_body(lines: int) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
+def _csv_body(sample: str, lines: int) -> str:
+    """Valid CSV of exactly ``lines`` lines: the header, then data rows.
+
+    Sample rows come first, then numbered rows with fixed values, so every row has the
+    header's column count. ``0`` is an empty file and ``1`` is the header alone.
+    """
+    if lines == 0:
+        return ""
+    header, *data = sample.splitlines()
+    wanted = lines - 1
+    rows = data[:wanted]
+    for n in range(len(data) + 1, wanted + 1):
+        rows.append(
+            f"2026-10-07T00:00:00Z,{n},{300 + n * 0.5:.1f},{1.0 / n:.3e},padding row {n:05d},pad"
+        )
+    return "\n".join([header, *rows]) + "\n"
+
+
 def build_body(spec: SampleSpec, lines: Optional[int] = None) -> str:
     """The sample's text, optionally cut or padded to exactly ``lines`` lines."""
     if lines is not None and spec.language == "json":
         # Cutting or padding would break the JSON, so build a valid document instead.
         return _json_body(lines)
+    if lines is not None and spec.language == "csv":
+        # Likewise for CSV: keep the header and the column count of every row.
+        return _csv_body(spec.sample_path.read_text(encoding="utf-8"), lines)
     text = spec.sample_path.read_text(encoding="utf-8")
     if lines is None:
         return text
