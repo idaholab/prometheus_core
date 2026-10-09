@@ -12,6 +12,7 @@ services:
       - agent-network
     environment:
       AGENT_PORT: 8000
+      EXTERNAL_AGENT_URL: http://form-filler-agent:8000
       AGENT_SECRET: ${AGENT_SECRET}
       REGISTRY_URL: ${REGISTRY_URL:-http://litellm:4000}
       LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:-registry}
