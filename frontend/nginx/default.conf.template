@@ -16,7 +16,12 @@ server {
     # ${BACKEND_UPSTREAM} is filled in by the nginx image's envsubst step at start
     # (the Dockerfile defaults it to http://backend:8000); only variables that are
     # set in the environment are substituted, so nginx's own $host etc. are untouched.
+    #
+    # BACKEND_UPSTREAM must be scheme://host:port only, with no path or trailing
+    # slash: a path makes nginx replace the matched `/api/` prefix, so API calls
+    # would reach the wrong route. It must also be non-empty.
     # proxy_pass has no path so the original `/api/...` URI is preserved verbatim.
+    #
     # buffering/cache are off and the read timeout is long so the /api/events SSE
     # stream is delivered incrementally rather than held until the response closes
     # (see backend/app/services/events.py).
