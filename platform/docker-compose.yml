@@ -153,6 +153,7 @@ services:
     environment:
       <<: *common-env
       AGENT_PORT: 8000
+      EXTERNAL_AGENT_URL: http://client-agent:8000
       LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:-registry}
       LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}

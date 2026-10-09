@@ -107,9 +107,12 @@ Key fields for discovery and routing:
 
 Do **not** put a `url` field in the card. `PrometheusAgent` sets the registered
 URL at startup: `EXTERNAL_AGENT_URL` if set, else
-`http://{container hostname}:{AGENT_PORT}` — inside Docker Compose the hostname
-is the service name, which resolves on `agent-network`. Set `EXTERNAL_AGENT_URL`
-only when the agent is port-mapped or runs on a different host.
+`http://{container hostname}:{AGENT_PORT}`. Always set `EXTERNAL_AGENT_URL` to
+`http://<service-name>:8000` in the agent's `docker-compose.yml`. The hostname
+fallback only works under Docker Compose, where the hostname happens to be the
+service name; on Kubernetes the hostname is the pod name, which other pods can't
+resolve and which changes on every restart. `make test-static` fails if an agent
+doesn't set it.
 
 ### 3. Create environment and dependencies
 
@@ -173,6 +176,7 @@ my-analysis-agent:
   environment:
     - AGENT_HOST=my-analysis-agent
     - AGENT_PORT=8000
+    - EXTERNAL_AGENT_URL=http://my-analysis-agent:8000
     - REGISTRY_URL=${REGISTRY_URL:-http://litellm:4000}
     - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
     - REDIS_URL=${REDIS_URL}
