@@ -39,7 +39,10 @@ RUN npm run build
 
 # ---- prod ----
 FROM nginx:alpine AS prod
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# The nginx image renders /etc/nginx/templates/*.template into conf.d/ at start,
+# substituting ${BACKEND_UPSTREAM}.
+ENV BACKEND_UPSTREAM=http://backend:8000
+COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

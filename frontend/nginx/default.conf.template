@@ -5,13 +5,23 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Backend API (FastAPI `backend` service on the agent-network, container port 8000).
+    # Cheap liveness/readiness endpoint for probes (not the SPA).
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok";
+    }
+
+    # Backend API (FastAPI `backend` service by default, container port 8000).
+    # ${BACKEND_UPSTREAM} is filled in by the nginx image's envsubst step at start
+    # (the Dockerfile defaults it to http://backend:8000); only variables that are
+    # set in the environment are substituted, so nginx's own $host etc. are untouched.
     # proxy_pass has no path so the original `/api/...` URI is preserved verbatim.
     # buffering/cache are off and the read timeout is long so the /api/events SSE
     # stream is delivered incrementally rather than held until the response closes
     # (see backend/app/services/events.py).
     location /api/ {
-        proxy_pass http://backend:8000;
+        proxy_pass ${BACKEND_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
