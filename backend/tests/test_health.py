@@ -30,6 +30,7 @@ def sqlite_admin_db(monkeypatch):
 
 
 def test_readyz_ok_when_valkey_and_admin_db_up(sqlite_admin_db):
+    """/readyz returns 200 when both Valkey and admin-db answer."""
     from app.main import app
 
     resp = TestClient(app).get("/readyz")
@@ -38,6 +39,7 @@ def test_readyz_ok_when_valkey_and_admin_db_up(sqlite_admin_db):
 
 
 def test_readyz_503_when_valkey_down_but_healthz_still_200(sqlite_admin_db):
+    """A Valkey outage fails /readyz with 503 but leaves liveness (/healthz) at 200."""
     from app.main import app
 
     original = app.state.redis
@@ -56,6 +58,7 @@ def test_readyz_503_when_valkey_down_but_healthz_still_200(sqlite_admin_db):
 
 
 def test_readyz_503_when_admin_db_down(monkeypatch):
+    """An admin-db outage fails /readyz with 503 but leaves /healthz at 200."""
     from app.main import app
 
     def _broken_factory():
@@ -70,6 +73,7 @@ def test_readyz_503_when_admin_db_down(monkeypatch):
 
 
 def test_readyz_503_when_valkey_hangs(sqlite_admin_db, monkeypatch):
+    """A Valkey ping that never returns hits the check timeout and fails /readyz with 503."""
     from app.main import app
 
     monkeypatch.setattr(health_mod, "READINESS_CHECK_TIMEOUT_S", 0.05)
