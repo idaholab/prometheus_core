@@ -18,7 +18,7 @@ backend/
     config.py        # pydantic-settings loader
     config.yml       # default configuration
     routers/
-      health.py      # GET /healthz
+      health.py      # GET /healthz (liveness), GET /readyz (readiness)
   tests/
 ```
 
@@ -30,7 +30,8 @@ Requires Python 3.12+ and `uv` (the platform base image ships 3.12; the app also
 uv sync
 uv run alembic upgrade head          # once, and after pulling a new migration
 uv run uvicorn app.main:app --port 8600
-curl localhost:8600/healthz          # {"status":"ok"}
+curl localhost:8600/healthz          # {"status":"ok"}  (liveness: no dependencies)
+curl localhost:8600/readyz           # 200 if Valkey + admin-db answer, else 503
 
 uv run ruff check
 uv run mypy app/
