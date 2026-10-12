@@ -36,9 +36,9 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "ruff>=0.11",
     "types-pyyaml>=6.0.12.20250915",
-    # Local dev/tests import prometheus_api.contract; in Docker the package
-    # comes preinstalled from the prometheus_api base image (--no-dev skips
-    # this entry at image build time).
+    # Local dev/tests import prometheus_api.contract; in Docker the package is
+    # installed from the repo's sdk/ by the Dockerfile (--no-dev skips this entry
+    # at image build time).
     "prometheus-api",
     # In-memory async DB for admin-plane tests (app/db.py, tests/conftest.py) --
     # tests never touch real Postgres; only Alembic/production use asyncpg.
@@ -50,9 +50,9 @@ dev = [
 ]
 
 [tool.uv.sources]
-# Pinned to the commit the Docker base image is built from, so local tests run
-# against the same prometheus_api the container does. Keep this in step with
-# PROMETHEUS_API_BASE_IMAGE_HASH in the root Makefile.
+# NOTE: the container installs prometheus_api from the checked-out sdk/, not from
+# this pin, so local tests can run against a different prometheus_api than the
+# image does. Keep this rev reasonably current with sdk/.
 # Working on prometheus_api locally? Override with:
 #   uv pip install -e /path/to/prometheus_api
 prometheus-api = { git = "https://github.inl.gov/genesis/prometheus_api.git", rev = "1914b557818cd6a9c558280c5789d7a67b8a0717" }

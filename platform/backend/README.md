@@ -24,7 +24,7 @@ backend/
 
 ## Development
 
-Requires Python 3.12+ and `uv` (the platform base image ships 3.12; the app also runs on 3.13).
+Requires Python 3.12+ and `uv` (the backend image is built on Python 3.12; the app also runs on 3.13).
 
 ```bash
 uv sync
