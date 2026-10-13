@@ -150,6 +150,8 @@ services:
     container_name: client-agent
     networks:
       - agent-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       <<: *common-env
       AGENT_PORT: 8000
@@ -183,6 +185,8 @@ services:
       - "${BACKEND_PORT:-8600}:8000"
     networks:
       - agent-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       <<: *common-env
       CLIENT_AGENT_URL: ${CLIENT_AGENT_URL:-http://client-agent:8000}
