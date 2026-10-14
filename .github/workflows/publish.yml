@@ -1,0 +1,104 @@
+name: publish
+
+# Publishes the devel images to ghcr.io after the test workflow passes on a
+# push to devel. Tags are <commit date>-<7 char sha>, e.g. 20261014-ea90a3d.
+# The -devel suffix keeps these separate from future release images.
+
+on:
+  workflow_run:
+    workflows: [test]
+    types: [completed]
+    branches: [devel]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: "meta"
+    # workflow_run also fires for failed runs and for PRs from devel
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/devel' ||
+      github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-26.04
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      tag: ${{ steps.meta.outputs.tag }}
+      prefix: ${{ steps.meta.outputs.prefix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit that was tested, not the current tip of devel
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Compute tag
+        id: meta
+        run: |
+          sha=$(git rev-parse HEAD)
+          # Commit date in UTC, so the tag doesn't depend on the runner or a rebuild
+          date=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y%m%d HEAD)
+          tag="$date-${sha:0:7}"
+          # ghcr.io/idaholab/prometheus_core upstream; a fork publishes to its
+          # own namespace. ghcr.io requires lowercase names
+          prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "Publishing $tag ($sha)" >> "$GITHUB_STEP_SUMMARY"
+
+  sdk:
+    name: "sdk"
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: sdk
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_sdk-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: sdk
+      file: sdk/Dockerfile
+
+  backend:
+    name: "backend"
+    # Built on the sdk image from the same commit
+    needs: [meta, sdk]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: backend
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_backend-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: platform/backend
+      file: platform/backend/Dockerfile
+      build-args: |
+        PROMETHEUS_API_BASE_IMAGE_REPO=${{ needs.meta.outputs.prefix }}/prometheus_sdk-devel
+        PROMETHEUS_API_BASE_IMAGE_HASH=${{ needs.meta.outputs.tag }}
+
+  frontend:
+    name: "frontend"
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: frontend
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_frontend-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      # Same context, target, and certs context as docker-compose.yml
+      context: platform
+      file: platform/frontend/Dockerfile
+      target: prod
+      build-contexts: certs=platform/certs
