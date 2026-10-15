@@ -136,3 +136,21 @@ def test_compose_has_volumes_section(compose_data):
     volumes = compose_data.get("volumes", {})
     assert "valkey-data" in volumes, "Missing 'valkey-data' named volume"
     assert "litellm-db-data" in volumes, "Missing 'litellm-db-data' named volume"
+
+
+def test_every_agent_sets_external_agent_url(project_root, compose_data):
+    """Each agent registers http://<service-name>:8000, not a hostname-derived URL.
+
+    PrometheusAgent's hostname fallback only works under Compose (hostname ==
+    service name); on Kubernetes the hostname is the pod name, which isn't routable.
+    """
+    services = {"client-agent": compose_data["services"]["client-agent"]}
+    for path in project_root.glob("agents/**/docker-compose.yml"):
+        services.update(yaml.safe_load(path.read_text())["services"])
+
+    wrong = {
+        name: svc.get("environment", {}).get("EXTERNAL_AGENT_URL")
+        for name, svc in services.items()
+        if svc.get("environment", {}).get("EXTERNAL_AGENT_URL") != f"http://{name}:8000"
+    }
+    assert not wrong, f"EXTERNAL_AGENT_URL missing or not http://<service>:8000: {wrong}"
