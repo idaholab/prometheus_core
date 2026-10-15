@@ -13,6 +13,8 @@ services:
       - "${ARTIFACT_DEBUG_PORT:-8008}:8000"
     networks:
       - agent-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       AGENT_PORT: 8000
       AGENT_SECRET: ${AGENT_SECRET}
