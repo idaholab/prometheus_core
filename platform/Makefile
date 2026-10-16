@@ -61,6 +61,10 @@ PROMETHEUS_SYSTEM_TEST_LLM_URL ?= http://localhost:$(LITELLM_LOCAL_PORT)
 PROFILE ?= dev
 PROFILE_FLAGS := $(if $(PROFILE),--profile $(PROFILE),)
 
+# Extra flags for `docker compose up` in `make up`, e.g. UP_ARGS="--wait" to
+# block until every service with a healthcheck reports healthy (used by CI).
+UP_ARGS ?=
+
 # All per-agent compose files found on disk (checked-out submodules only).
 AGENT_COMPOSE_FILES := $(shell find agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 ifeq ($(DEBUG_AGENTS),true)
@@ -242,6 +246,12 @@ test-system: export PROMETHEUS_SYSTEM_TEST_LLM_URL := $(PROMETHEUS_SYSTEM_TEST_L
 test-system: ##@ Test the user experience on an already-running platform (start with PROMETHEUS_SYSTEM_TESTING=true)
 	cd tests && uv run python -m pytest -m system system -v
 
+.PHONY: wait-agents
+WAIT_AGENTS_TIMEOUT ?= 300
+wait-agents: ##@ Wait until the client-agent and every included agent have registered with LiteLLM
+	python3 scripts/wait_for_agents.py --timeout $(WAIT_AGENTS_TIMEOUT) \
+		agents/client-agent $(patsubst %/docker-compose.yml,%,$(AGENT_COMPOSE_FILES))
+
 ##@
 ##@ Compose
 ##@
@@ -249,7 +259,7 @@ test-system: ##@ Test the user experience on an already-running platform (start 
 up: ##@ Clear LiteLLM DB, then build and start all services (detached). Set PROFILE=dev|prod to include the React frontend.
 up: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 up: $(BASE_IMAGE_DEP) generate init-env clear-litellm-db
-	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build -d
+	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build -d $(UP_ARGS)
 
 up-fg: ##@ Clear LiteLLM DB, then build and start all services (foreground). Set PROFILE=dev|prod to include the React frontend.
 up-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)

@@ -78,3 +78,44 @@ def test_backend_healthcheck_has_start_period(compose_data):
     """The entrypoint runs `alembic upgrade head` before uvicorn, so first boot is slow."""
     hc = _get_healthcheck(compose_data, "backend")
     assert "start_period" in hc
+
+
+def _assert_agent_healthcheck(hc, where: str) -> None:
+    assert hc is not None, f"{where} should define a healthcheck"
+    test_cmd = hc["test"]
+    joined = " ".join(test_cmd) if isinstance(test_cmd, list) else test_cmd
+    # The agent template reads AGENT_PORT in the probe, so match host and path
+    assert "localhost:" in joined, f"{where} must probe the container itself, not a host port"
+    assert "/health'" in joined, f"{where} must probe the base-class /health endpoint"
+    assert "start_period" in hc, f"{where} healthcheck should have start_period"
+
+
+def test_client_agent_has_healthcheck(compose_data):
+    """Lets `docker compose up --wait` gate on the client-agent serving HTTP."""
+    _assert_agent_healthcheck(_get_healthcheck(compose_data, "client-agent"), "client-agent")
+
+
+def test_agent_compose_files_have_healthchecks(project_root):
+    """Same probe for every per-agent file make generate includes."""
+    import yaml
+
+    paths = (
+        sorted(project_root.glob("agents/*/docker-compose.yml"))
+        + sorted(project_root.glob("agents/debug-agents/*/docker-compose.yml"))
+        + sorted(project_root.glob("agents/optional/*/docker-compose.yml"))
+    )
+    assert paths, "no per-agent compose files found"
+    for path in paths:
+        data = yaml.safe_load(path.read_text()) or {}
+        for name, svc in (data.get("services") or {}).items():
+            _assert_agent_healthcheck(svc.get("healthcheck"), f"{path.relative_to(project_root)}: {name}")
+
+
+def test_frontend_prod_has_healthcheck(compose_data):
+    """Probes nginx on its container port; the image has wget but no python."""
+    hc = _get_healthcheck(compose_data, "frontend-prod")
+    assert hc is not None, "frontend-prod should define a healthcheck"
+    test_cmd = hc["test"]
+    joined = " ".join(test_cmd) if isinstance(test_cmd, list) else test_cmd
+    assert "wget" in joined
+    assert "127.0.0.1:8080" in joined, "must probe the container port, not the host port"

@@ -163,6 +163,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    # /health is served by the PrometheusAgent base class once uvicorn is up.
+    # It does not cover LiteLLM registration, which retries in the background.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   # Standalone FastAPI backend (replaces Chainlit's server role; see backend/).
@@ -282,4 +290,12 @@ services:
     depends_on:
       backend:
         condition: service_started
+    # Probes nginx itself (the SPA index), not /api/, so a slow backend doesn't
+    # mark the frontend unhealthy. nginx:alpine ships busybox wget, not python.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped

@@ -346,6 +346,55 @@ jobs:
         # current directory on sys.path, which the tests need to import system/
         run: uv run --frozen --no-sync python -m pytest --color=yes -m "not integration"
 
+  platform-up:
+    name: "platform: up"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: platform
+    env:
+      # Build the prometheus_api base image from ../sdk instead of pulling it
+      LOCAL_SDK: "true"
+      DEBUG_AGENTS: "true"
+      OPTIONAL_AGENTS: "false"
+      PROFILE: prod
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create .env
+        # Start from the example for its ports and defaults. Nothing calls an
+        # LLM at startup, so a placeholder key is enough to get past
+        # init_env.py, which then generates every other secret
+        run: |
+          cp .env.example .env
+          sed -i 's/^ANTHROPIC_API_KEY=.*/ANTHROPIC_API_KEY=sk-ant-test-not-real/' .env
+      - name: Start
+        # --wait fails if any service with a healthcheck isn't healthy in time
+        run: make up UP_ARGS="--wait --wait-timeout 600"
+      - name: Wait for agent registration
+        # Healthy only means each agent is serving; registration with LiteLLM
+        # runs in the background and an agent keeps running if it gives up
+        run: make wait-agents
+      - name: Check backend
+        run: curl --fail --silent --show-error --retry 5 --retry-all-errors http://localhost:8600/healthz
+      - name: Check frontend
+        run: curl --fail --silent --show-error --retry 5 --retry-all-errors --output /dev/null http://localhost:8080/
+      - name: Show status
+        if: ${{ failure() }}
+        run: docker ps --all
+      - name: Show logs
+        if: ${{ failure() }}
+        # The same files and profile make up used, so the agents are included
+        run: |
+          docker compose -p prometheus_platform \
+            -f docker-compose.yml -f docker-compose.agents.yml --profile "$PROFILE" \
+            logs --no-color --timestamps
+      - name: Stop
+        if: ${{ always() }}
+        run: make down-v
+
   platform-agent:
     name: "platform: agent ${{ matrix.agent }}"
     needs: gitleaks

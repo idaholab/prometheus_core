@@ -143,12 +143,12 @@ NAME                  IMAGE                                     SERVICE         
 admin-db              postgres:16-alpine                        admin-db              Up (healthy)
 agent-valkey          valkey/valkey-bundle:9.1.0                 redis                 Up
 backend               prometheus_platform-backend                backend               Up (healthy)
-client-agent          prometheus_platform-client-agent           client-agent          Up
-form-filler-agent     prometheus_platform-form-filler-agent      form-filler-agent     Up
+client-agent          prometheus_platform-client-agent           client-agent          Up (healthy)
+form-filler-agent     prometheus_platform-form-filler-agent      form-filler-agent     Up (healthy)
 frontend-dev          prometheus_platform-frontend-dev           frontend-dev          Up
 litellm-db            postgres:16-alpine                         litellm-db            Up (healthy)
 litellm-proxy         ghcr.io/berriai/litellm:v1.92.0            litellm               Up (healthy)
-synthesis-agent       prometheus_platform-synthesis-agent        synthesis-agent       Up
+synthesis-agent       prometheus_platform-synthesis-agent        synthesis-agent       Up (healthy)
 ```
 
 Services and host ports:
@@ -318,6 +318,17 @@ make test-static       # Static checks of compose, env vars, ports — no Docker
 make test-integration  # Hits running containers (start the stack first via make up)
 make test-infra        # Both
 ```
+
+### Startup check
+
+CI's `platform: up` job boots the whole stack and checks that it comes up. To do the same locally:
+
+```bash
+make up LOCAL_SDK=true DEBUG_AGENTS=true PROFILE=prod UP_ARGS="--wait"  # block until every service is healthy
+make wait-agents                                                        # block until every agent is registered with LiteLLM
+```
+
+A healthy agent is only serving HTTP; LiteLLM registration runs in the background, so `make wait-agents` is what confirms the platform can route to it. Every agent's `docker-compose.yml` must define a `/health` healthcheck (`make test-static` enforces it).
 
 ## Troubleshooting
 

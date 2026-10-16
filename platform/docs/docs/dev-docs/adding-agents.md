@@ -187,8 +187,16 @@ my-analysis-agent:
       condition: service_healthy
   volumes:
     - ./shared:/app/shared
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    interval: 15s
+    timeout: 10s
+    retries: 5
+    start_period: 20s
   restart: unless-stopped
 ```
+
+The `healthcheck` is required: `make test-static` fails without it, and CI's `make up UP_ARGS="--wait"` uses it to know the agent is serving. It probes the base class's unauthenticated `/health` on the container port with Python, since the image has no `curl`. It does not show that LiteLLM registration succeeded; `make wait-agents` checks that.
 
 Once the container starts, it registers with LiteLLM. The client-agent discovers it automatically through LiteLLM's agent directory and loads the full agent card from the specialist's well-known endpoint when needed.
 The agent selects semantic model flavors such as `medium` in code; its selected
