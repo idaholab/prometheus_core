@@ -32,6 +32,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
 
 from app import identity
+from app.api_responses import AUTH_RESPONSES
 from app.a2a_client import A2AClient
 from app.config import settings
 from app.contract import ChatMessageRequest, ChatMessageResponse, ChatStatus, StatusEvent
@@ -43,7 +44,7 @@ from app.sessions import get_store
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(prefix="/api/chat", tags=["chat"], responses=AUTH_RESPONSES)
 
 # Cap on the accumulated in-flight status history carried on each StatusEvent (E-1).
 _STATUS_HISTORY_LIMIT = 50

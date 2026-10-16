@@ -21,11 +21,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.api_responses import AUTH_RESPONSES
 from app.config import settings
 from app.contract import ChatProfile, ConfigResponse
 from app.security import TokenClaims, current_claims
 
-router = APIRouter(prefix="/api", tags=["config"])
+router = APIRouter(prefix="/api", tags=["config"], responses=AUTH_RESPONSES)
 
 # The profile identifier that carries starter suggestions (parallels the
 # ``chat_profile == "Beginner Chat"`` branch in ``frontend/main.py`` on_chat_start).

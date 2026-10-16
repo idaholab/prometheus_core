@@ -25,13 +25,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
+from app.api_responses import AUTH_RESPONSES
 from app.config import settings
 from app.contract import CreateSessionRequest, SessionResponse
 from app.routers.config import BEGINNER_PROFILE, CHAT_PROFILES
 from app.security import TokenClaims, current_claims
 from app.sessions import get_store
 
-router = APIRouter(prefix="/api", tags=["sessions"])
+router = APIRouter(prefix="/api", tags=["sessions"], responses=AUTH_RESPONSES)
 
 # Selectable profile names (AU-8): a client-supplied profile is validated against these.
 _VALID_PROFILES = {p.name for p in CHAT_PROFILES}
