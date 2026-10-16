@@ -169,7 +169,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - A2A consumers must accept only exact v1 ProtoJSON enum, part, and payload shapes; reject malformed responses instead of normalizing legacy variants or inferring fields from prose.
 - Never place Markdown backticks inside shell command arguments; use shell-safe plain text or a non-shell file-editing interface.
 - Until identity-backed credential storage exists, each LLM-using agent selects its own LLM config and receives that config's provider keys; semantic model flavors remain hardcoded in agent code.
-- Run `gh` commands for `github.inl.gov` outside the network sandbox.
+- Run `gh` commands for `github.com` outside the network sandbox.
 - Never search or print `.env` files when inspecting configuration; query variable names without values or use example/config files that contain no secrets.
 - Never print resolved LLM configuration objects; fallback-model records contain expanded provider API keys.
 - Route butterfly-valve revisions through `author_equipment_geometry` as parameterized re-authoring from conversation context; do not require existing-CAD ingestion or a separate revision skill.

@@ -27,9 +27,9 @@ At the same time, it should enable:
 
 Today, routing and invocation logic is concentrated in the client-agent:
 
-- discovery and agent-card fetch: [agents/client-agent/tool_discovery.py](/Users/schwd/Programs/prometheus/prometheus_platform/agents/client-agent/tool_discovery.py)
-- capability cache: [agents/client-agent/capability_cache.py](/Users/schwd/Programs/prometheus/prometheus_platform/agents/client-agent/capability_cache.py)
-- orchestration-time skill invocation: [agents/client-agent/agent.py](/Users/schwd/Programs/prometheus/prometheus_platform/agents/client-agent/agent.py#L1088)
+- discovery and agent-card fetch: [agents/client-agent/tool_discovery.py](../../agents/client-agent/tool_discovery.py)
+- capability cache: [agents/client-agent/capability_cache.py](../../agents/client-agent/capability_cache.py)
+- orchestration-time skill invocation: [agents/client-agent/agent.py](../../agents/client-agent/agent.py#L1088)
 
 This creates three problems:
 
