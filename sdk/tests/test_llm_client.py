@@ -35,6 +35,9 @@ from prometheus_api.llm_client import (
     LLMClient,
     LLMClientError,
     LLMConfig,
+    LLMConfigError,
+    LLMEndpointUnavailableError,
+    LLMProviderError,
     LLMToolCallError,
     ToolDefinition,
     normalize_embedding_input,
@@ -725,6 +728,100 @@ async def test_async_proxy_unavailable_uses_fallback_sdk(monkeypatch, tmp_path):
     await client.aclose()
 
 
+def test_unknown_profile_raises_config_error():
+    with pytest.raises(LLMConfigError) as exc_info:
+        LLMConfig.from_env({"LLM_CONFIG_PROFILE": "genisis"})
+
+    message = str(exc_info.value)
+    assert "LLM_CONFIG_PROFILE" in message
+    assert "'genisis'" in message
+    assert "registry" in message
+    assert isinstance(exc_info.value, ValueError)
+
+
+def test_missing_config_file_raises_config_error(tmp_path):
+    with pytest.raises(LLMConfigError, match="does not exist"):
+        LLMConfig(config_file=tmp_path / "missing.yaml").load_fallback_models()
+
+
+def test_unreachable_proxy_without_model_list_names_the_proxy():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    client = LLMClient(
+        config=LLMConfig(proxy_url="http://proxy:4000", config_file=get_llm_config_path()),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(LLMEndpointUnavailableError) as exc_info:
+        client("Hello?")
+
+    message = str(exc_info.value)
+    assert "http://proxy:4000" in message
+    assert "'registry'" in message
+    assert "connection refused" in message
+
+
+def test_unreachable_direct_endpoint_names_the_endpoint(monkeypatch, tmp_path):
+    def fake_completion(**kwargs):
+        request = httpx.Request("POST", "http://llm.example/v1/chat/completions")
+        try:
+            raise httpx.ConnectError("[Errno 61] Connection refused", request=request)
+        except httpx.ConnectError as exc:
+            raise RuntimeError("litellm.InternalServerError: Connection error.") from exc
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    config_path = tmp_path / "direct.yaml"
+    config_path.write_text(
+        "model_list:\n"
+        "  - model_name: default\n"
+        "    litellm_params:\n"
+        "      model: openai/gpt-x\n"
+        "      api_base: http://llm.example/v1\n",
+        encoding="utf-8",
+    )
+    client = LLMClient(config=LLMConfig(config_file=config_path))
+
+    with pytest.raises(LLMEndpointUnavailableError) as exc_info:
+        client("Hello?")
+
+    message = str(exc_info.value)
+    assert "http://llm.example/v1" in message
+    assert "'default'" in message
+    assert "Connection refused" in message
+
+
+@pytest.mark.asyncio
+async def test_async_unreachable_direct_embedding_endpoint(monkeypatch, tmp_path):
+    async def fake_aembedding(**kwargs):
+        raise ConnectionRefusedError("[Errno 61] Connection refused")
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "aembedding", fake_aembedding)
+    client = AsyncLLMClient(config=LLMConfig(config_file=_fallback_yaml(tmp_path)))
+
+    with pytest.raises(LLMEndpointUnavailableError, match="'embedding'"):
+        await client.embedding("pressure spike")
+    await client.aclose()
+
+
+def test_provider_error_is_not_reported_as_unreachable(monkeypatch, tmp_path):
+    def fake_completion(**kwargs):
+        raise RuntimeError("401 invalid api key")
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LLMClient(config=LLMConfig(config_file=_fallback_yaml(tmp_path)))
+
+    with pytest.raises(RuntimeError, match="401 invalid api key") as exc_info:
+        client("Hello?")
+    assert exc_info.value.__cause__ is None
+
+
 def test_reachable_proxy_rejection_does_not_fallback(monkeypatch, tmp_path):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/models":
@@ -742,8 +839,124 @@ def test_reachable_proxy_rejection_does_not_fallback(monkeypatch, tmp_path):
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(LLMProviderError) as exc_info:
         client("Do not fallback.")
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "bad request"
+    assert isinstance(exc_info.value.__cause__, httpx.HTTPStatusError)
+
+
+def test_proxy_error_reports_status_endpoint_and_provider_message(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/models":
+            return _proxy_response(request, _proxy_models("default"))
+        body = {
+            "error": {
+                "message": "Invalid API key; Authorization: Bearer sk-live-123",
+                "type": "auth_error",
+                "code": 401,
+            }
+        }
+        return _proxy_response(request, body, status_code=401)
+
+    client = LLMClient(
+        config=LLMConfig(proxy_url="http://proxy", config_file=_fallback_yaml(tmp_path)),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        client("Hello?")
+
+    message = str(exc_info.value)
+    assert message.startswith("LLM request failed: 401 Unauthorized")
+    assert "http://proxy/v1/chat/completions" in message
+    assert "type=auth_error, code=401" in message
+    assert "sk-live-123" not in message
+    assert exc_info.value.alias == "default"
+
+
+@pytest.mark.asyncio
+async def test_async_proxy_models_error_is_a_provider_error(tmp_path):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text="upstream unavailable", request=request)
+
+    client = AsyncLLMClient(
+        config=LLMConfig(proxy_url="http://proxy", config_file=_fallback_yaml(tmp_path)),
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(LLMProviderError, match="503 Service Unavailable") as exc_info:
+        await client.medium("Hello?")
+    assert exc_info.value.endpoint == "http://proxy/v1/models"
+    assert exc_info.value.detail == "upstream unavailable"
+    await client.aclose()
+
+
+class _FakeLiteLLMError(Exception):
+    def __init__(self, message, status_code, body=None):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+        self.body = body
+
+
+def test_direct_html_error_page_is_summarized(monkeypatch, tmp_path):
+    page = "<!DOCTYPE html><html><head><title>Access Denied</title></head>" + "x" * 5000
+
+    def fake_completion(**kwargs):
+        raise _FakeLiteLLMError(f"litellm.APIError: APIError: OpenAIException - {page}", 403, page)
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    client = LLMClient(config=LLMConfig(config_file=_fallback_yaml(tmp_path)))
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        client("Hello?")
+
+    message = str(exc_info.value)
+    assert "403 Forbidden" in message
+    assert "'default' -> openai/default-model" in message
+    assert "HTML page 'Access Denied'" in message
+    assert len(message) < 600
+
+
+@pytest.mark.asyncio
+async def test_async_direct_embedding_error_strips_litellm_prefix(monkeypatch, tmp_path):
+    async def fake_aembedding(**kwargs):
+        raise _FakeLiteLLMError(
+            "litellm.RateLimitError: RateLimitError: OpenAIException - Slow down", 429
+        )
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "aembedding", fake_aembedding)
+    client = AsyncLLMClient(config=LLMConfig(config_file=_fallback_yaml(tmp_path)))
+
+    with pytest.raises(LLMProviderError) as exc_info:
+        await client.embedding("pressure spike")
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.detail == "Slow down"
+    assert exc_info.value.provider_model == "openai/text-embedding-model"
+    await client.aclose()
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"error": {"message": "Bad key", "type": "auth"}}, "Bad key (type=auth)"),
+        ({"detail": "model not found"}, "model not found"),
+        ({"error": "quota exceeded"}, "quota exceeded"),
+        (b'{"error": {"message": "from bytes"}}', "from bytes"),
+        ("", "empty response body"),
+        ("api_key=sk-123 rejected", "api_key=[REDACTED] rejected"),
+        ("y" * 1000, "y" * 299 + "…"),
+    ],
+)
+def test_summarize_body(body, expected):
+    from prometheus_api.llm_client.provider_errors import summarize_body
+
+    assert summarize_body(body) == expected
 
 
 def test_fallback_embedding_uses_litellm_sdk(monkeypatch, tmp_path):

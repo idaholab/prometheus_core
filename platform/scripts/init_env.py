@@ -119,6 +119,14 @@ def fill_secrets(text: str, gens: dict[str, str]) -> tuple[str, list[str]]:
     return text, filled
 
 
+def unknown_profile(env: dict[str, str]) -> str | None:
+    """The selected LLM_CONFIG_PROFILE if no installed profile has that name."""
+    if env.get("LLM_CONFIG_FILE"):
+        return None  # a custom YAML replaces the profile
+    profile = env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE
+    return None if profile in profiles() else profile
+
+
 def missing_llm_key(env: dict[str, str]) -> str | None:
     """The blank provider key required by the selected profile, if any."""
     if env.get("LLM_CONFIG_FILE"):
@@ -204,11 +212,19 @@ def main() -> int:
         print(f"Generated in {ENV.name}: {', '.join(filled)}")
 
     env = values(text)
-    if missing_llm_key(env) and interactive():
+    if (unknown_profile(env) or missing_llm_key(env)) and interactive():
         text = prompt_llm(text)
         ENV.write_text(text)
         env = values(text)
         print(f"Saved LLM_CONFIG_PROFILE={env['LLM_CONFIG_PROFILE']} in {ENV.name}.")
+    if profile := unknown_profile(env):
+        print(
+            f"\n[ERROR] LLM_CONFIG_PROFILE={profile} in {ENV} is not an installed profile.\n"
+            f"        Available profiles: {', '.join(profiles())}.\n"
+            f"        Fix it (or set LLM_CONFIG_FILE) and run make again.\n",
+            file=sys.stderr,
+        )
+        return 1
     if key := missing_llm_key(env):
         profile = env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE
         print(

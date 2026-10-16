@@ -120,6 +120,29 @@ def test_init_env_prompts_for_profile_and_key(tmp_path, env_example_path, monkey
     assert written["LLM_API_KEY"] == "sk-openai-x"
 
 
+def test_init_env_rejects_unknown_profile(tmp_path, env_example_path, monkeypatch, capsys):
+    init_env = _load_init_env()
+    example = tmp_path / ".env.example"
+    example.write_text(env_example_path.read_text())
+    env = tmp_path / ".env"
+    env.write_text(
+        example.read_text()
+        .replace("LLM_CONFIG_PROFILE=registry\n", "LLM_CONFIG_PROFILE=genisis\n")
+        .replace("LLM_API_KEY=\n", "LLM_API_KEY=sk-x\n")
+    )
+    monkeypatch.setattr(init_env, "EXAMPLE", example)
+    monkeypatch.setattr(init_env, "ENV", env)
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+
+    assert init_env.main() == 1
+    err = capsys.readouterr().err
+    assert "LLM_CONFIG_PROFILE=genisis" in err
+    assert "registry" in err
+
+    env.write_text(env.read_text().replace("LLM_CONFIG_FILE=\n", "LLM_CONFIG_FILE=/custom.yaml\n"))
+    assert init_env.main() == 0  # a custom YAML replaces the profile
+
+
 def test_profiles_match_sdk_llm_configs():
     """Every installed profile is offered, and all of them read LLM_API_KEY."""
     init_env = _load_init_env()
