@@ -15,7 +15,7 @@ Run locally (fast iteration):
   # Install prometheus_api pinned to the platform's base image hash
   # (PROMETHEUS_API_BASE_IMAGE_HASH in your .env), so local dev matches
   # what runs in the container:
-  uv pip install "git+https://github.inl.gov/genesis/prometheus_platform.git@<hash>#subdirectory=sdk"
+  uv pip install "git+https://github.com/idaholab/prometheus_core.git@<hash>#subdirectory=sdk"
   AGENT_SECRET_REQUIRED=false python agent.py
 
 Run the tests (extend tests/test_agent.py as you implement your logic):
@@ -32,4 +32,4 @@ Run with Docker (integration testing / deployment):
 By default, make joins the platform Docker network. To expose the agent port,
 set both EXTERNAL_AGENT_HOST and EXTERNAL_AGENT_PORT before running make.
 See the full walkthrough:
-https://github.inl.gov/genesis/prometheus_platform/blob/dev/agent-template/TUTORIAL.md
+https://github.com/idaholab/prometheus_core/blob/devel/agent-template/TUTORIAL.md

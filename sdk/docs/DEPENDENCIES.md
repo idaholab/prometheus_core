@@ -25,7 +25,7 @@ ontology-backed graph store.
 Prometheus API's `storage_client` uses DeepLynx as its storage backend for
 items, files, relationships, tags, search, and timeseries data.
 
-[Instructions for setting up DeepLynx locally](https://github.inl.gov/genesis/prometheus_platform/blob/dev/platform/docs/docs/local-deeplynx.md)
+[Instructions for setting up DeepLynx locally](https://github.com/idaholab/prometheus_core/blob/devel/platform/docs/docs/local-deeplynx.md)
 
 ## Docker
 

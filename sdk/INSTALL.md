@@ -45,13 +45,13 @@ The platform does this for you with `LOCAL_SDK=true` (see the [platform README](
 Install from the git repository into your own venv. Use `pip` or `uv pip`:
 
 ```bash
-pip install "git+https://github.inl.gov/genesis/prometheus_platform.git#subdirectory=sdk"
+pip install "git+https://github.com/idaholab/prometheus_core.git#subdirectory=sdk"
 ```
 
 To pin to a specific branch, tag, or commit:
 
 ```bash
-pip install "git+https://github.inl.gov/genesis/prometheus_platform.git@<ref>#subdirectory=sdk"
+pip install "git+https://github.com/idaholab/prometheus_core.git@<ref>#subdirectory=sdk"
 ```
 
 After installing, sanity-check the import:
@@ -69,8 +69,8 @@ Then copy `.env.example` to `.env` and fill in your DeepLynx credentials (see `R
 The project is `uv`-managed. To work on `prometheus-api` itself:
 
 ```bash
-git clone https://github.inl.gov/genesis/prometheus_platform.git
-cd prometheus_platform/sdk
+git clone https://github.com/idaholab/prometheus_core.git
+cd prometheus_core/sdk
 uv sync
 make check    # ruff + mypy
 make test     # pytest (unit only; integration tests need .env)

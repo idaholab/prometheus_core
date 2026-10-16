@@ -15,14 +15,14 @@ A Python toolkit that provides two main components:
 
 ```bash
 # Basic (StorageClient only)
-pip install "git+https://github.inl.gov/genesis/prometheus_platform.git#subdirectory=sdk"
+pip install "git+https://github.com/idaholab/prometheus_core.git#subdirectory=sdk"
 
 # With agent support
-pip install "prometheus-api[agent] @ git+https://github.inl.gov/genesis/prometheus_platform.git#subdirectory=sdk"
+pip install "prometheus-api[agent] @ git+https://github.com/idaholab/prometheus_core.git#subdirectory=sdk"
 
 # Editable / development
-git clone https://github.inl.gov/genesis/prometheus_platform.git
-cd prometheus_platform/sdk
+git clone https://github.com/idaholab/prometheus_core.git
+cd prometheus_core/sdk
 pip install -e ".[dev]"
 ```
 

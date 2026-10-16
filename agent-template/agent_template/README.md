@@ -36,14 +36,14 @@ source .venv/bin/activate
 # Install prometheus_api pinned to the platform's base image hash
 # (PROMETHEUS_API_BASE_IMAGE_HASH in your .env) so local dev matches the
 # container. Re-run this when the platform bumps the hash.
-uv pip install "git+https://github.inl.gov/genesis/prometheus_platform.git@$(grep -E '^PROMETHEUS_API_BASE_IMAGE_HASH=' .env | cut -d= -f2)#subdirectory=sdk"
+uv pip install "git+https://github.com/idaholab/prometheus_core.git@$(grep -E '^PROMETHEUS_API_BASE_IMAGE_HASH=' .env | cut -d= -f2)#subdirectory=sdk"
 
 AGENT_SECRET_REQUIRED=false python agent.py
 ```
 
 If the target agent is running in Docker, start it in external network mode so
 `localhost:8000` reaches the container; see the
-[template README run instructions](https://github.inl.gov/genesis/prometheus_platform/blob/dev/agent-template/README.md#run-it).
+[template README run instructions](https://github.com/idaholab/prometheus_core/blob/devel/agent-template/README.md#run-it).
 
 The agent starts on `http://localhost:8000`. Test it:
 
@@ -178,7 +178,7 @@ automatically (a static `USER_IDENTITY_PUBLIC_KEY` needs manual updating after
 every rotation). Generate/inspect keys with `prometheus-identity-keygen`
 (ships in `prometheus_api`, already installed in this image) or `openssl`.
 See
-[TUTORIAL.md](https://github.inl.gov/genesis/prometheus_platform/blob/dev/agent-template/TUTORIAL.md#verifying-which-platform-user-is-calling-you-multi-user-identity)
+[TUTORIAL.md](https://github.com/idaholab/prometheus_core/blob/devel/agent-template/TUTORIAL.md#verifying-which-platform-user-is-calling-you-multi-user-identity)
 and
-[Identity Key Management](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/IDENTITY_KEY_MANAGEMENT.md)
+[Identity Key Management](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/IDENTITY_KEY_MANAGEMENT.md)
 for the full picture.
