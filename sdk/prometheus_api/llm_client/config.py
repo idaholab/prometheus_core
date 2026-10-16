@@ -22,6 +22,8 @@ from typing import Any, Mapping, cast
 
 from prometheus_api.llm_configs import get_llm_config_path
 
+from .exceptions import LLMConfigError
+
 
 def _env_flag(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -102,7 +104,14 @@ class LLMConfig:
         if config_file_value:
             config_file = Path(config_file_value).expanduser()
         else:
-            config_file = get_llm_config_path(config_profile or "registry")
+            try:
+                config_file = get_llm_config_path(config_profile or "registry")
+            except ValueError as exc:
+                raise LLMConfigError(
+                    f"Invalid LLM_CONFIG_PROFILE: {exc}\n"
+                    "Set LLM_CONFIG_PROFILE to one of these, or point LLM_CONFIG_FILE at a "
+                    "custom YAML file."
+                ) from exc
 
         config = cls(
             config_file=config_file,
@@ -162,19 +171,26 @@ class LLMConfig:
         clone._config_payload_cache = self._config_payload_cache
         return clone
 
+    def describe_source(self) -> str:
+        """Name the selected configuration for error messages."""
+        path = self.config_file
+        if path is not None and path.parent == get_llm_config_path().parent:
+            return f"LLM profile {path.stem!r}"
+        return f"LLM config file {str(path)!r}"
+
     def _load_config_payload(self) -> dict[str, Any]:
         if self._config_payload_cache is not None:
             return dict(self._config_payload_cache)
         if self.config_file is None:  # pragma: no cover - guarded by __post_init__
             raise RuntimeError("LLM config file was not resolved")
         if not self.config_file.exists():
-            raise FileNotFoundError(f"LLM_CONFIG_FILE does not exist: {self.config_file}")
+            raise LLMConfigError(f"LLM config file does not exist: {self.config_file}")
 
         yaml = cast(Any, importlib.import_module("yaml"))
         with self.config_file.open("r", encoding="utf-8") as handle:
             payload = yaml.safe_load(handle) or {}
         if not isinstance(payload, dict):
-            raise ValueError("LLM_CONFIG_FILE must contain a YAML mapping")
+            raise LLMConfigError(f"LLM config file must contain a YAML mapping: {self.config_file}")
 
         self._config_payload_cache = {str(key): value for key, value in payload.items()}
         return dict(self._config_payload_cache)

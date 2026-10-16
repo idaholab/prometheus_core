@@ -17,6 +17,14 @@ class LLMClientError(RuntimeError):
     """Base error for LLM client failures."""
 
 
+class LLMConfigError(LLMClientError, ValueError):
+    """Raised when the selected LLM profile or config file cannot be loaded."""
+
+
+class LLMEndpointUnavailableError(LLMClientError):
+    """Raised when the configured LLM proxy or provider endpoint cannot be reached."""
+
+
 class LLMAliasError(ValueError):
     """Raised when a configured model alias is unavailable."""
 

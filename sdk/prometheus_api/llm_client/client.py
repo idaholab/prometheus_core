@@ -23,7 +23,12 @@ from typing import Any, Literal, Mapping, cast
 import httpx
 
 from .config import FallbackModelConfig, LLMConfig
-from .exceptions import LLMAliasError, LLMClientError, LLMToolCallError
+from .exceptions import (
+    LLMAliasError,
+    LLMClientError,
+    LLMEndpointUnavailableError,
+    LLMToolCallError,
+)
 from .models import ChatResponse, EmbeddingResponse
 from .normalization import ChatInput, EmbeddingInput, normalize_embedding_input, normalize_messages
 from .security import extract_llm_api_key_from_a2a_context, redact_secrets
@@ -51,6 +56,27 @@ def _missing_alias_error(alias: str, aliases: list[str]) -> LLMAliasError:
         f"LLM alias {alias!r} is not available. Available aliases: {available}.\n"
         "Configure it in LiteLLM or the selected LLM config file."
     )
+
+
+def _exception_chain(exc: BaseException) -> list[BaseException]:
+    chain: list[BaseException] = []
+    current: BaseException | None = exc
+    while current is not None and current not in chain:
+        chain.append(current)
+        current = current.__cause__ or current.__context__
+    return chain
+
+
+def _connection_failure(exc: BaseException) -> BaseException | None:
+    """Return the transport-level cause if ``exc`` means the endpoint was unreachable."""
+    for item in reversed(_exception_chain(exc)):
+        if isinstance(item, (httpx.TransportError, OSError)):
+            return item
+    return None
+
+
+def _failure_reason(exc: BaseException) -> str:
+    return str(exc).strip() or type(exc).__name__
 
 
 def _plain_dict(value: Any) -> dict[str, Any] | None:
@@ -145,6 +171,40 @@ class _ClientMixin:
         if alias not in models:
             raise _missing_alias_error(alias, sorted(models))
         return "fallback", models[alias].provider_model, models[alias]
+
+    def _fallback_after_proxy_failure(
+        self, alias: str, exc: _ProxyUnavailableError
+    ) -> tuple[_Mode, str, FallbackModelConfig]:
+        """Use the config's own model_list when the proxy is down, or fail clearly."""
+        source = self.config.describe_source()
+        if not self._fallback_models():
+            raise LLMEndpointUnavailableError(
+                f"Cannot reach the LLM proxy {self.config.proxy_url} ({source}): {exc}.\n"
+                "Check that the LiteLLM proxy is running and that proxy_url (REGISTRY_URL "
+                "for the registry profile) points at it."
+            ) from exc
+        logger.warning(
+            "LLM proxy %s is unreachable (%s); using the model_list from %s",
+            self.config.proxy_url,
+            exc,
+            source,
+        )
+        return self._select_fallback(alias)
+
+    def _raise_if_unreachable(self, fallback_model: FallbackModelConfig, exc: Exception) -> None:
+        """Translate a LiteLLM connection failure; leave every other error to the caller."""
+        cause = _connection_failure(exc)
+        if cause is None:
+            return
+        endpoint = fallback_model.litellm_params.get("api_base") or (
+            f"the default endpoint for {fallback_model.provider_model}"
+        )
+        raise LLMEndpointUnavailableError(
+            f"Cannot reach the LLM endpoint {endpoint} for alias {fallback_model.alias!r} "
+            f"({self.config.describe_source()}): {_failure_reason(cause)}.\n"
+            "Check that the endpoint is up and reachable from this host (VPN or proxy "
+            "settings), or select another profile with LLM_CONFIG_PROFILE."
+        ) from exc
 
     def _proxy_headers(self, api_key: Any = None) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
@@ -491,8 +551,8 @@ class LLMClient(_ClientMixin):
                     raw=raw, alias=alias, provider_model=provider_model
                 )
                 self._set_chat_trace_outputs(span, response)
-        except _ProxyUnavailableError:
-            mode, provider_model, fallback_model = self._select_fallback(alias)
+        except _ProxyUnavailableError as exc:
+            mode, provider_model, fallback_model = self._fallback_after_proxy_failure(alias, exc)
             self._log_chat_request(
                 alias=alias,
                 mode=mode,
@@ -563,8 +623,8 @@ class LLMClient(_ClientMixin):
                 raw = self._proxy_embedding(alias, provider_input, kwargs)
             else:
                 raw = self._fallback_embedding(fallback_model, provider_input, kwargs)
-        except _ProxyUnavailableError:
-            mode, provider_model, fallback_model = self._select_fallback(alias)
+        except _ProxyUnavailableError as exc:
+            mode, provider_model, fallback_model = self._fallback_after_proxy_failure(alias, exc)
             self._log_embedding_request(alias=alias, mode=mode, inputs=inputs)
             raw = self._fallback_embedding(fallback_model, provider_input, kwargs)
 
@@ -590,8 +650,8 @@ class LLMClient(_ClientMixin):
         if self.config.proxy_url:
             try:
                 aliases = self._list_proxy_models()
-            except _ProxyUnavailableError:
-                return self._select_fallback(alias)
+            except _ProxyUnavailableError as exc:
+                return self._fallback_after_proxy_failure(alias, exc)
             if alias not in aliases:
                 raise _missing_alias_error(alias, aliases)
             return "proxy", alias, None
@@ -661,11 +721,15 @@ class LLMClient(_ClientMixin):
     ) -> Any:
         if fallback_model is None:
             raise LLMClientError("Fallback model was not selected")
-        return _litellm().completion(
-            model=fallback_model.provider_model,
-            messages=messages,
-            **self._litellm_kwargs(fallback_model, kwargs),
-        )
+        try:
+            return _litellm().completion(
+                model=fallback_model.provider_model,
+                messages=messages,
+                **self._litellm_kwargs(fallback_model, kwargs),
+            )
+        except Exception as exc:
+            self._raise_if_unreachable(fallback_model, exc)
+            raise
 
     def _fallback_embedding(
         self,
@@ -675,11 +739,15 @@ class LLMClient(_ClientMixin):
     ) -> Any:
         if fallback_model is None:
             raise LLMClientError("Fallback model was not selected")
-        return _litellm().embedding(
-            model=fallback_model.provider_model,
-            input=provider_input,
-            **self._litellm_kwargs(fallback_model, kwargs),
-        )
+        try:
+            return _litellm().embedding(
+                model=fallback_model.provider_model,
+                input=provider_input,
+                **self._litellm_kwargs(fallback_model, kwargs),
+            )
+        except Exception as exc:
+            self._raise_if_unreachable(fallback_model, exc)
+            raise
 
 
 class AsyncLLMClient(_ClientMixin):
@@ -778,8 +846,8 @@ class AsyncLLMClient(_ClientMixin):
                     raw=raw, alias=alias, provider_model=provider_model
                 )
                 self._set_chat_trace_outputs(span, response)
-        except _ProxyUnavailableError:
-            mode, provider_model, fallback_model = self._select_fallback(alias)
+        except _ProxyUnavailableError as exc:
+            mode, provider_model, fallback_model = self._fallback_after_proxy_failure(alias, exc)
             self._log_chat_request(
                 alias=alias,
                 mode=mode,
@@ -850,8 +918,8 @@ class AsyncLLMClient(_ClientMixin):
                 raw = await self._proxy_embedding(alias, provider_input, kwargs)
             else:
                 raw = await self._fallback_embedding(fallback_model, provider_input, kwargs)
-        except _ProxyUnavailableError:
-            mode, provider_model, fallback_model = self._select_fallback(alias)
+        except _ProxyUnavailableError as exc:
+            mode, provider_model, fallback_model = self._fallback_after_proxy_failure(alias, exc)
             self._log_embedding_request(alias=alias, mode=mode, inputs=inputs)
             raw = await self._fallback_embedding(fallback_model, provider_input, kwargs)
 
@@ -877,8 +945,8 @@ class AsyncLLMClient(_ClientMixin):
         if self.config.proxy_url:
             try:
                 aliases = await self._list_proxy_models()
-            except _ProxyUnavailableError:
-                return self._select_fallback(alias)
+            except _ProxyUnavailableError as exc:
+                return self._fallback_after_proxy_failure(alias, exc)
             if alias not in aliases:
                 raise _missing_alias_error(alias, aliases)
             return "proxy", alias, None
@@ -948,11 +1016,15 @@ class AsyncLLMClient(_ClientMixin):
     ) -> Any:
         if fallback_model is None:
             raise LLMClientError("Fallback model was not selected")
-        return await _litellm().acompletion(
-            model=fallback_model.provider_model,
-            messages=messages,
-            **self._litellm_kwargs(fallback_model, kwargs),
-        )
+        try:
+            return await _litellm().acompletion(
+                model=fallback_model.provider_model,
+                messages=messages,
+                **self._litellm_kwargs(fallback_model, kwargs),
+            )
+        except Exception as exc:
+            self._raise_if_unreachable(fallback_model, exc)
+            raise
 
     async def _fallback_embedding(
         self,
@@ -962,8 +1034,12 @@ class AsyncLLMClient(_ClientMixin):
     ) -> Any:
         if fallback_model is None:
             raise LLMClientError("Fallback model was not selected")
-        return await _litellm().aembedding(
-            model=fallback_model.provider_model,
-            input=provider_input,
-            **self._litellm_kwargs(fallback_model, kwargs),
-        )
+        try:
+            return await _litellm().aembedding(
+                model=fallback_model.provider_model,
+                input=provider_input,
+                **self._litellm_kwargs(fallback_model, kwargs),
+            )
+        except Exception as exc:
+            self._raise_if_unreachable(fallback_model, exc)
+            raise
