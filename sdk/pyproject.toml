@@ -49,9 +49,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.inl.gov/genesis/prometheus_platform/tree/dev/sdk"
-Repository = "https://github.inl.gov/genesis/prometheus_platform"
-Documentation = "https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/README.md"
+Homepage = "https://github.com/idaholab/prometheus_core/tree/devel/sdk"
+Repository = "https://github.com/idaholab/prometheus_core"
+Documentation = "https://github.com/idaholab/prometheus_core/blob/devel/sdk/README.md"
 
 [project.entry-points."fsspec.specs"]
 deeplynx = "prometheus_api.storage_client.filesystem:DeepLynxFileSystem"

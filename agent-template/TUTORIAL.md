@@ -51,8 +51,8 @@ canonical template (in `agent_template/`) into a new directory, replacing the
 `TEMPLATE_*` placeholders with your agent's name, slug, class, and primary skill:
 
 ```bash
-git clone git@github.inl.gov:genesis/prometheus_platform.git
-cd prometheus_platform/agent-template
+git clone git@github.com:idaholab/prometheus_core.git
+cd prometheus_core/agent-template
 python setup_agent.py                        # prompts for everything
 python setup_agent.py "Plant Analysis" ../plant-agent   # name and output dir given
 ```
@@ -97,14 +97,14 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 # you develop against locally matches what runs in the container. Find the
 # hash in your .env (PROMETHEUS_API_BASE_IMAGE_HASH) or the platform Makefile,
 # and re-run this when the platform bumps it:
-uv pip install "git+https://github.inl.gov/genesis/prometheus_platform.git@3407a82#subdirectory=sdk"
+uv pip install "git+https://github.com/idaholab/prometheus_core.git@3407a82#subdirectory=sdk"
 ```
 
 > **Why pin?** `prometheus_api` evolves without backward-compatibility
 > guarantees. An unpinned install tracks `main` and can silently break your
 > agent; the pin keeps local dev and the Docker base image on the same
 > version. When you bump the hash, read the
-> [Agent Migration Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/AGENT_MIGRATIONS.md).
+> [Agent Migration Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/AGENT_MIGRATIONS.md).
 
 ---
 
@@ -1052,7 +1052,7 @@ USER_IDENTITY_AUD=prometheus-agents     # must match the operator's setting
 If your agent fetches per-user credentials for a third-party resource (a
 database, an HPC cluster, etc.) rather than just reading `user_id`, see the
 credential-broker section of
-[MULTI_USER.md](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/MULTI_USER.md)
+[MULTI_USER.md](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/MULTI_USER.md)
 in `prometheus_api` — `self.get_credential(resource)` and
 `requires_user_isolation` are the two pieces you'll want.
 
@@ -1085,7 +1085,7 @@ await self.send_artifact_reference(
 )
 ```
 
-See [PrometheusAgent Quick Start](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/QUICK_START.md) for the full artifact API including DeepLynx uploads.
+See [PrometheusAgent Quick Start](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/QUICK_START.md) for the full artifact API including DeepLynx uploads.
 
 ### Consuming artifacts from other agents
 
@@ -1174,7 +1174,7 @@ async def _execute(self, params, context, event_queue):
     ...
 ```
 
-See the `INPUT_REQUIRED` section in [PrometheusAgent Quick Start](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/QUICK_START.md) for the full pattern and important rules.
+See the `INPUT_REQUIRED` section in [PrometheusAgent Quick Start](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/QUICK_START.md) for the full pattern and important rules.
 
 ### Multiple skills
 
@@ -1212,7 +1212,7 @@ artifact = await self.send_deeplynx_artifact(
 # artifact.uri  →  "deeplynx://organizations/1/projects/2/items/42"
 ```
 
-See [PrometheusAgent Quick Start — DeepLynx artifact](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/QUICK_START.md#deeplynx-artifact) and [StorageClient Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/storage-client/GUIDE.md).
+See [PrometheusAgent Quick Start — DeepLynx artifact](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/QUICK_START.md#deeplynx-artifact) and [StorageClient Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/storage-client/GUIDE.md).
 
 ### Per-conversation state
 
@@ -1230,7 +1230,7 @@ As of prometheus_api 0.7.0, `context.context_id` is the **stable conversation
 ID** propagated by the orchestrator: state saved in one call is visible to
 later calls — including calls to *other* skills of your agent — within the
 same conversation. If you need per-invocation scoping instead, key by
-`context.task_id` (see the [Agent Migration Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/AGENT_MIGRATIONS.md)).
+`context.task_id` (see the [Agent Migration Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/AGENT_MIGRATIONS.md)).
 
 ---
 
@@ -1238,12 +1238,11 @@ same conversation. If you need per-invocation scoping instead, key by
 
 | Document | Description |
 |----------|-------------|
-| [PrometheusAgent Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/GUIDE.md) | Full API reference, pitfalls, lifecycle hooks |
-| [PrometheusAgent Quick Start](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/QUICK_START.md) | Condensed recipes for every helper |
-| [Agent Migration Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/AGENT_MIGRATIONS.md) | **Check this when bumping `PROMETHEUS_API_BASE_IMAGE_HASH`** — behavior changes per prometheus_api version, with migration steps |
-| [Environment Setup](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/ENV_SETUP.md) | All environment variables for agents and storage |
-| [StorageClient Guide](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/storage-client/GUIDE.md) | Reading and writing to DeepLynx |
-| [HPC Notes](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/hpc.md) | Running on INL HPC with Podman |
-| [Multi-User Identity & Credentials](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/MULTI_USER.md) | `params["user_id"]`, per-user credentials, process isolation |
-| [Identity Key Management](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/docs/agent/IDENTITY_KEY_MANAGEMENT.md) | RS256 keys, `prometheus-identity-keygen`, JWKS setup for this template |
-| [`examples/agent_patterns.py`](https://github.inl.gov/genesis/prometheus_platform/blob/dev/sdk/examples/agent_patterns.py) | Runnable reference implementation |
+| [PrometheusAgent Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/GUIDE.md) | Full API reference, pitfalls, lifecycle hooks |
+| [PrometheusAgent Quick Start](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/QUICK_START.md) | Condensed recipes for every helper |
+| [Agent Migration Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/AGENT_MIGRATIONS.md) | **Check this when bumping `PROMETHEUS_API_BASE_IMAGE_HASH`** — behavior changes per prometheus_api version, with migration steps |
+| [Environment Setup](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/ENV_SETUP.md) | All environment variables for agents and storage |
+| [StorageClient Guide](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/storage-client/GUIDE.md) | Reading and writing to DeepLynx |
+| [Multi-User Identity & Credentials](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/MULTI_USER.md) | `params["user_id"]`, per-user credentials, process isolation |
+| [Identity Key Management](https://github.com/idaholab/prometheus_core/blob/devel/sdk/docs/agent/IDENTITY_KEY_MANAGEMENT.md) | RS256 keys, `prometheus-identity-keygen`, JWKS setup for this template |
+| [`examples/agent_patterns.py`](https://github.com/idaholab/prometheus_core/blob/devel/sdk/examples/agent_patterns.py) | Runnable reference implementation |

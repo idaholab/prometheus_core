@@ -135,7 +135,7 @@ Grand total: 44 files
 ## Package Structure
 
 ```
-/Users/schwd/Programs/prometheus_api/
+sdk/
 ├── storage_client/              # Main package (31 files)
 │   ├── __init__.py
 │   ├── connection.py

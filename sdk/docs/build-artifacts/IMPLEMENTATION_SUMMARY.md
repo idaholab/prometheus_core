@@ -319,7 +319,7 @@ async with AsyncStorageClient(config) as client:
 ## Installation
 
 ```bash
-cd /Users/schwd/Programs/prometheus_api
+cd prometheus_core/sdk
 pip install -e .
 ```
 

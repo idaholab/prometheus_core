@@ -421,7 +421,7 @@ LiteLLM-object are each covered in both sync and async.
 ## Verification
 
 ```bash
-# Run from the prometheus_api repository root.
+# Run from the sdk/ directory.
 
 # Baseline — confirm exactly one pre-existing failure before Phase 0
 uv run pytest tests/test_llm_client.py tests/test_llm_configs.py -v

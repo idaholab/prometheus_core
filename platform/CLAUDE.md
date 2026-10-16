@@ -151,7 +151,7 @@ All services share the `agent-network` bridge.
 - `docs/docs/dev-docs/multi-user-setup.md` — multi-user configuration, credential broker, isolation (operator + developer guide)
 - `docs/docs/dev-docs/encryption-and-keys.md` — every secret and key in the platform, what protects what, and what breaks if one is lost or rotated
 
-## Further reading (prometheus_api repo)
+## Further reading (SDK, `../sdk`)
 
-- `prometheus_api/docs/agent/MULTI_USER.md` — identity JWT flow, credential broker backends, per-user worker pool, conversation ownership (agent author reference)
-- `prometheus_api/docs/agent/IDENTITY_KEY_MANAGEMENT.md` — RS256 key generation and distribution per service, third-party agent integration via JWKS, rotation (agent author reference; no HS256 option exists)
+- `../sdk/docs/agent/MULTI_USER.md` — identity JWT flow, credential broker backends, per-user worker pool, conversation ownership (agent author reference)
+- `../sdk/docs/agent/IDENTITY_KEY_MANAGEMENT.md` — RS256 key generation and distribution per service, third-party agent integration via JWKS, rotation (agent author reference; no HS256 option exists)

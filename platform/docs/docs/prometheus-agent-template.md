@@ -11,7 +11,7 @@ An interactive scaffolding tool that generates a ready-to-run A2A agent from a t
 ## Quick start
 
 ```bash
-cd prometheus_platform/agent-template
+cd prometheus_core/agent-template
 
 # Run the scaffolding script
 python setup_agent.py
@@ -244,7 +244,7 @@ Every generated agent exposes:
 Agents communicate using JSON-RPC 2.0 with the `message/send` method:
 
 If you test this request against a Dockerized target agent on localhost, run that
-agent in external network mode; see the [agent template run instructions](https://github.inl.gov/genesis/prometheus_platform/blob/dev/agent-template/README.md#run-it).
+agent in external network mode; see the [agent template run instructions](https://github.com/idaholab/prometheus_core/blob/devel/agent-template/README.md#run-it).
 
 **Request:**
 
