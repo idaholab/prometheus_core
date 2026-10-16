@@ -42,7 +42,7 @@ from app.db import get_db_session
 from app.db.models import OidcProvider
 from app.security import GenericOidcProvider, register_provider, require_admin, unregister_provider
 
-router = APIRouter(prefix="/api/admin/oidc-providers", tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/admin/oidc-providers", tags=["admin-oidc-providers"], dependencies=[Depends(require_admin)])
 
 _ROLES = {"admin", "user"}
 # provider_id is a URL path segment (GET /api/auth/login/{provider_id}) and a

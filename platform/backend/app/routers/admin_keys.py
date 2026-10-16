@@ -42,7 +42,7 @@ from app.db.models import SigningKey
 from app.security import require_admin
 from app.signing_keys import generate_signing_key, invalidate_active_key_cache
 
-router = APIRouter(prefix="/api/admin/signing-keys", tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/admin/signing-keys", tags=["admin-signing-keys"], dependencies=[Depends(require_admin)])
 
 
 class SigningKeyOut(BaseModel):
