@@ -37,12 +37,18 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api_responses import ADMIN_RESPONSES, ENCRYPTION_RESPONSES
 from app.crypto import encrypt
 from app.db import get_db_session
 from app.db.models import OidcProvider
 from app.security import GenericOidcProvider, register_provider, require_admin, unregister_provider
 
-router = APIRouter(prefix="/api/admin/oidc-providers", tags=["admin-oidc-providers"], dependencies=[Depends(require_admin)])
+router = APIRouter(
+    prefix="/api/admin/oidc-providers",
+    tags=["admin-oidc-providers"],
+    dependencies=[Depends(require_admin)],
+    responses=ADMIN_RESPONSES,
+)
 
 _ROLES = {"admin", "user"}
 # provider_id is a URL path segment (GET /api/auth/login/{provider_id}) and a
@@ -125,7 +131,7 @@ async def list_providers(db: AsyncSession = Depends(get_db_session)) -> list[Oid
     return [_out(row) for row in rows]
 
 
-@router.post("", response_model=OidcProviderOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OidcProviderOut, status_code=status.HTTP_201_CREATED, responses=ENCRYPTION_RESPONSES)
 async def create_provider(payload: OidcProviderCreate, db: AsyncSession = Depends(get_db_session)) -> OidcProviderOut:
     provider_id = payload.provider_id.strip()
     if len(provider_id) > _SLUG_MAX_LEN or not _SLUG_RE.match(provider_id):
@@ -158,7 +164,7 @@ async def create_provider(payload: OidcProviderCreate, db: AsyncSession = Depend
     return _out(row)
 
 
-@router.patch("/{provider_row_id}", response_model=OidcProviderOut)
+@router.patch("/{provider_row_id}", response_model=OidcProviderOut, responses=ENCRYPTION_RESPONSES)
 async def update_provider(
     provider_row_id: uuid.UUID, payload: OidcProviderUpdate, db: AsyncSession = Depends(get_db_session)
 ) -> OidcProviderOut:

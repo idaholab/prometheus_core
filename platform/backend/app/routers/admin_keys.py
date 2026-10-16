@@ -36,13 +36,19 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api_responses import ADMIN_RESPONSES, ENCRYPTION_RESPONSES
 from app.crypto import encrypt
 from app.db import get_db_session
 from app.db.models import SigningKey
 from app.security import require_admin
 from app.signing_keys import generate_signing_key, invalidate_active_key_cache
 
-router = APIRouter(prefix="/api/admin/signing-keys", tags=["admin-signing-keys"], dependencies=[Depends(require_admin)])
+router = APIRouter(
+    prefix="/api/admin/signing-keys",
+    tags=["admin-signing-keys"],
+    dependencies=[Depends(require_admin)],
+    responses=ADMIN_RESPONSES,
+)
 
 
 class SigningKeyOut(BaseModel):
@@ -78,7 +84,7 @@ async def list_keys(db: AsyncSession = Depends(get_db_session)) -> list[SigningK
     return [_out(row) for row in rows]
 
 
-@router.post("", response_model=SigningKeyOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=SigningKeyOut, status_code=status.HTTP_201_CREATED, responses=ENCRYPTION_RESPONSES)
 async def create_key(db: AsyncSession = Depends(get_db_session)) -> SigningKeyOut:
     """Generate a new RS256 keypair. Does not activate it -- see .../activate."""
     kid, private_pem, public_pem = generate_signing_key()

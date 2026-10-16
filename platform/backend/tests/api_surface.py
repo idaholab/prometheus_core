@@ -44,6 +44,7 @@ SNAPSHOT_PATH = Path(__file__).parent / "snapshots" / "api_surface.json"
 _DOC_KEYS = {"description", "summary", "examples", "example", "title", "tags", "operationId", "security"}
 
 _FRAMEWORK_SCHEMAS = {"HTTPValidationError", "ValidationError"}
+_SCHEMA_REF = "#/components/schemas/"
 
 # ``app.routers.admin_users.AdminUserOut`` -> ``AdminUserOut``, so moving a model
 # between modules is not reported as a surface change.
@@ -123,14 +124,33 @@ def _openapi_surface(app: Any) -> dict[str, Any]:
                 code: response for code, response in operation.get("responses", {}).items() if code.startswith("2")
             }
             paths.setdefault(path, {})[method] = _strip_docs(operation)
-    # FastAPI's own validation-error schemas come and go with whether any route has a
-    # validatable parameter; they are framework constants, not part of our surface.
-    schemas = {
-        name: _strip_docs(value)
-        for name, value in schema.get("components", {}).get("schemas", {}).items()
-        if name not in _FRAMEWORK_SCHEMAS
-    }
+    # Keep only schemas a client can actually exchange: those reachable from the pinned
+    # request bodies, parameters and success responses. Schemas referenced solely by
+    # error responses (e.g. the documented ``ErrorResponse``) are documentation, and
+    # FastAPI's own validation-error schemas are framework constants.
+    all_schemas = schema.get("components", {}).get("schemas", {})
+    reachable = _referenced_schemas(paths, all_schemas) - _FRAMEWORK_SCHEMAS
+    schemas = {name: _strip_docs(all_schemas[name]) for name in sorted(reachable)}
     return {"paths": paths, "schemas": schemas}
+
+
+def _referenced_schemas(root: Any, all_schemas: dict[str, Any]) -> set[str]:
+    """Names of every component schema ``root`` references, transitively."""
+    found: set[str] = set()
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith(_SCHEMA_REF):
+                name = ref[len(_SCHEMA_REF) :]
+                if name not in found:
+                    found.add(name)
+                    stack.append(all_schemas.get(name, {}))
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return found
 
 
 def build_surface() -> dict[str, Any]:
