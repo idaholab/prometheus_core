@@ -40,7 +40,7 @@ from app.db.models import User as UserRow
 from app.passwords import hash_password
 from app.security import require_admin
 
-router = APIRouter(prefix="/api/admin/users", tags=["admin"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/admin/users", tags=["admin-users"], dependencies=[Depends(require_admin)])
 
 _ROLES = {"admin", "user"}
 
