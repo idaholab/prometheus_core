@@ -73,9 +73,13 @@ Static, non-session settings (no `conversation_id`).
   "chat_suggestion_title": "What would you like to do today?",
   "workflow_suggestions": ["Design a nuclear system"],
   "auto_approve_steps": false,
-  "max_upload_bytes": 104857600
+  "max_upload_bytes": 104857600,
+  "llm_model": "anthropic/claude-sonnet-5-5"
 }
 ```
+
+`llm_model` is the provider model behind the orchestrator's `medium` alias, as the client-agent
+reports it. It is `null` when the client-agent cannot resolve the model or does not answer.
 
 ## `POST /api/uploads` → `UploadDescriptor`
 

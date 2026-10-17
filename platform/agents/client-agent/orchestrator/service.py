@@ -31,6 +31,7 @@ from workflow_library import get_workflow_registry, verify_workflow_source_healt
 from . import runtime, task_tracking
 from .chat_flow import chat
 from .debug_commands import _is_supported_slash_command_query
+from .llm_model import ORCHESTRATOR_LLM_ALIAS, resolve_llm_model
 from .models import ConversationRequest, ConversationResponse
 
 # Strong references to detached background orchestration tasks, so the event
@@ -86,6 +87,10 @@ class OrchestratorAgent(PrometheusAgent):
         """Manual refresh endpoint for capability/tool discovery."""
         payload = await runtime.refresh_discovery()
         return JSONResponse(payload)
+
+    async def _llm_model_endpoint(self, request: Request) -> JSONResponse:
+        """Report the orchestrator's LLM alias and the provider model it resolves to."""
+        return JSONResponse({"alias": ORCHESTRATOR_LLM_ALIAS, "model": await resolve_llm_model()})
 
     async def _stage_upload_endpoint(self, request: Request) -> JSONResponse:
         """Stage upload bytes server-side and return a metadata token for A2A."""
@@ -710,6 +715,7 @@ class OrchestratorAgent(PrometheusAgent):
         """Add custom orchestrator endpoints."""
         app.add_route("/uploads/stage", self._stage_upload_endpoint, methods=["POST"])
         app.add_route("/discovery/refresh", self._refresh_endpoint, methods=["POST"])
+        app.add_route("/llm/model", self._llm_model_endpoint, methods=["GET"])
         app.add_route("/workflows/catalog", self._workflow_catalog_endpoint, methods=["GET"])
         app.add_route("/workflows/{workflow_id}/input-form", self._workflow_input_form_endpoint, methods=["GET"])
         app.add_route("/workflows/{workflow_id}/start", self._workflow_start_endpoint, methods=["POST"])

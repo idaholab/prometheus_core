@@ -21,6 +21,7 @@ import { WelcomeScreen } from "./chat/WelcomeScreen";
 import { Markdown } from "./Markdown";
 import { ElementList } from "./ElementRenderer";
 import { artifactsToElements } from "@/lib/elements/artifactAdapter";
+import { modelLabel } from "@/lib/modelLabel";
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -161,6 +162,7 @@ interface ChatProps {
 export function Chat({ scrollContainerRef }: ChatProps) {
   const { items, awaiting, config, resumingConversationId } = useChatState();
   const maxUploadBytes = config?.max_upload_bytes || DEFAULT_MAX_UPLOAD_BYTES;
+  const activeModelLabel = modelLabel(config);
 
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -631,6 +633,9 @@ export function Chat({ scrollContainerRef }: ChatProps) {
               </button>
             </div>
           </div>
+          {activeModelLabel !== null && (
+            <p className="m-0 px-2 pt-1 text-right font-mono text-[11px] text-base-content/70">{activeModelLabel}</p>
+          )}
         </div>
       </div>
       <p className="text-center text-xs text-base-content/70 pb-2">

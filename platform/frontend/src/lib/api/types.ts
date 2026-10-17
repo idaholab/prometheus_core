@@ -295,6 +295,7 @@ export interface ConfigResponse {
   workflow_suggestions: string[];
   auto_approve_steps: boolean;
   max_upload_bytes: number;
+  llm_model?: string | null;
 }
 
 // --- history ----------------------------------------------------------------
