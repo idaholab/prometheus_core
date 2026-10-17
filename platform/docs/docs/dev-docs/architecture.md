@@ -213,6 +213,8 @@ All services are containerized via Docker Compose:
 | React Frontend (prod) | frontend-prod | 8080 | UI (prod profile) |
 | Backend | backend | 8600 | JSON/SSE API + auth |
 
+Both frontend services start only after the backend healthcheck (`/healthz`) passes, so the first page load can reach `/api`.
+
 All containers share the `agent-network` bridge network. Environment variables
 for secrets, LLM profile selection, and host mappings are passed via `.env`.
 Independently deployed agents use their own environment and provider keys.

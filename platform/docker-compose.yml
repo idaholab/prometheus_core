@@ -264,6 +264,10 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    # Wait for a healthy backend: the first /api calls fail until it serves.
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend-prod:
@@ -281,5 +285,5 @@ services:
       - agent-network
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
