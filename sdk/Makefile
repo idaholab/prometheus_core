@@ -66,10 +66,11 @@ test-install: ##@ Verify package installs and imports correctly in a clean venv
 	echo "Testing imports..." && \
 	"$$TMPVENV/bin/python" -c "\
 from prometheus_api import __version__; \
-from prometheus_api.llm_configs import LLM_CONFIG_PROFILES, get_llm_config_path; \
+from prometheus_api.llm_configs import get_llm_config_path, list_llm_config_profiles; \
 from prometheus_api.storage_client import StorageClient, AsyncStorageClient, ConnectionConfig; \
 from prometheus_api.agent import PrometheusAgent; \
-assert all(get_llm_config_path(profile).is_file() for profile in LLM_CONFIG_PROFILES); \
+assert 'registry' in list_llm_config_profiles(); \
+assert all(get_llm_config_path(profile).is_file() for profile in list_llm_config_profiles()); \
 print(f'prometheus-api {__version__} OK')" && \
 	rm -rf "$$TMPVENV" dist/ *.egg-info && \
 	echo "Install check passed" || \

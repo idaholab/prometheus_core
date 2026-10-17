@@ -1,0 +1,47 @@
+# Inference provider configuration for a locally running ollama.
+#
+# The config will require a model aliases which you can set up with
+#  ollama cp gemma4:31b default
+#  ollama cp gemma4:31b small
+#  ollama cp gemma4:31b medium
+#  ollama cp gemma4:31b large
+#  ollama cp gemma4:31b vision
+#
+# (replace gemma4:31b with the desired models)
+
+model_list:
+  - model_name: default
+    litellm_params:
+      model: openai/default
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1
+
+  - model_name: small
+    litellm_params:
+      model: openai/small
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1
+
+  - model_name: medium
+    litellm_params:
+      model: openai/medium
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1
+
+  - model_name: large
+    litellm_params:
+      model: openai/large
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1
+
+  - model_name: vision
+    litellm_params:
+      model: openai/vision
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1
+
+  - model_name: embedding
+    litellm_params:
+      model: openai/embedding
+      api_key: none
+      api_base: http://host.docker.internal:11434/v1

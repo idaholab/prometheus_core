@@ -121,13 +121,18 @@ def test_init_env_prompts_for_profile_and_key(tmp_path, env_example_path, monkey
 
 
 def test_profiles_match_sdk_llm_configs():
-    """Every installed profile is offered, and all of them read LLM_API_KEY."""
+    """Every installed profile is offered; all but the keyless ollama read LLM_API_KEY."""
     init_env = _load_init_env()
     known = init_env.profiles()
     assert next(iter(known)) == "registry"
     assert sorted(known) == sorted(p.stem for p in init_env.LLM_CONFIGS.glob("*.yaml"))
     # registry via litellm_config.yaml; EMBEDDING_API_KEY is never the profile key.
-    assert {key for key, _ in known.values()} == {"LLM_API_KEY"}
+    # Only the keyless local ollama profile (api_key: none) needs no key at all.
+    keys = {name: key for name, (key, _) in known.items()}
+    assert [name for name, key in keys.items() if key is None] == ["ollama"]
+    for name, key in keys.items():
+        if name != "ollama":
+            assert key == "LLM_API_KEY", f"{name} must read LLM_API_KEY"
 
 
 def test_port_vars_have_values(env_example_vars):

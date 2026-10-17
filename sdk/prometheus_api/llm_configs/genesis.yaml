@@ -1,0 +1,39 @@
+# American Science Cloud OpenAI-compatible inference scaffold.
+# Replace model IDs and the shared endpoint for the target AMSc deployment.
+
+model_list:
+  - model_name: default
+    litellm_params:
+      model: openai/claude-opus
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1
+
+  - model_name: small
+    litellm_params:
+      model: openai/claude-haiku
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1
+
+  - model_name: medium
+    litellm_params:
+      model: openai/claude-sonnet
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1
+
+  - model_name: large
+    litellm_params:
+      model: openai/claude-opus
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1
+
+  - model_name: vision
+    litellm_params:
+      model: openai/claude-opus
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1
+
+  - model_name: embedding
+    litellm_params:
+      model: openai/text-embedding-3-small@microsoft
+      api_key: os.environ/LLM_API_KEY
+      api_base: https://mag.genesis.americansciencecloud.org/v1

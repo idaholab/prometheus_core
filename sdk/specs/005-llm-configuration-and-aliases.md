@@ -20,10 +20,10 @@ Let applications select LLM models through stable aliases while using an explici
 - REQ-005-10: `list_models()` MUST prefer proxy aliases when the selected configuration's `proxy_url` is reachable and fall back to its `model_list` aliases only when the proxy is unreachable.
 - REQ-005-11: Missing aliases MUST raise `LLMAliasError` with the missing alias, available aliases, and an instruction to configure LiteLLM or the selected LLM config file.
 - REQ-005-12: `resolve_model(alias)` MUST return the alias itself on the proxy path and the provider model name on the fallback path.
-- REQ-005-13: The package MUST install `registry`, `inl_hpc`, `inl_litellm`, `amsc`, `anthropic`, `openai`, and `anl_asksage` YAML profiles, and `get_llm_config_path(profile)` MUST return the package-owned path for a supported profile and reject unknown names.
+- REQ-005-13: The YAML files in `prometheus_api/llm_configs/` are the sole definition of the installed profiles (the profile name is the file stem); there is no separate profile list. The package MUST install at least the `registry` profile, and `get_llm_config_path(profile)` MUST return the package-owned path for an installed profile and reject unknown names.
 - REQ-005-14: `LLMConfig.from_env(...)` MUST select the first available configuration in this order: `LLM_CONFIG_FILE`, `LLM_CONFIG_PROFILE`, then the installed `registry` profile.
 - REQ-005-15: `LLMConfig` MUST resolve a top-level YAML `proxy_url`, including `os.environ/NAME` references, unless an explicit `proxy_url` constructor argument overrides it.
-- REQ-005-16: The six direct-inference profiles MUST define `default`, `small`, `medium`, `large`, `vision`, and `embedding` aliases and MUST reference provider API keys through environment variables rather than embedding credentials. Every installed profile, including `registry`, MUST read its inference key from `LLM_API_KEY`; profiles whose provider supplies no embeddings MAY read the `embedding` flavor's key from `EMBEDDING_API_KEY`.
+- REQ-005-16: Every direct-inference profile (any installed profile other than `registry`) MUST define `default`, `small`, `medium`, `large`, `vision`, and `embedding` aliases and MUST reference provider API keys through environment variables rather than embedding credentials. Every installed profile, including `registry`, MUST read its inference key from `LLM_API_KEY`; profiles whose provider supplies no embeddings MAY read the `embedding` flavor's key from `EMBEDDING_API_KEY`. Profiles for keyless local providers (e.g. Ollama) MAY set `api_key: none` instead of an environment reference.
 - REQ-005-17: `LLMConfig.from_env(...)` MUST load `LLM_CONFIG_FILE`, `LLM_CONFIG_PROFILE`, `LLM_DEBUG_LOG_MESSAGES`, and `ENABLE_MLFLOW_TRACING`, trim string selectors, and convert truthy flag strings from `1`, `true`, `yes`, or `on`.
 
 ## Behavior
@@ -36,6 +36,7 @@ Let applications select LLM models through stable aliases while using an explici
 ## Interfaces
 - `FallbackModelConfig(alias: str, provider_model: str, litellm_params: dict[str, Any])`
 - `get_llm_config_path(profile: str = "registry") -> Path`
+- `list_llm_config_profiles() -> tuple[str, ...]`
 - `LLMConfig(proxy_url: str | None = None, config_file: Path | None = None, debug_log_messages: bool = False, enable_mlflow_tracing: bool = False, app_name: str | None = None, mlflow_trace_tags: dict[str, str] = {}, api_key: str | None = None, timeout: float = 30.0)`
 - `LLMConfig.from_env(env: Mapping[str, str] | None = None, env_file: Path | None = None) -> LLMConfig`
 - `LLMConfig.with_api_key(api_key: str | None) -> LLMConfig`
