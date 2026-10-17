@@ -79,14 +79,20 @@ directly — only the backend does, through the admin API).
 
 ## Bootstrap fallback vs. DB-authoritative
 
-Secret #2 has two possible sources, and which one is authoritative changes
-the moment an admin uses the UI:
+Secret #2 has two possible sources. Which one is authoritative depends on
+whether admin-db has an active key:
 
-- **Before any signing key is generated and activated**: `USER_IDENTITY_PRIVATE_KEY`
-  (hand-generated, `prometheus-identity-keygen` or `openssl`) is what
-  `mint_for_user()` uses. This is the only path when there's no admin-db, or
-  the operator deliberately skips the admin UI for this.
-- **After an admin generates and activates a key** (Admin > Signing Keys):
+- **Default (no `USER_IDENTITY_PRIVATE_KEY`)**: at startup the backend calls
+  `ensure_active_signing_key()` (`backend/app/signing_keys.py`). When admin-db
+  has no active key, it creates and activates one, under a Postgres advisory
+  lock so that the workers create one key only. When
+  `ADMIN_DB_ENCRYPTION_KEY` is missing or unusable, it logs a warning and the
+  backend boots without a DB key.
+- **`USER_IDENTITY_PRIVATE_KEY` set**: the startup step creates nothing.
+  `mint_for_user()` uses the static key (hand-generated,
+  `prometheus-identity-keygen` or `openssl`) until an admin activates a key
+  under Admin > Signing Keys.
+- **After a key is active in admin-db** (created at startup or by an admin):
   Postgres becomes authoritative. `mint_for_user()` prefers the active
   `SigningKey` row, cached in-process for ~60s (invalidated immediately on
   the next activate/retire, so rotation doesn't wait out the cache). The env

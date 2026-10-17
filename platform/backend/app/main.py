@@ -40,6 +40,7 @@ from app import redis_client, security
 from app.services.events import EventBus
 from app.services.mesh.service import shutdown_mesh_executor
 from app.sessions import SessionStore
+from app.signing_keys import ensure_active_signing_key
 
 
 @asynccontextmanager
@@ -68,6 +69,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_factory = get_session_factory()
     async with session_factory() as db:
         await security.register_existing_oidc_providers(db)
+        # A fresh install gets one active RS256 identity key, so mint_for_user()
+        # works before an admin visits Admin > Signing Keys. See app/signing_keys.py.
+        await ensure_active_signing_key(db)
     # One async Valkey client (a connection pool) shared by every subsystem that
     # needs one: sessions, the SSE event bus, session revocation and task events.
     # See app/redis_client.py.

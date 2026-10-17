@@ -58,11 +58,10 @@ Section 1 of `.env.example` lists what you must set; everything else has a
 working default. Back up `.env` once it exists: losing `ADMIN_DB_ENCRYPTION_KEY`
 makes encrypted admin-db rows unreadable.
 
-Until a signing key exists, agents reject every request with
-`No 'userToken' found in message metadata`. After creating the first admin
-user, generate and activate one under **Admin > Signing Keys** (see
-[Multi-user setup](docs/docs/dev-docs/multi-user-setup.md)), or set
-`USER_IDENTITY_REQUIRED=false` in `.env` for a quick local smoke test.
+The backend creates and activates the first identity signing key when it
+starts, unless `USER_IDENTITY_PRIVATE_KEY` is set (see [Multi-user setup](docs/docs/dev-docs/multi-user-setup.md)), and
+`USER_IDENTITY_REQUIRED=false` in `.env` still serves a quick local smoke test
+without identity.
 
 #### Choose an LLM profile
 
