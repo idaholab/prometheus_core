@@ -1,7 +1,7 @@
 # 010 — Agent artifacts, input, and context state
 
 status: implemented
-sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/context_state.py, prometheus_api/agent/events.py, tests/test_agent.py, tests/test_artifacts.py
+sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/context_state.py, prometheus_api/agent/events.py, tests/test_agent.py, tests/test_artifacts.py, tests/test_deeplynx_artifact.py
 depends-on: 008, 009, 012
 
 ## Purpose
@@ -19,16 +19,20 @@ Let agents request missing structured input, persist per-conversation state, pub
 - REQ-010-09: `send_json_artifact(...)` MUST emit a native A2A data artifact, wrap non-dict payloads under `{"value": ...}`, and catalog inline JSON only when `catalog_artifact=True`.
 - REQ-010-10: `send_json_artifact(...)` MUST NOT auto-register URI-shaped JSON payloads unless `catalog_artifact=True`.
 - REQ-010-11: `send_artifact_reference(...)` MUST register a URI-backed artifact and emit a native A2A file artifact.
-- REQ-010-12: `send_deeplynx_artifact(...)` MUST upload the local file, update the DeepLynx item properties with artifact metadata, apply optional tags, emit a `deeplynx://organizations/{org}/projects/{project}/items/{item}` reference, and include DeepLynx IDs in metadata. ⚠ untested
+- REQ-010-12: `send_deeplynx_artifact(...)` MUST upload the local file when no existing item matches, update the DeepLynx item properties with artifact metadata including `checksum`, apply optional tags, emit a `deeplynx://organizations/{org}/projects/{project}/items/{item}` reference, and include DeepLynx IDs in metadata.
 - REQ-010-13: `send_text_artifact(...)` MUST emit a native A2A text artifact and return the artifact ID.
 - REQ-010-14: `send_conversation_message(...)` MUST emit a JSON artifact named `conversation_message` with metadata `kind=conversation_message`.
 - REQ-010-15: `get_artifact_file_path(...)` MUST require a conversation ID or context, resolve from registry or provided artifact catalog, and cache provided catalog entries when possible.
 - REQ-010-16: Artifact resolution MUST materialize inline JSON/text to cache files, download non-local URI artifacts through `fsspec`, and validate local `file://` or absolute paths against allowed roots.
+- REQ-010-17: When `deduplicate` is true (the default), `send_deeplynx_artifact(...)` MUST look up an item in the configured project whose `properties.checksum` equals the SHA-256 of the local file and, on a match, MUST NOT upload or update DeepLynx and MUST emit a reference to the matched item with `deeplynx_deduplicated: true` in its metadata.
+- REQ-010-18: `send_deeplynx_artifact(...)` MUST fall back to a normal upload when the dedup lookup raises, and MUST NOT raise because of the lookup.
+- REQ-010-19: `send_deeplynx_artifact(..., deduplicate=False)` MUST NOT query DeepLynx for a matching item and MUST upload the file.
 
 ## Behavior
 - BEH-010-01: GIVEN `send_input_required(...)` is called WHEN the event is inspected THEN its status is final `input_required` and the missing input is in a `DataPart`.
 - BEH-010-02: GIVEN two conversations register artifacts with the same name or ID WHEN lookups occur THEN each conversation sees only its own artifacts.
 - BEH-010-03: GIVEN a local `file://` artifact outside allowed roots WHEN resolving it to a path THEN `PermissionError` is raised.
+- BEH-010-04: GIVEN the same file is passed to `send_deeplynx_artifact(...)` twice WHEN the first call stored an item with its `checksum` THEN the second call emits a reference to that item and uploads nothing.
 
 ## Interfaces
 - `MissingInput(name: str, description: str, user_prompt: str, type: str, options: list[str] | None = None, resolvable_from_context: bool = False, sensitive: bool = False, required: bool = True)`
@@ -42,7 +46,8 @@ Let agents request missing structured input, persist per-conversation state, pub
 - `PrometheusAgent.resolve_artifact_reference(conversation_id: str, artifact_id: str) -> ArtifactReference | None`
 - `PrometheusAgent.resolve_artifact_by_name(conversation_id: str, name_or_alias: str) -> ArtifactReference | None`
 - `PrometheusAgent.get_artifact_file_path(artifact_id: str, *, context: RequestContext | None = None, conversation_id: str | None = None, artifacts: Sequence[Mapping[str, Any]] | None = None, cache_dir: Path | None = None, allowed_file_roots: Sequence[Path | str] | None = None, force_download: bool = False) -> Path`
-- `PrometheusAgent.send_json_artifact(...) -> str`, `send_artifact_reference(...) -> ArtifactReference`, `send_deeplynx_artifact(...) -> ArtifactReference`, `send_text_artifact(...) -> str`, `send_conversation_message(...) -> str`
+- `PrometheusAgent.send_json_artifact(...) -> str`, `send_artifact_reference(...) -> ArtifactReference`, `send_text_artifact(...) -> str`, `send_conversation_message(...) -> str`
+- `PrometheusAgent.send_deeplynx_artifact(context, event_queue, *, file_path: Path, name: str, description: str, storage_config: ConnectionConfig, mime_type: str | None = None, json_type: str | None = None, artifact_id: str | None = None, tags: list[str] | None = None, metadata: dict[str, Any] | None = None, deduplicate: bool = True) -> ArtifactReference`
 - `ArtifactReference(...)`, `to_dict() -> dict`, `from_dict(payload: dict) -> ArtifactReference`, `from_a2a_artifact(payload: Any, *, conversation_id: str | None = None, producer_agent_id: str | None = None) -> ArtifactReference | None`, `from_any(...) -> ArtifactReference | None`, `to_context_dict() -> dict`
 - `ArtifactRegistry(redis_url: str | None = None, ttl_seconds: int | None = None).register/resolve_by_id/resolve_by_name/list/clear_conversation`
 - `ArtifactResolver(registry: ArtifactRegistry).get_artifact_file_path(...) -> Path`
@@ -58,5 +63,4 @@ Let agents request missing structured input, persist per-conversation state, pub
 - Local artifact path resolution does not support remote `file://host/...` URIs.
 
 ## Open questions
-- `send_deeplynx_artifact(...)` is implemented but lacks focused unit tests for upload/update/tag behavior.
 - Artifact name resolution is last-write-wins for normalized names; there is no alias history.

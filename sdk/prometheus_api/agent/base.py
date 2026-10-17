@@ -18,6 +18,7 @@ A2A-enabled agents, allowing you to focus on your agent's core logic.
 """
 
 import os
+import hashlib
 import json
 import logging
 import uuid
@@ -90,6 +91,16 @@ import uvicorn
 
 logger = logging.getLogger(__name__)
 _WORKFLOW_FILE_SUFFIXES = {".json", ".yaml", ".yml"}
+_CHECKSUM_KEY = "checksum"
+
+
+def _file_sha256(path: Path) -> str:
+    """Return the lower-case hex SHA-256 digest of a file, read in 1 MiB blocks."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 class _TrackedEventQueue:
@@ -1764,13 +1775,22 @@ class PrometheusAgent:
         artifact_id: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        deduplicate: bool = True,
     ) -> ArtifactReference:
         """Upload a local file to DeepLynx and emit a deeplynx:// artifact reference.
 
         Uploads the file, then creates a DeepLynx item whose ``properties`` carry
-        the artifact metadata (``mime_type``, ``json_type``, ``file_id``, and any
-        extra ``metadata`` keys).  The resulting URI encodes the item so downstream
-        consumers can retrieve both metadata and the raw file via the storage client.
+        the artifact metadata (``mime_type``, ``json_type``, ``file_id``,
+        ``checksum``, and any extra ``metadata`` keys).  The resulting URI
+        encodes the item so downstream consumers can retrieve both metadata and
+        the raw file via the storage client.
+
+        Before uploading, the SHA-256 digest of the file is looked up in the
+        configured project.  When an item already carries the same
+        ``checksum`` property, the upload is skipped and the reference
+        points to that item; its name, description, properties and tags are left
+        unchanged.  A failed lookup falls back to a normal upload.  Each call
+        still emits and registers its own conversation-scoped reference.
 
         URI format::
 
@@ -1788,55 +1808,93 @@ class PrometheusAgent:
             tags: Tag names applied to the DeepLynx item and the local artifact catalog.
             metadata: Extra key/value pairs merged into the item ``properties`` and
                 the ``ArtifactReference.metadata``.
+            deduplicate: Reuse an existing DeepLynx item with the same content
+                digest instead of uploading a new copy.  ``False`` always uploads.
 
         Returns:
             The registered ``ArtifactReference`` with ``uri`` set to the
             ``deeplynx://`` address and ``metadata`` containing
-            ``deeplynx_item_id`` and ``deeplynx_file_id`` for quick resolution.
+            ``deeplynx_item_id``, ``deeplynx_file_id``, ``checksum`` and
+            ``deeplynx_deduplicated`` (``True`` when an existing item was reused).
         """
         resolved_mime = mime_type or "application/octet-stream"
+        content_sha256 = await asyncio.to_thread(_file_sha256, file_path)
 
         async with AsyncStorageClient(storage_config) as client:
-            file_meta = await client.files.upload(
-                file_path,
-                name=name,
-                description=description,
-            )
+            match = None
+            if deduplicate:
+                try:
+                    hits = await client.search.advanced_query(
+                        filters=[
+                            {
+                                "filter": "properties",
+                                "operator": "KEY_VALUE",
+                                "json": json.dumps({_CHECKSUM_KEY: content_sha256}),
+                            }
+                        ],
+                        project_ids=[storage_config.project_id],
+                        page_size=25,
+                    )
+                    exact = [
+                        item
+                        for item in hits.items
+                        if (item.properties or {}).get(_CHECKSUM_KEY) == content_sha256
+                    ]
+                    match = min(exact, key=lambda item: item.id) if exact else None
+                except Exception as e:
+                    logger.warning(
+                        f"DeepLynx content-hash lookup failed for {file_path.name}; "
+                        f"uploading a new copy: {e}"
+                    )
 
-            # File upload creates a record in DeepLynx; update its properties to
-            # carry artifact metadata rather than creating a separate item record.
-            existing = await client.items.get(file_meta.id)
-            merged_properties: Dict[str, Any] = dict(existing.properties or {})
-            merged_properties.update(
-                {
-                    "mime_type": resolved_mime,
-                    "file_id": file_meta.id,
-                }
-            )
-            if json_type:
-                merged_properties["json_type"] = json_type
-            if file_meta.uri:
-                merged_properties["file_uri"] = file_meta.uri
-            if metadata:
-                merged_properties.update(metadata)
-
-            await client.items.update(
-                file_meta.id,
-                ItemUpdate(
+            size_bytes: Optional[int]
+            if match is not None:
+                item_id = match.id
+                size_bytes = file_path.stat().st_size
+            else:
+                file_meta = await client.files.upload(
+                    file_path,
                     name=name,
                     description=description,
-                    properties=merged_properties,
-                    class_id=existing.class_id,
-                    original_id=existing.original_id,
-                ),
-            )
-            if tags:
-                await client.items.add_tags(file_meta.id, list(tags))
+                )
+
+                # File upload creates a record in DeepLynx; update its properties to
+                # carry artifact metadata rather than creating a separate item record.
+                existing = await client.items.get(file_meta.id)
+                merged_properties: Dict[str, Any] = dict(existing.properties or {})
+                merged_properties.update(
+                    {
+                        "mime_type": resolved_mime,
+                        "file_id": file_meta.id,
+                    }
+                )
+                if json_type:
+                    merged_properties["json_type"] = json_type
+                if file_meta.uri:
+                    merged_properties["file_uri"] = file_meta.uri
+                if metadata:
+                    merged_properties.update(metadata)
+                merged_properties[_CHECKSUM_KEY] = content_sha256
+
+                await client.items.update(
+                    file_meta.id,
+                    ItemUpdate(
+                        name=name,
+                        description=description,
+                        properties=merged_properties,
+                        class_id=existing.class_id,
+                        original_id=existing.original_id,
+                    ),
+                )
+                if tags:
+                    await client.items.add_tags(file_meta.id, list(tags))
+                item_id = file_meta.id
+                size_bytes = file_meta.size
 
         uri = (
             f"deeplynx://organizations/{storage_config.organization_id}"
             f"/projects/{storage_config.project_id}"
-            f"/items/{file_meta.id}"
+            f"/items/{item_id}"
         )
         return await self.send_artifact_reference(
             context=context,
@@ -1845,13 +1903,15 @@ class PrometheusAgent:
             description=description,
             uri=uri,
             mime_type=resolved_mime,
-            size_bytes=file_meta.size,
+            size_bytes=size_bytes,
             artifact_id=artifact_id,
             tags=tags,
             metadata={
                 **(metadata or {}),
-                "deeplynx_item_id": file_meta.id,
-                "deeplynx_file_id": file_meta.id,
+                "deeplynx_item_id": item_id,
+                "deeplynx_file_id": item_id,
+                _CHECKSUM_KEY: content_sha256,
+                "deeplynx_deduplicated": match is not None,
             },
         )
 
