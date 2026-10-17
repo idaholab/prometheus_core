@@ -54,13 +54,21 @@ Specialist agents verify the JWT independently
 
 ### Managing signing keys via the admin UI (preferred)
 
+On a fresh install you do not create the first key. At startup, each backend
+worker calls `ensure_active_signing_key()` (`backend/app/signing_keys.py`)
+from the lifespan in `backend/app/main.py`. When admin-db has no active
+`SigningKey` row, it generates one RS256 key, stores it, and activates it.
+A Postgres advisory lock serializes the workers, so one install gets one key.
+It creates nothing when `USER_IDENTITY_PRIVATE_KEY` is set, and it leaves
+inactive and retired rows untouched.
+
 An admin can generate, activate, and retire RS256 keys from **Admin > Signing
 Keys** (`frontend/src/components/admin/AdminSigningKeys.tsx`) — no `.env` edit
-or container restart needed. Once any key has ever been activated, Postgres is
+or container restart needed. Once a key is active, Postgres is
 authoritative: `backend/app/identity.py::mint_for_user()` prefers admin-db's
 active `SigningKey` row (private key Fernet-encrypted at rest,
-`backend/app/crypto.py`) over the env var below, which becomes a **bootstrap
-fallback** for a fresh deployment with no keys yet.
+`backend/app/crypto.py`) over the env var below, which is a **static-key
+alternative** for a deployment that sets it before the first start.
 
 Encrypting that private key (and any OIDC client secret, see below) at rest
 needs `ADMIN_DB_ENCRYPTION_KEY` set — `make up`/`make restart` generate one
@@ -69,8 +77,10 @@ into `.env` automatically if it's blank (`scripts/init_env.py`, via the
 Starting the stack any other way (e.g. `docker compose up` directly, or CI)
 needs `python3 scripts/init_env.py` run first, or the key set by hand.
 Leaving it unset doesn't block local-password login — only signing-key
-generation and OIDC provider configuration need it, and both fail with an
-actionable error message (not a bare 500) if it's missing.
+generation and OIDC provider configuration need it. At startup, the backend
+logs a warning that names `ADMIN_DB_ENCRYPTION_KEY`, creates no key, and
+boots. The admin API calls fail with an actionable error message (not a
+bare 500).
 
 - `POST /api/admin/signing-keys` generates a keypair without activating it.
 - `POST /api/admin/signing-keys/{id}/activate` makes it the one key that mints
@@ -98,11 +108,13 @@ users only).
 
 ## Configuration
 
-### Generate a keypair (bootstrap fallback only)
+### Generate a keypair (static-key alternative only)
 
-Prefer the admin UI above once the platform is running. This env-var path only
-matters before any key has ever been generated/activated there, or for a
-deployment that intentionally skips the admin UI for this. Signing is RS256
+You normally do not need this step: the backend creates the first key at
+startup (see above). Use this env-var path only for a deployment that must
+sign with a key that you generate and hold outside admin-db. Set
+`USER_IDENTITY_PRIVATE_KEY` before the first start, because the backend then
+creates no DB key. Signing is RS256
 only — there is no shared-secret option. Generate a keypair with the tool that
 ships in `prometheus_api` (already installed in every agent container,
 including the backend):
@@ -445,7 +457,7 @@ still work (scoped to the `"local"` user_id).
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Agent returns `"Identity verification failed: userToken has expired"` | Turn lasted longer than `USER_IDENTITY_TTL` | Increase `USER_IDENTITY_TTL` (default 7200) |
-| Agent returns `"No 'userToken' found in message metadata"` | `USER_IDENTITY_REQUIRED=true` but `backend` has no `USER_IDENTITY_PRIVATE_KEY` configured | Generate a keypair (`prometheus-identity-keygen`) and set `USER_IDENTITY_PRIVATE_KEY` on the backend |
+| Agent returns `"No 'userToken' found in message metadata"` | `USER_IDENTITY_REQUIRED=true` but the backend has no active signing key and no `USER_IDENTITY_PRIVATE_KEY` (usually the startup warning about `ADMIN_DB_ENCRYPTION_KEY`) | Set `ADMIN_DB_ENCRYPTION_KEY` (`python3 scripts/init_env.py`) and restart the backend, or activate a key under **Admin > Signing Keys** |
 | Agent fails to verify with "USER_IDENTITY_PUBLIC_KEY ... is required" | Agent has no public key or `JWKS_URL` configured | Set `USER_IDENTITY_PUBLIC_KEY` (never the private key) on the agent |
 | `CredentialError: VAULT_ADDR is required` | `CREDENTIAL_BROKER=vault` but Vault env not set | Set `VAULT_ADDR` and `VAULT_JWT_ROLE`, or switch to `CREDENTIAL_BROKER=env` |
 | `/history` shows no conversations | User has not yet created any conversations in this deployment | Expected — history is now per-user |

@@ -44,6 +44,11 @@ def _fernet() -> Fernet:
         raise EncryptionError(f"ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: {exc}") from exc
 
 
+def ensure_configured() -> None:
+    """Raise :class:`EncryptionError` now if ADMIN_DB_ENCRYPTION_KEY is missing or invalid."""
+    _fernet()
+
+
 def encrypt(plaintext: str) -> bytes:
     """Encrypt a secret for storage in an admin-plane table column."""
     return _fernet().encrypt(plaintext.encode())

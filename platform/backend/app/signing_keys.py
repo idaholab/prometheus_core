@@ -16,16 +16,29 @@ Used by:
 - app/routers/admin_keys.py -- generate/activate/retire admin actions
 - app/routers/jwks.py -- the public JWKS document
 - app/identity.py -- DB-first active-key lookup for minting, with a short cache
+- app/main.py -- ensure_active_signing_key() at startup, for a fresh install
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from typing import Any, Optional, cast
 
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crypto import EncryptionError, encrypt, ensure_configured
 from app.db.models import SigningKey
+
+logger = logging.getLogger(__name__)
+
+# Arbitrary but fixed key for pg_advisory_xact_lock: serializes the startup
+# check-then-insert in ensure_active_signing_key() across every `--workers N`
+# process. Distinct from routers/setup.py's _BOOTSTRAP_LOCK_KEY.
+_SIGNING_KEY_BOOTSTRAP_LOCK_KEY = 0x50524F4D_00000002
 
 
 def _jwk_dict(public_key_pem: str) -> dict[str, Any]:
@@ -74,6 +87,65 @@ def generate_signing_key() -> tuple[str, str, str]:
 
     private_pem, public_pem = generate_keypair()
     return compute_kid(public_pem), private_pem, public_pem
+
+
+def new_signing_key_row(*, is_active: bool) -> SigningKey:
+    """A fresh RS256 ``SigningKey`` row with its private key encrypted, not yet added to a session.
+
+    Raises:
+        EncryptionError: if ADMIN_DB_ENCRYPTION_KEY is missing or invalid --
+            checked before the keypair is generated, so a misconfigured
+            install skips the keygen.
+    """
+    ensure_configured()
+    kid, private_pem, public_pem = generate_signing_key()
+    return SigningKey(
+        kid=kid,
+        private_key_encrypted=encrypt(private_pem),
+        public_key_pem=public_pem,
+        is_active=is_active,
+    )
+
+
+async def ensure_active_signing_key(db: AsyncSession) -> Optional[str]:
+    """Create and activate one RS256 key when admin-db has no active key.
+
+    Returns the new kid, or None when it did nothing. Never raises on a
+    missing or invalid ADMIN_DB_ENCRYPTION_KEY: it logs a warning, creates
+    no key, and the backend boots without a DB key.
+
+    Runs once per worker from the lifespan in app/main.py. The advisory lock
+    makes the workers' check-then-insert one at a time, so one install gets one
+    key. SQLite (tests only) has no advisory locks and skips it, as
+    routers/setup.py does. Inactive and retired rows are left untouched.
+    """
+    from app.identity import _is_configured  # function-local: app.identity imports this module
+
+    if _is_configured():
+        logger.info("static identity key configured; not creating a default signing key")
+        return None
+
+    if db.get_bind().dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _SIGNING_KEY_BOOTSTRAP_LOCK_KEY})
+
+    active = await db.scalar(select(SigningKey.id).where(SigningKey.is_active.is_(True)).limit(1))
+    if active is not None:
+        # Ends the transaction, which releases the advisory lock.
+        await db.rollback()
+        return None
+
+    try:
+        row = new_signing_key_row(is_active=True)
+    except EncryptionError as exc:
+        logger.warning("not creating a default signing key: ADMIN_DB_ENCRYPTION_KEY unusable (%s)", exc)
+        await db.rollback()
+        return None
+
+    db.add(row)
+    await db.commit()
+    invalidate_active_key_cache()
+    logger.info("created default signing key %s", row.kid)
+    return row.kid
 
 
 # --------------------------------------------------------------------------- #
