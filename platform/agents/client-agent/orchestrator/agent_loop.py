@@ -68,6 +68,7 @@ from workflow_library import (
 )
 
 from . import runtime
+from .llm_model import ORCHESTRATOR_LLM_ALIAS, cached_llm_model, resolve_llm_model
 from .skills import invoke_skill
 from .utils import extract_result_text
 
@@ -485,6 +486,7 @@ def _system_prompt(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> st
         SYSTEM_PROMPT_TEMPLATE
         .replace("{artifact_catalog}", "\n".join(lines) or "(none)")
         .replace("{recent_skill_inputs}", "\n".join(recent_skill_inputs(state, catalog)) or "(none)")
+        .replace("{llm_model}", cached_llm_model() or "unknown")
     )
 
 
@@ -1282,9 +1284,13 @@ async def _advance(
         turns += 1
         runtime.store_status_update(conversation_id, "Deciding the next step.")
         state["llm_messages"] = trim_transcript(state["llm_messages"])
+        if llm is None:
+            # Warm the cache _system_prompt() reads; None (a failed lookup) leaves "unknown".
+            await resolve_llm_model(ORCHESTRATOR_LLM_ALIAS)
         messages = [{"role": "system", "content": _system_prompt(state, catalog)}, *llm_view(state["llm_messages"])]
         if llm is None:
             llm = await stack.enter_async_context(runtime.create_llm())
+        # llm.medium is the ORCHESTRATOR_LLM_ALIAS flavor whose provider model the system prompt names.
         response = await llm.medium(
             messages,
             tools=[spec.definition() for spec in catalog.values()],

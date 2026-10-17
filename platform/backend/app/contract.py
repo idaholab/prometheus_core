@@ -400,6 +400,7 @@ class ConfigResponse(BaseModel):
     workflow_suggestions: list[str] = Field(default_factory=list)
     auto_approve_steps: bool = False
     max_upload_bytes: int = 0
+    llm_model: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #

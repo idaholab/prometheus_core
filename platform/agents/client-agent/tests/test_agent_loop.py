@@ -18,6 +18,7 @@ import copy
 import inspect
 import json
 import logging
+import time
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -28,7 +29,7 @@ import runtime_stub  # noqa: F401  (installs prometheus_api.agent stubs)
 from prometheus_api.llm_client import ChatResponse, parse_finish_reason, parse_tool_calls
 
 from capability_cache import AgentCapability
-from orchestrator import agent_loop, chat_flow, runtime
+from orchestrator import agent_loop, chat_flow, llm_model, runtime
 from orchestrator.models import ConversationRequest
 
 CONV = "conv-loop"
@@ -183,6 +184,11 @@ def harness(monkeypatch):
         agent_loop, "get_capability_cache", lambda: SimpleNamespace(get_capabilities=get_capabilities)
     )
     monkeypatch.setattr(agent_loop, "invoke_skill", fake_invoke)
+
+    async def no_llm_model(alias: str = "medium") -> Optional[str]:
+        return None  # keeps the turn's model lookup off the network
+
+    monkeypatch.setattr(agent_loop, "resolve_llm_model", no_llm_model)
 
     def script(steps: List[Any]) -> ScriptedLLM:
         llm = ScriptedLLM(steps)
@@ -1454,3 +1460,29 @@ def test_early_store_failure_keeps_the_turn(harness, monkeypatch, caplog) -> Non
         r for r in caplog.records if r.name == "orchestrator.chat_flow" and r.levelno == logging.WARNING
     ]
     assert any(CONV in r.getMessage() for r in warnings), "no warning names the conversation id"
+
+
+# --------------------------------------------------------------------------- #
+# System prompt names the resolved model
+# --------------------------------------------------------------------------- #
+
+
+def test_system_prompt_names_the_model(monkeypatch) -> None:
+    """The orchestrator system prompt names the cached provider model in both places
+    (what it runs on, and what to say when asked) and leaves no placeholder behind."""
+    monkeypatch.setattr(llm_model, "_cache", {"medium": ("anthropic/claude-sonnet-5-5", time.monotonic())})
+
+    prompt = agent_loop._system_prompt({}, {})
+
+    assert prompt.count("anthropic/claude-sonnet-5-5") == 2
+    assert "{llm_model}" not in prompt
+
+
+def test_system_prompt_says_unknown_without_a_model(monkeypatch) -> None:
+    """With no resolved model, the system prompt says ``unknown`` and leaves no placeholder."""
+    monkeypatch.setattr(llm_model, "_cache", {})
+
+    prompt = agent_loop._system_prompt({}, {})
+
+    assert "run on the large language model unknown" in prompt
+    assert "{llm_model}" not in prompt

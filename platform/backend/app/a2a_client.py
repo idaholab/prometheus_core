@@ -86,6 +86,16 @@ class A2AClient:
             raise ValueError("Upload staging response did not include upload_id")
         return payload
 
+    async def get_llm_model(self) -> Optional[str]:
+        """Return the provider model behind the orchestrator's flavor, or ``None``."""
+        headers = {"Authorization": f"Bearer {self.agent_secret}"}
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{self.agent_url}/llm/model", headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+        model = payload.get("model") if isinstance(payload, dict) else None
+        return model if isinstance(model, str) and model else None
+
     async def _file_chunks(self, file_path: Path, chunk_size: int = 1024 * 1024):
         with Path(file_path).open("rb") as stream:
             while True:

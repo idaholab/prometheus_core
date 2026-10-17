@@ -19,11 +19,16 @@ limit, auto-approve behavior).
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 
+from app.a2a_client import A2AClient
 from app.config import settings
 from app.contract import ChatProfile, ConfigResponse
 from app.security import TokenClaims, current_claims
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["config"])
 
@@ -46,10 +51,19 @@ CHAT_PROFILES: list[ChatProfile] = [
 ]
 
 
+def _get_a2a_client() -> A2AClient:
+    return A2AClient(agent_url=settings.agent_url, agent_secret=settings.agent_secret)
+
+
 @router.get("/config", response_model=ConfigResponse)
 async def get_config(claims: TokenClaims = Depends(current_claims)) -> ConfigResponse:
     # Auth-gated (AU-5): profiles/suggestions/limits were behind login in Chainlit; the
     # React app fetches config after authenticating (tasks/frontend Step 02).
+    try:
+        llm_model = await _get_a2a_client().get_llm_model()
+    except Exception as exc:  # the model label is best-effort; never fail the config
+        logger.warning("Failed to read the orchestrator LLM model: %s", exc)
+        llm_model = None
     return ConfigResponse(
         profiles=CHAT_PROFILES,
         chat_intro=settings.chat_intro,
@@ -57,4 +71,5 @@ async def get_config(claims: TokenClaims = Depends(current_claims)) -> ConfigRes
         workflow_suggestions=settings.workflow_suggestions,
         auto_approve_steps=settings.auto_approve_steps,
         max_upload_bytes=settings.max_upload_bytes,
+        llm_model=llm_model,
     )

@@ -42,6 +42,7 @@ agents/client-agent/
     models.py                      Conversation request/response/state models
     runtime.py                     Environment config, caches, status updates
     service.py                     PrometheusAgent subclass and HTTP/A2A endpoints
+    llm_model.py                   Resolves the `medium` alias to the provider model
     chat_flow.py                   Maps requests onto the loop, outcomes onto responses
     agent_loop.py                  Tool-calling orchestration loop
     skills.py                      Skill lookup and invocation
@@ -128,6 +129,7 @@ Major methods:
 - `_on_shutdown()`: Cancels the background refresh task.
 - `lifespan(app)`: Starlette lifespan wrapper used by the base agent.
 - `_refresh_endpoint(request)`: Manually refreshes discovery/capability/workflow state.
+- `_llm_model_endpoint(request)`: Returns the `medium` alias and its resolved provider model for `GET /llm/model`.
 - `_workflow_catalog_endpoint(request)`: Returns workflow catalog cards for the frontend picker.
 - `_workflow_input_form_endpoint(request)`: Builds the unresolved input form for a workflow template.
 - `_workflow_start_endpoint(request)`: Starts a conversation turn from a workflow catalog selection.
@@ -137,6 +139,15 @@ Major methods:
 - `_handle_uploaded_files(...)`: Validates uploaded files, infers descriptions, stores them in DeepLynx, and injects artifact references into the request payload.
 - `_execute(params, context, event_queue)`: Main A2A entry point for normal chat turns.
 - `configure_app(app)`: Adds client-agent-specific HTTP routes.
+
+`configure_app()` also adds the internal route `GET /llm/model`. The backend reads it
+for the `llm_model` field of `GET /api/config`. The base agent's bearer middleware
+guards it with `AGENT_SECRET`. It returns `{"alias": "medium", "model": <str or null>}`.
+`orchestrator/llm_model.py` (`resolve_llm_model()`) resolves the model. In proxy mode
+it reads LiteLLM `/model/info` and returns `litellm_params.model` of the `medium` entry.
+Without a proxy URL, it reads the fallback profile's `provider_model` for `medium`.
+A resolved model is cached for `DISCOVERY_REFRESH_SECONDS`; a failure gives `null`
+and is not cached. The orchestrator system prompt names the same model, or `unknown`.
 
 Service-layer rule of thumb: keep HTTP/A2A concerns here. Planning and execution
 belong in `chat_flow.py` and `agent_loop.py`.
