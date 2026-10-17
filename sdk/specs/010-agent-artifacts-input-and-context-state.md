@@ -24,11 +24,16 @@ Let agents request missing structured input, persist per-conversation state, pub
 - REQ-010-14: `send_conversation_message(...)` MUST emit a JSON artifact named `conversation_message` with metadata `kind=conversation_message`.
 - REQ-010-15: `get_artifact_file_path(...)` MUST require a conversation ID or context, resolve from registry or provided artifact catalog, and cache provided catalog entries when possible.
 - REQ-010-16: Artifact resolution MUST materialize inline JSON/text to cache files, download non-local URI artifacts through `fsspec`, and validate local `file://` or absolute paths against allowed roots.
+- REQ-010-17: `send_deeplynx_artifact(...)` MUST give each artifact a name that is unique within its conversation, keeping the requested name when it is free and otherwise adding the first free `-<n>` suffix before the extension, starting at 2, and MUST use that name for the DeepLynx upload, the item update, the catalog entry, and the emitted artifact.
+- REQ-010-18: `send_deeplynx_artifact(...)` MUST reserve the chosen name until its artifact is registered, so concurrent calls in one conversation never receive the same name.
+- REQ-010-19: When `send_deeplynx_artifact(...)` changes the name, it MUST record the caller's name as `requested_name` in the DeepLynx item properties and in the reference metadata.
+- REQ-010-20: `send_deeplynx_artifact(...)` MUST send DeepLynx a description of at most 250 characters, shortening a longer one to its first 249 characters plus `…` and recording the original text as `full_description` in the item properties, while the catalog entry and the emitted artifact keep the full description.
 
 ## Behavior
 - BEH-010-01: GIVEN `send_input_required(...)` is called WHEN the event is inspected THEN its status is final `input_required` and the missing input is in a `DataPart`.
 - BEH-010-02: GIVEN two conversations register artifacts with the same name or ID WHEN lookups occur THEN each conversation sees only its own artifacts.
 - BEH-010-03: GIVEN a local `file://` artifact outside allowed roots WHEN resolving it to a path THEN `PermissionError` is raised.
+- BEH-010-04: GIVEN one call creates N DeepLynx artifacts with the same requested name WHEN the uploads finish THEN N separate DeepLynx records and N catalog entries exist, each resolvable by its own name.
 
 ## Interfaces
 - `MissingInput(name: str, description: str, user_prompt: str, type: str, options: list[str] | None = None, resolvable_from_context: bool = False, sensitive: bool = False, required: bool = True)`
@@ -56,7 +61,8 @@ Let agents request missing structured input, persist per-conversation state, pub
 ## Out of scope / Non-goals
 - The artifact registry is metadata storage; it does not guarantee remote artifact immutability or retention.
 - Local artifact path resolution does not support remote `file://host/...` URIs.
+- The unique-name rule of `send_deeplynx_artifact(...)` covers one conversation in one process: it does not compare names across conversations or with earlier DeepLynx records, does not deduplicate content, does not apply to `send_artifact_reference(...)`, `send_json_artifact(...)` or `send_text_artifact(...)`, and does not use a cross-process lock.
 
 ## Open questions
-- `send_deeplynx_artifact(...)` is implemented but lacks focused unit tests for upload/update/tag behavior.
+- `send_deeplynx_artifact(...)` naming is covered by `tests/test_artifacts.py` (`test_deeplynx_same_name_artifacts_get_distinct_names`, `test_deeplynx_concurrent_same_name_artifacts_get_distinct_names`, `test_deeplynx_requested_name_kept_in_metadata`, `test_deeplynx_unique_name_rules`), and description capping by `test_deeplynx_description_capped_to_limit`, but upload/update/tag behavior still lacks focused unit tests.
 - Artifact name resolution is last-write-wins for normalized names; there is no alias history.

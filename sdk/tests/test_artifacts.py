@@ -14,6 +14,7 @@
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,11 +22,73 @@ from google.protobuf.json_format import MessageToDict
 
 from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
 from prometheus_api.agent.artifacts import ArtifactReference, ArtifactRegistry
+from prometheus_api.storage_client.connection import ConnectionConfig
+from prometheus_api.storage_client.models.file import FileMetadata
+from prometheus_api.storage_client.models.item import Item, ItemUpdate
 
 
 class _DummyAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
         return {"ok": True}
+
+
+class _FakeDeepLynx:
+    """In-memory DeepLynx that records file uploads and item updates.
+
+    ``client`` stands in for ``AsyncStorageClient``: every client it builds
+    shares this one store, so a test sees the calls of all uploads in order.
+    """
+
+    def __init__(self) -> None:
+        self.uploads: list[str] = []
+        self.upload_descriptions: list[str] = []
+        self.item_updates: dict[int, ItemUpdate] = {}
+        self._next_id = 100
+        self.files = self
+        self.items = _FakeDeepLynxItems(self)
+
+    def client(self, config: ConnectionConfig) -> "_FakeDeepLynx":
+        return self
+
+    async def __aenter__(self) -> "_FakeDeepLynx":
+        return self
+
+    async def __aexit__(self, *exc_info) -> None:
+        return None
+
+    async def upload(self, file_path, *, name: str, description: str) -> FileMetadata:
+        self.uploads.append(name)
+        self.upload_descriptions.append(description)
+        self._next_id += 1
+        return FileMetadata(id=self._next_id, name=name, description=description, size=3)
+
+
+class _FakeDeepLynxItems:
+    def __init__(self, store: _FakeDeepLynx) -> None:
+        self._store = store
+
+    async def get(self, item_id: int) -> Item:
+        now = datetime.now(timezone.utc)
+        return Item(id=item_id, name="uploaded", created_at=now, updated_at=now)
+
+    async def update(self, item_id: int, update: ItemUpdate) -> Item:
+        self._store.item_updates[item_id] = update
+        now = datetime.now(timezone.utc)
+        return Item(id=item_id, name=update.name or "", created_at=now, updated_at=now)
+
+    async def add_tags(self, item_id: int, tags: list[str]) -> None:
+        return None
+
+
+@pytest.fixture
+def fake_deeplynx(monkeypatch) -> _FakeDeepLynx:
+    store = _FakeDeepLynx()
+    monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", store.client)
+    return store
+
+
+def _deeplynx_config() -> ConnectionConfig:
+    return ConnectionConfig(organization_id=1, project_id=2, jwt_token="test-token")
 
 
 def _extract_text_part(event) -> str:
@@ -428,3 +491,233 @@ def test_get_artifact_file_path_downloads_fsspec_uri_to_cache(tmp_path):
 
     assert path.exists()
     assert path.read_bytes() == b"hello"
+
+
+async def test_deeplynx_same_name_artifacts_get_distinct_names(fake_deeplynx, tmp_path):
+    """Covers REQ-010-17 and BEH-010-04."""
+    agent = _DummyAgent(agent_name="Test Agent")
+    context = MagicMock(spec=RequestContext)
+    context.task_id = "task-dl"
+    context.context_id = "conv-dl"
+    queue = AsyncMock(spec=EventQueue)
+    file_path = tmp_path / "report.svg"
+    file_path.write_text("<svg/>")
+
+    references = [
+        await agent.send_deeplynx_artifact(
+            context=context,
+            event_queue=queue,
+            file_path=file_path,
+            name="report.svg",
+            description="Rendered report",
+            storage_config=_deeplynx_config(),
+            mime_type="image/svg+xml",
+        )
+        for _ in range(3)
+    ]
+
+    expected = ["report.svg", "report-2.svg", "report-3.svg"]
+    assert fake_deeplynx.uploads == expected
+    for reference, name in zip(references, expected):
+        item_id = reference.metadata["deeplynx_item_id"]
+        assert fake_deeplynx.item_updates[item_id].name == name
+        assert reference.name == name
+    assert len({reference.artifact_id for reference in references}) == 3
+
+    for reference, name in zip(references, expected):
+        resolved = agent.artifact_registry.resolve_by_name("conv-dl", name)
+        assert resolved is not None, name
+        assert resolved.artifact_id == reference.artifact_id
+
+    emitted = [call.args[0].artifact.name for call in queue.enqueue_event.call_args_list]
+    assert emitted == expected
+
+
+class _YieldingFakeDeepLynx(_FakeDeepLynx):
+    """``_FakeDeepLynx`` whose upload yields, so concurrent sends interleave."""
+
+    async def upload(self, file_path, *, name: str, description: str) -> FileMetadata:
+        await asyncio.sleep(0)
+        return await super().upload(file_path, name=name, description=description)
+
+
+async def test_deeplynx_concurrent_same_name_artifacts_get_distinct_names(monkeypatch, tmp_path):
+    """Covers REQ-010-18."""
+    store = _YieldingFakeDeepLynx()
+    monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", store.client)
+    agent = _DummyAgent(agent_name="Test Agent")
+    context = MagicMock(spec=RequestContext)
+    context.task_id = "task-dl-concurrent"
+    context.context_id = "conv-dl-concurrent"
+    queue = AsyncMock(spec=EventQueue)
+    file_path = tmp_path / "report.svg"
+    file_path.write_text("<svg/>")
+
+    references = await asyncio.gather(
+        *(
+            agent.send_deeplynx_artifact(
+                context=context,
+                event_queue=queue,
+                file_path=file_path,
+                name="report.svg",
+                description="Rendered report",
+                storage_config=_deeplynx_config(),
+                mime_type="image/svg+xml",
+            )
+            for _ in range(3)
+        )
+    )
+
+    expected = {"report.svg", "report-2.svg", "report-3.svg"}
+    assert len(store.uploads) == 3
+    assert set(store.uploads) == expected
+    assert {reference.name for reference in references} == expected
+    for name in expected:
+        assert agent.artifact_registry.resolve_by_name("conv-dl-concurrent", name) is not None
+    assert agent._pending_artifact_names == set()
+
+
+async def test_deeplynx_requested_name_kept_in_metadata(fake_deeplynx, tmp_path):
+    """Covers REQ-010-19."""
+    agent = _DummyAgent(agent_name="Test Agent")
+    context = MagicMock(spec=RequestContext)
+    context.task_id = "task-dl-requested"
+    context.context_id = "conv-dl-requested"
+    queue = AsyncMock(spec=EventQueue)
+    file_path = tmp_path / "report.svg"
+    file_path.write_text("<svg/>")
+
+    first, second = [
+        await agent.send_deeplynx_artifact(
+            context=context,
+            event_queue=queue,
+            file_path=file_path,
+            name="report.svg",
+            description="Rendered report",
+            storage_config=_deeplynx_config(),
+            mime_type="image/svg+xml",
+        )
+        for _ in range(2)
+    ]
+
+    first_properties = fake_deeplynx.item_updates[first.metadata["deeplynx_item_id"]].properties
+    assert first.name == "report.svg"
+    assert "requested_name" not in first_properties
+    assert "requested_name" not in first.metadata
+
+    second_properties = fake_deeplynx.item_updates[second.metadata["deeplynx_item_id"]].properties
+    assert second.name == "report-2.svg"
+    assert second_properties["requested_name"] == "report.svg"
+    assert second.metadata["requested_name"] == "report.svg"
+
+
+# Each case covers REQ-010-17: a list of (conversation, requested name) sends and the
+# effective names the sends get, in order.
+@pytest.mark.parametrize(
+    ("sends", "expected"),
+    [
+        pytest.param(
+            [("conv-a", "report.svg"), ("conv-a", "Report.svg")],
+            ["report.svg", "Report-2.svg"],
+            id="REQ-010-17-normalized-collision",
+        ),
+        pytest.param(
+            [("conv-a", "notes"), ("conv-a", "notes")],
+            ["notes", "notes-2"],
+            id="REQ-010-17-no-extension",
+        ),
+        pytest.param(
+            [("conv-a", "report.svg"), ("conv-b", "report.svg")],
+            ["report.svg", "report.svg"],
+            id="REQ-010-17-per-conversation",
+        ),
+        pytest.param(
+            [("conv-a", "report.svg"), ("conv-a", "summary.svg")],
+            ["report.svg", "summary.svg"],
+            id="REQ-010-17-distinct-names",
+        ),
+    ],
+)
+async def test_deeplynx_unique_name_rules(fake_deeplynx, tmp_path, sends, expected):
+    """Covers REQ-010-17."""
+    agent = _DummyAgent(agent_name="Test Agent")
+    queue = AsyncMock(spec=EventQueue)
+    file_path = tmp_path / "artifact.bin"
+    file_path.write_text("abc")
+
+    references = []
+    for conversation_id, name in sends:
+        context = MagicMock(spec=RequestContext)
+        context.task_id = f"task-{conversation_id}"
+        context.context_id = conversation_id
+        references.append(
+            await agent.send_deeplynx_artifact(
+                context=context,
+                event_queue=queue,
+                file_path=file_path,
+                name=name,
+                description="Rendered artifact",
+                storage_config=_deeplynx_config(),
+            )
+        )
+
+    assert fake_deeplynx.uploads == expected
+    assert [reference.name for reference in references] == expected
+    for reference, name in zip(references, expected):
+        assert fake_deeplynx.item_updates[reference.metadata["deeplynx_item_id"]].name == name
+    for (conversation_id, _), reference, name in zip(sends, references, expected):
+        resolved = agent.artifact_registry.resolve_by_name(conversation_id, name)
+        assert resolved is not None, name
+        assert resolved.artifact_id == reference.artifact_id
+    emitted = [call.args[0].artifact.name for call in queue.enqueue_event.call_args_list]
+    assert emitted == expected
+
+
+@pytest.mark.parametrize(
+    ("length", "capped"),
+    [
+        pytest.param(600, True, id="REQ-010-20-long-capped"),
+        pytest.param(250, False, id="REQ-010-20-at-limit-unchanged"),
+    ],
+)
+async def test_deeplynx_description_capped_to_limit(fake_deeplynx, tmp_path, length, capped):
+    """Covers REQ-010-20."""
+    agent = _DummyAgent(agent_name="Test Agent")
+    context = MagicMock(spec=RequestContext)
+    context.task_id = "task-dl-description"
+    context.context_id = "conv-dl-description"
+    queue = AsyncMock(spec=EventQueue)
+    file_path = tmp_path / "report.svg"
+    file_path.write_text("<svg/>")
+    description = ("Rendered report of the reactor run. " * 20)[:length]
+    assert len(description) == length
+
+    reference = await agent.send_deeplynx_artifact(
+        context=context,
+        event_queue=queue,
+        file_path=file_path,
+        name="report.svg",
+        description=description,
+        storage_config=_deeplynx_config(),
+        mime_type="image/svg+xml",
+    )
+
+    [uploaded_description] = fake_deeplynx.upload_descriptions
+    update = fake_deeplynx.item_updates[reference.metadata["deeplynx_item_id"]]
+    if capped:
+        for sent in (uploaded_description, update.description):
+            assert len(sent) <= 250
+            assert sent.endswith("…")
+            assert description.startswith(sent[:-1])
+        assert update.properties["full_description"] == description
+    else:
+        assert uploaded_description == description
+        assert update.description == description
+        assert "full_description" not in update.properties
+
+    assert reference.description == description
+    resolved = agent.artifact_registry.resolve_by_name("conv-dl-description", "report.svg")
+    assert resolved is not None
+    assert resolved.description == description
+    [call] = queue.enqueue_event.call_args_list
+    assert call.args[0].artifact.description == description

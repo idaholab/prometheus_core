@@ -68,7 +68,7 @@ from a2a.types import (
 )
 from .middleware import A2AContentSizeLimitMiddleware, BearerTokenMiddleware
 from .artifact_resolver import ArtifactResolver
-from .artifacts import ArtifactReference, ArtifactRegistry
+from .artifacts import ArtifactReference, ArtifactRegistry, _normalize_name
 from .context_state import ContextStateStore
 from .debug_routes import add_debug_chat_route
 from .events import (
@@ -90,6 +90,16 @@ import uvicorn
 
 logger = logging.getLogger(__name__)
 _WORKFLOW_FILE_SUFFIXES = {".json", ".yaml", ".yml"}
+# DeepLynx rejects a record description longer than 250 characters with HTTP 400
+# (observed on PUT /records/{id}); this mirrors that server-side limit, not a setting.
+DEEPLYNX_DESCRIPTION_MAX_CHARS = 250
+
+
+def _deeplynx_description(description: str) -> str:
+    """Return ``description`` capped at ``DEEPLYNX_DESCRIPTION_MAX_CHARS`` with a ``…`` marker."""
+    if len(description) <= DEEPLYNX_DESCRIPTION_MAX_CHARS:
+        return description
+    return description[: DEEPLYNX_DESCRIPTION_MAX_CHARS - 1].rstrip() + "…"
 
 
 class _TrackedEventQueue:
@@ -651,6 +661,9 @@ class PrometheusAgent:
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
         self.context_state_store = ContextStateStore()
+        # (conversation_id, normalized name) pairs held by in-flight DeepLynx uploads.
+        self._pending_artifact_names: set[tuple[str, str]] = set()
+        self._pending_artifact_names_lock = asyncio.Lock()
 
     def get_raw_agent_card(self) -> Dict[str, Any]:
         """Return the canonical raw agent-card payload used for planning metadata."""
@@ -1102,6 +1115,33 @@ class PrometheusAgent:
         if not reference.producer_agent_id:
             reference.producer_agent_id = self._producer_agent_id
         return self.artifact_registry.register(reference)
+
+    async def _reserve_unique_artifact_name(self, conversation_id: str, name: str) -> str:
+        """Reserve and return an artifact name that is free in one conversation.
+
+        Returns ``name`` when no catalog entry or in-flight upload of the
+        conversation uses it, else the first free ``<stem>-<n><suffix>`` with
+        n = 2, 3, ... 1000, else ``<stem>-<8 hex chars><suffix>``. The caller
+        releases the reservation by discarding
+        ``(conversation_id, _normalize_name(result))`` from
+        ``_pending_artifact_names``.
+        """
+        suffix = Path(name).suffix
+        stem = name[: len(name) - len(suffix)]
+        candidates = [name] + [f"{stem}-{n}{suffix}" for n in range(2, 1001)]
+        async with self._pending_artifact_names_lock:
+            chosen = next(
+                (
+                    candidate
+                    for candidate in candidates
+                    if (conversation_id, _normalize_name(candidate))
+                    not in self._pending_artifact_names
+                    and self.artifact_registry.resolve_by_name(conversation_id, candidate) is None
+                ),
+                f"{stem}-{uuid.uuid4().hex[:8]}{suffix}",
+            )
+            self._pending_artifact_names.add((conversation_id, _normalize_name(chosen)))
+        return chosen
 
     async def _emit_text_artifact(
         self,
@@ -1776,6 +1816,21 @@ class PrometheusAgent:
 
             deeplynx://organizations/{org_id}/projects/{proj_id}/items/{item_id}
 
+        Artifact names are unique within the conversation. The first artifact
+        keeps ``name``; when a catalog entry or an in-flight upload of the same
+        conversation already has it (case- and whitespace-insensitive), the
+        artifact gets the first free ``<stem>-<n><suffix>`` with n = 2, 3, ...
+        (``report.svg``, ``report-2.svg``, ``report-3.svg``). That effective name
+        goes to the DeepLynx file, the item update, the catalog entry and the
+        emitted artifact. When it differs from ``name``, the item ``properties``
+        and the reference ``metadata`` carry ``requested_name``.
+
+        DeepLynx accepts at most ``DEEPLYNX_DESCRIPTION_MAX_CHARS`` (250)
+        characters of description. A longer ``description`` goes to the DeepLynx
+        file and item as its first 249 characters, right-trimmed, plus ``…``, and
+        the item ``properties`` carry the original text as ``full_description``.
+        The catalog entry and the emitted artifact keep the full description.
+
         Args:
             file_path: Local path of the file to upload.
             name: Human-readable artifact name.
@@ -1795,65 +1850,77 @@ class PrometheusAgent:
             ``deeplynx_item_id`` and ``deeplynx_file_id`` for quick resolution.
         """
         resolved_mime = mime_type or "application/octet-stream"
+        conversation_id = self._context_conversation_id(context)
+        effective_name = await self._reserve_unique_artifact_name(conversation_id, name)
+        deeplynx_description = _deeplynx_description(description)
+        try:
+            async with AsyncStorageClient(storage_config) as client:
+                file_meta = await client.files.upload(
+                    file_path,
+                    name=effective_name,
+                    description=deeplynx_description,
+                )
 
-        async with AsyncStorageClient(storage_config) as client:
-            file_meta = await client.files.upload(
-                file_path,
-                name=name,
-                description=description,
+                # File upload creates a record in DeepLynx; update its properties to
+                # carry artifact metadata rather than creating a separate item record.
+                existing = await client.items.get(file_meta.id)
+                merged_properties: Dict[str, Any] = dict(existing.properties or {})
+                merged_properties.update(
+                    {
+                        "mime_type": resolved_mime,
+                        "file_id": file_meta.id,
+                    }
+                )
+                if json_type:
+                    merged_properties["json_type"] = json_type
+                if file_meta.uri:
+                    merged_properties["file_uri"] = file_meta.uri
+                if metadata:
+                    merged_properties.update(metadata)
+                if effective_name != name:
+                    merged_properties["requested_name"] = name
+                if deeplynx_description != description:
+                    merged_properties["full_description"] = description
+
+                await client.items.update(
+                    file_meta.id,
+                    ItemUpdate(
+                        name=effective_name,
+                        description=deeplynx_description,
+                        properties=merged_properties,
+                        class_id=existing.class_id,
+                        original_id=existing.original_id,
+                    ),
+                )
+                if tags:
+                    await client.items.add_tags(file_meta.id, list(tags))
+
+            uri = (
+                f"deeplynx://organizations/{storage_config.organization_id}"
+                f"/projects/{storage_config.project_id}"
+                f"/items/{file_meta.id}"
             )
-
-            # File upload creates a record in DeepLynx; update its properties to
-            # carry artifact metadata rather than creating a separate item record.
-            existing = await client.items.get(file_meta.id)
-            merged_properties: Dict[str, Any] = dict(existing.properties or {})
-            merged_properties.update(
-                {
-                    "mime_type": resolved_mime,
-                    "file_id": file_meta.id,
-                }
-            )
-            if json_type:
-                merged_properties["json_type"] = json_type
-            if file_meta.uri:
-                merged_properties["file_uri"] = file_meta.uri
-            if metadata:
-                merged_properties.update(metadata)
-
-            await client.items.update(
-                file_meta.id,
-                ItemUpdate(
-                    name=name,
-                    description=description,
-                    properties=merged_properties,
-                    class_id=existing.class_id,
-                    original_id=existing.original_id,
-                ),
-            )
-            if tags:
-                await client.items.add_tags(file_meta.id, list(tags))
-
-        uri = (
-            f"deeplynx://organizations/{storage_config.organization_id}"
-            f"/projects/{storage_config.project_id}"
-            f"/items/{file_meta.id}"
-        )
-        return await self.send_artifact_reference(
-            context=context,
-            event_queue=event_queue,
-            name=name,
-            description=description,
-            uri=uri,
-            mime_type=resolved_mime,
-            size_bytes=file_meta.size,
-            artifact_id=artifact_id,
-            tags=tags,
-            metadata={
+            reference_metadata: Dict[str, Any] = {
                 **(metadata or {}),
                 "deeplynx_item_id": file_meta.id,
                 "deeplynx_file_id": file_meta.id,
-            },
-        )
+            }
+            if effective_name != name:
+                reference_metadata["requested_name"] = name
+            return await self.send_artifact_reference(
+                context=context,
+                event_queue=event_queue,
+                name=effective_name,
+                description=description,
+                uri=uri,
+                mime_type=resolved_mime,
+                size_bytes=file_meta.size,
+                artifact_id=artifact_id,
+                tags=tags,
+                metadata=reference_metadata,
+            )
+        finally:
+            self._pending_artifact_names.discard((conversation_id, _normalize_name(effective_name)))
 
     async def send_text_artifact(
         self,

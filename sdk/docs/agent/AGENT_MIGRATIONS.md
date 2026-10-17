@@ -5,6 +5,44 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.14.0
+
+### Read the Effective Name from the DeepLynx Artifact Reference
+
+`PrometheusAgent.send_deeplynx_artifact(...)` now gives each artifact a name that is unique
+in its conversation. The signature does not change. The requested `name` stays when no
+catalog entry or in-flight upload of the conversation uses it. Otherwise the artifact gets
+the first free `<stem>-<n><ext>` with n = 2, 3, ... (`report.svg`, `report-2.svg`). The
+collision check ignores case, leading and trailing whitespace, and repeated inner whitespace. The effective name goes to the
+DeepLynx file, the item, the catalog entry and the emitted A2A artifact. When a suffix is
+added, the DeepLynx item `properties` and `ArtifactReference.metadata` carry
+`requested_name`, which replaces a caller value under that key. Concurrent calls in one
+conversation never get the same name. The DeepLynx file and item get a description of at most
+250 characters (`DEEPLYNX_DESCRIPTION_MAX_CHARS`). A longer `description` is cut to fit, and
+the item `properties` keep the original text as `full_description`. The catalog entry and the
+A2A artifact keep the full text.
+
+Migration steps:
+
+1. Read the name from the returned `ArtifactReference.name`, not from the `name` you passed.
+2. To match on the requested name, read `reference.metadata.get("requested_name", reference.name)`.
+3. Do not put a `requested_name` key in `metadata`; the SDK overwrites it when it adds a suffix.
+
+Agents that do not use the name after the call need no change.
+
+```python
+reference = await self.send_deeplynx_artifact(
+    context,
+    event_queue,
+    file_path=path,
+    name="report.svg",
+    description="Summary plot",
+    storage_config=config,
+)
+shown_name = reference.name  # "report-2.svg" when "report.svg" is taken
+requested = reference.metadata.get("requested_name", reference.name)
+```
+
 ## 0.13.0
 
 ### Use the Built-in LLM Tool-Calling Helpers
