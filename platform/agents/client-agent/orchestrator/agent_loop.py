@@ -357,15 +357,13 @@ def _call_record(call: ToolCall) -> Dict[str, Any]:
     }
 
 
-def begin_user_turn(
+def upload_note(
     state: Dict[str, Any],
-    query: str,
-    *,
     uploaded_artifact_ids: Optional[List[str]] = None,
     received_files: Optional[List[Dict[str, Any]]] = None,
-) -> None:
-    """Append a user message and reset per-turn bookkeeping."""
-    content = str(query or "").strip()
+) -> str:
+    """The transcript note that names this message's uploads; "" without uploads."""
+    note = ""
     catalog = {
         artifact["artifact_id"]: artifact
         for artifact in summarize_artifacts_for_context((state.get("context") or {}).get("artifacts"))
@@ -375,10 +373,22 @@ def begin_user_turn(
         for artifact_id in uploaded_artifact_ids or []
     ]
     if uploaded:
-        content += "\n\n[Files uploaded with this message: " + ", ".join(uploaded) + "]"
+        note += "\n\n[Files uploaded with this message: " + ", ".join(uploaded) + "]"
     unstored = [str(item.get("name") or "") for item in received_files or [] if isinstance(item, dict)]
     if any(unstored):
-        content += "\n\n[Files received but not stored: " + ", ".join(filter(None, unstored)) + "]"
+        note += "\n\n[Files received but not stored: " + ", ".join(filter(None, unstored)) + "]"
+    return note
+
+
+def begin_user_turn(
+    state: Dict[str, Any],
+    query: str,
+    *,
+    uploaded_artifact_ids: Optional[List[str]] = None,
+    received_files: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Append a user message and reset per-turn bookkeeping."""
+    content = str(query or "").strip() + upload_note(state, uploaded_artifact_ids, received_files)
     messages = state.setdefault("llm_messages", [])
     messages.append({"role": "user", "content": content or "(empty message)"})
     state["llm_messages"] = trim_transcript(messages)
@@ -754,8 +764,15 @@ def sensitive_fields(state: Dict[str, Any]) -> set[str]:
     }
 
 
-def apply_reply(state: Dict[str, Any], text: str) -> None:
+def apply_reply(
+    state: Dict[str, Any],
+    text: str,
+    *,
+    uploaded_artifact_ids: Optional[List[str]] = None,
+    received_files: Optional[List[Dict[str, Any]]] = None,
+) -> None:
     """A free-text reply answers ask_user and supersedes every other unfinished call."""
+    text += upload_note(state, uploaded_artifact_ids, received_files)
     for call in state.get("pending_calls") or []:
         if call["status"] == "done":
             continue

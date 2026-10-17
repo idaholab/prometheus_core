@@ -16,8 +16,9 @@ On each request that carries `uploaded_files`, the orchestrator calls
 `infer_file_descriptions` (one LLM call) to produce a description for every
 file, then `upload_files_to_deeplynx` to store them and register artifact
 references.  The resulting artifact IDs travel as `newly_uploaded_artifact_ids`
-on the request; the orchestration loop names them in the turn's user message so
-the model can pass them to skills that take artifact references.
+on the request; `agent_loop.upload_note` names them in the user message or in
+the reply to a pending call, so the model can pass them to skills that take
+artifact references.
 
 See docs/dev-docs/file-uploads.md for the full workflow description.
 """
