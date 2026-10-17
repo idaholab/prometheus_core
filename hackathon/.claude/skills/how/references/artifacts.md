@@ -67,10 +67,8 @@ Deck 03, slides 18-20. Free ports 3000, 5000, 5432 first.
 2. Open http://localhost:3000, pick "INL – default organization" (id 1), click "+ Project". The URL shows the project id.
 3. Person icon › Settings › API Keys › "+ Generate New". The secret shows once. Never paste it into the chat.
 4. In `prometheus_platform/.env` (your editor): `DEEPLYNX_KEY`, `DEEPLYNX_SECRET`,
-   `DEEPLYNX_BASE_URL=http://host.docker.internal:5000/api/v1`, `DEEPLYNX_ORG_ID=1`, `DEEPLYNX_PROJECT_ID`.
-5. Linux only: in `docker-compose.override.yml`, give `backend` and `client-agent` (and your agent)
-   `extra_hosts: ["host.docker.internal:host-gateway"]`.
-6. `make down` in the agent folder, then `make restart` in the platform (it empties the registry).
-7. Copy the values into the agent, printing nothing:
+   `DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1`, `DEEPLYNX_ORG_ID=1`, `DEEPLYNX_PROJECT_ID`.
+5. `make down` in the agent folder, then `make restart` in the platform (it empties the registry).
+6. Copy the values into the agent, printing nothing:
    `cd <agent> && { grep -v '^DEEPLYNX_' .env; grep '^DEEPLYNX_' <platform>/.env; } > .env.new && mv .env.new .env`.
-8. `make up` in the agent folder. Upload a small file in a fresh chat; `/artifacts` lists it.
+7. `make up` in the agent folder. Upload a small file in a fresh chat; `/artifacts` lists it.

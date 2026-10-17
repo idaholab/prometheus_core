@@ -726,11 +726,10 @@ EXTERNAL_AGENT_HOST=my-host.example.gov EXTERNAL_AGENT_PORT=8042 make up
 ```
 
 If the platform will call the agent through a port published on the same Docker
-host, `EXTERNAL_AGENT_HOST` may be `host.docker.internal` as long as the platform
-containers can resolve that name. `host.docker.internal` means "the host machine
-from inside a container." Docker Desktop provides it automatically. On Linux,
-the agent Makefile includes `docker-compose.linux.yml` in external mode, mapping
-that name to Docker's host gateway for the agent container.
+host, set `EXTERNAL_AGENT_HOST=prometheus.host.internal`. That name means "the
+host machine from inside a container": every platform and agent compose service
+maps it to Docker's host gateway, on macOS and Linux alike. It does not resolve
+on the host itself.
 
 The Makefile includes `docker-compose.net_external.yml`:
 
@@ -752,7 +751,7 @@ that the platform should call. If exactly one of `EXTERNAL_AGENT_HOST` or
 
 In external port mode, make sure `REGISTRY_URL` and `REDIS_URL` point to
 hostnames that are reachable from inside the agent container, such as
-`host.docker.internal` or a remote platform host. Do not use `localhost` for
+`prometheus.host.internal` or a remote platform host. Do not use `localhost` for
 host-published platform services from inside the container; inside the container,
 `localhost` means the agent container itself.
 

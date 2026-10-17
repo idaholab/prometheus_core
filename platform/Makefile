@@ -4,8 +4,6 @@
 # Any agent directory that contains a docker-compose.yml is included automatically.
 # To exclude an agent, remove its directory.
 
-UNAME := $(shell uname)
-
 # Load variables from .env if present (no error if missing). Lets settings like
 # DEBUG_AGENTS live alongside the rest of the project config.
 -include .env
@@ -106,20 +104,6 @@ LITELLM_DB_VOLUME := $(COMPOSE_PROJECT_NAME)_litellm-db-data
 .PHONY: help
 help: ##@ (Default) Print listing of key targets with their descriptions
 	@printf "\nUsage: make <command>\n"
-ifeq ($(UNAME), Linux)
-	@grep -F -h "##@" $(MAKEFILE_LIST) | grep -F -v grep -F | sed -e 's/\\$$//' | awk 'BEGIN {FS = ":*[[:space:]]*##@[[:space:]]*"}; \
-	{ \
-			if($$2 == "") \
-					pass; \
-			else if($$0 ~ /^#/) \
-					printf "\n\n%s\n", $$2; \
-			else if($$1 == "") \
-					printf "     %-20s%s\n", "", $$2; \
-			else \
-					printf "\n    \033[34m%-20s\033[0m %s", $$1, $$2; \
-	}'
-	@printf "\n\n"
-else ifeq ($(UNAME), Darwin)
 	@grep -F -h "##@" $(MAKEFILE_LIST) | grep -F -v grep -F | sed -e 's/\\$$//' | awk 'BEGIN {FS = ":*[[:space:]]*##@[[:space:]]*"}; \
 	{ \
 			if($$2 == "") \
@@ -132,9 +116,6 @@ else ifeq ($(UNAME), Darwin)
 					printf "\n    \033[34m%-20s\033[0m %s", $$1, $$2; \
 	}'
 	@printf "\n\n"
-else
-	@printf "\nmake help not supported on $(UNAME)\n"
-endif
 
 ##@
 ##@ Prerequisites

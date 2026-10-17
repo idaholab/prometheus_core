@@ -92,8 +92,7 @@ make logs        # tail logs (add SERVICE=<name> for one service)
 make down        # stop and remove
 ```
 
-These wrap `docker compose` and, on Linux, layer in `docker-compose.linux.yml`
-only when external mode is selected.
+These wrap `docker compose` and layer in the network-mode override.
 
 By default, `make` includes `docker-compose.net_internal.yml`, so the agent joins
 the platform's Docker network. Start the platform first, then run `make up` or
@@ -105,10 +104,9 @@ To expose the agent port outside Docker instead, set both external mode variable
 EXTERNAL_AGENT_HOST=my-host.example.gov EXTERNAL_AGENT_PORT=8042 make up
 ```
 
-`host.docker.internal` is Docker's hostname for "the host machine from inside a
-container." Docker Desktop provides it automatically. On Linux, external mode
-also includes `docker-compose.linux.yml`, which maps that name to Docker's host
-gateway so the agent container can call host-published platform services.
+`prometheus.host.internal` is the hostname for "the host machine from inside a
+container." `docker-compose.yml` maps it to Docker's host gateway on every OS,
+so the agent container can call host-published platform services.
 
 If exactly one of `EXTERNAL_AGENT_HOST` or `EXTERNAL_AGENT_PORT` is set, `make`
 stops before running Compose.

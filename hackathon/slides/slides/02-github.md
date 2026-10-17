@@ -834,7 +834,6 @@ agent-template/
     ├── docker-compose.yml
     ├── docker-compose.net_internal.yml
     ├── docker-compose.net_external.yml
-    ├── docker-compose.linux.yml
     ├── .env.example · pyproject.toml
     ├── prompts/  workflows/
     └── tests/

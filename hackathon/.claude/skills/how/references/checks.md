@@ -119,7 +119,7 @@ with StorageClient(cfg) as c:
     print("OK", cfg.base_url, len(c.items.list(page_size=5).items), "items")
 EOF
 ```
-- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (key and secret swapped or cut); connection refused to `host.docker.internal` (Linux `extra_hosts`; local DeepLynx stopped; AirPlay on :5000); `ValueError` (empty ids).
+- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (key and secret swapped or cut); connection refused to `prometheus.host.internal` (local DeepLynx stopped; host firewall; AirPlay on :5000); `ValueError` (empty ids).
 ### deeplynx-agent
 Tags: diagnose. Fix: yes. Run the `deeplynx-backend` command with `docker exec -i <container>`. Expect `OK` and the same base URL; a `deeplynx://` URI resolves only with the same org and project. Fix: `agent-env-sync`.
 

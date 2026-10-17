@@ -472,7 +472,7 @@ docker compose up          # add -d to detach
 #### It runs next to the platform
 
 {.small}
-DeepLynx has its own compose project and network (`nexus-network`). The platform containers reach it through your host at `host.docker.internal:5000`.
+DeepLynx has its own compose project and network (`nexus-network`). The platform containers reach it through your host at `prometheus.host.internal:5000`.
 :::
 
 ::: callout warn
@@ -537,7 +537,7 @@ Pulled new DeepLynx changes? `docker compose up --build`.
 ```text {.sm}
 DEEPLYNX_KEY=…
 DEEPLYNX_SECRET=…
-DEEPLYNX_BASE_URL=http://host.docker.internal:5000/api/v1/
+DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1/
 DEEPLYNX_ORG_ID=1
 DEEPLYNX_PROJECT_ID=1
 ```
@@ -1171,7 +1171,7 @@ No DeepLynx configured → uploads show "DeepLynx storage is not configured" and
 {.sm .wrap-code}
 | Symptom | Fix |
 |---|---|
-| Connection refused to `host.docker.internal` (Linux) | Docker Engine on Linux has no `host.docker.internal` by default. Add `extra_hosts: ["host.docker.internal:host-gateway"]` via a `docker-compose.override.yml`. |
+| Connection refused to `prometheus.host.internal` | DeepLynx must listen on `0.0.0.0:5000`, and on Linux the host firewall must allow the Docker bridge. `host.docker.internal` does not exist on Linux; use `prometheus.host.internal`. |
 | `AuthenticationError` / 401 | Key and secret swapped, or the secret was not copied completely. Generate a new key. |
 | `ValueError: invalid literal for int() with base 10: ''` | `DEEPLYNX_ORG_ID` / `_PROJECT_ID` are empty (compose passes empty strings). Set them. |
 | "Failed to get data source ID…" | The project has no default data source. Set `DEEPLYNX_DATA_SOURCE_ID` (list them with `examples/list_datasources.py` in prometheus_api). |

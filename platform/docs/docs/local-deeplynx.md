@@ -49,12 +49,12 @@ A popup will appear with a _key_ and a _secret_ — copy both now. This is the o
 
 ## Configure the platform to use the local DeepLynx
 
-As noted above, the API (not the web UI on port 3000) is exposed on the host at http://0.0.0.0:5000/api/v1. From the view of the Prometheus platform that host is available at host.docker.internal, so set
+As noted above, the API (not the web UI on port 3000) is exposed on the host at http://0.0.0.0:5000/api/v1. From inside the Prometheus platform containers that host is available as `prometheus.host.internal` (mapped to Docker's host gateway on macOS and Linux alike), so set
 
 ```
 DEEPLYNX_KEY=...
 DEEPLYNX_SECRET=...
-DEEPLYNX_BASE_URL=http://host.docker.internal:5000/api/v1/
+DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1/
 DEEPLYNX_ORG_ID=1
 DEEPLYNX_PROJECT_ID=1
 ```

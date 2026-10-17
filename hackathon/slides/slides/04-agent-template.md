@@ -654,7 +654,6 @@ hello-world/
 ├── docker-compose.yml        # service + env
 ├── docker-compose.net_internal.yml   # join platform network
 ├── docker-compose.net_external.yml   # publish a host port
-├── docker-compose.linux.yml  # host.docker.internal on Linux
 ├── Makefile                  # up, up-fg, down, logs
 ├── .env.example  (.env)
 └── README.md
@@ -980,8 +979,8 @@ Restart the agent (re-registers), then refresh discovery or restart the client-a
 | Mode | How | Registered URL / notes |
 |---|---|---|
 | **Docker, internal network**<br><span class="small">(recommended)</span> | `make up` in the agent dir. It joins `prometheus_platform_agent-network` via `docker-compose.net_internal.yml`. | `http://<service>:8000`. `REGISTRY_URL`, `REDIS_URL`, and `JWKS_URL` resolve by service name. Start the platform first. {.hl} |
-| **Docker, external port** | `EXTERNAL_AGENT_HOST=host.docker.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://host.docker.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `host.docker.internal:9977/6379/8600`. Linux adds `docker-compose.linux.yml`. |
-| **Host Python**<br><span class="small">(fastest edit loop)</span> | `python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:9977`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `EXTERNAL_AGENT_URL=http://host.docker.internal:8000` |
+| **Docker, external port** | `EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `prometheus.host.internal:9977/6379/8600`. |
+| **Host Python**<br><span class="small">(fastest edit loop)</span> | `python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:9977`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000` |
 | **In-tree** | Copy into `prometheus_core/platform/agents/<name>/`, then `make generate && make up` in `platform/` | Auto-included (one directory level). Uses the platform's `prometheus_api:local`. Copy `agents/synthesis-agent/docker-compose.yml` as the model. |
 
 :::: grid 2

@@ -652,7 +652,7 @@ docker compose up          <span class="c"># add -d to detach</span></pre>
 <div class="col">
 <div class="card">
 <h4>It runs next to the platform</h4>
-<p class="small">DeepLynx has its own compose project and network (<code>nexus-network</code>). The platform containers reach it through your host at <code>host.docker.internal:5000</code>.</p>
+<p class="small">DeepLynx has its own compose project and network (<code>nexus-network</code>). The platform containers reach it through your host at <code>prometheus.host.internal:5000</code>.</p>
 </div>
 
 <div class="callout warn">
@@ -705,7 +705,7 @@ docker compose up          <span class="c"># add -d to detach</span></pre>
 <p class="small"><strong>⑥</strong> In <code>prometheus_core/platform/.env</code>:</p>
 <pre class="sm">DEEPLYNX_KEY=…
 DEEPLYNX_SECRET=…
-DEEPLYNX_BASE_URL=http://host.docker.internal:5000/api/v1/
+DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1/
 DEEPLYNX_ORG_ID=1
 DEEPLYNX_PROJECT_ID=1</pre>
 <p class="small">Then <code>make restart</code>. Copy the same values into your agent's <code>.env</code> (<code>setup_agent.py</code> copies every <code>DEEPLYNX_*</code> for you).</p>
@@ -1633,8 +1633,8 @@ No DeepLynx configured → uploads show &quot;DeepLynx storage is not configured
 </thead>
 <tbody>
 <tr>
-<td>Connection refused to <code>host.docker.internal</code> (Linux)</td>
-<td>Docker Engine on Linux has no <code>host.docker.internal</code> by default. Add <code>extra_hosts: [&quot;host.docker.internal:host-gateway&quot;]</code> via a <code>docker-compose.override.yml</code>.</td>
+<td>Connection refused to <code>prometheus.host.internal</code></td>
+<td>DeepLynx must listen on <code>0.0.0.0:5000</code>, and on Linux the host firewall must allow the Docker bridge. <code>host.docker.internal</code> does not exist on Linux; use <code>prometheus.host.internal</code>.</td>
 </tr>
 <tr>
 <td><code>AuthenticationError</code> / 401</td>

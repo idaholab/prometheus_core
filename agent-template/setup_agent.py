@@ -346,10 +346,10 @@ def write_agent_env(output_dir: Path, selected_values: dict[str, str]) -> None:
         [
             "",
             "# Uncomment this for external network mode",
-            "#EXTERNAL_AGENT_HOST=host.docker.internal",
+            "#EXTERNAL_AGENT_HOST=prometheus.host.internal",
             "#EXTERNAL_AGENT_PORT=8042",
-            "#REGISTRY_URL=http://host.docker.internal:9977",
-            "#REDIS_URL=redis://host.docker.internal:6379",
+            "#REGISTRY_URL=http://prometheus.host.internal:9977",
+            "#REDIS_URL=redis://prometheus.host.internal:6379",
         ]
     )
 

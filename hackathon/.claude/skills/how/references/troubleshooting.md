@@ -62,7 +62,7 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 | `AuthenticationError` or 401 from DeepLynx | Key and secret swapped or cut. Generate a new key. | [deeplynx-backend](checks.md#deeplynx-backend) |
 | `ValueError: invalid literal for int() with base 10: ''` | `DEEPLYNX_ORG_ID` or `DEEPLYNX_PROJECT_ID` is empty. | [deeplynx-env](checks.md#deeplynx-env) |
 | "Failed to get data source ID…" | Set `DEEPLYNX_DATA_SOURCE_ID` and add it to `environment:` (no compose file forwards it). | - |
-| Connection refused to `host.docker.internal` (Linux) | Add `extra_hosts: ["host.docker.internal:host-gateway"]` to the platform override and the agent compose (unverified). | [deeplynx-backend](checks.md#deeplynx-backend) |
+| Connection refused to `prometheus.host.internal` | Check DeepLynx listens on `0.0.0.0:5000` and the host firewall allows the Docker bridge. `host.docker.internal` does not exist on Linux; use `prometheus.host.internal`. | [deeplynx-backend](checks.md#deeplynx-backend) |
 | Nothing on :5000 (macOS) | The AirPlay Receiver holds it. Turn it off, or remap the port. | [ports-free](checks.md#ports-free) |
 | "<name> exceeds the <n> byte upload limit" | Larger than `PROMETHEUS_MAX_UPLOAD_BYTES` (100 MiB). | - |
 

@@ -807,7 +807,6 @@ printf &#x27;\n\n\n\n\n\nno\nyes\nyes\n&#x27; \
 ├── docker-compose.yml        # service + env
 ├── docker-compose.net_internal.yml   # join platform network
 ├── docker-compose.net_external.yml   # publish a host port
-├── docker-compose.linux.yml  # host.docker.internal on Linux
 ├── Makefile                  # up, up-fg, down, logs
 ├── .env.example  (.env)
 └── README.md</pre>
@@ -1239,13 +1238,13 @@ docker logs hello-world-agent <span class="n">2</span>&gt;&amp;<span class="n">1
 </tr>
 <tr>
 <td><strong>Docker, external port</strong></td>
-<td><code>EXTERNAL_AGENT_HOST=host.docker.internal EXTERNAL_AGENT_PORT=8042 make up</code></td>
-<td><code>EXTERNAL_AGENT_URL=http://host.docker.internal:8042</code>. Point <code>REGISTRY_URL</code>/<code>REDIS_URL</code>/<code>JWKS_URL</code> at <code>host.docker.internal:9977/6379/8600</code>. Linux adds <code>docker-compose.linux.yml</code>.</td>
+<td><code>EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up</code></td>
+<td><code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042</code>. Point <code>REGISTRY_URL</code>/<code>REDIS_URL</code>/<code>JWKS_URL</code> at <code>prometheus.host.internal:9977/6379/8600</code>.</td>
 </tr>
 <tr>
 <td><strong>Host Python</strong><br><span class="small">(fastest edit loop)</span></td>
 <td><code>python agent.py</code> in a venv with <code>prometheus_api</code> installed</td>
-<td>Set <code>REGISTRY_URL=http://localhost:9977</code>, <code>REDIS_URL=redis://localhost:6379</code>, <code>JWKS_URL=http://localhost:8600/.well-known/jwks.json</code>, <code>EXTERNAL_AGENT_URL=http://host.docker.internal:8000</code></td>
+<td>Set <code>REGISTRY_URL=http://localhost:9977</code>, <code>REDIS_URL=redis://localhost:6379</code>, <code>JWKS_URL=http://localhost:8600/.well-known/jwks.json</code>, <code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000</code></td>
 </tr>
 <tr>
 <td><strong>In-tree</strong></td>

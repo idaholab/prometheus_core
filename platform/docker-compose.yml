@@ -35,6 +35,13 @@ x-common-env: &common-env
   # credential behavior; "vault" activates per-user Vault policies.
   CREDENTIAL_BROKER: ${CREDENTIAL_BROKER:-env}
 
+# Containers reach services on the Docker host (e.g. a local DeepLynx) as
+# prometheus.host.internal. A name of our own, rather than host.docker.internal,
+# works the same on Docker Desktop (which predefines host.docker.internal and
+# rejects re-adding it) and on Linux Engine (which does not define it).
+x-host-gateway: &host-gateway
+  - "prometheus.host.internal:host-gateway"
+
 x-build-args: &prometheus-api-build-args
   PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
   PROMETHEUS_API_BASE_IMAGE_HASH: ${PROMETHEUS_API_BASE_IMAGE_HASH:-}
@@ -102,6 +109,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:v1.92.0
     container_name: litellm-proxy
+    extra_hosts: *host-gateway
     ports:
       - "${LITELLM_LOCAL_PORT}:4000"
     volumes:
@@ -148,6 +156,7 @@ services:
       args:
         <<: *prometheus-api-build-args
     container_name: client-agent
+    extra_hosts: *host-gateway
     networks:
       - agent-network
     environment:
@@ -174,6 +183,7 @@ services:
       args:
         <<: *prometheus-api-build-args
     container_name: backend
+    extra_hosts: *host-gateway
     ports:
       - "${BACKEND_PORT:-8600}:8000"
     networks:
@@ -251,6 +261,7 @@ services:
       additional_contexts:
         certs: ../common/certs
     container_name: frontend-dev
+    extra_hosts: *host-gateway
     ports:
       - "${FRONTEND_DEV_PORT:-5150}:5150"
     networks:
@@ -275,6 +286,7 @@ services:
       additional_contexts:
         certs: ../common/certs
     container_name: frontend-prod
+    extra_hosts: *host-gateway
     ports:
       - "${FRONTEND_PROD_PORT:-8080}:8080"
     networks:

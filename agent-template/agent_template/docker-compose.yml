@@ -12,6 +12,8 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
     container_name: TEMPLATE_SLUG-agent
+    extra_hosts:
+      - "prometheus.host.internal:host-gateway"
     networks:
       - agent-network
     environment:

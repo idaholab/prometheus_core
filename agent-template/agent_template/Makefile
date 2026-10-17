@@ -1,5 +1,4 @@
 COMPOSE := docker compose
-UNAME   := $(shell uname)
 
 COMPOSE_BASE := docker-compose.yml
 COMPOSE_NET_INTERNAL := docker-compose.net_internal.yml
@@ -40,14 +39,7 @@ NETWORK_MODE := invalid
 COMPOSE_NET :=
 endif
 
-COMPOSE_LINUX :=
-ifeq ($(NETWORK_MODE),external)
-  ifeq ($(UNAME), Linux)
-    COMPOSE_LINUX := $(if $(wildcard docker-compose.linux.yml),-f docker-compose.linux.yml,)
-  endif
-endif
-
-COMPOSE_FILES := $(strip -f $(COMPOSE_BASE) $(COMPOSE_NET) $(COMPOSE_LINUX))
+COMPOSE_FILES := $(strip -f $(COMPOSE_BASE) $(COMPOSE_NET))
 
 .PHONY: help validate-network check-base-image up up-fg down logs
 

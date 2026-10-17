@@ -96,7 +96,7 @@ make up-fg
 EXTERNAL_AGENT_HOST=localhost EXTERNAL_AGENT_PORT=8000 make up-fg
 
 # Platform integration through a host-published port:
-EXTERNAL_AGENT_HOST=host.docker.internal EXTERNAL_AGENT_PORT=8042 make up
+EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up
 ```
 
 Plain `make up` / `make up-fg` defaults to the platform Docker network. If the
@@ -105,9 +105,9 @@ the agent port will not be published to the host. Use external mode with
 `EXTERNAL_AGENT_HOST=localhost EXTERNAL_AGENT_PORT=8000` when you only want to
 start one agent container and test it from your host with `curl`.
 
-For external mode, `host.docker.internal` is Docker's hostname for the host
-machine from inside a container. Docker Desktop provides it automatically; on
-Linux the template includes a small Compose override for the same mapping.
+For external mode, `prometheus.host.internal` is the hostname for the host
+machine from inside a container. Every platform and agent compose service maps
+it to Docker's host gateway, on macOS and Linux alike.
 
 See the generated `README.md` in your agent directory, and
 [`TUTORIAL.md`](TUTORIAL.md) for the full walkthrough — agent card design,
