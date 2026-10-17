@@ -195,6 +195,9 @@ def test_agents_slash_command_lists_registered_agents_without_llm(monkeypatch) -
             }
         ]
 
+    async def fake_refresh():
+        return None
+
     async def fake_get_capabilities():
         return [
             SimpleNamespace(
@@ -211,7 +214,7 @@ def test_agents_slash_command_lists_registered_agents_without_llm(monkeypatch) -
     monkeypatch.setattr(
         debug_commands,
         "get_capability_cache",
-        lambda: SimpleNamespace(get_capabilities=fake_get_capabilities),
+        lambda: SimpleNamespace(refresh=fake_refresh, get_capabilities=fake_get_capabilities),
     )
     monkeypatch.setattr(chat_flow, "get_conversation", lambda conversation_id: None)
     monkeypatch.setattr(runtime, "store_status_update", lambda *args, **kwargs: None)
@@ -223,11 +226,13 @@ def test_agents_slash_command_lists_registered_agents_without_llm(monkeypatch) -
     )
 
     assert response.status == "answer"
-    assert "Registered agents (1)" in response.message
-    assert "Mesh Agent (mesh-agent)" in response.message
-    assert "inspect_mesh (Inspect Mesh)" in response.message
-    assert "convert_mesh (Convert Mesh)" in response.message
+    assert "**Registered agents (1)**" in response.message
+    assert "1. **Mesh Agent**" in response.message
+    assert "`inspect_mesh` (Inspect Mesh)" in response.message
+    assert "`convert_mesh` (Convert Mesh)" in response.message
     assert response.message_metadata["slash_command"] == "agents"
+    assert [entry["agent_id"] for entry in response.message_metadata["agents"]] == ["mesh-agent"]
+    assert response.message_metadata["warnings"] == []
 
 
 def test_artifacts_slash_command_lists_conversation_artifacts_without_llm(monkeypatch) -> None:

@@ -94,9 +94,17 @@ def _delete_osti_knowledge() -> Dict[str, int]:
 def _format_debug_skill(skill: Dict[str, Any]) -> str:
     skill_id = str(skill.get("skill_id") or skill.get("id") or "").strip()
     skill_name = str(skill.get("skill_name") or skill.get("name") or "").strip()
-    if skill_id and skill_name and skill_name != skill_id:
-        return f"{skill_id} ({skill_name})"
-    return skill_id or skill_name or "unnamed-skill"
+    if not skill_id:
+        return skill_name or "unnamed-skill"
+    if skill_name and skill_name != skill_id:
+        return f"`{skill_id}` ({skill_name})"
+    return f"`{skill_id}`"
+
+
+def _agent_sort_key(entry: Dict[str, Any]) -> Tuple[str, str]:
+    agent_id = str(entry.get("agent_id") or "")
+    display_name = str(entry.get("name") or agent_id)
+    return display_name.casefold(), agent_id.casefold()
 
 
 async def _collect_registered_agent_debug_entries() -> Tuple[List[Dict[str, Any]], List[str]]:
@@ -171,7 +179,7 @@ async def _collect_registered_agent_debug_entries() -> Tuple[List[Dict[str, Any]
         errors.append(f"capability cache failed: {exc}")
 
     entries = list(entries_by_id.values())
-    entries.sort(key=lambda item: (str(item.get("name") or "").lower(), str(item.get("agent_id") or "")))
+    entries.sort(key=_agent_sort_key)
     for entry in entries:
         entry["skills"] = sorted(
             entry.get("skills") or [],
@@ -181,27 +189,30 @@ async def _collect_registered_agent_debug_entries() -> Tuple[List[Dict[str, Any]
 
 
 def _format_agents_debug_response(entries: List[Dict[str, Any]], errors: List[str]) -> str:
-    lines = [f"Registered agents ({len(entries)})"]
+    lines = [f"**Registered agents ({len(entries)})**", ""]
     if not entries:
-        lines.append("")
         lines.append("No registered agents were found.")
-    for entry in entries:
+    else:
+        lines.extend(["Sorted by name, A to Z.", ""])
+    for index, entry in enumerate(entries, start=1):
         name = str(entry.get("name") or entry.get("agent_id") or "unnamed-agent")
         agent_id = str(entry.get("agent_id") or "").strip()
-        header = f"- {name}"
+        marker = f"{index}. "
+        indent = " " * len(marker)
+        lines.append(f"{marker}**{name}**")
         if agent_id and agent_id != name:
-            header += f" ({agent_id})"
-        lines.append(header)
+            lines.append(f"{indent}- ID: `{agent_id}`")
         if entry.get("url"):
-            lines.append(f"  url: {entry['url']}")
+            lines.append(f"{indent}- URL: {entry['url']}")
         skills = entry.get("skills") or []
         if skills:
-            lines.append("  skills: " + ", ".join(_format_debug_skill(skill) for skill in skills))
+            lines.append(
+                f"{indent}- Skills ({len(skills)}): " + ", ".join(_format_debug_skill(skill) for skill in skills)
+            )
         else:
-            lines.append("  skills: none advertised")
+            lines.append(f"{indent}- Skills: none advertised")
     if errors:
-        lines.append("")
-        lines.append("Warnings:")
+        lines.extend(["", "**Warnings**", ""])
         lines.extend(f"- {error}" for error in errors)
     return "\n".join(lines)
 
