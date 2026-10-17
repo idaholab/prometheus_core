@@ -799,6 +799,105 @@ def test_ask_user_accepts_a_free_text_answer(harness) -> None:
     assert send(query="Option B").status == "answer"
 
 
+UPLOADED_REPORT = {
+    "artifact_id": "up-1",
+    "name": "report.csv",
+    "description": "Uploaded CSV.",
+    "uri": "deeplynx://organizations/1/projects/1/items/9",
+    "mime_type": "text/csv",
+    "metadata": {"source": "user-upload"},
+}
+
+
+@pytest.mark.parametrize(
+    "files, note",
+    [
+        (
+            {"newly_uploaded_artifact_ids": ["up-1"], "artifacts": [UPLOADED_REPORT]},
+            "[Files uploaded with this message: up-1 (report.csv)]",
+        ),
+        ({"received_files": [{"name": "big.bin"}]}, "[Files received but not stored: big.bin]"),
+    ],
+    ids=["uploaded", "received-not-stored"],
+)
+def test_reply_to_ask_user_names_the_upload(harness, files, note) -> None:
+    def sees_upload(request):
+        content = json.loads(request["messages"][-1]["content"])
+        assert content["status"] == "answered"
+        assert content["reply"].startswith("here it is")
+        assert content["reply"].endswith(note)
+        return reply("Got the report.")
+
+    harness.script(
+        [
+            reply(calls=[tool_call("ask_user", {"questions": [{"field": "file", "question": "Which file?"}]}, "c1")]),
+            sees_upload,
+        ]
+    )
+
+    assert send(query="Analyze my data").status == "needs_info"
+
+    response = send(query="here it is", **files)
+    assert response.status == "answer"
+
+
+def test_superseding_reply_names_the_upload(harness) -> None:
+    def sees_upload(request):
+        content = json.loads(request["messages"][-1]["content"])
+        assert content["status"] == "not_executed"
+        assert content["message"].startswith("Not executed: the user replied instead:")
+        assert "up-1 (report.csv)" in content["message"]
+        return reply("I'll use the uploaded report.")
+
+    harness.script([reply(calls=[tool_call("analyze_thermal", {"material_id": "SS316"}, "c1")]), sees_upload])
+
+    assert send(query="Analyze thermal fatigue for SS316").status == "needs_info"
+
+    response = send(query="use this file instead", newly_uploaded_artifact_ids=["up-1"], artifacts=[UPLOADED_REPORT])
+
+    assert response.status == "answer"
+    assert harness.invocations == []
+    assert_transcript_valid(harness.store[CONV]["llm_messages"])
+
+
+@pytest.mark.parametrize(
+    "files, expected",
+    [
+        (
+            {"newly_uploaded_artifact_ids": ["up-1"], "artifacts": [UPLOADED_REPORT]},
+            "Summarize this\n\n[Files uploaded with this message: up-1 (report.csv)]",
+        ),
+        ({"received_files": [{"name": "big.bin"}]}, "Summarize this\n\n[Files received but not stored: big.bin]"),
+        ({}, "Summarize this"),
+    ],
+    ids=["uploaded", "received-not-stored", "no-files"],
+)
+def test_new_turn_upload_note_unchanged(harness, files, expected) -> None:
+    def sees_message(request):
+        assert request["messages"][-1] == {"role": "user", "content": expected}
+        return reply("Done.")
+
+    harness.script([sees_message])
+
+    assert send(query="Summarize this", **files).status == "answer"
+
+
+def test_reply_without_upload_to_ask_user_adds_no_note(harness) -> None:
+    def sees_answer(request):
+        assert json.loads(request["messages"][-1]["content"]) == {"status": "answered", "reply": "the quarterly one"}
+        return reply("Using the quarterly report.")
+
+    harness.script(
+        [
+            reply(calls=[tool_call("ask_user", {"questions": [{"field": "file", "question": "Which file?"}]}, "c1")]),
+            sees_answer,
+        ]
+    )
+
+    assert send(query="Analyze my data").status == "needs_info"
+    assert send(query="the quarterly one").status == "answer"
+
+
 def test_turn_limit_ends_with_an_error_and_a_valid_transcript(harness, monkeypatch) -> None:
     monkeypatch.setattr(agent_loop, "MAX_LLM_TURNS", 2)
     harness.results.update(create_svg_artifact=svg_result)

@@ -421,7 +421,8 @@ class OrchestratorAgent(PrometheusAgent):
         Infers descriptions via a single LLM call, uploads all files to DeepLynx,
         and returns the list of newly-created artifact IDs. They travel to
         ``chat()`` as ``newly_uploaded_artifact_ids``, and
-        ``agent_loop.begin_user_turn`` names them in this turn's user message.
+        ``agent_loop.upload_note`` names them in the user message or in the
+        reply to a pending call.
         Always returns (possibly empty); never raises.
         """
         from file_upload_handler import (

@@ -209,6 +209,10 @@ and `conversation_history` for the response and the chat-history UI.
 
 The system prompt lists the conversation's artifact catalog (id, name, mime type,
 description) on every LLM call. Files uploaded this turn are named in the user message.
+A reply to a pending call names its files in that call's tool result.
+The `answered` result of `ask_user` and the `not_executed` result of a superseded call
+carry the note.
+The chat history keeps the reply text without the file note.
 
 The system prompt also lists the newest successful inputs of each skill
 (`recent_skill_inputs`). They come from the `tool_inputs` of every `conversation_history`

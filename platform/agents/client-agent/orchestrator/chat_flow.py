@@ -315,7 +315,12 @@ async def chat(request: ConversationRequest) -> ConversationResponse:
             agent_loop.apply_answers(state, catalog, request.followup_answers)
         elif request.query and has_pending:
             _append_history(state, {"role": "user", "content": request.query})
-            agent_loop.apply_reply(state, request.query)
+            agent_loop.apply_reply(
+                state,
+                request.query,
+                uploaded_artifact_ids=request.newly_uploaded_artifact_ids,
+                received_files=request.received_files,
+            )
         elif request.query:
             await _start_user_turn(state, request, request.query)
         elif request.plan_approved or request.followup_answers:
