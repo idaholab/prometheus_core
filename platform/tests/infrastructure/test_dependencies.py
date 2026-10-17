@@ -37,6 +37,18 @@ def test_client_agent_depends_on_litellm_healthy(compose_data):
     assert deps["litellm"] == "service_healthy"
 
 
+def test_frontend_dev_depends_on_backend_healthy(compose_data):
+    deps = _get_depends_on(compose_data, "frontend-dev")
+    assert "backend" in deps
+    assert deps["backend"] == "service_healthy"
+
+
+def test_frontend_prod_depends_on_backend_healthy(compose_data):
+    deps = _get_depends_on(compose_data, "frontend-prod")
+    assert "backend" in deps
+    assert deps["backend"] == "service_healthy"
+
+
 def test_client_agent_depends_on_redis_started(compose_data):
     deps = _get_depends_on(compose_data, "client-agent")
     assert "redis" in deps
