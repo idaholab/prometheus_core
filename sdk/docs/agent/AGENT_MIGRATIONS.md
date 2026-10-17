@@ -5,6 +5,40 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.13.1
+
+### Expect `send_deeplynx_artifact` to Reuse Identical Uploads
+
+`send_deeplynx_artifact(...)` now takes a keyword-only `deduplicate: bool = True`.
+Before it uploads, it computes the SHA-256 digest of `file_path`. It then searches the
+configured DeepLynx project for an item whose `checksum` property has that digest.
+On a match, it does not upload, update or tag. It returns a `deeplynx://` reference to
+the existing item. That item keeps the name, description, tags and properties of its
+first upload. On a miss, it uploads as before and stores `checksum` in the item
+properties. A failed lookup logs a warning and uploads. Each call still registers its own
+conversation-scoped reference. The reference `metadata` now carries `checksum` and
+`deeplynx_deduplicated`. Items uploaded before this change have no digest, so a lookup
+never matches them. No environment variable, endpoint or contract field changes.
+
+Migration steps:
+
+1. Expect a reused item to keep its original name, description, tags and metadata.
+2. Read `reference.metadata["deeplynx_deduplicated"]` to know if the call reused an item.
+3. Pass `deduplicate=False` when each call must create its own DeepLynx item.
+
+```python
+reference = await self.send_deeplynx_artifact(
+    context,
+    event_queue,
+    file_path=mesh_path,
+    name="Mesh Output",
+    description="Hex mesh",
+    storage_config=storage_config,
+    deduplicate=False,  # omit to reuse an item with identical bytes
+)
+reused = reference.metadata["deeplynx_deduplicated"]
+```
+
 ## 0.13.0
 
 ### Use the Built-in LLM Tool-Calling Helpers
