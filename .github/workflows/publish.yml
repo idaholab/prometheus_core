@@ -70,6 +70,7 @@ jobs:
       sha: ${{ needs.meta.outputs.sha }}
       context: sdk
       file: sdk/Dockerfile
+      build-contexts: certs=common/certs
 
   backend:
     name: "backend ${{ needs.meta.outputs.tag }}"
@@ -106,7 +107,7 @@ jobs:
       context: platform
       file: platform/frontend/Dockerfile
       target: prod
-      build-contexts: certs=platform/certs
+      build-contexts: certs=common/certs
 
   summary:
     name: "summary"

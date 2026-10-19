@@ -27,8 +27,9 @@ Other files here (like this README) are ignored.
 - `platform/frontend/Dockerfile`
 
 Both mount this directory from a named build context called `certs`. That
-context is passed by `sdk/Makefile`, `platform/docker-compose.yml`, and
-`.github/workflows/test.yml`. To build an image by hand, pass it yourself:
+context is passed by `sdk/Makefile`, `platform/docker-compose.yml`,
+`.github/workflows/test.yml`, and `.github/workflows/publish.yml`. To build an
+image by hand, pass it yourself:
 
 ```sh
 cd sdk && docker build --build-context certs=../common/certs .

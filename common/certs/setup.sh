@@ -10,9 +10,9 @@
 #
 # This directory is outside both build contexts, so every build must pass it
 # in, e.g. `docker build --build-context certs=../common/certs .` from sdk/.
-# sdk/Makefile, platform/docker-compose.yml and .github/workflows/test.yml
-# already do; a bare `docker build` fails with "certs: failed to resolve
-# source metadata".
+# sdk/Makefile, platform/docker-compose.yml, .github/workflows/test.yml and
+# .github/workflows/publish.yml already do; a bare `docker build` fails with
+# "certs: failed to resolve source metadata".
 #
 # Drop any extra CA certificates (e.g. a corporate TLS-inspection root) into
 # common/certs/ next to this script. Each file must be PEM-encoded and named
