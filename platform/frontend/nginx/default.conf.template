@@ -39,7 +39,24 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    # SPA fallback for client-side routing.
+    # notebook-render service (Starlette app on the agent-network, container port 8000).
+    # Serves the baked UQ notebook report (/notebook/render/{id}) and the uq_result
+    # JSON (/notebook/result/{id}). Same-origin so AGENT_SECRET stays server-side.
+    # proxy_pass has no path so the original `/notebook/...` URI is preserved verbatim.
+    location /notebook/ {
+        proxy_pass http://notebook-render:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+    }
+
+    # SPA fallback for client-side routing. The standalone 3D UQ console page is a static
+    # file bundled into the build at `dist/uq-console/index.html` (+ `/uq-console/bundle.js`,
+    # `/js/three/bundle.js`); `try_files $uri` serves it directly because the file
+    # exists, so it wins over the index.html SPA fallback. No dedicated block needed.
     location / {
         try_files $uri /index.html;
     }

@@ -33,10 +33,18 @@ function useConversationArtifacts(): ArtifactMeta[] {
   return [...byId.values()];
 }
 
+/** A `uq` artifact is a UQ notebook: open its baked HTML report (notebook-render,
+ * same-origin `/notebook`, same URL the inline UQ viewer uses) rather than
+ * downloading the raw `.ipynb` bytes from the content proxy. */
+function artifactHref(artifact: ArtifactMeta): string {
+  if (artifact.render_hint === "uq") return `/notebook/render/${artifact.artifact_id}`;
+  return api.artifactContentUrl(artifact.artifact_id);
+}
+
 function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
   return (
     <a
-      href={api.artifactContentUrl(artifact.artifact_id)}
+      href={artifactHref(artifact)}
       target="_blank"
       rel="noreferrer"
       className="card border border-base-300 bg-base-200 transition-colors hover:border-primary/40 hover:bg-base-300"

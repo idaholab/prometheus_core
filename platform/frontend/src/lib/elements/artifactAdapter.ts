@@ -141,6 +141,29 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
         },
       };
 
+    case "uq":
+      // Baked notebook report is served by the notebook-render service (same-origin
+      // via the `/notebook` proxy), NOT the artifact content proxy. The standalone
+      // 3D UQ console is a static page at `/uq-console/` carrying this run's data URL.
+      // `url` (content proxy) is the .ipynb download. All same-origin relative paths.
+      return {
+        ...base,
+        type: "custom",
+        name: "UQDashboard",
+        url,
+        props: {
+          reportUrl: `/notebook/render/${artifact.artifact_id}`,
+          // The producing agent opts out of the 3D UQ console with a
+          // `no-dashboard` tag (UQ_DASHBOARD=off); the report and .ipynb remain.
+          dashboardUrl: artifact.tags.includes("no-dashboard")
+            ? ""
+            : `/uq-console/index.html?result=/notebook/result/${artifact.artifact_id}`,
+          downloadUrl: url,
+          filename: artifact.name || "uq_result.ipynb",
+          height: "760px",
+        },
+      };
+
     case "report":
       return {
         ...base,

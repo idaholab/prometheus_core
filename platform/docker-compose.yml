@@ -222,6 +222,42 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # notebook-render — serves the UQ agent's baked notebook reports (/notebook/render/{id})
+  # and the extracted uq_result JSON (/notebook/result/{id}) at same-origin /notebook/*.
+  # Not a PrometheusAgent (runs no agent code, not on the base image), so it lives here
+  # in the root compose rather than being auto-discovered under agents/. It reads the
+  # baked .html/.ipynb the UQ agent writes into the shared NOTEBOOK_DIR. Comes up with
+  # `make up` regardless of PROFILE (no profiles gate), like backend.
+  notebook-render:
+    build:
+      context: .
+      dockerfile: notebook-render/Dockerfile
+      args:
+        <<: *prometheus-api-build-args
+      additional_contexts:
+        certs: ./certs
+    container_name: notebook-render
+    ports:
+      - "${NOTEBOOK_RENDER_PORT:-8876}:8000"
+    networks:
+      - agent-network
+    environment:
+      <<: *common-env
+      # NOTEBOOK_DIR points at the mounted UQ-agent artifacts dir (below), where
+      # the agent writes uq_{model}_{timestamp}.{ipynb,html}. proxy.py resolves an
+      # artifact_id to the real filename via the Valkey registry (REDIS_URL/
+      # REDIS_PASSWORD come from *common-env), then serves that file from here.
+      NOTEBOOK_DIR: /app/uq-artifacts
+      UQ_AGENT_URL: ${UQ_AGENT_URL:-http://multiphysics-uq-agent:8000}
+      CLIENT_AGENT_URL: ${CLIENT_AGENT_URL:-http://client-agent:8000}
+      RERUN_ROUTE: ${RERUN_ROUTE:-direct}
+    volumes:
+      # The UQ agent (a host process in hybrid dev, or a container in a full
+      # stack) writes its generated notebooks + baked HTML here. Read-only: this
+      # service only serves them. Override UQ_ARTIFACTS_DIR for other layouts.
+      - ${UQ_ARTIFACTS_DIR:-../../multiphysics-uq-agent/artifacts}:/app/uq-artifacts:ro
+    restart: unless-stopped
+
   frontend-dev:
     profiles: ["dev"]
     build:
@@ -242,6 +278,9 @@ services:
       # service name + internal port (8000), NOT the host-mapped 8600 — inside this
       # container localhost:8600 is its own loopback and refuses the connection.
       VITE_BACKEND_URL: http://backend:8000
+      # notebook-render is a sibling container; reach it by service name + internal
+      # port (8000), not the host-mapped 8876, for the same loopback reason as above.
+      VITE_NOTEBOOK_URL: http://notebook-render:8000
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./frontend:/app

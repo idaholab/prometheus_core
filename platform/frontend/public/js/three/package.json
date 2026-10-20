@@ -1,0 +1,14 @@
+{
+  "name": "c500-prometheus-ui-three",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "three.js bundle for the Chainlit UQ dashboard element (window.THREE)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "three": "^0.175.0"
+  }
+}

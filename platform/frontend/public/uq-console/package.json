@@ -1,0 +1,15 @@
+{
+  "name": "prometheus-ui-uq-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone 3D rod-worth UQ console (React app; reads window.THREE from ../js/three/bundle.js)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

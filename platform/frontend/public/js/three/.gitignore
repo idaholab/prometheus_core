@@ -1,0 +1,4 @@
+# Build-time only; the committed artifacts are build.mjs + bundle.js(.map) + package.json.
+# Rebuild with: npm install && node build.mjs
+node_modules/
+package-lock.json

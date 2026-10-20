@@ -1176,6 +1176,7 @@
               "mesh",
               "mermaid",
               "thermal",
+              "uq",
               "report",
               "code",
               "table",

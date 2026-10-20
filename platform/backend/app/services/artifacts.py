@@ -48,6 +48,9 @@ from app.contract import ArtifactMeta, Citation, RenderHint
 
 # json_type (highest-priority signal; mirrors _json_type_registry dispatch).
 _THERMAL_JSON_TYPE = "prometheus.thermal_analysis.result.v1"
+# UQ (multiphysics-uq-agent) baked-notebook result: MIME application/x-ipynb+json.
+# Routed to the inline notebook-report viewer + standalone 3D UQ console link.
+_UQ_JSON_TYPE = "prometheus.uq.result.v1"
 
 # Tag → hint (docs/docs/dev-docs/artifacts.md:161-167). Checked before MIME.
 _TAG_HINTS: dict[str, RenderHint] = {
@@ -337,6 +340,8 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
     json_type = artifact.get("json_type") or metadata.get("json_type")
     if json_type == _THERMAL_JSON_TYPE:
         return "thermal"
+    if json_type == _UQ_JSON_TYPE:
+        return "uq"
 
     # 2. specific mime_type — outranks tags.
     mime = _normalize_mime(artifact.get("mime_type"))

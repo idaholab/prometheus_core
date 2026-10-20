@@ -38,6 +38,7 @@ export type RenderHint =
   | "mesh"
   | "mermaid"
   | "thermal"
+  | "uq"
   | "report"
   | "code"
   | "table"

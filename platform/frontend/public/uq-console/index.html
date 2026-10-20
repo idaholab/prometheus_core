@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Rod-Worth UQ Console</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        min-height: 100%;
+        background: #070c16;
+        color: #e2e9f6;
+        font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+      }
+      /* Fallback shown until the React bundle mounts (or if it fails to load). */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        color: #8090ac;
+        font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+        font-size: 13px;
+        letter-spacing: 1px;
+        pointer-events: none;
+      }
+      #boot .tag {
+        color: #ffb454;
+        letter-spacing: 2.5px;
+        font-size: 10px;
+      }
+      /* Once React mounts into #root, hide the boot fallback. */
+      #root:not(:empty) + #boot {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot">
+      <div class="tag">GENERIC CORE · 3D UQ CONSOLE</div>
+      <div>loading interactive console…</div>
+    </div>
+
+    <!-- three first: sets window.THREE, which app.jsx reads at module-eval time.
+         Same vendored bundle the inline UQ element used; no CDN, no network. -->
+    <script src="/js/three/bundle.js"></script>
+    <!-- then the React app (React + ReactDOM + the console component, bundled). -->
+    <script src="/uq-console/bundle.js"></script>
+  </body>
+</html>

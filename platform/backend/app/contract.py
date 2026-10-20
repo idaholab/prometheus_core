@@ -186,6 +186,7 @@ RenderHint = Literal[
     "mesh",  # Exodus/STL → MeshViewer (shared VTK viewer)
     "mermaid",  # Mermaid diagram → MermaidViewer
     "thermal",  # prometheus.thermal_analysis.result.v1 → ThermalAnalysisViewer
+    "uq",  # prometheus.uq.result.v1 → UQDashboard (baked notebook report + 3D UQ console link)
     "report",  # markdown / plain-text report → markdown renderer (rendered inline, not downloaded)
     "code",  # source / config text (YAML, MOOSE .i, Python, ...) → CodeViewer (syntax-highlighted inline, not Markdown)
     "table",  # CSV / TSV → TableViewer (sortable table, raw-text toggle)
