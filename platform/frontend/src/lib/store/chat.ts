@@ -44,6 +44,7 @@ import type {
 } from "@/lib/api/types";
 import { artifactsPerTurn } from "./transcriptArtifacts";
 import { readOpenConversationId, saveOpenConversationId } from "./openConversation";
+import { RECOVERY_GRACE_MS, RECOVERY_POLL_MS, assistantCount, turnLanded } from "./turnRecovery";
 
 // --- item model -------------------------------------------------------------
 
@@ -520,8 +521,16 @@ async function post(body: ChatMessageRequest): Promise<void> {
   const isCurrent = () => state.conversationId === conversationId;
 
   set({ awaiting: true });
+  // Settles the turn exactly once: by the POST reply, or by the transcript
+  // poll if that reply was dropped on the way (see turnRecovery.ts).
+  let settled = false;
+  const stopRecovery = conversationId ? watchForStoredReply(conversationId, () => settled, () => {
+    settled = true;
+  }) : () => {};
   try {
     const res = await api.sendMessage(body);
+    if (settled) return;
+    settled = true;
     if (isCurrent()) {
       applyResponse(res);
     } else {
@@ -532,6 +541,8 @@ async function post(body: ChatMessageRequest): Promise<void> {
       bumpHistory();
     }
   } catch (err) {
+    if (settled) return;
+    settled = true;
     if (isCurrent()) {
       const text =
         err instanceof ApiError
@@ -540,10 +551,60 @@ async function post(body: ChatMessageRequest): Promise<void> {
       appendError(text);
     }
   } finally {
+    stopRecovery();
     if (isCurrent()) {
       set({ awaiting: false });
     }
   }
+}
+
+/**
+ * While a turn on `conversationId` is awaited, poll its stored transcript and,
+ * once the reply has landed there, render it and stop waiting -- for when the
+ * POST reply itself was dropped and would otherwise never arrive. The baseline
+ * reply count is read from the server at send time (a 404 means a brand-new
+ * chat: 0). Stops on its own once settled, when the user switches conversation
+ * or presses stop, or if the baseline can't be read. Returns a stop function.
+ */
+function watchForStoredReply(
+  conversationId: string,
+  isSettled: () => boolean,
+  settle: () => void,
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const stop = () => {
+    stopped = true;
+    if (timer) clearTimeout(timer);
+  };
+  const live = () =>
+    !stopped && !isSettled() && state.awaiting && state.conversationId === conversationId;
+
+  const baseline = api.getConversation(conversationId).then(
+    (detail) => assistantCount(detail.messages),
+    (err) => (err instanceof ApiError && err.status === 404 ? 0 : null),
+  );
+
+  const poll = async () => {
+    const base = await baseline;
+    if (base === null || !live()) return;
+    try {
+      const detail = await api.getConversation(conversationId);
+      if (!live()) return;
+      if (turnLanded(detail.messages, base)) {
+        settle();
+        stop();
+        set({ items: itemsFromTranscript(detail.messages, detail.artifacts), awaiting: false });
+        bumpHistory();
+        return;
+      }
+    } catch {
+      // Transient (404 before the first turn is stored, a restarting backend): retry.
+    }
+    if (live()) timer = setTimeout(() => void poll(), RECOVERY_POLL_MS);
+  };
+  timer = setTimeout(() => void poll(), RECOVERY_GRACE_MS);
+  return stop;
 }
 
 /** Send a user turn (optionally with staged uploads). */
