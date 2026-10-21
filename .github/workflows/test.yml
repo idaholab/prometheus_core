@@ -293,6 +293,100 @@ jobs:
           kubectl --context k3d-prometheus get nodes,pods -A -o wide || true
           kubectl --context k3d-prometheus describe pod smoke || true
 
+  helm-lint:
+    name: "helm: lint"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    env:
+      CHART: infrastructure/helm/prometheus
+      # The k3d cluster's version (infrastructure/local/k3d-config.yaml)
+      KUBERNETES_VERSION: 1.37.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm and kubeconform
+        uses: ./.github/actions/setup-kube-tools
+      - name: Lint and validate each values file
+        # values.schema.json catches unknown or mistyped values; kubeconform
+        # checks the rendered manifests against the cluster's Kubernetes API
+        run: |
+          agents=()
+          for f in $(find platform/agents -name helm-values.yaml | sort); do agents+=(-f "$f"); done
+          config=(--set-file litellm.config=platform/litellm_config.yaml)
+          check() {
+            echo "::group::$*"
+            helm lint --strict "$CHART" "${config[@]}" "$@"
+            helm template prometheus "$CHART" "${config[@]}" "$@" \
+              | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION"
+            echo "::endgroup::"
+          }
+          check
+          check -f "$CHART/values-dev.yaml"
+          check -f "$CHART/values-eks.yaml"
+          check -f "$CHART/values-dev.yaml" "${agents[@]}"
+          check -f "$CHART/values-dev.yaml" "${agents[@]}" -f "$CHART/values-debug.yaml" \
+            --set agents.osti-research-agent.enabled=true
+
+  helm-smoke:
+    name: "helm: k3d smoke test"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: platform
+    env:
+      LOCAL_SDK: "true"
+      PROFILE: prod
+      # init_env.py takes the LLM key from the environment; nothing calls an
+      # LLM at startup, so a placeholder is enough
+      LLM_API_KEY: sk-ant-test-not-real
+      REGISTRY: k3d-prometheus-registry.localhost:5001
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm, kubectl and k3d
+        uses: ./.github/actions/setup-kube-tools
+        with:
+          cluster-tools: "true"
+      - name: Build images
+        # The same images make up runs
+        run: make build
+      - name: Create the cluster
+        run: make cluster-up
+      - name: Push images to the cluster registry
+        run: make cluster-push PUSH_TAG=ci
+      - name: Install the chart
+        # values-dev.yaml with every agent's helm-values.yaml; --wait means all pods Ready
+        run: |
+          make cluster-deploy PROMETHEUS_IMAGE_REGISTRY="$REGISTRY" PROMETHEUS_IMAGE_TAG=ci
+      - name: Check through the ingress
+        run: |
+          # nginx's own health endpoint, then a backend route the ingress
+          # sends straight to the backend
+          curl -sSf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:8080/healthz
+          curl -sSf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:8080/api/setup/status
+      - name: Check backend health and readiness
+        # /healthz and /readyz aren't exposed outside the cluster
+        run: |
+          kubectl --context k3d-prometheus -n prometheus port-forward svc/backend 8600:8000 &
+          trap 'kill %1' EXIT
+          curl -sSf --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8600/healthz
+          curl -sSf --retry 10 --retry-delay 2 --retry-all-errors http://localhost:8600/readyz
+      - name: Show status
+        if: ${{ failure() }}
+        run: |
+          make cluster-status
+          kubectl --context k3d-prometheus -n prometheus describe pods
+      - name: Show logs
+        if: ${{ failure() }}
+        run: |
+          for d in $(kubectl --context k3d-prometheus -n prometheus get deploy,statefulset -o name); do
+            echo "::group::$d"
+            kubectl --context k3d-prometheus -n prometheus logs "$d" --all-containers --tail 200 || true
+            echo "::endgroup::"
+          done
+
   hackathon-slides:
     name: "hackathon: slides"
     needs: gitleaks
@@ -813,6 +907,9 @@ jobs:
         with:
           version: "0.11.25"
           python-version: "3.12"
+      - name: Install helm
+        # test_helm_chart.py renders the chart, and skips without helm
+        uses: ./.github/actions/setup-kube-tools
       - name: Sync environment
         run: uv sync --frozen
       - name: Test

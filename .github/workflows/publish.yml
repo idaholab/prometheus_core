@@ -139,11 +139,68 @@ jobs:
       target: prod
       build-contexts: certs=common/certs
 
+  client-agent:
+    name: "client-agent ${{ needs.meta.outputs.tag }}"
+    # Built FROM the sdk image from the same commit, as Compose builds it
+    needs: [meta, sdk]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: client-agent
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_client-agent-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: platform/agents/client-agent
+      file: platform/agents/client-agent/Dockerfile
+      build-args: |
+        PROMETHEUS_API_BASE_IMAGE_REPO=${{ needs.meta.outputs.prefix }}/prometheus_sdk-devel
+        PROMETHEUS_API_BASE_IMAGE_HASH=${{ needs.meta.outputs.tag }}
+
+  synthesis-agent:
+    name: "synthesis-agent ${{ needs.meta.outputs.tag }}"
+    # Built FROM the sdk image from the same commit, as Compose builds it
+    needs: [meta, sdk]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: synthesis-agent
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_synthesis-agent-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: platform/agents/synthesis-agent
+      file: platform/agents/synthesis-agent/Dockerfile
+      build-args: |
+        PROMETHEUS_API_BASE_IMAGE_REPO=${{ needs.meta.outputs.prefix }}/prometheus_sdk-devel
+        PROMETHEUS_API_BASE_IMAGE_HASH=${{ needs.meta.outputs.tag }}
+
+  form-filler-agent:
+    name: "form-filler-agent ${{ needs.meta.outputs.tag }}"
+    # Built FROM the sdk image from the same commit, as Compose builds it
+    needs: [meta, sdk]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      name: form-filler-agent
+      image: ${{ needs.meta.outputs.prefix }}/prometheus_form-filler-agent-devel
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: platform/agents/form-filler-agent
+      file: platform/agents/form-filler-agent/Dockerfile
+      build-args: |
+        PROMETHEUS_API_BASE_IMAGE_REPO=${{ needs.meta.outputs.prefix }}/prometheus_sdk-devel
+        PROMETHEUS_API_BASE_IMAGE_HASH=${{ needs.meta.outputs.tag }}
+
   summary:
     name: "summary"
     # Also report which images failed, as long as there was a tag to publish
     if: ${{ always() && needs.meta.result == 'success' }}
-    needs: [meta, sdk, backend, frontend]
+    needs: [meta, sdk, backend, frontend, client-agent, synthesis-agent, form-filler-agent]
     runs-on: ubuntu-slim
     steps:
       - name: Write summary
@@ -156,6 +213,9 @@ jobs:
           SDK_RESULT: ${{ needs.sdk.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
+          CLIENT_AGENT_RESULT: ${{ needs.client-agent.result }}
+          SYNTHESIS_AGENT_RESULT: ${{ needs.synthesis-agent.result }}
+          FORM_FILLER_AGENT_RESULT: ${{ needs.form-filler-agent.result }}
         run: |
           status() {
             case "$1" in
@@ -187,4 +247,7 @@ jobs:
             row sdk "$SDK_RESULT"
             row backend "$BACKEND_RESULT"
             row frontend "$FRONTEND_RESULT"
+            row client-agent "$CLIENT_AGENT_RESULT"
+            row synthesis-agent "$SYNTHESIS_AGENT_RESULT"
+            row form-filler-agent "$FORM_FILLER_AGENT_RESULT"
           } >> "$GITHUB_STEP_SUMMARY"
