@@ -1,0 +1,127 @@
+{{- /*
+One Deployment and Service per enabled entry of .Values.agents. Each agent
+directory ships its entry in a helm-values.yaml under platform/agents/.
+*/ -}}
+{{- range $name, $a := .Values.agents }}
+{{- if $a.enabled }}
+{{- include "prometheus.requires" (dict "root" $ "name" $name "needs" (list "litellm")) }}
+{{- $ctx := dict "root" $ "name" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $a.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+      {{- with include "prometheus.envChecksum" $ }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "prometheus.pullSecrets" $ | trim | nindent 6 }}
+      {{- include "prometheus.podSecurity" $ | trim | nindent 6 }}
+      initContainers:
+        {{- include "prometheus.waitForLitellm" $ | trim | nindent 8 }}
+        {{- include "prometheus.caInit" (dict "root" $ "image" (include "prometheus.image" (dict "root" $ "image" $a.image))) | trim | nindent 8 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "prometheus.image" (dict "root" $ "image" $a.image) }}
+          imagePullPolicy: {{ $.Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            {{- include "prometheus.commonEnvFrom" $ | trim | nindent 12 }}
+            {{- with $a.envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "prometheus.commonEnv" $ | trim | nindent 12 }}
+            - name: AGENT_PORT
+              value: "8000"
+            # The pod hostname isn't resolvable; register the Service name instead
+            - name: EXTERNAL_AGENT_URL
+              value: http://{{ $name }}:8000
+            {{- include "prometheus.caEnv" $ | trim | nindent 12 }}
+            {{- with $a.env }}
+            {{- include "prometheus.plainEnv" . | trim | nindent 12 }}
+            {{- end }}
+          {{- include "prometheus.probes" (dict "path" "/healthz" "port" "http") | trim | nindent 10 }}
+          {{- include "prometheus.containerSecurity" $ | trim | nindent 10 }}
+          {{- with $a.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "prometheus.caVolumeMounts" $ | trim | nindent 12 }}
+            {{- range $a.persistence }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+      {{- with $a.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $a.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "prometheus.caVolumes" $ | trim | nindent 8 }}
+        {{- range $a.persistence }}
+        - name: {{ .name }}
+          {{- if .size }}
+          persistentVolumeClaim:
+            claimName: {{ $name }}-{{ .name }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+{{- range $a.persistence }}
+{{- if .size }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-{{ .name }}
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+  annotations:
+    # Model caches are slow to refill; keep them across helm uninstall
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

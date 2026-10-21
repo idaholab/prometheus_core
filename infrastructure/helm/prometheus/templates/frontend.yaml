@@ -1,0 +1,54 @@
+{{- /* Production frontend: nginx serves the built app on 8080 */ -}}
+{{- if .Values.frontend.enabled }}
+{{- $ctx := dict "root" . "name" "frontend" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+    spec:
+      {{- include "prometheus.pullSecrets" . | trim | nindent 6 }}
+      {{- include "prometheus.podSecurity" . | trim | nindent 6 }}
+      containers:
+        - name: frontend
+          image: {{ include "prometheus.image" (dict "root" . "image" .Values.frontend.image) }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # nginx still proxies /api/ for clients that bypass the ingress
+            # (kubectl port-forward svc/frontend)
+            - name: BACKEND_UPSTREAM
+              value: http://backend:8000
+          {{- include "prometheus.probes" (dict "path" "/healthz" "port" "http" "startupSeconds" 60) | trim | nindent 10 }}
+          {{- include "prometheus.containerSecurity" . | trim | nindent 10 }}
+          {{- with .Values.frontend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

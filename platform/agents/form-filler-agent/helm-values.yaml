@@ -1,0 +1,6 @@
+# Helm values for this agent; see agents in infrastructure/helm/prometheus/values.yaml
+agents:
+  form-filler-agent:
+    enabled: true
+    image:
+      repository: prometheus_form-filler-agent-devel

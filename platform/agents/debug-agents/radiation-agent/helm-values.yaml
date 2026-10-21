@@ -1,0 +1,6 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  radiation-agent:
+    enabled: false
+    image:
+      repository: prometheus_radiation-agent-devel

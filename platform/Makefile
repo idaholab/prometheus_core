@@ -412,7 +412,30 @@ regenerate: clean-generated generate
 ##@ Local Kubernetes cluster (k3d)
 ##@
 
-.PHONY: cluster-up cluster-down cluster-reset
+.PHONY: cluster-up cluster-down cluster-reset cluster-push cluster-deploy cluster-undeploy cluster-status cluster-logs cluster-clobber
+
+# Images cluster-deploy pulls: $(PROMETHEUS_IMAGE_REGISTRY)/prometheus_<name>-devel:$(PROMETHEUS_IMAGE_TAG),
+# as published by .github/workflows/publish.yml. Bump the tag deliberately.
+PROMETHEUS_IMAGE_REGISTRY ?= ghcr.io/idaholab/prometheus_core
+PROMETHEUS_IMAGE_TAG      ?= 20261021-4b6eda2
+CLUSTER_NAMESPACE         ?= prometheus
+HELM_CHART                := ../infrastructure/helm/prometheus
+# Every agent's helm-values.yaml, plus values-debug.yaml with DEBUG_AGENTS=true
+# and the optional agents with OPTIONAL_AGENTS=true (they ship disabled)
+HELM_AGENT_VALUES         := $(foreach f,$(sort $(shell find agents -name helm-values.yaml 2>/dev/null)),-f $(f))
+HELM_AGENT_VALUES         += $(if $(filter true,$(DEBUG_AGENTS)),-f $(HELM_CHART)/values-debug.yaml)
+HELM_AGENT_VALUES         += $(if $(filter true,$(OPTIONAL_AGENTS)),$(foreach f,$(sort $(shell find agents/optional -name helm-values.yaml 2>/dev/null)),--set agents.$(notdir $(patsubst %/,%,$(dir $(f)))).enabled=true))
+# Extra helm upgrade flags, e.g. HELM_ARGS="--set global.image.registry=k3d-prometheus-registry.localhost:5001"
+HELM_ARGS                 ?=
+KUBE_CONTEXT              := k3d-prometheus
+# The in-cluster LiteLLM's config: which upstream each model alias goes to.
+# Defaults to the same file Compose mounts; set LITELLM_CONFIG=/path/to/config.yaml
+# to send model requests elsewhere (another LiteLLM, a different provider).
+LITELLM_CONFIG            ?= litellm_config.yaml
+# Set EXTRA_CA_CERT=/path/to/ca.pem behind a TLS-inspecting proxy, so LiteLLM,
+# the backend and the agents trust it for outbound HTTPS. Unset by default.
+EXTRA_CA_CERT             ?=
+KUBECTL                   := kubectl --context $(KUBE_CONTEXT) -n $(CLUSTER_NAMESPACE)
 
 cluster-up: ##@ Create (or start) the local k3d cluster with its image registry on localhost:5001
 	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --cluster
@@ -424,6 +447,52 @@ cluster-down: ##@ Delete the local k3d cluster and its registry (pushed images a
 cluster-reset: ##@ Delete and recreate the local k3d cluster
 	@$(MAKE) --no-print-directory cluster-down
 	@$(MAKE) --no-print-directory cluster-up
+
+cluster-push: ##@ Push the images make build made to the k3d registry (then cluster-deploy PROMETHEUS_IMAGE_REGISTRY=k3d-prometheus-registry.localhost:5001 PROMETHEUS_IMAGE_TAG=local)
+	@$(INFRA_SCRIPTS)/cluster-push-images.sh $(COMPOSE_PROJECT_NAME) $(or $(PUSH_TAG),local)
+
+cluster-deploy: ##@ Deploy the stack to the k3d cluster from the published images (PROMETHEUS_IMAGE_TAG=...)
+cluster-deploy: init-env
+	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --cluster
+	kubectl --context $(KUBE_CONTEXT) create namespace $(CLUSTER_NAMESPACE) --dry-run=client -o yaml \
+		| kubectl --context $(KUBE_CONTEXT) apply -f -
+	@# .env stays the one source of secrets, for Compose and the cluster alike
+	$(INFRA_SCRIPTS)/sync-env-secrets.sh .env $(KUBE_CONTEXT) $(CLUSTER_NAMESPACE)
+ifneq ($(EXTRA_CA_CERT),)
+	$(KUBECTL) create configmap prometheus-extra-ca --from-file=ca.crt=$(EXTRA_CA_CERT) --dry-run=client -o yaml \
+		| $(KUBECTL) apply -f -
+endif
+	helm upgrade --install prometheus $(HELM_CHART) \
+		--kube-context $(KUBE_CONTEXT) --namespace $(CLUSTER_NAMESPACE) \
+		-f $(HELM_CHART)/values-dev.yaml $(HELM_AGENT_VALUES) \
+		--set global.image.registry=$(PROMETHEUS_IMAGE_REGISTRY) \
+		--set global.image.tag=$(PROMETHEUS_IMAGE_TAG) \
+		--set-file litellm.config=$(LITELLM_CONFIG) \
+		$(if $(EXTRA_CA_CERT),--set extraCaCert.configMap=prometheus-extra-ca) \
+		--set-string envChecksum=$$(sha256sum .env | cut -c1-16) \
+		--wait --timeout 10m $(HELM_ARGS)
+ifeq ($(CHECK),true)
+	@# Like make up: return only once the ingress answers and every agent is registered
+	$(INFRA_SCRIPTS)/cluster-check.sh $(KUBE_CONTEXT) $(CLUSTER_NAMESPACE) $(CHECK_TIMEOUT) \
+		agents/client-agent $$(find agents -name helm-values.yaml -exec dirname {} \; | sort)
+endif
+
+cluster-undeploy: ##@ Remove the stack from the k3d cluster, keeping its data (PVCs)
+	helm uninstall prometheus --kube-context k3d-prometheus --namespace $(CLUSTER_NAMESPACE)
+
+cluster-status: ##@ Show the stack's pods, services and ingress in the k3d cluster
+	$(KUBECTL) get pods,svc,ingress,pvc
+
+cluster-logs: ##@ Follow one service's logs in the k3d cluster (SVC=backend)
+	$(KUBECTL) logs -f deploy/$(or $(SVC),backend) --all-containers
+
+cluster-clobber: ##@ Remove the stack and delete its data (users, keys, history) from the k3d cluster
+	@printf "This deletes ALL users, signing keys, OIDC config, and chat history in\n"
+	@printf "namespace '%s' of the k3d cluster. Type 'clobber' to confirm: " "$(CLUSTER_NAMESPACE)"; \
+	read answer; \
+	if [ "$$answer" != "clobber" ]; then printf "Aborted.\n"; exit 1; fi
+	-helm uninstall prometheus --kube-context k3d-prometheus --namespace $(CLUSTER_NAMESPACE) --wait
+	$(KUBECTL) delete pvc --all
 
 ##@
 ##@ Frontend (React)

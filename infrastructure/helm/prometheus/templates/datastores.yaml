@@ -1,0 +1,154 @@
+{{- /*
+In-chart datastores for dev: Postgres for LiteLLM's agent registrations and,
+separately, for the backend's admin plane (users, OIDC config, signing keys),
+plus Valkey. Single replica, a PVC each.
+*/ -}}
+{{- define "prometheus.postgres" -}}
+{{- $root := .root -}}
+{{- $ctx := dict "root" $root "name" .name -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ .name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ include "prometheus.image" (dict "root" $root "image" $root.Values.postgres.image) }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .user }}
+            - name: POSTGRES_DB
+              value: {{ .user }}
+            {{- include "prometheus.privateEnv" (dict "root" $root "key" .passwordKey) | trim | nindent 12 }}
+            - name: POSTGRES_PASSWORD
+              value: $({{ .passwordKey }})
+            # A subdirectory, so a non-empty volume root (lost+found) doesn't stop initdb
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .user | quote }}]
+            periodSeconds: 10
+          {{- with .config.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .config.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+{{- end }}
+
+{{- if .Values.litellmDb.enabled }}
+{{ include "prometheus.postgres" (dict "root" . "name" "litellm-db" "user" "litellm" "passwordKey" "LITELLM_DB_PASSWORD" "config" .Values.litellmDb) }}
+{{- end }}
+{{- if .Values.adminDb.enabled }}
+---
+{{ include "prometheus.postgres" (dict "root" . "name" "admin-db" "user" "admin" "passwordKey" "ADMIN_DB_PASSWORD" "config" .Values.adminDb) }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+{{- $ctx := dict "root" . "name" "redis" }}
+---
+# Valkey. Named redis so REDIS_URL keeps its Compose default
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: valkey
+          image: {{ include "prometheus.image" (dict "root" . "image" .Values.redis.image) }}
+          command: ["valkey-server", "--requirepass", "$(REDIS_PASSWORD)", "--appendonly", "yes"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.shared }}
+                  key: REDIS_PASSWORD
+            - name: REDISCLI_AUTH
+              value: $(REDIS_PASSWORD)
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 10
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+{{- end }}

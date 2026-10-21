@@ -1,0 +1,6 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  corrosion-agent:
+    enabled: false
+    image:
+      repository: prometheus_corrosion-agent-devel

@@ -1,0 +1,6 @@
+# Helm values for this agent; see agents in infrastructure/helm/prometheus/values.yaml
+agents:
+  synthesis-agent:
+    enabled: true
+    image:
+      repository: prometheus_synthesis-agent-devel

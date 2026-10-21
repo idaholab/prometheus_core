@@ -1,0 +1,10 @@
+apiVersion: v2
+name: prometheus
+description: >-
+  Prometheus multi-agent platform: frontend, backend, client-agent orchestrator,
+  specialist agents, LiteLLM gateway, Valkey and Postgres.
+type: application
+version: 0.1.0
+# The platform has no release version yet; image tags fall back to this when
+# neither the component nor global.image.tag sets one
+appVersion: devel

@@ -1,0 +1,47 @@
+{{- /*
+The one entry point the browser uses. /api goes straight to the backend (one
+hop fewer than through nginx, which keeps SSE simple); everything else to the
+frontend. /.well-known/jwks.json is not exposed: agents reach it in-cluster.
+Controller-specific settings (timeouts, buffering) go in ingress.annotations.
+*/ -}}
+{{- if .Values.ingress.enabled }}
+{{- include "prometheus.requires" (dict "root" . "name" "ingress" "needs" (list "backend" "frontend")) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  labels:
+    {{- include "prometheus.labels" (dict "root" . "name" "ingress") | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - {{- with .Values.ingress.host }}
+      host: {{ . | quote }}
+      {{- end }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+{{- end }}

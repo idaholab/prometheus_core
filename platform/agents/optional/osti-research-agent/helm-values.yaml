@@ -1,0 +1,22 @@
+# Helm values for this optional agent (OPTIONAL_AGENTS=true for Compose). Its
+# PDF/ML dependencies need several GiB of memory and model caches.
+agents:
+  osti-research-agent:
+    enabled: false
+    image:
+      repository: prometheus_osti-research-agent-devel
+    resources:
+      requests:
+        memory: 2Gi
+      limits:
+        memory: 8Gi
+    persistence:
+      - name: model-cache
+        mountPath: /root/.cache/datalab
+        size: 10Gi
+      - name: huggingface-cache
+        mountPath: /root/.cache/huggingface
+        size: 10Gi
+      - name: torch-cache
+        mountPath: /root/.cache/torch
+        size: 5Gi

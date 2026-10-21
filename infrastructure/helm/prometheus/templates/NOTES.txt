@@ -1,0 +1,13 @@
+Prometheus is deployed to namespace {{ .Release.Namespace }}.
+
+Service names are fixed (backend, litellm, redis, client-agent, ...) to match
+docker-compose.yml, so install only one release per namespace.
+
+{{- if .Values.ingress.enabled }}
+
+Open {{ include "prometheus.backendPublicUrl" . }}. The first visit runs the setup wizard.
+{{- end }}
+
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl logs -f deploy/backend -n {{ .Release.Namespace }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/client-agent 8001:8000   # system tests

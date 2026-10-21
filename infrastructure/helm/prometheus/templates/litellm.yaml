@@ -1,0 +1,92 @@
+{{- /* LiteLLM: the A2A agent registry/gateway and the shared LLM proxy */ -}}
+{{- if .Values.litellm.enabled }}
+{{- include "prometheus.requires" (dict "root" . "name" "litellm" "needs" (list "litellmDb")) }}
+{{- $ctx := dict "root" . "name" "litellm" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+data:
+  config.yaml: |
+    {{- required "litellm.config is required: pass --set-file litellm.config=platform/litellm_config.yaml" .Values.litellm.config | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  # Check that LiteLLM's /v1/agents state is fully DB-backed before raising this
+  replicas: {{ .Values.litellm.replicas }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+      annotations:
+        # Roll the pod when the config changes
+        checksum/config: {{ .Values.litellm.config | sha256sum }}
+        {{- include "prometheus.envChecksum" . | nindent 8 }}
+    spec:
+      {{- include "prometheus.pullSecrets" . | trim | nindent 6 }}
+      {{- include "prometheus.podSecurity" . | trim | nindent 6 }}
+      initContainers:
+        {{- include "prometheus.waitFor" (dict "root" . "name" "litellm-db" "host" "litellm-db" "port" 5432) | trim | nindent 8 }}
+        {{- include "prometheus.caInit" (dict "root" . "image" (include "prometheus.image" (dict "root" . "image" .Values.litellm.image))) | trim | nindent 8 }}
+      containers:
+        - name: litellm
+          image: {{ include "prometheus.image" (dict "root" . "image" .Values.litellm.image) }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          # The same args as docker-compose.yml
+          args: ["--config", "/app/config.yaml", "--port", "4000", "--telemetry", "false"]
+          ports:
+            - name: http
+              containerPort: 4000
+          # LITELLM_MASTER_KEY and the provider keys config.yaml references
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.shared }}
+          env:
+            - name: LITELLM_LOCAL_MODEL_COST_MAP
+              value: "True"
+            {{- include "prometheus.privateEnv" (dict "root" . "key" "LITELLM_DB_PASSWORD") | trim | nindent 12 }}
+            - name: DATABASE_URL
+              value: postgresql://litellm:$(LITELLM_DB_PASSWORD)@litellm-db:5432/litellm
+            {{- include "prometheus.caEnv" . | trim | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+            {{- include "prometheus.caVolumeMounts" . | trim | nindent 12 }}
+          # Prisma migrations run on boot, so startup gets up to 5 minutes
+          {{- include "prometheus.probes" (dict "path" "/health/liveliness" "readinessPath" "/health/readiness" "port" "http" "startupSeconds" 300) | trim | nindent 10 }}
+          {{- include "prometheus.containerSecurity" . | trim | nindent 10 }}
+          {{- with .Values.litellm.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config
+        {{- include "prometheus.caVolumes" . | trim | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+{{- end }}

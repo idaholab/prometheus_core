@@ -1,0 +1,6 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  thermal-agent:
+    enabled: false
+    image:
+      repository: prometheus_thermal-agent-devel

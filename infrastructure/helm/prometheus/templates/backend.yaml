@@ -1,0 +1,152 @@
+{{- /*
+FastAPI backend. The entrypoint runs the admin-db migrations before serving;
+alembic's advisory lock makes concurrent pods safe.
+*/ -}}
+{{- if .Values.backend.enabled }}
+{{- include "prometheus.requires" (dict "root" . "name" "backend" "needs" (list "adminDb" "redis")) }}
+{{- $ctx := dict "root" . "name" "backend" -}}
+{{- $b := .Values.backend -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $b.autoscaling.enabled }}
+  replicas: {{ $b.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+      {{- with include "prometheus.envChecksum" . }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "prometheus.pullSecrets" . | trim | nindent 6 }}
+      {{- include "prometheus.podSecurity" . | trim | nindent 6 }}
+      terminationGracePeriodSeconds: {{ $b.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "prometheus.waitFor" (dict "root" . "name" "admin-db" "host" "admin-db" "port" 5432) | trim | nindent 8 }}
+        {{- include "prometheus.waitFor" (dict "root" . "name" "redis" "host" "redis" "port" 6379) | trim | nindent 8 }}
+        {{- include "prometheus.caInit" (dict "root" . "image" (include "prometheus.image" (dict "root" . "image" $b.image))) | trim | nindent 8 }}
+      containers:
+        - name: backend
+          image: {{ include "prometheus.image" (dict "root" . "image" $b.image) }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            {{- include "prometheus.commonEnvFrom" . | trim | nindent 12 }}
+          env:
+            {{- include "prometheus.commonEnv" . | trim | nindent 12 }}
+            - name: CLIENT_AGENT_URL
+              value: http://client-agent:8000
+            # Backend only: the session-cookie key, the identity signing key
+            # (only the backend mints) and the admin plane
+            {{- include "prometheus.privateEnv" (dict "root" . "key" "BACKEND_JWT_SECRET") | trim | nindent 12 }}
+            {{- include "prometheus.privateEnv" (dict "root" . "key" "USER_IDENTITY_PRIVATE_KEY" "optional" true) | trim | nindent 12 }}
+            {{- include "prometheus.privateEnv" (dict "root" . "key" "ADMIN_DB_ENCRYPTION_KEY") | trim | nindent 12 }}
+            {{- include "prometheus.privateEnv" (dict "root" . "key" "ADMIN_DB_PASSWORD") | trim | nindent 12 }}
+            - name: ADMIN_DATABASE_URL
+              value: postgresql+asyncpg://admin:$(ADMIN_DB_PASSWORD)@admin-db:5432/admin
+            - name: USER_IDENTITY_TTL
+              value: {{ $b.identityTtl | quote }}
+            # The origin the browser uses, for OIDC redirects and the cookie's Secure flag
+            - name: BACKEND_PUBLIC_URL
+              value: {{ include "prometheus.backendPublicUrl" . | quote }}
+            # PROMETHEUS_MESH_WORKERS is the VTK pool size per web worker, so the
+            # peak child count is BACKEND_WORKERS x this, which the memory limit covers
+            - name: PROMETHEUS_MESH_CACHE_DIR
+              value: /var/cache/prometheus-mesh
+            - name: PROMETHEUS_MESH_WORKERS
+              value: {{ $b.mesh.workers | quote }}
+            - name: PROMETHEUS_MESH_TIMEOUT_SECONDS
+              value: {{ $b.mesh.timeoutSeconds | quote }}
+            - name: BACKEND_WORKERS
+              value: {{ $b.workers | quote }}
+            {{- include "prometheus.caEnv" . | trim | nindent 12 }}
+          volumeMounts:
+            - name: mesh-cache
+              mountPath: /var/cache/prometheus-mesh
+            # Uploads spool here
+            - name: tmp
+              mountPath: /tmp
+            {{- include "prometheus.caVolumeMounts" . | trim | nindent 12 }}
+          # /healthz is dependency-free (liveness); /readyz checks Valkey and admin-db
+          {{- include "prometheus.probes" (dict "path" "/healthz" "readinessPath" "/readyz" "port" "http" "startupSeconds" 180) | trim | nindent 10 }}
+          lifecycle:
+            # Let the Service and ingress stop routing here before shutdown starts
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          {{- include "prometheus.containerSecurity" . | trim | nindent 10 }}
+          {{- with $b.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: mesh-cache
+          emptyDir:
+            sizeLimit: {{ $b.persistence.meshCache.sizeLimit }}
+        - name: tmp
+          emptyDir: {}
+        {{- include "prometheus.caVolumes" . | trim | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+{{- if $b.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: {{ $b.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- if $b.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: {{ $b.autoscaling.minReplicas }}
+  maxReplicas: {{ $b.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $b.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

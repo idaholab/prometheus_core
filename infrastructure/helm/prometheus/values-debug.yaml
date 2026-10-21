@@ -1,0 +1,17 @@
+# Turns on the debug agents, the counterpart of DEBUG_AGENTS=true for Compose.
+# Pass after the agents' helm-values.yaml files, which ship them disabled.
+agents:
+  artifact-debug-agent:
+    enabled: true
+  code-render-debug-agent:
+    enabled: true
+  corrosion-agent:
+    enabled: true
+  data-agent:
+    enabled: true
+  radiation-agent:
+    enabled: true
+  thermal-agent:
+    enabled: true
+  thread-pattern-agent:
+    enabled: true

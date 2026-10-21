@@ -1,0 +1,26 @@
+# Local k3d cluster (make cluster-up, then make cluster-deploy).
+#
+# The datastores run in the chart. Secrets come from platform/.env, which
+# make cluster-deploy copies into the prometheus-env Secrets. Images come from
+# ghcr.io at PROMETHEUS_IMAGE_TAG; to run local builds, push them to the
+# cluster registry and set
+#   global.image.registry: k3d-prometheus-registry.localhost:5001
+
+litellmDb:
+  enabled: true
+adminDb:
+  enabled: true
+redis:
+  enabled: true
+
+backend:
+  # k3d maps host port 8080 to Traefik
+  publicUrl: http://localhost:8080
+  persistence:
+    meshCache:
+      sizeLimit: 2Gi
+
+ingress:
+  enabled: true
+  className: traefik
+  host: ""

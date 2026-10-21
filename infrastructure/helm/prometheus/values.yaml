@@ -1,0 +1,187 @@
+# Default values for the Prometheus chart.
+#
+# Service names are fixed (backend, litellm, redis, client-agent, ...), not
+# prefixed with the release name, so the default URLs used by Compose
+# (http://litellm:4000, http://backend:8000/.well-known/jwks.json, ...) work
+# unchanged. That means one release per namespace.
+#
+# values-dev.yaml: k3d (make cluster-deploy). values-eks.yaml: EKS (P4-02).
+# Specialist agents add themselves from a helm-values.yaml under platform/agents/.
+
+global:
+  # First-party images are {registry}/{repository}:{tag}. A component's own
+  # image.registry and image.tag win; the tag falls back to global.image.tag,
+  # then to the chart's appVersion.
+  image:
+    registry: ghcr.io/idaholab/prometheus_core
+    tag: ""
+    pullPolicy: IfNotPresent
+    # The ghcr.io packages are public; set for a private registry
+    pullSecrets: []
+
+# Secrets come from platform/.env (make cluster-deploy syncs them); the chart
+# never creates or holds them.
+secrets:
+  # Read by every agent and the backend with envFrom: AGENT_SECRET,
+  # REDIS_PASSWORD, LITELLM_MASTER_KEY, the LLM provider keys, ...
+  shared: prometheus-env
+  # Keys only some pods may see, read one by one with secretKeyRef:
+  # BACKEND_JWT_SECRET, USER_IDENTITY_PRIVATE_KEY, ADMIN_DB_ENCRYPTION_KEY,
+  # ADMIN_DB_PASSWORD, LITELLM_DB_PASSWORD. Compose keeps these off the agents
+  # too (see docs/docs/dev-docs/encryption-and-keys.md).
+  private: prometheus-env-private
+
+# Non-secret settings every agent and the backend get, through the
+# prometheus-common ConfigMap (the x-common-env block in docker-compose.yml,
+# minus the secrets). REGISTRY_URL, REDIS_URL and JWKS_URL are not here: they
+# always point at the fixed service names.
+commonEnv:
+  AGENT_SECRET_REQUIRED: "true"
+  DEEPLYNX_BASE_URL: https://deeplynx.inl.gov/api/v1
+  PROMETHEUS_MAX_UPLOAD_BYTES: "104857600"
+  USER_IDENTITY_ISS: prometheus-platform
+  USER_IDENTITY_AUD: prometheus-agents
+  USER_IDENTITY_REQUIRED: "true"
+  CREDENTIAL_BROKER: env
+  # LLM profile for the agents that call an LLM. LLM_CONFIG_PROFILE in .env
+  # wins, because the shared Secret is read after this ConfigMap.
+  LLM_CONFIG_PROFILE: registry
+  LLM_CONFIG_FILE: ""
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# Non-root, read-only root filesystem (prometheus.podSecurity). Off until the
+# images run as UID 10001 (P1-11); today they run as root.
+podSecurity:
+  enabled: false
+  runAsUser: 10001
+
+# Extra CA certificate for networks behind a TLS-inspecting proxy. Off by
+# default. Set configMap to a ConfigMap with a ca.crt key; make cluster-deploy
+# creates one from EXTRA_CA_CERT=/path/to/ca.pem. LiteLLM, the backend and the
+# agents then trust it on top of their images' own CA bundles.
+extraCaCert:
+  configMap: ""
+
+# A hash of platform/.env, set by make cluster-deploy, so pods restart when
+# the Secrets they read change
+envChecksum: ""
+
+# Image for the init containers that wait for a dependency
+waitImage: busybox:1.37.0
+
+litellm:
+  enabled: true
+  image:
+    registry: ghcr.io/berriai
+    repository: litellm
+    tag: v1.92.0
+  replicas: 1
+  # platform/litellm_config.yaml. make cluster-deploy passes it with
+  # --set-file litellm.config=litellm_config.yaml
+  config: ""
+  resources: {}
+
+litellmDb:
+  enabled: true
+  storage: 1Gi
+  resources: {}
+
+adminDb:
+  enabled: true
+  storage: 1Gi
+  resources: {}
+
+postgres:
+  image:
+    registry: docker.io/library
+    repository: postgres
+    tag: 16-alpine
+
+redis:
+  enabled: true
+  image:
+    registry: docker.io/valkey
+    repository: valkey-bundle
+    tag: 9.1.0
+  storage: 1Gi
+  resources: {}
+
+backend:
+  enabled: true
+  image:
+    repository: prometheus_backend-devel
+  replicas: 1
+  # OIDC redirect base: the origin the browser uses. Empty derives it from
+  # ingress.host (https:// when ingress.tls is set).
+  publicUrl: ""
+  workers: 1
+  identityTtl: 7200
+  mesh:
+    workers: 2
+    timeoutSeconds: 120
+  persistence:
+    # Converted Exodus/STL meshes, content-hash keyed. An emptyDir per pod:
+    # losing it only costs re-conversion
+    meshCache:
+      sizeLimit: 10Gi
+  # VTK conversion runs in child processes inside the container, so their
+  # memory counts against this limit. The limit turns "a pathological mesh ate
+  # the node" into one OOM-killed child that degrades a single artifact
+  # (BrokenProcessPool, handled in backend/app/services/mesh/service.py).
+  resources:
+    limits:
+      memory: 4Gi
+  # Open SSE streams never finish on their own, so shutdown waits this long
+  terminationGracePeriodSeconds: 30
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 80
+
+clientAgent:
+  enabled: true
+  image:
+    repository: prometheus_client-agent-devel
+  # Must stay 1 while staged uploads are on the pod's local disk
+  replicas: 1
+  # Where a file staged by one turn waits for the next (P1-09). local is the
+  # pod's disk; s3 lets several replicas share it.
+  stagedUploads:
+    backend: local
+    s3:
+      bucket: ""
+      endpointUrl: ""
+  resources: {}
+  terminationGracePeriodSeconds: 30
+
+frontend:
+  enabled: true
+  image:
+    repository: prometheus_frontend-devel
+  replicas: 1
+  resources: {}
+
+# Specialist agents, keyed by name (also the Service name and the name the
+# agent registers with LiteLLM). Each agent directory ships its entry in
+# helm-values.yaml; see the agent schema in values.schema.json.
+#   enabled:       render it
+#   image:         {registry, repository, tag}; registry and tag default to global.image
+#   replicas, resources, nodeSelector, tolerations
+#   env:           extra variables, as a map
+#   envFrom:       extra envFrom sources, as in a pod spec
+#   persistence:   list of {name, mountPath, size}; a PVC when size is set,
+#                  otherwise an emptyDir
+agents: {}
+
+ingress:
+  enabled: true
+  className: traefik
+  # Empty matches any host
+  host: ""
+  annotations: {}
+  # Standard Ingress tls entries, e.g. [{hosts: [prometheus.example.com], secretName: prometheus-tls}]
+  tls: []

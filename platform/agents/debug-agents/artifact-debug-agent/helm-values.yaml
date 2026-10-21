@@ -1,0 +1,6 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  artifact-debug-agent:
+    enabled: false
+    image:
+      repository: prometheus_artifact-debug-agent-devel

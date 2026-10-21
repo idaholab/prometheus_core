@@ -1,0 +1,2 @@
+# EKS. A placeholder: P4-02 fills this in (RDS and ElastiCache instead of the
+# in-chart datastores, External Secrets, ALB ingress, ECR images).

@@ -1,0 +1,8 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  thread-pattern-agent:
+    enabled: false
+    image:
+      repository: prometheus_thread-pattern-agent-devel
+    env:
+      PROMETHEUS_HEARTBEAT_INTERVAL: "15"

@@ -1,0 +1,98 @@
+{{- /*
+The client-agent orchestrator. Kept apart from the specialist agents because
+it has more config and a different role; it uses the same helpers.
+*/ -}}
+{{- if .Values.clientAgent.enabled }}
+{{- include "prometheus.requires" (dict "root" . "name" "clientAgent" "needs" (list "litellm" "redis")) }}
+{{- $ctx := dict "root" . "name" "client-agent" -}}
+{{- $c := .Values.clientAgent -}}
+{{- if and (gt (int $c.replicas) 1) (eq $c.stagedUploads.backend "local") }}
+{{- fail "clientAgent.replicas > 1 needs clientAgent.stagedUploads.backend=s3: local staged uploads are only on one pod's disk" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-agent
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $c.replicas }}
+  selector:
+    matchLabels:
+      {{- include "prometheus.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "prometheus.labels" $ctx | nindent 8 }}
+      {{- with include "prometheus.envChecksum" . }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "prometheus.pullSecrets" . | trim | nindent 6 }}
+      {{- include "prometheus.podSecurity" . | trim | nindent 6 }}
+      terminationGracePeriodSeconds: {{ $c.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "prometheus.waitForLitellm" . | trim | nindent 8 }}
+        {{- include "prometheus.caInit" (dict "root" . "image" (include "prometheus.image" (dict "root" . "image" $c.image))) | trim | nindent 8 }}
+      containers:
+        - name: client-agent
+          image: {{ include "prometheus.image" (dict "root" . "image" $c.image) }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            {{- include "prometheus.commonEnvFrom" . | trim | nindent 12 }}
+          env:
+            {{- include "prometheus.commonEnv" . | trim | nindent 12 }}
+            - name: AGENT_PORT
+              value: "8000"
+            # The pod hostname isn't resolvable; register the Service name instead
+            - name: EXTERNAL_AGENT_URL
+              value: http://client-agent:8000
+            {{- include "prometheus.caEnv" . | trim | nindent 12 }}
+            - name: PROMETHEUS_STAGED_UPLOAD_BACKEND
+              value: {{ $c.stagedUploads.backend | quote }}
+            {{- if eq $c.stagedUploads.backend "s3" }}
+            - name: S3_BUCKET
+              value: {{ required "clientAgent.stagedUploads.s3.bucket is required with backend=s3" $c.stagedUploads.s3.bucket | quote }}
+            {{- with $c.stagedUploads.s3.endpointUrl }}
+            - name: S3_ENDPOINT_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            # Local staged uploads live under the temp directory
+            - name: tmp
+              mountPath: /tmp
+            {{- include "prometheus.caVolumeMounts" . | trim | nindent 12 }}
+          {{- include "prometheus.probes" (dict "path" "/healthz" "port" "http") | trim | nindent 10 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          {{- include "prometheus.containerSecurity" . | trim | nindent 10 }}
+          {{- with $c.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "prometheus.caVolumes" . | trim | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-agent
+  labels:
+    {{- include "prometheus.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "prometheus.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+{{- end }}

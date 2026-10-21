@@ -199,8 +199,17 @@ The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default
 ## Local Kubernetes cluster with k3d
 
 A prototype for running Prometheus on Kubernetes locally. `make cluster-up` creates a one-node
-[k3d](https://k3d.io) cluster. Deploying the stack into it is not wired up yet. The Docker Compose
-workflow above is unchanged and doesn't need any of this.
+[k3d](https://k3d.io) cluster, and `make cluster-deploy` installs the stack into it with the Helm
+chart in `../infrastructure/helm/prometheus/`. The Docker Compose workflow above is unchanged and
+doesn't need any of this.
+
+```bash
+make cluster-up
+make build LOCAL_SDK=true PROFILE=prod   # or skip both steps and use published images, below
+make cluster-push
+make cluster-deploy PROMETHEUS_IMAGE_REGISTRY=k3d-prometheus-registry.localhost:5001 PROMETHEUS_IMAGE_TAG=local
+# open http://localhost:8080
+```
 
 Run the targets from `platform/`. On Windows, run them from your WSL2 distro. See
 [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md).
@@ -218,8 +227,62 @@ Run the targets from `platform/`. On Windows, run them from your WSL2 distro. Se
 | `make cluster-up` | Checks the tools, then creates the cluster. Starts it if it's stopped, and does nothing if it's already running |
 | `make cluster-down` | Deletes the cluster |
 | `make cluster-reset` | `cluster-down`, then `cluster-up` |
+| `make cluster-push` | Pushes the images `make build` made to the cluster registry as `prometheus_<name>-devel:local` (`PUSH_TAG=` to change). Images that weren't built are skipped |
+| `make cluster-deploy` | Runs `init-env`, copies `.env` into the `prometheus-env` and `prometheus-env-private` Secrets, installs or upgrades the chart, and waits until every pod is ready. Then, like `make up`, it checks the frontend and `/api` through the ingress and waits until every agent is registered with LiteLLM (`CHECK=false` skips this) |
+| `make cluster-undeploy` | Uninstalls the chart. The databases and Valkey keep their volumes |
+| `make cluster-status` | Lists the pods, services, ingress and volumes |
+| `make cluster-logs SVC=backend` | Follows one service's logs |
+| `make cluster-clobber` | Uninstalls the chart and deletes its volumes (users, keys, history), after confirmation |
 
 Set `SKIP_PREREQUISITES=1` to skip the tool check.
+
+Images are `$(PROMETHEUS_IMAGE_REGISTRY)/prometheus_<name>-devel:$(PROMETHEUS_IMAGE_TAG)`. By
+default they come from ghcr.io at a pinned tag (`<commit date>-<sha7>`, as `publish.yml` publishes
+them). The agent images are published only from the commit that added them to `publish.yml` on, so
+use local builds until then.
+
+Agents: client-agent, synthesis-agent and form-filler-agent run by default. `DEBUG_AGENTS=true`
+adds the debug agents and `OPTIONAL_AGENTS=true` the optional ones, as with Compose. Each agent's
+chart settings live next to it in `agents/<name>/helm-values.yaml`, and `cluster-deploy` passes
+every one of them. Adding an agent means a Dockerfile, its compose file and a `helm-values.yaml`:
+
+```yaml
+agents:
+  my-agent:              # the Service name, and the name it registers with LiteLLM
+    enabled: true
+    image:
+      repository: prometheus_my-agent-devel
+    env:                 # extra variables beyond the shared ones
+      MY_SETTING: "1"
+```
+
+The chart's `values.yaml` documents every setting, and `values.schema.json` rejects unknown ones.
+Service names are fixed (`backend`, `litellm`, `redis`, ...) to match Compose, so install one
+release per namespace. In the cluster, `/api` goes from the ingress straight to the backend; the
+backend's `/healthz` and `/readyz` and the client-agent are reachable with
+`kubectl port-forward svc/<name>`.
+
+Behind a TLS-inspecting proxy, outbound HTTPS from the pods (LiteLLM to the LLM provider, agents
+to DeepLynx) fails certificate verification. Pass the proxy's CA certificate and the backend,
+LiteLLM and the agents trust it on top of their own CA bundles:
+
+```bash
+make cluster-deploy EXTRA_CA_CERT=/path/to/ca.pem
+```
+
+Nothing is added when `EXTRA_CA_CERT` is unset.
+
+The in-cluster LiteLLM uses `litellm_config.yaml`, the same file Compose mounts, which sends model
+requests to Anthropic with `LLM_API_KEY`. To send them somewhere else, such as another LiteLLM
+service, pass your own config. Keep `general_settings` from `litellm_config.yaml` and change the
+`model_list` entries:
+
+```bash
+make cluster-deploy LITELLM_CONFIG=/path/to/litellm_config.yaml
+```
+
+Agents keep `LLM_CONFIG_PROFILE=registry`, so every model request still goes through the in-cluster
+LiteLLM.
 
 On the INL network, `cluster-up` downloads the INL root CA from
 `https://certstore.inl.gov/pki/CAINLROOT_B64.crt` to `~/.cache/prometheus/` and trusts it inside

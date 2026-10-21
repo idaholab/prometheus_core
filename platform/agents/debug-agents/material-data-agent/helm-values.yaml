@@ -1,0 +1,7 @@
+# Helm values for this debug agent; values-debug.yaml enables it.
+# It registers as data-agent, the name its compose service uses.
+agents:
+  data-agent:
+    enabled: false
+    image:
+      repository: prometheus_data-agent-devel

@@ -1,0 +1,11 @@
+{{- /* Non-secret settings shared by every agent and the backend (prometheus.commonEnvFrom) */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-common
+  labels:
+    {{- include "prometheus.labels" (dict "root" . "name" "prometheus-common") | nindent 4 }}
+data:
+  {{- range $name, $value := .Values.commonEnv }}
+  {{ $name }}: {{ $value | toString | quote }}
+  {{- end }}

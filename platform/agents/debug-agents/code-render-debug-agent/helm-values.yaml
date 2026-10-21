@@ -1,0 +1,6 @@
+# Helm values for this debug agent; values-debug.yaml enables it
+agents:
+  code-render-debug-agent:
+    enabled: false
+    image:
+      repository: prometheus_code-render-debug-agent-devel
