@@ -23,11 +23,21 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - REQ-009-13: `PrometheusAgent.run_worker(...)` MUST execute `PrometheusWorker.run()` off the event loop, forward queued worker events, return the worker result, propagate worker exceptions, and set cooperative cancellation on caller cancellation.
 - REQ-009-14: `PrometheusWorker.emit_status_update(...)` MUST queue non-final status events only after the worker has been bound through `run_worker(...)`.
 - REQ-009-15: `PrometheusWorker.emit_json_artifact(...)` MUST queue inline JSON artifact events and return/reuse the artifact ID, but MUST NOT perform catalog registration or loop-bound I/O.
+- REQ-009-16: A standard `PrometheusAgent` execution MUST create one DeepLynx item after identity verification and parameter extraction, but before emitting the initial `working` status or invoking `_execute(...)`.
+- REQ-009-17: The execution item MUST be created with a just-in-time `deeplynx` credential and MUST contain a versioned schema identifier, agent name, normalized producer agent ID, authenticated user ID, task ID, context ID, creation timestamp, and the effective parameters passed to `_execute(...)`.
+- REQ-009-18: Secret-bearing values in execution-record parameters MUST be recursively redacted with the shared LLM security redactor while preserving the parameter structure; the unredacted effective parameters MUST still be passed to `_execute(...)`.
+- REQ-009-19: A verified identity MUST overwrite any caller-provided `user_id` parameter. Execution-record metadata MUST derive the authenticated user from the active verified identity, never from untrusted request data.
+- REQ-009-20: If credential acquisition, storage configuration, or execution-item creation fails, the executor MUST emit its normal terminal failure and MUST NOT invoke `_execute(...)`.
+- REQ-009-21: `PrometheusAgent.execution_record_id` MUST expose the created DeepLynx item ID only within the active execution scope and MUST isolate concurrent executions and reset after success or failure.
 
 ## Behavior
 - BEH-009-01: GIVEN a slow `_execute(...)` and a short heartbeat interval WHEN execution runs THEN at least one silent non-final heartbeat is emitted before the final completed event.
 - BEH-009-02: GIVEN `_execute(...)` emits a final status WHEN it returns a dict THEN the executor skips automatic finalization and does not emit a contradictory terminal event.
 - BEH-009-03: GIVEN a worker emits status, artifact, and status events WHEN `run_worker(...)` completes THEN those events are forwarded in order and the worker result is returned.
+- BEH-009-04: GIVEN an authenticated standard agent request WHEN execution begins THEN one execution item is created before agent work and `_execute(...)` can read that item's ID from `self.execution_record_id`.
+- BEH-009-05: GIVEN a request parameter containing a spoofed `user_id` and nested credentials WHEN the execution item is created THEN both the item and `_execute(...)` use the verified user ID, while only the persisted parameter snapshot has credential values redacted.
+- BEH-009-06: GIVEN concurrent requests on one agent instance WHEN both execute THEN each invocation observes only its own execution-record ID and neither ID remains bound after its invocation ends.
+- BEH-009-07: GIVEN DeepLynx execution-item creation fails WHEN execution begins THEN the task fails before `_execute(...)` runs.
 
 ## Interfaces
 - `MissingInput` is owned by spec 010.
@@ -35,7 +45,8 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - `PrometheusAgentExecutor.execute(context: RequestContext, event_queue: EventQueue) -> None`
 - `PrometheusAgentExecutor.cancel(context: RequestContext, event_queue: EventQueue) -> None`
 - `PrometheusAgentExecutor._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
-- `DelegatingPrometheusAgentExecutor(agent_name: str, execute_fn: Callable[..., Awaitable[dict[str, Any]]])`
+- `DelegatingPrometheusAgentExecutor(agent_name: str, execute_fn: Callable[..., Awaitable[dict[str, Any]]], execution_scope: Callable[..., AsyncContextManager[None]] | None = None)`
+- `PrometheusAgent.execution_record_id -> int | None`
 - `PrometheusAgent._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
 - `PrometheusAgent.send_status_update(context, event_queue, state: TaskState = TaskState.working, final: bool = False, message: str | None = None, metadata: dict | None = None) -> None`
 - `PrometheusAgent.declare_long_running(context, event_queue, *, estimate_seconds: float | None = None, message: str | None = None, metadata: dict | None = None) -> None`

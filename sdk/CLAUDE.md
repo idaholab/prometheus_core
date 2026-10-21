@@ -75,7 +75,9 @@ Default `IMAGE_TAG` is `git rev-parse --short HEAD`.
 `DeepLynxFileSystem` (fsspec) maps `deeplynx://` URIs to DeepLynx file records, storing object keys in record metadata rather than building a separate index. It's wired up automatically via the `[project.entry-points."fsspec.specs"]` declaration in `pyproject.toml`.
 
 ### PrometheusAgent contract
-Subclasses override `async _execute(self, params, context: RequestContext, event_queue: EventQueue) -> dict`. The returned dict becomes the final task status — the base class emits the terminal `TaskStatusUpdateEvent` automatically. Inside `_execute`, use the helpers rather than constructing A2A events manually:
+Subclasses override `async _execute(self, params, context: RequestContext, event_queue: EventQueue) -> dict`. The returned dict becomes the final task status — the base class emits the terminal `TaskStatusUpdateEvent` automatically. Before `_execute` starts, the standard executor obtains a just-in-time `deeplynx` credential and creates a mandatory execution item containing agent/task/context identity, the verified user, and a recursively redacted snapshot of the effective parameters. Creation failure fails the task before subclass work. During `_execute`, `self.execution_record_id` exposes that invocation's DeepLynx item ID; it is request-scoped for concurrency safety and returns `None` outside the active invocation. The verified identity always replaces any caller-provided `params["user_id"]`. Deployments therefore need valid DeepLynx credentials and either `DEEPLYNX_DATA_SOURCE_ID` or a project default data source.
+
+Inside `_execute`, use the helpers rather than constructing A2A events manually:
 
 - `send_status_update(...)` — transient progress
 - `send_artifact_reference(...)` — URI-backed file artifact (e.g. `deeplynx://...`)

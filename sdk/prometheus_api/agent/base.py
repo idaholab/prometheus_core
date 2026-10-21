@@ -23,10 +23,22 @@ import logging
 import uuid
 import asyncio
 from contextlib import asynccontextmanager, suppress
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Mapping, Optional
-from typing import Sequence, cast
-from datetime import datetime
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -85,11 +97,21 @@ from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
 from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
-from ..storage_client.models.item import ItemUpdate
+from ..storage_client.models.item import ItemCreate, ItemUpdate
+from ..llm_client.security import redact_secrets
 import uvicorn
 
 logger = logging.getLogger(__name__)
 _WORKFLOW_FILE_SUFFIXES = {".json", ".yaml", ".yml"}
+_EXECUTION_RECORD_SCHEMA = "prometheus.execution_record.v1"
+_EXECUTION_RECORD_TAG = "execution"
+
+
+_ExecutionScope = Callable[
+    [Dict[str, Any], RequestContext],
+    AsyncContextManager[None],
+]
+_UNSET_EXECUTION_RECORD = object()
 
 
 class _TrackedEventQueue:
@@ -246,18 +268,22 @@ class PrometheusAgentExecutor(AgentExecutor):
                 # Extract parameters from the message (injects params["user_id"])
                 params = self._extract_params(context)
 
-                # Send "working" status
-                await emit_status_update(
-                    context=context,
-                    event_queue=tracked_queue,
-                    state=TaskState.TASK_STATE_WORKING,
-                    final=False,
-                )
+                # Standard delegating executors may establish request-scoped state
+                # before any work status or agent code runs. The bare executor's
+                # default scope is a storage-independent no-op.
+                async with self._request_scope(params, context):
+                    # Send "working" status
+                    await emit_status_update(
+                        context=context,
+                        event_queue=tracked_queue,
+                        state=TaskState.TASK_STATE_WORKING,
+                        final=False,
+                    )
 
-                # Perform the main analysis (implemented by subclass), with a
-                # background keepalive so streaming connections do not time out
-                # during long gaps between substantive status updates.
-                result = await self._execute_with_heartbeat(params, context, tracked_queue)
+                    # Perform the main analysis (implemented by subclass), with a
+                    # background keepalive so streaming connections do not time out
+                    # during long gaps between substantive status updates.
+                    result = await self._execute_with_heartbeat(params, context, tracked_queue)
 
             # Agent can fully control finalization for advanced/streaming use cases.
             # If it already emitted a final status, skip automatic completion events.
@@ -300,6 +326,15 @@ class PrometheusAgentExecutor(AgentExecutor):
                     final=True,
                 )
             raise
+
+    @asynccontextmanager
+    async def _request_scope(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Establish optional request state before working status and agent work."""
+        yield
 
     @staticmethod
     def _heartbeat_interval() -> float:
@@ -485,7 +520,7 @@ class PrometheusAgentExecutor(AgentExecutor):
         from .identity import current_user_id as _current_user_id
 
         uid = _current_user_id()
-        if uid is not None and "user_id" not in params:
+        if uid is not None:
             params["user_id"] = uid
 
         logger.info("Extracted parameter keys: %s", sorted(params.keys()))
@@ -565,9 +600,24 @@ class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
             [Dict[str, Any], RequestContext, EventQueue],
             Awaitable[Dict[str, Any]],
         ],
+        execution_scope: Optional[_ExecutionScope] = None,
     ):
         super().__init__(agent_name=agent_name)
         self._execute_fn = execute_fn
+        self._execution_scope = execution_scope
+
+    @asynccontextmanager
+    async def _request_scope(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Enter the optional owning-agent scope before work begins."""
+        if self._execution_scope is None:
+            yield
+            return
+        async with self._execution_scope(params, context):
+            yield
 
     async def _execute(
         self,
@@ -648,6 +698,10 @@ class PrometheusAgent:
         self._custom_http_routes: List[_AgentHTTPRoute] = []
         self._custom_static_endpoints: List[_AgentStaticEndpoint] = []
         self.executor: Optional[PrometheusAgentExecutor] = None
+        self._execution_record_id: ContextVar[object] = ContextVar(
+            f"prometheus_execution_record_id_{id(self)}",
+            default=_UNSET_EXECUTION_RECORD,
+        )
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
         self.context_state_store = ContextStateStore()
@@ -1410,6 +1464,58 @@ class PrometheusAgent:
             backoff_factor=backoff_factor,
         )
 
+    @property
+    def execution_record_id(self) -> Optional[int]:
+        """DeepLynx execution item ID for the active request, if any."""
+        value = self._execution_record_id.get()
+        return value if isinstance(value, int) else None
+
+    @asynccontextmanager
+    async def _execution_record_scope(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Create and bind the request's durable DeepLynx execution record."""
+        identity = get_current_identity()
+        if identity is None:
+            raise RuntimeError("Execution records require a verified request identity")
+
+        task_id = context_task_id(context)
+        context_id = event_context_id(context)
+        created_at = datetime.now(timezone.utc).isoformat()
+        producer_id = self._producer_agent_id
+        properties = {
+            "schema": _EXECUTION_RECORD_SCHEMA,
+            "agent_name": self.agent_name,
+            "producer_agent_id": producer_id,
+            "authenticated_user_id": identity.user_id,
+            "task_id": task_id,
+            "context_id": context_id,
+            "parameters": redact_secrets(params),
+            "created_at": created_at,
+        }
+        credential = await self.get_credential("deeplynx")
+        config = ConnectionConfig.from_credential(credential)
+        name_suffix = f" execution {created_at}"
+        execution_name = f"{self.agent_name[: 499 - len(name_suffix)]}{name_suffix}"
+        item_create = ItemCreate(
+            name=execution_name,
+            description=f"Execution record for task {task_id}",
+            properties=properties,
+            class_id=None,
+            original_id=f"prometheus-execution:{producer_id}:{task_id}",
+            tags=[_EXECUTION_RECORD_TAG],
+        )
+        async with AsyncStorageClient(config) as client:
+            item = await client.items.create(item_create)
+
+        token = self._execution_record_id.set(item.id)
+        try:
+            yield
+        finally:
+            self._execution_record_id.reset(token)
+
     def create_executor(self) -> PrometheusAgentExecutor:
         """
         Create the agent executor.
@@ -1424,6 +1530,7 @@ class PrometheusAgent:
         return DelegatingPrometheusAgentExecutor(
             agent_name=self.agent_name,
             execute_fn=self._execute,
+            execution_scope=self._execution_record_scope,
         )
 
     async def _execute(
