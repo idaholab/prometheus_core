@@ -24,6 +24,10 @@ the above: `AGENT_SECRET` is a bearer token for A2A auth between the backend,
 client-agent, and every specialist agent — it has nothing to do with *who the
 user is* (identity plane) and predates all of this.
 
+SMTP passwords (`SMTP_PASSWORD` and `SMTP_<NAME>_PASSWORD`) are external
+credentials, held only in the backend environment and never stored by the
+platform; see [Platform settings](platform-settings.md).
+
 ### Why four, not one
 
 - **#1 (session cookie) is deliberately separate from #2 (identity JWT).**

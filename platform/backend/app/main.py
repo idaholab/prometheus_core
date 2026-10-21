@@ -10,6 +10,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -20,7 +21,9 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.crypto import EncryptionError
 from app.db import get_session_factory
+from app.email_settings import get_email_settings
 from app.routers import (
+    admin_email_settings,
     admin_keys,
     admin_oidc,
     admin_users,
@@ -41,6 +44,10 @@ from app.services.events import EventBus
 from app.services.mesh.service import shutdown_mesh_executor
 from app.sessions import SessionStore
 from app.signing_keys import ensure_active_signing_key
+
+# A child of uvicorn.error, which uvicorn configures at INFO; the backend sets up
+# no logging of its own, so a plain app.main logger would drop the INFO lines.
+email_logger = logging.getLogger("uvicorn.error").getChild("email")
 
 
 @asynccontextmanager
@@ -72,6 +79,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # A fresh install gets one active RS256 identity key, so mint_for_user()
         # works before an admin visits Admin > Signing Keys. See app/signing_keys.py.
         await ensure_active_signing_key(db)
+    # SMTP configurations from the optional platform settings file, loaded once
+    # (app/email_settings.py). Loading never raises: a missing or bad file turns
+    # email off and is logged here, never a password.
+    email = get_email_settings()
+    if email.error is not None:
+        email_logger.warning("email: %s: %s", email.settings_file, email.error)
+    for name, (error, _) in sorted(email.invalid.items()):
+        email_logger.warning("email: configuration %s is invalid: %s", name, error)
+    email_logger.info(
+        "email: %d configurations, default %s, %d invalid",
+        len(email.configurations),
+        email.default,
+        len(email.invalid),
+    )
     # One async Valkey client (a connection pool) shared by every subsystem that
     # needs one: sessions, the SSE event bus, session revocation and task events.
     # See app/redis_client.py.
@@ -137,3 +158,4 @@ app.include_router(conversations.router)
 app.include_router(admin_users.router)
 app.include_router(admin_keys.router)
 app.include_router(admin_oidc.router)
+app.include_router(admin_email_settings.router)

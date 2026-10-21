@@ -27,6 +27,8 @@ dependencies = [
     # (Fernet, app/crypto.py). Also used by prometheus_api for RS256 -- pinning
     # here too since the backend depends on it directly, not just transitively.
     "cryptography>=42",
+    # Validates SmtpConfiguration.from_address as pydantic EmailStr (app/email_settings.py).
+    "email-validator>=2.0",
 ]
 
 [dependency-groups]

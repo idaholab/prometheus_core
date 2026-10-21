@@ -29,14 +29,18 @@ def test_litellm_config_file_exists(project_root):
     assert (project_root / "litellm_config.yaml").exists()
 
 
-# Only these two host paths may be bind-mounted at runtime. Every other service
+# Only these three host paths may be bind-mounted at runtime. Every other service
 # must run purely from its image, so the stack stays deployable to plain Docker or
 # Kubernetes without provisioning a host path or an RWX volume for source. The
 # frontend entry is the Vite dev server, which needs host sources for HMR and is
 # gated behind the "dev" profile; litellm_config.yaml is config, i.e. a ConfigMap.
+# The backend entry is the optional platform settings file, also config with no
+# secrets (its passwords are env references); it is mounted read-only, so an edit
+# needs a restart and no rebuild, i.e. a ConfigMap too.
 ALLOWED_HOST_MOUNTS = {
     "litellm": {"./litellm_config.yaml:/app/config.yaml"},
     "frontend-dev": {"./frontend:/app"},
+    "backend": {"./settings:/app/settings:ro"},
 }
 
 

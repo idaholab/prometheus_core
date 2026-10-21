@@ -419,3 +419,92 @@ Soft delete: sets `conv:meta:{id}.hidden`, which excludes the conversation from
 `recent`. `GET /api/conversations/{id}` and `/resume` then answer `404`, so a tab
 that still remembers the id starts a clean chat instead of reopening it. The
 underlying `conversation:{id}` document (and its artifacts) are left untouched.
+
+## Admin: email settings
+
+The first admin route in this contract. The response models are
+`EmailSettingsOut` and `EmailConfigurationOut` in
+`app/routers/admin_email_settings.py`. Like the other admin models, they live
+in `app/routers/`, not in `app/contract.py`. The route is read-only. The
+platform settings file (`platform/settings/platform-settings.yml`, read by
+`app/email_settings.py`) is the only source of email settings, and the backend loads it once at startup. The route returns that
+loaded state and does not read the file again. The operator page is
+`docs/docs/dev-docs/platform-settings.md`.
+
+### `GET /api/admin/email-settings` → `EmailSettingsOut`
+
+Admin only: the router has `dependencies=[Depends(require_admin)]`. The route
+answers **401** without a session and **403** for a non-admin session. It
+answers **200** in every other case, also when no email is configured.
+
+- `configured` is `true` only when `default` names a valid configuration.
+- `error` is the error of the whole file or `smtp` section (for example
+  `smtp.default must name one of smtp.configurations`), else `null`.
+- `configurations` holds every configuration in the file, valid and invalid,
+  in name order.
+- An invalid configuration has `valid: false`, its own `error`, and
+  `password_env` when its password reference was accepted. Every connection
+  field (`host` through `from_name`) is `null`, and `has_password` is `false`.
+
+No password value is ever returned. A configuration has no `password` key.
+It reports only `has_password` (`true` when the named variable is set and
+not empty) and `password_env` (the name of the variable, never its value).
+
+```json
+{
+  "configured": true,
+  "settings_file": "/app/settings/platform-settings.yml",
+  "file_present": true,
+  "default": "relay",
+  "error": null,
+  "configurations": [
+    {
+      "name": "other",
+      "is_default": false,
+      "valid": false,
+      "error": "SMTP_OTHER_PASSWORD is not set",
+      "host": null,
+      "port": null,
+      "security": null,
+      "verify_tls": null,
+      "ca_bundle": null,
+      "username": null,
+      "from_address": null,
+      "from_name": null,
+      "has_password": false,
+      "password_env": "SMTP_OTHER_PASSWORD"
+    },
+    {
+      "name": "relay",
+      "is_default": true,
+      "valid": true,
+      "error": null,
+      "host": "mailrelay.example.com",
+      "port": 587,
+      "security": "starttls",
+      "verify_tls": true,
+      "ca_bundle": null,
+      "username": "prometheus",
+      "from_address": "prometheus@example.com",
+      "from_name": "Prometheus",
+      "has_password": true,
+      "password_env": "SMTP_RELAY_PASSWORD"
+    }
+  ]
+}
+```
+
+`security` is one of `none`, `starttls` or `ssl`.
+
+With no settings file, the route returns no configurations:
+
+```json
+{
+  "configured": false,
+  "settings_file": "/app/settings/platform-settings.yml",
+  "file_present": false,
+  "default": null,
+  "error": null,
+  "configurations": []
+}
+```

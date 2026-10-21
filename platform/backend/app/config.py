@@ -210,5 +210,11 @@ class Settings(BaseSettings):
     # every configured OIDC provider.
     backend_public_url: str = os.environ.get("BACKEND_PUBLIC_URL", "").rstrip("/")
 
+    # Platform settings file (optional, operator-owned; app/email_settings.py reads its
+    # smtp section). No config.yml equivalent -- env-only.
+    platform_settings_path: str = (
+        os.environ.get("PROMETHEUS_SETTINGS_PATH") or "/app/settings/platform-settings.yml"
+    ).strip()
+
 
 settings = Settings()

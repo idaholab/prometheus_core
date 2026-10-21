@@ -34,6 +34,10 @@ docker-compose.agents.yml
 # Local dev override — not committed
 docker-compose.override.yml
 
+# Operator platform settings (and CA bundles) — only the example is committed
+settings/*
+!settings/platform-settings.example.yml
+
 # ignore agents that have their own repos
 agents/requirements_agent
 agents/bim_agent

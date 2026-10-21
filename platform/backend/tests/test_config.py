@@ -216,3 +216,50 @@ def test_cookie_secure_ignores_an_empty_override(monkeypatch):
     monkeypatch.setenv("BACKEND_PUBLIC_URL", "https://prometheus.example.gov")
     monkeypatch.setenv("BACKEND_COOKIE_SECURE", "   ")
     assert _cookie_secure({"debug": True}) is True
+
+
+# --------------------------------------------------------------------------- #
+# Platform settings file (SMTP): the compose wiring of the ./settings mount
+# --------------------------------------------------------------------------- #
+
+
+def test_compose_mounts_platform_settings_read_only_on_the_backend_only():
+    """The ``backend`` service in ``platform/docker-compose.yml`` MUST mount ``./settings``
+    read-only at ``/app/settings``, MUST set ``PROMETHEUS_SETTINGS_PATH`` to the file in it,
+    and MUST forward ``SMTP_PASSWORD`` with an empty default."""
+    from pathlib import Path
+
+    import yaml
+
+    compose = yaml.safe_load((Path(__file__).resolve().parent.parent.parent / "docker-compose.yml").read_text())
+    services = compose["services"]
+
+    def mounts(service: dict) -> list[str]:
+        # Short syntax is "src:dst[:mode]"; long syntax is a mapping. Normalise both.
+        out = []
+        for vol in service.get("volumes") or []:
+            if isinstance(vol, dict):
+                mode = ":ro" if vol.get("read_only") else ""
+                out.append(f"{vol.get('source')}:{vol.get('target')}{mode}")
+            else:
+                out.append(vol)
+        return out
+
+    def environment(service: dict) -> dict:
+        env = service.get("environment") or {}
+        if isinstance(env, list):
+            return dict(item.split("=", 1) if "=" in item else (item, None) for item in env)
+        return env
+
+    backend = services["backend"]
+    assert "./settings:/app/settings:ro" in mounts(backend), "the settings mount must be read-only"
+    env = environment(backend)
+    assert env.get("PROMETHEUS_SETTINGS_PATH") == "/app/settings/platform-settings.yml"
+    assert env.get("SMTP_PASSWORD") == "${SMTP_PASSWORD:-}"
+
+    others = [
+        name
+        for name, svc in services.items()
+        if name != "backend" and any(m.split(":", 1)[0] == "./settings" for m in mounts(svc or {}))
+    ]
+    assert others == [], f"only the backend may mount ./settings, also mounted by {others}"

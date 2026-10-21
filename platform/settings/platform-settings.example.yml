@@ -1,0 +1,41 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+# Platform settings, read once by the backend at startup.
+#
+# Copy this file to platform-settings.yml in this directory and edit the copy.
+# The copy is gitignored. Compose mounts this directory read-only into the
+# backend at /app/settings, so restart the backend after a change; no rebuild.
+#
+# Never put a password in this file. Give a password only as an environment
+# reference: os.environ/SMTP_PASSWORD or os.environ/SMTP_<NAME>_PASSWORD.
+# The backend gets SMTP_PASSWORD from .env; forward any SMTP_<NAME>_PASSWORD
+# to the backend service in docker-compose.override.yml.
+
+smtp:
+  default: relay            # optional when exactly one configuration exists
+  configurations:
+    relay:
+      host: smtp.example.org
+      port: 25                  # default 587
+      security: none            # none | starttls | ssl; default starttls
+      from_address: prometheus@example.org
+      from_name: Prometheus     # optional
+      verify_tls: true          # default true
+      ca_bundle: /app/settings/relay-ca.pem   # optional; PPLT-131 reads it
+    mailpit:
+      host: mailpit
+      port: 1025
+      security: none
+      from_address: dev@example.com
+      username: dev             # optional
+      password: os.environ/SMTP_MAILPIT_PASSWORD   # optional; env reference only

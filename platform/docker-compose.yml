@@ -222,6 +222,11 @@ services:
       # backend-only, never forwarded to agents.
       ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+asyncpg://admin:${ADMIN_DB_PASSWORD}@admin-db:5432/admin}
       ADMIN_DB_ENCRYPTION_KEY: ${ADMIN_DB_ENCRYPTION_KEY:-}
+      # Platform settings file (SMTP), from the read-only ./settings mount below.
+      # The file holds no password: it names SMTP_PASSWORD or SMTP_<NAME>_PASSWORD
+      # (forward extra ones in docker-compose.override.yml). Backend-only.
+      PROMETHEUS_SETTINGS_PATH: /app/settings/platform-settings.yml
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       # Base URL for the OIDC redirect_uri sent to identity providers -- must
       # be the origin the BROWSER actually uses (e.g. the Vite dev server at
       # http://localhost:5150, which proxies /api here; not this container's
@@ -245,6 +250,7 @@ services:
       BACKEND_WORKERS: ${BACKEND_WORKERS:-1}
     volumes:
       - mesh-cache:/var/cache/prometheus-mesh
+      - ./settings:/app/settings:ro
     # VTK conversion happens in child processes inside this container, so their
     # memory counts against this cgroup. The limit is what turns "a pathological
     # mesh ate the host" into one OOM-killed child that degrades a single
