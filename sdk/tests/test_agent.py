@@ -1172,8 +1172,8 @@ workflows:
         item = observed["item"]
         assert item.name == f"Record Agent execution {item.properties['created_at']}"
         assert item.original_id == "prometheus-execution:record-agent:task-9"
-        assert item.tags == ["execution"]
-        assert item.properties["schema"] == "prometheus.execution_record.v1"
+        assert item.tags is None
+        assert "schema" not in item.properties
         assert item.properties["agent_name"] == "Record Agent"
         assert item.properties["producer_agent_id"] == "record-agent"
         assert item.properties["authenticated_user_id"] == "verified-user"

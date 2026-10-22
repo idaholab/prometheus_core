@@ -103,8 +103,6 @@ import uvicorn
 
 logger = logging.getLogger(__name__)
 _WORKFLOW_FILE_SUFFIXES = {".json", ".yaml", ".yml"}
-_EXECUTION_RECORD_SCHEMA = "prometheus.execution_record.v1"
-_EXECUTION_RECORD_TAG = "execution"
 
 
 _ExecutionScope = Callable[
@@ -1486,7 +1484,6 @@ class PrometheusAgent:
         created_at = datetime.now(timezone.utc).isoformat()
         producer_id = self._producer_agent_id
         properties = {
-            "schema": _EXECUTION_RECORD_SCHEMA,
             "agent_name": self.agent_name,
             "producer_agent_id": producer_id,
             "authenticated_user_id": identity.user_id,
@@ -1514,7 +1511,6 @@ class PrometheusAgent:
             properties=properties,
             class_id=None,
             original_id=f"prometheus-execution:{producer_id}:{task_id}",
-            tags=[_EXECUTION_RECORD_TAG],
         )
         async with AsyncStorageClient(config) as client:
             item = await client.items.create(item_create)
