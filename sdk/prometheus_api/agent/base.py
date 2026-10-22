@@ -1492,7 +1492,16 @@ class PrometheusAgent:
             "authenticated_user_id": identity.user_id,
             "task_id": task_id,
             "context_id": context_id,
-            "parameters": redact_secrets(params),
+            # DeepLynx limits record properties to three container levels. Agent
+            # parameters are arbitrary JSON (artifact catalogs alone can exceed
+            # that), so redact them while structured and persist the snapshot as
+            # JSON text rather than embedding it in the properties tree.
+            "parameters_json": json.dumps(
+                redact_secrets(params),
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ),
             "created_at": created_at,
         }
         credential = await self.get_credential("deeplynx")

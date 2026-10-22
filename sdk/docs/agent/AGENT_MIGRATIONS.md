@@ -56,25 +56,24 @@ healthcheck:
 
 ### Configure DeepLynx for Automatic Execution Records
 
-The standard `PrometheusAgent` executor now creates a DeepLynx execution item before
-calling subclass `_execute(...)`. The item records agent, task, context, and verified-user
-identity plus a recursively redacted snapshot of the effective parameters. Creation is
-mandatory: credential, configuration, data-source, or item-creation failures fail the task
-before subclass work begins.
+Before `_execute(...)`, the standard `PrometheusAgent` executor now creates a mandatory
+DeepLynx execution item containing the agent, task, context, verified user, and effective
+parameters. Parameters are recursively redacted and stored as JSON in the scalar
+`parameters_json` property to avoid DeepLynx's properties-depth limit. Decode them with
+`json.loads(...)`. Credential, configuration, data-source, or item-creation failures stop the
+execution before subclass work begins.
 
 Migration steps:
 
-1. Ensure each agent can obtain a `deeplynx` credential through its configured credential
-   broker. For the environment broker, configure the existing DeepLynx authentication,
-   organization, and project variables.
-2. Configure `DEEPLYNX_DATA_SOURCE_ID` or ensure the target project has a default data source.
-3. Do not trust a caller-provided `params["user_id"]`; the base executor now replaces it with
-   the verified identity before `_execute(...)`.
-4. Access the created item ID through `self.execution_record_id` only while `_execute(...)` is
-   active. The property is request-scoped, concurrency-safe, and returns `None` outside that
-   invocation.
-5. Do not expect API keys, tokens, passwords, secrets, or authorization values in the stored
-   parameter snapshot; their keys remain present but their values are `[REDACTED]`.
+1. Ensure the configured credential broker can provide a `deeplynx` credential. When using the
+   environment broker, set the existing DeepLynx authentication, organization, and project
+   variables.
+2. Set `DEEPLYNX_DATA_SOURCE_ID` or configure a default data source for the target project.
+3. Do not trust `params["user_id"]`; the executor replaces it with the verified identity before
+   `_execute(...)`.
+4. Read the item ID from `self.execution_record_id` during `_execute(...)` only. This
+   request-scoped property is concurrency-safe and otherwise returns `None`.
+5. Stored secrets retain their keys but have `[REDACTED]` values.
 
 ```python
 class AnalysisAgent(PrometheusAgent):

@@ -1154,6 +1154,12 @@ workflows:
                 "prompt": "token=hidden",
                 "api_key": "also-hidden",
                 "nested": {"password": "hidden-too"},
+                "artifacts": [
+                    {
+                        "artifact_id": "svg-1",
+                        "metadata": {"source": {"name": "hi.svg"}},
+                    }
+                ],
             }
         )
 
@@ -1173,10 +1179,16 @@ workflows:
         assert item.properties["authenticated_user_id"] == "verified-user"
         assert item.properties["task_id"] == "task-9"
         assert item.properties["context_id"] == "context-8"
-        assert item.properties["parameters"]["user_id"] == "verified-user"
-        assert item.properties["parameters"]["api_key"] == "[REDACTED]"
-        assert item.properties["parameters"]["nested"]["password"] == "[REDACTED]"
-        assert "token=[REDACTED]" in item.properties["parameters"]["prompt"]
+        assert "parameters" not in item.properties
+        parameters = json.loads(item.properties["parameters_json"])
+        assert parameters["user_id"] == "verified-user"
+        assert parameters["api_key"] == "[REDACTED]"
+        assert parameters["nested"]["password"] == "[REDACTED]"
+        assert "token=[REDACTED]" in parameters["prompt"]
+        assert parameters["artifacts"][0]["metadata"]["source"]["name"] == "hi.svg"
+        assert observed["params"]["nested"]["password"] == "hidden-too"
+        assert observed["params"]["artifacts"][0]["metadata"]["source"]["name"] == "hi.svg"
+        assert all(not isinstance(value, (dict, list)) for value in item.properties.values())
         assert item.properties["created_at"].endswith("+00:00")
         assert observed["config"].organization_id == 11
 
