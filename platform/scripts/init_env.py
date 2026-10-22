@@ -259,7 +259,7 @@ def main() -> int:
         print(
             f"\n[ERROR] {key} is empty in {ENV}.\n"
             f"        LLM_CONFIG_PROFILE={profile} needs it; set it (or pick another profile)\n"
-            f"        and run make again. See README.md, 'Choose an LLM profile'.\n",
+            f"        and run make again. See .env.example for the profiles.\n",
             file=sys.stderr,
         )
         return 1

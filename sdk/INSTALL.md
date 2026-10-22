@@ -36,7 +36,7 @@ make build-local                     # → prometheus_api:local (host architectu
 
 The image trusts the CA certificates in [`common/certs`](../common/certs/README.md) (the INL bundle by default). To trust your own, add them there before building.
 
-The platform does this for you with `LOCAL_SDK=true` (see the [platform README](../platform/README.md#2-get-the-base-image)).
+The platform does this for you with `LOCAL_SDK=true` (see the [platform README](../platform/README.md#base-image)).
 
 ---
 

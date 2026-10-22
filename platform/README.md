@@ -24,160 +24,94 @@ graph TD
 
 ## Prerequisites
 
-- Docker and Docker Compose
-  - **Windows:** run the stack from a WSL2 distro, not from Windows directly. See
-    [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) for enabling WSL2
-    integration in Docker Desktop before continuing below.
-- [uv](https://docs.astral.sh/uv/) and Python — only required to run the Python components outside Docker:
-  - Backend: **3.12+**
-  - Client-agent: **3.12+**
-  - Infrastructure tests: **3.13+**
-- Node.js + npm — only required to run the React `frontend/` dev server outside Docker
-- `make` and `openssl` — on a minimal distro/WSL image these may not be preinstalled
-  (RHEL-based: `sudo dnf groupinstall "Development Tools"` and `sudo dnf install openssl`)
+- Docker with Compose. On Windows, run everything from a WSL2 distro; see
+  [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md).
+- `make` and `openssl`. On RHEL-based distros: `sudo dnf groupinstall "Development Tools"` and
+  `sudo dnf install openssl`.
+- Python 3, used by the setup scripts.
+- For Kubernetes only: [k3d](https://k3d.io/stable/#installation),
+  [kubectl](https://kubernetes.io/docs/tasks/tools/), [Helm](https://helm.sh/docs/intro/install/)
+  and [Tilt](https://docs.tilt.dev/install.html).
 
 ## Quickstart
 
-### 1. Configure environment
-
-The first `make up` creates `.env` from `.env.example` and generates every
-secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
-`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). The only things you have to
-set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
-`make up` asks for them in a terminal, or stops and tells you what is missing. To prepare `.env` without starting anything:
+### 1. Configure the environment
 
 ```bash
-python3 scripts/init_env.py   # or: make init-env
-# then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
+cp .env.example .env
 ```
 
-Section 1 of `.env.example` lists what you must set; everything else has a
-working default. Back up `.env` once it exists: losing `ADMIN_DB_ENCRYPTION_KEY`
-makes encrypted admin-db rows unreadable.
+In `.env`, set `LLM_CONFIG_PROFILE` and `LLM_API_KEY`. The comments in `.env.example` list the
+providers.
 
-The backend creates and activates the first identity signing key when it
-starts, unless `USER_IDENTITY_PRIVATE_KEY` is set (see [Multi-user setup](docs/docs/dev-docs/multi-user-setup.md)), and
-`USER_IDENTITY_REQUIRED=false` in `.env` still serves a quick local smoke test
-without identity.
-
-#### Choose an LLM profile
-
-`LLM_CONFIG_PROFILE` tells the agents which LLM provider to use, and `LLM_API_KEY` holds that provider's key -- the same variable for every profile. Set it in `.env`; there is no default.
-
-If the profile or its API key is blank, `make up` (via `scripts/init_env.py`) shows a menu of the profiles in `../sdk/prometheus_api/llm_configs/` (use the up/down arrows, then Enter), asks for the matching key, and writes both to `.env`. If they are set in the environment instead (as in CI), it writes them to `.env` without asking; otherwise it fails. You can also set them by hand:
-
-| Value | What it uses | Key to put in `LLM_API_KEY` |
-|---|---|---|
-| `anthropic` | Anthropic directly. | Anthropic; also `EMBEDDING_API_KEY` if an agent uses embeddings |
-| `openai` | OpenAI directly for model and embedding requests. | OpenAI |
-| `inl_hpc` | INL HPC's OpenAI-compatible model service. | INL HPC |
-| `inl_litellm` | INL's hosted LiteLLM service. | INL LiteLLM |
-| `amsc` | The American Science Cloud I2 model service. | AMSC I2 |
-| `anl_asksage` | ANL's AskSage model service (OpenAI-compatible API). | The AskSage static API key; also `EMBEDDING_API_KEY` if an agent uses embeddings |
-
-For example, to use OpenAI:
-
-```dotenv
-LLM_CONFIG_PROFILE=openai
-LLM_API_KEY=<your-openai-api-key>
-```
-
-The SDK's `registry` profile is not supported here: it sends model requests to an LLM proxy at `REGISTRY_URL`, and on this platform that is the backend's agent registry, which does not proxy LLM calls. `scripts/init_env.py` rejects it.
-
-Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file. It overrides `LLM_CONFIG_PROFILE`, must be available inside every agent container, and requires any environment variables referenced by that file.
-
-#### Run DeepLynx with the platform
-
-Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, add one line to `.env`, after `make init-env` has created it:
+### 2a. Run with Docker Compose
 
 ```bash
-printf '\nLOCAL_DEEPLYNX=true\n' >> .env
-```
-
-Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `localhost:5000`; both ports must be free) and runs `make deeplynx-setup`, which creates a project and an API key and writes the `DEEPLYNX_*` lines to `.env`. See [DeepLynx storage](#deeplynx-storage) to use a DeepLynx you already have instead.
-
-### 2. Get the base image
-
-Every Python service is built `FROM` the `prometheus_api` base image. Pick one of the two options below.
-
-#### Option A: pull the published image (default)
-
-Nothing to do. `make up` pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
-
-#### Option B: build it locally from `../sdk`
-
-Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out:
-
-```bash
-printf '\nLOCAL_SDK=true\n' >> .env
-```
-
-`make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
-
-The SDK base image, the backend and the frontend import the registry build cache that CI publishes (`amd64` or `arm64`, from your machine), so a first build reuses layers instead of rebuilding them. The agent images aren't published, so they still build locally. Importing a registry cache needs Docker's containerd image store (the default in recent Docker Desktop); if your builds ignore it, enable it under Settings → General. To build without the cache, for example when offline, set `USE_BUILD_CACHE=false` in `.env` or on the command line. A fork can point `BUILD_CACHE` at its own cache prefix.
-
-### 3. Start the stack
-
-```bash
-make up      # build + start everything (detached)
-make logs    # tail all services (SERVICE=<name> to filter)
-make ps      # show running services
-```
-
-`make up` runs `make generate` first, which scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`. **Do not hand-edit that file** — re-run `make generate` after adding or removing an agent (or use `make ng-up` to skip regeneration). Agents in `agents/debug-agents/` and `agents/optional/` (OSTI research) are skipped unless `DEBUG_AGENTS=true` / `OPTIONAL_AGENTS=true`.
-
-Launch and restart targets run `make clear-agent-registry` before starting services. This deletes the agent registrations (the `prometheus:agent-registry` Valkey key) so agents you removed don't linger, while preserving Valkey conversation and artifact state.
-
-The first run also builds every agent image and pulls (or, with `LOCAL_SDK=true`,
-builds) the `prometheus_api` base image, so it's slower than later runs — expect roughly **5 to 15 minutes**
-depending on your connection and machine. Use `make up-fg` instead of `make up`
-to watch that build/startup happen in the foreground rather than waiting on a
-detached container with no output.
-
-`make ps` once everything is healthy looks like:
-
-```
-NAME                                    IMAGE                                     SERVICE               STATUS
-prometheus_platform-admin-db-1          postgres:16-alpine                        admin-db              Up (healthy)
-prometheus_platform-backend-1           prometheus_platform-backend               backend               Up (healthy)
-prometheus_platform-client-agent-1      prometheus_platform-client-agent          client-agent          Up (healthy)
-prometheus_platform-frontend-dev-1      prometheus_platform-frontend-dev          frontend-dev          Up
-prometheus_platform-redis-1             valkey/valkey-bundle:9.1.3                redis                 Up
-prometheus_platform-synthesis-agent-1   prometheus_platform-synthesis-agent       synthesis-agent       Up (healthy)
-```
-
-Services and host ports:
-
-| Service | URL / Port | Role |
-|---|---|---|
-| React frontend | http://localhost:5150 (dev profile, default) / 8080 (prod profile) | Entry point |
-| Backend (FastAPI) | http://localhost:8600 (`BACKEND_PORT`) | JSON/SSE API + auth/sessions; agent registry (`/v1/agents`) + A2A gateway (`/a2a/{agent_name}`) |
-| Client agent | internal only; http://localhost:8001 in system-test mode | Orchestrator |
-| Valkey | localhost:6379 | Redis-compatible state, status, artifact metadata, agent registrations |
-| Postgres (`admin-db`) | internal only | Backend admin plane (users, OIDC config, signing keys) |
-
-### Stop or reset the stack
-
-```bash
-make down                  # stop everything (down-v also drops volumes)
-make clear-agent-registry  # stop services + delete only the agent registrations from Valkey
-make clobber               # stop services + delete admin-db and Valkey (asks first)
-```
-
-Reinstalling, or lost your `.env`? The old volumes still use the old database passwords, and their rows are encrypted with the old key. The backend can't connect, and the setup wizard doesn't run. `make clobber` deletes those volumes (all users, keys and history) so the next `make up` starts fresh.
-
-### Log in
-
-Upon first startup, you will be prompted to create a username and password. Save these credentials as you will need them when you log in.
-
-If you forget your password while running the project locally, start the platform and clear its local user accounts:
-
-```bash
+echo "LOCAL_SDK=true" >> .env
 make up
-make clear-admin-users
 ```
 
-The `make clear-admin-users` command deletes all local user accounts. Refresh the application afterward; you will be prompted to create a new username and password. If you use `make up-fg` instead of `make up`, leave it running and run `make clear-admin-users` from a second terminal in the project directory.
+The first run builds every image and takes 5 to 15 minutes. Open http://localhost:5150 and create
+your login. Stop the stack with `make down`.
+
+### 2b. Run on a local Kubernetes cluster
+
+```bash
+make cluster-up
+make build LOCAL_SDK=true PROFILE=prod
+make cluster-push
+make cluster-deploy PROMETHEUS_IMAGE_REGISTRY=k3d-prometheus-registry.localhost:5001 PROMETHEUS_IMAGE_TAG=local
+```
+
+This creates a one-node k3d cluster and installs the stack with the Helm chart in
+`../infrastructure/helm/prometheus/`. Open http://localhost:8080 and create your login.
+
+Behind a TLS-inspecting proxy, add `EXTRA_CA_CERT=/path/to/ca.pem` to `make cluster-deploy`.
+
+```bash
+make cluster-status             # list the pods
+make cluster-logs SVC=backend   # follow one service's logs
+make cluster-down               # delete the cluster
+```
+
+## Setup details
+
+### Secrets
+
+The first start fills in every blank secret in `.env`. Back up `.env` after that: without it, the
+encrypted data in the admin database can't be read. See
+[Encryption and keys](docs/docs/dev-docs/encryption-and-keys.md).
+
+### Base image
+
+Every agent is built on a shared image that contains the Prometheus SDK. There are two ways to
+get it:
+
+- **Build it yourself.** This is what `LOCAL_SDK=true` in the Quickstart does. It builds the image
+  from the `sdk/` folder in this repo and needs no account.
+  The SDK, backend and frontend images reuse the build cache that CI publishes, which needs
+  Docker's containerd image store (the default in recent Docker Desktop). Set
+  `USE_BUILD_CACHE=false` to build without it, for example when offline.
+- **Download it.** Remove `LOCAL_SDK=true` from `.env`. `make up` then pulls
+  `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by
+  `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`, with no login. Set that variable in `.env` to
+  use a different tag.
+
+### DeepLynx
+
+Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx
+with the platform, add `LOCAL_DEEPLYNX=true` to `.env`; `make up` then starts it and fills in the
+`DEEPLYNX_*` settings (see [Local DeepLynx install](docs/docs/local-deeplynx.md)). To use an
+existing DeepLynx, set `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together
+with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`.
+
+### Everyday commands
+
+```bash
+make up      # start the stack
+make logs    # follow the logs
+make down    # stop the stack
+```
 
 ## Local frontend development (hot reload)
 
@@ -196,91 +130,6 @@ make dev           # http://localhost:5150
 
 The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), which maps to the containerized backend.
 
-## Local Kubernetes cluster with k3d
-
-A prototype for running Prometheus on Kubernetes locally. `make cluster-up` creates a one-node
-[k3d](https://k3d.io) cluster, and `make cluster-deploy` installs the stack into it with the Helm
-chart in `../infrastructure/helm/prometheus/`. The Docker Compose workflow above is unchanged and
-doesn't need any of this.
-
-```bash
-make cluster-up
-make build LOCAL_SDK=true PROFILE=prod   # or skip both steps and use published images, below
-make cluster-push
-make cluster-deploy PROMETHEUS_IMAGE_REGISTRY=k3d-prometheus-registry.localhost:5001 PROMETHEUS_IMAGE_TAG=local
-# open http://localhost:8080
-```
-
-Run the targets from `platform/`. On Windows, run them from your WSL2 distro. See
-[Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md).
-
-| Tool | Where to install it |
-|---|---|
-| Docker | [Docker Desktop](https://docs.docker.com/desktop/) or [Docker Engine](https://docs.docker.com/engine/install/) |
-| k3d | [k3d installation](https://k3d.io/stable/#installation) |
-| kubectl | Included with Docker Desktop. Otherwise, [Install kubectl](https://kubernetes.io/docs/tasks/tools/) |
-| Helm | [Installing Helm](https://helm.sh/docs/intro/install/) |
-| Tilt | [Install Tilt](https://docs.tilt.dev/install.html) |
-
-| Target | What it does |
-|---|---|
-| `make cluster-up` | Checks the tools, then creates the cluster. Starts it if it's stopped, and does nothing if it's already running |
-| `make cluster-down` | Deletes the cluster |
-| `make cluster-reset` | `cluster-down`, then `cluster-up` |
-| `make cluster-push` | Pushes the images `make build` made to the cluster registry as `prometheus_<name>-devel:local` (`PUSH_TAG=` to change). Images that weren't built are skipped |
-| `make cluster-deploy` | Runs `init-env`, copies `.env` into the `prometheus-env` and `prometheus-env-private` Secrets, installs or upgrades the chart, and waits until every pod is ready. Then, like `make up`, it checks the frontend and `/api` through the ingress and waits until every agent is registered with the backend (`CHECK=false` skips this) |
-| `make cluster-undeploy` | Uninstalls the chart. The databases and Valkey keep their volumes |
-| `make cluster-status` | Lists the pods, services, ingress and volumes |
-| `make cluster-logs SVC=backend` | Follows one service's logs |
-| `make cluster-clobber` | Uninstalls the chart and deletes its volumes (users, keys, history), after confirmation |
-
-Set `SKIP_PREREQUISITES=1` to skip the tool check.
-
-Images are `$(PROMETHEUS_IMAGE_REGISTRY)/prometheus_<name>-devel:$(PROMETHEUS_IMAGE_TAG)`. By
-default they come from ghcr.io at a pinned tag (`<commit date>-<sha7>`, as `publish.yml` publishes
-them). The agent images are published only from the commit that added them to `publish.yml` on, so
-use local builds until then.
-
-Agents: client-agent, synthesis-agent and form-filler-agent run by default. `DEBUG_AGENTS=true`
-adds the debug agents and `OPTIONAL_AGENTS=true` the optional ones, as with Compose. Each agent's
-chart settings live next to it in `agents/<name>/helm-values.yaml`, and `cluster-deploy` passes
-every one of them. Adding an agent means a Dockerfile, its compose file and a `helm-values.yaml`:
-
-```yaml
-agents:
-  my-agent:              # the Service name, and the name it registers under
-    enabled: true
-    image:
-      repository: prometheus_my-agent-devel
-    env:                 # extra variables beyond the shared ones
-      MY_SETTING: "1"
-```
-
-The chart's `values.yaml` documents every setting, and `values.schema.json` rejects unknown ones.
-Service names are fixed (`backend`, `redis`, ...) to match Compose, so install one
-release per namespace. In the cluster, `/api` goes from the ingress straight to the backend; the
-backend's `/healthz` and `/readyz` and the client-agent are reachable with
-`kubectl port-forward svc/<name>`.
-
-Behind a TLS-inspecting proxy, outbound HTTPS from the pods (agents to their LLM provider and
-to DeepLynx) fails certificate verification. Pass the proxy's CA certificate and the backend
-and the agents trust it on top of their own CA bundles:
-
-```bash
-make cluster-deploy EXTRA_CA_CERT=/path/to/ca.pem
-```
-
-Nothing is added when `EXTRA_CA_CERT` is unset.
-
-Agents call the provider that `LLM_CONFIG_PROFILE` in `.env` selects, as under Compose. There is
-no LLM proxy in the cluster.
-
-On the INL network, `cluster-up` downloads the INL root CA from
-`https://certstore.inl.gov/pki/CAINLROOT_B64.crt` to `~/.cache/prometheus/` and trusts it inside
-the node, so Kubernetes can pull its own system images through TLS inspection. Don't delete the
-cached file while the cluster exists. If `HTTP_PROXY` or `HTTPS_PROXY` is set in your shell, it's
-passed to the node.
-
 ## Full-system tests
 
 Full-system tests exercise the same LLM-driven planning, parameter requests, specialist agents, and artifacts as the frontend. They never start or reconfigure Docker. Start the full platform with the client-agent host port enabled, then run the suite separately:
@@ -294,34 +143,46 @@ make test-system
 
 ## Configuration
 
+### Services and ports
+
+| Service           | URL / Port                                               | Role                                                                                              |
+| ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| React frontend    | http://localhost:5150, or 8080 with `PROFILE=prod`       | Entry point                                                                                       |
+| Backend (FastAPI) | http://localhost:8600 (`BACKEND_PORT`)                   | JSON/SSE API + auth/sessions; agent registry (`/v1/agents`) + A2A gateway (`/a2a/{agent_name}`) |
+| Client agent      | internal only; http://localhost:8001 in system-test mode | Orchestrator                                                                                      |
+| Valkey            | localhost:6379                                           | Redis-compatible state, status, artifact metadata, agent registrations                            |
+| Postgres          | internal only                                            | `admin-db`: users, OIDC config, signing keys                                                      |
+
+### Backend settings
+
 Backend settings come from `backend/app/config.yml` (override the path with `PROMETHEUS_CONFIG_PATH`):
 
-| Key | Description |
-|-----|-------------|
-| `agent-url` | Client-agent A2A endpoint (default: `http://localhost:8001`). Overridden by `CLIENT_AGENT_URL`. |
-| `agent-secret` | Bearer token for agent auth. Overridden by `AGENT_SECRET`. |
-| `redis-url` | Redis connection URL for session/conversation state. Overridden by `REDIS_URL`. |
-| `jwt-secret` | Session-cookie signing key. Overridden by `BACKEND_JWT_SECRET`. |
-| `debug` | Enable debug features |
-| `auto-approve-steps` | Skip manual approval between workflow steps |
-| `workflow-suggestions` | Chat suggestions shown on startup |
+| Key                    | Description                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `agent-url`            | Client-agent A2A endpoint (default: `http://localhost:8001`). Overridden by `CLIENT_AGENT_URL`. |
+| `agent-secret`         | Bearer token for agent auth. Overridden by `AGENT_SECRET`.                                      |
+| `redis-url`            | Redis connection URL for session/conversation state. Overridden by `REDIS_URL`.                 |
+| `jwt-secret`           | Session-cookie signing key. Overridden by `BACKEND_JWT_SECRET`.                                 |
+| `debug`                | Enable debug features                                                                           |
+| `auto-approve-steps`   | Skip manual approval between workflow steps                                                     |
+| `workflow-suggestions` | Chat suggestions shown on startup                                                               |
 
 The React app itself is configured through `frontend/config.ts` and `VITE_*` environment variables (e.g. `VITE_BACKEND_URL`).
 
 Notable environment variables (see `.env.example` for the full list):
 
-| Variable | Purpose |
-|---|---|
-| `LLM_CONFIG_PROFILE` | Required; installed agent LLM mapping, e.g. `anthropic`, `openai`, `inl_hpc`, `inl_litellm`, `amsc`, or `anl_asksage` (no default; `registry` is not supported) |
-| `LLM_CONFIG_FILE` | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE` |
-| `DEBUG_AGENTS` | When `true`, also build and start the mock agents in `agents/debug-agents/` |
-| `OPTIONAL_AGENTS` | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build) |
-| `LOCAL_DEEPLYNX` | When `true`, also start DeepLynx from its published images and point the `DEEPLYNX_*` settings at it ([Local DeepLynx install](docs/docs/local-deeplynx.md)) |
-| `PROMETHEUS_SYSTEM_TESTING` | When `true`, Make includes the Compose override that publishes the client-agent on `CLIENT_AGENT_PORT` |
-| Provider API keys | Credentials referenced by the selected profile; see `.env.example` |
-| `AGENT_SECRET_REQUIRED` | Enforce Bearer auth on specialist agents (default `true`) |
-| `LOCAL_CERT_FILE` / `CERT_FILE` | CA bundle path on host / inside containers |
-| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Corporate proxy settings |
+| Variable                                  | Purpose                                                                                                                                              |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LLM_CONFIG_PROFILE`                      | LLM provider; `.env.example` lists the values                                                                                                        |
+| `LLM_CONFIG_FILE`                         | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE`                                                                 |
+| `DEBUG_AGENTS`                            | When `true`, also build and start the mock agents in `agents/debug-agents/`                                                                          |
+| `OPTIONAL_AGENTS`                         | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build) |
+| `LOCAL_DEEPLYNX`                          | When `true`, also start DeepLynx from its published images and point the `DEEPLYNX_*` settings at it ([Local DeepLynx install](docs/docs/local-deeplynx.md)) |
+| `PROMETHEUS_SYSTEM_TESTING`               | When `true`, Make includes the Compose override that publishes the client-agent on `CLIENT_AGENT_PORT`                                               |
+| Provider API keys                         | Credentials referenced by the selected profile; see `.env.example`                                                                                   |
+| `AGENT_SECRET_REQUIRED`                   | Enforce Bearer auth on specialist agents (default `true`)                                                                                            |
+| `LOCAL_CERT_FILE` / `CERT_FILE`           | CA bundle path on host / inside containers                                                                                                           |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Corporate proxy settings                                                                                                                             |
 
 ### DeepLynx storage
 
@@ -368,6 +229,15 @@ platform/
 
 ## Development
 
+### Agent discovery
+
+`make up` scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`, so don't edit
+that file by hand. Agents in `agents/debug-agents/` and `agents/optional/` are included only with
+`DEBUG_AGENTS=true` and `OPTIONAL_AGENTS=true`.
+
+On Kubernetes, each agent also needs an `agents/<name>/helm-values.yaml`. The chart's
+`values.yaml` documents the settings.
+
 ### Frontend (`frontend/Makefile`)
 
 ```bash
@@ -411,12 +281,20 @@ A healthy agent shows only that it serves HTTP. Registration with the backend ru
 
 ## Troubleshooting
 
-_TBD — common issues and fixes will be collected here as they come up._
+**Forgot your password.** With the platform running, delete the local user accounts and refresh
+the app. You are prompted to create a new username and password.
+
+```bash
+make clear-admin-users
+```
+
+**Reinstalled, or lost `.env`.** The old volumes still use the old database passwords, and their
+rows are encrypted with the old key, so the backend can't connect. `make clobber` deletes those
+volumes, including all users, keys and history, so the next `make up` starts fresh.
 
 ## Documentation
 
 - [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) - installing and verifying Docker Desktop's WSL2 integration before running `make up`
-- [Local Kubernetes cluster with k3d](#local-kubernetes-cluster-with-k3d) - prototype local cluster setup
 - [Architecture](docs/docs/dev-docs/architecture.md)
 - [Client-agent developer guide](agents/client-agent/README.md)
 - [Adding agents](docs/docs/dev-docs/adding-agents.md)
