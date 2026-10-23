@@ -1151,11 +1151,7 @@ If your agent needs information it cannot infer from the initial call, it can pa
 from prometheus_api.agent import MissingInput
 
 async def _execute(self, params, context, event_queue):
-    state = self.load_context_state(str(context.context_id))
-    resolved = {**state.get("resolved", {}), **self.get_provided_inputs(context)}
-
-    if "temperature_c" not in resolved:
-        self.save_context_state(str(context.context_id), {"resolved": resolved})
+    if params.get("temperature_c") is None:
         await self.send_input_required(
             context=context, event_queue=event_queue,
             missing_inputs=[MissingInput(
@@ -1169,7 +1165,8 @@ async def _execute(self, params, context, event_queue):
         )
         return {}   # suspend — do NOT return real results here
 
-    # On resume, resolved["temperature_c"] is populated
+    # On resume, params holds every original argument plus the answer,
+    # so params["temperature_c"] is set; no saved state is needed.
     ...
 ```
 

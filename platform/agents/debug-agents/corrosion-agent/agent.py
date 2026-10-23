@@ -123,22 +123,20 @@ def _build_corrosion_report(material_id: str, analysis: Dict[str, Any]) -> str:
 class CorrosionAnalysisAgent(PrometheusAgent):
     """Agent for corrosion analysis."""
 
-    def _merge_resolved_inputs(self, resolved: Dict[str, Any], params: Dict[str, Any], context: RequestContext) -> Dict[str, Any]:
-        merged = dict(resolved or {})
-        if params.get("material_id"):
-            merged["material_id"] = params["material_id"]
+    @staticmethod
+    def _resolve_inputs(params: Dict[str, Any]) -> Dict[str, Any]:
+        """Read every input from params.
 
-        operating_context = params.get("context", {})
-        if isinstance(operating_context, dict):
-            for key in ("temperature_c", "pressure_mpa", "operating_hours", "coolant_chemistry"):
-                if operating_context.get(key) is not None:
-                    merged[key] = operating_context[key]
-
-        for key, value in self.get_provided_inputs(context).items():
-            if value is not None:
-                merged[key] = value
-
-        return merged
+        Operating conditions come nested under ``context`` from the model, or at the
+        top level when the user answered an INPUT_REQUIRED form; the answer wins.
+        """
+        operating_context = params.get("context")
+        if not isinstance(operating_context, dict):
+            operating_context = {}
+        resolved: Dict[str, Any] = {"material_id": params.get("material_id")}
+        for key in ("temperature_c", "pressure_mpa", "operating_hours", "coolant_chemistry"):
+            resolved[key] = params[key] if params.get(key) is not None else operating_context.get(key)
+        return resolved
 
     async def _execute(
         self,
@@ -152,8 +150,7 @@ class CorrosionAnalysisAgent(PrometheusAgent):
         Generates expert-level corrosion analysis from material properties and
         operating conditions.
         """
-        state = self.load_context_state(str(context.context_id or ""))
-        resolved = self._merge_resolved_inputs(state.get("resolved", {}), params, context)
+        resolved = self._resolve_inputs(params)
 
         material_id = resolved.get("material_id")
         if not material_id:
@@ -170,14 +167,6 @@ class CorrosionAnalysisAgent(PrometheusAgent):
                     )
                 ],
                 hint="I need the target material before I can run the corrosion analysis.",
-            )
-            self.save_context_state(
-                str(context.context_id or ""),
-                {
-                    "resolved": resolved,
-                    "pending": ["material_id"],
-                    "task_id": context.task_id,
-                },
             )
             return {"status": "input_required"}
 
@@ -252,16 +241,6 @@ class CorrosionAnalysisAgent(PrometheusAgent):
                 description=f"Corrosion analysis result for {material_id}.",
                 json_type=CORROSION_ANALYSIS_JSON_TYPE,
                 catalog_artifact=True,
-            )
-
-            self.save_context_state(
-                str(context.context_id or ""),
-                {
-                    "resolved": resolved,
-                    "pending": [],
-                    "task_id": context.task_id,
-                    "last_result_timestamp": analysis["timestamp"],
-                },
             )
 
             return {

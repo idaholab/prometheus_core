@@ -478,7 +478,7 @@ class OrchestratorAgent(PrometheusAgent):
         await emit_upload_status(f"Analyzing {len(uploaded_files)} uploaded file(s).")
 
         try:
-            async with runtime.create_llm(context) as llm:
+            async with runtime.create_llm() as llm:
                 descriptions = await infer_file_descriptions(
                     request_payload.get("query") or "", uploaded_files, llm,
                 )
@@ -621,12 +621,11 @@ class OrchestratorAgent(PrometheusAgent):
             )
 
         async def _run_chat() -> ConversationResponse:
-            with runtime.llm_request_context(context):
-                with runtime.status_stream(emit_chat_status) as status_tasks:
-                    try:
-                        return await chat(chat_request)
-                    finally:
-                        await runtime.wait_for_status_stream(status_tasks)
+            with runtime.status_stream(emit_chat_status) as status_tasks:
+                try:
+                    return await chat(chat_request)
+                finally:
+                    await runtime.wait_for_status_stream(status_tasks)
 
         turn = task_tracking.current_turn()
         deadline = task_tracking.background_deadline_seconds()

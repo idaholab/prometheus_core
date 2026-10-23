@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 1. **`prometheus_api.storage_client`** — Pydantic-typed sync (`StorageClient`) and async (`AsyncStorageClient`) HTTP clients for items, files (incl. chunked uploads), relationships, search, tags, timeseries. Also registers a `deeplynx://` fsspec filesystem (`DeepLynxFileSystem`) via the `fsspec.specs` entry point.
 2. **`prometheus_api.agent`** — `PrometheusAgent` base class for A2A-protocol agents (built on `a2a-sdk` + Starlette/uvicorn). Subclasses override `async _execute(params, context, event_queue)` and the base handles agent-card loading, bearer-token auth, registry registration, status/artifact emission, and per-`contextId` state persistence.
-3. **`prometheus_api.llm_client`** — provider-agnostic sync (`LLMClient`) and async (`AsyncLLMClient`) chat/embedding clients over LiteLLM. Agent code selects a *semantic flavor* (`default`, `small`, `medium`, `large`, `vision`, `embedding`); deployments map flavors to provider models in the installed YAML profiles under `llm_configs/`. Also owns tool calling (`llm_client/tools.py`), secret redaction, A2A `llm_api_key` extraction, and opt-in MLflow tracing.
+3. **`prometheus_api.llm_client`** — provider-agnostic sync (`LLMClient`) and async (`AsyncLLMClient`) chat/embedding clients over LiteLLM. Agent code selects a *semantic flavor* (`default`, `small`, `medium`, `large`, `vision`, `embedding`); deployments map flavors to provider models in the installed YAML profiles under `llm_configs/`. Also owns tool calling (`llm_client/tools.py`), secret redaction, and opt-in MLflow tracing. LLM credentials come only from `LLMConfig`/the environment, never from A2A requests.
 
 `prometheus_api.contract` (package top level, importable with only pydantic — no agent runtime) holds the canonical frontend ↔ client-agent wire contract (`ConversationRequest`, `ConversationResponse`, `ConversationStatus`) — the JSON payload exchanged in A2A text parts. The Prometheus platform's frontend and client-agent must import these models rather than redefining them; change them here and the change propagates to both sides. They are also re-exported from `prometheus_api.agent`.
 
@@ -81,7 +81,8 @@ Subclasses override `async _execute(self, params, context: RequestContext, event
 - `send_artifact_reference(...)` — URI-backed file artifact (e.g. `deeplynx://...`)
 - `send_json_artifact(..., catalog_artifact=True)` — reusable inline JSON artifact
 - `send_conversation_message(...)` — durable chat-visible message
-- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload
+- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel
+- `get_input_sources(context)` — who supplied each param (`"model"` / `"user"` / `"context"`), from `inputSources` message metadata
 - `load_context_state(...)` / `save_context_state(...)` — per-`contextId` resumable state via `ContextStateStore`
 
 The agent module also re-exports common A2A types (`RequestContext`, `EventQueue`, `TaskState`, `TaskStatus`, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, `Artifact`, `TextPart`) from `prometheus_api.agent`, so subclasses normally don't need to import directly from `a2a.*`.

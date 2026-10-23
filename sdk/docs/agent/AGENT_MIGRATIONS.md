@@ -5,7 +5,74 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
-## Unreleased
+## 0.14.1
+
+### INPUT_REQUIRED Answers Arrive in `params`
+
+`PrometheusAgent.get_provided_inputs(...)` was removed, and the client-agent no longer sends a
+`provided_inputs` data part. When a task resumes after `INPUT_REQUIRED`, the client-agent
+re-sends **every** original argument with the user's answers (and any values it filled in
+from the conversation) merged into `params`. Each message also carries `inputSources`
+metadata saying who supplied each parameter. Read it with the new
+`PrometheusAgent.get_input_sources(context)`, which returns `"model"`, `"user"` or `"context"`
+per name.
+
+Migration steps:
+
+1. Replace `self.get_provided_inputs(context)` with plain `params` reads.
+2. Delete `load_context_state` / `save_context_state` calls that only kept a copy of earlier
+   arguments for the resume. Keep state only for what `params` can't carry, such as the
+   phase of a multi-round form or answers from earlier rounds.
+3. If your agent expects a value nested (e.g. `params["context"]["temperature_c"]`), also
+   accept it at the top level: a form answer arrives as `params["temperature_c"]`.
+4. Use `self.get_input_sources(context)` when the agent's output should say who chose a
+   value.
+5. Build on a client-agent and base image that include this change. With an older
+   client-agent, answers to `INPUT_REQUIRED` won't reach the agent.
+
+```python
+# Before
+state = self.load_context_state(str(context.context_id))
+resolved = {**state.get("resolved", {}), **self.get_provided_inputs(context)}
+temperature_c = resolved.get("temperature_c")
+
+# After
+temperature_c = params.get("temperature_c")
+if temperature_c is None:
+    await self.send_input_required(context=context, event_queue=event_queue,
+                                   missing_inputs=[...], hint="...")
+    return {}
+```
+
+## 0.14.0
+
+### LLM Credentials No Longer Come from A2A Requests
+
+`LLMClient.from_a2a_context(...)`, `AsyncLLMClient.from_a2a_context(...)` and
+`extract_llm_api_key_from_a2a_context(...)` were removed. They read an `llm_api_key` from
+any structured A2A data part (top-level or under `provided_inputs`) and used it as the
+LLM credential. Nothing in the platform sent one, but the path let a credential travel on
+the parameter channel. `PrometheusAgent.llm_client(context)` keeps its signature and now
+takes credentials only from `config` or the environment. A request-independent
+credential provider will be designed separately.
+
+Migration steps:
+
+1. Replace `AsyncLLMClient.from_a2a_context(context, ...)` with `AsyncLLMClient(...)`,
+   and `LLMClient.from_a2a_context(...)` with `LLMClient(...)`. Keep passing `config=`
+   and `app_name=`.
+2. Drop imports of `extract_llm_api_key_from_a2a_context` from `prometheus_api.llm_client`.
+3. Do not ask the user for LLM keys with `INPUT_REQUIRED`, and do not send them in A2A
+   messages. A key sent that way is now ignored.
+4. Inside a `PrometheusAgent`, keep using `self.llm_client(context)`; no change needed.
+
+```python
+config = LLMConfig.from_env()
+if config.proxy_url:
+    config = config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
+async with AsyncLLMClient(config=config, app_name="My Agent") as llm:
+    response = await llm.medium(prompt)
+```
 
 ### The Health Endpoint Moved from `/health` to `/healthz`
 

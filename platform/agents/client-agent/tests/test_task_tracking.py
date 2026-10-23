@@ -370,7 +370,7 @@ def test_invoke_skill_returns_and_consumes_task_graph_resume_ids(
         result = await INVOKE_SKILL(
             "author_equipment_geometry",
             {
-                "provided_inputs": {"rod_diameter": 0.05},
+                "rod_diameter": 0.05,
                 "_a2a_context_id": pending["_a2a_context_id"],
                 "_a2a_task_id": pending["_a2a_task_id"],
                 "_task_graph_root_id": root_id,

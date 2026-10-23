@@ -150,7 +150,7 @@ How the next request is mapped:
 
 | Incoming request | With pending calls |
 |------------------|--------------------|
-| `followup_answers` | Merged into `needs_args` call arguments; used as the `ask_user` answer; sent as `provided_inputs` to resume `waiting_input` A2A tasks (same context and task id, same Task Graph node). |
+| `followup_answers` | Merged into `needs_args` call arguments; used as the `ask_user` answer; merged into the params that resume `waiting_input` A2A tasks (same context and task id, same Task Graph node), with sources in `inputSources` metadata. |
 | `plan_approved` | `needs_approval` → `ready`, then execute. |
 | `plan_rejected` | Every unfinished call gets the result "The user rejected this call". Reply: "Plan rejected…". No LLM call. |
 | Free-text `query` | An `ask_user` call is answered with the text. Every other unfinished call gets the result "Not executed: the user replied instead: …", and the loop continues. So "use 20 mm instead" while a plan awaits approval simply re-plans. |
@@ -195,13 +195,24 @@ A tool result is compact JSON:
  "summary": "<answer/message/report text, ≤ 2 000 chars>",
  "artifacts": [{"artifact_id": "...", "name": "...", "mime_type": "...", "description": "..."}],
  "result": "<remaining JSON payload, ≤ 6 000 chars>",
- "provided_inputs": {"<name>": "<value>"},
+ "inputs": {"<name>": "<value>"},
+ "input_sources": {"<name>": "model|user|context"},
  "error": "..."}
 ```
 
-`provided_inputs` holds the values given after the call was made: answers to a
-specialist's `INPUT_REQUIRED` form, and values resolved from context. Sensitive answers
-are never included. The same values are merged into the call's `turn_tool_inputs` entry.
+Values supplied after the call was made (form answers for missing required parameters
+or a specialist's `INPUT_REQUIRED`, and values resolved from context) are merged into the
+call's arguments, so they are part of `turn_tool_inputs` and the params the agent
+receives. Each call tracks `input_sources`: `model` for the model's own arguments, `user`
+for form answers, `context` for values the platform filled in. When anything other than
+the model supplied an input, the tool result includes `inputs` (what ran) and
+`input_sources`, so the model credits each value correctly. The sources also travel to
+the agent as A2A message metadata `inputSources`.
+
+Sensitive answers reach only the resumed invocation: they are never written to the
+arguments, context, `inputs`, or transcript (their name still appears in
+`input_sources`). Agents read every input from `params` and the sources with
+`PrometheusAgent.get_input_sources(context)`; there is no separate provided-inputs data part.
 
 Artifacts produced by a call are merged into `context.artifacts` right away, so the next
 call's artifact references validate. The full raw result is kept in `turn_tool_results`

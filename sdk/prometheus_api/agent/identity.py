@@ -295,9 +295,8 @@ _current_identity: ContextVar[Optional[UserIdentity]] = ContextVar("current_iden
 def identity_scope(identity: Optional[UserIdentity]) -> Iterator[None]:
     """Bind *identity* as the current user for the duration of this context.
 
-    Mirrors the ``llm_request_context`` pattern in the client-agent's
-    ``orchestrator/runtime.py``.  Uses a ``ContextVar`` so concurrent
-    async tasks never share identity state.
+    Uses a ``ContextVar`` so concurrent async tasks never share identity
+    state.
 
     Example::
 

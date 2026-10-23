@@ -19,13 +19,9 @@ import logging
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from a2a.types import Part
-from google.protobuf.json_format import ParseDict
-from google.protobuf.struct_pb2 import Value
 
 from prometheus_api.llm_client import (
     AsyncLLMClient,
@@ -1047,27 +1043,8 @@ def test_secret_redaction_recurses_through_common_secret_fields():
     assert redacted["text"] == "password: [REDACTED]"
 
 
-def test_async_client_extracts_llm_api_key_from_a2a_datapart_only():
-    context = SimpleNamespace(
-        message=SimpleNamespace(
-            parts=[
-                Part(text='{"llm_api_key": "visible-text-secret"}'),
-                Part(
-                    data=ParseDict(
-                        {"provided_inputs": {"llm_api_key": "structured-key"}},
-                        Value(),
-                    )
-                ),
-            ]
-        )
-    )
-
-    client = AsyncLLMClient.from_a2a_context(context, config=LLMConfig())
-
-    assert client.config.api_key == "structured-key"
-
-
-def test_a2a_api_key_is_sent_as_proxy_bearer_token():
+def test_config_api_key_is_sent_as_proxy_bearer_token():
+    # REQ-007-05: a transient config key authenticates every proxy request.
     observed_headers: list[str | None] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -1076,24 +1053,14 @@ def test_a2a_api_key_is_sent_as_proxy_bearer_token():
             return _proxy_response(request, _proxy_models("default"))
         return _proxy_response(request, {"choices": [{"message": {"content": "ok"}}]})
 
-    context = MagicMock()
-    context.message.parts = [
-        Part(
-            data=ParseDict(
-                {"provided_inputs": {"llm_api_key": "structured-key"}},
-                Value(),
-            )
-        )
-    ]
-    client = LLMClient.from_a2a_context(
-        context,
-        config=LLMConfig(proxy_url="http://proxy"),
+    client = LLMClient(
+        config=LLMConfig(proxy_url="http://proxy").with_api_key("proxy-key"),
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 
     client("hello")
 
-    assert observed_headers == ["Bearer structured-key", "Bearer structured-key"]
+    assert observed_headers == ["Bearer proxy-key", "Bearer proxy-key"]
 
 
 def _tool_call_payload(call_id="call_1", name="lookup", arguments='{"query": "iron"}'):

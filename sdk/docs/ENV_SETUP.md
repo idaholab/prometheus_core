@@ -282,7 +282,7 @@ embedding_response = llm.embedding("bearing temperature rising")
 vector = embedding_response.embeddings[0]
 ```
 
-Agents should prefer structured A2A input for transient LLM keys:
+Agents create clients with `self.llm_client(context)`:
 
 ```python
 from prometheus_api.agent import PrometheusAgent
@@ -294,8 +294,8 @@ class AnalysisAgent(PrometheusAgent):
         return {"status": "completed", "answer": response.text}
 ```
 
-`from_a2a_context()` reads `llm_api_key` only from structured A2A v1 `Part(data=...)` /
-`provided_inputs`; it does not parse keys out of visible text JSON payloads.
+Credentials come from the selected profile and environment only; nothing in an A2A request
+can supply or override an LLM key.
 
 See `examples/llm_client_usage.py` for sync chat and embedding usage, and
 `examples/llm_agent_usage.py` for A2A agent usage with `AsyncLLMClient`.

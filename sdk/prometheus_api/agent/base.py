@@ -992,32 +992,32 @@ class PrometheusAgent:
         """Persist agent-local state for one A2A contextId."""
         self.context_state_store.save(self._producer_agent_id, str(context_id or ""), state)
 
-    def get_provided_inputs(self, context: RequestContext) -> Dict[str, Any]:
-        """Extract structured follow-up inputs from incoming v1 data parts."""
+    @staticmethod
+    def get_input_sources(context: RequestContext) -> Dict[str, str]:
+        """Who supplied each parameter, from the ``inputSources`` message metadata.
+
+        Values are ``"model"`` (the orchestrator's tool call), ``"user"`` (a form
+        answer, e.g. to this agent's INPUT_REQUIRED) or ``"context"`` (filled from
+        the conversation). Every input itself arrives in ``params``; this only says
+        where it came from. Returns ``{}`` when the caller sent no sources.
+        """
         message = getattr(context, "message", None)
         if message is None:
             return {}
-
-        provided: Dict[str, Any] = {}
-        for part in getattr(message, "parts", []) or []:
-            if part.WhichOneof("content") != "data":
-                continue
-            data = MessageToDict(part.data)
-            if isinstance(data.get("provided_inputs"), dict):
-                provided.update(data["provided_inputs"])
-            else:
-                provided.update(data)
-        return provided
+        sources = MessageToDict(message.metadata).get("inputSources")
+        if not isinstance(sources, dict):
+            return {}
+        return {str(name): str(source) for name, source in sources.items()}
 
     def llm_client(self, context: RequestContext, **kwargs: Any) -> Any:
-        """Create an AsyncLLMClient that inherits this agent's name for tracing."""
+        """Create an AsyncLLMClient that inherits this agent's name for tracing.
+
+        Credentials come from ``config`` or the environment, never from the A2A
+        request.
+        """
         from ..llm_client import AsyncLLMClient
 
-        return AsyncLLMClient.from_a2a_context(
-            context,
-            app_name=self.agent_name,
-            **kwargs,
-        )
+        return AsyncLLMClient(app_name=self.agent_name, **kwargs)
 
     @staticmethod
     def pending_hint(

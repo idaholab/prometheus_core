@@ -50,29 +50,14 @@ _status_emit_tail: ContextVar[Optional[asyncio.Task]] = ContextVar(
     "status_emit_tail",
     default=None,
 )
-_llm_request_context: ContextVar[Any] = ContextVar("llm_request_context", default=None)
 
 
-def create_llm(context: Any = None) -> AsyncLLMClient:
-    """Create a provider-agnostic async client for the active A2A request."""
+def create_llm() -> AsyncLLMClient:
+    """Create a provider-agnostic async client."""
     config = LLMConfig.from_env()
     if config.proxy_url:
         config = config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
-    return AsyncLLMClient.from_a2a_context(
-        context if context is not None else _llm_request_context.get(),
-        config=config,
-        app_name="Client Agent",
-    )
-
-
-@contextmanager
-def llm_request_context(context: Any) -> Iterator[None]:
-    """Make the A2A request context available to nested orchestration helpers."""
-    token = _llm_request_context.set(context)
-    try:
-        yield
-    finally:
-        _llm_request_context.reset(token)
+    return AsyncLLMClient(config=config, app_name="Client Agent")
 
 
 def _get_status_redis_client():

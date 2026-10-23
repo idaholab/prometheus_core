@@ -171,7 +171,6 @@ and configure `MLFLOW_TRACKING_URI` and optionally `MLFLOW_EXPERIMENT_NAME`.
 - Installed LiteLLM profiles for registry, INL HPC, AMSc, Anthropic, and OpenAI inference
 - Optional MLflow tracing for sync and async chat calls
 - Prompt-safe debug logging with opt-in redacted content logging
-- A2A `llm_api_key` extraction from structured `DataPart` / `provided_inputs`
 
 ## Examples
 

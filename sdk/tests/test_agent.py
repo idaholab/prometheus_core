@@ -689,13 +689,31 @@ workflows:
                 assert "workflows" not in payload
                 ParseDict(payload, AgentCard())
 
-    def test_llm_client_helper_inherits_agent_name_and_context_key(self):
+    def test_get_input_sources_reads_message_metadata(self):
+        # REQ-010-03: sources come from metadata.inputSources; inputs themselves are params.
+        from a2a.types import Message
+
+        message = Message(message_id="m1")
+        message.metadata.update({"inputSources": {"topic": "model", "weekday": "user"}})
+        context = SimpleNamespace(message=message)
+
+        assert PrometheusAgent.get_input_sources(context) == {"topic": "model", "weekday": "user"}
+        assert (
+            PrometheusAgent.get_input_sources(SimpleNamespace(message=Message(message_id="m2")))
+            == {}
+        )
+        assert PrometheusAgent.get_input_sources(SimpleNamespace(message=None)) == {}
+
+    def test_llm_client_helper_inherits_agent_name_and_ignores_request_keys(self):
         agent = PrometheusAgent(agent_name="Trace Agent")
         context = MagicMock(spec=RequestContext)
         context.message.parts = [
             Part(
                 data=ParseDict(
-                    {"provided_inputs": {"llm_api_key": "structured-key"}},
+                    {
+                        "provided_inputs": {"llm_api_key": "request-key"},
+                        "llm_api_key": "request-key",
+                    },
                     Value(),
                 )
             )
@@ -705,7 +723,7 @@ workflows:
 
         assert isinstance(client, AsyncLLMClient)
         assert client.config.app_name == "Trace Agent"
-        assert client.config.api_key == "structured-key"
+        assert client.config.api_key is None
 
     def test_default_lifespan_is_a_no_op(self):
         agent = PrometheusAgent(agent_name="MyAgent")

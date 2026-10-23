@@ -29,7 +29,7 @@ Test coverage and `⚠ untested` handling should follow
 | 004 | DeepLynx fsspec filesystem | implemented | `deeplynx://` path semantics, metadata versioning, lookup fallbacks, and deletion. |
 | 005 | LLM configuration and aliases | implemented | Installed YAML profiles, environment selection, proxy/direct aliases, and alias errors. |
 | 006 | LLM chat and embeddings | implemented | Sync/async chat and embedding calls, proxy/fallback execution, and response shaping. |
-| 007 | LLM security and tracing | implemented | Secret redaction, A2A-provided API keys, prompt-safe debug logging, and MLflow tracing. |
+| 007 | LLM security and tracing | implemented | Secret redaction, no credentials from A2A requests, prompt-safe debug logging, and MLflow tracing. |
 | 008 | Agent app, card, auth, and registry | implemented | Agent card loading, workflow injection, Starlette routes, bearer auth, and LiteLLM registration. |
 | 009 | Agent execution, events, and workers | implemented | Executor lifecycle, heartbeats, status/background events, cancellation, and blocking worker support. |
 | 010 | Agent artifacts, input, and context state | implemented | Input-required payloads, artifact cataloging/resolution, DeepLynx artifact upload, and context state. |

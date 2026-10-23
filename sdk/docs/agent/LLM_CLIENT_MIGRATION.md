@@ -48,8 +48,8 @@ Replace these agent-local patterns:
 With these shared utilities:
 
 - `self.llm_client(context)` in `PrometheusAgent` subclasses
-- `AsyncLLMClient.from_a2a_context(context, app_name=...)` when a caller is not
-  inside a `PrometheusAgent` subclass
+- `AsyncLLMClient(app_name=...)` when a caller is not inside a `PrometheusAgent`
+  subclass
 - `LLMClient()` in sync scripts
 - Generic aliases: `default`, `small`, `medium`, `large`, `vision`, `embedding`
 - `LLM_CONFIG_PROFILE` for an installed registry or provider mapping
@@ -141,9 +141,8 @@ proxy rejection is surfaced instead of silently bypassing proxy policy.
 
 6. Remove visible key plumbing.
 
-   Do not accept `llm_api_key` in plain text prompts or visible request JSON.
-   `from_a2a_context()` reads it only from structured A2A v1 `Part(data=...)` /
-   `provided_inputs`.
+   Do not accept LLM keys in any part of an A2A request. Credentials come from
+   the selected profile and environment only.
 
 7. Update tests.
 

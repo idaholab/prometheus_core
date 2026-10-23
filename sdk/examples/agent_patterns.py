@@ -74,15 +74,8 @@ class ExampleAnalysisAgent(PrometheusAgent):
         context: RequestContext,
         event_queue: EventQueue,
     ) -> Dict[str, Any]:
-        state = self.load_context_state(context.context_id)
-        resolved = dict(state.get("resolved", {}))
-        resolved.update(self.get_provided_inputs(context))
-
-        if params.get("material_id"):
-            resolved["material_id"] = str(params["material_id"]).strip().upper()
-
-        if "temperature_c" not in resolved:
-            self.save_context_state(context.context_id, {"resolved": resolved})
+        # On resume, params holds every original argument plus the user's answers.
+        if params.get("temperature_c") is None:
             await self.send_input_required(
                 context=context,
                 event_queue=event_queue,
@@ -98,12 +91,8 @@ class ExampleAnalysisAgent(PrometheusAgent):
             )
             return {}
 
-        material = self.catalog.get_material(resolved["material_id"])
-        temperature_c = float(resolved["temperature_c"])
-        self.save_context_state(
-            context.context_id,
-            {"resolved": {"material_id": material.material_id, "temperature_c": temperature_c}},
-        )
+        material = self.catalog.get_material(str(params.get("material_id") or "").strip().upper())
+        temperature_c = float(params["temperature_c"])
 
         await self.send_status_update(
             context=context,

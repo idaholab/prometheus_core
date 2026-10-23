@@ -10,7 +10,7 @@ Let agents request missing structured input, persist per-conversation state, pub
 ## Requirements
 - REQ-010-01: `MissingInput` and `build_input_required_payload(...)` MUST serialize missing input descriptors under `missing_inputs` and include a stripped `hint`.
 - REQ-010-02: `send_input_required(...)` MUST emit a final `input_required` status whose message part is a JSON `DataPart` with canonical missing-input payload.
-- REQ-010-03: `get_provided_inputs(...)` MUST merge structured `DataPart` content, preferring `provided_inputs` when present and otherwise merging the data object.
+- REQ-010-03: `get_input_sources(...)` MUST return the `inputSources` message-metadata map (parameter name → `"model"`, `"user"`, or `"context"`) as strings, and `{}` when the message or the map is missing. Late-supplied inputs (INPUT_REQUIRED answers, context fills) MUST arrive in `params`; there is no separate provided-inputs channel. (Reworded 2026-10-20; `get_provided_inputs(...)` was removed in 0.14.1.)
 - REQ-010-04: `load_context_state(...)` and `save_context_state(...)` MUST scope state by normalized producer agent ID and A2A `context_id`.
 - REQ-010-05: `ContextStateStore.load(...)` MUST return `{}` for blank IDs, missing state, corrupt JSON, or non-dict payloads; `save(...)` MUST reject blank agent/context IDs.
 - REQ-010-06: `ArtifactReference` MUST serialize to/from a normalized JSON-compatible dict and MUST normalize native A2A file, data, and text artifact payloads.
@@ -34,7 +34,7 @@ Let agents request missing structured input, persist per-conversation state, pub
 - `MissingInput(name: str, description: str, user_prompt: str, type: str, options: list[str] | None = None, resolvable_from_context: bool = False, sensitive: bool = False, required: bool = True)`
 - `build_input_required_payload(missing_inputs: list[MissingInput], hint: str) -> dict[str, Any]`
 - `PrometheusAgent.send_input_required(context, event_queue, *, missing_inputs: list[MissingInput], hint: str, metadata: dict | None = None) -> None`
-- `PrometheusAgent.get_provided_inputs(context: RequestContext) -> dict[str, Any]`
+- `PrometheusAgent.get_input_sources(context: RequestContext) -> dict[str, str]`
 - `PrometheusAgent.load_context_state(context_id: str) -> dict[str, Any]`
 - `PrometheusAgent.save_context_state(context_id: str, state: dict[str, Any]) -> None`
 - `PrometheusAgent.register_artifact_reference(context: RequestContext, reference: ArtifactReference) -> ArtifactReference`

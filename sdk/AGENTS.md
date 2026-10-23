@@ -95,7 +95,7 @@ Recent commits use short, direct summaries such as `fix tag ids` or `Cleaned up 
 
 ## Security & Configuration Tips
 
-Do not commit `.env`, secrets, API keys, generated certificates, or local caches. Use `.env.example` for documenting required variables. Treat integration credentials, DeepLynx IDs, `REGISTRY_URL`, `REGISTRY_MAX_RETRIES`, `LLM_API_KEY`, `EMBEDDING_API_KEY`, `MLFLOW_API_KEY`, MLflow tracking settings, and other LLM provider keys as environment-specific configuration, not hard-coded defaults. LLM debug logging must keep prompt and embedding content hidden unless `LLM_DEBUG_LOG_MESSAGES=true`, structured A2A `llm_api_key` values must be redacted from logs, and agent parameter/registration logging must not emit prompt content or bearer tokens. `ENABLE_MLFLOW_TRACING` must remain opt-in because MLflow traces can record chat inputs and outputs.
+Do not commit `.env`, secrets, API keys, generated certificates, or local caches. Use `.env.example` for documenting required variables. Treat integration credentials, DeepLynx IDs, `REGISTRY_URL`, `REGISTRY_MAX_RETRIES`, `LLM_API_KEY`, `EMBEDDING_API_KEY`, `MLFLOW_API_KEY`, MLflow tracking settings, and other LLM provider keys as environment-specific configuration, not hard-coded defaults. LLM debug logging must keep prompt and embedding content hidden unless `LLM_DEBUG_LOG_MESSAGES=true`, LLM credentials must never be read from A2A requests, and agent parameter/registration logging must not emit prompt content or bearer tokens. `ENABLE_MLFLOW_TRACING` must remain opt-in because MLflow traces can record chat inputs and outputs.
 
 ## Additional Instructions
 

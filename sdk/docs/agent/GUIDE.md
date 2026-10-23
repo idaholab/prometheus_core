@@ -448,24 +448,14 @@ Configuration:
 
 ### Basic pattern
 
-When a required value is missing, emit `INPUT_REQUIRED` and return `{}`. The platform suspends the task and asks the user. When the user responds, your `_execute` is called again with the answers in `get_provided_inputs(context)`.
+When a required value is missing, emit `INPUT_REQUIRED` and return `{}`. The platform suspends the task and asks the user. When the user responds, your `_execute` is called again with **all** the original params plus the answers merged into `params`. You don't need saved state to remember the first call's arguments.
 
 ```python
 from prometheus_api.agent import MissingInput
 
 class MyAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
-        context_id = str(context.context_id)
-        state = self.load_context_state(context_id)
-        provided = self.get_provided_inputs(context)
-
-        # Merge: initial params, persisted state, and new provided inputs
-        resolved = {**state.get("resolved", {}), **provided}
-        if params.get("temperature_c") is not None:
-            resolved["temperature_c"] = params["temperature_c"]
-
-        if "temperature_c" not in resolved:
-            self.save_context_state(context_id, {"resolved": resolved})
+        if params.get("temperature_c") is None:
             await self.send_input_required(
                 context=context,
                 event_queue=event_queue,
@@ -482,16 +472,24 @@ class MyAgent(PrometheusAgent):
             )
             return {}   # ← MUST return {} here — task is suspended
 
-        self.save_context_state(context_id, {"resolved": resolved})
-        temp = float(resolved["temperature_c"])
+        temp = float(params["temperature_c"])
         return {"message": f"Analysis complete at {temp} °C.", "temperature_c": temp}
 ```
+
+To know *who* supplied a value, call `self.get_input_sources(context)`. It maps each parameter name to `"model"` (the orchestrator's tool call), `"user"` (a form answer) or `"context"` (filled in from the conversation), and returns `{}` when the caller sent no sources:
+
+```python
+if self.get_input_sources(context).get("weekday") == "user":
+    note = "You chose this day."
+```
+
+Never ask for credentials (API keys, tokens) with `INPUT_REQUIRED`: they would travel as parameters.
 
 ### `MissingInput` fields
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | `str` | yes | Field identifier — becomes the key in `get_provided_inputs()` |
+| `name` | `str` | yes | Field identifier — the answer arrives as `params[name]` on resume |
 | `description` | `str` | yes | Explanation for the orchestrator LLM; shown as help text in the form |
 | `user_prompt` | `str` | yes | The question label shown to the user in the form |
 | `type` | `str` | yes | Input type — controls form widget (see table below) |
@@ -505,7 +503,7 @@ class MyAgent(PrometheusAgent):
 | `type` value | Form widget | Notes |
 |---|---|---|
 | `"string"` | Text input | Free text |
-| `"string"` + `options=[...]` | Dropdown select | Preferred over `"enum"` |
+| `"string"` + `options=[...]` | Dropdown select | Preferred over `"enum"`. `options` may be computed per request, so they can list values the agent card can't know in advance |
 | `"number"` or `"integer"` | Number input | Validates numeric input |
 | `"boolean"` | Checkbox | `True`/`False`; never required even if `required=True` |
 
@@ -565,9 +563,9 @@ async def _execute(self, params, context, event_queue):
     if phase == "start":
         return await self._phase_start(params, context, event_queue, context_id)
     if phase == "awaiting_classification":
-        return await self._phase_classification(context, event_queue, context_id, state)
+        return await self._phase_classification(params, context, event_queue, context_id, state)
     if phase == "awaiting_sizing":
-        return await self._phase_sizing(context, event_queue, context_id, state)
+        return await self._phase_sizing(params, context, event_queue, context_id, state)
     raise ValueError(f"Unknown phase: {phase!r}")
 
 async def _phase_start(self, params, context, event_queue, context_id):
@@ -589,9 +587,9 @@ async def _phase_start(self, params, context, event_queue, context_id):
     )
     return {}
 
-async def _phase_classification(self, context, event_queue, context_id, state):
-    provided = self.get_provided_inputs(context)
-    profile = {**state.get("profile", {}), **provided}
+async def _phase_classification(self, params, context, event_queue, context_id, state):
+    # This round's answers arrive in params; earlier rounds' answers live in state.
+    profile = {**state.get("profile", {}), **{k: params[k] for k in ("code_class", "safety_category") if k in params}}
 
     self.save_context_state(context_id, {
         "phase": "awaiting_sizing",
@@ -610,12 +608,11 @@ async def _phase_classification(self, context, event_queue, context_id, state):
     )
     return {}
 
-async def _phase_sizing(self, context, event_queue, context_id, state):
-    provided = self.get_provided_inputs(context)
+async def _phase_sizing(self, params, context, event_queue, context_id, state):
     profile = {**state.get("profile", {})}
-    for k, v in provided.items():
-        if v is not None:
-            profile[k] = v
+    for k in ("design_pressure_mpa", "design_temp_c"):
+        if params.get(k) is not None:
+            profile[k] = params[k]
 
     self.save_context_state(context_id, {})   # clear state when done
 
@@ -672,14 +669,16 @@ self.save_context_state(context.task_id, state)
 self.save_context_state(str(context.context_id), state)
 ```
 
-**4. Calling `get_provided_inputs` on the first turn**
+**4. Copying params into context state "for the resume"**
 
-On the initial call, there are no provided inputs yet — `get_provided_inputs` returns `{}`. Only on resume (after the user submits the form) does it return populated values. Always merge with existing state:
+Not needed: on resume the platform re-sends every original argument with the answers merged in. Save state only for what `params` can't carry, such as the phase of a multi-round form or answers from earlier rounds.
 
 ```python
-state = self.load_context_state(context_id)
-resolved = dict(state.get("resolved", {}))
-resolved.update(self.get_provided_inputs(context))   # empty dict on first turn, values on resume
+# WRONG — redundant; params already has material_id on resume
+self.save_context_state(context_id, {"resolved": {"material_id": params["material_id"]}})
+
+# CORRECT
+material_id = params.get("material_id")
 ```
 
 **5. Assuming `skill_id` persists across turns**
@@ -932,16 +931,8 @@ class MyAgent(PrometheusAgent):
         raise ValueError(f"Unknown skill: {skill_id!r}")
 
     async def _handle_analysis(self, params, context, event_queue):
-        context_id = str(context.context_id)
-        state = self.load_context_state(context_id)
-        resolved = {**state.get("resolved", {}), **self.get_provided_inputs(context)}
-
-        if "material_id" not in resolved:
-            if params.get("material_id"):
-                resolved["material_id"] = params["material_id"]
-
-        if "material_id" not in resolved:
-            self.save_context_state(context_id, {"resolved": resolved})
+        material_id = params.get("material_id")
+        if not material_id:
             await self.send_input_required(
                 context=context,
                 event_queue=event_queue,
@@ -957,9 +948,6 @@ class MyAgent(PrometheusAgent):
                 hint="Please specify the material.",
             )
             return {}
-
-        self.save_context_state(context_id, {})  # clear on completion
-        material_id = resolved["material_id"]
 
         await self.send_status_update(context, event_queue, message=f"Analyzing {material_id}…")
 
@@ -991,7 +979,7 @@ if __name__ == "__main__":
 ```python
 @dataclass
 class MissingInput:
-    name: str                             # Field key in provided_inputs on resume
+    name: str                             # Key of the answer in params on resume
     description: str                      # Orchestrator context + form help text
     user_prompt: str                      # Label shown to user in the form
     type: str                             # "string" | "number" | "integer" | "boolean"
@@ -1056,10 +1044,11 @@ Load persisted per-context state. Returns `{}` if nothing saved.
 
 Persist agent-local state (Redis with in-memory fallback, TTL 24 h by default).
 
-### `get_provided_inputs(context) → Dict`
+### `get_input_sources(context) → Dict[str, str]`
 
-Extract user-submitted form values from incoming v1 `Part(data=...)` values.
-Returns `{}` on the first turn.
+Who supplied each parameter, from the `inputSources` message metadata: `"model"`,
+`"user"` (a form answer) or `"context"` (filled from the conversation). The values
+themselves are in `params`. Returns `{}` when the caller sent no sources.
 
 ### `list_artifact_references(conversation_id, limit=None) → List[ArtifactReference]`
 

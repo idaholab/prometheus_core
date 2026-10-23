@@ -12,9 +12,8 @@
 
 """PrometheusAgent example using the shared async LLM client.
 
-This agent reads LLM configuration from environment variables and uses
-self.llm_client(context), which can consume a transient llm_api_key only from
-structured A2A v1 Part(data=...) / provided_inputs payloads.
+This agent reads LLM configuration, including credentials, from environment
+variables and uses self.llm_client(context).
 
 Run locally with the same LLM setup as examples/llm_client_usage.py:
 

@@ -33,7 +33,7 @@ from .exceptions import (
 from .models import ChatResponse, EmbeddingResponse
 from .provider_errors import format_provider_error, litellm_error_body, summarize_body
 from .normalization import ChatInput, EmbeddingInput, normalize_embedding_input, normalize_messages
-from .security import extract_llm_api_key_from_a2a_context, redact_secrets
+from .security import redact_secrets
 from .tools import (
     ToolCall,
     ToolDefinition,
@@ -152,15 +152,6 @@ def _extract_proxy_aliases(payload: Any) -> list[str]:
 
 class _ClientMixin:
     config: LLMConfig
-
-    @classmethod
-    def from_a2a_context(cls, context: Any, config: LLMConfig | None = None, **kwargs: Any):
-        """Create a client using an optional ``llm_api_key`` from structured A2A data."""
-        resolved_config = config or LLMConfig.from_env()
-        api_key = extract_llm_api_key_from_a2a_context(context)
-        if api_key:
-            resolved_config = resolved_config.with_api_key(api_key)
-        return cls(config=resolved_config, **kwargs)  # type: ignore[call-arg]
 
     def _fallback_models(self) -> dict[str, FallbackModelConfig]:
         return self.config.load_fallback_models()

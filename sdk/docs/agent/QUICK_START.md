@@ -166,19 +166,15 @@ agent is allowed to read, separated by the platform path separator.
 
 ## `INPUT_REQUIRED` — requesting user input
 
-Save state **before** calling `send_input_required`, then **always** `return {}`.
+Call `send_input_required`, then **always** `return {}`. On resume, `params` holds every
+original argument plus the user's answers, so no saved state is needed.
 
 ```python
 from prometheus_api.agent import MissingInput
 
 
 async def _execute(self, params, context, event_queue):
-    context_id = str(context.context_id)
-    state = self.load_context_state(context_id)
-    resolved = {**state.get("resolved", {}), **self.get_provided_inputs(context)}
-
-    if "temperature_c" not in resolved:
-        self.save_context_state(context_id, {"resolved": resolved})   # save BEFORE
+    if params.get("temperature_c") is None:
         await self.send_input_required(
             context=context, event_queue=event_queue,
             missing_inputs=[
@@ -194,15 +190,14 @@ async def _execute(self, params, context, event_queue):
         )
         return {}   # ← required — task is suspended
 
-    self.save_context_state(context_id, {})   # clear on completion
-    return {"message": f"Running at {resolved['temperature_c']} °C.", "agent": self.agent_name}
+    return {"message": f"Running at {params['temperature_c']} °C.", "agent": self.agent_name}
 ```
 
 Key rules:
-- Use `context.context_id` as the state key (not `task_id` — it changes each turn)
-- `get_provided_inputs()` returns `{}` on the first turn; values appear on resume
+- Answers arrive in `params` on resume; `self.get_input_sources(context)` says whether each value came from the `"model"`, the `"user"` or the `"context"`
+- If you do keep state (e.g. a multi-round form's phase), key it by `context.context_id` (not `task_id`, which changes each turn)
 - Bundle all missing fields into **one** `send_input_required` call — the form renders them as separate widgets
-- `type="boolean"` renders as a checkbox; `options=[...]` renders as a dropdown
+- `type="boolean"` renders as a checkbox; `options=[...]` renders as a dropdown (options may be computed per request)
 
 ## Multiple skills
 

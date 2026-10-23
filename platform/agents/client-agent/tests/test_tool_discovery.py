@@ -1123,3 +1123,40 @@ def test_skill_tool_validates_input_and_forwards_original_keys(monkeypatch) -> N
 
     with pytest.raises(pydantic.ValidationError):
         asyncio.run(tool.ainvoke({"steps": 1, "mode": "medium"}))
+
+
+def test_call_a2a_agent_sends_input_sources_as_metadata_not_params(monkeypatch) -> None:
+    a2a_payload = {
+        "result": {
+            "status": {
+                "state": "TASK_STATE_COMPLETED",
+                "message": {"parts": [{"text": json.dumps({"status": "completed"})}]},
+            }
+        }
+    }
+    captured: dict = {}
+
+    class _CapturingClient(_FakeAsyncClient):
+        async def post(self, endpoint, json=None, headers=None):
+            captured["message"] = json
+            return _FakeResponse(self._payload)
+
+    monkeypatch.setattr(
+        tool_discovery.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: _CapturingClient(payload=a2a_payload, **kwargs),
+    )
+
+    asyncio.run(
+        tool_discovery.call_a2a_agent(
+            "http://example.test/a2a/meeting-scheduler-agent",
+            "schedule_meeting",
+            topic="Design review",
+            weekday="Thursday",
+            _input_sources={"topic": "model", "weekday": "user"},
+        )
+    )
+
+    message = captured["message"]["params"]["message"]
+    assert message["metadata"]["inputSources"] == {"topic": "model", "weekday": "user"}
+    assert json.loads(message["parts"][0]["text"]) == {"topic": "Design review", "weekday": "Thursday"}

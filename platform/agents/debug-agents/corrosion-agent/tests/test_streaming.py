@@ -68,9 +68,6 @@ def test_streaming_agent_emits_intermediate_status_update(monkeypatch):
 
     # Stub base helpers that reach external state (Redis-backed context/catalog);
     # keep send_status_update real so we assert the actual emitted event.
-    monkeypatch.setattr(agent, "load_context_state", lambda *a, **k: {})
-    monkeypatch.setattr(agent, "save_context_state", lambda *a, **k: None)
-    monkeypatch.setattr(agent, "get_provided_inputs", lambda *a, **k: {})
 
     async def _fake_json_artifact(*a, **k):
         return "artifact-id"
