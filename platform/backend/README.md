@@ -45,6 +45,37 @@ itself from its lifespan, and no longer does (see *Multi-worker* below). Skippin
 gives you a backend that starts and then fails on the first admin-plane query.
 `uv run pytest` needs no database — the suite runs against SQLite and `fakeredis`.
 
+### API surface snapshot
+
+`tests/snapshots/api_surface.json` is a written record of the backend's HTTP API:
+every URL and method, the parameters it reads, the status it returns on success, and
+the shape of its request and response bodies. It exists so that an API change can't
+slip through unnoticed. Renaming a response field from `title` to `name` passes every
+unit test while the frontend, which still reads `title`, breaks.
+
+**How it works.** `tests/test_api_surface.py` builds the same record from the running
+app and fails if it differs from the file, printing the diff. Adding, removing or
+changing an endpoint therefore fails the test until the file is updated. The record
+keeps only what a client can observe and drops documentation (summaries, descriptions,
+examples, tags, error responses), so editing a docstring never trips it.
+`tests/api_surface.py` defines exactly what is kept.
+
+**When it fails:**
+
+- If you didn't mean to change the API, the diff shows what moved. Fix the code.
+- If you did, regenerate the file and commit it alongside the change:
+
+  ```bash
+  uv run python -m tests.api_surface
+  ```
+
+  The JSON diff then shows up in the PR, so reviewers see exactly which endpoints
+  changed shape without digging through the code. A PR that leaves the file untouched
+  hasn't changed the API.
+
+Nobody needs to read the file itself; it is long because it lists every endpoint in
+full. Only its diff matters.
+
 ## Configuration
 
 `app/config.py` loads `app/config.yml` (override the path with `PROMETHEUS_CONFIG_PATH`).
