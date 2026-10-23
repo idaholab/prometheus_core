@@ -112,7 +112,7 @@ if "prometheus_api.agent" not in sys.modules:
 
         @staticmethod
         def registry_url() -> str:
-            return "http://litellm:4000"
+            return "http://backend:8000"
 
         @staticmethod
         def pending_hint(pending_requests, hint):
@@ -654,7 +654,7 @@ def test_get_all_tools_dynamic_fetches_full_agent_card(monkeypatch) -> None:
 
     assert tools == [
         {
-            "agent_url": "http://litellm:4000/a2a/thermal-analysis-agent",
+            "agent_url": f"{tool_discovery.REGISTRY_URL}/a2a/thermal-analysis-agent",
             "skill": "analyze_thermal",
         }
     ]

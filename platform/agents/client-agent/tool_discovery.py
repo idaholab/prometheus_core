@@ -30,13 +30,13 @@ from prometheus_api.a2a_stream import stream_a2a_request
 logger = logging.getLogger(__name__)
 
 REGISTRY_URL = PrometheusAgent.registry_url()
-LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "")
+AGENT_SECRET = os.getenv("AGENT_SECRET", "")
 import socket as _socket
 
 _AGENT_PORT = (os.getenv("AGENT_PORT") or "8000").strip()
 SELF_AGENT_URL = (os.getenv("EXTERNAL_AGENT_URL") or f"http://{_socket.gethostname()}:{_AGENT_PORT}").rstrip("/")
 # Docker Compose sets the container hostname to the service name; this is the
-# agent_name key used when the client-agent registers with LiteLLM.
+# agent_name key used when the client-agent registers with the registry.
 _SELF_AGENT_ID = _socket.gethostname()
 StatusCallback = Callable[[str], Awaitable[None]]
 # Invoked once when a downstream agent emits a status tagged metadata.background
@@ -73,10 +73,11 @@ class A2AContractError(ValueError):
     """Raised when an agent response violates the required A2A v1 contract."""
 
 
-def _litellm_headers() -> Dict[str, str]:
+def _registry_headers() -> Dict[str, str]:
+    """Bearer AGENT_SECRET, accepted by the backend's registry and by every agent."""
     headers = {}
-    if LITELLM_MASTER_KEY:
-        headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
+    if AGENT_SECRET:
+        headers["Authorization"] = f"Bearer {AGENT_SECRET}"
     return headers
 
 
@@ -87,7 +88,7 @@ def _normalize_url(url: str) -> str:
 def is_self_agent(agent_id: str, agent_url: str) -> bool:
     """Return True when a discovered agent record points to this orchestrator.
 
-    Primary check: agent_id (the LiteLLM routing key) matches the container
+    Primary check: agent_id (the registry routing key) matches the container
     hostname, which Docker Compose sets to the service name. URL comparison is
     a fallback for cases where the hostname-derived URL is available.
     """
@@ -97,22 +98,22 @@ def is_self_agent(agent_id: str, agent_url: str) -> bool:
 
 
 async def discover_agents() -> List[Dict[str, Any]]:
-    """Query LiteLLM for all registered A2A agents.
+    """Query the registry for all registered A2A agents.
 
     Returns a normalised list where each entry contains:
-      agent_id   – the agent_name used as LiteLLM routing key
+      agent_id   – the agent_name used as registry routing key
       name       – human-readable name from agent_card_params
       url        – downstream agent base URL (from agent_card_params.url)
       agent_name – same as agent_id, kept for clarity
       agent_card_params – full card dict including skills + inputSchema
     """
-    async with httpx.AsyncClient(timeout=10.0, headers=_litellm_headers()) as client:
+    async with httpx.AsyncClient(timeout=10.0, headers=_registry_headers()) as client:
         response = await client.get(f"{REGISTRY_URL}/v1/agents")
         response.raise_for_status()
         raw = response.json()
 
     result = []
-    # LiteLLM returns a list directly or wrapped in a key — handle both
+    # Accept a bare list or one wrapped in a key
     entries = raw if isinstance(raw, list) else raw.get("data", raw.get("agents", []))
     for entry in entries:
         card = entry.get("agent_card_params") or {}
@@ -130,16 +131,16 @@ async def discover_agents() -> List[Dict[str, Any]]:
 async def get_agent_card(agent_id: str, direct_url: Optional[str] = None) -> Dict[str, Any]:
     """Get the full agent card for an agent.
 
-    agent_id is the agent_name (LiteLLM routing key). Prefer the specialist's
-    direct well-known agent-card endpoint because LiteLLM's `/a2a/{agent_name}`
+    agent_id is the agent_name (registry routing key). Prefer the specialist's
+    direct well-known agent-card endpoint because a gateway's `/a2a/{agent_name}`
     response drops non-standard per-skill metadata such as `inputSchema`.
-    Falls back to LiteLLM and finally to the discovery summary payload.
+    Falls back to the registry and finally to the discovery summary payload.
     """
     normalized_direct_url = _normalize_url(direct_url or "")
     if normalized_direct_url:
         for path in ("/api/agent-card", "/.well-known/agent-card.json", "/.well-known/agent.json"):
             try:
-                async with httpx.AsyncClient(timeout=10.0, headers=_litellm_headers()) as client:
+                async with httpx.AsyncClient(timeout=10.0, headers=_registry_headers()) as client:
                     response = await client.get(f"{normalized_direct_url}{path}")
                     if response.status_code == 200:
                         return response.json()
@@ -147,7 +148,7 @@ async def get_agent_card(agent_id: str, direct_url: Optional[str] = None) -> Dic
                 pass
 
     try:
-        async with httpx.AsyncClient(timeout=10.0, headers=_litellm_headers()) as client:
+        async with httpx.AsyncClient(timeout=10.0, headers=_registry_headers()) as client:
             response = await client.get(f"{REGISTRY_URL}/a2a/{agent_id}")
             if response.status_code == 200:
                 return response.json()
@@ -516,12 +517,11 @@ async def call_a2a_agent(
     if kwargs.get("_a2a_task_id"):
         message["params"]["message"]["taskId"] = kwargs["_a2a_task_id"]
 
-    # Route through LiteLLM: agent_url is {REGISTRY_URL}/a2a/{agent_name}.
+    # Route through the registry gateway: agent_url is {REGISTRY_URL}/a2a/{agent_name},
+    # which forwards with the agent's own registered credentials.
     # A2A v1 uses one JSON-RPC endpoint and selects the operation by method.
     endpoint = agent_url.rstrip("/")
-    headers = {"Content-Type": "application/json", "A2A-Version": "1.0"}
-    if LITELLM_MASTER_KEY:
-        headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
+    headers = {"Content-Type": "application/json", "A2A-Version": "1.0", **_registry_headers()}
 
     # Use longer timeout for research agents that may take minutes
     timeout_seconds = 900.0  # 15 minutes
@@ -698,10 +698,10 @@ async def get_all_tools_dynamic() -> List[StructuredTool]:
                 logger.debug("Skipping self agent in tool discovery: %s (%s)", agent_id, direct_url)
                 continue
 
-            # Route all calls through LiteLLM rather than directly to the agent.
+            # Route all calls through the registry gateway rather than directly to the agent.
             agent_url = f"{REGISTRY_URL}/a2a/{agent_id}"
 
-            # LiteLLM's /v1/agents payload can omit full per-skill metadata.
+            # A registry's /v1/agents payload can omit full per-skill metadata.
             # Fetch the full card so tool schemas stay authoritative.
             agent_card = await get_agent_card(agent_id, direct_url=direct_url)
             if not agent_card.get("skills"):

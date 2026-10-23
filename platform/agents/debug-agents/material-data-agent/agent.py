@@ -18,7 +18,6 @@ orchestration debugging!
 Implements A2A protocol using prometheus_api with Bearer token authentication
 """
 import json
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -363,8 +362,6 @@ class MaterialDataAgent(PrometheusAgent):
             )
 
             llm_config = LLMConfig.from_env()
-            if llm_config.proxy_url:
-                llm_config = llm_config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
             async with self.llm_client(context, config=llm_config) as llm:
                 response = await llm.medium(
                     prompt,

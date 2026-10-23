@@ -5,7 +5,10 @@
 x-common-env: &common-env
   AGENT_SECRET: ${AGENT_SECRET}
   AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
-  REGISTRY_URL: ${REGISTRY_URL:-http://litellm:4000}
+  # The A2A agent registry and gateway (backend/app/routers/agent_registry.py).
+  REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+  # The SDK sends LITELLM_MASTER_KEY as its registry token; the registry checks AGENT_SECRET.
+  LITELLM_MASTER_KEY: ${AGENT_SECRET}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
   REDIS_PASSWORD: ${REDIS_PASSWORD}
   DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
@@ -163,18 +166,17 @@ services:
       <<: *common-env
       AGENT_PORT: 8000
       EXTERNAL_AGENT_URL: http://client-agent:8000
-      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:-registry}
+      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}
       LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
     depends_on:
-      litellm:
+      backend:
         condition: service_healthy
       redis:
         condition: service_started
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
-    # It does not cover LiteLLM registration, which retries in the background.
+    # It does not cover registry registration, which retries in the background.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s
@@ -259,10 +261,10 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
+    # Not client-agent: the backend only calls it per request, and every agent
+    # (client-agent included) waits on the backend, which hosts their registry.
     depends_on:
       redis:
-        condition: service_started
-      client-agent:
         condition: service_started
       admin-db:
         condition: service_healthy

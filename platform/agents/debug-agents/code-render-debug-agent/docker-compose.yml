@@ -19,8 +19,9 @@ services:
       AGENT_PORT: 8000
       EXTERNAL_AGENT_URL: http://code-render-debug-agent:8000
       AGENT_SECRET: ${AGENT_SECRET}
-      REGISTRY_URL: ${REGISTRY_URL:-http://litellm:4000}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+      # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
+      LITELLM_MASTER_KEY: ${AGENT_SECRET}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
@@ -37,10 +38,10 @@ services:
       USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
       PYTHONDONTWRITEBYTECODE: 1
     depends_on:
-      litellm:
+      backend:
         condition: service_healthy
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
-    # It does not cover LiteLLM registration, which retries in the background.
+    # It does not cover registry registration, which retries in the background.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s

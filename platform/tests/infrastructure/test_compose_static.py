@@ -73,13 +73,13 @@ def test_litellm_image_pinned(compose_data):
 
 def test_client_agent_receives_selectable_llm_configuration(compose_data):
     common_env = compose_data["x-common-env"]
-    assert common_env["REGISTRY_URL"] == "${REGISTRY_URL:-http://litellm:4000}"
+    assert common_env["REGISTRY_URL"] == "${REGISTRY_URL:-http://backend:8000}"
     assert "LLM_DEFAULT_MODEL" not in common_env
     assert "LLM_API_KEY" not in common_env
     assert "MODEL_NAME" not in common_env
 
     client_env = compose_data["services"]["client-agent"]["environment"]
-    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:-registry}"
+    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}"
     assert client_env["LLM_CONFIG_FILE"] == "${LLM_CONFIG_FILE:-}"
     for key in ("LLM_API_KEY", "EMBEDDING_API_KEY"):
         assert client_env[key] == f"${{{key}:-}}"
