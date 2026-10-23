@@ -155,8 +155,13 @@ DeepLynx file storage.
 | `JWKS_URL` | Multi-user identity (recommended): the platform operator's JWKS URL — point it at the **platform backend** (`https://<platform-host>/.well-known/jwks.json`), not at another agent. Fetches the verification key automatically, including any rotation done through the platform's admin UI. See below. |
 | `USER_IDENTITY_PUBLIC_KEY` | Multi-user identity (alternative to `JWKS_URL`): a static public key from the platform operator. **Never** the private key — this agent only verifies. Won't observe a key rotated through the admin UI; re-ask the operator for the new key if verification starts failing. |
 | `USER_IDENTITY_ISS` / `USER_IDENTITY_AUD` | Must match the platform operator's values exactly. |
+| `DEEPLYNX_KEY` / `DEEPLYNX_SECRET` | Required DeepLynx authentication pair; alternatively use `DEEPLYNX_JWT_TOKEN`. |
+| `DEEPLYNX_JWT_TOKEN` | Alternative to key/secret authentication; do not set both methods. |
+| `DEEPLYNX_ORG_ID` / `DEEPLYNX_PROJECT_ID` | Required DeepLynx organization and project IDs. |
+| `DEEPLYNX_DATA_SOURCE_ID` | Optional when the project has a default data source. |
+| `DEEPLYNX_BASE_URL` | Optional; uses the SDK default when omitted. |
 
-See `.env.example` for the full list (including optional DeepLynx and proxy settings).
+See `.env.example` for the full list, including proxy and runtime settings.
 
 ### Verifying platform users (multi-user)
 

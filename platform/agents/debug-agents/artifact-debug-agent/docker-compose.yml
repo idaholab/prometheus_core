@@ -39,8 +39,10 @@ services:
       DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
       DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
       DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
       DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
       DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
     depends_on:
       litellm:
         condition: service_healthy

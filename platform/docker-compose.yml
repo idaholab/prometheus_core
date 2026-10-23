@@ -11,8 +11,10 @@ x-common-env: &common-env
   DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
   DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
   DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+  DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
   DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
   DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+  DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
   PROMETHEUS_MAX_UPLOAD_BYTES: ${PROMETHEUS_MAX_UPLOAD_BYTES:-104857600}
   # Multi-user identity plane (RS256 only -- see docs/dev-docs/multi-user-setup.md
   # and prometheus_api/docs/agent/IDENTITY_KEY_MANAGEMENT.md). Only the backend

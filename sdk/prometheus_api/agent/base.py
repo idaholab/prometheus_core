@@ -269,7 +269,7 @@ class PrometheusAgentExecutor(AgentExecutor):
                 # Standard delegating executors may establish request-scoped state
                 # before any work status or agent code runs. The bare executor's
                 # default scope is a storage-independent no-op.
-                async with self._request_scope(params, context):
+                async with self._establish_request_scope(params, context):
                     # Send "working" status
                     await emit_status_update(
                         context=context,
@@ -326,7 +326,7 @@ class PrometheusAgentExecutor(AgentExecutor):
             raise
 
     @asynccontextmanager
-    async def _request_scope(
+    async def _establish_request_scope(
         self,
         params: Dict[str, Any],
         context: RequestContext,
@@ -605,7 +605,7 @@ class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
         self._execution_scope = execution_scope
 
     @asynccontextmanager
-    async def _request_scope(
+    async def _establish_request_scope(
         self,
         params: Dict[str, Any],
         context: RequestContext,
@@ -1469,7 +1469,7 @@ class PrometheusAgent:
         return value if isinstance(value, int) else None
 
     @asynccontextmanager
-    async def _execution_record_scope(
+    async def _create_execution_record(
         self,
         params: Dict[str, Any],
         context: RequestContext,
@@ -1503,8 +1503,11 @@ class PrometheusAgent:
         }
         credential = await self.get_credential("deeplynx")
         config = ConnectionConfig.from_credential(credential)
-        name_suffix = f" execution {created_at}"
-        execution_name = f"{self.agent_name[: 499 - len(name_suffix)]}{name_suffix}"
+        execution_name = (
+            f"Agent {self.agent_name} executed task_{task_id} by {identity.user_id} at {created_at}"
+        )
+        if len(execution_name) > 500:
+            execution_name = f"{identity.user_id}_{self.agent_name}_{task_id}_{created_at}"
         item_create = ItemCreate(
             name=execution_name,
             description=f"Execution record for task {task_id}",
@@ -1535,7 +1538,7 @@ class PrometheusAgent:
         return DelegatingPrometheusAgentExecutor(
             agent_name=self.agent_name,
             execute_fn=self._execute,
-            execution_scope=self._execution_record_scope,
+            execution_scope=self._create_execution_record,
         )
 
     async def _execute(
@@ -2049,6 +2052,37 @@ class PrometheusAgent:
         except Exception:
             logger.exception("Background registry registration task failed unexpectedly")
 
+    @staticmethod
+    def _validate_deeplynx_configuration() -> None:
+        """Fail startup when required DeepLynx environment values are invalid."""
+        broker = os.getenv("CREDENTIAL_BROKER", "env").strip().lower()
+        if broker not in ("env", ""):
+            return
+
+        jwt_token = os.getenv("DEEPLYNX_JWT_TOKEN", "").strip()
+        key = os.getenv("DEEPLYNX_KEY", "").strip()
+        secret = os.getenv("DEEPLYNX_SECRET", "").strip()
+        if jwt_token and (key or secret):
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: set DEEPLYNX_JWT_TOKEN or "
+                "DEEPLYNX_KEY + DEEPLYNX_SECRET, not both"
+            )
+        if not jwt_token and not (key and secret):
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: set DEEPLYNX_JWT_TOKEN or "
+                "DEEPLYNX_KEY + DEEPLYNX_SECRET"
+            )
+
+        missing = [
+            name
+            for name in ("DEEPLYNX_ORG_ID", "DEEPLYNX_PROJECT_ID")
+            if not os.getenv(name, "").strip()
+        ]
+        if missing:
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: missing " + ", ".join(missing)
+            )
+
     @asynccontextmanager
     async def _application_lifespan(
         self,
@@ -2057,7 +2091,8 @@ class PrometheusAgent:
         *,
         register_on_startup: bool,
     ) -> AsyncIterator[None]:
-        """Run subclass lifespan and start registry registration in the background."""
+        """Validate required storage config, run subclass lifespan, and register."""
+        self._validate_deeplynx_configuration()
         registration_task: Optional[asyncio.Task[None]] = None
         async with self.lifespan(app):
             if register_on_startup:
