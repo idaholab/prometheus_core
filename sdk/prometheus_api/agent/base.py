@@ -1507,7 +1507,10 @@ class PrometheusAgent:
             f"Agent {self.agent_name} executed task_{task_id} by {identity.user_id} at {created_at}"
         )
         if len(execution_name) > 500:
-            execution_name = f"{identity.user_id}_{self.agent_name}_{task_id}_{created_at}"
+            prefix = f"{identity.user_id}_"
+            suffix = f"_{task_id}_{created_at}"
+            available_agent_length = max(0, 499 - len(prefix) - len(suffix))
+            execution_name = f"{prefix}{self.agent_name[:available_agent_length]}{suffix}"[:499]
         item_create = ItemCreate(
             name=execution_name,
             description=f"Execution record for task {task_id}",

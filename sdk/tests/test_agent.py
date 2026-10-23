@@ -785,8 +785,12 @@ workflows:
             ("shutdown", sentinel_app),
         ]
 
-    def test_application_lifespan_starts_background_registration(self):
+    def test_application_lifespan_starts_background_registration(self, monkeypatch):
         events = []
+        monkeypatch.setenv("DEEPLYNX_KEY", "test-key")
+        monkeypatch.setenv("DEEPLYNX_SECRET", "test-secret")
+        monkeypatch.setenv("DEEPLYNX_ORG_ID", "1")
+        monkeypatch.setenv("DEEPLYNX_PROJECT_ID", "2")
 
         class TestAgent(PrometheusAgent):
             @asynccontextmanager
@@ -1170,7 +1174,10 @@ workflows:
         assert agent.execution_record_id is None
         assert observed["params"]["user_id"] == "verified-user"
         item = observed["item"]
-        assert item.name == f"Record Agent execution {item.properties['created_at']}"
+        assert item.name == (
+            "Agent Record Agent executed task_task-9 by verified-user at "
+            f"{item.properties['created_at']}"
+        )
         assert item.original_id == "prometheus-execution:record-agent:task-9"
         assert item.tags is None
         assert "schema" not in item.properties
@@ -1209,7 +1216,8 @@ workflows:
 
         item = execution_storage[0]
         assert len(item.name) == 499
-        assert item.name.endswith(f" execution {item.properties['created_at']}")
+        assert item.name.startswith("local_")
+        assert item.name.endswith(f"_task-long-name_{item.properties['created_at']}")
 
     def test_execution_record_failure_prevents_work_and_execute(self, monkeypatch):
         """Covers REQ-009-20 and BEH-009-07."""
