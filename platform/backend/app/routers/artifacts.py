@@ -40,6 +40,7 @@ from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
 from app import uri_resolver
+from app.api_responses import AUTH_RESPONSES
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
 from app.services.mesh.service import mesh_cache_root
@@ -47,7 +48,7 @@ from app.sessions import SessionState, get_store
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["artifacts"])
+router = APIRouter(prefix="/api", tags=["artifacts"], responses=AUTH_RESPONSES)
 
 # Render hints served as a browser download rather than viewed inline.
 _DOWNLOAD_HINTS = {"file", "unknown"}
