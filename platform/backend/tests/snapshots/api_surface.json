@@ -1,0 +1,2584 @@
+{
+  "openapi": {
+    "paths": {
+      "/.well-known/jwks.json": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": {
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/oidc-providers": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/OidcProviderOut"
+                    },
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OidcProviderOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/oidc-providers/{provider_row_id}": {
+        "delete": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "provider_row_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "204": {}
+          }
+        },
+        "patch": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "provider_row_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderUpdate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OidcProviderOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/signing-keys": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/SigningKeyOut"
+                    },
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "responses": {
+            "201": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SigningKeyOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/signing-keys/{key_id}/activate": {
+        "post": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "key_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SigningKeyOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/signing-keys/{key_id}/retire": {
+        "post": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "key_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SigningKeyOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/users": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/AdminUserOut"
+                    },
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/admin/users/{user_id}": {
+        "delete": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "user_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "204": {}
+          }
+        },
+        "patch": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "user_id",
+              "required": true,
+              "schema": {
+                "format": "uuid",
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserUpdate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/artifacts/mesh/{dataset_id}/{filename}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "dataset_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "in": "path",
+              "name": "filename",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/artifacts/{artifact_id}/content": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "artifact_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/callback/{provider}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "provider",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/login": {
+        "post": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/LoginResult"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/login/{provider_id}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "provider_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/logout": {
+        "post": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": {
+                      "type": "boolean"
+                    },
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/me": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/providers": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/ProviderInfo"
+                    },
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/chat/messages": {
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ChatMessageResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/config": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConfigResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/conversations/recent": {
+        "get": {
+          "parameters": [
+            {
+              "in": "query",
+              "name": "limit",
+              "required": false,
+              "schema": {
+                "default": 20,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConversationHistoryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/conversations/{conversation_id}": {
+        "delete": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "conversation_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "204": {}
+          }
+        },
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "conversation_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConversationDetailResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "patch": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "conversation_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationRenameRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConversationSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/conversations/{conversation_id}/resume": {
+        "post": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "conversation_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationResumeRequest"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ConversationDetailResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/events": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/sessions": {
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CreateSessionRequest"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SessionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/setup/bootstrap": {
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BootstrapResult"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/setup/status": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SetupStatus"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/uploads": {
+        "post": {
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_post_upload_api_uploads_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UploadDescriptor"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/healthz": {
+        "get": {
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AdminUserCreate": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "AdminUserOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "external_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role",
+          "provider",
+          "is_active",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "AdminUserUpdate": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ArtifactMeta": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Citation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "default": "",
+            "type": "string"
+          },
+          "json_body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "json_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "default": "",
+            "type": "string"
+          },
+          "producer_agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "render_hint": {
+            "default": "unknown",
+            "enum": [
+              "pdf",
+              "image",
+              "json",
+              "ifc",
+              "mesh",
+              "mermaid",
+              "thermal",
+              "report",
+              "code",
+              "table",
+              "reference",
+              "file",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "type": "object"
+      },
+      "Body_post_upload_api_uploads_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "BootstrapRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "type": "object"
+      },
+      "BootstrapResult": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
+      "ChatMessageRequest": {
+        "properties": {
+          "followup_answers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_approved": {
+            "default": false,
+            "type": "boolean"
+          },
+          "plan_rejected": {
+            "default": false,
+            "type": "boolean"
+          },
+          "query": {
+            "default": "",
+            "type": "string"
+          },
+          "upload_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UploadDescriptor"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ChatMessageResponse": {
+        "properties": {
+          "artifacts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ArtifactMeta"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_approve": {
+            "default": false,
+            "type": "boolean"
+          },
+          "follow_up_suggestions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "followup_questions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FormField"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommended_materials": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "response_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChatStatus"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turn_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ChatProfile": {
+        "properties": {
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "markdown_description": {
+            "default": "",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ChatStatus": {
+        "enum": [
+          "needs_info",
+          "plan_ready",
+          "executing",
+          "completed",
+          "recommendation",
+          "answer",
+          "backgrounded",
+          "error"
+        ],
+        "type": "string"
+      },
+      "Citation": {
+        "properties": {
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ConfigResponse": {
+        "properties": {
+          "auto_approve_steps": {
+            "default": false,
+            "type": "boolean"
+          },
+          "chat_intro": {
+            "default": "",
+            "type": "string"
+          },
+          "chat_suggestion_title": {
+            "default": "",
+            "type": "string"
+          },
+          "max_upload_bytes": {
+            "default": 0,
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ChatProfile"
+            },
+            "type": "array"
+          },
+          "workflow_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ConversationDetailResponse": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactMeta"
+            },
+            "type": "array"
+          },
+          "auto_approve_steps": {
+            "default": false,
+            "type": "boolean"
+          },
+          "conversation_id": {
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationMessage"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "default": "",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "type": "object"
+      },
+      "ConversationHistoryResponse": {
+        "properties": {
+          "available": {
+            "default": false,
+            "type": "boolean"
+          },
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ConversationMessage": {
+        "properties": {
+          "artifact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "content": {
+            "default": "",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "type": "string"
+          },
+          "timestamp": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "type": "object"
+      },
+      "ConversationRenameRequest": {
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "ConversationResumeRequest": {
+        "properties": {
+          "bind_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ConversationSummary": {
+        "properties": {
+          "conversation_id": {
+            "type": "string"
+          },
+          "pending": {
+            "default": false,
+            "type": "boolean"
+          },
+          "query": {
+            "default": "",
+            "type": "string"
+          },
+          "status": {
+            "default": "unknown",
+            "type": "string"
+          },
+          "timestamp": {
+            "default": "",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "type": "object"
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "bind_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FormField": {
+        "properties": {
+          "default": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "help": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "input_type": {
+            "default": "text",
+            "enum": [
+              "text",
+              "number",
+              "email",
+              "password",
+              "date",
+              "datetime",
+              "textarea",
+              "select",
+              "checkbox"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SelectOption"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "required": {
+            "default": true,
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "type": "object"
+      },
+      "LoginResult": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
+      "OidcProviderCreate": {
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "default_role": {
+            "default": "user",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "issuer_url": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "scopes": {
+            "default": "openid profile email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "display_name",
+          "issuer_url",
+          "client_id",
+          "client_secret"
+        ],
+        "type": "object"
+      },
+      "OidcProviderOut": {
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "default_role": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "issuer_url": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "display_name",
+          "issuer_url",
+          "client_id",
+          "scopes",
+          "default_role",
+          "is_enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "OidcProviderUpdate": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issuer_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ProviderInfo": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "display_name"
+        ],
+        "type": "object"
+      },
+      "SelectOption": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object"
+      },
+      "SessionResponse": {
+        "properties": {
+          "auto_approve_steps": {
+            "default": false,
+            "type": "boolean"
+          },
+          "chat_intro": {
+            "default": "",
+            "type": "string"
+          },
+          "chat_suggestion_title": {
+            "default": "",
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": "string"
+          },
+          "profile": {
+            "default": "",
+            "type": "string"
+          },
+          "workflow_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "type": "object"
+      },
+      "SetupStatus": {
+        "properties": {
+          "needs_setup": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "needs_setup"
+        ],
+        "type": "object"
+      },
+      "SigningKeyOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "kid": {
+            "type": "string"
+          },
+          "public_key_pem": {
+            "type": "string"
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kid",
+          "public_key_pem",
+          "is_active",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "UploadDescriptor": {
+        "properties": {
+          "mime_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "upload_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "name",
+          "mime_type",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "provider": {
+            "default": "credentials",
+            "type": "string"
+          },
+          "role": {
+            "default": "user",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/.well-known/jwks.json",
+      "response_model": "dict[str, list[dict[str, Any]]]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/oidc-providers",
+      "response_model": "list[OidcProviderOut]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "payload"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/oidc-providers",
+      "response_model": "OidcProviderOut",
+      "status_code": 201
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "provider_row_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/oidc-providers/{provider_row_id}",
+      "response_model": null,
+      "status_code": 204
+    },
+    {
+      "methods": [
+        "PATCH"
+      ],
+      "params": {
+        "body": [
+          "payload"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "provider_row_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/oidc-providers/{provider_row_id}",
+      "response_model": "OidcProviderOut",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/signing-keys",
+      "response_model": "list[SigningKeyOut]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/signing-keys",
+      "response_model": "SigningKeyOut",
+      "status_code": 201
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "key_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/signing-keys/{key_id}/activate",
+      "response_model": "SigningKeyOut",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "key_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/signing-keys/{key_id}/retire",
+      "response_model": "SigningKeyOut",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/users",
+      "response_model": "list[AdminUserOut]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "payload"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/admin/users",
+      "response_model": "AdminUserOut",
+      "status_code": 201
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "user_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/users/{user_id}",
+      "response_model": null,
+      "status_code": 204
+    },
+    {
+      "methods": [
+        "PATCH"
+      ],
+      "params": {
+        "body": [
+          "payload"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "user_id"
+        ],
+        "query": []
+      },
+      "path": "/api/admin/users/{user_id}",
+      "response_model": "AdminUserOut",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "dataset_id",
+          "filename"
+        ],
+        "query": []
+      },
+      "path": "/api/artifacts/mesh/{dataset_id}/{filename}",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "artifact_id"
+        ],
+        "query": []
+      },
+      "path": "/api/artifacts/{artifact_id}/content",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [
+          "provider"
+        ],
+        "query": []
+      },
+      "path": "/api/auth/callback/{provider}",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/auth/login",
+      "response_model": "LoginResult",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [
+          "provider_id"
+        ],
+        "query": []
+      },
+      "path": "/api/auth/login/{provider_id}",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/auth/logout",
+      "response_model": "dict[str, bool]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/auth/me",
+      "response_model": "User",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/auth/providers",
+      "response_model": "list[ProviderInfo]",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "body"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/chat/messages",
+      "response_model": "ChatMessageResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/config",
+      "response_model": "ConfigResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": [
+          "limit"
+        ]
+      },
+      "path": "/api/conversations/recent",
+      "response_model": "ConversationHistoryResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "conversation_id"
+        ],
+        "query": []
+      },
+      "path": "/api/conversations/{conversation_id}",
+      "response_model": null,
+      "status_code": 204
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "conversation_id"
+        ],
+        "query": []
+      },
+      "path": "/api/conversations/{conversation_id}",
+      "response_model": "ConversationDetailResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "PATCH"
+      ],
+      "params": {
+        "body": [
+          "body"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "conversation_id"
+        ],
+        "query": []
+      },
+      "path": "/api/conversations/{conversation_id}",
+      "response_model": "ConversationSummary",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "body"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "conversation_id"
+        ],
+        "query": []
+      },
+      "path": "/api/conversations/{conversation_id}/resume",
+      "response_model": "ConversationDetailResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/events",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "body"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/sessions",
+      "response_model": "SessionResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "payload"
+        ],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/setup/bootstrap",
+      "response_model": "BootstrapResult",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/setup/status",
+      "response_model": "SetupStatus",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "params": {
+        "body": [
+          "file"
+        ],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/api/uploads",
+      "response_model": "UploadDescriptor",
+      "status_code": null
+    },
+    {
+      "kind": "Route",
+      "path": "/docs"
+    },
+    {
+      "kind": "Route",
+      "path": "/docs/oauth2-redirect"
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [],
+        "query": []
+      },
+      "path": "/healthz",
+      "response_model": "dict[str, str]",
+      "status_code": null
+    },
+    {
+      "kind": "Route",
+      "path": "/openapi.json"
+    },
+    {
+      "kind": "Route",
+      "path": "/redoc"
+    }
+  ]
+}

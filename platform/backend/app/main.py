@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.crypto import EncryptionError
 from app.db import get_session_factory
+from app.openapi import API_DESCRIPTION, API_TITLE, API_VERSION, TAGS
 from app.routers import (
     admin_keys,
     admin_oidc,
@@ -94,7 +95,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.redis.aclose()
 
 
-app = FastAPI(title="Prometheus Backend", lifespan=lifespan)
+app = FastAPI(
+    title=API_TITLE,
+    version=API_VERSION,
+    description=API_DESCRIPTION,
+    openapi_tags=TAGS,
+    lifespan=lifespan,
+)
 
 # CORS for local dev only; in prod the frontend is served same-origin behind nginx.
 # Explicit origins, not "*", because credentialed requests can't use a wildcard
