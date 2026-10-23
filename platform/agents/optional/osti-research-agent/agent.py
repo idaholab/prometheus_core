@@ -1389,8 +1389,6 @@ except Exception as e:
         await self._send_status(context, event_queue, "Checking knowledge base for existing answers...", False, conversation_id)
 
         llm_config = LLMConfig.from_env()
-        if llm_config.proxy_url:
-            llm_config = llm_config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
         async with self.llm_client(context, config=llm_config) as llm:
             cached_answer = await self.check_memory(question, llm)
         if cached_answer and cached_answer.get("sufficient", True):

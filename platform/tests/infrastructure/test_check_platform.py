@@ -159,7 +159,7 @@ def test_http_check_passes_on_2xx_and_raises_otherwise(server):
 
 def test_main_passes_when_everything_is_up(server, tmp_path, monkeypatch, capsys):
     """Exits 0 once the backend, frontend, proxy and agents all pass."""
-    monkeypatch.setenv("LITELLM_MASTER_KEY", "key")
+    monkeypatch.setenv("AGENT_SECRET", "key")
     server.routes.update(
         {
             "/healthz": (200, b"ok"),
@@ -171,7 +171,7 @@ def test_main_passes_when_everything_is_up(server, tmp_path, monkeypatch, capsys
     port = str(server.port)
     rc = _run_main(
         monkeypatch,
-        "--backend-port", port, "--frontend-port", port, "--litellm-port", port,
+        "--backend-port", port, "--frontend-port", port,
         str(_agent_dir(tmp_path, "Client Agent")),
     )  # fmt: skip
     assert rc == 0
@@ -179,22 +179,22 @@ def test_main_passes_when_everything_is_up(server, tmp_path, monkeypatch, capsys
 
 
 def test_main_skips_the_frontend_and_agents_when_not_given(server, monkeypatch):
-    """Without --frontend-port or agents, only the backend is checked and no master key is needed."""
-    monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+    """Without --frontend-port or agents, only the backend is checked and no agent secret is needed."""
+    monkeypatch.delenv("AGENT_SECRET", raising=False)
     server.routes["/healthz"] = (200, b"ok")
     port = str(server.port)
-    assert _run_main(monkeypatch, "--backend-port", port, "--litellm-port", port) == 0
+    assert _run_main(monkeypatch, "--backend-port", port) == 0
 
 
 def test_main_times_out_and_names_what_failed(server, tmp_path, monkeypatch, capsys):
     """On a timeout, exits 1 and lists only the checks that never passed."""
-    monkeypatch.setenv("LITELLM_MASTER_KEY", "key")
+    monkeypatch.setenv("AGENT_SECRET", "key")
     server.routes.update({"/": (200, b"<html>"), "/api/setup/status": (502, b""), "/v1/agents": _agents()})
     port = str(server.port)
     rc = _run_main(
         monkeypatch,
         "--timeout", "0",
-        "--backend-port", port, "--frontend-port", port, "--litellm-port", port,
+        "--backend-port", port, "--frontend-port", port,
         str(_agent_dir(tmp_path, "Client Agent")),
     )  # fmt: skip
     assert rc == 1
@@ -205,27 +205,27 @@ def test_main_times_out_and_names_what_failed(server, tmp_path, monkeypatch, cap
     assert "  frontend:" not in err
 
 
-def test_main_fails_fast_on_a_rejected_master_key(server, tmp_path, monkeypatch, capsys):
+def test_main_fails_fast_on_a_rejected_agent_secret(server, tmp_path, monkeypatch, capsys):
     """A rejected key exits 1 on the first poll, not at the timeout."""
-    monkeypatch.setenv("LITELLM_MASTER_KEY", "wrong")
+    monkeypatch.setenv("AGENT_SECRET", "wrong")
     server.routes.update({"/healthz": (200, b"ok"), "/v1/agents": (401, b"")})
     port = str(server.port)
     start = time.monotonic()
     rc = _run_main(
         monkeypatch,
         "--timeout", "5",
-        "--backend-port", port, "--litellm-port", port,
+        "--backend-port", port,
         str(_agent_dir(tmp_path, "Client Agent")),
     )  # fmt: skip
     assert rc == 1
-    assert "rejected LITELLM_MASTER_KEY" in capsys.readouterr().err
+    assert "rejected AGENT_SECRET" in capsys.readouterr().err
     assert time.monotonic() - start < 5, "should exit on the first poll, not wait out the timeout"
 
 
-def test_main_requires_the_master_key_for_agents(tmp_path, monkeypatch, capsys):
-    """With agents to check and no LITELLM_MASTER_KEY, exits 1 at once."""
-    monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+def test_main_requires_the_agent_secret_for_agents(tmp_path, monkeypatch, capsys):
+    """With agents to check and no AGENT_SECRET, exits 1 at once."""
+    monkeypatch.delenv("AGENT_SECRET", raising=False)
     monkeypatch.setattr(cp, "ENV", tmp_path / "missing.env")
-    rc = _run_main(monkeypatch, "--backend-port", "1", "--litellm-port", "1", str(_agent_dir(tmp_path, "Client Agent")))
+    rc = _run_main(monkeypatch, "--backend-port", "1", str(_agent_dir(tmp_path, "Client Agent")))
     assert rc == 1
-    assert "LITELLM_MASTER_KEY is not set" in capsys.readouterr().err
+    assert "AGENT_SECRET is not set" in capsys.readouterr().err

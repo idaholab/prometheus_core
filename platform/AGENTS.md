@@ -165,7 +165,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - When replacing an implementation path, delete the obsolete path and tests instead of leaving quarantined fallback code.
 - Before adding a second state store or execution path, step back and test whether the existing abstraction can become canonical; prefer deleting compensating synchronization over layering another fix.
 - Treat dependency provenance as artifact-selection guidance, not an authorization boundary; keep the full conversation catalog available and validate selected IDs against it.
-- Raw A2A v1 callers use PascalCase JSON-RPC methods, ProtoJSON enum/part/configuration shapes, and `A2A-Version: 1.0`; keep the LiteLLM gateway at version 1.92.0 or newer.
+- Raw A2A v1 callers use PascalCase JSON-RPC methods, ProtoJSON enum/part/configuration shapes, and `A2A-Version: 1.0`; the backend A2A gateway (`/a2a/{agent_name}`) must forward those calls and their streamed responses unchanged.
 - A2A consumers must accept only exact v1 ProtoJSON enum, part, and payload shapes; reject malformed responses instead of normalizing legacy variants or inferring fields from prose.
 - Never place Markdown backticks inside shell command arguments; use shell-safe plain text or a non-shell file-editing interface.
 - Until identity-backed credential storage exists, each LLM-using agent selects its own LLM config and receives that config's provider keys; semantic model flavors remain hardcoded in agent code.

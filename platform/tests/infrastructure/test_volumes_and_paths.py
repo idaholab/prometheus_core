@@ -18,24 +18,12 @@ def _get_volumes(svc: dict) -> list[str]:
     return [str(v) for v in svc.get("volumes", [])]
 
 
-def test_litellm_config_bind_mount(compose_data):
-    volumes = _get_volumes(compose_data["services"]["litellm"])
-    assert any("litellm_config.yaml:/app/config.yaml" in v for v in volumes), (
-        "litellm service should bind-mount litellm_config.yaml"
-    )
-
-
-def test_litellm_config_file_exists(project_root):
-    assert (project_root / "litellm_config.yaml").exists()
-
-
-# Only these two host paths may be bind-mounted at runtime. Every other service
+# Only this host path may be bind-mounted at runtime. Every other service
 # must run purely from its image, so the stack stays deployable to plain Docker or
 # Kubernetes without provisioning a host path or an RWX volume for source. The
 # frontend entry is the Vite dev server, which needs host sources for HMR and is
-# gated behind the "dev" profile; litellm_config.yaml is config, i.e. a ConfigMap.
+# gated behind the "dev" profile.
 ALLOWED_HOST_MOUNTS = {
-    "litellm": {"./litellm_config.yaml:/app/config.yaml"},
     "frontend-dev": {"./frontend:/app"},
 }
 
@@ -98,7 +86,7 @@ def test_no_host_bind_mounts_in_agent_compose_files(project_root):
 
 def test_named_volumes_declared(compose_data):
     volumes = compose_data.get("volumes", {})
-    assert "litellm-db-data" in volumes
+    assert "admin-db-data" in volumes
     assert "valkey-data" in volumes
     assert "mesh-cache" in volumes
 
@@ -117,8 +105,8 @@ def test_mesh_cache_volume(compose_data):
 
 
 def test_postgres_data_volume(compose_data):
-    volumes = _get_volumes(compose_data["services"]["litellm-db"])
-    assert any("litellm-db-data:/var/lib/postgresql/data" in v for v in volumes)
+    volumes = _get_volumes(compose_data["services"]["admin-db"])
+    assert any("admin-db-data:/var/lib/postgresql/data" in v for v in volumes)
 
 
 def test_valkey_data_volume(compose_data):

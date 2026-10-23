@@ -36,16 +36,8 @@ def _resolve_default(expr: str, env_vars: dict[str, str]) -> str | None:
 
 def test_postgres_no_host_port(compose_data):
     """PostgreSQL should not expose a host port (internal-only access)."""
-    svc = compose_data["services"]["litellm-db"]
-    assert "ports" not in svc, "litellm-db should not expose host ports"
-
-
-def test_litellm_port_mapping(compose_data):
-    svc = compose_data["services"]["litellm"]
-    ports = svc.get("ports", [])
-    assert len(ports) == 1
-    host_expr, container_port = _parse_port_mapping(ports[0])
-    assert container_port == "4000"
+    svc = compose_data["services"]["admin-db"]
+    assert "ports" not in svc, "admin-db should not expose host ports"
 
 
 def test_redis_port_mapping(compose_data):
@@ -88,7 +80,6 @@ def test_no_host_port_conflicts(compose_data, env_example_vars):
 def test_internal_container_ports_correct(compose_data):
     """Verify internal container ports match expected values."""
     expected = {
-        "litellm": "4000",
         "redis": "6379",
         "backend": "8000",
     }

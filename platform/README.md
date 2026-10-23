@@ -9,19 +9,19 @@ graph TD
   U[User] -->|chat / file upload| FE[React Frontend]
   FE -->|JSON / SSE| BE[FastAPI Backend]
   BE -->|A2A JSON-RPC| CA[Client Agent]
-  CA -->|agent discovery + A2A routing| LLM[LiteLLM Agent Gateway]
+  CA -->|agent discovery + A2A routing| GW[Backend Agent Registry + A2A Gateway]
   CA -->|state + factoids| RED[(Valkey<br/>Redis-compatible)]
-  LLM -->|A2A| CORR[Corrosion Agent]
-  LLM -->|A2A| RAD[Radiation Agent]
-  LLM -->|A2A| THERM[Thermal Agent]
-  LLM -->|A2A| DATA[Data Agent]
-  LLM -->|A2A| SYNTH[Synthesis Agent]
-  LLM -->|A2A| OSTI[OSTI Research Agent]
-  LLM -->|A2A| FF[Form Filler Agent]
+  GW -->|A2A| CORR[Corrosion Agent]
+  GW -->|A2A| RAD[Radiation Agent]
+  GW -->|A2A| THERM[Thermal Agent]
+  GW -->|A2A| DATA[Data Agent]
+  GW -->|A2A| SYNTH[Synthesis Agent]
+  GW -->|A2A| OSTI[OSTI Research Agent]
+  GW -->|A2A| FF[Form Filler Agent]
   FE -->|renders| VIZ[MeshViewer / IFCViewer / MermaidViewer]
 ```
 
-**Request flow:** A user sends a message in the React frontend, which posts it to the FastAPI backend over its JSON/SSE contract. The backend forwards it as an A2A JSON-RPC request to the client-agent, which classifies the query, discovers relevant specialist agents through LiteLLM's agent directory, collects any missing parameters, builds an execution plan, and dispatches work through LiteLLM's A2A gateway. Results (including artifacts) flow back through the client-agent and backend to the frontend for rendering.
+**Request flow:** A user sends a message in the React frontend, which posts it to the FastAPI backend over its JSON/SSE contract. The backend forwards it as an A2A JSON-RPC request to the client-agent, which classifies the query, discovers relevant specialist agents through the backend's agent registry (`/v1/agents`), collects any missing parameters, builds an execution plan, and dispatches work through the backend's A2A gateway (`/a2a/{agent_name}`). Results (including artifacts) flow back through the client-agent and backend to the frontend for rendering.
 
 ## Prerequisites
 
@@ -43,15 +43,14 @@ graph TD
 ### 1. Configure environment
 
 The first `make up` creates `.env` from `.env.example` and generates every
-secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `LITELLM_MASTER_KEY`,
-`LITELLM_DB_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`,
-`ADMIN_DB_ENCRYPTION_KEY`). The only thing you have to set is the API key for
-your `LLM_CONFIG_PROFILE` (see below). Without it, `make up` stops and tells
-you which key is missing. To prepare `.env` without starting anything:
+secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
+`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). The only things you have to
+set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
+`make up` asks for them in a terminal, or stops and tells you what is missing. To prepare `.env` without starting anything:
 
 ```bash
 python3 scripts/init_env.py   # or: make init-env
-# then set LLM_API_KEY to the key for your chosen profile in .env
+# then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
 ```
 
 Section 1 of `.env.example` lists what you must set; everything else has a
@@ -65,18 +64,13 @@ without identity.
 
 #### Choose an LLM profile
 
-`LLM_CONFIG_PROFILE` tells the agents which LLM provider to use, and `LLM_API_KEY` holds that provider's key -- the same variable for every profile. Set it in `.env`; if you do not change it, the default is `registry`.
+`LLM_CONFIG_PROFILE` tells the agents which LLM provider to use, and `LLM_API_KEY` holds that provider's key -- the same variable for every profile. Set it in `.env`; there is no default.
 
-```dotenv
-LLM_CONFIG_PROFILE=registry
-```
-
-If the profile's API key is blank, `make up` (via `scripts/init_env.py`) shows a menu of the profiles in `../sdk/prometheus_api/llm_configs/` (use the up/down arrows, then Enter), asks for the matching key, and writes both to `.env`. If the key is set in the environment instead (as in CI), it writes that to `.env` without asking. You can also set them by hand:
+If the profile or its API key is blank, `make up` (via `scripts/init_env.py`) shows a menu of the profiles in `../sdk/prometheus_api/llm_configs/` (use the up/down arrows, then Enter), asks for the matching key, and writes both to `.env`. If they are set in the environment instead (as in CI), it writes them to `.env` without asking; otherwise it fails. You can also set them by hand:
 
 | Value | What it uses | Key to put in `LLM_API_KEY` |
 |---|---|---|
-| `registry` | The LiteLLM proxy included with this project. This is the default and the simplest option for most users. | Anthropic |
-| `anthropic` | Anthropic directly, without using LiteLLM for model requests. | Anthropic; also `EMBEDDING_API_KEY` if an agent uses embeddings |
+| `anthropic` | Anthropic directly. | Anthropic; also `EMBEDDING_API_KEY` if an agent uses embeddings |
 | `openai` | OpenAI directly for model and embedding requests. | OpenAI |
 | `inl_hpc` | INL HPC's OpenAI-compatible model service. | INL HPC |
 | `inl_litellm` | INL's hosted LiteLLM service. | INL LiteLLM |
@@ -89,6 +83,8 @@ For example, to use OpenAI:
 LLM_CONFIG_PROFILE=openai
 LLM_API_KEY=<your-openai-api-key>
 ```
+
+The SDK's `registry` profile is not supported here: it sends model requests to an LLM proxy at `REGISTRY_URL`, and on this platform that is the backend's agent registry, which does not proxy LLM calls. `scripts/init_env.py` rejects it.
 
 Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file. It overrides `LLM_CONFIG_PROFILE`, must be available inside every agent container, and requires any environment variables referenced by that file.
 
@@ -127,7 +123,7 @@ make ps      # show running services
 
 `make up` runs `make generate` first, which scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`. **Do not hand-edit that file** — re-run `make generate` after adding or removing an agent (or use `make ng-up` to skip regeneration). Agents in `agents/debug-agents/` and `agents/optional/` (OSTI research) are skipped unless `DEBUG_AGENTS=true` / `OPTIONAL_AGENTS=true`.
 
-Launch and restart targets clear LiteLLM's Postgres volume before starting services. This removes stale LiteLLM agent registrations while preserving Valkey conversation and artifact state.
+Launch and restart targets run `make clear-agent-registry` before starting services. This deletes the agent registrations (the `prometheus:agent-registry` Valkey key) so agents you removed don't linger, while preserving Valkey conversation and artifact state.
 
 The first run also builds every agent image and pulls (or, with `LOCAL_SDK=true`,
 builds) the `prometheus_api` base image, so it's slower than later runs — expect roughly **5 to 15 minutes**
@@ -145,8 +141,6 @@ backend               prometheus_platform-backend                backend        
 client-agent          prometheus_platform-client-agent           client-agent          Up (healthy)
 form-filler-agent     prometheus_platform-form-filler-agent      form-filler-agent     Up (healthy)
 frontend-dev          prometheus_platform-frontend-dev           frontend-dev          Up
-litellm-db            postgres:16-alpine                         litellm-db            Up (healthy)
-litellm-proxy         ghcr.io/berriai/litellm:v1.92.0            litellm               Up (healthy)
 synthesis-agent       prometheus_platform-synthesis-agent        synthesis-agent       Up (healthy)
 ```
 
@@ -155,18 +149,17 @@ Services and host ports:
 | Service | URL / Port | Role |
 |---|---|---|
 | React frontend | http://localhost:5150 (dev profile, default) / 8080 (prod profile) | Entry point |
-| Backend (FastAPI) | http://localhost:8600 (`BACKEND_PORT`) | JSON/SSE API + auth/sessions |
+| Backend (FastAPI) | http://localhost:8600 (`BACKEND_PORT`) | JSON/SSE API + auth/sessions; agent registry (`/v1/agents`) + A2A gateway (`/a2a/{agent_name}`) |
 | Client agent | internal only; http://localhost:8001 in system-test mode | Orchestrator |
-| LiteLLM gateway | http://localhost:9977 (`LITELLM_LOCAL_PORT`) | Agent registry + LLM proxy |
-| Valkey | localhost:6379 | Redis-compatible state, status, artifact metadata |
-| Postgres (LiteLLM) | internal only | Persistent agent registrations |
+| Valkey | localhost:6379 | Redis-compatible state, status, artifact metadata, agent registrations |
+| Postgres (`admin-db`) | internal only | Backend admin plane (users, OIDC config, signing keys) |
 
 ### Stop or reset the stack
 
 ```bash
-make down              # stop everything (down-v also drops volumes)
-make clear-litellm-db  # stop services + remove only LiteLLM's Postgres volume
-make clobber           # stop services + delete both DBs and Valkey (asks first)
+make down                  # stop everything (down-v also drops volumes)
+make clear-agent-registry  # stop services + delete only the agent registrations from Valkey
+make clobber               # stop services + delete admin-db and Valkey (asks first)
 ```
 
 Reinstalling, or lost your `.env`? The old volumes still use the old database passwords, and their rows are encrypted with the old key. The backend can't connect, and the setup wizard doesn't run. `make clobber` deletes those volumes (all users, keys and history) so the next `make up` starts fresh.
@@ -232,7 +225,7 @@ Notable environment variables (see `.env.example` for the full list):
 
 | Variable | Purpose |
 |---|---|
-| `LLM_CONFIG_PROFILE` | Installed agent LLM mapping: `registry`, `inl_hpc`, `inl_litellm`, `amsc`, `anthropic`, or `openai` |
+| `LLM_CONFIG_PROFILE` | Required; installed agent LLM mapping, e.g. `anthropic`, `openai`, `inl_hpc`, `inl_litellm`, `amsc`, or `anl_asksage` (no default; `registry` is not supported) |
 | `LLM_CONFIG_FILE` | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE` |
 | `DEBUG_AGENTS` | When `true`, also build and start the mock agents in `agents/debug-agents/` |
 | `OPTIONAL_AGENTS` | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build) |
@@ -253,9 +246,8 @@ Notable environment variables (see `.env.example` for the full list):
 ```
 platform/
   Makefile                  # Top-level orchestration (Compose, generate, tests)
-  docker-compose.yml        # Core infra: Valkey, LiteLLM, Postgres, client-agent, backend, frontend
+  docker-compose.yml        # Core infra: Valkey, Postgres (admin-db), client-agent, backend, frontend
   docker-compose.agents.yml # Auto-generated from agents/*/docker-compose.yml — do not edit
-  litellm_config.yaml       # LiteLLM proxy config (model_list, master key, db url)
   scripts/
     generate-agents-compose.sh
   backend/
@@ -320,9 +312,9 @@ make test-infra        # Both
 
 ### Startup check
 
-`make up` returns only once the platform is up. It first waits for every service with a healthcheck to report healthy (`docker compose up --wait`), then runs `make check`. That checks the backend and frontend on their host ports, the frontend's `/api` proxy, and that the client-agent and every included agent have registered with LiteLLM. `restart`, `ng-up` and `ng-restart` do the same, and the `-fg` targets can't, since they never return. Set `CHECK=false` to return as soon as the containers start, and run `make check` later against a running stack. CI's `platform: up` job runs the same `make up`.
+`make up` returns only once the platform is up. It first waits for every service with a healthcheck to report healthy (`docker compose up --wait`), then runs `make check`. That checks the backend and frontend on their host ports, the frontend's `/api` proxy, and that the client-agent and every included agent have registered with the backend's agent registry. `restart`, `ng-up` and `ng-restart` do the same, and the `-fg` targets can't, since they never return. Set `CHECK=false` to return as soon as the containers start, and run `make check` later against a running stack. CI's `platform: up` job runs the same `make up`.
 
-A healthy agent shows only that it serves HTTP. LiteLLM registration runs in the background, so `make check` is what confirms that the platform can route to the agent. Every per-agent `docker-compose.yml` must define a healthcheck on the base class's health endpoint, and `make test-static` enforces it.
+A healthy agent shows only that it serves HTTP. Registration with the backend runs in the background, so `make check` is what confirms that the platform can route to the agent. Every per-agent `docker-compose.yml` must define a healthcheck on the base class's health endpoint, and `make test-static` enforces it.
 
 ## Troubleshooting
 

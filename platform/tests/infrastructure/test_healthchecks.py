@@ -18,35 +18,17 @@ def _get_healthcheck(compose_data, service_name) -> dict | None:
 
 
 def test_postgres_has_healthcheck(compose_data):
-    hc = _get_healthcheck(compose_data, "litellm-db")
-    assert hc is not None, "litellm-db should define a healthcheck"
+    hc = _get_healthcheck(compose_data, "admin-db")
+    assert hc is not None, "admin-db should define a healthcheck"
 
 
 def test_postgres_healthcheck_command(compose_data):
-    hc = _get_healthcheck(compose_data, "litellm-db")
+    hc = _get_healthcheck(compose_data, "admin-db")
     test_cmd = hc["test"]
-    # test can be a list like ["CMD-SHELL", "pg_isready -U litellm"]
+    # test can be a list like ["CMD-SHELL", "pg_isready -U admin"]
     joined = " ".join(test_cmd) if isinstance(test_cmd, list) else test_cmd
     assert "pg_isready" in joined
-    assert "-U litellm" in joined
-
-
-def test_litellm_has_healthcheck(compose_data):
-    hc = _get_healthcheck(compose_data, "litellm")
-    assert hc is not None, "litellm should define a healthcheck"
-
-
-def test_litellm_healthcheck_url(compose_data):
-    hc = _get_healthcheck(compose_data, "litellm")
-    test_cmd = hc["test"]
-    joined = " ".join(test_cmd) if isinstance(test_cmd, list) else test_cmd
-    assert "health/liveliness" in joined
-    assert "localhost:4000" in joined
-
-
-def test_litellm_healthcheck_has_start_period(compose_data):
-    hc = _get_healthcheck(compose_data, "litellm")
-    assert "start_period" in hc, "litellm healthcheck should have start_period (slow startup)"
+    assert "-U admin" in joined
 
 
 def test_valkey_has_no_healthcheck(compose_data):

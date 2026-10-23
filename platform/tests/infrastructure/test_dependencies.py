@@ -25,16 +25,11 @@ def _get_depends_on(compose_data, service_name) -> dict:
     return {}
 
 
-def test_litellm_depends_on_postgres_healthy(compose_data):
-    deps = _get_depends_on(compose_data, "litellm")
-    assert "litellm-db" in deps
-    assert deps["litellm-db"] == "service_healthy"
-
-
-def test_client_agent_depends_on_litellm_healthy(compose_data):
+def test_client_agent_depends_on_backend_healthy(compose_data):
+    """The client-agent registers with, and discovers agents through, the backend's registry."""
     deps = _get_depends_on(compose_data, "client-agent")
-    assert "litellm" in deps
-    assert deps["litellm"] == "service_healthy"
+    assert "backend" in deps
+    assert deps["backend"] == "service_healthy"
 
 
 def test_frontend_dev_depends_on_backend_healthy(compose_data):
@@ -55,22 +50,16 @@ def test_client_agent_depends_on_redis_started(compose_data):
     assert deps["redis"] == "service_started"
 
 
-def test_backend_depends_on_client_agent_started(compose_data):
+def test_backend_does_not_depend_on_client_agent(compose_data):
+    """The client-agent waits on the backend, so the reverse edge would be a cycle."""
     deps = _get_depends_on(compose_data, "backend")
-    assert "client-agent" in deps
-    assert deps["client-agent"] == "service_started"
+    assert "client-agent" not in deps
 
 
 def test_backend_depends_on_redis_started(compose_data):
     deps = _get_depends_on(compose_data, "backend")
     assert "redis" in deps
     assert deps["redis"] == "service_started"
-
-
-def test_backend_does_not_depend_on_litellm(compose_data):
-    """The backend reaches the client-agent over A2A, not LiteLLM directly."""
-    deps = _get_depends_on(compose_data, "backend")
-    assert "litellm" not in deps
 
 
 def test_no_circular_dependencies(compose_data, infrastructure_services):
@@ -122,18 +111,13 @@ def test_startup_order(compose_data, infrastructure_services):
     for svc in infrastructure_services:
         deps_map[svc] = set(_get_depends_on(compose_data, svc).keys())
 
-    # litellm-db and redis should have no infra dependencies
-    assert not deps_map["litellm-db"], "litellm-db should have no dependencies"
+    # admin-db and redis should have no infra dependencies
+    assert not deps_map["admin-db"], "admin-db should have no dependencies"
     assert not deps_map["redis"], "redis should have no dependencies"
 
-    # litellm depends only on litellm-db
-    assert deps_map["litellm"] == {"litellm-db"}
+    # backend depends on the datastores, not client-agent: it hosts the agent registry
+    assert deps_map["backend"] == {"redis", "admin-db"}
 
-    # client-agent depends on litellm and redis (both must start before it)
-    assert "litellm" in deps_map["client-agent"]
+    # client-agent depends on the backend (its registry) and redis, so it starts last
+    assert "backend" in deps_map["client-agent"]
     assert "redis" in deps_map["client-agent"]
-
-    # backend depends on client-agent and redis (starts last); it does not need litellm
-    assert "client-agent" in deps_map["backend"]
-    assert "redis" in deps_map["backend"]
-    assert "litellm" not in deps_map["backend"]

@@ -48,7 +48,7 @@ system prompt  +  transcript  +  tools (one per skill, one per workflow template
   LLM turn ──► tool calls? ──no──► final answer (end of turn)
       ▲              │ yes
       │              ▼
-      │     validate → [pause for user if needed] → invoke specialists via LiteLLM A2A
+      │     validate → [pause for user if needed] → invoke specialists via the backend's A2A gateway
       │              │
       └──── tool results (summary + artifact ids) appended to transcript
 ```
@@ -77,7 +77,7 @@ assistant → "Here is the PNG image with the word Popelnase."
 |--------|------|
 | `orchestrator/agent_loop.py` | The loop: tool catalog, LLM turns, call validation, pausing and resuming, execution, result compaction. |
 | `orchestrator/chat_flow.py` | Thin entry point: slash commands, state load/create, maps a `ConversationRequest` (query / answers / approval / rejection) onto the loop and a `LoopOutcome` onto a `ConversationResponse`. |
-| `orchestrator/skills.py` | Unchanged: `invoke_skill` (A2A via LiteLLM, Task Graph tracking, streaming status, long-running detach). |
+| `orchestrator/skills.py` | Unchanged: `invoke_skill` (A2A via the backend gateway, Task Graph tracking, streaming status, long-running detach). |
 | `workflow_library/` | Unchanged engine. Each compiled template is exposed as one tool and executed deterministically by `execute_workflow`. |
 | `prompts/orchestrator_system.txt` | The system prompt. |
 

@@ -17,17 +17,6 @@ from __future__ import annotations
 from orchestrator import runtime
 
 
-def test_runtime_client_uses_proxy_configuration(monkeypatch):
-    monkeypatch.setenv("REGISTRY_URL", "http://litellm:4000")
-    monkeypatch.setenv("LITELLM_MASTER_KEY", "proxy-key")
-
-    client = runtime.create_llm()
-
-    assert client.config.proxy_url == "http://litellm:4000"
-    assert client.config.api_key == "proxy-key"
-    assert client.config.app_name == "Client Agent"
-
-
 def test_runtime_client_preserves_direct_profile_key(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     config_path = tmp_path / "direct.yaml"
@@ -43,7 +32,6 @@ model_list:
     )
     monkeypatch.setenv("LLM_CONFIG_FILE", str(config_path))
     monkeypatch.setenv("LLM_API_KEY", "provider-key")
-    monkeypatch.setenv("LITELLM_MASTER_KEY", "proxy-key")
 
     client = runtime.create_llm()
     medium = client.config.load_fallback_models()["medium"]
