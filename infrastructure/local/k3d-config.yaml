@@ -1,0 +1,28 @@
+# Local k3d cluster for testing Prometheus on Kubernetes (EPIC P3-01).
+#
+# Create with the cluster-up target, which also downloads and mounts the INL
+# root CA and forwards proxy settings. Those depend on host paths and the
+# environment, which k3d does not resolve inside this file.
+#
+# Images: build locally, push to the registry below from the host as
+# localhost:5001/<name>:<tag>, and reference them from pods as
+# k3d-prometheus-registry.localhost:5001/<name>:<tag>.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: prometheus
+# Kubernetes 1.37
+image: rancher/k3s:v1.37.1-k3s1
+# One server, no agents, to keep memory use low
+servers: 1
+agents: 0
+registries:
+  create:
+    name: k3d-prometheus-registry.localhost
+    host: "0.0.0.0"
+    hostPort: "5001"
+ports:
+  # Host 8080 -> Traefik (bundled with k3s) on port 80
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer

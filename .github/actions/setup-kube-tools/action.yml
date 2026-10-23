@@ -1,0 +1,44 @@
+name: setup-kube-tools
+description: Install pinned, checksum-verified helm, kubeconform, kubectl and k3d (linux amd64)
+
+inputs:
+  cluster-tools:
+    description: Also install kubectl and k3d
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install
+      shell: bash
+      env:
+        HELM_VERSION: v4.3.0
+        HELM_SHA256: 86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb
+        KUBECONFORM_VERSION: v0.7.0
+        KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+        # The k3d cluster's version (infrastructure/local/k3d-config.yaml)
+        KUBECTL_VERSION: v1.37.1
+        KUBECTL_SHA256: 65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8
+        K3D_VERSION: v5.9.0
+        K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+        CLUSTER_TOOLS: ${{ inputs.cluster-tools }}
+      run: |
+        bin="$RUNNER_TEMP/kube-tools"
+        mkdir -p "$bin"
+        cd "$RUNNER_TEMP"
+        fetch() {
+          curl -sSfL -o "$2" "$1"
+          echo "$3  $2" | sha256sum -c
+        }
+        fetch "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz" helm.tgz "$HELM_SHA256"
+        tar -xzf helm.tgz -C "$bin" --strip-components 1 linux-amd64/helm
+        fetch "https://github.com/yannh/kubeconform/releases/download/$KUBECONFORM_VERSION/kubeconform-linux-amd64.tar.gz" \
+          kubeconform.tgz "$KUBECONFORM_SHA256"
+        tar -xzf kubeconform.tgz -C "$bin" kubeconform
+        if [ "$CLUSTER_TOOLS" = true ]; then
+          fetch "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl" "$bin/kubectl" "$KUBECTL_SHA256"
+          fetch "https://github.com/k3d-io/k3d/releases/download/$K3D_VERSION/k3d-linux-amd64" "$bin/k3d" "$K3D_SHA256"
+          chmod +x "$bin/kubectl" "$bin/k3d"
+        fi
+        echo "$bin" >> "$GITHUB_PATH"

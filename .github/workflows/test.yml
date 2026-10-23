@@ -87,6 +87,73 @@ jobs:
       - name: Check
         run: python3 platform/scripts/add_markings.py --check
 
+  k3d-cluster:
+    name: "k3d: cluster targets"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: platform
+    env:
+      # Tilt isn't used by these targets yet, and isn't installed here
+      SKIP_PREREQUISITES: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm, kubectl and k3d
+        uses: ./.github/actions/setup-kube-tools
+        with:
+          cluster-tools: "true"
+      - name: Create the cluster
+        run: make cluster-up
+      - name: Check the node
+        run: kubectl --context k3d-prometheus wait --for=condition=Ready node --all --timeout=120s
+      - name: Check the registry
+        # Push from the host as localhost:5001, pull from a pod by the in-cluster name
+        run: |
+          docker pull -q busybox:1.37
+          docker tag busybox:1.37 localhost:5001/smoke:ci
+          docker push -q localhost:5001/smoke:ci
+          kubectl --context k3d-prometheus run smoke --restart=Never \
+            --image=k3d-prometheus-registry.localhost:5001/smoke:ci -- true
+          kubectl --context k3d-prometheus wait --for=jsonpath='{.status.phase}'=Succeeded \
+            pod/smoke --timeout=120s
+      - name: Check the ingress port
+        # Traefik answers 404 until something is deployed; any response means 8080 reaches it
+        run: |
+          for i in $(seq 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/ || true)"
+            [ "$code" = 404 ] && exit 0
+            sleep 3
+          done
+          echo "Expected 404 from Traefik on localhost:8080, last got '$code'" >&2
+          exit 1
+      - name: Run cluster-up again
+        # A running cluster is left alone
+        run: make cluster-up | tee "$RUNNER_TEMP/up.log" && grep -q 'already running' "$RUNNER_TEMP/up.log"
+      - name: Start a stopped cluster
+        run: |
+          k3d cluster stop prometheus
+          make cluster-up
+          kubectl --context k3d-prometheus wait --for=condition=Ready node --all --timeout=120s
+      - name: Reset the cluster
+        # A new cluster, so the smoke pod from before is gone
+        run: |
+          make cluster-reset
+          kubectl --context k3d-prometheus wait --for=condition=Ready node --all --timeout=120s
+          ! kubectl --context k3d-prometheus get pod smoke 2>/dev/null
+      - name: Delete the cluster
+        run: |
+          make cluster-down
+          ! k3d cluster get prometheus 2>/dev/null
+      - name: Show status
+        if: ${{ failure() }}
+        run: |
+          k3d cluster list
+          kubectl --context k3d-prometheus get nodes,pods -A -o wide || true
+          kubectl --context k3d-prometheus describe pod smoke || true
+
   hackathon-slides:
     name: "hackathon: slides"
     needs: gitleaks

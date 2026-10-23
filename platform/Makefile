@@ -141,30 +141,12 @@ help: ##@ (Default) Print listing of key targets with their descriptions
 ##@ Prerequisites
 ##@
 
+# Shared with the repo-root infrastructure/ (local k3d cluster).
+INFRA_SCRIPTS := ../infrastructure/scripts
+
 .PHONY: check-prerequisites
 check-prerequisites: ##@ Verify Docker before running platform tasks
-	@if [ "$(SKIP_PREREQUISITES)" = "1" ]; then \
-		exit 0; \
-	fi; \
-	printf "\nChecking prerequisites...\n"; \
-	status=0; \
-	if ! command -v docker >/dev/null 2>&1; then \
-		printf "  [ERROR] The docker command is not available.\n"; \
-		printf "          Install Docker and ensure it is available on PATH.\n"; \
-		status=1; \
-	elif ! docker info >/dev/null 2>&1; then \
-		printf "  [ERROR] Docker is installed, but the Docker daemon is unavailable.\n"; \
-		printf "          Start Docker, then verify access by running 'docker info'.\n"; \
-		printf "          Also check your Docker socket permissions if needed.\n"; \
-		status=1; \
-	else \
-		printf "  [OK] Docker is running.\n"; \
-	fi; \
-	if [ "$$status" -ne 0 ]; then \
-		printf "\nPrerequisite check failed. Resolve the errors above and try again.\n\n"; \
-		exit "$$status"; \
-	fi; \
-	printf "All prerequisites are available.\n\n"
+	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --compose
 
 # These targets require the platform runtime prerequisites. Static tests,
 # frontend-only tasks, help, and compose-file generation are intentionally
@@ -372,6 +354,23 @@ clean-generated: ##@ Remove the generated agents compose file.
 
 regenerate: ##@ Regenerate the agents compose file
 regenerate: clean-generated generate
+
+##@
+##@ Local Kubernetes cluster (k3d)
+##@
+
+.PHONY: cluster-up cluster-down cluster-reset
+
+cluster-up: ##@ Create (or start) the local k3d cluster with its image registry on localhost:5001
+	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --cluster
+	@$(INFRA_SCRIPTS)/cluster-up.sh
+
+cluster-down: ##@ Delete the local k3d cluster and its registry (pushed images are lost)
+	k3d cluster delete prometheus
+
+cluster-reset: ##@ Delete and recreate the local k3d cluster
+	@$(MAKE) --no-print-directory cluster-down
+	@$(MAKE) --no-print-directory cluster-up
 
 ##@
 ##@ Frontend (React)

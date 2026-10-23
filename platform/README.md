@@ -201,6 +201,37 @@ make dev           # http://localhost:5150
 
 The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), which maps to the containerized backend.
 
+## Local Kubernetes cluster with k3d
+
+A prototype for running Prometheus on Kubernetes locally. `make cluster-up` creates a one-node
+[k3d](https://k3d.io) cluster. Deploying the stack into it is not wired up yet. The Docker Compose
+workflow above is unchanged and doesn't need any of this.
+
+Run the targets from `platform/`. On Windows, run them from your WSL2 distro. See
+[Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md).
+
+| Tool | Where to install it |
+|---|---|
+| Docker | [Docker Desktop](https://docs.docker.com/desktop/) or [Docker Engine](https://docs.docker.com/engine/install/) |
+| k3d | [k3d installation](https://k3d.io/stable/#installation) |
+| kubectl | Included with Docker Desktop. Otherwise, [Install kubectl](https://kubernetes.io/docs/tasks/tools/) |
+| Helm | [Installing Helm](https://helm.sh/docs/intro/install/) |
+| Tilt | [Install Tilt](https://docs.tilt.dev/install.html) |
+
+| Target | What it does |
+|---|---|
+| `make cluster-up` | Checks the tools, then creates the cluster. Starts it if it's stopped, and does nothing if it's already running |
+| `make cluster-down` | Deletes the cluster |
+| `make cluster-reset` | `cluster-down`, then `cluster-up` |
+
+Set `SKIP_PREREQUISITES=1` to skip the tool check.
+
+On the INL network, `cluster-up` downloads the INL root CA from
+`https://certstore.inl.gov/pki/CAINLROOT_B64.crt` to `~/.cache/prometheus/` and trusts it inside
+the node, so Kubernetes can pull its own system images through TLS inspection. Don't delete the
+cached file while the cluster exists. If `HTTP_PROXY` or `HTTPS_PROXY` is set in your shell, it's
+passed to the node.
+
 ## Full-system tests
 
 Full-system tests exercise the same LLM-driven planning, parameter requests, specialist agents, and artifacts as the frontend. They never start or reconfigure Docker. Start the full platform with the client-agent host port enabled, then run the suite separately:
@@ -331,6 +362,7 @@ _TBD — common issues and fixes will be collected here as they come up._
 ## Documentation
 
 - [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) - installing and verifying Docker Desktop's WSL2 integration before running `make up`
+- [Local Kubernetes cluster with k3d](#local-kubernetes-cluster-with-k3d) - prototype local cluster setup
 - [Architecture](docs/docs/dev-docs/architecture.md)
 - [Client-agent developer guide](agents/client-agent/README.md)
 - [Adding agents](docs/docs/dev-docs/adding-agents.md)
