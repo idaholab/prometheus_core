@@ -43,12 +43,14 @@ services:
       USER_IDENTITY_AUD: ${USER_IDENTITY_AUD:-prometheus-agents}
       USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
 
-      # deeplynx environment
+      # DeepLynx configuration required by standard agent execution.
       DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-}
       DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
       DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
       DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
       DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
 
       # LLM configuration. The profile maps the semantic flavors the agent asks
       # for in code onto concrete provider models; `registry` (the default)

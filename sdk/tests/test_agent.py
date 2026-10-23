@@ -36,12 +36,50 @@ from prometheus_api.agent import (
     TaskStatus,
     TaskStatusUpdateEvent,
     TaskArtifactUpdateEvent,
+    UserIdentity,
 )
 from prometheus_api.agent.registry import AgentRegistryClient
 from prometheus_api.llm_client import AsyncLLMClient, LLMConfig
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill, Artifact, Part, Task
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.struct_pb2 import Value
+
+
+@pytest.fixture
+def execution_storage(monkeypatch):
+    """Provide a successful in-memory DeepLynx execution-record client."""
+    created = []
+
+    class FakeItems:
+        async def create(self, item):
+            created.append(item)
+            return SimpleNamespace(id=len(created))
+
+    class FakeStorageClient:
+        def __init__(self, config):
+            self.config = config
+            self.items = FakeItems()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    async def get_credential(self, resource, scope=None):
+        assert resource == "deeplynx"
+        return SimpleNamespace(
+            value={
+                "org_id": 1,
+                "project_id": 2,
+                "key": "key",
+                "secret": "secret",
+            }
+        )
+
+    monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", FakeStorageClient)
+    monkeypatch.setattr(PrometheusAgent, "get_credential", get_credential)
+    return created
 
 
 def _test_agent_card() -> AgentCard:
@@ -747,8 +785,12 @@ workflows:
             ("shutdown", sentinel_app),
         ]
 
-    def test_application_lifespan_starts_background_registration(self):
+    def test_application_lifespan_starts_background_registration(self, monkeypatch):
         events = []
+        monkeypatch.setenv("DEEPLYNX_KEY", "test-key")
+        monkeypatch.setenv("DEEPLYNX_SECRET", "test-secret")
+        monkeypatch.setenv("DEEPLYNX_ORG_ID", "1")
+        monkeypatch.setenv("DEEPLYNX_PROJECT_ID", "2")
 
         class TestAgent(PrometheusAgent):
             @asynccontextmanager
@@ -842,7 +884,7 @@ workflows:
             # A non-exempt route still needs the token
             assert (await client.post("/", json={})).status_code == 401
 
-    async def test_build_app_debug_chat_route_executes_agent(self, monkeypatch):
+    async def test_build_app_debug_chat_route_executes_agent(self, monkeypatch, execution_storage):
         class TestAgent(PrometheusAgent):
             async def _execute(self, params, context, event_queue):
                 return {
@@ -1045,6 +1087,232 @@ workflows:
         assert isinstance(executor, PrometheusAgentExecutor)
         assert executor.agent_name == "TestAgent"
 
+    def test_execution_record_payload_precedes_work_and_is_request_scoped(self, monkeypatch):
+        """Covers REQ-009-16 through REQ-009-19 and BEH-009-04/05."""
+        timeline = []
+        observed = {}
+
+        class Items:
+            async def create(self, item):
+                timeline.append("record")
+                observed["item"] = item
+                return SimpleNamespace(id=73)
+
+        class Client:
+            def __init__(self, config):
+                observed["config"] = config
+                self.items = Items()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class Queue:
+            async def enqueue_event(self, event):
+                if (
+                    isinstance(event, TaskStatusUpdateEvent)
+                    and event.status.state == TaskState.TASK_STATE_WORKING
+                ):
+                    timeline.append("working")
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                timeline.append("credential")
+                assert resource == "deeplynx"
+                return SimpleNamespace(
+                    value={
+                        "org_id": 11,
+                        "project_id": 22,
+                        "key": "jit-key",
+                        "secret": "jit-secret",
+                    }
+                )
+
+            async def _execute(self, params, context, event_queue):
+                timeline.append("execute")
+                observed["params"] = params
+                observed["record_id"] = self.execution_record_id
+                return {"ok": True}
+
+        monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", Client)
+        monkeypatch.setattr(
+            PrometheusAgentExecutor,
+            "_extract_identity",
+            lambda self, context: UserIdentity(
+                user_id="verified-user",
+                claims={},
+                raw_token="verified-token",
+            ),
+        )
+        agent = Agent(agent_name="Record Agent")
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-9"
+        context.context_id = "context-8"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = json.dumps(
+            {
+                "user_id": "forged-user",
+                "prompt": "token=hidden",
+                "api_key": "also-hidden",
+                "nested": {"password": "hidden-too"},
+                "artifacts": [
+                    {
+                        "artifact_id": "svg-1",
+                        "metadata": {"source": {"name": "hi.svg"}},
+                    }
+                ],
+            }
+        )
+
+        asyncio.run(agent.create_executor().execute(context, Queue()))
+
+        assert timeline[:4] == ["credential", "record", "working", "execute"]
+        assert observed["record_id"] == 73
+        assert agent.execution_record_id is None
+        assert observed["params"]["user_id"] == "verified-user"
+        item = observed["item"]
+        assert item.name == (
+            "Agent Record Agent executed task_task-9 by verified-user at "
+            f"{item.properties['created_at']}"
+        )
+        assert item.original_id == "prometheus-execution:record-agent:task-9"
+        assert item.tags is None
+        assert "schema" not in item.properties
+        assert item.properties["agent_name"] == "Record Agent"
+        assert item.properties["producer_agent_id"] == "record-agent"
+        assert item.properties["authenticated_user_id"] == "verified-user"
+        assert item.properties["task_id"] == "task-9"
+        assert item.properties["context_id"] == "context-8"
+        assert "parameters" not in item.properties
+        parameters = json.loads(item.properties["parameters_json"])
+        assert parameters["user_id"] == "verified-user"
+        assert parameters["api_key"] == "[REDACTED]"
+        assert parameters["nested"]["password"] == "[REDACTED]"
+        assert "token=[REDACTED]" in parameters["prompt"]
+        assert parameters["artifacts"][0]["metadata"]["source"]["name"] == "hi.svg"
+        assert observed["params"]["nested"]["password"] == "hidden-too"
+        assert observed["params"]["artifacts"][0]["metadata"]["source"]["name"] == "hi.svg"
+        assert all(not isinstance(value, (dict, list)) for value in item.properties.values())
+        assert item.properties["created_at"].endswith("+00:00")
+        assert observed["config"].organization_id == 11
+
+    async def test_execution_record_name_is_less_than_500_characters(self, execution_storage):
+        class Agent(PrometheusAgent):
+            async def _execute(self, params, context, event_queue):
+                return {"ok": True}
+
+        agent = Agent(agent_name="A" * 600)
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-long-name"
+        context.context_id = "context-long-name"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = "{}"
+
+        await agent.create_executor().execute(context, AsyncMock(spec=EventQueue))
+
+        item = execution_storage[0]
+        assert len(item.name) == 499
+        assert item.name.startswith("local_")
+        assert item.name.endswith(f"_task-long-name_{item.properties['created_at']}")
+
+    def test_execution_record_failure_prevents_work_and_execute(self, monkeypatch):
+        """Covers REQ-009-20 and BEH-009-07."""
+        worked = False
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                raise RuntimeError("credential unavailable")
+
+            async def _execute(self, params, context, event_queue):
+                nonlocal worked
+                worked = True
+                return {"ok": True}
+
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-fail"
+        context.context_id = "context-fail"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = "{}"
+        queue = AsyncMock(spec=EventQueue)
+        agent = Agent(agent_name="Fail Agent")
+
+        with pytest.raises(RuntimeError, match="credential unavailable"):
+            asyncio.run(agent.create_executor().execute(context, queue))
+
+        assert worked is False
+        states = [
+            call[0][0].status.state
+            for call in queue.enqueue_event.call_args_list
+            if isinstance(call[0][0], TaskStatusUpdateEvent)
+        ]
+        assert TaskState.TASK_STATE_WORKING not in states
+        assert states[-1] == TaskState.TASK_STATE_FAILED
+        assert agent.execution_record_id is None
+
+    async def test_execution_record_context_is_concurrency_safe(self, monkeypatch):
+        """Covers REQ-009-21 and BEH-009-06."""
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        class Items:
+            async def create(self, item):
+                item_id = 101 if item.properties["task_id"] == "task-a" else 202
+                return SimpleNamespace(id=item_id)
+
+        class Client:
+            def __init__(self, config):
+                self.items = Items()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        seen = {}
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                return SimpleNamespace(
+                    value={"org_id": 1, "project_id": 2, "key": "k", "secret": "s"}
+                )
+
+            async def _execute(self, params, context, event_queue):
+                seen[context.task_id] = self.execution_record_id
+                if context.task_id == "task-a":
+                    entered.set()
+                    await release.wait()
+                else:
+                    await entered.wait()
+                    release.set()
+                assert self.execution_record_id == seen[context.task_id]
+                return {"ok": True}
+
+        monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", Client)
+        agent = Agent(agent_name="Concurrent Agent")
+
+        def make_context(task_id):
+            context = MagicMock(spec=RequestContext)
+            context.task_id = task_id
+            context.context_id = f"context-{task_id}"
+            context.current_task = None
+            context.message = None
+            context.get_user_input.return_value = "{}"
+            return context
+
+        await asyncio.gather(
+            agent.create_executor().execute(make_context("task-a"), AsyncMock(spec=EventQueue)),
+            agent.create_executor().execute(make_context("task-b"), AsyncMock(spec=EventQueue)),
+        )
+
+        assert seen == {"task-a": 101, "task-b": 202}
+        assert agent.execution_record_id is None
+
 
 class TestEventTypes:
     """Tests for A2A event type creation."""
@@ -1079,7 +1347,7 @@ class TestEventTypes:
 class TestAgentIntegration:
     """Integration tests for agent components."""
 
-    def test_full_execution_flow(self):
+    def test_full_execution_flow(self, execution_storage):
         """Test complete execution flow with a concrete agent."""
 
         class EchoAgent(PrometheusAgent):

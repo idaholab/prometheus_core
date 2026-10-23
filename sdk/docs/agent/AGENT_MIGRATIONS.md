@@ -54,6 +54,34 @@ healthcheck:
 
 ## 0.13.0
 
+### Configure DeepLynx for Automatic Execution Records
+
+Before `_execute(...)`, the standard `PrometheusAgent` executor now creates a mandatory
+DeepLynx execution item containing the agent, task, context, verified user, and effective
+parameters. Parameters are recursively redacted and stored as JSON in the scalar
+`parameters_json` property to avoid DeepLynx's properties-depth limit. Decode them with
+`json.loads(...)`. Credential, configuration, data-source, or item-creation failures stop the
+execution before subclass work begins.
+
+Migration steps:
+
+1. Ensure the configured credential broker can provide a `deeplynx` credential. When using the
+   environment broker, set the existing DeepLynx authentication, organization, and project
+   variables.
+2. Set `DEEPLYNX_DATA_SOURCE_ID` or configure a default data source for the target project.
+3. Do not trust `params["user_id"]`; the executor replaces it with the verified identity before
+   `_execute(...)`.
+4. Read the item ID from `self.execution_record_id` during `_execute(...)` only. This
+   request-scoped property is concurrency-safe and otherwise returns `None`.
+5. Stored secrets retain their keys but have `[REDACTED]` values.
+
+```python
+class AnalysisAgent(PrometheusAgent):
+    async def _execute(self, params, context, event_queue):
+        execution_item_id = self.execution_record_id
+        return {"status": "success", "execution_item_id": execution_item_id}
+```
+
 ### Use the Built-in LLM Tool-Calling Helpers
 
 `LLMClient.chat(...)` and `AsyncLLMClient.chat(...)` now accept keyword-only `tools`

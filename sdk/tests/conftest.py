@@ -12,7 +12,11 @@
 
 """Pytest configuration for prometheus_api tests."""
 
+from types import SimpleNamespace
+
 import pytest
+
+from prometheus_api.agent import PrometheusAgent
 
 
 def pytest_collection_modifyitems(config, items):
@@ -35,3 +39,42 @@ def _disable_identity_for_legacy_tests(request, monkeypatch):
     # Skip if the test's own module already sets USER_IDENTITY_REQUIRED.
     if "test_identity" not in str(request.fspath):
         monkeypatch.setenv("USER_IDENTITY_REQUIRED", "false")
+
+
+@pytest.fixture(autouse=True)
+def _stub_execution_records_for_legacy_tests(request, monkeypatch):
+    """Keep A2A transport tests independent of external DeepLynx credentials."""
+    if "test_a2a_payloads.py" not in str(request.fspath):
+        return
+
+    next_id = 0
+
+    class FakeItems:
+        async def create(self, item):
+            nonlocal next_id
+            next_id += 1
+            return SimpleNamespace(id=next_id)
+
+    class FakeStorageClient:
+        def __init__(self, config):
+            self.items = FakeItems()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    async def get_credential(self, resource, scope=None):
+        assert resource == "deeplynx"
+        return SimpleNamespace(
+            value={
+                "org_id": 1,
+                "project_id": 2,
+                "key": "test-key",
+                "secret": "test-secret",
+            }
+        )
+
+    monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", FakeStorageClient)
+    monkeypatch.setattr(PrometheusAgent, "get_credential", get_credential)
