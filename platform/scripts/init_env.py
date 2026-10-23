@@ -17,10 +17,10 @@
 2. For every variable in .env.example whose comment block carries a
    ``python3 -c "..."`` one-liner, fill a blank value in .env by running it.
    Values that are already set are never touched.
-3. If the API key for the selected LLM_CONFIG_PROFILE is blank, take it from
-   the environment if it is set there (as in CI). Otherwise, if the script runs
-   in a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
-   profile's key. Otherwise exit non-zero.
+3. If LLM_CONFIG_PROFILE, or the API key it needs, is blank, take it from the
+   environment if it is set there (as in CI). Otherwise, if the script runs in
+   a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
+   profile's key. Otherwise exit non-zero. There is no default profile.
 
 Standard library only, so it runs before anything else is installed. Run from
 anywhere; paths resolve relative to this file.
@@ -43,11 +43,11 @@ ENV = ROOT / ".env"
 ASSIGNMENT = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
 ONE_LINER = re.compile(r'^#\s*python3 -c "(.+)"\s*$')
 
-# One profile per YAML here; the default profile routes through this stack's
-# LiteLLM proxy, so its provider key comes from LITELLM_CONFIG instead.
+# One profile per YAML here.
 LLM_CONFIGS = ROOT.parent / "sdk" / "prometheus_api" / "llm_configs"
-LITELLM_CONFIG = ROOT / "litellm_config.yaml"
-DEFAULT_PROFILE = "registry"
+# Installed by the SDK but unusable on this platform: "registry" sends LLM calls to
+# REGISTRY_URL, which here is the backend's agent registry, not an LLM proxy.
+UNSUPPORTED_PROFILES = {"registry"}
 
 API_KEY_REF = re.compile(r"os\.environ/([A-Z][A-Z0-9_]*_API_KEY)")
 # Shared by several profiles for embeddings only; never the key a profile needs.
@@ -68,17 +68,14 @@ def description(yaml: Path) -> str:
 
 
 def profiles() -> dict[str, tuple[str | None, str]]:
-    """LLM_CONFIG_PROFILE -> (provider key it cannot start without, description).
-
-    The default profile comes first, the rest alphabetically.
-    """
+    """LLM_CONFIG_PROFILE -> (provider key it cannot start without, description), alphabetically."""
     if not LLM_CONFIGS.is_dir():
         raise SystemExit(f"[ERROR] LLM config profiles not found at {LLM_CONFIGS}.")
-    found = {}
-    for yaml in sorted(LLM_CONFIGS.glob("*.yaml"), key=lambda y: (y.stem != DEFAULT_PROFILE, y.stem)):
-        source = LITELLM_CONFIG if yaml.stem == DEFAULT_PROFILE else yaml
-        found[yaml.stem] = (provider_key(source), description(yaml))
-    return found
+    return {
+        yaml.stem: (provider_key(yaml), description(yaml))
+        for yaml in sorted(LLM_CONFIGS.glob("*.yaml"))
+        if yaml.stem not in UNSUPPORTED_PROFILES
+    }
 
 
 def generators(example: str) -> dict[str, str]:
@@ -120,11 +117,16 @@ def fill_secrets(text: str, gens: dict[str, str]) -> tuple[str, list[str]]:
     return text, filled
 
 
+def missing_profile(env: dict[str, str]) -> bool:
+    """True if neither LLM_CONFIG_PROFILE nor a custom LLM_CONFIG_FILE is set."""
+    return not env.get("LLM_CONFIG_FILE") and not env.get("LLM_CONFIG_PROFILE")
+
+
 def unknown_profile(env: dict[str, str]) -> str | None:
-    """The selected LLM_CONFIG_PROFILE if no installed profile has that name."""
-    if env.get("LLM_CONFIG_FILE"):
-        return None  # a custom YAML replaces the profile
-    profile = env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE
+    """The selected LLM_CONFIG_PROFILE if no usable installed profile has that name."""
+    if env.get("LLM_CONFIG_FILE") or not env.get("LLM_CONFIG_PROFILE"):
+        return None  # a custom YAML replaces the profile; a blank one is missing_profile
+    profile = env["LLM_CONFIG_PROFILE"]
     return None if profile in profiles() else profile
 
 
@@ -132,7 +134,7 @@ def missing_llm_key(env: dict[str, str]) -> str | None:
     """The blank provider key required by the selected profile, if any."""
     if env.get("LLM_CONFIG_FILE"):
         return None  # a custom YAML decides which keys it needs
-    key, _ = profiles().get(env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE, (None, ""))
+    key, _ = profiles().get(env.get("LLM_CONFIG_PROFILE", ""), (None, ""))
     return key if key and not env.get(key) else None
 
 
@@ -190,7 +192,7 @@ def prompt_llm(text: str) -> str:
     known = profiles()
     options = list(known)
     labels = [desc if key else f"{desc}  [no key]" for key, desc in known.values()]
-    current = env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE
+    current = env.get("LLM_CONFIG_PROFILE", "")
     print("\nChoose an LLM profile (up/down, Enter):")
     profile = choose(options, labels, options.index(current) if current in options else 0)
     text = set_var(text, "LLM_CONFIG_PROFILE", profile)
@@ -213,26 +215,44 @@ def main() -> int:
         print(f"Generated in {ENV.name}: {', '.join(filled)}")
 
     env = values(text)
+    if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):
+        text = set_var(text, "LLM_CONFIG_PROFILE", os.environ["LLM_CONFIG_PROFILE"])
+        ENV.write_text(text)
+        env = values(text)
+        print(f"Saved LLM_CONFIG_PROFILE from the environment in {ENV.name}.")
     if (key := missing_llm_key(env)) and os.environ.get(key):
         text = set_var(text, key, os.environ[key])
         ENV.write_text(text)
         env = values(text)
         print(f"Saved {key} from the environment in {ENV.name}.")
-    if (unknown_profile(env) or missing_llm_key(env)) and interactive():
+    if (missing_profile(env) or unknown_profile(env) or missing_llm_key(env)) and interactive():
         text = prompt_llm(text)
         ENV.write_text(text)
         env = values(text)
         print(f"Saved LLM_CONFIG_PROFILE={env['LLM_CONFIG_PROFILE']} in {ENV.name}.")
-    if profile := unknown_profile(env):
+    if missing_profile(env):
         print(
-            f"\n[ERROR] LLM_CONFIG_PROFILE={profile} in {ENV} is not an installed profile.\n"
+            f"\n[ERROR] LLM_CONFIG_PROFILE is empty in {ENV}.\n"
+            f"        Available profiles: {', '.join(profiles())}.\n"
+            f"        Set it (or set LLM_CONFIG_FILE) and run make again.\n",
+            file=sys.stderr,
+        )
+        return 1
+    if profile := unknown_profile(env):
+        reason = (
+            "is not supported on this platform (it needs an LLM proxy at REGISTRY_URL)"
+            if profile in UNSUPPORTED_PROFILES
+            else "is not an installed profile"
+        )
+        print(
+            f"\n[ERROR] LLM_CONFIG_PROFILE={profile} in {ENV} {reason}.\n"
             f"        Available profiles: {', '.join(profiles())}.\n"
             f"        Fix it (or set LLM_CONFIG_FILE) and run make again.\n",
             file=sys.stderr,
         )
         return 1
     if key := missing_llm_key(env):
-        profile = env.get("LLM_CONFIG_PROFILE") or DEFAULT_PROFILE
+        profile = env["LLM_CONFIG_PROFILE"]
         print(
             f"\n[ERROR] {key} is empty in {ENV}.\n"
             f"        LLM_CONFIG_PROFILE={profile} needs it; set it (or pick another profile)\n"

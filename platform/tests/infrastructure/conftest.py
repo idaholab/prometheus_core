@@ -65,27 +65,16 @@ def env_example_vars(env_example_path: Path) -> dict[str, str]:
 
 
 @pytest.fixture(scope="session")
-def litellm_config_path(project_root: Path) -> Path:
-    """Return the path to litellm_config.yaml."""
-    return project_root / "litellm_config.yaml"
-
-
-@pytest.fixture(scope="session")
-def litellm_config_data(litellm_config_path: Path) -> dict:
-    """Parse and return litellm_config.yaml as a dict."""
-    return yaml.safe_load(litellm_config_path.read_text())
-
-
-@pytest.fixture(scope="session")
 def infrastructure_services() -> set[str]:
     """Return the set of infrastructure service names (excludes specialist agents)."""
-    return {"litellm-db", "litellm", "redis", "backend", "client-agent"}
+    return {"admin-db", "redis", "backend", "client-agent"}
 
 
 def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
-    """Extract all ${VAR} and ${VAR:-default} references from compose file.
+    """Extract all ${VAR}, ${VAR:-default} and ${VAR:?error} references from compose file.
 
-    Returns list of (var_name, has_default) tuples.
+    Returns list of (var_name, has_default) tuples. ``:?`` makes a var required, so it
+    has no default.
     """
     results = []
     for match in re.finditer(r"\$\{([^}]+)\}", compose_text):
@@ -93,6 +82,8 @@ def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
         if ":-" in expr:
             var_name = expr.split(":-")[0]
             results.append((var_name, True))
+        elif ":?" in expr:
+            results.append((expr.split(":?")[0], False))
         else:
             results.append((expr, False))
     return results
@@ -237,14 +228,13 @@ def env_test_file(project_root: Path):
     test_secret = uuid.uuid4().hex[:16]
     env_path = project_root / ".env.test"
     env_path.write_text(
+        f"LLM_CONFIG_PROFILE=anthropic\n"
         f"LLM_API_KEY=sk-ant-test-not-real\n"
         f"AGENT_SECRET={test_secret}\n"
         f"REDIS_PASSWORD={test_secret}\n"
         f"REDIS_URL=redis://:{test_secret}@redis:6379\n"
         f"BACKEND_JWT_SECRET={test_secret}\n"
-        f"LITELLM_MASTER_KEY={test_secret}\n"
-        f"LITELLM_DB_PASSWORD={test_secret}\n"
-        f"LITELLM_LOCAL_PORT=19977\n"
+        f"ADMIN_DB_PASSWORD={test_secret}\n"
         f"REDIS_LOCAL_PORT=16379\n"
         f"CLIENT_AGENT_PORT=18001\n"
         f"BACKEND_PORT=18600\n"
@@ -258,7 +248,6 @@ def env_test_file(project_root: Path):
 def test_ports() -> dict[str, int]:
     """Host ports used by integration tests (offset from defaults to avoid conflicts)."""
     return {
-        "litellm": 19977,
         "redis": 16379,
         "client_agent": 18001,
         "backend": 18600,
@@ -295,9 +284,10 @@ def docker_compose_up(project_root: Path, env_test_file: Path, test_ports: dict[
         str(env_test_file),
     ]
 
-    # Start in phases so frontend/client-agent don't fail while LiteLLM is still booting.
-    core_services = ["litellm-db", "litellm", "redis"]
-    app_services = ["client-agent", "backend"]
+    # Start in phases: the datastores, then the backend (it hosts the agent
+    # registry the client-agent registers with), then the client-agent.
+    core_services = ["admin-db", "redis"]
+    app_services = ["backend", "client-agent"]
 
     try:
         # Start core infrastructure first.
@@ -310,8 +300,7 @@ def docker_compose_up(project_root: Path, env_test_file: Path, test_ports: dict[
 
         # Enforce readiness checks with actionable diagnostics on failure.
         core_readiness_checks = [
-            ("litellm-db", "healthy", _wait_for_container_healthy, 90),
-            ("litellm-proxy", "healthy", _wait_for_container_healthy, 180),
+            ("admin-db", "healthy", _wait_for_container_healthy, 90),
             ("agent-valkey", "running", _wait_for_container_running, 60),
         ]
         for container_name, expected_state, wait_fn, timeout in core_readiness_checks:
@@ -336,8 +325,8 @@ def docker_compose_up(project_root: Path, env_test_file: Path, test_ports: dict[
         )
 
         app_readiness_checks = [
-            ("client-agent", "running", _wait_for_container_running, 120),
             ("backend", "running", _wait_for_container_running, 180),
+            ("client-agent", "running", _wait_for_container_running, 120),
         ]
         for container_name, expected_state, wait_fn, timeout in app_readiness_checks:
             if wait_fn(container_name, timeout=timeout):
@@ -353,16 +342,7 @@ def docker_compose_up(project_root: Path, env_test_file: Path, test_ports: dict[
             )
 
         env_vars = _parse_env_test_file(env_test_file)
-        litellm_port = env_vars.get("LITELLM_LOCAL_PORT", "19977")
         backend_port = env_vars.get("BACKEND_PORT", "18600")
-
-        if not _wait_for_http_ready(
-            f"http://localhost:{litellm_port}/health/readiness",
-            timeout=120,
-            ok_statuses=(200,),
-        ):
-            logs = _get_container_logs("litellm-proxy")
-            pytest.fail(f"LiteLLM readiness endpoint did not return HTTP 200 within 120s.\nRecent logs:\n{logs}")
 
         if not _wait_for_http_ready(
             f"http://localhost:{backend_port}/healthz",
@@ -382,36 +362,3 @@ def docker_compose_up(project_root: Path, env_test_file: Path, test_ports: dict[
             capture_output=True,
             timeout=120,
         )
-
-
-@pytest.fixture(scope="session")
-def litellm_client(docker_compose_up, env_test_file: Path):
-    """Return an httpx.Client pre-configured for the LiteLLM proxy.
-
-    Includes base_url and Authorization header with the master key.
-    """
-    env_vars = _parse_env_test_file(env_test_file)
-    port = env_vars.get("LITELLM_LOCAL_PORT", "19977")
-    master_key = env_vars.get("LITELLM_MASTER_KEY", "")
-
-    client = httpx.Client(
-        base_url=f"http://localhost:{port}",
-        headers={"Authorization": f"Bearer {master_key}"},
-        timeout=15.0,
-    )
-    yield client
-    client.close()
-
-
-@pytest.fixture(scope="session")
-def litellm_no_auth_client(docker_compose_up, env_test_file: Path):
-    """Return an httpx.Client for LiteLLM WITHOUT auth headers."""
-    env_vars = _parse_env_test_file(env_test_file)
-    port = env_vars.get("LITELLM_LOCAL_PORT", "19977")
-
-    client = httpx.Client(
-        base_url=f"http://localhost:{port}",
-        timeout=15.0,
-    )
-    yield client
-    client.close()

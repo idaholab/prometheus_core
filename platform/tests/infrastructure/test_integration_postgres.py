@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Integration tests for PostgreSQL container (litellm-db)."""
+"""Integration tests for the PostgreSQL container (admin-db)."""
 
 import subprocess
 
@@ -39,11 +39,11 @@ def _docker_inspect_health(container_name: str) -> str:
 
 
 def test_postgres_container_running(docker_compose_up):
-    assert _docker_inspect_status("litellm-db") == "running"
+    assert _docker_inspect_status("admin-db") == "running"
 
 
 def test_postgres_healthy(docker_compose_up):
-    assert _docker_inspect_health("litellm-db") == "healthy"
+    assert _docker_inspect_health("admin-db") == "healthy"
 
 
 def test_postgres_accepts_connection(docker_compose_up):
@@ -52,12 +52,12 @@ def test_postgres_accepts_connection(docker_compose_up):
         [
             "docker",
             "exec",
-            "litellm-db",
+            "admin-db",
             "psql",
             "-U",
-            "litellm",
+            "admin",
             "-d",
-            "litellm",
+            "admin",
             "-c",
             "SELECT 1;",
         ],
@@ -67,43 +67,43 @@ def test_postgres_accepts_connection(docker_compose_up):
     assert result.returncode == 0, f"psql failed: {result.stderr}"
 
 
-def test_postgres_litellm_database_exists(docker_compose_up):
+def test_postgres_admin_database_exists(docker_compose_up):
     result = subprocess.run(
         [
             "docker",
             "exec",
-            "litellm-db",
+            "admin-db",
             "psql",
             "-U",
-            "litellm",
+            "admin",
             "-d",
             "postgres",
             "-c",
-            "SELECT datname FROM pg_database WHERE datname = 'litellm';",
+            "SELECT datname FROM pg_database WHERE datname = 'admin';",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "litellm" in result.stdout
+    assert "admin" in result.stdout
 
 
-def test_postgres_litellm_user_exists(docker_compose_up):
+def test_postgres_admin_user_exists(docker_compose_up):
     result = subprocess.run(
         [
             "docker",
             "exec",
-            "litellm-db",
+            "admin-db",
             "psql",
             "-U",
-            "litellm",
+            "admin",
             "-d",
             "postgres",
             "-c",
-            "SELECT rolname FROM pg_roles WHERE rolname = 'litellm';",
+            "SELECT rolname FROM pg_roles WHERE rolname = 'admin';",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "litellm" in result.stdout
+    assert "admin" in result.stdout

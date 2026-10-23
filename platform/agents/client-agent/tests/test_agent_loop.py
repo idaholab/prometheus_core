@@ -38,7 +38,7 @@ def _capability(skill_id: str, input_schema: Dict[str, Any], **kwargs: Any) -> A
     return AgentCapability(
         agent_id="test-agent",
         agent_name="Test Agent",
-        agent_url="http://litellm:4000/a2a/test-agent",
+        agent_url="http://backend:8000/a2a/test-agent",
         skill_id=skill_id,
         skill_name=skill_id.replace("_", " ").title(),
         description=f"{skill_id} skill",

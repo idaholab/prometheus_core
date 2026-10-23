@@ -200,7 +200,7 @@ def test_agents_slash_command_lists_registered_agents_without_llm(monkeypatch) -
             SimpleNamespace(
                 agent_id="mesh-agent",
                 agent_name="Mesh Agent",
-                agent_url="http://litellm:4000/a2a/mesh-agent",
+                agent_url="http://backend:8000/a2a/mesh-agent",
                 skill_id="convert_mesh",
                 skill_name="Convert Mesh",
             )

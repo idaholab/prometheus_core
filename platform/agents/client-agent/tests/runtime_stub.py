@@ -107,7 +107,7 @@ if not _importable("prometheus_api.agent"):
 
         @staticmethod
         def registry_url() -> str:
-            return "http://litellm:4000"
+            return "http://backend:8000"
 
         def run(self, *args, **kwargs):
             return None

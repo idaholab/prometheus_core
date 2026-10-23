@@ -481,8 +481,9 @@ jobs:
       OPTIONAL_AGENTS: "false"
       PROFILE: prod
       # make up runs init_env.py, which creates .env from .env.example,
-      # generates every secret, and takes this key from the environment.
-      # Nothing calls an LLM at startup, so a placeholder is enough
+      # generates every secret, and takes the profile and its key from the
+      # environment. Nothing calls an LLM at startup, so a placeholder is enough
+      LLM_CONFIG_PROFILE: anthropic
       LLM_API_KEY: sk-ant-test-not-real
     steps:
       - name: Checkout

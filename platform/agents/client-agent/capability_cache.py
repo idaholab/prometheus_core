@@ -226,7 +226,7 @@ class CapabilityCache:
 
             for agent in agents:
                 try:
-                    agent_id = agent["agent_id"]       # agent_name (LiteLLM routing key)
+                    agent_id = agent["agent_id"]       # agent_name (registry routing key)
                     agent_name = agent.get("name", agent_id)
                     direct_url = agent.get("url", "")   # downstream agent URL (for self-check)
 
@@ -234,10 +234,10 @@ class CapabilityCache:
                         print(f"Skipping self agent in capability cache: {agent_id} ({direct_url})")
                         continue
 
-                    # Route all calls through LiteLLM: /a2a/{agent_name}
+                    # Route all calls through the registry gateway: /a2a/{agent_name}
                     agent_url = f"{REGISTRY_URL}/a2a/{agent_id}"
 
-                    # LiteLLM's /v1/agents payload is a lossy summary and may omit
+                    # A registry's /v1/agents payload can be a lossy summary and omit
                     # per-skill inputSchema/approval metadata. Always fetch the
                     # full agent card for capability planning.
                     agent_card = await get_agent_card(agent_id, direct_url=direct_url)

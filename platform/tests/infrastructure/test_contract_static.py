@@ -107,7 +107,7 @@ def _capture_client_agent_request(monkeypatch, **kwargs) -> dict:
             return _FakeResponse(_specialist_final_status({"status": "completed"}))
 
     monkeypatch.setattr(tool_discovery.httpx, "AsyncClient", _CapturingClient)
-    asyncio.run(tool_discovery.call_a2a_agent("http://litellm:4000/a2a/test-agent", "analyze_sample", **kwargs))
+    asyncio.run(tool_discovery.call_a2a_agent("http://backend:8000/a2a/test-agent", "analyze_sample", **kwargs))
     return captured["message"]
 
 

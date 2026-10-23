@@ -13,9 +13,8 @@
 """Async SQLAlchemy engine/session for the admin plane (users, OIDC providers,
 signing keys).
 
-This is a separate datastore from Redis (chat/session/artifact state, all
-ephemeral-ish and conversation-scoped) and from litellm-db (LiteLLM's own,
-opaque to us). The admin plane is the one place in this platform that needs a
+This is a separate datastore from Redis (chat/session/artifact state and agent
+registrations, all ephemeral-ish). The admin plane is the one place in this platform that needs a
 real relational store with migrations -- see ``app/db/models.py`` for the
 schema and ``alembic/`` for migrations.
 

@@ -23,7 +23,7 @@ A Prometheus agent runs as one process with one asyncio event loop. A blocking
 call (a synchronous SDK, a legacy library, a CPU loop, ``time.sleep``) does not
 ``await``, so while it runs nothing else on the loop can run: not the keepalive
 heartbeat, not the A2A SSE consumer that flushes bytes to the caller, not other
-clients. If the gap exceeds the upstream socket-read timeout (LiteLLM/aiohttp),
+clients. If the gap exceeds the upstream socket-read timeout (the registry gateway),
 the streaming connection is torn down even though the agent is still working.
 
 The pattern

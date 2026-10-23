@@ -17,10 +17,11 @@ services:
       AGENT_PORT: 8000
       EXTERNAL_AGENT_URL: http://form-filler-agent:8000
       AGENT_SECRET: ${AGENT_SECRET}
-      REGISTRY_URL: ${REGISTRY_URL:-http://litellm:4000}
-      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:-registry}
+      REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}
       LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
+      LITELLM_MASTER_KEY: ${AGENT_SECRET}
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -40,10 +41,10 @@ services:
       CREDENTIAL_BROKER: ${CREDENTIAL_BROKER:-env}
       PYTHONDONTWRITEBYTECODE: 1
     depends_on:
-      litellm:
+      backend:
         condition: service_healthy
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
-    # It does not cover LiteLLM registration, which retries in the background.
+    # It does not cover registry registration, which retries in the background.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s

@@ -280,7 +280,7 @@ objects.
 
 Major functions:
 
-- `discover_agents()`: Lists available agents from the LiteLLM agent directory.
+- `discover_agents()`: Lists available agents from the backend's agent registry.
 - `get_agent_card(agent_id, direct_url=None)`: Fetches a specialist agent card.
 - `create_input_schema_from_skill(skill)`: Builds a Pydantic model from skill `inputSchema`.
 - `call_a2a_agent(...)`: Calls a downstream agent over A2A JSON-RPC.

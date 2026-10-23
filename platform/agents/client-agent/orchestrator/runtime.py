@@ -55,8 +55,6 @@ _status_emit_tail: ContextVar[Optional[asyncio.Task]] = ContextVar(
 def create_llm() -> AsyncLLMClient:
     """Create a provider-agnostic async client."""
     config = LLMConfig.from_env()
-    if config.proxy_url:
-        config = config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
     return AsyncLLMClient(config=config, app_name="Client Agent")
 
 

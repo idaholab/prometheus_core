@@ -55,7 +55,7 @@ def test_each_service_has_image_or_build(compose_data, infrastructure_services):
 
 
 def test_postgres_image_version(compose_data):
-    assert compose_data["services"]["litellm-db"]["image"] == "postgres:16-alpine"
+    assert compose_data["services"]["admin-db"]["image"] == "postgres:16-alpine"
 
 
 def test_redis_service_uses_valkey_bundle(compose_data):
@@ -64,28 +64,18 @@ def test_redis_service_uses_valkey_bundle(compose_data):
     assert svc["command"][:1] == ["valkey-server"]
 
 
-def test_litellm_image_pinned(compose_data):
-    image = compose_data["services"]["litellm"]["image"]
-    assert image == "ghcr.io/berriai/litellm:v1.92.0", (
-        "LiteLLM 1.92.0 is the minimum pinned gateway with A2A SDK v1 routing"
-    )
-
-
 def test_client_agent_receives_selectable_llm_configuration(compose_data):
     common_env = compose_data["x-common-env"]
-    assert common_env["REGISTRY_URL"] == "${REGISTRY_URL:-http://litellm:4000}"
+    assert common_env["REGISTRY_URL"] == "${REGISTRY_URL:-http://backend:8000}"
     assert "LLM_DEFAULT_MODEL" not in common_env
     assert "LLM_API_KEY" not in common_env
     assert "MODEL_NAME" not in common_env
 
     client_env = compose_data["services"]["client-agent"]["environment"]
-    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:-registry}"
+    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}"
     assert client_env["LLM_CONFIG_FILE"] == "${LLM_CONFIG_FILE:-}"
     for key in ("LLM_API_KEY", "EMBEDDING_API_KEY"):
         assert client_env[key] == f"${{{key}:-}}"
-
-    proxy_env = compose_data["services"]["litellm"]["environment"]
-    assert proxy_env["LLM_API_KEY"] == "${LLM_API_KEY}"
 
 
 def test_client_agent_port_is_published_only_by_system_test_override(
@@ -121,7 +111,14 @@ def test_compose_has_networks_section(compose_data):
 def test_compose_has_volumes_section(compose_data):
     volumes = compose_data.get("volumes", {})
     assert "valkey-data" in volumes, "Missing 'valkey-data' named volume"
-    assert "litellm-db-data" in volumes, "Missing 'litellm-db-data' named volume"
+    assert "admin-db-data" in volumes, "Missing 'admin-db-data' named volume"
+
+
+def test_no_litellm_services(compose_data):
+    """The backend hosts the agent registry and gateway; LiteLLM is gone from the platform."""
+    leftovers = [name for name in compose_data["services"] if "litellm" in name]
+    assert not leftovers, f"LiteLLM services remain: {leftovers}"
+    assert not [v for v in compose_data.get("volumes", {}) if "litellm" in v]
 
 
 def test_every_agent_sets_external_agent_url(project_root, compose_data):

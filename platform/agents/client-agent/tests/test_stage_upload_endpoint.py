@@ -23,7 +23,7 @@ called it).
 
 Builds a tiny standalone Starlette app around the unbound endpoint function
 directly (it makes no use of `self`), rather than constructing a full
-OrchestratorAgent (agent card loading, LiteLLM registration, etc.) -- see
+OrchestratorAgent (agent card loading, registry registration, etc.) -- see
 test_execution_path.py for the heavier alternative used elsewhere in this suite.
 """
 

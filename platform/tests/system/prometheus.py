@@ -172,18 +172,10 @@ async def is_similar(
     actual: str,
     expected: str,
     *,
-    judge_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     model: Optional[str] = None,
 ) -> bool:
     """Use the platform's configured LLM profile to judge semantic similarity."""
-    judgment = await _judge_similarity(
-        actual,
-        expected,
-        judge_url=judge_url,
-        api_key=api_key,
-        model=model,
-    )
+    judgment = await _judge_similarity(actual, expected, model=model)
     return judgment.similar
 
 
@@ -205,19 +197,9 @@ async def _judge_similarity(
     actual: str,
     expected: str,
     *,
-    judge_url: Optional[str] = None,
-    api_key: Optional[str] = None,
     model: Optional[str] = None,
 ) -> SimilarityJudgment:
     config = LLMConfig.from_env()
-    if judge_url is not None or config.proxy_url:
-        config.proxy_url = str(
-            judge_url or os.getenv("PROMETHEUS_SYSTEM_TEST_LLM_URL") or "http://localhost:9977"
-        ).rstrip("/")
-        key = str(api_key or os.getenv("LITELLM_MASTER_KEY") or "").strip()
-        if not key:
-            raise RuntimeError("LITELLM_MASTER_KEY is required for proxy LLM assertions")
-        config = config.with_api_key(key)
 
     messages = [
         {
