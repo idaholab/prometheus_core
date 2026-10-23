@@ -83,9 +83,10 @@ def infrastructure_services() -> set[str]:
 
 
 def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
-    """Extract all ${VAR} and ${VAR:-default} references from compose file.
+    """Extract all ${VAR}, ${VAR:-default} and ${VAR:?error} references from compose file.
 
-    Returns list of (var_name, has_default) tuples.
+    Returns list of (var_name, has_default) tuples. ``:?`` makes a var required, so it
+    has no default.
     """
     results = []
     for match in re.finditer(r"\$\{([^}]+)\}", compose_text):
@@ -93,6 +94,8 @@ def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
         if ":-" in expr:
             var_name = expr.split(":-")[0]
             results.append((var_name, True))
+        elif ":?" in expr:
+            results.append((expr.split(":?")[0], False))
         else:
             results.append((expr, False))
     return results

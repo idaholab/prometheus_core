@@ -52,7 +52,6 @@ PROMETHEUS_SYSTEM_TESTING ?= false
 CLIENT_AGENT_PORT ?= 8001
 LITELLM_LOCAL_PORT ?= 9977
 PROMETHEUS_SYSTEM_TEST_URL ?= http://localhost:$(CLIENT_AGENT_PORT)
-PROMETHEUS_SYSTEM_TEST_LLM_URL ?= http://localhost:$(LITELLM_LOCAL_PORT)
 
 # Set PROFILE=prod to bring up the React frontend in production mode instead,
 # or PROFILE= (empty) to exclude the React frontend entirely. Default: dev.
@@ -229,7 +228,6 @@ check-markings: ##@ Fail if a tracked .py/.ts/.tsx/.jsx file lacks the copyright
 	python3 scripts/add_markings.py --check
 
 test-system: export AGENT_SECRET := $(AGENT_SECRET)
-test-system: export LITELLM_MASTER_KEY := $(LITELLM_MASTER_KEY)
 test-system: export LLM_CONFIG_PROFILE := $(LLM_CONFIG_PROFILE)
 test-system: export LLM_API_KEY := $(LLM_API_KEY)
 test-system: export EMBEDDING_API_KEY := $(EMBEDDING_API_KEY)
@@ -239,7 +237,6 @@ test-system: export DEEPLYNX_SECRET := $(DEEPLYNX_SECRET)
 test-system: export DEEPLYNX_ORG_ID := $(DEEPLYNX_ORG_ID)
 test-system: export DEEPLYNX_PROJECT_ID := $(DEEPLYNX_PROJECT_ID)
 test-system: export PROMETHEUS_SYSTEM_TEST_URL := $(PROMETHEUS_SYSTEM_TEST_URL)
-test-system: export PROMETHEUS_SYSTEM_TEST_LLM_URL := $(PROMETHEUS_SYSTEM_TEST_LLM_URL)
 test-system: ##@ Test the user experience on an already-running platform (start with PROMETHEUS_SYSTEM_TESTING=true)
 	cd tests && uv run python -m pytest -m system system -v
 

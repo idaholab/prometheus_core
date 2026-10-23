@@ -91,21 +91,26 @@ def test_init_env_fills_secrets_and_checks_llm_key(tmp_path, env_example_path, m
     monkeypatch.setattr(init_env, "ENV", env)
     monkeypatch.setattr(init_env, "interactive", lambda: False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_CONFIG_PROFILE", raising=False)
+    llm_vars = ("LLM_API_KEY", "LLM_CONFIG_PROFILE")
 
-    assert init_env.main() == 1  # LLM_API_KEY still blank
+    assert init_env.main() == 1  # LLM_CONFIG_PROFILE and LLM_API_KEY still blank
     first = init_env.values(env.read_text())
     assert all(first[v] for v in REQUIRED_VARS if v != "LLM_API_KEY")
+
+    env.write_text(env.read_text().replace("LLM_CONFIG_PROFILE=\n", "LLM_CONFIG_PROFILE=anthropic\n"))
+    assert init_env.main() == 1  # LLM_API_KEY still blank
 
     env.write_text(env.read_text().replace("LLM_API_KEY=\n", "LLM_API_KEY=sk-ant-x\n"))
     assert init_env.main() == 0
     second = init_env.values(env.read_text())
-    assert {k: v for k, v in second.items() if k != "LLM_API_KEY"} == {
-        k: v for k, v in first.items() if k != "LLM_API_KEY"
+    assert {k: v for k, v in second.items() if k not in llm_vars} == {
+        k: v for k, v in first.items() if k not in llm_vars
     }, "existing values must never be overwritten"
 
 
-def test_init_env_takes_llm_key_from_environment(tmp_path, env_example_path, monkeypatch):
-    """CI sets LLM_API_KEY in the environment instead of answering the prompt."""
+def test_init_env_requires_a_profile(tmp_path, env_example_path, monkeypatch, capsys):
+    """There is no default profile: a blank one fails, even with a key set."""
     init_env = _load_init_env()
     example = tmp_path / ".env.example"
     example.write_text(env_example_path.read_text())
@@ -113,10 +118,32 @@ def test_init_env_takes_llm_key_from_environment(tmp_path, env_example_path, mon
     monkeypatch.setattr(init_env, "EXAMPLE", example)
     monkeypatch.setattr(init_env, "ENV", env)
     monkeypatch.setattr(init_env, "interactive", lambda: False)
+    monkeypatch.delenv("LLM_CONFIG_PROFILE", raising=False)
+    monkeypatch.setenv("LLM_API_KEY", "sk-from-env")
+
+    assert init_env.main() == 1
+    assert "LLM_CONFIG_PROFILE is empty" in capsys.readouterr().err
+
+    env.write_text(env.read_text().replace("LLM_CONFIG_FILE=\n", "LLM_CONFIG_FILE=/custom.yaml\n"))
+    assert init_env.main() == 0  # a custom YAML replaces the profile
+
+
+def test_init_env_takes_llm_key_from_environment(tmp_path, env_example_path, monkeypatch):
+    """CI sets LLM_CONFIG_PROFILE and LLM_API_KEY in the environment instead of answering the prompt."""
+    init_env = _load_init_env()
+    example = tmp_path / ".env.example"
+    example.write_text(env_example_path.read_text())
+    env = tmp_path / ".env"
+    monkeypatch.setattr(init_env, "EXAMPLE", example)
+    monkeypatch.setattr(init_env, "ENV", env)
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+    monkeypatch.setenv("LLM_CONFIG_PROFILE", "anthropic")
     monkeypatch.setenv("LLM_API_KEY", "sk-from-env")
 
     assert init_env.main() == 0
-    assert init_env.values(env.read_text())["LLM_API_KEY"] == "sk-from-env"
+    written = init_env.values(env.read_text())
+    assert written["LLM_CONFIG_PROFILE"] == "anthropic"
+    assert written["LLM_API_KEY"] == "sk-from-env"
 
     # A key already in .env wins over the environment
     monkeypatch.setenv("LLM_API_KEY", "sk-other")
@@ -149,7 +176,7 @@ def test_init_env_rejects_unknown_profile(tmp_path, env_example_path, monkeypatc
     env = tmp_path / ".env"
     env.write_text(
         example.read_text()
-        .replace("LLM_CONFIG_PROFILE=registry\n", "LLM_CONFIG_PROFILE=genisis\n")
+        .replace("LLM_CONFIG_PROFILE=\n", "LLM_CONFIG_PROFILE=genisis\n")
         .replace("LLM_API_KEY=\n", "LLM_API_KEY=sk-x\n")
     )
     monkeypatch.setattr(init_env, "EXAMPLE", example)
@@ -159,20 +186,24 @@ def test_init_env_rejects_unknown_profile(tmp_path, env_example_path, monkeypatc
     assert init_env.main() == 1
     err = capsys.readouterr().err
     assert "LLM_CONFIG_PROFILE=genisis" in err
-    assert "registry" in err
+    assert "anthropic" in err
+
+    env.write_text(env.read_text().replace("LLM_CONFIG_PROFILE=genisis\n", "LLM_CONFIG_PROFILE=registry\n"))
+    assert init_env.main() == 1
+    assert "LLM_CONFIG_PROFILE=registry" in capsys.readouterr().err  # installed by the SDK, but no proxy here
 
     env.write_text(env.read_text().replace("LLM_CONFIG_FILE=\n", "LLM_CONFIG_FILE=/custom.yaml\n"))
     assert init_env.main() == 0  # a custom YAML replaces the profile
 
 
 def test_profiles_match_sdk_llm_configs():
-    """Every installed profile is offered; all but the keyless ollama read LLM_API_KEY."""
+    """Every installed profile but "registry" is offered; all but the keyless ollama read LLM_API_KEY."""
     init_env = _load_init_env()
     known = init_env.profiles()
-    assert next(iter(known)) == "registry"
-    assert sorted(known) == sorted(p.stem for p in init_env.LLM_CONFIGS.glob("*.yaml"))
-    # registry via litellm_config.yaml; EMBEDDING_API_KEY is never the profile key.
-    # Only the keyless local ollama profile (api_key: none) needs no key at all.
+    installed = {p.stem for p in init_env.LLM_CONFIGS.glob("*.yaml")}
+    assert list(known) == sorted(installed - {"registry"})
+    # EMBEDDING_API_KEY is never the profile key. Only the keyless local ollama
+    # profile (api_key: none) needs no key at all.
     keys = {name: key for name, (key, _) in known.items()}
     assert [name for name, key in keys.items() if key is None] == ["ollama"]
     for name, key in keys.items():

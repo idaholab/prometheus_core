@@ -133,7 +133,7 @@ def test_is_similar_uses_llm_gateway_and_parses_json(monkeypatch) -> None:
                 {"text": '{"similar": true, "reason": "Same outcome"}'},
             )()
 
-    config = type("Config", (), {"proxy_url": None})()
+    config = object()
     monkeypatch.setattr(
         prometheus.LLMConfig,
         "from_env",

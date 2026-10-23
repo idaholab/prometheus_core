@@ -82,7 +82,7 @@ def test_llm_agent_compose_files_receive_selectable_profiles(project_root):
         environment = next(iter(services.values()))["environment"]
 
         assert environment["REGISTRY_URL"] == "${REGISTRY_URL:-http://litellm:4000}"
-        assert environment["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:-registry}"
+        assert environment["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}"
         assert environment["LLM_CONFIG_FILE"] == "${LLM_CONFIG_FILE:-}"
         assert environment["LITELLM_MASTER_KEY"] == "${LITELLM_MASTER_KEY}"
         assert "LLM_DEFAULT_MODEL" not in environment
@@ -90,15 +90,12 @@ def test_llm_agent_compose_files_receive_selectable_profiles(project_root):
             assert environment[key] == expected
 
 
-def test_proxy_key_is_only_attached_after_config_resolution(project_root):
+def test_runtime_agents_do_not_attach_the_litellm_proxy_key(project_root):
+    """The platform has no LLM proxy, so no agent swaps its profile's key for LITELLM_MASTER_KEY."""
     violations = []
     for path in _runtime_agent_files(project_root):
         source = path.read_text(encoding="utf-8")
-        if "LLMConfig.from_env()" not in source:
-            continue
-        if "LLMConfig.from_env().with_api_key" in source:
-            violations.append(f"{path.relative_to(project_root)}: chained proxy key")
-        if "if config.proxy_url:" not in source and "if llm_config.proxy_url:" not in source:
-            violations.append(f"{path.relative_to(project_root)}: missing proxy URL guard")
+        if "with_api_key(" in source:
+            violations.append(f"{path.relative_to(project_root)}: with_api_key")
 
-    assert not violations, "Unsafe proxy-key configuration remains:\n" + "\n".join(violations)
+    assert not violations, "Proxy-key configuration remains:\n" + "\n".join(violations)

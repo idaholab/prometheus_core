@@ -17,7 +17,6 @@ Consumes outputs from data/radiation/corrosion/thermal specialists and produces
 a consolidated engineering summary for workflow final output.
 """
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -71,8 +70,6 @@ class SynthesisAgent(PrometheusAgent):
 
         try:
             llm_config = LLMConfig.from_env()
-            if llm_config.proxy_url:
-                llm_config = llm_config.with_api_key(os.getenv("LITELLM_MASTER_KEY"))
             async with self.llm_client(context, config=llm_config) as llm:
                 response = await llm.medium(
                     prompt,

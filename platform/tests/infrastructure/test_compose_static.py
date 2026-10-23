@@ -79,7 +79,7 @@ def test_client_agent_receives_selectable_llm_configuration(compose_data):
     assert "MODEL_NAME" not in common_env
 
     client_env = compose_data["services"]["client-agent"]["environment"]
-    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:-registry}"
+    assert client_env["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}"
     assert client_env["LLM_CONFIG_FILE"] == "${LLM_CONFIG_FILE:-}"
     for key in ("LLM_API_KEY", "EMBEDDING_API_KEY"):
         assert client_env[key] == f"${{{key}:-}}"
