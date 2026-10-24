@@ -13,7 +13,12 @@ This repository gives you two things:
   `docker-compose.yml`, network compose includes, `Makefile`, `.env.example`,
   `prompts/`, and `workflows/`).
 - **`setup_agent.py`** — an interactive scaffolder that copies the template into
-  a new directory with your agent's name, slug, class, and skill filled in.
+  a new directory with your agent's name, slug, class, and skill filled in, and
+  its `_execute` scaffolded to an agentic design pattern (see
+  [Design patterns](#design-patterns)).
+- **`patterns.json`**, **`patterns.py`**, **`frameworks.py`** — the design-pattern
+  catalog (9 families, 36 architectures, 9 agent frameworks), the pattern
+  suggester, and the code generators the scaffolder uses.
 - **[`TUTORIAL.md`](TUTORIAL.md)** — a step-by-step guide that explains every file
   and walks you through building, containerizing, and deploying an agent.
 
@@ -41,10 +46,14 @@ python setup_agent.py                        # prompts for everything
 python setup_agent.py "Plant Analysis" ../plant-agent   # name and output dir given
 python setup_agent.py --yes "Plant Analysis" ../plant-agent   # every other value defaulted, no prompts
 python setup_agent.py --env-only ../plant-agent         # only the .env, for an agent you cloned
+python setup_agent.py --list-patterns                   # the design-pattern catalog
+python setup_agent.py --yes --pattern corrective_rag "Doc QA" ../doc-qa             # pick the pattern
+python setup_agent.py --yes --pattern react --framework langgraph "Ops Bot" ../ops  # ...built with LangGraph
+python setup_agent.py --llm "Plant Analysis"            # let the platform's LLM suggest the pattern
 ```
 
 The script prompts for the agent name (unless given as the first argument),
-description, slug, class name, and primary skill, then writes a ready-to-edit project to the output directory you choose:
+description, slug, class name, primary skill, and design pattern, then writes a ready-to-edit project to the output directory you choose:
 
 ```
 my-agent/
@@ -121,6 +130,65 @@ See the generated `README.md` in your agent directory, and
 emitting artifacts, multi-turn input (`INPUT_REQUIRED`), multiple skills,
 agent-owned workflows, prompt templates, custom HTTP endpoints, DeepLynx
 storage, and both deployment paths (external repo vs. in-tree).
+
+## Design patterns
+
+`setup_agent.py` scaffolds `_execute` to one agentic design pattern from
+[`patterns.json`](patterns.json): 36 architectures in 9 families.
+
+| Family | Examples (`--pattern` slug) |
+|---|---|
+| Reflection & Refinement | `reflection`, `reflexion`, `chain_of_verification` |
+| Retrieval | `agentic_rag`, `corrective_rag`, `self_rag`, `graph_rag` |
+| Planning & Chaining | `planning`, `pev`, `tree_of_thoughts`, `lats` |
+| Tool Use & Actions | `tool_use`, `react`, `swe_agent`, `browser_agent` |
+| Memory | `episodic_semantic`, `graph_memory`, `memgpt`, `voyager` |
+| Routing & Governance | `dry_run`, `reflexive_metacognitive` |
+| Sampling & Search | `self_consistency`, `forward_sampling_uq`, `ensemble` |
+| Multi-Agent | `multi_agent`, `blackboard`, `debate`, `storm`, `meta_controller` |
+| Specialty | `constitutional_ai`, `rlhf_self_improvement`, `cellular_automata` |
+
+`python setup_agent.py --list-patterns` prints all of them with when to use each.
+
+Each architecture has ordered steps and a control-flow topology (`linear`,
+`loop`, `cycle`, `parallel`, `tree`). The generated agent gets:
+
+- `_run_pattern`, called from `_execute`, which walks the steps in that
+  topology (a bounded `MAX_ITERATIONS` loop, an `asyncio.gather` over
+  `NUM_SAMPLES`, ...), and one `_step_<name>` method per step with a
+  `TODO(author)`. Every step returns `None` until you implement it, so the new
+  agent runs, lints, and passes its tests from the start.
+- A "Design pattern" section in its `README.md` with the steps and a Mermaid
+  diagram.
+
+**Choosing the pattern.** The scaffolder suggests one from the agent
+description with an offline keyword score, and you accept it or pick another.
+`--pattern <slug>` sets it directly. `--llm` asks the platform's LLM instead,
+through `prometheus_api.llm_client.LLMClient` configured from the environment
+(`LLM_CONFIG_PROFILE` / `LLM_API_KEY`); any failure falls back to the keyword
+suggestion. `--yes` takes the suggestion without prompting.
+
+**Framework variants.** `--framework <slug>` (`langgraph`, `pydantic_ai`,
+`crewai`, `smolagents`, `ag2`, `strands`, `openai_agents`, `google_adk`,
+`claude_agent_sdk`) also writes `pattern_<framework>.py`, which builds the
+same steps with that framework's own primitives (for example a LangGraph
+`StateGraph` with the loop as a conditional edge). `agent.py` keeps its
+`PrometheusAgent`; `_run_pattern` calls the module's `run_framework` through
+`asyncio.to_thread`, so A2A, auth, and registration stay with the platform.
+The framework's package is added to the agent's `pyproject.toml`. The default,
+`native`, uses no framework.
+
+**In the template itself**, `agent_template/agent.py` keeps a working default
+(the Tool Use pattern) between `# >>> design pattern` and `# <<< design pattern`
+markers, so the unscaffolded template still runs and lints; the scaffolder
+replaces that block.
+
+The taxonomy follows the public literature on agentic design patterns,
+including DeepLearning.AI's *Agentic Design Patterns* series and the
+MIT-licensed [all-agentic-architectures](https://github.com/FareedKhan-dev/all-agentic-architectures)
+collection; each catalog entry links its reference. Pattern names are the
+field-standard ones; descriptions, steps, and generated code are our own, and
+no third-party code or prose is included.
 
 ## Repository development
 
