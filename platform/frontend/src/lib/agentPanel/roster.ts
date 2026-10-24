@@ -46,6 +46,7 @@ const KNOWN_AGENTS: Record<AgentId, AgentDef> = {
   [PLANNER]: { name: "Planner", role: "client-agent", color: "#6aa9ff" },
   forward_sampling_uq: { name: "UQ agent", role: "forward_sampling_uq", color: "#ff6b8a" },
   [RUNNER]: { name: "okflow runner", role: "HPC pipelines", color: "#b388ff" },
+  "okflow-config-agent": { name: "okflow config", role: "pipeline config", color: "#7CFC00" },
 };
 
 /** "okflow-config-agent" -> "okflow config"; a skill id is shown as-is. */
