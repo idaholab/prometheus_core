@@ -11,13 +11,14 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { Bot, Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
+import { LiveAgentPanel } from "../LiveAgentPanel";
 
-type StatusTab = "jobs" | "artifacts";
+type StatusTab = "agents" | "jobs" | "artifacts";
 
 /** Every artifact in the open conversation's transcript, newest last, deduped
  * by id. A resumed conversation gives each assistant turn the artifacts it
@@ -111,9 +112,9 @@ interface StatusPanelProps {
 }
 
 /**
- * Right-hand status rail for Home: a DaisyUI tab bar switching between Active
- * Jobs and Artifacts. Artifacts are live off the conversation transcript; job
- * cards get wired in as that data source lands.
+ * Right-hand status rail for Home: a DaisyUI tab bar switching between the live
+ * Agents view (default), Active Jobs and Artifacts. Agents and Artifacts are live
+ * off the conversation transcript; job cards get wired in as that data source lands.
  *
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
@@ -121,7 +122,7 @@ interface StatusPanelProps {
  * on Home's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
-  const [tab, setTab] = useState<StatusTab>("jobs");
+  const [tab, setTab] = useState<StatusTab>("agents");
   const artifacts = useConversationArtifacts();
 
   if (collapsed) {
@@ -135,6 +136,9 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           <PanelRight size={16} />
         </RailButton>
         <div className="h-2" aria-hidden />
+        <RailButton active={tab === "agents"} label="Agents" onClick={() => openTo("agents")}>
+          <Bot size={20} />
+        </RailButton>
         <RailButton active={tab === "jobs"} label="Active Jobs" onClick={() => openTo("jobs")}>
           <Cpu size={20} />
         </RailButton>
@@ -155,6 +159,13 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         <div role="tablist" className="tabs tabs-border">
           <button
             role="tab"
+            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "agents" ? "tab-active" : ""}`}
+            onClick={() => setTab("agents")}
+          >
+            Agents
+          </button>
+          <button
+            role="tab"
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "jobs" ? "tab-active" : ""}`}
             onClick={() => setTab("jobs")}
           >
@@ -173,7 +184,9 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         </RailButton>
       </div>
 
-      {tab === "jobs" ? (
+      {tab === "agents" ? (
+        <LiveAgentPanel />
+      ) : tab === "jobs" ? (
         <EmptyState
           icon={<Cpu size={32} />}
           title="No Active Jobs"
