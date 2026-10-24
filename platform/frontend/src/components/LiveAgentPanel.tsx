@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * LiveAgentPanel — the live agent rail shown in the status panel's Agents tab.
+ * LiveAgentPanel — the live agent rail shown in the status panel's Live Agents Arena tab.
  *
  * Reads the in-flight turn's verbatim status log from the chat store (no second SSE
  * connection) and renders it as a vertical column of agents that appear as each status

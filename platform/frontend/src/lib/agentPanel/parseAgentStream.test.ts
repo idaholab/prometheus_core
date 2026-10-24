@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import { parseAgentStream } from "./parseAgentStream.ts";
+import { RUNNER, agentDef } from "./roster.ts";
 
 /**
  * Verbatim status streams captured from the tool-calling loop (orchestrator/agent_loop.py,
@@ -173,4 +174,47 @@ test("a second skill in the same turn re-lights the panel after the first comple
   assert.equal(s.active, "synthesize_material_analysis");
   assert.equal(s.status.forward_sampling_uq.outcome, "done");
   assert.equal(s.complete, false);
+});
+
+test("a peer agent a specialist calls joins the stage, with no roster change", () => {
+  const s = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] Requesting baseline pipeline config from okflow-config-agent (base_branch='x')...",
+  ]);
+  assert.ok(s.revealed.includes("okflow-config-agent"));
+  assert.equal(s.active, "okflow-config-agent");
+  assert.deepEqual(s.edge, { from: "forward_sampling_uq", to: "okflow-config-agent", dir: "down", label: "A2A" });
+  assert.equal(s.status["okflow-config-agent"].outcome, "working");
+});
+
+test("the peer is done once the specialist moves on, and failures are kept", () => {
+  const done = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] Requesting baseline pipeline config from okflow-config-agent ...",
+    "[forward_sampling_uq] Running okflow neutronics (4 cases)",
+  ]);
+  assert.equal(done.status["okflow-config-agent"].outcome, "done");
+
+  const failed = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] could not reach brand-new-agent for skill 'x' at http://...: 404",
+  ]);
+  assert.ok(failed.revealed.includes("brand-new-agent"));
+  assert.equal(failed.status["brand-new-agent"].outcome, "failed");
+});
+
+test("the okflow runner named in a line keeps its pipeline-runner identity", () => {
+  const s = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] could not reach okflow runner 'okflow-runner-agent' for skill 'start_pipeline'",
+  ]);
+  assert.ok(s.revealed.includes(RUNNER));
+  assert.ok(!s.revealed.includes("okflow-runner-agent"));
+});
+
+test("an unknown agent gets a readable name and a stable color of its own", () => {
+  const a = agentDef("okflow-config-agent");
+  assert.equal(a.name, "okflow config");
+  assert.equal(a.color, agentDef("okflow-config-agent").color);
+  assert.notEqual(a.color, agentDef("rom-builder-agent").color);
 });

@@ -113,8 +113,8 @@ interface StatusPanelProps {
 }
 
 /**
- * Right-hand status rail for Home: a DaisyUI tab bar switching between the live
- * Agents view (default), Active Jobs and Artifacts. Agents and Artifacts are live
+ * Right-hand status rail for Home: a DaisyUI tab bar switching between the Live
+ * Agents Arena (default), Active Jobs and Artifacts. Agents and Artifacts are live
  * off the conversation transcript; Active Jobs polls the backend's Task Graph.
  *
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
@@ -137,7 +137,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           <PanelRight size={16} />
         </RailButton>
         <div className="h-2" aria-hidden />
-        <RailButton active={tab === "agents"} label="Agents" onClick={() => openTo("agents")}>
+        <RailButton active={tab === "agents"} label="Live Agents Arena" onClick={() => openTo("agents")}>
           <Bot size={20} />
         </RailButton>
         <RailButton active={tab === "jobs"} label="Active Jobs" onClick={() => openTo("jobs")}>
@@ -163,7 +163,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "agents" ? "tab-active" : ""}`}
             onClick={() => setTab("agents")}
           >
-            Agents
+            Live Agents Arena
           </button>
           <button
             role="tab"

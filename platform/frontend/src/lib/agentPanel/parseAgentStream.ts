@@ -24,6 +24,8 @@
  *   - `[<skill>] <progress>`                               -> <skill> is working
  *   - `[<skill>] Pipeline <id>: <state>`                   -> reveal the okflow runner, track <id>
  *   - `[<skill>] Running okflow ...: <i>/<n> cases complete` -> runner loop badge xN, i done
+ *   - `[<skill>] ... <name>-agent ...`                     -> reveal that peer, skill -> peer
+ *                                                             (any agent a specialist calls)
  *   - `'<skill>' completed.`                               -> <skill> done, report docks
  *   - `'<skill>' failed: <error>` / `Capability '<skill>' is currently unavailable.`
  *                                                          -> <skill> failed (red), error kept
@@ -113,6 +115,25 @@ const RE_UNREACHABLE =
   /could not be reached|unreachable|connect(ion)? (refused|error|failed)|ConnectError|ConnectTimeout|Network communication error|Name or service not known|nodename nor servname|currently unavailable/i;
 const PIPELINE_DONE = new Set(["success", "failed", "canceled", "skipped"]);
 
+/**
+ * A specialist reporting that it is talking to another agent. Any agent may call
+ * others (an A2A sub-call), and the orchestrator never sees those calls, so they are
+ * found in the specialist's own progress lines by the agent's name. Agent names are
+ * kebab-case and end in "-agent" (the A2A registry convention: "okflow-config-agent",
+ * "rom-builder-agent"), so a new peer shows up with no change here.
+ */
+const RE_PEER_NAME = /\b([a-z][a-z0-9]*(?:-[a-z0-9]+)*-agent)\b/i;
+/** "could not reach <peer>" or similar: the call itself failed. */
+const RE_PEER_FAILED = /could not reach|unreachable|did not complete|returned an error|rejected request/i;
+/** Wording that says the peer finished and handed something back. */
+const RE_PEER_DONE = /\b(built|returned|delivered|done|completed?|validated)\b/i;
+
+/** The roster id for a named peer agent: the okflow runner keeps its pipeline id. */
+function peerId(name: string): AgentId {
+  const id = name.toLowerCase();
+  return id === "okflow-runner-agent" ? RUNNER : id;
+}
+
 export function parseAgentStream(history: string[]): PanelState {
   const revealed: AgentId[] = [];
   const status: Record<AgentId, AgentStatus> = {};
@@ -154,6 +175,12 @@ export function parseAgentStream(history: string[]): PanelState {
       const [, skill, text] = m;
       reveal(skill);
       status[skill] ??= { outcome: "working" };
+      // This skill called a peer that is still working, and now reports something
+      // that does not name that peer: the peer has answered.
+      const pending: AgentId | null = edge && edge.from === skill && edge.dir === "down" ? edge.to : null;
+      if (pending && pending !== RUNNER && status[pending]?.outcome === "working" && !text.includes(pending)) {
+        status[pending] = { outcome: "done" };
+      }
       let p: RegExpMatchArray | null;
       if ((p = text.match(RE_PIPELINE))) {
         reveal(RUNNER);
@@ -184,6 +211,23 @@ export function parseAgentStream(history: string[]): PanelState {
         loop.n = Math.max(loop.n, Number(p[1]) || 0);
         active = RUNNER;
         edge = { from: skill, to: RUNNER, dir: "down", label: "pipelines" };
+      } else if ((p = text.match(RE_PEER_NAME)) && peerId(p[1]) !== skill) {
+        // The specialist is calling another agent (an A2A sub-call).
+        const peer = peerId(p[1]);
+        reveal(peer);
+        if (RE_PEER_FAILED.test(text)) {
+          status[peer] = { outcome: "failed", error: text, unreachable: RE_UNREACHABLE.test(text) };
+          active = skill;
+          edge = null;
+        } else if (RE_PEER_DONE.test(text)) {
+          status[peer] = { outcome: "done" };
+          active = skill;
+          edge = { from: peer, to: skill, dir: "up", label: "result" };
+        } else {
+          status[peer] = { outcome: "working" };
+          active = peer;
+          edge = { from: skill, to: peer, dir: "down", label: "A2A" };
+        }
       } else {
         active = skill;
         if (!edge || (edge.to !== skill && edge.from !== skill)) {

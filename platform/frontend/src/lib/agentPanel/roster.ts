@@ -48,6 +48,11 @@ const KNOWN_AGENTS: Record<AgentId, AgentDef> = {
   [RUNNER]: { name: "okflow runner", role: "HPC pipelines", color: "#b388ff" },
 };
 
+/** "okflow-config-agent" -> "okflow config"; a skill id is shown as-is. */
+function friendlyName(id: AgentId): string {
+  return id.endsWith("-agent") ? id.slice(0, -"-agent".length).replace(/-/g, " ") : id;
+}
+
 /** Stable hue per skill id, so an unknown agent keeps its color across turns. */
 function colorFor(id: string): string {
   let h = 0;
@@ -57,6 +62,7 @@ function colorFor(id: string): string {
   return `hsl(${hue} 70% 64%)`;
 }
 
+/** Any agent not listed above gets a readable name and its own stable color. */
 export function agentDef(id: AgentId): AgentDef {
-  return KNOWN_AGENTS[id] ?? { name: id, role: id, color: colorFor(id) };
+  return KNOWN_AGENTS[id] ?? { name: friendlyName(id), role: id, color: colorFor(id) };
 }
