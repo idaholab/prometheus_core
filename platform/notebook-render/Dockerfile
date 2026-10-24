@@ -8,8 +8,10 @@
 # report as-is (no live kernel, never blanks) plus the extracted uq_result JSON,
 # and (b) proxies a dormant /rerun to the UQ agent, injecting the Bearer
 # server-side so no secret ever reaches the browser or the downloadable
-# notebook. Plain python:slim keeps the image small and portable for HPC.
-FROM python:3.12-slim
+# notebook. A slim Python image keeps it small and portable for HPC.
+# Pinned like the backend and SDK images (python 3.12, Debian trixie; pip and
+# apt work as on python:slim).
+FROM ghcr.io/astral-sh/uv:0.13.6-python3.12-trixie-slim@sha256:bf889bda77474aa50c351caf1538b855ef2b7a30add45f26ca50dcb6ade06402
 
 # Build args for INL hosts (mirrors the platform's build-arg convention).
 # PROMETHEUS_API_BASE_IMAGE_HASH is passed by the shared compose anchor but
@@ -29,7 +31,7 @@ WORKDIR /app
 
 # Trust the corporate TLS-proxy CA before any TLS fetch, mirroring the
 # frontend/backend Dockerfiles. The bundle is supplied by the `certs` build
-# context (additional_contexts: { certs: ./certs } in docker-compose.yml).
+# context (additional_contexts: { certs: ../common/certs } in docker-compose.yml).
 # Without this, pip's TLS handshake to pypi.org fails behind the INL proxy
 # (CERTIFICATE_VERIFY_FAILED / unable to get local issuer certificate).
 # Takes every *.pem / *.crt in certs/ (the frontend Dockerfile's convention), so it

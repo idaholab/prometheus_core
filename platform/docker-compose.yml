@@ -65,6 +65,10 @@ volumes:
   # convenience: without a volume it lands in the container's /tmp and every
   # backend restart silently re-converts every mesh a user reopens.
   mesh-cache:
+  # The UQ agent's generated notebooks (.ipynb + baked .html), served read-only by
+  # notebook-render. A UQ agent on the platform network mounts this same volume
+  # (external name: <project>_uq-notebooks) as its artifact directory.
+  uq-notebooks:
 
 services:
 
@@ -235,7 +239,7 @@ services:
       args:
         <<: *prometheus-api-build-args
       additional_contexts:
-        certs: ./certs
+        certs: ../common/certs
     container_name: notebook-render
     ports:
       - "${NOTEBOOK_RENDER_PORT:-8876}:8000"
@@ -243,7 +247,7 @@ services:
       - agent-network
     environment:
       <<: *common-env
-      # NOTEBOOK_DIR points at the mounted UQ-agent artifacts dir (below), where
+      # NOTEBOOK_DIR points at the shared uq-notebooks volume (below), where
       # the agent writes uq_{model}_{timestamp}.{ipynb,html}. proxy.py resolves an
       # artifact_id to the real filename via the Valkey registry (REDIS_URL/
       # REDIS_PASSWORD come from *common-env), then serves that file from here.
@@ -252,10 +256,10 @@ services:
       CLIENT_AGENT_URL: ${CLIENT_AGENT_URL:-http://client-agent:8000}
       RERUN_ROUTE: ${RERUN_ROUTE:-direct}
     volumes:
-      # The UQ agent (a host process in hybrid dev, or a container in a full
-      # stack) writes its generated notebooks + baked HTML here. Read-only: this
-      # service only serves them. Override UQ_ARTIFACTS_DIR for other layouts.
-      - ${UQ_ARTIFACTS_DIR:-../../multiphysics-uq-agent/artifacts}:/app/uq-artifacts:ro
+      # The UQ agent writes its generated notebooks + baked HTML into this named
+      # volume; this service only reads them. Named, not a host path, so the
+      # stack deploys without provisioning a directory outside the repository.
+      - uq-notebooks:/app/uq-artifacts:ro
     restart: unless-stopped
 
   frontend-dev:
