@@ -17,6 +17,7 @@ import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
 import { LiveAgentPanel } from "../LiveAgentPanel";
+import { ActiveJobsPanel } from "./ActiveJobsPanel";
 
 type StatusTab = "agents" | "jobs" | "artifacts";
 
@@ -114,7 +115,7 @@ interface StatusPanelProps {
 /**
  * Right-hand status rail for Home: a DaisyUI tab bar switching between the live
  * Agents view (default), Active Jobs and Artifacts. Agents and Artifacts are live
- * off the conversation transcript; job cards get wired in as that data source lands.
+ * off the conversation transcript; Active Jobs polls the backend's Task Graph.
  *
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
@@ -187,11 +188,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
       {tab === "agents" ? (
         <LiveAgentPanel />
       ) : tab === "jobs" ? (
-        <EmptyState
-          icon={<Cpu size={32} />}
-          title="No Active Jobs"
-          hint="Assigned solver pipelines will display here"
-        />
+        <ActiveJobsPanel />
       ) : artifacts.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={32} />}

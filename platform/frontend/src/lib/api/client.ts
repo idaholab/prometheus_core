@@ -30,6 +30,7 @@ import type {
   ConversationHistoryResponse,
   ConversationResumeRequest,
   ConversationSummary,
+  ConversationTasksResponse,
   CreateSessionRequest,
   OidcProvider,
   OidcProviderCreate,
@@ -162,6 +163,12 @@ export const api = {
   /** Read a conversation's transcript without rebinding the session. */
   getConversation(conversationId: string): Promise<ConversationDetailResponse> {
     return request<ConversationDetailResponse>(`/conversations/${encodeURIComponent(conversationId)}`);
+  },
+
+  /** GET /api/conversations/{id}/tasks — the conversation's background-task tree
+   * (one root per chat turn, its specialist dispatches as children), newest first. */
+  getConversationTasks(conversationId: string): Promise<ConversationTasksResponse> {
+    return request<ConversationTasksResponse>(`/conversations/${encodeURIComponent(conversationId)}/tasks`);
   },
 
   /** Rebind the session to a past conversation; the next chat turn continues it. */
