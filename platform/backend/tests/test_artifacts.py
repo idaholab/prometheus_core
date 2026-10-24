@@ -434,3 +434,20 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     # quote + newline stripped from the ascii name (.json appended for the inline body)
     assert 'filename="evilname.json"' in cd
     assert "filename*=UTF-8''" in cd  # RFC 5987 form carries the exact name
+
+
+def test_to_artifact_meta_merges_metadata_tags():
+    """Tags that crossed the A2A hop only in metadata still reach the frontend."""
+    meta = to_artifact_meta(
+        {
+            "artifact_id": "m1",
+            "name": "mesh.bin",
+            "mime_type": "application/octet-stream",
+            "tags": ["draft"],
+            "metadata": {"tags": ["exodus", "draft"]},
+        }
+    )
+    assert meta is not None
+    assert meta.tags == ["draft", "exodus"]
+    # A routing tag that only arrived in metadata still picks the viewer.
+    assert meta.render_hint == "mesh"
