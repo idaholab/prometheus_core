@@ -20,11 +20,19 @@
 import type { TaskNode } from "../api/types.ts";
 
 /** A task that has not reached a terminal state. */
-export const RUNNING_STATES = new Set(["submitted", "working", "input-required"]);
+export const RUNNING_STATES = new Set([
+  "submitted",
+  "working",
+  "input-required",
+]);
 
 export interface JobLink {
   label: string;
   url: string;
+  /** GitLab pipeline id, when the URL is a pipeline page. */
+  pipelineId?: string;
+  /** Latest state reported for that pipeline ("running", "failed", ...), if any. */
+  state?: string;
 }
 
 export interface JobRow {
@@ -44,6 +52,15 @@ export interface JobRow {
 
 const URL_RE = /https?:\/\/[^\s"'<>)\]]+/g;
 const PIPELINE_RE = /\/-\/pipelines\/(\d+)/;
+const PIPELINE_STATE_RE = /Pipeline (\d+):\s*([a-z_]+)\s*$/gim;
+
+/** Latest reported state per pipeline id, from "Pipeline <id>: <state>" status lines. */
+export function pipelineStates(text: string): Map<string, string> {
+  const states = new Map<string, string>();
+  for (const m of text.matchAll(PIPELINE_STATE_RE))
+    states.set(m[1], m[2].toLowerCase());
+  return states;
+}
 
 /** Every URL in `text`, labelled ("GitLab pipeline 123" for GitLab pipeline URLs), deduped. */
 export function extractLinks(text: string | null | undefined): JobLink[] {
@@ -54,7 +71,15 @@ export function extractLinks(text: string | null | undefined): JobLink[] {
     if (seen.has(url)) continue;
     seen.add(url);
     const pipeline = PIPELINE_RE.exec(url);
-    links.push({ label: pipeline ? `GitLab pipeline ${pipeline[1]}` : url, url });
+    links.push(
+      pipeline
+        ? {
+            label: `GitLab pipeline ${pipeline[1]}`,
+            url,
+            pipelineId: pipeline[1],
+          }
+        : { label: url, url },
+    );
   }
   return links;
 }
@@ -66,13 +91,30 @@ export function extractLinks(text: string | null | undefined): JobLink[] {
  * Task Graph keeps only the latest), so a link reported early, such as a pipeline
  * URL at start, stays visible after later progress messages replace it.
  */
-export function toJobRows(tasks: TaskNode[], history: Map<string, string[]> = new Map()): JobRow[] {
+export function toJobRows(
+  tasks: TaskNode[],
+  history: Map<string, string[]> = new Map(),
+): JobRow[] {
   const rows: JobRow[] = [];
   const visit = (node: TaskNode, turnTitle: string, depth: number) => {
     const children = node.children ?? [];
     if (depth > 0 || children.length === 0) {
-      const seen = [...(history.get(node.task_id) ?? []), node.last_status_message ?? ""];
-      const links = extractLinks(seen.join("\n"));
+      const seen = [
+        ...(history.get(node.task_id) ?? []),
+        node.last_status_message ?? "",
+      ];
+      const text = seen.join("\n");
+      const states = pipelineStates(text);
+      // Failed pipelines first: the one to open is usually the one that broke.
+      const links = extractLinks(text)
+        .map((link) =>
+          link.pipelineId && states.has(link.pipelineId)
+            ? { ...link, state: states.get(link.pipelineId) }
+            : link,
+        )
+        .sort(
+          (a, b) => Number(b.state === "failed") - Number(a.state === "failed"),
+        );
       rows.push({
         taskId: node.task_id,
         name: node.skill || node.title || "task",
@@ -93,12 +135,16 @@ export function toJobRows(tasks: TaskNode[], history: Map<string, string[]> = ne
 }
 
 /** Fold the latest status message of every task into `history` (mutates and returns it). */
-export function recordStatusHistory(tasks: TaskNode[], history: Map<string, string[]>): Map<string, string[]> {
+export function recordStatusHistory(
+  tasks: TaskNode[],
+  history: Map<string, string[]>,
+): Map<string, string[]> {
   const walk = (node: TaskNode) => {
     const msg = node.last_status_message;
     if (msg) {
       const seen = history.get(node.task_id) ?? [];
-      if (seen[seen.length - 1] !== msg) history.set(node.task_id, [...seen, msg].slice(-50));
+      if (seen[seen.length - 1] !== msg)
+        history.set(node.task_id, [...seen, msg].slice(-500));
     }
     for (const child of node.children ?? []) walk(child);
   };

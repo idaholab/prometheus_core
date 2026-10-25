@@ -45,7 +45,11 @@ test("extractLinks labels GitLab pipelines and dedupes", () => {
       "again https://gitlab.example/group/project/-/pipelines/4242 and https://docs.example/x",
   );
   assert.deepEqual(links, [
-    { label: "GitLab pipeline 4242", url: "https://gitlab.example/group/project/-/pipelines/4242" },
+    {
+      label: "GitLab pipeline 4242",
+      url: "https://gitlab.example/group/project/-/pipelines/4242",
+      pipelineId: "4242",
+    },
     { label: "https://docs.example/x", url: "https://docs.example/x" },
   ]);
   assert.deepEqual(extractLinks(null), []);
@@ -88,4 +92,26 @@ test("recordStatusHistory appends only new messages", () => {
   tree[0].last_status_message = "b";
   recordStatusHistory(tree, history);
   assert.deepEqual(history.get("t"), ["a", "b"]);
+});
+
+test("toJobRows tags pipeline links with their state, failed first", () => {
+  const tree = [node({ task_id: "uq", title: "UQ", last_status_message: "Pipeline 8: failed" })];
+  const history = new Map([
+    [
+      "uq",
+      [
+        "Pipeline 7 started: https://gl.example/g/p/-/pipelines/7",
+        "Pipeline 8 started: https://gl.example/g/p/-/pipelines/8",
+        "Pipeline 7: success",
+      ],
+    ],
+  ]);
+  const [row] = toJobRows(tree, history);
+  assert.deepEqual(
+    row.links.map((l) => [l.pipelineId, l.state]),
+    [
+      ["8", "failed"],
+      ["7", "success"],
+    ],
+  );
 });
