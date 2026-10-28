@@ -296,17 +296,25 @@ function applyResponse(res: ChatMessageResponse): void {
     }
     case "backgrounded": {
       if (res.task_id) awaitedTaskIds.add(res.task_id);
-      setItems((items) => [
-        ...items,
-        {
-          id: nextId("tool"),
-          kind: "tool",
-          taskId: res.task_id ?? undefined,
-          name: res.message ?? "Running in the background…",
-          history: [],
-          done: false,
-        },
-      ]);
+      // The detached task continues this turn: carry the turn's status log into
+      // its progress step, so the trace (and the Live Agents Arena, which reads
+      // it) keeps the agents already seen instead of starting from nothing.
+      setItems((items) => {
+        const prior = items.find(
+          (it): it is ToolItem => it.kind === "tool" && it.turnId === res.turn_id,
+        );
+        return [
+          ...items,
+          {
+            id: nextId("tool"),
+            kind: "tool",
+            taskId: res.task_id ?? undefined,
+            name: res.message ?? "Running in the background…",
+            history: prior ? [...prior.history] : [],
+            done: false,
+          },
+        ];
+      });
       break;
     }
     case "error": {

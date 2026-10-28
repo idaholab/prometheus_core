@@ -105,7 +105,12 @@ const RE_PROGRESS = /^\[([^\]]+)\]\s+(.*)$/;
 const RE_COMPLETED = /^'([^']+)' completed\.$/;
 const RE_FAILED = /^'([^']+)' failed:\s*(.*)$/;
 const RE_UNAVAILABLE = /^Capability '([^']+)' is currently unavailable\.$/;
-const RE_PIPELINE = /^Pipeline (\d+):\s*([a-z_]+)/i;
+const RE_PIPELINE = /^(?:Sample \d+:\s*)?Pipeline (\d+)(?::\s*([a-z_]+)| (started|resumed))/i;
+/** The UQ agent's one-line roll-up of its pipelines: "Pipelines (k/N): 3 running, 1 success". */
+const RE_PIPELINE_TALLY = /^Pipelines \((\d+)\/(\d+)\):\s*(.*)$/i;
+/** A backgrounded turn's progress line names the deepest running dispatch:
+ * "waiting on <skill> — <its latest status>". */
+const RE_WAITING_ON = /^waiting on (\S+?)(?:\s+[—-]\s+(.*))?$/;
 const RE_OKFLOW_PROGRESS = /^Running okflow\b.*?(\d+)\s*\/\s*(\d+)\s+cases?\b/i;
 const RE_OKFLOW_TOTAL = /^Running okflow\b.*?\((\d+)\s+cases?\)/i;
 const RE_TURN_DONE =
@@ -157,7 +162,11 @@ export function parseAgentStream(history: string[]): PanelState {
   const lines = (history ?? []).filter((l) => typeof l === "string" && l.trim().length > 0);
   if (lines.length > 0) reveal(PLANNER);
 
-  for (const raw of lines) {
+  for (const raw0 of lines) {
+    // A backgrounded turn reports "waiting on <skill> — <msg>": read it as that
+    // skill's own progress line so the same rules below apply.
+    const w = raw0.trim().match(RE_WAITING_ON);
+    const raw = w ? (w[2] ? `[${w[1]}] ${w[2]}` : `[${w[1]}] working`) : raw0;
     const line = raw.trim();
     let m: RegExpMatchArray | null;
 
@@ -185,10 +194,21 @@ export function parseAgentStream(history: string[]): PanelState {
       if ((p = text.match(RE_PIPELINE))) {
         reveal(RUNNER);
         status[RUNNER] = { outcome: "working" };
-        pipelines.set(p[1], p[2].toLowerCase());
+        pipelines.set(p[1], (p[2] ?? "created").toLowerCase());
         const loop = runnerLoop();
         loop.n = Math.max(loop.n, pipelines.size);
         active = RUNNER;
+        edge = { from: skill, to: RUNNER, dir: "down", label: "pipelines" };
+      } else if ((p = text.match(RE_PIPELINE_TALLY))) {
+        reveal(RUNNER);
+        const loop = runnerLoop();
+        loop.n = Math.max(loop.n, Number(p[2]) || 0);
+        const finished = [...p[3].matchAll(/(\d+)\s+(success|failed|canceled|skipped)/gi)]
+          .reduce((n, x) => n + Number(x[1]), 0);
+        loop.completed = Math.max(loop.completed, finished);
+        loop.done = loop.n > 0 && loop.completed >= loop.n;
+        status[RUNNER] = { outcome: loop.done ? "done" : "working" };
+        active = loop.done ? skill : RUNNER;
         edge = { from: skill, to: RUNNER, dir: "down", label: "pipelines" };
       } else if ((p = text.match(RE_OKFLOW_PROGRESS))) {
         reveal(RUNNER);

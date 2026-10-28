@@ -218,3 +218,25 @@ test("an unknown agent gets a readable name and a stable color of its own", () =
   assert.equal(a.color, agentDef("okflow-config-agent").color);
   assert.notEqual(a.color, agentDef("rom-builder-agent").color);
 });
+
+test("a backgrounded turn's 'waiting on <skill> — msg' lines keep the specialist, peers and runner", () => {
+  const s = parseAgentStream([
+    "Next step: 'forward_sampling_uq'.",
+    "waiting on forward_sampling_uq — Requesting baseline pipeline config from okflow-config-agent...",
+    "waiting on forward_sampling_uq — Sample 3: Pipeline 7 started: https://gl.example/g/p/-/pipelines/7",
+    "waiting on forward_sampling_uq — Pipelines (2/2): 1 running, 1 success",
+  ]);
+  assert.ok(s.revealed.includes("forward_sampling_uq"));
+  assert.ok(s.revealed.includes("okflow-config-agent"));
+  assert.ok(s.revealed.includes(RUNNER));
+  assert.equal(s.loops[RUNNER].n, 2);
+  assert.equal(s.loops[RUNNER].completed, 1);
+});
+
+test("the pipeline tally completes the runner loop when every pipeline is finished", () => {
+  const s = parseAgentStream([
+    "[forward_sampling_uq] Pipelines (3/3): 2 success, 1 failed",
+  ]);
+  assert.equal(s.loops[RUNNER].done, true);
+  assert.equal(s.status[RUNNER].outcome, "done");
+});
