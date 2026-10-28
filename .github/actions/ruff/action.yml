@@ -1,0 +1,33 @@
+name: Ruff
+description: Lint and format-check one project with its locked ruff version
+inputs:
+  directory:
+    description: The project's directory, relative to the repo root
+    required: true
+  uv-project:
+    description: The uv project with the locked ruff, relative to the directory
+    required: false
+    default: "."
+runs:
+  using: composite
+  steps:
+    - name: Sync environment
+      # Only the dev group, for the project's locked ruff version
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        UV_PROJECT: ${{ inputs.uv-project }}
+      run: uv sync --frozen --only-dev --no-install-package prometheus-api
+    - name: Check
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        UV_PROJECT: ${{ inputs.uv-project }}
+      run: uv run --frozen --no-sync ruff check --output-format=github .
+    - name: Format
+      if: ${{ !cancelled() }}
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        UV_PROJECT: ${{ inputs.uv-project }}
+      run: uv run --frozen --no-sync ruff format --check --diff .

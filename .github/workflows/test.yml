@@ -43,27 +43,12 @@ jobs:
           fi
           gitleaks git --redact --no-banner --log-opts="$BASE_SHA..$HEAD_SHA" .
 
-  ruff:
-    name: "ruff ${{ matrix.project }}"
+  # The jobs below that run several checks give each check an id and
+  # continue-on-error, so that every check runs. The Result step then reports
+  # each one and fails the job if any of them failed
+  lint:
+    name: "lint"
     runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        project:
-          - sdk
-          - platform/backend
-          - platform/tests
-          - platform/scripts
-          - agent-template
-        include:
-          # Not a uv project; linted with platform/tests' locked ruff
-          - project: platform/scripts
-            uv-project: ../tests
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
-    env:
-      UV_PROJECT: ${{ matrix.uv-project || '.' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,23 +57,47 @@ jobs:
         with:
           version: "0.11.25"
           python-version: "3.12"
-      - name: Sync environment
-        # Only the dev group, for each project's locked ruff version
-        run: uv sync --frozen --only-dev --no-install-package prometheus-api
-      - name: Check
-        run: uv run --frozen --no-sync ruff check --output-format=github .
-      - name: Format
-        if: ${{ !cancelled() }}
-        run: uv run --frozen --no-sync ruff format --check --diff .
-
-  markings:
-    name: "markings"
-    runs-on: ubuntu-26.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check
+      - name: Markings
+        id: markings
+        continue-on-error: true
         run: python3 platform/scripts/add_markings.py --check
+      - name: Ruff sdk
+        id: ruff-sdk
+        continue-on-error: true
+        uses: ./.github/actions/ruff
+        with:
+          directory: sdk
+      - name: Ruff platform/backend
+        id: ruff-platform-backend
+        continue-on-error: true
+        uses: ./.github/actions/ruff
+        with:
+          directory: platform/backend
+      - name: Ruff platform/tests
+        id: ruff-platform-tests
+        continue-on-error: true
+        uses: ./.github/actions/ruff
+        with:
+          directory: platform/tests
+      - name: Ruff platform/scripts
+        id: ruff-platform-scripts
+        continue-on-error: true
+        uses: ./.github/actions/ruff
+        with:
+          directory: platform/scripts
+          # Not a uv project; linted with platform/tests' locked ruff
+          uv-project: ../tests
+      - name: Ruff agent-template
+        id: ruff-agent-template
+        continue-on-error: true
+        uses: ./.github/actions/ruff
+        with:
+          directory: agent-template
+      - name: Result
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/check-steps
+        with:
+          steps: ${{ toJSON(steps) }}
 
   k3d-cluster:
     name: "k3d: cluster targets"
@@ -157,13 +166,10 @@ jobs:
           kubectl --context k3d-prometheus get nodes,pods -A -o wide || true
           kubectl --context k3d-prometheus describe pod smoke || true
 
-  hackathon-slides:
-    name: "hackathon: slides"
+  docs:
+    name: "docs"
     needs: gitleaks
     runs-on: ubuntu-26.04
-    defaults:
-      run:
-        working-directory: hackathon/slides
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -172,41 +178,34 @@ jobs:
         with:
           version: "0.11.25"
           python-version: "3.12"
-      - name: Build
-        run: make build
-      - name: Check generated decks are up to date
+      - name: Hackathon slides
+        id: hackathon-slides
+        continue-on-error: true
+        working-directory: hackathon/slides
         run: |
+          make build
           if [ -n "$(git status --porcelain .)" ]; then
             git status --short .
             git --no-pager diff --stat .
             echo "::error::The generated slides are out of date. Run 'make build' in hackathon/slides and commit the result."
             exit 1
           fi
-
-  platform-docs:
-    name: "platform: docs"
-    needs: gitleaks
-    runs-on: ubuntu-26.04
-    defaults:
-      run:
+      - name: Platform docs
+        id: platform-docs
+        continue-on-error: true
         working-directory: platform/docs
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          version: "0.11.25"
-          python-version: "3.12"
-      - name: Build
-        run: uv run --frozen zensical build --clean
-      - name: Check for hackathon collision
-        # The pages workflow serves the hackathon slides from /hackathon/
         run: |
+          uv run --frozen zensical build --clean
+          # The pages workflow serves the hackathon slides from /hackathon/
           if [ -e site/hackathon ]; then
             echo "::error::The docs build produced site/hackathon, which collides with the hackathon slides on the Pages site. Rename that docs page or folder."
             exit 1
           fi
+      - name: Result
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/check-steps
+        with:
+          steps: ${{ toJSON(steps) }}
 
   sdk-python:
     name: "sdk: python ${{ matrix.python }}"
@@ -537,22 +536,10 @@ jobs:
         run: uv run --frozen --no-sync python -m pytest --color=yes -m "not integration"
 
   platform-compose:
-    name: "platform: compose debug=${{ matrix.debug }} optional=${{ matrix.optional }} system-test=${{ matrix.system-test }}"
+    name: "platform: compose"
     needs: gitleaks
     runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        debug: ["false", "true"]
-        optional: ["false", "true"]
-        system-test: ["false", "true"]
-    defaults:
-      run:
-        working-directory: platform
     env:
-      DEBUG_AGENTS: ${{ matrix.debug }}
-      OPTIONAL_AGENTS: ${{ matrix.optional }}
-      SYSTEM_TEST: ${{ matrix.system-test }}
       # Placeholders for the variables .env sets, which init_env.py generates
       # in make up. config only interpolates them
       ADMIN_DB_PASSWORD: placeholder
@@ -567,62 +554,141 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Generate
-        run: make generate
-      - name: Validate
-        # The same files the Makefile passes, with both profiles so every
-        # service is checked. Fails on warnings too, such as an unset variable
-        run: |
-          files=(-f docker-compose.yml -f docker-compose.agents.yml)
-          if [ "$SYSTEM_TEST" = true ]; then
-            files+=(-f docker-compose.system-test.yml)
-          fi
-          docker compose "${files[@]}" --profile dev --profile prod config -q 2> "$RUNNER_TEMP/config.log" \
-            || { cat "$RUNNER_TEMP/config.log"; exit 1; }
-          if [ -s "$RUNNER_TEMP/config.log" ]; then
-            cat "$RUNNER_TEMP/config.log"
-            echo "::error::docker compose config printed warnings"
-            exit 1
-          fi
+      # Every combination of agents and the system test file. The same files the
+      # Makefile passes, with both profiles so every service is checked
+      - name: Validate debug=false optional=false system-test=false
+        id: debug-false-optional-false-system-test-false
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "false"
+          OPTIONAL_AGENTS: "false"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml --profile dev --profile prod
+      - name: Validate debug=false optional=false system-test=true
+        id: debug-false-optional-false-system-test-true
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "false"
+          OPTIONAL_AGENTS: "false"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.system-test.yml --profile dev --profile prod
+      - name: Validate debug=false optional=true system-test=false
+        id: debug-false-optional-true-system-test-false
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "false"
+          OPTIONAL_AGENTS: "true"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml --profile dev --profile prod
+      - name: Validate debug=false optional=true system-test=true
+        id: debug-false-optional-true-system-test-true
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "false"
+          OPTIONAL_AGENTS: "true"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.system-test.yml --profile dev --profile prod
+      - name: Validate debug=true optional=false system-test=false
+        id: debug-true-optional-false-system-test-false
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "true"
+          OPTIONAL_AGENTS: "false"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml --profile dev --profile prod
+      - name: Validate debug=true optional=false system-test=true
+        id: debug-true-optional-false-system-test-true
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "true"
+          OPTIONAL_AGENTS: "false"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.system-test.yml --profile dev --profile prod
+      - name: Validate debug=true optional=true system-test=false
+        id: debug-true-optional-true-system-test-false
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "true"
+          OPTIONAL_AGENTS: "true"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml --profile dev --profile prod
+      - name: Validate debug=true optional=true system-test=true
+        id: debug-true-optional-true-system-test-true
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          DEBUG_AGENTS: "true"
+          OPTIONAL_AGENTS: "true"
+        with:
+          directory: platform
+          generate: "true"
+          args: -f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.system-test.yml --profile dev --profile prod
+      - name: Result
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/check-steps
+        with:
+          steps: ${{ toJSON(steps) }}
 
   agent-template-compose:
-    name: "agent-template: compose ${{ matrix.network }}"
+    name: "agent-template: compose"
     needs: gitleaks
     runs-on: ubuntu-26.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - network: internal
-          - network: external
-            host: localhost
-            port: "8042"
-    defaults:
-      run:
-        working-directory: agent-template/agent_template
     env:
-      NETWORK: ${{ matrix.network }}
       # Placeholders for the variables .env sets. config only interpolates them
       AGENT_SECRET: placeholder
       LITELLM_MASTER_KEY: placeholder
       REDIS_PASSWORD: placeholder
-      # Set together for external mode, as the Makefile requires
-      EXTERNAL_AGENT_HOST: ${{ matrix.host }}
-      EXTERNAL_AGENT_PORT: ${{ matrix.port }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate
-        # The same files the Makefile passes. Fails on warnings too, such as
-        # an unset variable
-        run: |
-          docker compose -f docker-compose.yml -f "docker-compose.net_$NETWORK.yml" config -q 2> "$RUNNER_TEMP/config.log" \
-            || { cat "$RUNNER_TEMP/config.log"; exit 1; }
-          if [ -s "$RUNNER_TEMP/config.log" ]; then
-            cat "$RUNNER_TEMP/config.log"
-            echo "::error::docker compose config printed warnings"
-            exit 1
-          fi
+      # The same files the Makefile passes for each network mode
+      - name: Validate internal
+        id: internal
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          EXTERNAL_AGENT_HOST: ""
+          EXTERNAL_AGENT_PORT: ""
+        with:
+          directory: agent-template/agent_template
+          args: -f docker-compose.yml -f docker-compose.net_internal.yml
+      - name: Validate external
+        id: external
+        continue-on-error: true
+        uses: ./.github/actions/compose-config
+        env:
+          # Set together for external mode, as the Makefile requires
+          EXTERNAL_AGENT_HOST: localhost
+          EXTERNAL_AGENT_PORT: "8042"
+        with:
+          directory: agent-template/agent_template
+          args: -f docker-compose.yml -f docker-compose.net_external.yml
+      - name: Result
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/check-steps
+        with:
+          steps: ${{ toJSON(steps) }}
 
   # Runs on every PR, merge queue and devel push like the rest of this
   # workflow: the whole job, build included, takes a few minutes, so nightly

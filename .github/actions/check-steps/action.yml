@@ -1,0 +1,32 @@
+name: Check steps
+description: >-
+  Summarize the outcome of every step with an id, and fail if any of them
+  failed. For jobs whose checks continue on error, so that every check runs
+inputs:
+  steps:
+    description: The job's steps context, as toJSON(steps)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Check steps
+      shell: bash
+      env:
+        STEPS: ${{ inputs.steps }}
+      run: |
+        # A step that continues on error has outcome failure but conclusion success
+        {
+          echo "| Check | Result |"
+          echo "|---|---|"
+          jq -r 'to_entries[] | "| \(.key) | \(
+            if .value.outcome == "success" then "✅ success"
+            elif .value.outcome == "failure" then "❌ failure"
+            else "⏭️ \(.value.outcome)" end) |"' <<< "$STEPS"
+        } >> "$GITHUB_STEP_SUMMARY"
+        failed=$(jq -r 'to_entries[] | select(.value.outcome != "success") | .key' <<< "$STEPS")
+        if [ -n "$failed" ]; then
+          for step in $failed; do
+            echo "::error::$step did not succeed"
+          done
+          exit 1
+        fi

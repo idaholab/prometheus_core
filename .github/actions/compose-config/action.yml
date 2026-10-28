@@ -1,0 +1,35 @@
+name: Compose config
+description: Validate docker compose files, failing on warnings such as an unset variable
+inputs:
+  directory:
+    description: The directory the compose files are in, relative to the repo root
+    required: true
+  args:
+    description: The -f and --profile arguments, the same as the Makefile passes
+    required: true
+  generate:
+    description: Run make generate first, for the agents compose file
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Generate
+      if: ${{ inputs.generate == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      run: make generate
+    - name: Validate
+      shell: bash
+      working-directory: ${{ inputs.directory }}
+      env:
+        ARGS: ${{ inputs.args }}
+      run: |
+        log="$(mktemp -p "$RUNNER_TEMP")"
+        # ARGS is split on whitespace on purpose
+        docker compose $ARGS config -q 2> "$log" || { cat "$log"; exit 1; }
+        if [ -s "$log" ]; then
+          cat "$log"
+          echo "::error::docker compose config printed warnings"
+          exit 1
+        fi
