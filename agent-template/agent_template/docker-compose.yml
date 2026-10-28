@@ -43,12 +43,20 @@ services:
       USER_IDENTITY_AUD: ${USER_IDENTITY_AUD:-prometheus-agents}
       USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
 
-      # deeplynx environment
+      # DeepLynx configuration required by standard agent execution.
       DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-}
       DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
       DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
       DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
       DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
+
+      # ADK session store: the adk role and schema in the platform's admin-db.
+      # ADK_DB_PASSWORD must match the platform's value; it reaches the agent
+      # only inside this URL. Without a database, sessions stay in memory and
+      # cannot resume after a restart.
+      ADK_SESSION_DB_URL: ${ADK_SESSION_DB_URL:-postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin}
 
       # LLM configuration. The profile maps the semantic flavors the agent asks
       # for in code onto concrete provider models; `registry` (the default)

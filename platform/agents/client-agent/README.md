@@ -24,9 +24,9 @@ High-level runtime path:
 A2A POST /
   -> orchestrator.service.OrchestratorAgent._execute()
   -> orchestrator.chat_flow.chat()
-  -> orchestrator.agent_loop.advance()        (LLM turn ↔ tool calls, until an answer or a pause)
-  -> orchestrator.skills.invoke_skill()       (or workflow_library.execute_workflow)
-  -> tool_discovery-created A2A StructuredTool
+  -> orchestrator.agent_loop.run_turn()       (one ADK run of the client_agent LlmAgent, until an answer or a pause)
+  -> orchestrator.adk_tools.a2a_skill_tool()  (or a workflow tool that runs to_adk_workflow's ADK Workflow)
+  -> tool_discovery.call_a2a_agent()
   -> specialist agent
 ```
 
@@ -298,7 +298,7 @@ Important files:
 - `compiler.py`: Compiles workflow definitions against capability metadata.
 - `matcher.py`: Scores workflow templates against user queries.
 - `binding.py`: Resolves step/input bindings.
-- `executor.py`: Executes compiled workflow steps.
+- `compiler.py` `to_adk_workflow(compiled, invoke_skill)`: builds the ADK graph `Workflow` that runs a compiled template (one `FunctionNode` per step, one `Edge` per dependency).
 
 ## State and Data Contracts
 

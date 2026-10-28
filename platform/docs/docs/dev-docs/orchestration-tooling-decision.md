@@ -1,5 +1,15 @@
 # Orchestration Tooling — Homegrown vs. Prefect/Airflow
 
+!!! warning "Superseded by the ADK runtime ADR (2026-10)"
+    The "keep the homegrown stack" decision below no longer applies. Agents and the
+    client-agent orchestrator now run on Google ADK through `prometheus_api.adk`. The
+    hand-written loop and `workflow_library/executor.py` are removed, and workflow templates
+    compile to ADK graphs with `to_adk_workflow`. The decision record is the ADR draft
+    `specs/adk-runtime/adr-adk-runtime.md` in the Genesis control repository, which goes to the
+    Prometheus Confluence space. The current design is in
+    [Client-Agent Orchestration as a Tool-Calling Loop](agent-loop-orchestration.md). The
+    rationale below stays as history.
+
 **Date:** 2026-06-11
 **Scope:** Review question: should `task_graph.py` / `workflow_library/` be replaced by an off-the-shelf orchestrator?
 

@@ -132,6 +132,13 @@ class TaskNode:
     result_ref: Optional[str] = None
     error: Optional[str] = None
 
+    # The ADK run of a detached turn; ``invocation_id`` resumes it after a restart.
+    # Nodes stored before these fields existed load with ``None``.
+    invocation_id: Optional[str] = None
+    adk_session_id: Optional[str] = None
+    # The user the ADK session belongs to; a resume runs as the same user.
+    adk_user_id: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -183,6 +190,32 @@ def list_nodes(conversation_id: str) -> List[TaskNode]:
         return []
     nodes = [get_node(conversation_id, tid) for tid in task_ids]
     return [n for n in nodes if n is not None]
+
+
+def list_resumable_nodes() -> List[TaskNode]:
+    """Every unfinished node, across conversations, that records an ADK invocation."""
+    nodes: List[TaskNode] = []
+    try:
+        client = _client()
+        cursor = 0
+        while True:
+            # One MGET per SCAN batch instead of one GET per node.
+            cursor, keys = client.scan(cursor=cursor, match="tasks:node:*")
+            for key, data in zip(keys, client.mget(keys) if keys else []):
+                if not data:
+                    continue
+                try:
+                    node = TaskNode.from_dict(json.loads(data))
+                except Exception as exc:
+                    logger.warning("[TASKGRAPH] Corrupt node %s: %s", key, exc)
+                    continue
+                if node.invocation_id and node.state not in TERMINAL_STATES:
+                    nodes.append(node)
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.warning("[TASKGRAPH] Failed to scan nodes: %s", exc)
+    return nodes
 
 
 def list_roots(conversation_id: str) -> List[str]:
@@ -301,6 +334,9 @@ def update_own_state(
     is_background: Optional[bool] = None,
     result_ref: Optional[str] = None,
     error: Optional[str] = None,
+    invocation_id: Optional[str] = None,
+    adk_session_id: Optional[str] = None,
+    adk_user_id: Optional[str] = None,
 ) -> Optional[TaskNode]:
     """Update a node's *own* reported state, then percolate the effect upward.
 
@@ -329,6 +365,15 @@ def update_own_state(
         direct_changed = True
     if error is not None and error != node.error:
         node.error = error
+        direct_changed = True
+    if invocation_id is not None and invocation_id != node.invocation_id:
+        node.invocation_id = invocation_id
+        direct_changed = True
+    if adk_session_id is not None and adk_session_id != node.adk_session_id:
+        node.adk_session_id = adk_session_id
+        direct_changed = True
+    if adk_user_id is not None and adk_user_id != node.adk_user_id:
+        node.adk_user_id = adk_user_id
         direct_changed = True
     if direct_changed:
         save_node(node)

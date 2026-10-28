@@ -15,7 +15,9 @@ Dynamic tool discovery from A2A registry.
 Creates callable tools by discovering agents and their skills from the registry.
 """
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
+import asyncio
 import json
 import logging
 import os
@@ -26,6 +28,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, create_model
 from prometheus_api.agent import ArtifactReference, PrometheusAgent
 from prometheus_api.a2a_stream import stream_a2a_request
+from prometheus_api.contract import PARENT_EXECUTION_RECORD_METADATA_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -412,6 +415,29 @@ def _validate_input_required_payload(payload: Dict[str, Any]) -> None:
                 )
 
 
+#: The client-agent's DeepLynx execution record of the current request (set by
+#: ``OrchestratorAgent._execute``); outgoing calls name it as their parent record.
+parent_execution_record_id: ContextVar[Optional[int]] = ContextVar("parent_execution_record_id", default=None)
+
+
+async def _cancel_remote_task(endpoint: str, headers: Dict[str, str], sent: Dict[str, Any]) -> None:
+    """Forward a cancel (A2A ``CancelTask``) to the remote task of a cancelled call; best-effort.
+
+    Only a task this call is known to run is cancelled: the one its message continues.
+    A new task is not named until the reply, so its cancel is skipped rather than
+    guessed from the context, which other calls of the conversation share.
+    """
+    task_id = sent.get("taskId")
+    if not task_id:
+        return
+    request = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": "CancelTask", "params": {"id": task_id}}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(endpoint, json=request, headers=headers)
+    except Exception as exc:  # the caller is already cancelled; never mask that
+        logger.warning("[A2A] Cancel forward to %s failed: %s", endpoint, exc)
+
+
 async def call_a2a_agent(
     agent_url: str,
     skill_id: str,
@@ -466,6 +492,10 @@ async def call_a2a_agent(
             message_metadata[USER_TOKEN_METADATA_KEY] = identity.raw_token
     except ImportError:
         pass  # prometheus_api not available; identity metadata omitted
+    # The client-agent's execution record: the callee's record links to it (child_of).
+    parent_record_id = parent_execution_record_id.get()
+    if parent_record_id is not None:
+        message_metadata[PARENT_EXECUTION_RECORD_METADATA_KEY] = parent_record_id
 
     message = {
         "jsonrpc": "2.0",
@@ -532,17 +562,25 @@ async def call_a2a_agent(
             stream_message["method"] = "SendStreamingMessage"
             stream_endpoint = agent_url.rstrip("/")
             logger.debug("[A2A] Using streaming invocation via %s", stream_endpoint)
-            a2a_result = await stream_a2a_request(
-                stream_endpoint,
-                stream_message,
-                headers=headers,
-                timeout_seconds=timeout_seconds,
-                status_callback=_status_callback if callable(_status_callback) else None,
-                background_callback=_background_callback if callable(_background_callback) else None,
-            )
+            try:
+                a2a_result = await stream_a2a_request(
+                    stream_endpoint,
+                    stream_message,
+                    headers=headers,
+                    timeout_seconds=timeout_seconds,
+                    status_callback=_status_callback if callable(_status_callback) else None,
+                    background_callback=_background_callback if callable(_background_callback) else None,
+                )
+            except asyncio.CancelledError:
+                await _cancel_remote_task(endpoint, headers, message["params"]["message"])
+                raise
         else:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-                response = await client.post(endpoint, json=message, headers=headers)
+                try:
+                    response = await client.post(endpoint, json=message, headers=headers)
+                except asyncio.CancelledError:
+                    await _cancel_remote_task(endpoint, headers, message["params"]["message"])
+                    raise
                 logger.debug("[A2A] Response status: %s", response.status_code)
                 response.raise_for_status()
                 result = response.json()

@@ -12,9 +12,15 @@
 
 """Relationships resource for synchronous operations."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from ..exceptions import StorageClientError
 from ..models.relationship import Relationship, RelationshipCreate
 from .base import BaseResource
+
+# An edge stores its type only as ``relationship_id``, a project relationship with a name.
+# Process-wide caches: (base_url, org, project, name) -> id and (base_url, org, project, id) -> name.
+_relationship_ids: Dict[Tuple[str, int, int, str], int] = {}
+_relationship_names: Dict[Tuple[str, int, int, int], str] = {}
 
 
 class RelationshipsResource(BaseResource):
@@ -42,7 +48,7 @@ class RelationshipsResource(BaseResource):
         payload = {
             "origin_id": relationship.from_item_id,
             "destination_id": relationship.to_item_id,
-            "name": relationship.relationship_type,  # API expects 'name' field
+            "relationship_id": self._relationship_id(relationship.relationship_type),
             "properties": relationship.properties,
         }
 
@@ -114,7 +120,7 @@ class RelationshipsResource(BaseResource):
             {
                 "origin_id": rel.from_item_id,
                 "destination_id": rel.to_item_id,
-                "name": rel.relationship_type,  # API expects 'name' field
+                "relationship_id": self._relationship_id(rel.relationship_type),
                 "properties": rel.properties,
             }
             for rel in relationships
@@ -134,6 +140,11 @@ class RelationshipsResource(BaseResource):
         else:
             edges = data.get("edges", [])
 
+        if relationships and not edges:
+            raise ValueError(
+                f"DeepLynx created no edges for a bulk request of {len(relationships)}; "
+                f"response: {data!r}"
+            )
         return [self._parse_relationship(rel_data) for rel_data in edges]
 
     def get_item_relationships(
@@ -206,7 +217,11 @@ class RelationshipsResource(BaseResource):
                         id=rel_data.get("id", 0),
                         from_item_id=from_id,
                         to_item_id=to_id,
-                        relationship_type=rel_data.get("name", ""),
+                        relationship_type=(
+                            rel_data.get("relationshipName")
+                            or rel_data.get("name")
+                            or self._relationship_name(rel_data.get("relationshipId"))
+                        ),
                         properties=rel_data.get("properties", {}),
                         created_at=rel_data.get("createdAt"),
                         updated_at=rel_data.get("lastUpdatedAt"),
@@ -241,6 +256,57 @@ class RelationshipsResource(BaseResource):
 
         data = response.json()
         return data if isinstance(data, dict) else {"result": data}
+
+    def _relationship_cache_key(self) -> Tuple[str, int, int]:
+        config = self._client.config
+        return (config.base_url, config.organization_id, config.project_id)
+
+    def _relationship_name(self, relationship_id: Any) -> str:
+        """Return the cached name of a project relationship ID, or ``""``."""
+        if relationship_id is None:
+            return ""
+        return _relationship_names.get((*self._relationship_cache_key(), relationship_id), "")
+
+    def _cache_relationships(self, relationships: List[Dict[str, Any]]) -> None:
+        scope = self._relationship_cache_key()
+        # Prefer a relationship without origin and destination classes for each name.
+        for rel in sorted(
+            relationships, key=lambda r: bool(r.get("originId") or r.get("destinationId"))
+        ):
+            name, rel_id = rel.get("name"), rel.get("id")
+            if not name or rel_id is None:
+                continue
+            _relationship_ids.setdefault((*scope, name), rel_id)
+            _relationship_names.setdefault((*scope, rel_id), name)
+
+    def _list_relationships(self) -> None:
+        response = self._client._request(
+            "GET", f"/projects/{self._client.config.project_id}/relationships"
+        )
+        data = response.json()
+        self._cache_relationships(data if isinstance(data, list) else [])
+
+    def _relationship_id(self, name: str) -> Optional[int]:
+        """Return the ID of the project relationship *name*, creating it when missing."""
+        if not name:
+            return None
+        key = (*self._relationship_cache_key(), name)
+        if key not in _relationship_ids:
+            self._list_relationships()
+        if key not in _relationship_ids:
+            try:
+                response = self._client._request(
+                    "POST",
+                    f"/projects/{self._client.config.project_id}/relationships",
+                    json={"name": name},
+                )
+                self._cache_relationships([response.json()])
+            except StorageClientError:
+                # Another writer may have created it first; the name is unique per project.
+                self._list_relationships()
+                if key not in _relationship_ids:
+                    raise
+        return _relationship_ids[key]
 
     def _parse_relationship(self, data: Dict[str, Any]) -> Relationship:
         """Parse API response data into a Relationship model.
@@ -281,7 +347,11 @@ class RelationshipsResource(BaseResource):
             id=data["id"],
             from_item_id=from_item_id,
             to_item_id=to_item_id,
-            relationship_type=data.get("name", ""),
+            relationship_type=(
+                data.get("relationshipName")
+                or data.get("name")
+                or self._relationship_name(data.get("relationshipId"))
+            ),
             properties=data.get("properties", {}),
             created_at=data.get("createdAt"),
             updated_at=data.get("lastUpdatedAt"),

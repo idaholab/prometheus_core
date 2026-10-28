@@ -13,11 +13,18 @@
 """Workflow compiler and validator."""
 from __future__ import annotations
 
+import copy
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from .schema import CompiledPattern, CompiledWorkflow, WorkflowDefinition
+from google.adk.agents import Context
+from google.adk.events import RequestInput
+from google.adk.workflow import START, Edge, FunctionNode, JoinNode, Workflow
+
+from .binding import get_path, resolve_step_params, set_path
+from .naming import workflow_slug, workflow_tool_name
+from .schema import CompiledPattern, CompiledWorkflow, WorkflowDefinition, WorkflowStep
 
 if TYPE_CHECKING:
     from capability_cache import AgentCapability
@@ -336,4 +343,276 @@ def compile_workflow(
         required_input_paths=sorted(set(required_input_paths)),
         step_ids=step_ids,
         warnings=warnings,
+    )
+
+
+StepInvokeFn = Callable[[str, Dict[str, Any], str], Awaitable[Dict[str, Any]]]
+
+# A2A identifiers that let a resumed step continue the specialist task it paused.
+_A2A_RESUME_KEYS = ("_a2a_context_id", "_a2a_task_id", "_task_graph_root_id", "_task_graph_node_id")
+
+
+def _should_skip_by_when(step: WorkflowStep, context: Dict[str, Any]) -> bool:
+    when = step.when or {}
+    not_in_context = when.get("not_in_context")
+    if isinstance(not_in_context, str):
+        return get_path(context, not_in_context) is not None
+    return False
+
+
+def _apply_step_outputs(
+    step: WorkflowStep,
+    result: Any,
+    context: Dict[str, Any],
+    context_delta: Dict[str, Any],
+) -> None:
+    for output in step.outputs or []:
+        if not isinstance(output, dict):
+            continue
+        to_context = output.get("to_context")
+        from_path = output.get("from")
+        if not to_context:
+            continue
+        if from_path:
+            value = get_path(result, str(from_path))
+            if value is None and str(from_path) == "result":
+                value = result
+        else:
+            value = result
+        if value is None:
+            continue
+        set_path(context, str(to_context), value)
+        set_path(context_delta, str(to_context), value)
+
+
+def _resolve_final_output(workflow: CompiledWorkflow, step_results: Dict[str, Any]) -> Any:
+    final_ref = (workflow.definition.outputs.final or {}).get("from")
+    if isinstance(final_ref, str) and final_ref:
+        source = {"step": step_results}
+        if final_ref.startswith("step."):
+            return get_path(source, final_ref)
+        return get_path(step_results, final_ref)
+
+    for step in workflow.definition.steps:
+        if step.is_final and step.id in step_results:
+            return step_results[step.id].get("result")
+    if workflow.definition.steps:
+        last_id = workflow.definition.steps[-1].id
+        if last_id in step_results:
+            return step_results[last_id].get("result")
+    return None
+
+
+def _merge_envelopes(node_input: Dict[str, Any], joined: bool) -> Dict[str, Any]:
+    """Merge the run envelopes that reach a node into one.
+
+    A node behind a `JoinNode` receives `{predecessor_name: envelope}`; any other
+    node receives one envelope, or the workflow input from START, which has no
+    `steps` yet.
+    """
+    envelopes = list(node_input.values()) if joined else [node_input or {}]
+    merged = {key: value for key, value in envelopes[0].items() if key != "steps"}
+    merged["steps"] = {}
+    for envelope in envelopes:
+        merged["steps"].update(envelope.get("steps") or {})
+    return merged
+
+
+def _current_context(workflow: CompiledWorkflow, envelope: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Return the run context with every succeeded step's outputs applied, and those outputs alone."""
+    context = copy.deepcopy(envelope.get("context") or {})
+    context_delta: Dict[str, Any] = {}
+    for step in workflow.definition.steps:
+        entry = envelope["steps"].get(step.id)
+        if entry and entry.get("status") == "succeeded":
+            _apply_step_outputs(step, entry.get("result"), context, context_delta)
+    return context, context_delta
+
+
+async def _invoke_step(
+    ctx: Context,
+    step: WorkflowStep,
+    envelope: Dict[str, Any],
+    context: Dict[str, Any],
+    invoke_skill: StepInvokeFn,
+    on_error: str,
+) -> Union[Dict[str, Any], RequestInput]:
+    pending_key = f"workflow_library:{ctx.node_path}"
+    interrupt_id = f"wf_input:{ctx.node_path}"
+    payload = resolve_step_params(
+        params_spec=step.params,
+        input_params=envelope.get("input") or {},
+        context=context,
+        step_results=envelope["steps"],
+    )
+    # What the template bound for this step, without the conversation-wide additions.
+    params = {
+        key: value
+        for key, value in payload.items()
+        if not key.startswith("_") and key not in {"artifacts", "conversation_id"}
+    }
+    if "artifacts" not in payload and isinstance(context.get("artifacts"), list):
+        payload["artifacts"] = context["artifacts"]
+    conversation_id = str(envelope.get("conversation_id") or "")
+    payload["conversation_id"] = conversation_id
+
+    # A rerun after an answer continues the specialist task that asked for input.
+    pending = ctx.state.get(pending_key)
+    answers = ctx.resume_inputs.get(interrupt_id)
+    if pending is not None and answers is not None:
+        payload = {**payload, "provided_inputs": answers, **pending}
+
+    try:
+        invoked = await invoke_skill(step.skill_id, payload, conversation_id)
+    except Exception as exc:
+        if on_error == "fail_fast":
+            raise
+        invoked = {"error": str(exc)}
+
+    if "input_required" in invoked:
+        ctx.state[pending_key] = {key: invoked[key] for key in _A2A_RESUME_KEYS if invoked.get(key)}
+        return RequestInput(
+            interrupt_id=interrupt_id,
+            payload={
+                "step_id": step.id,
+                "skill_id": step.skill_id,
+                "params": params,
+                "input_required": invoked.get("input_required"),
+            },
+        )
+    if pending is not None:
+        ctx.state[pending_key] = None
+    if "error" in invoked:
+        if on_error == "fail_fast":
+            raise WorkflowStepError(f"Workflow step '{step.id}' failed: {invoked['error']}")
+        return {"status": "failed", "params": params, "error": str(invoked["error"])}
+    return {"status": "succeeded", "params": params, "result": invoked.get("result")}
+
+
+class WorkflowStepError(RuntimeError):
+    """Raised by a failed step under `fail_fast`, so ADK stops the workflow run."""
+
+
+def _step_node(
+    workflow: CompiledWorkflow,
+    step: WorkflowStep,
+    invoke_skill: StepInvokeFn,
+    joined: bool,
+) -> FunctionNode:
+    on_error = workflow.definition.execution.on_error
+
+    async def run_step(ctx: Context, node_input: Dict[str, Any]) -> Union[Dict[str, Any], RequestInput]:
+        envelope = _merge_envelopes(node_input, joined)
+        steps = envelope["steps"]
+        context, _ = _current_context(workflow, envelope)
+        if any((steps.get(dep) or {}).get("status") != "succeeded" for dep in step.depends_on):
+            outcome: Dict[str, Any] = {"status": "blocked"}
+        elif _should_skip_by_when(step, context):
+            outcome = {"status": "skipped"}
+        else:
+            invoked = await _invoke_step(ctx, step, envelope, context, invoke_skill, on_error)
+            if isinstance(invoked, RequestInput):
+                return invoked
+            outcome = invoked
+        steps[step.id] = {"skill_id": step.skill_id, **outcome}
+        return envelope
+
+    return FunctionNode(func=run_step, name=f"step_{workflow_slug(step.id)}", rerun_on_resume=True)
+
+
+def _finish_node(workflow: CompiledWorkflow, joined: bool) -> FunctionNode:
+    definition = workflow.definition
+
+    async def finish(node_input: Dict[str, Any]) -> Dict[str, Any]:
+        envelope = _merge_envelopes(node_input, joined)
+        steps = envelope["steps"]
+        _, context_delta = _current_context(workflow, envelope)
+        results = {step_id: entry for step_id, entry in steps.items() if entry.get("status") == "succeeded"}
+        errors = [
+            {"step_id": step_id, "skill_id": entry.get("skill_id"), "error": entry.get("error") or "unknown error"}
+            for step_id, entry in steps.items()
+            if entry.get("status") == "failed"
+        ]
+        return {
+            "workflow_id": definition.id,
+            "workflow_version": definition.version,
+            "step_statuses": {step.id: (steps.get(step.id) or {}).get("status") for step in definition.steps},
+            "step_results": results,
+            "errors": errors,
+            "final_output": _resolve_final_output(workflow, results),
+            "context_delta": context_delta,
+            "success": not errors,
+        }
+
+    return FunctionNode(func=finish, name="finish")
+
+
+def _connect(target: Any, sources: List[Any], join_name: str) -> List[Edge]:
+    """Edges into `target`: from START, from its one source, or through a `JoinNode` that waits for all."""
+    if not sources:
+        return [Edge(from_node=START, to_node=target)]
+    if len(sources) == 1:
+        return [Edge(from_node=sources[0], to_node=target)]
+    join = JoinNode(name=join_name)
+    return [Edge(from_node=source, to_node=join) for source in sources] + [Edge(from_node=join, to_node=target)]
+
+
+def _dependency_order(steps: List[WorkflowStep]) -> List[WorkflowStep]:
+    """Template order, moved only as far as each step's dependencies require."""
+    ordered: List[WorkflowStep] = []
+    placed: Set[str] = set()
+    remaining = list(steps)
+    while remaining:
+        step = next(item for item in remaining if set(item.depends_on) <= placed)
+        ordered.append(step)
+        placed.add(step.id)
+        remaining.remove(step)
+    return ordered
+
+
+def to_adk_workflow(compiled: CompiledWorkflow, invoke_skill: StepInvokeFn) -> Workflow:
+    """Build the ADK graph `Workflow` that runs a compiled template.
+
+    Each step is one `FunctionNode` that awaits `invoke_skill(skill_id, payload,
+    conversation_id)` with its `binding.py` inputs; each dependency is one edge,
+    root steps start from START, and a step with several predecessors waits
+    behind a `JoinNode`. `sequential` also chains the steps in template order;
+    `dag` and `parallel` run ready steps up to `max_concurrency` at once. Under
+    `fail_fast` a failed step stops the run; under `continue_with_partial` its
+    dependents are `blocked` and the other steps go on. A step that needs input
+    interrupts with a `RequestInput` and reruns with the answer.
+
+    Run it with the node input `{"input": ..., "context": ..., "conversation_id": ...}`.
+    Its output, from the `finish` node, carries `step_statuses`, `step_results`,
+    `errors`, `final_output`, `context_delta` and `success`.
+    """
+    definition = compiled.definition
+    execution = definition.execution
+    sequential = execution.mode == "sequential"
+    steps = _dependency_order(list(definition.steps)) if sequential else list(definition.steps)
+
+    predecessors: Dict[str, List[str]] = {}
+    for index, step in enumerate(steps):
+        preds = list(step.depends_on)
+        if sequential and index > 0 and steps[index - 1].id not in preds:
+            preds.append(steps[index - 1].id)
+        predecessors[step.id] = preds
+
+    nodes = {
+        step.id: _step_node(compiled, step, invoke_skill, joined=len(predecessors[step.id]) > 1) for step in steps
+    }
+    edges: List[Edge] = []
+    for step in steps:
+        node = nodes[step.id]
+        edges.extend(_connect(node, [nodes[pred] for pred in predecessors[step.id]], f"join_{node.name}"))
+
+    upstream = {pred for preds in predecessors.values() for pred in preds}
+    leaves = [nodes[step.id] for step in steps if step.id not in upstream]
+    edges.extend(_connect(_finish_node(compiled, joined=len(leaves) > 1), leaves, "join_finish"))
+
+    return Workflow(
+        name=workflow_tool_name(definition.id),
+        description=definition.description,
+        edges=edges,
+        max_concurrency=1 if sequential else max(1, int(execution.max_concurrency or 1)),
     )

@@ -1,7 +1,7 @@
 # Client-Agent Orchestration as a Tool-Calling Loop
 
-**Date:** 2026-09-30
-**Status:** Implemented (replaces the compile-then-execute planner)
+**Date:** 2026-09-30 (sections 2-3 revised 2026-10-27 for the ADK runtime)
+**Status:** Implemented (replaces the compile-then-execute planner; runs on Google ADK)
 **Scope:** `agents/client-agent/` — how a user turn becomes specialist skill invocations.
 
 ---
@@ -39,25 +39,28 @@ on simple requests, for two structural reasons:
 
 ## 2. Decision
 
-Replace planning with a **single tool-calling loop**, the standard agent pattern:
+Replace planning with a **single tool-calling agent**, the standard agent pattern. Since the
+ADK runtime change, that agent is one Google ADK `LlmAgent` named `client_agent`. The
+client-agent builds it per turn with `build_runner()` from `prometheus_api.adk`:
 
 ```
-system prompt  +  transcript  +  tools (one per skill, one per workflow template, ask_user)
+instruction (system prompt)  +  ADK session events  +  tools (one per skill, one per workflow template, ask_user)
       │
       ▼
-  LLM turn ──► tool calls? ──no──► final answer (end of turn)
-      ▲              │ yes
-      │              ▼
-      │     validate → [pause for user if needed] → invoke specialists via LiteLLM A2A
-      │              │
-      └──── tool results (summary + artifact ids) appended to transcript
+  LlmAgent turn ──► function calls? ──no──► final answer (end of turn)
+      ▲                   │ yes
+      │                   ▼
+      │      before_tool check → [approval or ask_user pause] → call_a2a_agent to the specialist
+      │                   │
+      └──── function responses (summary + artifact ids) appended to the session
 ```
 
 The model sees every skill's description and input schema as a tool. It also sees
-everything that has happened so far: user messages, earlier tool calls, and their results
-with artifact ids. It decides the next call with fully parameterized arguments, *after* the previous
-call's result is known. Decomposition, chaining, parameter extraction and data flow
-between steps all become ordinary tool-calling behavior.
+everything that has happened so far in the ADK session: user messages, earlier function
+calls, and their results with artifact ids. It decides the next call with fully
+parameterized arguments, *after* the previous call's result is known. Decomposition,
+chaining, parameter extraction and data flow between steps all become ordinary
+tool-calling behavior.
 
 "Create a PNG image with the word Popelnase" becomes:
 
@@ -69,185 +72,175 @@ tool      → {"status": "succeeded", "artifacts": [{"artifact_id": "a2", "mime_
 assistant → "Here is the PNG image with the word Popelnase."
 ```
 
+The hand-written loop of the first version (`advance`, `_drive_batch`, `_run_call`) is
+removed. ADK now owns the turn, the pauses, and the resume. The SDK spec
+`sdk/specs/016-adk-runtime.md` defines `build_runner()` and its plugins.
+
 ## 3. Design
 
 ### 3.1 Modules
 
 | Module | Role |
 |--------|------|
-| `orchestrator/agent_loop.py` | The loop: tool catalog, LLM turns, call validation, pausing and resuming, execution, result compaction. |
-| `orchestrator/chat_flow.py` | Thin entry point: slash commands, state load/create, maps a `ConversationRequest` (query / answers / approval / rejection) onto the loop and a `LoopOutcome` onto a `ConversationResponse`. |
-| `orchestrator/skills.py` | Unchanged: `invoke_skill` (A2A via LiteLLM, Task Graph tracking, streaming status, long-running detach). |
-| `workflow_library/` | Unchanged engine. Each compiled template is exposed as one tool and executed deterministically by `execute_workflow`. |
+| `orchestrator/agent_loop.py` | Policy and the turn: `build_tool_catalog`, the system prompt, argument checks (`_validation_problem`, `_missing_user_inputs`), result compaction (`_compact_result`), and `run_turn`, which runs or resumes one ADK invocation of `client_agent`. |
+| `orchestrator/adk_tools.py` | The catalog as ADK tools: `a2a_skill_tool`, `workflow_tool`, the `ask_user` `LongRunningFunctionTool`, the `before_tool` callback, and `build_client_agent`. |
+| `orchestrator/chat_flow.py` | Entry point: slash commands, state load/create, maps a `ConversationRequest` (query / answers / approval / rejection) onto a new or resumed ADK run, and a `TurnOutcome` onto a `ConversationResponse`. |
+| `orchestrator/service.py` | The A2A agent: binds each request to an `AdkRun`, detaches long turns to the background, and resumes unfinished turns in `lifespan`. |
+| `orchestrator/skills.py` | `invoke_skill` (A2A via LiteLLM, Task Graph tracking, streaming status, long-running detach); workflow steps call it. |
+| `workflow_library/` | Loads and compiles the YAML templates. `to_adk_workflow` turns each compiled template into an ADK graph `Workflow`. |
 | `prompts/orchestrator_system.txt` | The system prompt. |
 
 Deleted: `planner.py`, `planner_models.py`, `orchestrator/planning_flow.py`,
 `orchestrator/parameter_extraction.py`, `orchestrator/parameters.py`,
 `orchestrator/execution.py`, the planning and extraction prompts,
 `artifact_handling.collect_chain_required_paths` / `resolve_artifact_inputs`,
-`workflow_library/matcher.py`, and the `agent.py` monkeypatch compatibility layer.
+`workflow_library/matcher.py`, `workflow_library/executor.py` (`execute_workflow`), and the
+`agent.py` monkeypatch compatibility layer.
 
 ### 3.2 Tools
 
-* **Skill tools**: one per registered capability (`CapabilityCache`). The name is the
-  skill id, sanitized to `^[a-zA-Z0-9_-]{1,64}$`. The description is the skill
-  description, usage notes, and "requires approval" when it applies. Parameters are the
-  skill's `input_schema`, with:
+`adk_tools.build_tools(catalog)` makes one ADK tool per `ToolSpec` of
+`agent_loop.build_tool_catalog()`:
+
+* **Skill tools** (`a2a_skill_tool(spec)`): one per registered capability
+  (`CapabilityCache`). The name is the skill id, sanitized to `^[a-zA-Z0-9_-]{1,64}$`. The
+  description is the skill description, usage notes, and "requires approval" when it
+  applies. The function declaration is the spec's JSON schema, with:
   * vendor keywords (`x_*`, `x-*`) stripped, so the provider sees plain JSON Schema;
   * artifact-reference fields (`x_artifact_ref`) described as "artifact_id of an existing
-    conversation artifact". The user is never asked for one on a form. A missing required
-    artifact reference is an error result that sends the model to the catalog or to the
-    upstream skill;
-  * `artifacts` / `conversation_id` removed, because the orchestrator attaches them.
-* **Workflow tools**: one per compiled template (`workflow_tool_name(id)`). Parameters are
-  the template's `required_input_paths`, as flat properties keyed by dotted path.
-* **`ask_user`**: open clarification questions, given as a list of typed form fields.
+    conversation artifact". The user is never asked for one on a form;
+  * `artifacts` / `conversation_id` removed, because the tool attaches them.
 
-### 3.3 Call lifecycle
+  The tool calls `tool_discovery.call_a2a_agent`. That call adds the
+  `prometheusParentExecutionRecordId` message metadata key, and it forwards an A2A cancel to
+  the remote task when the call is cancelled.
+* **Workflow tools** (`workflow_tool(spec, compiled)`): one per compiled template
+  (`workflow_tool_name(id)`). Parameters are the template's `required_input_paths`, as flat
+  properties keyed by dotted path. The tool runs the template's ADK `Workflow` as one call,
+  see 3.6.
+* **`ask_user`**: a `LongRunningFunctionTool`. Its arguments are a list of typed form fields.
+  It returns `{"status": "pending", ...}` and pauses the run until the user answers.
 
-Every tool call in an assistant message becomes a **pending call** with a status:
+A tool whose spec requires approval carries `approval_required = True`. The SDK approval
+plugin turns its first call into an ADK `adk_request_confirmation` pause.
 
-| Status | Meaning | Leaves the state when |
-|--------|---------|-----------------------|
-| `needs_args` | Required *user-input* parameters are missing (schema-derived). | The user submits the form. |
-| `needs_answer` | `ask_user` question. | The user answers (form or free text). |
-| `needs_approval` | Skill has `requires_approval` or the workflow has `metadata.requires_approval`. | The user approves or rejects. |
-| `ready` | Validated, runnable. | It executes. |
-| `waiting_input` | A specialist returned A2A `INPUT_REQUIRED`. | The user answers and the same A2A task resumes. |
-| `done` | Has a tool-result message. | — |
+### 3.3 Call checks
 
-Validation happens before anything runs. These problems produce an immediate **error
-result** for the model: an unknown tool, malformed JSON arguments, a schema violation
-(`jsonschema`), an unknown artifact id, or a missing *runtime* input. The model can then
-correct the call. A missing *user-input* parameter pauses with a typed form instead. The
-model is told never to invent those values. Form answers go through the same validation
-before the call runs.
+The `before_tool` callback runs before each skill call. It normalizes the arguments to the
+skill's input schema and runs `_validation_problem`: an unknown artifact id, a schema
+violation (`jsonschema`), or a missing runtime input. A problem is the call's result, and
+the model sees it and corrects the call; nothing is dispatched. A missing *user-input*
+parameter (`_missing_user_inputs`) is also an error result. It tells the model to ask with
+`ask_user` and then call again. The model is told never to invent those values.
 
-**Batch rule:** if any call in an assistant message needs the user (args, answer,
-approval), nothing in that message runs until every call is ready. Forms come first,
-then approval. Once all calls are ready, they run concurrently (`asyncio.gather`), which
-is how parallel work is expressed. After every call in the batch is `done`, the tool
-results are appended in call order and the loop continues. This keeps the transcript
-valid for every provider: each `tool_call_id` gets exactly one result before the next
-LLM turn.
+A specialist that returns A2A `INPUT_REQUIRED` gives the tool result
+`{"status": "input_required", "input_required": {...}}`. The model then decides the next
+step, for example an `ask_user` form.
 
 ### 3.4 Pausing and resuming across turns
 
-Loop state lives in the conversation record in Valkey (`conversation:{id}`):
+A pause is an ADK long-running call: an `adk_request_confirmation` call of the approval
+plugin, or an `ask_user` call. `run_turn` collects the paused calls into
+`TurnOutcome.pending_calls`, and sets `awaiting_approval` or `needs_input`. The conversation
+record in Valkey (`conversation:{id}`) keeps `pending_calls`, `awaiting_approval`, `plan`,
+`missing_info`, and the ids of the ADK run, `adk_session_id` and `adk_invocation_id`. The
+ADK session itself is stored by the session service (`ADK_SESSION_DB_URL`).
 
-```jsonc
-{
-  "llm_messages": [ ... ],      // OpenAI-format transcript (user / assistant+tool_calls / tool)
-  "pending_calls": [ ... ],     // the unfinished batch, see 3.3
-  "turn_tool_results": { ... }, // skill_id → raw result for this user turn (response payload)
-  "conversation_history": [ ... ], // user-visible transcript + evidence (backend chat history)
-  "context": { "artifacts": [ ... ] },
-  "awaiting_approval": bool, "missing_info": [...], "final_report": str|null, "plan": {...}
-}
-```
-
-How the next request is mapped:
+The next request resumes the paused invocation with one function response per pending call:
 
 | Incoming request | With pending calls |
 |------------------|--------------------|
-| `followup_answers` | Merged into `needs_args` call arguments; used as the `ask_user` answer; sent as `provided_inputs` to resume `waiting_input` A2A tasks (same context and task id, same Task Graph node). |
-| `plan_approved` | `needs_approval` → `ready`, then execute. |
-| `plan_rejected` | Every unfinished call gets the result "The user rejected this call". Reply: "Plan rejected…". No LLM call. |
-| Free-text `query` | An `ask_user` call is answered with the text. Every other unfinished call gets the result "Not executed: the user replied instead: …", and the loop continues. So "use 20 mm instead" while a plan awaits approval simply re-plans. |
+| `plan_approved` | `chat(plan_approved=True)` answers `adk_request_confirmation` with `{"confirmed": true}`. The approved call runs, and the run goes on. |
+| `plan_rejected` | Every pending call is closed: the confirmation gets `{"confirmed": false}`, and `ask_user` gets `not_executed`. Reply: "Plan rejected…". |
+| `followup_answers` | `ask_user` gets `{"status": "answered", "answers": {...}}`. |
+| Free-text `query` | `ask_user` is answered with the text, and an approval is closed unconfirmed. When no `ask_user` was pending, the text then starts a new invocation. So "use 20 mm instead" while a plan waits for approval simply re-plans. |
 
-Without pending calls, the query is appended as a user message and the loop runs.
-An explicit workflow selection (`/workflow` slash command, catalog start endpoint)
-with no free-text arguments injects a synthetic assistant tool call to that workflow.
-The form inputs are its arguments, so it takes the same validate/pause/execute path
-without an LLM routing decision. A `/workflow` command with free-text arguments
-instead adds a hint to the user message, and the model fills the workflow inputs.
+Without pending calls, the query starts a new invocation. An explicit workflow selection
+(`/workflow` slash command, catalog start endpoint) adds a hint to the user message that
+names the workflow tool. The form inputs or the free-text arguments go into that hint, and
+the model fills the workflow inputs.
+
+**Resume after a restart.** A turn detached to the background records the run's
+`invocation_id` and `adk_session_id` on its Task Graph root node (`TaskNode`). At startup,
+`lifespan` lists the unfinished nodes that have an `invocation_id`
+(`task_graph.list_resumable_nodes`). It resumes each one in the background with
+`run_turn(..., message=None, invocation_id=node.invocation_id)`. A resume that pauses again
+sets the node to `input-required`; a resume that fails sets it to `failed`.
 
 ### 3.4a Concurrent turns
 
 A turn detached to the background keeps running while the user sends the next one, and
 `conversation_store` merges stores by turn instead of overwriting (`merge_conversation`).
-The loop fits into that model as follows:
-
-* **`llm_messages` merges per turn like `conversation_history`.** Each message is tagged
-  with its turn's `turn_id` and `turn_started_at` when first stored. A store keeps the
-  messages of every other turn from the stored document. It takes this turn's messages
-  from its own copy, as one contiguous block ordered by turn start.
-* **`llm_view` repairs the merged transcript before every LLM call.** A paused batch
-  resumes in a later request, which is a new turn, so another turn's block can land
-  between a call and its result. A superseded pending call may never get a result.
-  `llm_view` puts each call's stored result directly after its assistant message. Where a
-  call has no result, it substitutes a "not executed" one. It drops results with no call
-  and strips the bookkeeping tags.
-* **Unfinished `pending_calls` count as pending input** in the newest-turn ownership rule
-  (`_leaves_pending_input`). So a newer turn that left no form or plan does not overwrite
-  a late turn's open one.
-* **Restore fidelity:** a pause's `followup_questions` / `plan` history entry carries the
-  reply text as `content`. So artifacts produced before the pause are stamped on it
-  (`stamp_turn_artifacts`) and restore with that reply. The `plan_approved` entry has no
-  content, so a restored chat shows no bubble that the live UI never showed.
+`conversation_history` and the stored `llm_messages` merge per turn: a store keeps the
+entries of every other turn from the stored document, and takes this turn's entries from its
+own copy. Unfinished `pending_calls` count as pending input in the newest-turn ownership
+rule, so a newer turn that left no form or plan does not overwrite a late turn's open one. A
+pause's `followup_questions` / `plan` history entry carries the reply text as `content`, so
+artifacts produced before the pause are stamped on it (`stamp_turn_artifacts`).
 
 ### 3.5 What goes back to the model
 
-A tool result is compact JSON:
+A successful skill result is compact JSON (`_compact_result`):
 
 ```json
-{"status": "succeeded|failed|rejected|not_executed|answered",
+{"status": "succeeded",
  "summary": "<answer/message/report text, ≤ 2 000 chars>",
  "artifacts": [{"artifact_id": "...", "name": "...", "mime_type": "...", "description": "..."}],
- "result": "<remaining JSON payload, ≤ 6 000 chars>",
- "provided_inputs": {"<name>": "<value>"},
- "error": "..."}
+ "result": "<remaining JSON payload, ≤ 6 000 chars>"}
 ```
 
-`provided_inputs` holds the values given after the call was made: answers to a
-specialist's `INPUT_REQUIRED` form, and values resolved from context. Sensitive answers
-are never included. The same values are merged into the call's `turn_tool_inputs` entry.
+A failed call, a failed check, or an unavailable capability is
+`{"status": "failed", "error": "..."}`.
 
-Artifacts produced by a call are merged into `context.artifacts` right away, so the next
-call's artifact references validate. The full raw result is kept in `turn_tool_results`
-and `conversation_history` for the response and the chat-history UI.
+Artifacts produced by a call are merged into the session state `context.artifacts` right
+away, so the next call's artifact references validate. The system prompt lists the
+conversation's artifact catalog (id, name, mime type, description) and the newest
+successful inputs of each skill (`recent_skill_inputs`) on every model call.
 
-The system prompt lists the conversation's artifact catalog (id, name, mime type,
-description) on every LLM call. Files uploaded this turn are named in the user message.
-A reply to a pending call names its files in that call's tool result.
-The `answered` result of `ask_user` and the `not_executed` result of a superseded call
-carry the note.
-The chat history keeps the reply text without the file note.
+### 3.6 Workflow templates as ADK graphs
 
-The system prompt also lists the newest successful inputs of each skill
-(`recent_skill_inputs`). They come from the `tool_inputs` of every `conversation_history`
-entry, so they survive the transcript window in 3.6. A follow-up such as "redo the valve
-with 6 holes" can then start from inputs the model no longer sees in the transcript.
+The templates stay YAML data. `compile_workflow` validates a template against the
+capability metadata, as before. `to_adk_workflow(compiled, invoke_skill)` then builds one ADK
+graph `Workflow`:
 
-### 3.6 LLM client and bounds
+* one `FunctionNode` per step, which calls `invoke_skill` with the step's bound inputs
+  (`binding.py`);
+* one `Edge` per dependency, from `START` for a root step, and a `JoinNode` for a step with
+  several predecessors;
+* `sequential` also chains the steps in template order; `dag` and `parallel` run ready
+  steps up to `max_concurrency` at once;
+* under `fail_fast` a failed step stops the run; under `continue_with_partial` its
+  dependents are `blocked` and the other steps go on;
+* a step that needs input interrupts with a `RequestInput` and reruns with the answer;
+* a `finish` node returns `step_statuses`, `step_results`, `errors`, `final_output`,
+  `context_delta` and `success`.
 
-* Uses the `prometheus_api.llm_client` tool-calling API (base image ≥ `1914b55`).
-  Tools are `ToolDefinition`s sent with `tool_choice="auto"`, calls come from
-  `response.tool_calls` (`arguments_error` set on malformed JSON), and the transcript is
-  built with `assistant_message(response)` / `tool_result_message(call_id, content)`.
-  The loop ends **only** when a response has no tool calls, never on `finish_reason`. An
-  empty final answer is reported as an error instead of being stored.
-* At most **12 LLM turns** per user request. On hitting the limit, the loop ends with an
-  error message.
-* Transcript window: when `llm_messages` exceeds 80 entries, the oldest turns are
-  dropped, always cutting at a user-message boundary so no tool result is orphaned.
-* Model flavor: `medium`, hardcoded per platform convention.
-  One call per step replaces 6–12 calls per request, so this is the speed lever. Switch
-  to `large` in code only if routing quality requires it.
+The workflow tool runs it with `tool_context.run_node(...)`, so a workflow run is part of
+the ADK invocation and resumes with it.
 
-### 3.7 Response mapping (unchanged wire contract)
+### 3.7 LLM client and bounds
 
-| Loop outcome | `ConversationResponse.status` |
+* The model is `prometheus_model("medium", agent.llm_client(context))`, an ADK model whose
+  every completion goes through `AsyncLLMClient`. Model flavor `medium` is hardcoded per
+  platform convention.
+* The turn ends when a model response has no function calls, or when a long-running call
+  pauses the run.
+* The compaction plugin bounds the request: the client-agent uses
+  `CompactionPolicy(trigger_ratio=0.6)`, earlier than the SDK default of `0.7`, because tool
+  results are large. It rewrites only the outgoing model request and keeps every artifact id
+  and tool-call id; the stored session events do not change.
+
+### 3.8 Response mapping (unchanged wire contract)
+
+| Turn outcome | `ConversationResponse.status` |
 |--------------|-------------------------------|
 | Final text, ≥ 1 skill ran this turn | `completed` (`message` = `report` = text, `tool_results`, suggested queries) |
 | Final text, no skill ran | `answer` |
-| Paused on `needs_args` / `needs_answer` / `waiting_input` | `needs_info` with `followup_questions` |
-| Paused on `needs_approval` | `plan_ready` with `plan` = the pending batch (steps = `{name, agent, description}` per call; a workflow call adds `workflow_id`, `selection_source` and any pinned `workflow_version`) |
-| Loop error or turn limit | `error` |
+| Paused on `ask_user` | `needs_info` with `followup_questions` |
+| Paused on `adk_request_confirmation` | `plan_ready` with `plan` = the paused calls (steps = `{name, agent, description}` per call; a workflow call adds `workflow_id` and `selection_source`) |
+| Error | `error` |
 
-The wire contract is unchanged except for one field. The conversation record no longer
-carries a `material_id`, so `ConversationSummary.material_id` is removed from the backend
-contract (`backend/CONTRACT.md`) and its TypeScript mirror. No frontend code read it.
+The frontend wire contract (`backend/CONTRACT.md`) does not change with the ADK runtime.
 
 ## 4. Consequences
 

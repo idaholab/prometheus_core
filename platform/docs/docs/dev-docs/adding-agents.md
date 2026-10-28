@@ -6,7 +6,7 @@ This guide covers how to create a new specialist agent, register it with LiteLLM
 
 ### 1. Subclass PrometheusAgent
 
-Every agent extends the `PrometheusAgent` base class from `prometheus_api`:
+A new agent subclasses `AdkPrometheusAgent` from `prometheus_api.adk`, as step 6 shows. `AdkPrometheusAgent` extends the `PrometheusAgent` base class. A plain `PrometheusAgent` subclass that overrides `_execute` also works:
 
 ```python
 # agent.py
@@ -205,6 +205,34 @@ The `healthcheck` is required. `make test-static` fails without it in any per-ag
 Once the container starts, it registers with LiteLLM. The client-agent discovers it automatically through LiteLLM's agent directory and loads the full agent card from the specialist's well-known endpoint when needed.
 The agent selects semantic model flavors such as `medium` in code; its selected
 YAML maps those flavors to provider model IDs.
+
+### 6. ADK runtime
+
+A new agent starts on Google ADK. The template in `agent-template/agent_template/` already
+does this. Its "ADK runtime" README section and `agent.py` show the full pattern.
+
+1. Subclass `AdkPrometheusAgent` from `prometheus_api.adk` instead of `PrometheusAgent`.
+2. Map each skill ID of `agent_card.json` to one ADK agent or `Workflow` in `adk_agents`.
+   The agent does not start when a card skill has no ADK node, or a node has no card skill.
+3. Use `prometheus_model(alias, client)` as the model of an `LlmAgent`. Do not put a provider
+   model ID or key in the agent.
+4. Save output files in a tool with `tool_context.save_artifact(...)`. Each save makes one
+   new DeepLynx item.
+5. Add `ADK_SESSION_DB_URL` to the service environment. Without the variable, ADK sessions
+   stay in memory and a run cannot resume after a restart.
+6. Add `admin-db` to the `depends_on` list of the service.
+
+```yaml
+environment:
+  ADK_SESSION_DB_URL: ${ADK_SESSION_DB_URL:-postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin}
+depends_on:
+  admin-db:
+    condition: service_healthy
+```
+
+The A2A contract does not change: the platform cannot tell whether an agent runs ADK. The SDK
+migration log (`sdk/docs/agent/AGENT_MIGRATIONS.md`, `0.15.0`) lists the steps to move an
+existing agent.
 
 ## Workflow templates
 

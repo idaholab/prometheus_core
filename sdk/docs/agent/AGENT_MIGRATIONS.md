@@ -5,6 +5,149 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.15.0
+
+### Move an Agent onto `AdkPrometheusAgent`
+
+The new `prometheus_api.adk` package runs Google ADK (`google-adk==2.13.0`) inside the agent.
+`AdkPrometheusAgent` subclasses `PrometheusAgent`. It maps each card skill to an ADK agent or
+`Workflow` and runs it through `build_runner()`. That runner supplies the model, the sessions,
+the artifacts, the memory, and the plugins. The A2A wire does not change: the agent sends the
+same status and artifact events as `send_status_update` and `send_artifact_reference`. A
+`PrometheusAgent` that overrides `_execute` keeps working without a change.
+
+Migration steps:
+
+1. Subclass `AdkPrometheusAgent` (from `prometheus_api.adk`) instead of `PrometheusAgent`.
+2. Set `adk_agents` to a dict from each card skill ID to its ADK agent or `Workflow`. At
+   startup, a card skill without a node, or a node without a card skill, raises `ValueError`.
+   A subclass that overrides `_execute` handles the unmapped skills itself.
+3. Set `long_running` to a dict from skill ID to estimated seconds for each slow skill. Those
+   skills call `declare_long_running` before they run.
+4. Keep the default `compaction`, `CompactionPolicy()`, or set your own policy. The default
+   policy triggers at `0.7` of the input window and keeps an `8000`-token tail.
+5. To turn compaction off, set `compaction = None`.
+6. Use `prometheus_model(alias, client)` for an `LlmAgent` model, so each completion goes
+   through `AsyncLLMClient`. Do not put a provider URL, key, or model ID in the agent.
+7. Build the Platform with `make up LOCAL_SDK=true` until a published base image contains
+   `prometheus_api.adk`. The current registry base image does not contain the package.
+
+```python
+from google.adk.agents import LlmAgent
+from google.adk.tools import FunctionTool
+from prometheus_api.adk import AdkPrometheusAgent
+
+report_agent = LlmAgent(name="write_report", instruction="...", tools=[FunctionTool(save_report)])
+
+
+class ReportAgent(AdkPrometheusAgent):
+    adk_agents = {"write_report": report_agent}  # card skill ID -> ADK node
+    long_running = {"write_report": 120}          # estimated seconds
+    compaction = None                             # opt out of compaction
+```
+
+### Stop Running Work in the New `on_cancel` Hook
+
+`PrometheusAgentExecutor.cancel` now awaits `PrometheusAgent.on_cancel(context)` before it
+emits the `canceled` status. The default does nothing, so no agent has to change.
+`AdkPrometheusAgent.on_cancel` sets the abort event of the task's ADK run: the cancel plugin
+then blocks every new tool call and calls `cancel()` on the run's registered workers.
+
+Migration steps:
+
+1. No change is needed for an agent that does not react to a cancel.
+2. To stop your own `_execute` work, override `async on_cancel(self, context)` and signal that
+   work, for example with an `asyncio.Event` keyed by the task ID.
+
+```python
+class MyAgent(PrometheusAgent):
+    async def on_cancel(self, context):
+        self._stop[context.task_id].set()
+```
+
+### Set `ADK_SESSION_DB_URL` So ADK Runs Can Resume
+
+`build_runner()` reads `ADK_SESSION_DB_URL` for the ADK session store and the procedure memory.
+The platform Compose file defaults it to the `adk` role and schema in `admin-db`:
+`postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin`. When the variable is empty,
+the runner keeps sessions and procedures in memory and logs one warning. A run then cannot
+resume after a restart.
+
+Migration steps:
+
+1. Add `ADK_SESSION_DB_URL` to the agent's Compose environment, with the platform default above.
+2. Pass the platform's `ADK_DB_PASSWORD` to the agent. It must match the value that the
+   backend migration gives the `adk` role.
+3. Add `depends_on: admin-db` to the agent service.
+
+```yaml
+environment:
+  ADK_SESSION_DB_URL: ${ADK_SESSION_DB_URL:-postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin}
+```
+
+### Save ADK Artifacts with `tool_context.save_artifact`
+
+`send_deeplynx_artifact` still works in `_execute`. In an ADK tool, save output with
+`tool_context.save_artifact(filename, part)` and read input with
+`tool_context.load_artifact(...)`. `DeepLynxArtifactService` makes one new, immutable DeepLynx
+item for each save, with a version number per artifact key and a `generated` relation from the
+execution record. A second save of the same file name is a new item with the next version.
+There is no `supersedes` relation, and no artifact item is updated or deleted. A resumed tool
+call that saves again with the same idempotency key gets the first version back, not a second
+item.
+
+Migration steps:
+
+1. In an ADK tool, replace `send_deeplynx_artifact` with `tool_context.save_artifact`.
+2. Do not expect a save to replace an earlier item. Group versions by the `artifact_key`
+   property.
+
+```python
+async def save_report(title: str, body: str, tool_context: ToolContext) -> dict:
+    report = f"# {title}\n\n{body}\n"
+    version = await tool_context.save_artifact(
+        "report.md",
+        types.Part.from_bytes(data=report.encode(), mime_type="text/markdown"),
+    )
+    return {"status": "success", "filename": "report.md", "version": version}
+```
+
+### Keep Environment Loading Out of Imports
+
+`litellm` loads the nearest `.env` when it is imported, unless `LITELLM_MODE` is set.
+`prometheus_api.adk` imports `litellm` only when a completion runs, and sets `LITELLM_MODE` to
+`PRODUCTION` first when it is not set. Importing the package therefore does not read a `.env`
+file into the process environment.
+
+Migration steps:
+
+1. No change is needed. Do not rely on an `import` of `prometheus_api.adk` to load `.env`
+   values; set them in the environment.
+
+### Turn Off the Bridge's Status Events When the Agent Sends Its Own Status
+
+`build_runner()` has a new keyword, `bridge_events: bool = True`. It passes the value to
+`A2ABridgePlugin(emit_events=...)`. With the default, the bridge sends a status update for each
+tool call and model text, and sends input-required for a paused call. With `bridge_events=False`,
+the bridge sends artifact references only. The client-agent orchestrator uses `False`, because
+it builds the turn's one final A2A payload itself.
+
+Migration steps:
+
+1. No change is needed for an agent that lets the bridge send its status events.
+2. If your agent builds its own A2A status payload from the run, pass `bridge_events=False` to
+   `build_runner()`.
+
+```python
+runner = build_runner(
+    agent,
+    context,
+    root,
+    event_queue=event_queue,
+    bridge_events=False,  # the agent sends its own final status; the bridge sends artifacts only
+)
+```
+
 ## 0.14.0
 
 ### LLM Credentials No Longer Come from A2A Requests
@@ -53,6 +196,34 @@ healthcheck:
 ```
 
 ## 0.13.0
+
+### Configure DeepLynx for Automatic Execution Records
+
+Before `_execute(...)`, the standard `PrometheusAgent` executor now creates a mandatory
+DeepLynx execution item containing the agent, task, context, verified user, and effective
+parameters. Parameters are recursively redacted and stored as JSON in the scalar
+`parameters_json` property to avoid DeepLynx's properties-depth limit. Decode them with
+`json.loads(...)`. Credential, configuration, data-source, or item-creation failures stop the
+execution before subclass work begins.
+
+Migration steps:
+
+1. Ensure the configured credential broker can provide a `deeplynx` credential. When using the
+   environment broker, set the existing DeepLynx authentication, organization, and project
+   variables.
+2. Set `DEEPLYNX_DATA_SOURCE_ID` or configure a default data source for the target project.
+3. Do not trust `params["user_id"]`; the executor replaces it with the verified identity before
+   `_execute(...)`.
+4. Read the item ID from `self.execution_record_id` during `_execute(...)` only. This
+   request-scoped property is concurrency-safe and otherwise returns `None`.
+5. Stored secrets retain their keys but have `[REDACTED]` values.
+
+```python
+class AnalysisAgent(PrometheusAgent):
+    async def _execute(self, params, context, event_queue):
+        execution_item_id = self.execution_record_id
+        return {"status": "success", "execution_item_id": execution_item_id}
+```
 
 ### Use the Built-in LLM Tool-Calling Helpers
 

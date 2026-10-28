@@ -131,3 +131,50 @@ DEEPLYNX_DATA_SOURCE_ID=789
     config = ConnectionConfig.from_env(env_file=test_env)
 
     assert config.data_source_id == 789
+
+
+_DEEPLYNX_ENV = {
+    "DEEPLYNX_KEY": "key",
+    "DEEPLYNX_SECRET": "secret",
+    "DEEPLYNX_ORG_ID": "123",
+    "DEEPLYNX_PROJECT_ID": "456",
+}
+
+
+@pytest.fixture
+def deeplynx_env(tmp_path, monkeypatch):
+    """Isolate from_env() from any local .env and DEEPLYNX_* values, then set valid ones."""
+    monkeypatch.chdir(tmp_path)
+    for name in ("DEEPLYNX_JWT_TOKEN", "DEEPLYNX_BASE_URL", "DEEPLYNX_DATA_SOURCE_ID"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in _DEEPLYNX_ENV.items():
+        monkeypatch.setenv(name, value)
+    return monkeypatch
+
+
+@pytest.mark.parametrize("blank", ["", "  "], ids=["empty", "whitespace"])
+def test_from_env_blank_data_source_id_is_unset(deeplynx_env, blank):
+    """Covers REQ-001-06: a blank DEEPLYNX_DATA_SOURCE_ID is the optional id left unset."""
+    deeplynx_env.setenv("DEEPLYNX_DATA_SOURCE_ID", blank)
+
+    config = ConnectionConfig.from_env()
+
+    assert config.data_source_id is None
+    assert config.organization_id == 123
+    assert config.project_id == 456
+
+
+@pytest.mark.parametrize("blank", ["", "  "], ids=["empty", "whitespace"])
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        pytest.param("DEEPLYNX_ORG_ID", "organization_id must be provided", id="org"),
+        pytest.param("DEEPLYNX_PROJECT_ID", "project_id must be provided", id="project"),
+    ],
+)
+def test_from_env_blank_required_id_is_missing(deeplynx_env, name, message, blank):
+    """Covers REQ-001-06: a blank org or project id raises the missing-id error."""
+    deeplynx_env.setenv(name, blank)
+
+    with pytest.raises(ValueError, match=message):
+        ConnectionConfig.from_env()

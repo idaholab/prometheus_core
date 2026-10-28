@@ -32,6 +32,9 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+# A2A message metadata key that names the caller's DeepLynx execution record (child_of edge).
+PARENT_EXECUTION_RECORD_METADATA_KEY = "prometheusParentExecutionRecordId"
+
 
 class ConversationStatus(str, Enum):
     """Authoritative set of ``ConversationResponse.status`` values.

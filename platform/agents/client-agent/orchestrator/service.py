@@ -13,23 +13,27 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from a2a.server.context import ServerCallContext
 from prometheus_api.agent import ArtifactReference, EventQueue, PrometheusAgent, RequestContext
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+import task_graph
+import tool_discovery
 from artifact_handling import merge_artifact_catalogs
 from capability_cache import get_capability_cache
 from conversation_store import get_conversation, record_turn_artifacts
 from workflow_library import get_workflow_registry, verify_workflow_source_health
 
-from . import runtime, task_tracking
-from .chat_flow import chat
+from . import agent_loop, runtime, task_tracking
+from .chat_flow import AdkRun, adk_run, chat
 from .debug_commands import _is_supported_slash_command_query
 from .models import ConversationRequest, ConversationResponse
 
@@ -37,6 +41,20 @@ from .models import ConversationRequest, ConversationResponse
 # loop does not garbage-collect them while they run past the request that
 # started them.
 _BACKGROUND_TASKS: set = set()
+
+logger = logging.getLogger(__name__)
+
+
+class _DetachedEventQueue(EventQueue):
+    """The event queue of a run with no A2A caller (a resumed turn, a catalog start): drops events."""
+
+    async def enqueue_event(self, event: Any) -> None:
+        return None
+
+
+def _detached_context(context_id: str, task_id: Optional[str] = None) -> RequestContext:
+    """An A2A request context for a run with no A2A caller; *context_id* is the ADK session."""
+    return RequestContext(ServerCallContext(), context_id=context_id, task_id=task_id or str(uuid.uuid4()))
 
 
 class OrchestratorAgent(PrometheusAgent):
@@ -73,10 +91,50 @@ class OrchestratorAgent(PrometheusAgent):
                 pass
             runtime._refresh_task = None
 
+    async def _resume_node(self, node: task_graph.TaskNode) -> None:
+        """Resume one detached turn's ADK invocation where it stopped; best-effort."""
+        try:
+            outcome = await agent_loop.run_turn(
+                self,
+                _detached_context(node.adk_session_id or node.conversation_id, node.task_id),
+                _DetachedEventQueue(),
+                catalog=await agent_loop.build_tool_catalog(),
+                message=None,
+                conversation_id=node.conversation_id,
+                user_id=node.adk_user_id or "local",
+                invocation_id=node.invocation_id,
+            )
+        except Exception as exc:
+            logger.warning("Resume of task %s (invocation %s) failed: %s", node.task_id, node.invocation_id, exc)
+            task_graph.update_own_state(node.conversation_id, node.task_id, own_state="failed", error=str(exc))
+            return
+        if outcome.pending_calls:
+            task_graph.update_own_state(node.conversation_id, node.task_id, own_state="input-required")
+            return
+        task_graph.store_result(
+            node.conversation_id,
+            node.task_id,
+            ConversationResponse(
+                conversation_id=node.conversation_id, status="answer", message=outcome.final_text
+            ).model_dump(exclude_none=True),
+        )
+        task_graph.update_own_state(node.conversation_id, node.task_id, own_state="completed")
+
+    def _resume_unfinished_turns(self) -> None:
+        """Resume, in the background, every unfinished detached turn that recorded an invocation."""
+        for node in task_graph.list_resumable_nodes():
+            task = asyncio.create_task(self._resume_node(node))
+            _BACKGROUND_TASKS.add(task)
+            task.add_done_callback(_BACKGROUND_TASKS.discard)
+
     @asynccontextmanager
     async def lifespan(self, app) -> AsyncIterator[None]:
         """Use Starlette lifespan hooks instead of deprecated event handlers."""
         await self._on_startup()
+        try:
+            self._resume_unfinished_turns()
+        except Exception as exc:
+            logger.warning("Resuming unfinished turns failed: %s", exc)
         try:
             yield
         finally:
@@ -261,6 +319,9 @@ class OrchestratorAgent(PrometheusAgent):
             workflow_version=workflow_version,
             selection_source="catalog",
         )
+        context_id = conversation_id or str(uuid.uuid4())
+        chat_request.conversation_id = context_id
+        adk_run.set(AdkRun(self, _detached_context(context_id), _DetachedEventQueue()))
         response = await chat(chat_request)
         return JSONResponse(response.model_dump(exclude_none=True))
 
@@ -542,6 +603,7 @@ class OrchestratorAgent(PrometheusAgent):
             )
         conversation_id = str(request_payload.get("conversation_id") or context.context_id or "")
         user_id: str = str(request_payload.get("user_id") or "")
+        tool_discovery.parent_execution_record_id.set(self.execution_record_id)
 
         # Enforce conversation ownership: the verified user_id (injected into
         # params["user_id"] by PrometheusAgentExecutor._extract_params after
@@ -620,6 +682,10 @@ class OrchestratorAgent(PrometheusAgent):
                 message=message,
             )
 
+        # The turn's ADK run; chat() fills run.ids with its invocation and session.
+        run = AdkRun(self, context, event_queue)
+        adk_run.set(run)
+
         async def _run_chat() -> ConversationResponse:
             with runtime.status_stream(emit_chat_status) as status_tasks:
                 try:
@@ -658,6 +724,15 @@ class OrchestratorAgent(PrometheusAgent):
         # the orchestration keeps running in a background task; the user regains
         # control and is notified on completion.
         root_id = task_tracking.ensure_background_root()
+        if root_id and run.ids:
+            # A restart resumes the detached run from these (see _resume_unfinished_turns).
+            task_graph.update_own_state(
+                conversation_id,
+                root_id,
+                invocation_id=run.ids.get("invocation_id"),
+                adk_session_id=run.ids.get("session_id"),
+                adk_user_id=run.ids.get("user_id"),
+            )
         self._spawn_background_finisher(chat_task, conversation_id, root_id, turn)
         runtime.store_status_update(
             conversation_id, "Task is now running in the background.", final=True

@@ -25,7 +25,7 @@ Every agent starts from a small project template:
 | File | Purpose |
 |------|---------|
 | `agent_card.json` | Declares the agent's name, description, and skills. The orchestrator reads this at startup. |
-| `agent.py` | Your Python code. Subclass `PrometheusAgent`, implement `_execute`. |
+| `agent.py` | Your Python code. Subclass `AdkPrometheusAgent` and map each card skill to an ADK node in `adk_agents`. |
 | `prompts/` | Optional prompt template files loaded by your agent code. |
 | `workflows/` | Optional agent-owned workflow definitions loaded into the served agent card. |
 | `pyproject.toml` | Python packaging metadata and your extra dependencies. |
@@ -203,6 +203,13 @@ Tips:
 ---
 
 ## Step 3 — The Python agent (`agent.py`)
+
+> **The template starts on ADK.** The `agent.py` of the template subclasses
+> `AdkPrometheusAgent` (from `prometheus_api.adk`), not `PrometheusAgent`. It maps the card
+> skill to an ADK `LlmAgent` in `adk_agents`, and its example tool saves a file with
+> `tool_context.save_artifact(...)`. Read the "ADK runtime" section of the template
+> `README.md` for that path. The `_execute` contract below still applies to a plain
+> `PrometheusAgent`, and an `AdkPrometheusAgent` subclass can override `_execute` too.
 
 Open `agent.py`. The structure is:
 

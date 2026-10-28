@@ -10,45 +10,50 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Tool-calling orchestration loop.
+"""The client agent's tool catalog and its ADK run.
 
-Every registered skill (and workflow template) is a tool. The LLM sees the
-whole conversation — user turns, its own earlier tool calls, and their compact
-results with artifact ids — and decides the next fully parameterized call after
-each result arrives. Decomposition, chaining, and data flow between steps are
-ordinary tool-calling behavior; there is no up-front plan.
+Every registered skill (and workflow template) is a tool of one ADK
+``LlmAgent`` (``adk_tools.build_client_agent``). The model sees the whole
+conversation and decides the next fully parameterized call after each result
+arrives; decomposition, chaining and data flow between steps are ordinary
+tool-calling behavior, and there is no up-front plan.
 
-The unfinished tool calls of the latest assistant message ("pending calls")
-persist in conversation state, so the loop can pause for a form, an approval,
-or a specialist's INPUT_REQUIRED and resume on a later request. See
-``docs/docs/dev-docs/agent-loop-orchestration.md``.
+A chat turn is one ADK run (:func:`run_turn`). A pause (an approval, an
+``ask_user`` form, a specialist's INPUT_REQUIRED) is a long-running call in the
+ADK session; a later request resumes it by ``invocation_id`` with function
+responses (``chat_flow``). See ``docs/docs/dev-docs/agent-loop-orchestration.md``.
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import copy
 import json
 import logging
 import re
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple
 
+from a2a.server.agent_execution.context import RequestContext
+from a2a.server.events import EventQueue
+from google.adk.agents.invocation_context import new_invocation_context_id
+from google.adk.models import BaseLlm
+
 from jsonschema import Draft202012Validator
 from prometheus_api import load_prompt
-from prometheus_api.llm_client import (
-    ToolCall,
-    ToolDefinition,
-    assistant_message,
-    tool_result_message,
-)
+from prometheus_api.agent import PrometheusAgent
+from prometheus_api.agent.events import context_id as event_context_id
+from prometheus_api.agent.events import context_task_id
+from google.adk.runners import Runner
+from google.adk.utils._function_call_names import REQUEST_CONFIRMATION_FUNCTION_CALL_NAME
+from google.genai import types
+from prometheus_api.adk import CompactionPolicy, build_runner, prometheus_model
+from prometheus_api.adk.plugins.bridge import event_text
+from prometheus_api.adk.runner import commit_run_to_memory, ensure_session
+from prometheus_api.llm_client import ToolDefinition
 
 from artifact_handling import (
     extract_artifact_field_paths,
-    merge_artifacts_into_context,
     summarize_artifacts_for_context,
 )
 from capability_cache import AgentCapability, get_capability_cache
@@ -57,18 +62,10 @@ from param_schema import (
     flatten_schema_properties,
     get_nested_value,
     has_param_path,
-    normalize_params_for_input_schema,
-    set_nested_value,
 )
-from workflow_library import (
-    execute_workflow,
-    get_workflow_registry,
-    verify_workflow_source_health,
-    workflow_tool_name,
-)
+from workflow_library import get_workflow_registry, workflow_tool_name
 
-from . import runtime
-from .skills import invoke_skill
+from . import adk_tools, runtime
 from .utils import extract_result_text
 
 logger = logging.getLogger(__name__)
@@ -76,7 +73,6 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 SYSTEM_PROMPT_TEMPLATE = load_prompt("orchestrator_system.txt", prompts_dir=PROMPTS_DIR)
 
-MAX_LLM_TURNS = 12
 MAX_TRANSCRIPT_MESSAGES = 80
 SUMMARY_CHARS = 2000
 RESULT_CHARS = 6000
@@ -91,16 +87,6 @@ _TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 _SCHEMA_MAP_KEYS = {"properties", "patternProperties", "$defs", "definitions"}
 
 ToolKind = Literal["skill", "workflow", "ask_user"]
-CallStatus = Literal[
-    "needs_args",  # required user-input parameters missing → form
-    "needs_answer",  # ask_user question → form
-    "needs_approval",  # skill/workflow requires approval → plan_ready
-    "ready",  # validated, runnable
-    "resume",  # INPUT_REQUIRED answered, resume the same A2A task
-    "waiting_input",  # specialist returned INPUT_REQUIRED → form
-    "done",  # has a tool-result message
-]
-USER_BLOCKING = {"needs_args", "needs_answer", "waiting_input"}
 
 
 @dataclass(frozen=True)
@@ -124,16 +110,6 @@ class ToolSpec:
 
     def definition(self) -> ToolDefinition:
         return ToolDefinition(name=self.name, description=self.description, parameters=self.parameters)
-
-
-@dataclass
-class LoopOutcome:
-    """Where :func:`advance` stopped."""
-
-    kind: Literal["final", "needs_info", "needs_approval", "error"]
-    message: str = ""
-    questions: List[Dict[str, Any]] = field(default_factory=list)
-    plan: Optional[Dict[str, Any]] = None
 
 
 ASK_USER_SPEC = ToolSpec(
@@ -348,15 +324,6 @@ def workflow_tool_for(catalog: Mapping[str, ToolSpec], workflow_id: str) -> Opti
 # --------------------------------------------------------------------------- #
 
 
-def _call_record(call: ToolCall) -> Dict[str, Any]:
-    return {
-        "id": call.id or f"call_{uuid.uuid4().hex[:16]}",
-        "name": call.name,
-        "arguments": dict(call.arguments),
-        "arguments_error": call.arguments_error,
-    }
-
-
 def upload_note(
     state: Dict[str, Any],
     uploaded_artifact_ids: Optional[List[str]] = None,
@@ -409,80 +376,6 @@ def trim_transcript(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return messages
 
 
-def inject_tool_call(
-    state: Dict[str, Any],
-    catalog: Mapping[str, ToolSpec],
-    spec: ToolSpec,
-    arguments: Dict[str, Any],
-    note: str,
-    *,
-    workflow_version: Optional[str] = None,
-    selection_source: Optional[str] = None,
-) -> None:
-    """Record a platform-chosen call (explicit workflow start) as if the model made it."""
-    call_id = f"call_{uuid.uuid4().hex[:16]}"
-    state["llm_messages"].append(
-        {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": call_id,
-                    "type": "function",
-                    "function": {"name": spec.name, "arguments": json.dumps(arguments)},
-                }
-            ],
-        }
-    )
-    state["pending_note"] = note
-    call = _new_call(
-        {"id": call_id, "name": spec.name, "arguments": arguments, "arguments_error": None},
-        catalog,
-        state,
-    )
-    if workflow_version:
-        call["workflow_version"] = workflow_version
-    if selection_source:
-        call["selection_source"] = selection_source
-    state["pending_calls"] = [call]
-
-
-# Bookkeeping keys conversation_store adds to persisted messages; never sent to the LLM.
-_MESSAGE_TAGS = ("turn_id", "turn_started_at")
-_SUPERSEDED_RESULT = json.dumps(
-    {"status": "not_executed", "message": "This call was superseded by a later turn and never ran."}
-)
-
-
-def llm_view(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """The persisted transcript as a provider-valid message list.
-
-    Turns of one conversation can run concurrently and are stored as per-turn blocks
-    (``conversation_store``), so a tool result can be separated from its call (a
-    turn resumed after another turn ran in between) or never arrive (a superseded
-    pending call). Each call gets exactly one result, directly after its assistant
-    message: the stored one when it exists, otherwise a "not executed" result.
-    Results with no call are dropped. Bookkeeping tags are stripped.
-    """
-    results: Dict[str, Dict[str, Any]] = {}
-    for message in messages:
-        if message.get("role") == "tool":
-            results.setdefault(str(message.get("tool_call_id") or ""), message)
-    view: List[Dict[str, Any]] = []
-    for message in messages:
-        if message.get("role") == "tool":
-            continue
-        view.append({key: value for key, value in message.items() if key not in _MESSAGE_TAGS})
-        for tool_call in message.get("tool_calls") or []:
-            call_id = str(tool_call.get("id") or "")
-            stored = results.pop(call_id, None)
-            if stored is None:
-                view.append(tool_result_message(call_id, _SUPERSEDED_RESULT))
-            else:
-                view.append({key: value for key, value in stored.items() if key not in _MESSAGE_TAGS})
-    return view
-
-
 def _system_prompt(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> str:
     artifacts = summarize_artifacts_for_context((state.get("context") or {}).get("artifacts"))
     lines = [
@@ -494,8 +387,14 @@ def _system_prompt(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> st
     return (
         SYSTEM_PROMPT_TEMPLATE
         .replace("{artifact_catalog}", "\n".join(lines) or "(none)")
-        .replace("{recent_skill_inputs}", "\n".join(recent_skill_inputs(state, catalog)) or "(none)")
+        .replace("{recent_skill_inputs}", "\n".join(_skill_input_digest(state, catalog)) or "(none)")
     )
+
+
+def _skill_input_digest(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> List[str]:
+    """The recent skill inputs of the prompt: precomputed by chat_flow in an ADK run, else from the history."""
+    digest = state.get(adk_tools.RECENT_SKILL_INPUTS_KEY)
+    return list(digest) if isinstance(digest, list) else recent_skill_inputs(state, catalog)
 
 
 def _restrict_to_schema(value: Any, schema: Any) -> Any:
@@ -549,11 +448,6 @@ def _repeat_index(key: str) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def _finish(call: Dict[str, Any], payload: Dict[str, Any]) -> None:
-    call["status"] = "done"
-    call["content"] = json.dumps(payload, default=str)
-
-
 def _known_artifact_ids(state: Dict[str, Any]) -> List[str]:
     return [
         artifact["artifact_id"]
@@ -602,17 +496,6 @@ def _missing_user_inputs(spec: ToolSpec, arguments: Dict[str, Any]) -> List[str]
     return [path for path in spec.user_required if not has_param_path(arguments, path)]
 
 
-def _refresh_status(call: Dict[str, Any], spec: ToolSpec) -> None:
-    missing = _missing_user_inputs(spec, call["arguments"])
-    call["missing"] = missing
-    if missing:
-        call["status"] = "needs_args"
-    elif spec.requires_approval and not call.get("approved"):
-        call["status"] = "needs_approval"
-    else:
-        call["status"] = "ready"
-
-
 def _normalize_questions(raw: Any) -> List[Dict[str, Any]]:
     questions: List[Dict[str, Any]] = []
     for item in raw if isinstance(raw, list) else []:
@@ -628,46 +511,6 @@ def _normalize_questions(raw: Any) -> List[Dict[str, Any]]:
             question["type"] = "select"
         questions.append(question)
     return questions
-
-
-def _new_call(
-    tool_call: Dict[str, Any],
-    catalog: Mapping[str, ToolSpec],
-    state: Dict[str, Any],
-) -> Dict[str, Any]:
-    name = str(tool_call.get("name") or "")
-    spec = catalog.get(name)
-    call: Dict[str, Any] = {
-        "id": tool_call["id"],
-        "name": name,
-        "kind": spec.kind if spec else None,
-        "target": spec.target if spec else None,
-        "arguments": dict(tool_call.get("arguments") or {}),
-        "status": "ready",
-        "content": None,
-    }
-    if tool_call.get("arguments_error"):
-        _finish(call, {"status": "failed", "error": f"Invalid tool-call arguments: {tool_call['arguments_error']}"})
-        return call
-    if spec is None:
-        _finish(call, {"status": "failed", "error": f"Unknown tool '{name}'."})
-        return call
-    if spec.kind == "ask_user":
-        questions = _normalize_questions(call["arguments"].get("questions"))
-        if not questions:
-            _finish(call, {"status": "failed", "error": "ask_user needs at least one question with field and question."})
-            return call
-        call["questions"] = questions
-        call["status"] = "needs_answer"
-        return call
-    if spec.kind == "skill":
-        call["arguments"] = normalize_params_for_input_schema(call["arguments"], spec.input_schema)
-    problem = _validation_problem(spec, call["arguments"], state)
-    if problem:
-        _finish(call, {"status": "failed", "error": problem})
-        return call
-    _refresh_status(call, spec)
-    return call
 
 
 # --------------------------------------------------------------------------- #
@@ -690,124 +533,6 @@ def coerce_answer(value: Any, value_type: Any) -> Any:
     if kind in {"boolean", "checkbox"} and not isinstance(value, bool):
         return str(value).strip().lower() in {"true", "yes", "1", "on"}
     return value
-
-
-def _answer_for(answers: Mapping[str, Any], path: str) -> Any:
-    if path in answers:
-        return answers[path]
-    leaf = path.rsplit(".", 1)[-1]
-    return answers.get(leaf)
-
-
-def apply_answers(
-    state: Dict[str, Any],
-    catalog: Mapping[str, ToolSpec],
-    answers: Mapping[str, Any],
-) -> None:
-    """Route submitted form values to every pending call that asked for them."""
-    context = state.setdefault("context", {})
-    for call in state.get("pending_calls") or []:
-        spec = catalog.get(call["name"])
-        status = call["status"]
-        if status == "needs_args" and spec is not None:
-            properties = (
-                flatten_schema_properties(spec.input_schema)
-                if spec.kind == "skill"
-                else {str(form_field["field"]): form_field for form_field in spec.form_fields}
-            )
-            for path in list(call.get("missing") or []):
-                value = coerce_answer(_answer_for(answers, path), (properties.get(path) or {}).get("type"))
-                if value is None:
-                    continue
-                if spec.kind == "skill":
-                    set_nested_value(call["arguments"], path, value)
-                else:
-                    call["arguments"][path] = value
-            problem = _validation_problem(spec, call["arguments"], state)
-            if problem:
-                _finish(call, {"status": "failed", "error": problem})
-                continue
-            _refresh_status(call, spec)
-        elif status == "needs_answer":
-            provided = {
-                question["field"]: answers[question["field"]]
-                for question in call.get("questions") or []
-                if question["field"] in answers
-            }
-            if provided:
-                _finish(call, {"status": "answered", "answers": provided})
-        elif status == "waiting_input":
-            provided: Dict[str, Any] = {}
-            for item in call.get("missing_inputs") or []:
-                name = str(item.get("name") or "").strip()
-                if not name or name not in answers:
-                    continue
-                value = coerce_answer(answers[name], item.get("type"))
-                if value is None:
-                    continue
-                provided[name] = value
-                if not item.get("sensitive"):
-                    context[name] = value
-                    call.setdefault("recorded_inputs", {})[name] = value
-            if provided:
-                call["provided_inputs"] = provided
-                call["status"] = "resume"
-
-
-def sensitive_fields(state: Dict[str, Any]) -> set[str]:
-    """Names of the inputs pending calls asked for as sensitive; never persisted."""
-    return {
-        str(item.get("name") or "")
-        for call in state.get("pending_calls") or []
-        for item in call.get("missing_inputs") or []
-        if item.get("sensitive")
-    }
-
-
-def apply_reply(
-    state: Dict[str, Any],
-    text: str,
-    *,
-    uploaded_artifact_ids: Optional[List[str]] = None,
-    received_files: Optional[List[Dict[str, Any]]] = None,
-) -> None:
-    """A free-text reply answers ask_user and supersedes every other unfinished call."""
-    text += upload_note(state, uploaded_artifact_ids, received_files)
-    for call in state.get("pending_calls") or []:
-        if call["status"] == "done":
-            continue
-        if call["status"] == "needs_answer":
-            _finish(call, {"status": "answered", "reply": text})
-        else:
-            _finish(
-                call,
-                {
-                    "status": "not_executed",
-                    "message": f"Not executed: the user replied instead: {text}",
-                },
-            )
-
-
-def approve_pending(state: Dict[str, Any]) -> None:
-    for call in state.get("pending_calls") or []:
-        if call["status"] == "needs_approval":
-            call["approved"] = True
-            call["status"] = "ready"
-
-
-def reject_pending(state: Dict[str, Any]) -> None:
-    for call in state.get("pending_calls") or []:
-        if call["status"] != "done":
-            _finish(call, {"status": "rejected", "message": "The user rejected this call."})
-    commit_batch(state)
-
-
-def commit_batch(state: Dict[str, Any]) -> None:
-    """Append one tool-result message per call, in call order, and clear the batch."""
-    for call in state.get("pending_calls") or []:
-        state["llm_messages"].append(tool_result_message(call["id"], call.get("content") or ""))
-    state["pending_calls"] = []
-    state["pending_note"] = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -840,492 +565,125 @@ def _compact_result(result: Any, status: str) -> Dict[str, Any]:
     return payload
 
 
-def _result_key(state: Dict[str, Any], base: str) -> str:
-    """A turn-unique result key: ``base`` first, then ``base#2``, ``base#3``..."""
-    taken = state.setdefault("turn_tool_results", {})
-    if base not in taken:
-        return base
-    index = 2
-    while f"{base}#{index}" in taken:
-        index += 1
-    return f"{base}#{index}"
-
-
-def _record_result(state: Dict[str, Any], key: str, arguments: Dict[str, Any], result: Any) -> None:
-    artifacts = result.get("artifacts") if isinstance(result, dict) else None
-    state["context"] = merge_artifacts_into_context(state.get("context") or {}, artifacts or [])
-    state.setdefault("turn_tool_results", {})[key] = result
-    state.setdefault("turn_tool_inputs", {})[key] = copy.deepcopy(arguments)
-
-
-def _resolve_from_context(
-    missing_inputs: List[Dict[str, Any]],
-    arguments: Dict[str, Any],
-    context: Dict[str, Any],
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Answer ``resolvable_from_context`` inputs from the call's arguments or state context."""
-    resolved: Dict[str, Any] = {}
-    unresolved: List[Dict[str, Any]] = []
-    for item in missing_inputs or []:
-        name = str(item.get("name") or "").strip()
-        if not name:
-            continue
-        value = None
-        if item.get("resolvable_from_context"):
-            for source in (arguments, context):
-                if has_param_path(source, name):
-                    value = get_nested_value(source, name)
-                    break
-        if value is None:
-            unresolved.append(item)
-        else:
-            resolved[name] = value
-    return resolved, unresolved
-
-
-def _a2a_resume_fields(record: Mapping[str, Any]) -> Dict[str, Any]:
-    fields = {
-        "_a2a_context_id": record.get("a2a_context_id"),
-        "_a2a_task_id": record.get("a2a_task_id"),
-        "_task_graph_root_id": record.get("task_graph_root_id"),
-        "_task_graph_node_id": record.get("task_graph_node_id"),
-    }
-    return {key: value for key, value in fields.items() if value}
-
-
-def _blocked_record(skill_id: str, item: Mapping[str, Any], missing: List[Dict[str, Any]], hint: Any) -> Dict[str, Any]:
-    return {
-        "skill_id": skill_id,
-        "a2a_context_id": item.get("_a2a_context_id"),
-        "a2a_task_id": item.get("_a2a_task_id"),
-        "task_graph_root_id": item.get("_task_graph_root_id"),
-        "task_graph_node_id": item.get("_task_graph_node_id"),
-        "missing_inputs": missing,
-        "hint": hint,
-    }
-
-
-def _invocation_params(call: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
-    params = copy.deepcopy(call["arguments"])
-    artifacts = summarize_artifacts_for_context((state.get("context") or {}).get("artifacts"))
-    if artifacts:
-        params["artifacts"] = artifacts
-    return params
-
-
-async def _settle_skill_item(
-    call: Dict[str, Any],
-    item: Dict[str, Any],
-    state: Dict[str, Any],
-    params: Dict[str, Any],
-) -> None:
-    """Turn one invoke_skill outcome into a finished call or an INPUT_REQUIRED pause."""
-    skill_id = call["target"]
-    conversation_id = str(state.get("conversation_id") or "")
-    if item.get("input_required"):
-        payload = item.get("input_required") or {}
-        missing = payload.get("missing_inputs", []) if isinstance(payload, dict) else []
-        resolved, unresolved = _resolve_from_context(missing, call["arguments"], state.get("context") or {})
-        if resolved and not call.get("auto_resumed"):
-            call["auto_resumed"] = True
-            call.setdefault("recorded_inputs", {}).update(resolved)
-            resumed = await invoke_skill(
-                skill_id,
-                {**params, "provided_inputs": resolved, **_a2a_resume_fields(_blocked_record(skill_id, item, [], None))},
-                conversation_id,
-                emit_status=False,
-            )
-            await _settle_skill_item(call, resumed, state, params)
-            return
-        hint = payload.get("hint") if isinstance(payload, dict) else None
-        call.update(_blocked_record(skill_id, item, unresolved or missing, hint))
-        call["status"] = "waiting_input"
-        return
-    if "error" in item:
-        state.setdefault("turn_tool_results", {})[_result_key(state, skill_id)] = {"error": item["error"]}
-        _finish(call, {"status": "failed", "error": str(item["error"])})
-        return
-    result = item.get("result")
-    # Inputs given after the call was made (form answers, values resolved from
-    # context) belong to the invocation's record, and the model must see them.
-    recorded = call.pop("recorded_inputs", {})
-    _record_result(state, _result_key(state, skill_id), {**call["arguments"], **recorded}, result)
-    payload = _compact_result(result, "succeeded")
-    if recorded:
-        payload["provided_inputs"] = recorded
-    _finish(call, payload)
-
-
-async def _run_skill(call: Dict[str, Any], state: Dict[str, Any]) -> None:
-    params = _invocation_params(call, state)
-    conversation_id = str(state.get("conversation_id") or "")
-    if call["status"] == "resume":
-        item = await invoke_skill(
-            call["target"],
-            {**params, "provided_inputs": call.pop("provided_inputs", {}), **_a2a_resume_fields(call)},
-            conversation_id,
-        )
-    else:
-        item = await invoke_skill(call["target"], params, conversation_id)
-    await _settle_skill_item(call, item, state, params)
-
-
-async def _run_workflow(call: Dict[str, Any], state: Dict[str, Any]) -> None:
-    conversation_id = str(state.get("conversation_id") or "")
-    workflow = get_workflow_registry().get(call["target"], version=call.get("workflow_version"))
-    if workflow is None:
-        _finish(call, {"status": "failed", "error": f"Workflow '{call['target']}' is unavailable."})
-        return
-
-    # step_id -> outcome of every finished step; a resumed run never invokes them again.
-    completed = call.setdefault("completed_steps", {})
-    step_keys = call.setdefault("step_result_keys", {})
-    if call["status"] == "resume":
-        # Finish the blocked specialist tasks first, then continue the template
-        # from where it stopped. Non-sensitive answers also reach later steps.
-        provided = call.pop("provided_inputs", {})
-        sensitive = {str(item.get("name") or "") for item in call.get("missing_inputs") or [] if item.get("sensitive")}
-        still_blocked: List[Dict[str, Any]] = []
-        for record in call.get("blocked_steps") or []:
-            step_id = str(record.get("step_id") or record["skill_id"])
-            names = {str(item.get("name") or "") for item in record.get("missing_inputs") or []}
-            step_inputs = {name: value for name, value in provided.items() if name in names}
-            resumed = await invoke_skill(
-                record["skill_id"],
-                {**_invocation_params(call, state), "provided_inputs": step_inputs, **_a2a_resume_fields(record)},
-                conversation_id,
-            )
-            if resumed.get("input_required"):
-                payload = resumed.get("input_required") or {}
-                still_blocked.append(
-                    {
-                        **_blocked_record(
-                            record["skill_id"], resumed, payload.get("missing_inputs") or [], payload.get("hint")
-                        ),
-                        "step_id": step_id,
-                        "params": record.get("params") or {},
-                    }
-                )
-            elif "error" in resumed:
-                completed[step_id] = {"status": "failed", "error": str(resumed["error"])}
-            else:
-                recorded = {name: value for name, value in step_inputs.items() if name not in sensitive}
-                params = {**(record.get("params") or {}), **recorded}
-                completed[step_id] = {"status": "succeeded", "result": resumed.get("result"), "params": params}
-                _record_step(state, step_keys, step_id, record["skill_id"], params, resumed.get("result"))
-        call["arguments"].update({name: value for name, value in provided.items() if name not in sensitive})
-        if still_blocked:
-            _pause_workflow(call, still_blocked)
-            return
-
-    health_error = await verify_workflow_source_health(workflow)
-    if health_error:
-        _finish(call, {"status": "failed", "error": health_error})
-        return
-    runtime.store_status_update(
-        conversation_id,
-        f"Running workflow '{workflow.definition.id}' ({len(workflow.definition.steps)} steps).",
-    )
-    context = dict(state.get("context") or {})
-    inputs = normalize_params_for_input_schema(call["arguments"])
-    artifacts = summarize_artifacts_for_context(context.get("artifacts"))
-    if artifacts:
-        inputs["artifacts"] = artifacts
-    execution = await execute_workflow(
-        workflow=workflow,
-        input_params=inputs,
-        context=context,
-        invoke_skill=invoke_skill,
-        conversation_id=conversation_id,
-        completed_steps=completed,
-    )
-    # Siblings in the same batch may have merged artifacts into state meanwhile.
-    state["context"] = merge_artifacts_into_context(context, (state.get("context") or {}).get("artifacts") or [])
-    for step_id, payload in (execution.get("step_results") or {}).items():
-        if isinstance(payload, dict) and step_id not in completed:
-            params = payload.get("params") or {}
-            completed[step_id] = {"status": "succeeded", "result": payload.get("result"), "params": params}
-            _record_step(state, step_keys, step_id, str(payload.get("skill_id") or step_id), params, payload.get("result"))
-    for error in execution.get("errors") or []:
-        if error.get("step_id") and error["step_id"] not in completed:
-            completed[error["step_id"]] = {"status": "failed", "error": error.get("error")}
-
-    blocked = [
-        {
-            **_blocked_record(
-                str(step["skill_id"]),
-                step,
-                (step.get("input_required") or {}).get("missing_inputs") or [],
-                (step.get("input_required") or {}).get("hint"),
-            ),
-            "step_id": step.get("step_id"),
-            "params": step.get("params") or {},
-        }
-        for step in execution.get("input_required_steps") or []
-    ]
-    if blocked:
-        _pause_workflow(call, blocked)
-        return
-
-    statuses = execution.get("step_statuses") or {}
-    failed = any(status == "failed" for status in statuses.values())
-    _finish(
-        call,
-        {
-            "status": "failed" if failed else "succeeded",
-            "step_statuses": statuses,
-            "errors": execution.get("errors") or [],
-            "summary": _truncate(extract_result_text(execution.get("final_output")), SUMMARY_CHARS),
-            "final_output": _truncate(json.dumps(execution.get("final_output"), default=str), RESULT_CHARS),
-        },
-    )
-
-
-def _record_step(
-    state: Dict[str, Any],
-    step_keys: Dict[str, str],
-    step_id: str,
-    skill_id: str,
-    params: Dict[str, Any],
-    result: Any,
-) -> None:
-    """Record one workflow step's result under its skill, keeping the key it got first."""
-    key = step_keys.get(step_id) or _result_key(state, skill_id)
-    step_keys[step_id] = key
-    _record_result(state, key, params, result)
-
-
-def _pause_workflow(call: Dict[str, Any], blocked: List[Dict[str, Any]]) -> None:
-    call["blocked_steps"] = blocked
-    call["missing_inputs"] = [item for record in blocked for item in record["missing_inputs"]]
-    call["hint"] = next((record["hint"] for record in blocked if record.get("hint")), None)
-    call["status"] = "waiting_input"
-
-
-async def _run_call(call: Dict[str, Any], state: Dict[str, Any]) -> None:
-    try:
-        if call["kind"] == "workflow":
-            await _run_workflow(call, state)
-        else:
-            await _run_skill(call, state)
-    except Exception as exc:  # one failing call must not sink its siblings
-        logger.exception("Tool call %s (%s %s) failed", call["id"], call["kind"], call["target"])
-        _finish(call, {"status": "failed", "error": str(exc)})
-
-
 # --------------------------------------------------------------------------- #
-# Pauses: forms and approval
+# The turn: one ADK run of the client agent
 # --------------------------------------------------------------------------- #
 
-
-def _question_type(prop: Mapping[str, Any]) -> str:
-    kind = str(prop.get("type") or "string").lower()
-    if prop.get("enum"):
-        return "select"
-    if kind in {"number", "integer"}:
-        return "number"
-    if kind == "boolean":
-        return "checkbox"
-    return "text"
+# The orchestrator compacts early: tool results are large and the window is shared.
+COMPACTION = CompactionPolicy(trigger_ratio=0.6)
 
 
-def _form_questions(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> List[Dict[str, Any]]:
-    """Union of every blocking call's questions; one field answers all calls sharing it."""
-    questions: List[Dict[str, Any]] = []
-    seen: set[str] = set()
+@dataclass
+class TurnOutcome:
+    """Where one ADK run of the client agent stopped."""
 
-    def add(question: Dict[str, Any]) -> None:
-        if question["field"] not in seen:
-            seen.add(question["field"])
-            questions.append(question)
+    session_id: str
+    invocation_id: str
+    final_text: str = ""
+    awaiting_approval: bool = False
+    needs_input: bool = False
+    # The paused long-running calls: {"id", "name", "args"} each.
+    pending_calls: List[Dict[str, Any]] = field(default_factory=list)
+    # The skill calls of the user turn so far, by result key (skill_id, skill_id#2...).
+    tool_results: Dict[str, Any] = field(default_factory=dict)
+    tool_inputs: Dict[str, Any] = field(default_factory=dict)
 
-    for call in state.get("pending_calls") or []:
-        spec = catalog.get(call["name"])
-        if call["status"] == "needs_answer":
-            for question in call.get("questions") or []:
-                add(question)
-        elif call["status"] == "needs_args" and spec is not None:
-            if spec.kind == "workflow":
-                missing = set(call.get("missing") or [])
-                for form_field in spec.form_fields:
-                    if form_field["field"] not in missing:
-                        continue
-                    add(
-                        {
-                            "field": form_field["field"],
-                            "question": form_field.get("label") or form_field["field"],
-                            "description": form_field.get("description"),
-                            "type": _question_type({"type": form_field.get("type"), "enum": form_field.get("options")}),
-                            "options": form_field.get("options"),
-                        }
-                    )
-                continue
-            properties = flatten_schema_properties(spec.input_schema)
-            for path in call.get("missing") or []:
-                prop = properties.get(path) or {}
-                question = {
-                    "field": path,
-                    "question": prop.get("title") or path.replace(".", " ").replace("_", " ").capitalize(),
-                    "description": prop.get("description"),
-                    "type": _question_type(prop),
-                }
-                if prop.get("enum"):
-                    question["options"] = list(prop["enum"])
-                add(question)
-        elif call["status"] == "waiting_input":
-            for item in call.get("missing_inputs") or []:
-                name = str(item.get("name") or "").strip()
-                if not name:
-                    continue
-                kind = str(item.get("type") or "string").strip().lower()
-                add(
-                    {
-                        "field": name,
-                        "question": item.get("user_prompt") or item.get("description") or name,
-                        "description": item.get("description"),
-                        "type": "select" if kind == "enum" or item.get("options") else _question_type({"type": kind}),
-                        "options": item.get("options"),
-                        "required": bool(item.get("required", True)),
-                        "sensitive": bool(item.get("sensitive")),
-                        "value_type": kind,
-                    }
-                )
-    return questions
+    @property
+    def pending_call_ids(self) -> List[str]:
+        return [str(call["id"]) for call in self.pending_calls]
 
 
-def _plan(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> Dict[str, Any]:
-    calls = [call for call in state.get("pending_calls") or [] if call["status"] != "done"]
-    steps: List[Dict[str, Any]] = []
-    duration = 0
-    for call in calls:
-        spec = catalog.get(call["name"])
-        if spec is None:
-            continue
-        duration += spec.expected_duration_seconds
-        arguments = ", ".join(
-            f"{key}={json.dumps(value, default=str)}"
-            for key, value in call["arguments"].items()
-        )
-        steps.append(
-            {
-                "name": spec.label,
-                "agent": spec.agent_name,
-                "description": _truncate(f"{spec.target}({arguments})", 400),
-            }
-        )
-    plan: Dict[str, Any] = {
-        "intent": state.get("pending_note") or "Review the next step(s) before they run.",
-        "steps": steps,
-        "skills": [call["target"] for call in calls],
-        "workflow_type": "parallel" if len(calls) > 1 else "single",
-        "estimated_duration_seconds": duration,
-        "required_params": [],
-        "param_metadata": {},
-    }
-    workflow_call = next((call for call in calls if call.get("kind") == "workflow"), None)
-    if workflow_call is not None:
-        # PlanViewerElement's details panel shows which workflow runs and who chose it.
-        plan["workflow_id"] = workflow_call["target"]
-        plan["selection_source"] = workflow_call.get("selection_source") or "model"
-        if workflow_call.get("workflow_version"):
-            plan["workflow_version"] = workflow_call["workflow_version"]
-    return plan
-
-
-def _pause_message(state: Dict[str, Any], default: str) -> str:
-    for call in state.get("pending_calls") or []:
-        if call["status"] == "waiting_input" and call.get("hint"):
-            return str(call["hint"])
-    return state.get("pending_note") or default
-
-
-async def _drive_batch(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> Optional[LoopOutcome]:
-    """Run the pending batch as far as possible; return an outcome when the user is needed."""
-    calls = state.get("pending_calls") or []
-    if any(call["status"] in USER_BLOCKING for call in calls):
-        return LoopOutcome(
-            "needs_info",
-            message=_pause_message(state, "I need some additional information to proceed:"),
-            questions=_form_questions(state, catalog),
-        )
-    if any(call["status"] == "needs_approval" for call in calls):
-        return LoopOutcome(
-            "needs_approval",
-            message=_pause_message(state, "Please review and approve the next step(s):"),
-            plan=_plan(state, catalog),
-        )
-    runnable = [call for call in calls if call["status"] in {"ready", "resume"}]
-    if runnable:
-        await asyncio.gather(*(_run_call(call, state) for call in runnable))
-    if any(call["status"] == "waiting_input" for call in calls):
-        return LoopOutcome(
-            "needs_info",
-            message=_pause_message(state, "A specialist needs additional information to proceed:"),
-            questions=_form_questions(state, catalog),
-        )
-    return None
-
-
-# --------------------------------------------------------------------------- #
-# The loop
-# --------------------------------------------------------------------------- #
-
-
-async def advance(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) -> LoopOutcome:
-    """Drive pending calls and LLM turns until a final answer or a user pause."""
-    async with contextlib.AsyncExitStack() as stack:
-        return await _advance(state, catalog, stack)
-
-
-async def _advance(
-    state: Dict[str, Any],
+async def run_turn(
+    agent: PrometheusAgent,
+    context: RequestContext,
+    event_queue: EventQueue,
+    *,
     catalog: Mapping[str, ToolSpec],
-    stack: contextlib.AsyncExitStack,
-) -> LoopOutcome:
-    conversation_id = str(state.get("conversation_id") or "")
-    llm: Any = None  # created on the first LLM turn, reused for the rest of this advance
-    turns = 0
-    while True:
-        if state.get("pending_calls"):
-            paused = await _drive_batch(state, catalog)
-            if paused is not None:
-                return paused
-            commit_batch(state)
-        if turns >= MAX_LLM_TURNS:
-            return LoopOutcome(
-                "error",
-                message=f"Stopped after {MAX_LLM_TURNS} orchestration steps without reaching an answer.",
-            )
-        turns += 1
-        runtime.store_status_update(conversation_id, "Deciding the next step.")
-        state["llm_messages"] = trim_transcript(state["llm_messages"])
-        messages = [{"role": "system", "content": _system_prompt(state, catalog)}, *llm_view(state["llm_messages"])]
-        if llm is None:
-            llm = await stack.enter_async_context(runtime.create_llm())
-        response = await llm.medium(
-            messages,
-            tools=[spec.definition() for spec in catalog.values()],
-            tool_choice="auto",
-            max_tokens=4096,
+    message: str | types.Content | None,
+    conversation_id: str = "",
+    conversation_context: Optional[Mapping[str, Any]] = None,
+    user_id: str = "local",
+    invocation_id: Optional[str] = None,
+    test: bool = False,
+    model: Optional[BaseLlm] = None,
+    extra_state: Optional[Mapping[str, Any]] = None,
+) -> TurnOutcome:
+    """Run (or resume) the client agent for one chat turn.
+
+    A ``str`` message starts a new invocation; a ``types.Content`` of function
+    responses (an approval or form answers) with the paused ``invocation_id``
+    resumes it, and ``None`` resumes it where it stopped. In test mode the
+    runner uses in-memory services and ``model`` (a stub) also summarizes.
+    *extra_state* is merged into the session state for the run's tools; its
+    ``temp:`` keys last for this run only and are never stored.
+    The outcome carries the skill calls the turn has made so far.
+    """
+    llm = None
+    if model is None:
+        # Closed with the runner when the turn ends (proxy mode holds an httpx client).
+        llm = agent.llm_client(context)
+        model = prometheus_model("medium", llm)
+    root = adk_tools.build_client_agent(catalog, model)
+    runner: Runner = build_runner(
+        agent,
+        context,
+        root,
+        event_queue=event_queue,
+        compaction=COMPACTION,
+        test=test,
+        # chat_flow sends the turn's one final JSON status; the bridge emits artifacts only.
+        bridge_events=False,
+        summarizer_model=model if test else None,
+    )
+    session_id = event_context_id(context) or context_task_id(context)
+    try:
+        await ensure_session(runner, user_id, session_id)
+        state_delta: Dict[str, Any] = {adk_tools.CONVERSATION_ID_KEY: conversation_id, **dict(extra_state or {})}
+        if conversation_context is not None:
+            state_delta[adk_tools.CONTEXT_KEY] = dict(conversation_context)
+        if isinstance(message, str):
+            # A new user turn starts its tool records empty; a resume keeps adding to them.
+            state_delta[adk_tools.TOOL_RESULTS_KEY] = {}
+            state_delta[adk_tools.TOOL_INPUTS_KEY] = {}
+        new_message = types.Content(role="user", parts=[types.Part(text=message)]) if isinstance(message, str) else message
+        invocation_id = invocation_id or new_invocation_context_id()
+
+        outcome = TurnOutcome(session_id=session_id, invocation_id=invocation_id)
+        calls: Dict[str, Dict[str, Any]] = {}
+        pending: List[str] = []
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            invocation_id=invocation_id,
+            new_message=new_message,
+            state_delta=state_delta,
+        ):
+            if event.author == "user" or event.partial:
+                continue
+            for call in event.get_function_calls():
+                if call.id:
+                    calls[call.id] = {"id": call.id, "name": call.name, "args": dict(call.args or {})}
+            pending.extend(call_id for call_id in event.long_running_tool_ids or () if call_id not in pending)
+            text = event_text(event)
+            if text:
+                outcome.final_text = text
+        outcome.pending_calls = [calls[call_id] for call_id in pending if call_id in calls]
+        outcome.awaiting_approval = any(
+            call["name"] == REQUEST_CONFIRMATION_FUNCTION_CALL_NAME for call in outcome.pending_calls
         )
-        # The absence of tool calls is the only terminator (never finish_reason).
-        if not response.tool_calls:
-            answer = response.text.strip()
-            if not answer:
-                return LoopOutcome("error", message="The orchestrator returned an empty answer.")
-            state["llm_messages"].append(assistant_message(response))
-            return LoopOutcome("final", message=answer)
-        records = [_call_record(tool_call) for tool_call in response.tool_calls]
-        message = assistant_message(response)
-        stored_calls = message.get("tool_calls") or []
-        if len(stored_calls) == len(records):
-            # Generated ids must match in the transcript, or llm_view drops the real result.
-            for stored, record in zip(stored_calls, records):
-                if not stored.get("id"):
-                    stored["id"] = record["id"]
-        state["llm_messages"].append(message)
-        state["pending_note"] = response.text.strip()
-        state["pending_calls"] = [_new_call(record, catalog, state) for record in records]
-        for call in state["pending_calls"]:
-            if call["status"] in {"ready", "needs_args", "needs_approval"}:
-                runtime.store_status_update(conversation_id, f"Next step: '{call['target']}'.")
+        outcome.needs_input = any(
+            call["name"] != REQUEST_CONFIRMATION_FUNCTION_CALL_NAME for call in outcome.pending_calls
+        )
+        finished = await runner.session_service.get_session(
+            app_name=runner.app_name, user_id=user_id, session_id=session_id
+        )
+        if finished is not None:
+            outcome.tool_results = dict(finished.state.get(adk_tools.TOOL_RESULTS_KEY) or {})
+            outcome.tool_inputs = dict(finished.state.get(adk_tools.TOOL_INPUTS_KEY) or {})
+        if not outcome.pending_calls:
+            await commit_run_to_memory(runner, user_id, session_id)
+    finally:
+        await runner.close()
+        if llm is not None:
+            await llm.aclose()
+    return outcome

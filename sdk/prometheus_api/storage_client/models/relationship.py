@@ -12,9 +12,10 @@
 
 """Relationship models for the storage client."""
 
+import json
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RelationshipBase(BaseModel):
@@ -28,6 +29,17 @@ class RelationshipBase(BaseModel):
     )
 
     model_config = {"from_attributes": True}
+
+    @field_validator("properties", mode="before")
+    @classmethod
+    def _decode_json_properties(cls, value: Any) -> Any:
+        """Decode the JSON-string ``properties`` that some DeepLynx versions return."""
+        if not isinstance(value, str):
+            return value
+        if not value.strip():
+            return {}
+        decoded = json.loads(value)
+        return {} if decoded is None else decoded
 
 
 class RelationshipCreate(RelationshipBase):

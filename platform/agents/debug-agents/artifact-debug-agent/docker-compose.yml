@@ -39,10 +39,17 @@ services:
       DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
       DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
       DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
       DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
       DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
+      # ADK session store: the adk role and schema in admin-db (backend Alembic revision
+      # 4f1a2b3c4d5e). Empty means in-memory sessions that cannot resume.
+      ADK_SESSION_DB_URL: ${ADK_SESSION_DB_URL:-postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin}
     depends_on:
       litellm:
+        condition: service_healthy
+      admin-db:
         condition: service_healthy
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
     # It does not cover LiteLLM registration, which retries in the background.

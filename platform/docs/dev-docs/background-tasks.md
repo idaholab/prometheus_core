@@ -22,8 +22,9 @@ terminal event, up to a 900 s timeout:
 - client-agent `call_a2a_agent()` blocks on each downstream call
   (`agents/client-agent/tool_discovery.py:430`, `blocking: True` at line 478,
   `timeout_seconds = 900.0` at line 518),
-- the workflow executor blocks on each batch via `asyncio.gather`
-  (`agents/client-agent/workflow_library/executor.py`).
+- the workflow executor blocked on each batch via `asyncio.gather`
+  (`workflow_library/executor.py`, since replaced by the ADK `Workflow` that
+  `workflow_library.to_adk_workflow` builds).
 
 There is no notion of work that outlives the request that started it. This document
 designs that capability and tracks the Phase 0/1 implementation.

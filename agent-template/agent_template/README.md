@@ -10,7 +10,7 @@ responses in the Prometheus web UI.
 
 | File | Purpose |
 |------|---------|
-| `agent.py` | Your code. Subclass of `PrometheusAgent`; implements `_execute`. |
+| `agent.py` | Your code. Subclass of `AdkPrometheusAgent`; maps each card skill to an ADK agent in `adk_agents`. |
 | `agent_card.json` | Declares the agent's name, description, and skills. The orchestrator reads this to decide when to route to you. |
 | `prompts/` | Prompt template files loaded by your agent code when prompts get too large for `agent.py`. |
 | `workflows/` | Optional agent-owned workflow definitions inserted into the served agent card. |
@@ -22,8 +22,44 @@ responses in the Prometheus web UI.
 | `Makefile` | Convenience wrapper around `docker compose` (`make up`, `make up-fg`, `make down`, `make logs`). |
 | `.env.example` | Template for `.env` — copy and fill in real values. |
 
-`prometheus_api`, `a2a`, `starlette`, and `uvicorn` are already installed in the
+`prometheus_api`, `google-adk`, `a2a`, `starlette`, and `uvicorn` are already installed in the
 base image — do **not** add them to `pyproject.toml`.
+
+## ADK runtime
+
+This agent runs on Google ADK. The base class `AdkPrometheusAgent` builds one ADK
+runner for each request with `build_runner`. That runner supplies the sessions, the
+artifacts, the memory, and the status events.
+
+- Map each skill ID in `agent_card.json` to one ADK agent in `adk_agents`. The agent
+  does not start when a card skill has no ADK agent, or an ADK agent has no card skill.
+- Write each tool as an `async` function. Wrap it in `FunctionTool`. The function
+  docstring tells the model what the tool does.
+- Save output files with `tool_context.save_artifact(...)`. Each save makes one new
+  DeepLynx item, and the platform shows it to the user.
+- Read input files with `tool_context.load_artifact(...)`.
+- Do not give the `LlmAgent` a model. For each request, `create_runner` opens one
+  LLM client with `self.llm_client(context)`. It gives the `LlmAgent`
+  `prometheus_model("default", client)` over that client. A plugin on the runner
+  closes the client when the run ends. To use a different size, change the flavor (`small`, `medium`,
+  `large`). Do not name a provider model in code.
+- Keep blocking work out of a tool. Use `asyncio.to_thread(...)` for it.
+
+ADK keeps its sessions in the `adk` schema of the platform `admin-db`. Set
+`ADK_DB_PASSWORD` in `.env` to the platform value. `docker-compose.yml` builds
+`ADK_SESSION_DB_URL` from it. When you run `python agent.py` without
+`ADK_SESSION_DB_URL`, the sessions stay in memory. An interrupted run then cannot
+resume after a restart.
+
+To test a skill without a model provider, give the instance a copy of the ADK agent
+with a stub `BaseLlm`. Do not change the class dict.
+
+```python
+agent.adk_agents = {skill_id: agent.adk_agents[skill_id].clone(update={"model": stub})}
+agent.adk_test_mode = True  # in-memory sessions and artifacts
+```
+
+`create_runner` keeps a model that is already set.
 
 ## Run locally (fast iteration)
 
@@ -74,7 +110,7 @@ in-memory dict — fine for local development.
 ## Run the tests
 
 ```bash
-uv run pytest                 # tests/ — extend as you implement _execute
+uv run pytest                 # tests/ — extend as you implement your skill
 uv run ruff check .           # lint
 ```
 
@@ -120,8 +156,8 @@ For in-tree platform deployment, copy this directory into
 1. **`agent_card.json`** — set `name`, `description` (a one-sentence capability
    statement the orchestrator reads), and the skill's `inputSchema`,
    `output_format`, and `usage_notes`.
-2. **`agent.py`** — read your inputs from `params`, do the work, return a plain
-   `dict`. Use `self.send_status_update(...)` for progress messages.
+2. **`agent.py`** — write the instruction and the tools of the skill's ADK agent.
+   The request params reach the agent as JSON in the first user message.
 3. **`prompts/`** — move large static LLM prompts into text files and load them
    with `load_prompt(...)` from `prometheus_api`.
 4. **`workflows/`** — add workflow YAML/JSON files when this agent should publish
@@ -150,13 +186,20 @@ DeepLynx file storage.
 | `REGISTRY_URL` | LiteLLM proxy URL where the agent registers on startup. |
 | `LITELLM_MASTER_KEY` | LiteLLM gateway auth. |
 | `REDIS_URL` / `REDIS_PASSWORD` | Conversation state and artifact registry. |
+| `ADK_DB_PASSWORD` | Password of the `adk` role in the platform `admin-db`. Must match the platform's value. |
+| `ADK_SESSION_DB_URL` | ADK session store. Compose defaults it to the `adk` schema in `admin-db`; unset outside Docker keeps sessions in memory. |
 | `PROMETHEUS_API_BASE_IMAGE_HASH` | Base image tag the Dockerfile builds from. |
 | `LOCAL_SDK` | `true` builds FROM the locally built `prometheus_api:local` instead of the registry. |
 | `JWKS_URL` | Multi-user identity (recommended): the platform operator's JWKS URL — point it at the **platform backend** (`https://<platform-host>/.well-known/jwks.json`), not at another agent. Fetches the verification key automatically, including any rotation done through the platform's admin UI. See below. |
 | `USER_IDENTITY_PUBLIC_KEY` | Multi-user identity (alternative to `JWKS_URL`): a static public key from the platform operator. **Never** the private key — this agent only verifies. Won't observe a key rotated through the admin UI; re-ask the operator for the new key if verification starts failing. |
 | `USER_IDENTITY_ISS` / `USER_IDENTITY_AUD` | Must match the platform operator's values exactly. |
+| `DEEPLYNX_KEY` / `DEEPLYNX_SECRET` | Required DeepLynx authentication pair; alternatively use `DEEPLYNX_JWT_TOKEN`. |
+| `DEEPLYNX_JWT_TOKEN` | Alternative to key/secret authentication; do not set both methods. |
+| `DEEPLYNX_ORG_ID` / `DEEPLYNX_PROJECT_ID` | Required DeepLynx organization and project IDs. |
+| `DEEPLYNX_DATA_SOURCE_ID` | Optional when the project has a default data source. |
+| `DEEPLYNX_BASE_URL` | Optional; uses the SDK default when omitted. |
 
-See `.env.example` for the full list (including optional DeepLynx and proxy settings).
+See `.env.example` for the full list, including proxy and runtime settings.
 
 ### Verifying platform users (multi-user)
 

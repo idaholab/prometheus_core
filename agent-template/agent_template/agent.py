@@ -15,16 +15,26 @@ TEMPLATE_NAME Agent.
 
 TEMPLATE_DESCRIPTION
 
-This is a Prometheus specialist agent.  Subclass PrometheusAgent and implement
-`_execute` — the base class handles the HTTP server, authentication, agent-card
-serving, and registry registration for you.
+This is a Prometheus specialist agent on the Google ADK runtime.  Each skill in
+agent_card.json maps to one ADK agent in ``adk_agents``; the base class runs it
+through ``build_runner`` and handles the HTTP server, authentication, agent-card
+serving, registry registration, sessions, artifacts, and status events for you.
 """
 
+import asyncio
 import logging
 from typing import Any
 
-from prometheus_api import load_prompt  # noqa: F401 - used by the LLM pattern below
-from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
+from google.adk.agents import LlmAgent
+from google.adk.plugins import BasePlugin
+from google.adk.runners import Runner
+from google.adk.tools import FunctionTool, ToolContext
+from google.adk.workflow import BaseNode
+from google.genai import types
+from prometheus_api import load_prompt  # noqa: F401 - used by the prompt-file pattern below
+from prometheus_api.adk import AdkPrometheusAgent, prometheus_model
+from prometheus_api.agent import EventQueue, RequestContext
+from prometheus_api.llm_client import AsyncLLMClient
 
 # Read secrets and configuration from environment variables.
 # Never hard-code API keys or URLs here.
@@ -38,8 +48,57 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class TEMPLATE_CLASSAgent(PrometheusAgent):
+async def save_report(title: str, body: str, tool_context: ToolContext) -> dict[str, Any]:
+    """Save a Markdown report as an artifact of this conversation.
+
+    Args:
+        title: A short title for the report.
+        body: The report text, in Markdown.
+    """
+    # save_artifact stores one immutable DeepLynx item per call and links it to
+    # this run; the platform shows it to the user as an artifact.
+    report = f"# {title}\n\n{body}\n"
+    version = await tool_context.save_artifact(
+        "report.md",
+        types.Part.from_bytes(data=report.encode(), mime_type="text/markdown"),
+    )
+    return {"status": "success", "filename": "report.md", "version": version}
+
+
+# The ADK agent of the TEMPLATE_SKILL_ID skill.  It has no model here: the model
+# client is request-scoped, so create_runner adds it for each request.  The
+# first user message is the request params as JSON (the keys of the skill's
+# inputSchema in agent_card.json).
+TEMPLATE_SKILL_ID_agent = LlmAgent(
+    name="TEMPLATE_SKILL_ID",
+    instruction=(
+        "You are TEMPLATE_NAME Agent, a Prometheus specialist agent. "
+        "The user message is a JSON object with the task input in input_data. "
+        "Process the input, then call save_report once with your findings. "
+        "Reply with one JSON object with the keys status, input_received and message."
+    ),
+    tools=[FunctionTool(save_report)],
+)
+
+
+class _CloseLlmClient(BasePlugin):
+    """Close the request's LLM client when the runner closes."""
+
+    def __init__(self, client: AsyncLLMClient) -> None:
+        super().__init__(name="close_llm_client")
+        self._client = client
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+class TEMPLATE_CLASSAgent(AdkPrometheusAgent):
     """TEMPLATE_NAME Agent."""
+
+    # Card skill ID -> ADK agent or Workflow.  Every skill in agent_card.json
+    # needs an entry, and every entry needs a card skill: startup raises
+    # ValueError otherwise.
+    adk_agents = {"TEMPLATE_SKILL_ID": TEMPLATE_SKILL_ID_agent}
 
     # Optional: register agent-owned HTTP endpoints in __init__.
     #
@@ -68,90 +127,60 @@ class TEMPLATE_CLASSAgent(PrometheusAgent):
     #
     #     return JSONResponse({"artifact_id": request.path_params["artifact_id"]})
 
-    async def _execute(
+    def create_runner(
         self,
-        params: dict[str, Any],
         context: RequestContext,
+        root: BaseNode,
+        *,
         event_queue: EventQueue,
-    ) -> dict[str, Any]:
-        """Process one request.
+        abort_signal: asyncio.Event,
+    ) -> Runner:
+        """Give a model-less ADK agent this request's model, then build its runner.
 
-        Args:
-            params: Parameters from the caller's JSON payload, plus ``skill_id``
-                from the message metadata (the skill the orchestrator selected).
-            context: The A2A request context.  Use ``context.context_id`` as a
-                stable key for per-conversation state.
-            event_queue: Pass to the ``send_*`` helpers to emit progress updates
-                and artifacts.
-
-        Returns:
-            A plain ``dict``.  The base class wraps it as the final ``completed``
-            task status automatically — do not enqueue that event yourself.
+        ``prometheus_model`` sends every completion through one AsyncLLMClient
+        with a semantic flavor; the LLM config maps the flavor to a model.  The
+        base class closes the runner when the run ends, and the runner then
+        closes the client.  An agent that already has a model (a test stub)
+        keeps it.
         """
-        # ------------------------------------------------------------------
-        # 1. Read inputs from params.  These keys must match the properties
-        #    declared in agent_card.json's inputSchema.
-        # ------------------------------------------------------------------
-        input_data = params.get("input_data")
-        if not input_data:
-            return {"status": "error", "error": "input_data is required"}
-
-        # ------------------------------------------------------------------
-        # 2. Send optional progress updates so the UI stays responsive.
-        #    The base class sends the initial "working" update automatically;
-        #    call this only when you want intermediate messages.
-        # ------------------------------------------------------------------
-        await self.send_status_update(
-            context=context,
-            event_queue=event_queue,
-            message="Processing your request…",
+        if not isinstance(root, LlmAgent) or root.model:
+            return super().create_runner(
+                context, root, event_queue=event_queue, abort_signal=abort_signal
+            )
+        client = self.llm_client(context)
+        root = root.clone(update={"model": prometheus_model("default", client)})
+        runner = super().create_runner(
+            context, root, event_queue=event_queue, abort_signal=abort_signal
         )
-
-        # ------------------------------------------------------------------
-        # 3. Do your actual work here.  Replace this with real logic.
-        # ------------------------------------------------------------------
-        result = {
-            "status": "success",
-            "input_received": input_data,
-            "message": "Replace this with your agent's processing logic.",
-        }
-
-        # ------------------------------------------------------------------
-        # 4. Return a plain dict.  Keep keys consistent with the
-        #    "output_format" you described in agent_card.json.
-        # ------------------------------------------------------------------
-        return result
+        runner.plugin_manager.register_plugin(_CloseLlmClient(client))
+        return runner
 
     # ----------------------------------------------------------------------
     # PATTERNS — uncomment and adapt as needed.
     # ----------------------------------------------------------------------
     #
-    # Calling an LLM through the platform's LiteLLM gateway:
+    # A second skill: add it to agent_card.json and to adk_agents, with its own
+    # ADK agent (or a Workflow of FunctionNodes when the skill needs no model).
     #
-    #     system_prompt = load_prompt("system_prompt.txt").format(input_data=input_data)
-    #     async with self.llm_client(context) as llm:
-    #         response = await llm.medium(system_prompt)
-    #     return {"status": "success", "summary": response.text}
+    #     adk_agents = {"TEMPLATE_SKILL_ID": TEMPLATE_SKILL_ID_agent, "skill_b": skill_b_agent}
     #
-    # Dispatching when agent_card.json declares more than one skill:
+    # Loading a long instruction from prompts/ (ADK fills each {name}
+    # placeholder from session state, so do not put literal braces in it):
     #
-    #     handler = {
-    #         "skill_a": self._handle_a,
-    #         "skill_b": self._handle_b,
-    #     }.get(params.get("skill_id"))
-    #     if handler is None:
-    #         return {"status": "error", "error": f"Unknown skill: {params.get('skill_id')}"}
-    #     return await handler(params, context, event_queue)
+    #     instruction=load_prompt("instructions.txt"),
     #
-    # Persisting per-conversation state across turns (Redis-backed, with an
-    # in-memory fallback for local development):
+    # Reading an input artifact in a tool:
     #
-    #     state = self.load_context_state(str(context.context_id))
-    #     state["count"] = state.get("count", 0) + 1
-    #     self.save_context_state(str(context.context_id), state)
+    #     async def summarize(filename: str, tool_context: ToolContext) -> dict[str, Any]:
+    #         part = await tool_context.load_artifact(filename)
+    #         ...
     #
-    # See TUTORIAL.md ("Advanced topics") for emitting artifacts, asking the
-    # user for missing inputs (INPUT_REQUIRED), and DeepLynx file storage.
+    # Announcing a slow skill (the platform then shows it as background work):
+    #
+    #     long_running = {"TEMPLATE_SKILL_ID": 300}  # estimated seconds
+    #
+    # See TUTORIAL.md ("Advanced topics") for asking the user for missing
+    # inputs (INPUT_REQUIRED) and DeepLynx file storage.
 
 
 if __name__ == "__main__":

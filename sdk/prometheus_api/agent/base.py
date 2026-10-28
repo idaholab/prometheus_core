@@ -23,10 +23,22 @@ import logging
 import uuid
 import asyncio
 from contextlib import asynccontextmanager, suppress
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Mapping, Optional
-from typing import Sequence, cast
-from datetime import datetime
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    cast,
+)
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -85,11 +97,19 @@ from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
 from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
-from ..storage_client.models.item import ItemUpdate
+from ..storage_client.models.item import ItemCreate, ItemUpdate
+from ..llm_client.security import redact_secrets
 import uvicorn
 
 logger = logging.getLogger(__name__)
 _WORKFLOW_FILE_SUFFIXES = {".json", ".yaml", ".yml"}
+
+
+_ExecutionScope = Callable[
+    [Dict[str, Any], RequestContext],
+    AsyncContextManager[None],
+]
+_UNSET_EXECUTION_RECORD = object()
 
 
 class _TrackedEventQueue:
@@ -246,18 +266,22 @@ class PrometheusAgentExecutor(AgentExecutor):
                 # Extract parameters from the message (injects params["user_id"])
                 params = self._extract_params(context)
 
-                # Send "working" status
-                await emit_status_update(
-                    context=context,
-                    event_queue=tracked_queue,
-                    state=TaskState.TASK_STATE_WORKING,
-                    final=False,
-                )
+                # Standard delegating executors may establish request-scoped state
+                # before any work status or agent code runs. The bare executor's
+                # default scope is a storage-independent no-op.
+                async with self._establish_request_scope(params, context):
+                    # Send "working" status
+                    await emit_status_update(
+                        context=context,
+                        event_queue=tracked_queue,
+                        state=TaskState.TASK_STATE_WORKING,
+                        final=False,
+                    )
 
-                # Perform the main analysis (implemented by subclass), with a
-                # background keepalive so streaming connections do not time out
-                # during long gaps between substantive status updates.
-                result = await self._execute_with_heartbeat(params, context, tracked_queue)
+                    # Perform the main analysis (implemented by subclass), with a
+                    # background keepalive so streaming connections do not time out
+                    # during long gaps between substantive status updates.
+                    result = await self._execute_with_heartbeat(params, context, tracked_queue)
 
             # Agent can fully control finalization for advanced/streaming use cases.
             # If it already emitted a final status, skip automatic completion events.
@@ -300,6 +324,15 @@ class PrometheusAgentExecutor(AgentExecutor):
                     final=True,
                 )
             raise
+
+    @asynccontextmanager
+    async def _establish_request_scope(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Establish optional request state before working status and agent work."""
+        yield
 
     @staticmethod
     def _heartbeat_interval() -> float:
@@ -485,7 +518,7 @@ class PrometheusAgentExecutor(AgentExecutor):
         from .identity import current_user_id as _current_user_id
 
         uid = _current_user_id()
-        if uid is not None and "user_id" not in params:
+        if uid is not None:
             params["user_id"] = uid
 
         logger.info("Extracted parameter keys: %s", sorted(params.keys()))
@@ -546,12 +579,16 @@ class PrometheusAgentExecutor(AgentExecutor):
             event_queue: Queue for sending status updates
         """
         logger.info(f"Cancellation requested for {self.agent_name}")
+        await self._on_cancel(context)
         await emit_status_update(
             context=context,
             event_queue=event_queue,
             state=TaskState.TASK_STATE_CANCELED,
             final=True,
         )
+
+    async def _on_cancel(self, context: RequestContext) -> None:
+        """Stop the task's agent work before the ``canceled`` status; the bare executor has none."""
 
 
 class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
@@ -565,9 +602,26 @@ class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
             [Dict[str, Any], RequestContext, EventQueue],
             Awaitable[Dict[str, Any]],
         ],
+        execution_scope: Optional[_ExecutionScope] = None,
+        cancel_fn: Optional[Callable[[RequestContext], Awaitable[None]]] = None,
     ):
         super().__init__(agent_name=agent_name)
         self._execute_fn = execute_fn
+        self._execution_scope = execution_scope
+        self._cancel_fn = cancel_fn
+
+    @asynccontextmanager
+    async def _establish_request_scope(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Enter the optional owning-agent scope before work begins."""
+        if self._execution_scope is None:
+            yield
+            return
+        async with self._execution_scope(params, context):
+            yield
 
     async def _execute(
         self,
@@ -577,6 +631,11 @@ class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
     ) -> Dict[str, Any]:
         """Delegate to the owning agent's `_execute` implementation."""
         return await self._execute_fn(params, context, event_queue)
+
+    async def _on_cancel(self, context: RequestContext) -> None:
+        """Delegate to the owning agent's `on_cancel` hook, when one is given."""
+        if self._cancel_fn is not None:
+            await self._cancel_fn(context)
 
 
 class PrometheusAgent:
@@ -648,6 +707,10 @@ class PrometheusAgent:
         self._custom_http_routes: List[_AgentHTTPRoute] = []
         self._custom_static_endpoints: List[_AgentStaticEndpoint] = []
         self.executor: Optional[PrometheusAgentExecutor] = None
+        self._execution_record_id: ContextVar[object] = ContextVar(
+            f"prometheus_execution_record_id_{id(self)}",
+            default=_UNSET_EXECUTION_RECORD,
+        )
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
         self.context_state_store = ContextStateStore()
@@ -1410,6 +1473,71 @@ class PrometheusAgent:
             backoff_factor=backoff_factor,
         )
 
+    @property
+    def execution_record_id(self) -> Optional[int]:
+        """DeepLynx execution item ID for the active request, if any."""
+        value = self._execution_record_id.get()
+        return value if isinstance(value, int) else None
+
+    @asynccontextmanager
+    async def _create_execution_record(
+        self,
+        params: Dict[str, Any],
+        context: RequestContext,
+    ) -> AsyncIterator[None]:
+        """Create and bind the request's durable DeepLynx execution record."""
+        identity = get_current_identity()
+        if identity is None:
+            raise RuntimeError("Execution records require a verified request identity")
+
+        task_id = context_task_id(context)
+        context_id = event_context_id(context)
+        created_at = datetime.now(timezone.utc).isoformat()
+        producer_id = self._producer_agent_id
+        properties = {
+            "agent_name": self.agent_name,
+            "producer_agent_id": producer_id,
+            "authenticated_user_id": identity.user_id,
+            "task_id": task_id,
+            "context_id": context_id,
+            # DeepLynx limits record properties to three container levels. Agent
+            # parameters are arbitrary JSON (artifact catalogs alone can exceed
+            # that), so redact them while structured and persist the snapshot as
+            # JSON text rather than embedding it in the properties tree.
+            "parameters_json": json.dumps(
+                redact_secrets(params),
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ),
+            "created_at": created_at,
+        }
+        credential = await self.get_credential("deeplynx")
+        config = ConnectionConfig.from_credential(credential)
+        execution_name = (
+            f"Agent {self.agent_name} executed task_{task_id} by {identity.user_id} at {created_at}"
+        )
+        if len(execution_name) > 500:
+            prefix = f"{identity.user_id}_"
+            suffix = f"_{task_id}_{created_at}"
+            available_agent_length = max(0, 499 - len(prefix) - len(suffix))
+            execution_name = f"{prefix}{self.agent_name[:available_agent_length]}{suffix}"[:499]
+        item_create = ItemCreate(
+            name=execution_name,
+            description=f"Execution record for task {task_id}",
+            properties=properties,
+            class_id=None,
+            original_id=f"prometheus-execution:{producer_id}:{task_id}",
+        )
+        async with AsyncStorageClient(config) as client:
+            item = await client.items.create(item_create)
+
+        token = self._execution_record_id.set(item.id)
+        try:
+            yield
+        finally:
+            self._execution_record_id.reset(token)
+
     def create_executor(self) -> PrometheusAgentExecutor:
         """
         Create the agent executor.
@@ -1424,6 +1552,8 @@ class PrometheusAgent:
         return DelegatingPrometheusAgentExecutor(
             agent_name=self.agent_name,
             execute_fn=self._execute,
+            execution_scope=self._create_execution_record,
+            cancel_fn=self.on_cancel,
         )
 
     async def _execute(
@@ -1466,6 +1596,14 @@ class PrometheusAgent:
             "You must override _execute() in your agent subclass. "
             "This is where your agent's core logic should be implemented."
         )
+
+    async def on_cancel(self, context: RequestContext) -> None:
+        """Stop the work of the cancelled task before its ``canceled`` status is sent.
+
+        ``PrometheusAgentExecutor.cancel`` awaits this hook first. The default does nothing;
+        override it to signal a running ``_execute`` (``AdkPrometheusAgent`` sets the run's
+        abort event).
+        """
 
     # ------------------------------------------------------------------
     # Identity helpers (available to subclass _execute implementations)
@@ -1937,6 +2075,37 @@ class PrometheusAgent:
         except Exception:
             logger.exception("Background registry registration task failed unexpectedly")
 
+    @staticmethod
+    def _validate_deeplynx_configuration() -> None:
+        """Fail startup when required DeepLynx environment values are invalid."""
+        broker = os.getenv("CREDENTIAL_BROKER", "env").strip().lower()
+        if broker not in ("env", ""):
+            return
+
+        jwt_token = os.getenv("DEEPLYNX_JWT_TOKEN", "").strip()
+        key = os.getenv("DEEPLYNX_KEY", "").strip()
+        secret = os.getenv("DEEPLYNX_SECRET", "").strip()
+        if jwt_token and (key or secret):
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: set DEEPLYNX_JWT_TOKEN or "
+                "DEEPLYNX_KEY + DEEPLYNX_SECRET, not both"
+            )
+        if not jwt_token and not (key and secret):
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: set DEEPLYNX_JWT_TOKEN or "
+                "DEEPLYNX_KEY + DEEPLYNX_SECRET"
+            )
+
+        missing = [
+            name
+            for name in ("DEEPLYNX_ORG_ID", "DEEPLYNX_PROJECT_ID")
+            if not os.getenv(name, "").strip()
+        ]
+        if missing:
+            raise RuntimeError(
+                "Invalid required DeepLynx configuration: missing " + ", ".join(missing)
+            )
+
     @asynccontextmanager
     async def _application_lifespan(
         self,
@@ -1945,7 +2114,8 @@ class PrometheusAgent:
         *,
         register_on_startup: bool,
     ) -> AsyncIterator[None]:
-        """Run subclass lifespan and start registry registration in the background."""
+        """Validate required storage config, run subclass lifespan, and register."""
+        self._validate_deeplynx_configuration()
         registration_task: Optional[asyncio.Task[None]] = None
         async with self.lifespan(app):
             if register_on_startup:

@@ -11,8 +11,10 @@ x-common-env: &common-env
   DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
   DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
   DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+  DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
   DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
   DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+  DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
   PROMETHEUS_MAX_UPLOAD_BYTES: ${PROMETHEUS_MAX_UPLOAD_BYTES:-104857600}
   # Multi-user identity plane (RS256 only -- see docs/dev-docs/multi-user-setup.md
   # and prometheus_api/docs/agent/IDENTITY_KEY_MANAGEMENT.md). Only the backend
@@ -34,6 +36,9 @@ x-common-env: &common-env
   # resources (DeepLynx, SLURM). "env" (default) preserves today's global
   # credential behavior; "vault" activates per-user Vault policies.
   CREDENTIAL_BROKER: ${CREDENTIAL_BROKER:-env}
+  # ADK session store: the adk role and schema in admin-db (backend Alembic revision
+  # 4f1a2b3c4d5e). Empty means in-memory sessions that cannot resume.
+  ADK_SESSION_DB_URL: ${ADK_SESSION_DB_URL:-postgresql+asyncpg://adk:${ADK_DB_PASSWORD}@admin-db:5432/admin}
 
 # Containers reach services on the Docker host (e.g. a local DeepLynx) as
 # prometheus.host.internal. A name of our own, rather than host.docker.internal,
@@ -173,6 +178,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      admin-db:
+        condition: service_healthy
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
     # It does not cover LiteLLM registration, which retries in the background.
     healthcheck:
@@ -223,6 +230,8 @@ services:
       # backend-only, never forwarded to agents.
       ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+asyncpg://admin:${ADMIN_DB_PASSWORD}@admin-db:5432/admin}
       ADMIN_DB_ENCRYPTION_KEY: ${ADMIN_DB_ENCRYPTION_KEY:-}
+      # Password the adk-role migration sets; agents reach it through ADK_SESSION_DB_URL.
+      ADK_DB_PASSWORD: ${ADK_DB_PASSWORD}
       # Base URL for the OIDC redirect_uri sent to identity providers -- must
       # be the origin the BROWSER actually uses (e.g. the Vite dev server at
       # http://localhost:5150, which proxies /api here; not this container's

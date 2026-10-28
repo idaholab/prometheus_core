@@ -177,14 +177,27 @@ class ConnectionConfig(BaseModel):
         )
 
         # Organization and project IDs
-        org_id = organization_id or env_vars.get("DEEPLYNX_ORG_ID") or os.getenv("DEEPLYNX_ORG_ID")
+        # An empty or whitespace-only value counts as unset.
+        org_id = (
+            organization_id
+            or (env_vars.get("DEEPLYNX_ORG_ID") or os.getenv("DEEPLYNX_ORG_ID") or "").strip()
+            or None
+        )
         proj_id = (
-            project_id or env_vars.get("DEEPLYNX_PROJECT_ID") or os.getenv("DEEPLYNX_PROJECT_ID")
+            project_id
+            or (
+                env_vars.get("DEEPLYNX_PROJECT_ID") or os.getenv("DEEPLYNX_PROJECT_ID") or ""
+            ).strip()
+            or None
         )
         ds_id = (
             kwargs.pop("data_source_id", None)
-            or env_vars.get("DEEPLYNX_DATA_SOURCE_ID")
-            or os.getenv("DEEPLYNX_DATA_SOURCE_ID")
+            or (
+                env_vars.get("DEEPLYNX_DATA_SOURCE_ID")
+                or os.getenv("DEEPLYNX_DATA_SOURCE_ID")
+                or ""
+            ).strip()
+            or None
         )
 
         if org_id is not None:

@@ -30,9 +30,7 @@ started. So a store never overwrites the document wholesale:
   answers next.
 - The LLM transcript (``llm_messages``) is merged by turn too: each message carries
   the ``turn_id`` and ``turn_started_at`` of the turn that wrote it, and each turn's
-  messages stay one contiguous block, ordered by when the turn started. (The loop
-  re-pairs tool calls with their results before every LLM call; see
-  ``orchestrator.agent_loop.llm_view``.)
+  messages stay one contiguous block, ordered by when the turn started.
 - ``record_turn_artifacts`` stamps the ids of the artifacts a turn produced on that
   turn's reply, which a restored conversation renders from.
 
