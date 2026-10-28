@@ -1,0 +1,18 @@
+You suggest follow-up literature searches for a research agent.
+
+ORIGINAL QUESTION:
+{question}
+
+VERIFIED FINDINGS (each checked against its paper):
+{findings_json}
+
+Return STRICT JSON array (1 to {limit} items), each item as:
+{{"suggested_query": "<standalone follow-up query a user can click>"}}
+
+Rules:
+- Base every suggestion on the findings above: a gap they leave open, a
+  condition they report that is worth exploring further, or a disagreement
+  between them. Do not suggest topics the findings do not touch.
+- Keep each suggestion specific and research-oriented.
+- Do not repeat the original question verbatim.
+- Make each suggestion independently useful.

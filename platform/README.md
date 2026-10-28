@@ -10,7 +10,7 @@ graph TD
   FE -->|JSON / SSE| BE[FastAPI Backend]
   BE -->|A2A JSON-RPC| CA[Client Agent]
   CA -->|agent discovery + A2A routing| LLM[LiteLLM Agent Gateway]
-  CA -->|state + factoids| RED[(Valkey<br/>Redis-compatible)]
+  CA -->|state + atomic facts| RED[(Valkey<br/>Redis-compatible)]
   LLM -->|A2A| CORR[Corrosion Agent]
   LLM -->|A2A| RAD[Radiation Agent]
   LLM -->|A2A| THERM[Thermal Agent]
@@ -276,6 +276,13 @@ Notable environment variables (see `.env.example` for the full list):
 ### DeepLynx storage
 
 DeepLynx configuration is required for standard agent execution records. Set either `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`. `DEEPLYNX_BASE_URL` is optional and uses the SDK default when omitted. `DEEPLYNX_DATA_SOURCE_ID` is also optional when the project has a default data source. Instructions to configure a local DeepLynx server can be found [here](docs/docs/local-deeplynx.md).
+
+The OSTI research agent is enabled only with `OPTIONAL_AGENTS=true`. It uses
+the `deepagent` engine by default and keeps `pipeline` as the rollback engine.
+Its parser, OCR, figure analysis, scholarly/web search, analyzer limits, and
+embedding settings are listed in `.env.example`; operational details are in
+[`architecture.md`](agents/optional/osti-research-agent/docs/architecture.md)
+and [`runbook.md`](agents/optional/osti-research-agent/docs/runbook.md).
 
 ### Optional integrations (work in progress)
 

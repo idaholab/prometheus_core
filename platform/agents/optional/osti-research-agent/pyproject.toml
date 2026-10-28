@@ -5,12 +5,59 @@ description = "OSTI literature search and research agent"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.26.0",
+    "pydantic>=2.0",
     "redis>=5.0.0",
     "requests>=2.28.0",
     "beautifulsoup4>=4.12.0",
+    "docling==2.119.0",
     "marker-pdf>=0.2.0",
     "lxml>=4.9.0",
     "pymupdf>=1.23.0",
+    # Docling and Marker require PyTorch, but this service runs CPU-only.
+    # Declaring them directly lets uv route Linux installs to the CPU index.
+    "torch>=2.7,<3; sys_platform == 'linux'",
+    "torchvision>=0,<1; sys_platform == 'linux'",
+    # Deep-agent runtime dependencies. deepagents moves fast
+    # and reshuffles its public API across minors (backends moved to
+    # deepagents.backends between 0.6 and 0.7); pin the minor and review its
+    # changelog before bumping. langchain/langgraph/langchain-core arrive
+    # transitively; langchain-litellm supplies the provider-neutral chat model.
+    "deepagents>=0.7.10,<0.8",
+    "langchain-litellm>=0.11.1,<0.12",
+    # LiteLLM tool-call logging imports MCP types at runtime.
+    "mcp>=2.2.0,<3",
+    # Terminal output of the evaluation CLI (evals/); already locked via docling.
+    "rich>=13",
+]
+
+# The A2A executor (agent.py) additionally needs prometheus_api and a2a-sdk.
+# Neither is required to run research_agent's CLI, tests, or core pipeline.
+# prometheus_api is baked into this agent's Docker base image (see
+# Dockerfile) and isn't pip-installable without INL network access, so it's
+# intentionally not listed here - for local dev, see agents/client-agent's
+# tests/conftest.py for the install command. a2a-sdk is public on PyPI.
+[project.optional-dependencies]
+a2a = [
+    "a2a-sdk>=1.1.0",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: slow tests (golden-corpus PDF parsing; needs fetched PDFs + model weights) - run in a nightly job, not the default suite",
+    "real_synthesis: run the graded synthesis instead of the no-op stub (tests drive it with fake chat models)",
 ]
 
 [tool.coverage.run]

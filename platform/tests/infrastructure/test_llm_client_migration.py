@@ -16,14 +16,15 @@ from pathlib import Path
 
 import yaml
 
-
 FORBIDDEN_RUNTIME_PATTERNS = (
     "from anthropic import",
     "import anthropic",
     "from openai import",
     "import openai",
     "langchain_anthropic",
+    "langchain_openai",
     "ChatAnthropic",
+    "ChatOpenAI",
     "AsyncAnthropic",
     "AsyncOpenAI",
     "LLM_API_KEY =",
@@ -99,3 +100,15 @@ def test_runtime_agents_do_not_attach_the_litellm_proxy_key(project_root):
             violations.append(f"{path.relative_to(project_root)}: with_api_key")
 
     assert not violations, "Proxy-key configuration remains:\n" + "\n".join(violations)
+
+
+def test_osti_runtime_does_not_force_model_temperature(project_root):
+    root = project_root / "agents" / "optional" / "osti-research-agent"
+    violations = []
+    for path in root.rglob("*.py"):
+        if "tests" in path.parts or ".venv" in path.parts:
+            continue
+        if "temperature=" in path.read_text(encoding="utf-8").replace(" ", ""):
+            violations.append(str(path.relative_to(project_root)))
+
+    assert not violations, "OSTI runtime forces model temperature:\n" + "\n".join(violations)

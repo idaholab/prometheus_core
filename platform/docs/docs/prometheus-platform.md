@@ -16,7 +16,7 @@ graph TD
   FE -->|JSON / SSE| BE[FastAPI Backend]
   BE -->|A2A JSON-RPC| CA[Client Agent]
   CA -->|agent discovery + A2A routing| LLM[LiteLLM Agent Gateway]
-  CA -->|state + factoids| RED[(Redis)]
+  CA -->|state + atomic facts| RED[(Redis)]
   LLM -->|A2A| SA[Specialist Agents]
   FE -->|renders| VIZ[MeshViewer / IFCViewer / MermaidViewer]
 ```
@@ -29,7 +29,7 @@ The React frontend communicates with the FastAPI backend over its JSON/SSE contr
 | Backend | 8600 | FastAPI, A2A client |
 | Client Agent | 8001 | LangGraph, Prometheus LLMClient, A2A SDK |
 | LiteLLM Agent Gateway | 9977 | LiteLLM proxy + A2A routing |
-| Redis | 6379 | Factoids, conversation state |
+| Redis | 6379 | Atomic facts, conversation state |
 
 The client-agent also maintains a workflow library for reusable multi-step analyses. Workflow templates can be
 platform-owned or published by specialist agents through their agent cards. See [Workflow Templates](workflow-templates.md)

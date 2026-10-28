@@ -821,6 +821,7 @@ jobs:
             flag: osti-research-agent
             # marker-pdf pulls in PyTorch with CUDA and the tests don't use it
             overrides: "marker-pdf; sys_platform == 'never'"
+            test_dependencies: respx
           - agent: code-render-debug-agent
             path: platform/agents/debug-agents/code-render-debug-agent
             flag: code-render-debug-agent
@@ -849,11 +850,14 @@ jobs:
       - name: Install dependencies
         env:
           OVERRIDES: ${{ matrix.overrides }}
+          TEST_DEPENDENCIES: ${{ matrix.test_dependencies }}
         run: |
           printf '%s\n' "$OVERRIDES" > "$RUNNER_TEMP/overrides.txt"
+          # Space-separated extra test packages (respx for OSTI); empty for most agents.
+          read -ra test_dependencies <<< "$TEST_DEPENDENCIES"
           uv venv
           uv pip install -r pyproject.toml --overrides "$RUNNER_TEMP/overrides.txt" \
-            pytest pytest-asyncio pytest-cov "$GITHUB_WORKSPACE/sdk"
+            pytest pytest-asyncio pytest-cov "${test_dependencies[@]}" "$GITHUB_WORKSPACE/sdk"
       - name: Test
         # Agents with a flag fail below fail_under in their pyproject.toml
         run: .venv/bin/python -m pytest --color=yes ${{ matrix.flag && '--cov --cov-report=xml' || '' }}

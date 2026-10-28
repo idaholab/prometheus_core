@@ -1,6 +1,6 @@
 {
   "name": "OSTI Research Agent",
-  "description": "Searches the OSTI scientific papers and reports database for publications to answer specific research questions.",
+  "description": "Researches specific questions across the OSTI scientific-report database, the open scholarly literature (OpenAlex/arXiv), and the web, extracting evidence from paper text, tables, and figures.",
   "version": "1.0.0",
   "capabilities": {
     "streaming": true,
@@ -10,11 +10,11 @@
     {
       "id": "search_literature",
       "name": "Search Literature",
-      "description": "Search OSTI database for peer-reviewed publications, experimental data, and research findings to answer specific questions about material properties, operating parameters, or engineering phenomena",
-      "usage_notes": "Use when you need published experimental data, peer-reviewed research, or information not available in the material database. Long-running operation - reserve for questions requiring literature support",
+      "description": "Search OSTI, the open scholarly literature (OpenAlex/arXiv), and the web for peer-reviewed publications, experimental data, and research findings to answer specific questions about material properties, operating parameters, or engineering phenomena; extracts quantitative evidence from tables and figures and cites its sources",
+      "usage_notes": "Use when you need published experimental data, peer-reviewed research, or information not available in the material database. Long-running operation - reserve for questions requiring literature support. Prior research is reused to target sources faster; findings are always re-verified against the papers",
       "requires_approval": false,
-      "expected_duration_seconds": 180,
-      "output_format": "JSON with answer, provenance (source papers), citations, and confidence assessment",
+      "expected_duration_seconds": 300,
+      "output_format": "JSON with answer, provenance (source papers), and citations",
       "inputSchema": {
         "type": "object",
         "properties": {

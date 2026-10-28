@@ -340,6 +340,41 @@ build-plain: ##@ Build images with plain (verbose) progress output
 build-plain: $(BASE_IMAGE_DEP) generate
 	$(CONTAINER_RUNTIME) $(COMPOSE_FILES) $(PROFILE_FLAGS) build --progress=plain
 
+# OSTI agent evaluation. Runs agents/optional/osti-research-agent/evals inside
+# the running agent container (it has the agent's config, Redis and Docling),
+# then copies the report and transcripts back to OSTI_EVAL_OUT on the host.
+OSTI_EVAL_CONTAINER ?= osti-research-agent
+OSTI_EVAL_OUT ?= agents/optional/osti-research-agent/evals/results
+# How many questions to run; empty (OSTI_EVAL_LIMIT=) runs every selected one.
+OSTI_EVAL_LIMIT ?= 3
+OSTI_EVAL_ENGINES ?= deepagent
+# Any other `python -m evals run` options, e.g. "--category uq --no-judge".
+OSTI_EVAL_ARGS ?=
+OSTI_EVAL_RUN_ARGS = --engines $(OSTI_EVAL_ENGINES) \
+	$(if $(strip $(OSTI_EVAL_LIMIT)),--limit $(OSTI_EVAL_LIMIT),) $(OSTI_EVAL_ARGS)
+
+.PHONY: osti-eval osti-eval-report
+osti-eval: ##@ Run the OSTI agent evaluation in its container and print the report (OSTI_EVAL_LIMIT=N questions, default 3; OSTI_EVAL_LIMIT= for all)
+	@docker inspect -f '{{.State.Running}}' $(OSTI_EVAL_CONTAINER) 2>/dev/null | grep -q true || \
+		{ echo "$(OSTI_EVAL_CONTAINER) is not running; start it with: make up OPTIONAL_AGENTS=true"; exit 1; }
+	@run_dir=/tmp/osti-eval-$$(date +%Y%m%d-%H%M%S); \
+	status=0; \
+	trap '' INT; \
+	docker exec -it -w /app $(OSTI_EVAL_CONTAINER) python -m evals run \
+		--report $$run_dir/report.json --workdir $$run_dir/out $(OSTI_EVAL_RUN_ARGS) || status=$$?; \
+	mkdir -p $(OSTI_EVAL_OUT); \
+	if docker cp $(OSTI_EVAL_CONTAINER):$$run_dir $(OSTI_EVAL_OUT)/ >/dev/null 2>&1; then \
+		echo "Results: $(OSTI_EVAL_OUT)/$$(basename $$run_dir)/report.md"; \
+	fi; \
+	exit $$status
+
+osti-eval-report: ##@ Re-print the latest OSTI evaluation report copied back by osti-eval
+	@latest=$$(ls -1d $(OSTI_EVAL_OUT)/osti-eval-* 2>/dev/null | tail -1); \
+	if [ -z "$$latest" ]; then echo "No results in $(OSTI_EVAL_OUT); run make osti-eval first"; exit 1; fi; \
+	cd agents/optional/osti-research-agent && \
+		python3 -m evals report "$(CURDIR)/$$latest/report.json"; \
+	echo "Markdown: $$latest/report.md"
+
 logs: ##@ Tail logs for all services (SERVICE=<name> to filter)
 	$(COMPOSE) $(COMPOSE_FILES) logs -f $(SERVICE)
 

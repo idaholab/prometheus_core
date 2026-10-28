@@ -71,6 +71,41 @@ def test_litellm_image_pinned(compose_data):
     )
 
 
+def test_osti_optional_compose_preserves_platform_contract(project_root):
+    path = project_root / "agents" / "optional" / "osti-research-agent" / "docker-compose.yml"
+    service = yaml.safe_load(path.read_text(encoding="utf-8"))["services"]["osti-research-agent"]
+
+    assert service["extra_hosts"] == ["prometheus.host.internal:host-gateway"]
+    assert service["build"]["args"][:2] == [
+        "PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}",
+        "PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}",
+    ]
+    # Agents register through the backend, not LiteLLM (see #195).
+    assert service["depends_on"] == {
+        "backend": {"condition": "service_healthy"},
+        "redis": {"condition": "service_started"},
+    }
+
+    environment = service["environment"]
+    for key, expected in {
+        "LLM_API_KEY": "${LLM_API_KEY:-}",
+        "EMBEDDING_API_KEY": "${EMBEDDING_API_KEY:-}",
+        "JWKS_URL": "${JWKS_URL:-http://backend:8000/.well-known/jwks.json}",
+        "USER_IDENTITY_ISS": "${USER_IDENTITY_ISS:-prometheus-platform}",
+        "USER_IDENTITY_AUD": "${USER_IDENTITY_AUD:-prometheus-agents}",
+        "USER_IDENTITY_REQUIRED": "${USER_IDENTITY_REQUIRED:-true}",
+        "WEB_SEARCH_PROVIDER": "${WEB_SEARCH_PROVIDER:-none}",
+        "EMBEDDING_MODEL": "${EMBEDDING_MODEL:-embedding}",
+    }.items():
+        assert environment[key] == expected
+
+
+def test_osti_agent_remains_gated_by_optional_agents(project_root):
+    makefile = (project_root / "Makefile").read_text(encoding="utf-8")
+    optional_block = makefile.split("ifeq ($(OPTIONAL_AGENTS),true)", 1)[1].split("endif", 1)[0]
+    assert "agents/optional" in optional_block
+
+
 def test_client_agent_receives_selectable_llm_configuration(compose_data):
     common_env = compose_data["x-common-env"]
     assert common_env["REGISTRY_URL"] == "${REGISTRY_URL:-http://backend:8000}"

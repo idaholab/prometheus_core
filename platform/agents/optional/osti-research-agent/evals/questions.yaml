@@ -1,0 +1,443 @@
+# Parity evaluation question set.
+#
+# ~48 questions:
+#   - 10 core dev questions (DOE/nuclear materials, answerable from OSTI)
+#   - 5 open-literature/web-only and repeat-for-cache questions
+#   - 5 adversarial (ambiguous, no-answer, figure-only, cache, breadth)
+#   - 28 uncertainty-quantification (UQ) literature questions in nuclear fuel
+#     performance, thermal hydraulics and reactor physics:
+#       20 uq core (one ask each, answerable from abstracts/records)
+#        2 uq stretch (answer needs full text or a table; scored separately)
+#        5 adversarial UQ (ambiguous, invented parameter, conflicting
+#          sources x2, false premise)
+#        1 cache repeat
+#
+# Per question:
+#   id                 stable slug (used in the score report)
+#   question           the prompt sent to both engines
+#   category           core | scholarly | web | cache | adversarial | uq
+#   domain             (optional, UQ block only) fuel_performance |
+#                      thermal_hydraulics | reactor_physics | multiphysics
+#                      If the loader rejects unknown keys, drop these lines;
+#                      the uq-fp- / uq-th- / uq-rp- / uq-mp- id prefixes carry
+#                      the same information.
+#   expected_source_ids (optional) OSTI ids / DOI slugs expected in provenance
+#   expected_facts     (optional) substrings/numbers expected in the answer
+#   expect_status      (optional) completed | no_results | ...
+#   notes              why this question is in the set
+#
+# expected_source_ids / expected_facts are intentionally left blank where the
+# "correct" source isn't pinned yet - fill them in from a first golden run
+# before reading the acceptance bar (adjust the bar before running, not after).
+#
+# UQ block design (revised after the first test run, which showed the earlier
+# version expected more than a literature engine can realistically deliver):
+#   - One ask per question. Earlier questions bundled 3-4 sub-questions.
+#   - The expected answer is a headline finding stated in the source's
+#     abstract or index record, not a value buried in a full-text table.
+#   - Sources are ones the engines can plausibly reach: OSTI records,
+#     arXiv, and journal articles indexed by OpenAlex. Questions that depended
+#     on unindexed conference PDFs (KNS transactions, TopFuel, posters,
+#     slides) were dropped or re-anchored, or have expect_status omitted.
+#   - expected_facts are short, format-robust stems ("Ris" matches Risø and
+#     Riso; "650" matches IFA-650.10 and IFA650.10; "conductivit" matches
+#     conductivity and conductivities), at most one per question.
+#   - expect_status is set only where coverage is confident; it is omitted
+#     where an honest "not found" would also be acceptable.
+#   - Questions whose answer needs full text or a table are kept as "stretch"
+#     items (ids contain -stretch-, notes say Evidence: full_text) so they can
+#     be scored apart from the core UQ items.
+# Each UQ note carries: Evidence (abstract | full_text), Index (where the
+# engines can find it), Ref (what a good answer contains) and Access (OPEN =
+# full text free; OPEN-ABSTRACT = finding is in a free abstract/record).
+
+questions:
+#   - 10 core dev questions (DOE/nuclear materials, answerable from OSTI)
+#   - 5 open-literature/web-only and repeat-for-cache questions
+#   - 5 adversarial (ambiguous, no-answer, figure-only, cache, breadth)
+#   - 31 uncertainty-quantification (UQ) literature questions, each tied to a
+#     specific published benchmark, experiment or code study in nuclear fuel
+#     performance, thermal hydraulics or reactor physics:
+#       23 uq (scenario-specific ranges, distributions, dominant inputs,
+#          benchmark conclusions)
+#        7 adversarial UQ (ambiguous, invented parameter, real benchmark plus
+#          invented parameter, conflicting sources x2, table-only, false premise)
+#        1 cache repeat
+#
+# Per question:
+#   id                 stable slug (used in the score report)
+#   question           the prompt sent to both engines
+#   category           core | scholarly | web | cache | adversarial | uq
+#   domain             (optional, UQ block only) fuel_performance |
+#                      thermal_hydraulics | reactor_physics | multiphysics
+#                      If the loader rejects unknown keys, drop these lines;
+#                      the uq-fp- / uq-th- / uq-rp- / uq-mp- id prefixes carry
+#                      the same information.
+#   expected_source_ids (optional) OSTI ids / DOI slugs expected in provenance
+#   expected_facts     (optional) substrings/numbers expected in the answer
+#   expect_status      (optional) completed | no_results | ...
+#   notes              why this question is in the set
+#
+# expected_source_ids / expected_facts are intentionally left blank where the
+# "correct" source isn't pinned yet - fill them in from a first golden run
+# before reading the acceptance bar (adjust the bar before running, not after).
+#
+# UQ block: the notes carry reference values taken from a literature review
+# of the cited papers/reports (the "Ref:" part). They are there so the
+# golden-run reviewer can judge answers and pin expected_facts; they are NOT
+# scored automatically. expected_facts in the UQ block are limited to
+# substrings that are stable in format (benchmark/test names, integers).
+# expected_source_ids are filled only where the OSTI id or DOI was verified.
+#
+# Access: every UQ note ends with an "Access:" tag from a check of whether the
+# cited source can be read without a subscription (checked Oct 2026):
+#   OPEN          full text verified free (NEA/NRC/OSTI/lab report, open
+#                 conference proceedings, arXiv, institutional repository,
+#                 open-access journal)
+#   OPEN-ABSTRACT the facts used are in a free abstract/record, but the full
+#                 paper is paywalled or its free copy was not confirmed
+# Paywalled journal versions were replaced with open equivalents (arXiv,
+# theses, lab reports) where the same work is available.
+
+questions:
+  # --- core dev set (OSTI-answerable) ---
+  - id: ss316-creep-400c
+    question: "What is the creep rate of stainless steel 316 at 400C and 15 MPa?"
+    category: core
+    expected_facts: ["316"]
+    expect_status: completed
+    notes: "Canonical creep question; numeric answer in OSTI creep studies."
+
+  - id: triso-safe-temperature
+    question: "What operating temperature is considered safe for TRISO fuel particles?"
+    category: core
+    expected_facts: ["TRISO"]
+    expect_status: completed
+
+  - id: zircaloy-oxidation-kinetics
+    question: "What are the oxidation kinetics of Zircaloy-4 cladding in high-temperature steam?"
+    category: core
+    expected_facts: ["Zircaloy"]
+    expect_status: completed
+
+  - id: inconel-718-fatigue
+    question: "How does irradiation affect the fatigue life of Inconel 718?"
+    category: core
+    expect_status: completed
+
+  - id: graphite-irradiation-swelling
+    question: "How much does nuclear-grade graphite swell under fast-neutron irradiation?"
+    category: core
+    expect_status: completed
+
+  - id: ss304-thermal-conductivity
+    question: "What is the thermal conductivity of stainless steel 304 at 600C?"
+    category: core
+    expected_facts: ["304"]
+    expect_status: completed
+
+  - id: uo2-thermal-conductivity
+    question: "How does the thermal conductivity of UO2 fuel change with burnup?"
+    category: core
+    expected_facts: ["UO2"]
+    expect_status: completed
+
+  - id: he-embrittlement-steels
+    question: "What causes helium embrittlement in structural steels for fusion reactors?"
+    category: core
+    expect_status: completed
+
+  - id: sic-swelling-irradiation
+    question: "What is the irradiation swelling behavior of silicon carbide at 300-800C?"
+    category: core
+    expect_status: completed
+
+  - id: fecral-corrosion-accident
+    question: "How do FeCrAl alloys perform against high-temperature steam oxidation in accident conditions?"
+    category: core
+    expected_facts: ["FeCrAl"]
+    expect_status: completed
+
+  # --- Open-literature, web-only, and cache coverage ---
+  - id: openalex-recent-review
+    question: "What do recent review articles say about additive manufacturing of 316L for nuclear service?"
+    category: scholarly
+    expected_facts: ["316L"]
+    expect_status: completed
+    notes: "Answerable via OpenAlex/arXiv when OSTI is thin; checks non-OSTI provenance."
+
+  - id: arxiv-ml-materials
+    question: "How is machine learning being applied to predict irradiation-induced defects in metals?"
+    category: scholarly
+    expect_status: completed
+    notes: "Preprint-heavy topic; exercises the arXiv path."
+
+  - id: web-standard-astm
+    question: "Which ASTM standard governs charpy impact testing of reactor pressure vessel steels?"
+    category: web
+    expect_status: completed
+    notes: "Context/standards lookup; only meaningful when a web provider is configured."
+
+  - id: cache-repeat-ss316-creep
+    question: "What is the creep rate of stainless steel 316 at 400C and 15 MPa?"
+    category: cache
+    expect_status: completed
+    notes: "Duplicate of ss316-creep-400c; run second, expect cached answer, no downloads."
+
+  - id: cache-repeat-triso
+    question: "What operating temperature is considered safe for TRISO fuel particles?"
+    category: cache
+    expect_status: completed
+    notes: "Duplicate of triso-safe-temperature; expect memory hit."
+
+  # --- adversarial ---
+  - id: adversarial-ambiguous
+    question: "Is it safe?"
+    category: adversarial
+    notes: "Ambiguous phrasing; expect a clarifying or appropriately limited answer, not a crash."
+
+  - id: adversarial-no-answer
+    question: "What is the measured creep rate of unobtainium-42 at 1200C under 900 MPa?"
+    category: adversarial
+    expect_status: no_results
+    notes: "No literature answer exists; expect honest no_results, not fabrication."
+
+  - id: adversarial-figure-only
+    question: "According to published Arrhenius plots, what activation energy governs creep in alloy 617?"
+    category: adversarial
+    expected_facts: ["617"]
+    expect_status: completed
+    notes: "Answer lives in a figure; the pipeline engine structurally cannot read it."
+
+  - id: adversarial-cache-figure-repeat
+    question: "According to published Arrhenius plots, what activation energy governs creep in alloy 617?"
+    category: adversarial
+    expect_status: completed
+    notes: "Repeat of the figure question; cache behavior on a figure-derived answer."
+
+  - id: adversarial-broad
+    question: "Tell me everything known about materials degradation in nuclear reactors."
+    category: adversarial
+    expect_status: completed
+    notes: "Very broad; tests budget discipline (must not run away downloading papers)."
+
+  # ===========================================================================
+  # --- UQ literature research (revised: realistic expectations) ---
+  # ===========================================================================
+
+  # --- fuel performance ---
+  - id: uq-fp-bison-fgr-model-uncertainty
+    question: "How large is the inherent modeling uncertainty in BISON fission gas release predictions, according to uncertainty and sensitivity studies of its physics-based fission gas model?"
+    category: uq
+    domain: fuel_performance
+    expected_source_ids: ["1162205"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: OSTI 1162205; J. Nucl. Mater. (2015) in OpenAlex. Ref: Pastore et al. - the usual factor-of-2 deviation between calculated and measured FGR roughly matches inherent model uncertainty at high release; larger deviations at release around 10% and below. Access: OPEN (Polimi IRIS author version)."
+
+  - id: uq-fp-bison-fgr-inverse-uq-data
+    question: "What experimental data have been used for Bayesian inverse uncertainty quantification of the BISON fission gas release model parameters?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["Ris"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: Reliab. Eng. Syst. Saf. 169 (2018) in OpenAlex; arXiv 2206.14615. Ref: Wu, Kozlowski, Meidani - Risø-AN3 on-line time-series FGR measurements; posterior distributions meant to replace expert-judgment specifications. Credit also Risø-GE7 calibration (Nguyen and Downar) if mentioned. Access: OPEN via arXiv 2206.14615; journal paywalled."
+
+  - id: uq-fp-fumac-loca-uq-conclusion
+    question: "What did the IAEA FUMAC project's uncertainty analysis of the Halden LOCA test IFA-650.10 conclude about cladding deformation predictions compared with thermal predictions?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["650"]
+    notes: "Evidence: abstract-level conclusion, but the main source is a TopFuel 2018 conference PDF that may not be indexed, so expect_status is omitted. Index: euronuclear.org PDF; IAEA/INIS records. Ref: uncertainty bands acceptable for thermal outputs (rod pressure, cladding and fuel temperature) but large for cladding elongation and diameter; mechanical models judged not yet adequate; strong user effect. A clear 'could not find the FUMAC analysis' is acceptable. Access: OPEN."
+
+  - id: uq-fp-ria-benchmark-uncertainty
+    question: "In the OECD/NEA RIA fuel codes benchmark Phase II, could input uncertainties explain the differences between the fuel codes' predictions?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["RIA"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: Nucl. Eng. Technol. 50(2) (2018) 280-291 in OpenAlex; INIS; NEA/CSNI/R(2017)1. Ref: no - input uncertainties cannot fully explain the code-to-code spread; model differences dominate. Checks that a negative finding is reported plainly. Access: OPEN (open-access journal; NEA report)."
+
+  - id: uq-fp-cold-ramp-dominant-inputs
+    question: "Which input uncertainties most affect predicted cladding elongation and outer diameter in uncertainty analyses of the Studsvik cold ramp tests from the MPCMIV benchmark?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["conductivit"]
+    expected_source_ids: ["10.3389/fenrg.2023.1112978"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: Front. Energy Res. 11 (2023) in OpenAlex/DOAJ. Ref: Faure et al. - fuel and cladding thermal conductivities and cladding outer diameter are the top three; epistemic uncertainty can change the sensitivity ranking. Access: OPEN (CC BY)."
+
+  - id: uq-fp-triso-failure-statistical-methods
+    question: "Which statistical methods have been found most efficient for computing TRISO particle failure probability in BISON?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["Weibull"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: J. Nucl. Mater. 563 (2022) 153604 in OpenAlex; related INL reports in OSTI. Ref: Dhulipala et al. - compared Monte Carlo variants; subset simulation and the Weibull theory judged most efficient for 1-D and 2-D TRISO models. Access: OPEN-ABSTRACT (journal paywalled; INL/EXT-21-64589 open)."
+
+  - id: uq-fp-triso-manufacturing-limits
+    question: "How have PARFUME failure probability calculations been used to set critical manufacturing limits for TRISO particle attributes?"
+    category: uq
+    domain: fuel_performance
+    expected_facts: ["PARFUME"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: J. Nucl. Mater. 469 (2016) 99-105 in OpenAlex; INIS. Ref: key particle attributes varied systematically to build failure probability functions; critical limits mark where failure probability starts to rise; low-enriched particle with 425 um kernel. Links to core question triso-safe-temperature. Access: OPEN-ABSTRACT."
+
+  - id: uq-fp-stretch-fumac-input-ranges
+    question: "What uncertainty range was specified for the fuel thermal conductivity model multiplier in the IAEA FUMAC uncertainty benchmark on Halden test IFA-650.10?"
+    category: uq
+    domain: fuel_performance
+    notes: "STRETCH. Evidence: full_text (specification table in the TopFuel 2018 paper). Single parameter instead of the earlier four. Ref: normal, mean 1.0, sd 5%, truncated at 0.90-1.10. Expect the pipeline engine to miss this; the agent engine may find it. Score separately. Access: OPEN."
+
+  # --- thermal hydraulics ---
+  - id: uq-th-wilks-run-count
+    question: "How many code runs does Wilks' formula require for a first-order one-sided 95/95 tolerance limit in a best-estimate plus uncertainty LOCA analysis?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["59"]
+    expect_status: completed
+    notes: "Evidence: abstract (stated in many records). Index: widely available in OSTI and journals. Ref: 59 runs (second order 93, third order 124). Sanity anchor for the UQ block. Access: OPEN."
+
+  - id: uq-th-bemuse-loft-l25
+    question: "Did the uncertainty bands calculated by BEMUSE participants envelop the measured cladding temperatures of the LOFT L2-5 test?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["L2-5"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: de Crécy et al., Nucl. Eng. Des. 238 (2008) in OpenAlex; NEA/CSNI/R(2007)4. Ref: mostly yes, fairly well, but band widths differed widely between participants. Access: OPEN (NEA report); journal abstract free."
+
+  - id: uq-th-lbloca-fuel-parameters
+    question: "Which fuel-related parameters most influence peak cladding temperature uncertainty in large-break LOCA uncertainty analyses?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["gap"]
+    expect_status: completed
+    notes: "Evidence: abstract (common finding). Index: many OSTI/NRC/journal records. Ref: fuel thermal conductivity, gap conductance (or gap width) and peaking factor/power are typically top-ranked. Broad but well covered, so any well-sourced answer naming these should pass. Access: OPEN (NRC, NEA, KNS sources)."
+
+  - id: uq-th-premium-lesson
+    question: "What was the main conclusion of the OECD/NEA PREMIUM benchmark on quantifying uncertainties of reflood physical models?"
+    category: uq
+    domain: thermal_hydraulics
+    expect_status: completed
+    notes: "Evidence: abstract. Index: Skorek, de Crécy, Kovtonyuk, PREMIUM synthesis (journal, OpenAlex); NEA/CSNI/R(2016)18. Ref: results depended strongly on the method and showed a strong user effect; a systematic approach to model uncertainty quantification is needed (this led to SAPIUM). FEBA used for quantification, PERICLES for validation. Access: OPEN (NEA report); journal abstract free."
+
+  - id: uq-th-iuq-methods
+    question: "What methods are used for inverse uncertainty quantification of physical model parameters in system thermal-hydraulics codes?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["CIRC"]
+    expect_status: completed
+    notes: "Evidence: abstract plus survey body. Index: arXiv 2104.12919 (Wu et al. survey; Nucl. Eng. Des. 384, 2021). Ref: CIRCÉ, IPREM/FFTBM, Bayesian calibration with surrogate models (GP, PCE) and MCMC; SAPIUM good-practice guideline. 'CIRC' matches CIRCE and CIRCÉ. Access: OPEN (arXiv)."
+
+  - id: uq-th-trace-data-driven-uncertainty
+    question: "Have data-driven uncertainty distributions been derived for TRACE closure-model parameters, and from which experimental data?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["BFBT"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: arXiv 1801.09261 and related Wu/Wang/Kozlowski papers in OpenAlex. Ref: yes - Bayesian inverse UQ produced posterior distributions for TRACE physical model parameters from BFBT steady-state void fraction data (also PSBT in later work), replacing expert opinion. Access: OPEN (arXiv)."
+
+  - id: uq-th-atrium-critical-flow-experiments
+    question: "Which experiments are used in the OECD/NEA ATRIUM benchmark for inverse uncertainty quantification of critical flow models?"
+    category: uq
+    domain: thermal_hydraulics
+    expected_facts: ["Marviken"]
+    notes: "Evidence: abstract. Index: Bersano et al. empirical IUQ paper (Polimi/Polito records); CEA CNS proceedings paper; NEA project page. Recent (2022 onward) and partly conference-only, so expect_status omitted. Ref: Sozzi-Sutherland, Super Moby Dick, Marviken; applies the SAPIUM guideline. Access: OPEN (NEA page, CNS proceedings)."
+
+  - id: uq-th-stretch-trace-bfbt-priors
+    question: "What prior range was assumed for the TRACE physical model multipliers in Bayesian inverse UQ with BFBT void fraction data?"
+    category: uq
+    domain: thermal_hydraulics
+    notes: "STRETCH. Evidence: full_text (parameter table in arXiv 1801.09261). Ref: uniform (0, 5), nominal 1.0, for single-phase liquid-wall HTC, subcooled boiling HTC, wall drag and two interfacial drag coefficients. arXiv full text is reachable, so this tests whether the engine reads past the abstract. Score separately. Access: OPEN."
+
+  # --- reactor physics ---
+  - id: uq-rp-htgr-kinf-nuclear-data
+    question: "What k-infinity uncertainty due to nuclear data was found for the MHTGR-350 fuel block in Exercise I-1 of the IAEA HTGR uncertainty benchmark?"
+    category: uq
+    domain: reactor_physics
+    expected_facts: ["0.58"]
+    expected_source_ids: ["1259491"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: OSTI 1259491 (Nucl. Eng. Des.). Ref: 0.58%, dominated by U-238 capture and U-235 nu-bar covariances (SCALE/TSUNAMI, HFP Ex. I-1a). Access: OPEN-ABSTRACT."
+
+  - id: uq-rp-lwr-kinf-nuclear-data
+    question: "What is the typical k-infinity uncertainty due to nuclear data for a fresh LWR UO2 fuel assembly, and which reactions dominate it?"
+    category: uq
+    domain: reactor_physics
+    expected_facts: ["238"]
+    expect_status: completed
+    notes: "Evidence: abstract (common finding). Index: Rochman et al., Nucl. Data Sheets 139 (2017) in OpenAlex; UAM-LWR papers; NUREG/CR-7249. Ref: roughly 0.5% (about 500-600 pcm); U-235 nu-bar and U-238 capture lead; result depends on covariance library. Accept 0.4-0.7% if sourced. Access: OPEN (several open UAM papers)."
+
+  - id: uq-rp-rod-ejection-dominant-parameters
+    question: "Which parameters dominate the uncertainty in peak fuel enthalpy for a PWR rod ejection accident?"
+    category: uq
+    domain: reactor_physics
+    expected_facts: ["rod worth"]
+    expected_source_ids: ["759041"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: OSTI 759041 (BNL-NUREG-67430). Ref: ejected rod worth and delayed neutron fraction dominate (assumed 8% and 5%); Doppler coefficient, fuel specific heat and peaking factors secondary. Access: OPEN-ABSTRACT."
+
+  - id: uq-rp-nuclear-data-power-uncertainty
+    question: "How large are nuclear-data-induced uncertainties in PWR radial power distributions and transient power peaks, according to XSUSA sampling studies?"
+    category: uq
+    domain: reactor_physics
+    expected_facts: ["XSUSA"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: Aures et al., Nucl. Eng. Des. 355 (2019) 110313 in OpenAlex; Aures EPFL thesis 10450. Ref: radial power 1-sigma up to about 10%; transient power peak up to about 20%. Access: OPEN-ABSTRACT (thesis OPEN)."
+
+  - id: uq-rp-depletion-nuclide-uncertainty
+    question: "What range of uncertainty in calculated nuclide concentrations does nuclear data uncertainty cause in LWR fuel depletion analysis, according to NUREG/CR-7249?"
+    category: uq
+    domain: reactor_physics
+    notes: "Evidence: abstract. Index: NRC website (ORNL/TM-2017/706); may need the web provider, so expect_status omitted. Ref: a few percent up to about 50% depending on nuclide; rod power factor under 0.5%. Access: OPEN."
+
+  # --- multiphysics ---
+  - id: uq-mp-uam-phases
+    question: "How does the OECD/NEA UAM-LWR benchmark structure uncertainty propagation from nuclear data to coupled core and system calculations?"
+    category: uq
+    domain: multiphysics
+    expected_facts: ["UAM"]
+    expect_status: completed
+    notes: "Evidence: abstract. Index: many UAM papers in OSTI/OpenAlex. Ref: Phase I neutronics (cell physics, lattice, core), Phase II core multiphysics (fuel, kinetics, thermal hydraulics), Phase III coupled core-system; uncertainties carried from each step to the next. Access: OPEN."
+
+  # --- adversarial UQ ---
+  - id: uq-adversarial-ambiguous-range
+    question: "What parameter range should I use for the uncertainty analysis?"
+    category: adversarial
+    domain: multiphysics
+    notes: "No code, benchmark, parameter or response named; expect a clarifying or appropriately limited answer, not an invented range."
+
+  - id: uq-adversarial-invented-parameter
+    question: "What uncertainty range does the literature recommend for the Hartwell-Ostrander gap closure coefficient in BISON fuel performance analyses?"
+    category: adversarial
+    domain: fuel_performance
+    notes: "Invented parameter attached to a real code. expect_status omitted because engines may return completed with an explicit 'not found' message; judge on content: pass if it says no such parameter was found, fail if it gives a range."
+
+  - id: uq-adversarial-beta-eff-conflict
+    question: "Why do published estimates of the nuclear-data uncertainty in the effective delayed neutron fraction differ so much?"
+    category: adversarial
+    domain: reactor_physics
+    expect_status: completed
+    notes: "Real conflict: engineering-judgment values around 5% (BNL rod ejection, OSTI 759041) vs 20-100% from SCALE covariance propagation (NUREG/CR-7249); delayed nu-bar covariance data quality is the main driver. Pass if the engine explains the difference rather than asserting one number."
+
+  - id: uq-adversarial-gap-conductance-conflict
+    question: "Why do published uncertainty ranges for fuel-cladding gap conductance differ so much between LOCA uncertainty studies?"
+    category: adversarial
+    domain: fuel_performance
+    expect_status: completed
+    notes: "No single right range. Good answers point to purpose (benchmark specification vs conservative screening), code-specific model forms and burnup state. Reference spread: about +/-25% (FUMAC spec) to multipliers of 0.2-2.0 (some TRACE screening studies). Fail if the engine picks or averages one value without explanation."
+
+  - id: uq-adversarial-bemuse-false-premise
+    question: "Why did all participants in BEMUSE Phase III obtain nearly identical uncertainty band widths for the LOFT L2-5 test?"
+    category: adversarial
+    domain: thermal_hydraulics
+    expect_status: completed
+    notes: "False premise: band widths diverged widely even though most bands enveloped the data (stated in the de Crécy et al. abstract). Pass if the engine corrects the premise."
+
+  # --- UQ cache ---
+  - id: uq-cache-repeat-htgr-kinf
+    question: "What k-infinity uncertainty due to nuclear data was found for the MHTGR-350 fuel block in Exercise I-1 of the IAEA HTGR uncertainty benchmark?"
+    category: cache
+    domain: reactor_physics
+    expected_facts: ["0.58"]
+    expect_status: completed
+    notes: "Duplicate of uq-rp-htgr-kinf-nuclear-data; run second, expect cached answer, same pinned fact, no downloads."

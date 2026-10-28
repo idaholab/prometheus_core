@@ -10,3 +10,9 @@
 common/certs/*
 !common/certs/setup.sh
 !common/certs/README.md
+
+# OSTI agent evaluation output (make osti-eval / python -m evals run)
+platform/agents/optional/osti-research-agent/evals/results/
+platform/agents/optional/osti-research-agent/evals/out/
+platform/agents/optional/osti-research-agent/evals/report.json
+platform/agents/optional/osti-research-agent/evals/report.md

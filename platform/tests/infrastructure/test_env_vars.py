@@ -44,6 +44,24 @@ LLM_CONFIG_VARS = [
     "EMBEDDING_API_KEY",
 ]
 
+OSTI_CONFIG_VARS = [
+    "TOTAL_BUDGET_S",
+    "MAX_PAPERS_ANALYZED",
+    "ANALYZER_MODEL_CALL_LIMIT",
+    "ANALYZER_TOOL_CALL_LIMIT",
+    "MAX_PDF_MB",
+    "DOCLING_TIMEOUT_S",
+    "PARSE_OCR",
+    "ANALYZE_FIGURES",
+    "MAX_FIGURES",
+    "MIN_FIGURE_AREA",
+    "WEB_SEARCH_PROVIDER",
+    "TAVILY_API_KEY",
+    "SEARXNG_URL",
+    "OPENALEX_MAILTO",
+    "EMBEDDING_MODEL",
+]
+
 
 def test_env_example_exists(env_example_path):
     assert env_example_path.exists(), ".env.example file does not exist"
@@ -57,6 +75,16 @@ def test_required_var_present(env_example_vars, var):
 @pytest.mark.parametrize("var", LLM_CONFIG_VARS)
 def test_llm_config_var_present(env_example_vars, var):
     assert var in env_example_vars, f"LLM configuration variable '{var}' missing from .env.example"
+
+
+def test_osti_config_vars_are_documented(env_example_path):
+    documented = {
+        line.removeprefix("#").partition("=")[0]
+        for line in env_example_path.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    }
+    missing = sorted(set(OSTI_CONFIG_VARS) - documented)
+    assert not missing, f"OSTI variables missing from .env.example: {missing}"
 
 
 def test_all_compose_var_refs_have_entry_or_default(compose_var_refs, env_example_vars):
