@@ -11,6 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { api, ApiError } from "@/lib/api/client";
 import type { AuthProvider } from "@/lib/api/types";
 import { setCurrentUser } from "@/lib/store/session";
@@ -97,22 +98,26 @@ export function Login({ onSuccess }: Props) {
         onChange={(e) => setPassword(e.target.value)}
       />
 
-      <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-        {loading ? "Signing in..." : "Sign in"}
-      </button>
+      <Button
+        variant="primary"
+        wide
+        type="submit"
+        loading={loading}
+        label={loading ? "Signing in..." : "Sign in"}
+      />
 
       {providers.length > 0 && (
         <>
           <div className="divider text-xs text-base-content/40">or</div>
           <div className="space-y-2">
             {providers.map((provider) => (
-              <a
+              <Button
                 key={provider.provider_id}
-                className="btn btn-outline w-full"
-                href={api.loginUrl(provider.provider_id)}
-              >
-                Sign in with {provider.display_name}
-              </a>
+                outline
+                wide
+                label={`Sign in with ${provider.display_name}`}
+                onClick={() => window.location.assign(api.loginUrl(provider.provider_id))}
+              />
             ))}
           </div>
         </>

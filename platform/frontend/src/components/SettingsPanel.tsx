@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { useChatType } from "@/lib/useChatType";
 import { ChatTypeSelect } from "@/components/chat/ChatTypeSelect";
+import { Button } from "@/components/ui/Button";
 
 const MODELS = [
   "None",
@@ -99,16 +100,10 @@ export function SettingsPanel({ onClose }: Props) {
         </div>
       </div>
       <div className="flex justify-between gap-2 p-3 border-t border-base-300">
-        <button className="btn btn-ghost btn-sm" onClick={handleReset}>
-          Reset
-        </button>
+        <Button variant="ghost" size="sm" label="Reset" onClick={handleReset} />
         <div className="flex gap-2">
-          <button className="btn btn-ghost btn-sm" onClick={handleCancel}>
-            Cancel
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={handleConfirm}>
-            Confirm
-          </button>
+          <Button variant="ghost" size="sm" label="Cancel" onClick={handleCancel} />
+          <Button variant="primary" size="sm" label="Confirm" onClick={handleConfirm} />
         </div>
       </div>
     </div>

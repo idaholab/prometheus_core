@@ -28,6 +28,7 @@ import {
   chatSuggestionTitle as fallbackSuggestionTitle,
   workflowSuggestions as fallbackSuggestions,
 } from "@/config";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { useChatType } from "@/lib/useChatType";
 import { useChatState } from "@/lib/store/chat";
 import { SuggestionCard } from "../dashboard/SuggestionCard";
@@ -58,9 +59,7 @@ export function WelcomeScreen({ onSelect }: { onSelect: (text: string) => void }
           <p className="m-0 text-base font-bold text-base-content">New Session</p>
           <p className="m-0 text-xs text-base-content/60">Initialize reactor planner agent</p>
         </div>
-        <span className="badge badge-outline border-base-300 bg-base-200 font-mono text-[11px] text-primary">
-          SYSTEM_IDLE
-        </span>
+        <StatusPill tone="neutral" label="Idle" />
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
