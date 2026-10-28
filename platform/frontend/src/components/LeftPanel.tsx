@@ -13,6 +13,7 @@
 import type { ReactNode } from "react";
 import { Atom, MessageSquarePlus, PanelLeft } from "lucide-react";
 import { useCurrentUser } from "@/lib/store/session";
+import { Button } from "@/components/ui/Button";
 import { NAV_ITEMS, ADMIN_NAV_ITEM, type NavId, type NavItem } from "./dashboard/nav";
 
 interface Props {
@@ -78,7 +79,7 @@ export function LeftPanel({
 
   return (
     <aside
-      className={`${isOpen ? "w-64" : "w-16"} flex flex-col overflow-hidden border-r border-base-300 bg-base-200 transition-[width] duration-200`}
+      className={`${isOpen ? "w-64 overflow-hidden" : "w-16 overflow-visible"} flex flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200`}
     >
       {/* Brand */}
       <div className={`flex items-center gap-2.5 p-3 ${collapsed ? "justify-center" : ""}`}>
@@ -98,14 +99,14 @@ export function LeftPanel({
 
       {/* Collapse toggle */}
       <div className={`flex px-2 pb-2 ${collapsed ? "justify-center" : "justify-end"}`}>
-        <button
-          className="btn btn-ghost btn-xs btn-square"
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<PanelLeft />}
+          ariaLabel={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+          tooltipPlacement={isOpen ? "left" : "right"}
           onClick={onToggle}
-          aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
-          title={isOpen ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          <PanelLeft size={16} />
-        </button>
+        />
       </div>
 
       {/* Primary nav */}
@@ -125,14 +126,14 @@ export function LeftPanel({
       {collapsed ? (
         <>
           <div className="mt-3 flex justify-center">
-            <button
-              className="btn btn-ghost btn-sm btn-square"
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<MessageSquarePlus />}
+              ariaLabel="New chat"
+              tooltipPlacement="right"
               onClick={onNewChat}
-              aria-label="New chat"
-              title="New chat"
-            >
-              <MessageSquarePlus size={18} />
-            </button>
+            />
           </div>
           <div className="flex-1" />
         </>

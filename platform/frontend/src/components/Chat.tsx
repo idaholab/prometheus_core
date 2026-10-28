@@ -18,6 +18,8 @@ import type { ChatItem, NeedsInfoItem, PlanItem, ToolItem } from "@/lib/store/ch
 import type { UploadDescriptor } from "@/lib/api/types";
 import { FollowupForm } from "./chat/FollowupForm";
 import { WelcomeScreen } from "./chat/WelcomeScreen";
+import { Button } from "@/components/ui/Button";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Markdown } from "./Markdown";
 import { ElementList } from "./ElementRenderer";
 import { artifactsToElements } from "@/lib/elements/artifactAdapter";
@@ -103,16 +105,8 @@ function PlanCard({
       )}
       {item.decided === null && !item.autoApprove ? (
         <div className="flex gap-2">
-          <button className="btn btn-primary btn-sm" disabled={disabled} onClick={() => onDecide(true)}>
-            Approve
-          </button>
-          <button
-            className="btn btn-ghost btn-sm border border-base-300"
-            disabled={disabled}
-            onClick={() => onDecide(false)}
-          >
-            Reject
-          </button>
+          <Button variant="primary" size="sm" label="Approve" disabled={disabled} onClick={() => onDecide(true)} />
+          <Button outline size="sm" label="Reject" disabled={disabled} onClick={() => onDecide(false)} />
         </div>
       ) : item.decided ? (
         <p className="text-xs text-base-content/60">Plan {item.decided}.</p>
@@ -484,13 +478,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
               {item.followUpSuggestions.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {item.followUpSuggestions.map((s) => (
-                    <button
-                      key={s}
-                      className="btn btn-xs btn-ghost border border-base-300"
-                      onClick={() => handleSend(s)}
-                    >
-                      {s}
-                    </button>
+                    <Button key={s} outline size="xs" label={s} onClick={() => handleSend(s)} />
                   ))}
                 </div>
               )}
@@ -514,45 +502,57 @@ export function Chat({ scrollContainerRef }: ChatProps) {
         ) : !hasMessages ? (
           <WelcomeScreen onSelect={(text) => handleSend(text)} />
         ) : (
-          <div
-            ref={scrollContainerRef}
-            onScroll={handleScroll}
-            className="flex-1 overflow-y-auto"
-          >
-            <div ref={messageListRef} className="max-w-4xl mx-auto p-5 space-y-5">
-              {items.map((item, i) => renderItem(item, i))}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex shrink-0 items-center justify-end px-6 pb-4 pt-6">
+              <StatusPill tone="success" label="Active" />
+            </div>
+            <div
+              ref={scrollContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto"
+            >
+              <div ref={messageListRef} className="max-w-4xl mx-auto p-5 space-y-5">
+                {items.map((item, i) => renderItem(item, i))}
 
-              {showLoadingDots && (
-                <div
-                  className="flex gap-2 justify-start"
-                  aria-live="polite"
-                  aria-label="Assistant is thinking"
-                >
-                  <AssistantAvatar />
-                  <span className="loading loading-dots loading-md text-base-content self-center" />
-                </div>
-              )}
+                {showLoadingDots && (
+                  <div
+                    className="flex gap-2 justify-start"
+                    aria-live="polite"
+                    aria-label="Assistant is thinking"
+                  >
+                    <AssistantAvatar />
+                    <span className="loading loading-dots loading-md text-base-content self-center" />
+                  </div>
+                )}
 
-              <div ref={spacerRef} aria-hidden />
+                <div ref={spacerRef} aria-hidden />
+              </div>
             </div>
           </div>
         )}
 
         {hasMessages && (
-          <button
-            type="button"
-            onClick={handleScrollToLatest}
-            className={`btn btn-circle btn-sm absolute bottom-4 left-1/2 z-10 -translate-x-1/2 border border-base-300 bg-base-100 text-base-content shadow-md transition-all duration-200 motion-reduce:transition-none hover:bg-base-200 dark:bg-accent dark:text-accent-content dark:hover:bg-accent/70 ${
+          <div
+            className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 transition-all duration-200 motion-reduce:transition-none ${
               showScrollToLatest
                 ? "translate-y-0 opacity-100"
                 : "pointer-events-none translate-y-2 opacity-0"
             }`}
-            aria-label="Scroll to latest message"
-            aria-hidden={!showScrollToLatest}
-            tabIndex={showScrollToLatest ? 0 : -1}
+            // React 18 types lack `inert`; React 18 renders the attribute only as a string.
+            {...(!showScrollToLatest && { inert: "" })}
           >
-            <ArrowDown size={18} />
-          </button>
+            <Button
+              shape="circle"
+              size="sm"
+              icon={<ArrowDown />}
+              ariaLabel="Scroll to latest message"
+              onClick={() => {
+                handleScrollToLatest();
+                // The wrapper turns inert and drops focus; give it to the composer.
+                textareaRef.current?.focus();
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -592,16 +592,20 @@ export function Chat({ scrollContainerRef }: ChatProps) {
               </div>
             )}
             <div className="relative flex items-end">
-              <button
-                className="btn btn-ghost btn-circle btn-sm absolute bottom-2.5 left-2.5"
-                onClick={handlePickFiles}
-                // An upload is staged under the session's current conversation, which
-                // is still the previous one until the resume returns.
-                disabled={awaiting || resuming}
-                aria-label="Attach files"
-              >
-                <Paperclip size={16} />
-              </button>
+              <div className="absolute bottom-2.5 left-2.5">
+                <Button
+                  variant="ghost"
+                  shape="circle"
+                  size="sm"
+                  icon={<Paperclip />}
+                  ariaLabel="Attach files"
+                  tooltipPlacement="right"
+                  onClick={handlePickFiles}
+                  // An upload is staged under the session's current conversation, which
+                  // is still the previous one until the resume returns.
+                  disabled={awaiting || resuming}
+                />
+              </div>
               <textarea
                 ref={textareaRef}
                 className="flex-1 bg-transparent resize-none outline-none pl-14 pr-14 py-4 text-base leading-6 placeholder:text-base-content/50 max-h-50"
@@ -615,20 +619,19 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                 // PREVIOUS conversation, so a turn sent now lands in the wrong one.
                 disabled={resuming}
               />
-              <button
-                className="btn btn-primary btn-circle btn-sm absolute bottom-2.5 right-2.5 disabled:opacity-40"
-                onClick={() => (awaiting ? handleStop() : handleSend())}
-                disabled={resuming || (!awaiting && !input.trim() && readyDescriptors.length === 0)}
-                aria-label={awaiting ? "Stop response" : "Send message"}
-              >
-                {awaiting ? (
-                  <Square size={14} fill="currentColor" />
-                ) : uploadingCount > 0 ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <ArrowUp size={18} />
-                )}
-              </button>
+              <div className="absolute bottom-2.5 right-2.5">
+                <Button
+                  variant="primary"
+                  shape="circle"
+                  size="sm"
+                  icon={awaiting ? <Square fill="currentColor" /> : <ArrowUp />}
+                  ariaLabel={awaiting ? "Stop response" : "Send message"}
+                  tooltipPlacement="left"
+                  loading={!awaiting && uploadingCount > 0}
+                  onClick={() => (awaiting ? handleStop() : handleSend())}
+                  disabled={resuming || (!awaiting && !input.trim() && readyDescriptors.length === 0)}
+                />
+              </div>
             </div>
           </div>
         </div>

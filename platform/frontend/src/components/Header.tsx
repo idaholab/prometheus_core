@@ -15,6 +15,7 @@ import { Bell, ChevronDown, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { usePageHeaderOverride } from "../lib/store/pageHeader";
 import { useTheme } from "../lib/useTheme";
 import { useCurrentUser } from "../lib/store/session";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   /** Active section label. Drives the breadcrumb and page title unless the
@@ -69,9 +70,7 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="btn btn-ghost btn-sm btn-square" aria-label="Notifications">
-          <Bell size={18} />
-        </button>
+        <Button variant="ghost" size="sm" icon={<Bell />} ariaLabel="Notifications" tooltipPlacement="bottom" />
         <div className="h-6 w-px bg-base-300" />
         <div className="dropdown dropdown-end">
           <div
