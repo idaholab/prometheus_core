@@ -30,6 +30,9 @@ runs:
       # Report names are relative to the unit; make them repo-root-relative
       run: sed -i "s#filename=\"#filename=\"$DIRECTORY/#" coverage.xml
     - name: Upload coverage
+      # The merge queue tests the commit that devel then fast-forwards to, so
+      # the push run reports it again; uploading in both doubles every flag
+      if: ${{ github.event_name != 'merge_group' }}
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ inputs.token }}
