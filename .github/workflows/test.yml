@@ -505,6 +505,9 @@ jobs:
           push: false
           load: true
           tags: sdk:${{ matrix.platform }}
+          # Read-only: the cache written by publish-images on devel (same scope
+          # as build-image.yml), so a PR only rebuilds the layers it changed
+          cache-from: type=gha,scope=sdk-${{ matrix.platform }}
       - name: Test
         # The image only has the installed package; mount the checkout for
         # pyproject.toml, uv.lock, and the tests
@@ -578,6 +581,9 @@ jobs:
           build-contexts: certs=common/certs
           platforms: linux/${{ matrix.platform }}
           push: false
+          # Read-only: the cache written by publish-images on devel (same scope
+          # as build-image.yml), so a PR only rebuilds the layers it changed
+          cache-from: type=gha,scope=frontend-${{ matrix.platform }}
 
   platform-backend-docker:
     name: "platform: backend docker ${{ matrix.platform }}"
@@ -609,6 +615,9 @@ jobs:
             certs=common/certs
           platforms: linux/${{ matrix.platform }}
           push: false
+          # Read-only: the cache written by publish-images on devel (same scope
+          # as build-image.yml), so a PR only rebuilds the layers it changed
+          cache-from: type=gha,scope=backend-${{ matrix.platform }}
 
   platform-backend-python:
     name: "platform: backend python ${{ matrix.python }}"
