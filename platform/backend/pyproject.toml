@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
     "python-multipart>=0.0.9",  # required for form-encoded POST /api/auth/login
-    "uvicorn[standard]>=0.34",
+    "uvicorn[standard]>=0.54.0",
     "pydantic-settings>=2.0",
     "redis>=4.2",
     "httpx>=0.27.0",
