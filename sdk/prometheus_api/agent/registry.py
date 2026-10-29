@@ -176,6 +176,54 @@ class AgentRegistryClient:
             response.raise_for_status()
             logger.info("Registered '%s' with LiteLLM at %s", agent_name, self.registry_url)
 
+    async def is_registered_async(self, agent_card: AgentCard) -> bool:
+        """Whether the registry currently lists this agent, by name.
+
+        Raises on a transport or HTTP error, so a registry that is down is not
+        mistaken for one that has forgotten the agent.
+        """
+        agent_name = self.agent_name(agent_card)
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
+            response = await client.get(f"{self.registry_url}/v1/agents")
+            response.raise_for_status()
+            entries = response.json()
+        return any(
+            isinstance(entry, dict) and entry.get("agent_name") == agent_name
+            for entry in (entries if isinstance(entries, list) else [])
+        )
+
+    async def keep_registered_async(
+        self,
+        agent_card: AgentCard,
+        *,
+        raw_agent_card: Optional[Dict[str, Any]] = None,
+        interval: float = 60.0,
+    ) -> None:
+        """Re-register whenever the registry no longer lists this agent.
+
+        Registration happens once at startup, so a registry that restarts or is
+        cleared while the agent keeps running (``make up`` clears it on every
+        launch) silently drops the agent from discovery until the agent itself
+        restarts. This loop checks every ``interval`` seconds and re-registers
+        when the entry is gone. A check that fails (registry down) is logged and
+        retried on the next tick. Runs until cancelled.
+        """
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                if await self.is_registered_async(agent_card):
+                    continue
+                logger.warning(
+                    "'%s' is no longer listed by the registry at %s; re-registering",
+                    self.agent_name(agent_card),
+                    self.registry_url,
+                )
+                await self.register_once_async(agent_card, raw_agent_card=raw_agent_card)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("Registry check failed (%s); will retry in %.0fs", e, interval)
+
     def register_with_retries(
         self,
         agent_card: AgentCard,

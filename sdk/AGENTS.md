@@ -48,7 +48,7 @@ Preserve the surrounding logging interpolation style when editing existing modul
 f-string-heavy sections such as `agent/base.py`, prefer f-strings for straightforward values
 unless lazy interpolation provides a material benefit.
 
-Agent registry URL lookups should go through `PrometheusAgent.registry_url()` so the `REGISTRY_URL` fallback value stays centralized. Registry HTTP/retry behavior belongs in `agent/registry.py`; registration starts from the app lifespan as a background async task. Keep `REGISTRY_MAX_RETRIES` docs and tests aligned with that startup behavior, including retries against the built-in fallback URL. Invalid retry configuration should not prevent an agent from starting.
+Agent registry URL lookups should go through `PrometheusAgent.registry_url()` so the `REGISTRY_URL` fallback value stays centralized. Registry HTTP/retry behavior belongs in `agent/registry.py`; registration starts from the app lifespan as a background async task. Keep `REGISTRY_MAX_RETRIES` and `REGISTRY_CHECK_INTERVAL_SECONDS` docs and tests aligned with that behavior, including retries against the built-in fallback URL. Invalid retry configuration should not prevent an agent from starting.
 
 LiteLLM A2A routing requires the registered copy of a v1 agent card to retain
 top-level `url` and `protocolVersion` fields derived from its JSON-RPC
