@@ -72,12 +72,23 @@ Why `platform/ctl/`:
 - **`__main__.py` parses on 3.9**: no 3.10+ syntax, and `cli` is imported
   only after the version check, so even a wrong interpreter gets a clear
   message instead of a `SyntaxError`.
-- **The shim** then runs
-  `exec env PYTHONPATH="<platform>/ctl" "$python" -m platformctl "$@"`. All
-  other logic is in Python, so the coverage covers it. The tool finds the
-  platform folder from its own location, never from the current directory,
-  so `make -C <platform> ...` works. The Makefile calls it as
-  `sh $(CURDIR)/platformctl`, so a lost executable bit doesn't matter.
+- **The shim** then runs `exec "$python" -I "<platform>/ctl/run.py" "$@"`.
+  `run.py` (a few lines, parses on 3.9) puts its own folder first on
+  `sys.path` and runs `platformctl`. Not `python -m` with `PYTHONPATH`: that
+  puts the current directory first on `sys.path`, so a `json.py` in the
+  folder the user is in replaces the stdlib module (verified), and agent
+  folders are full of `.py` files. `-I` also ignores `PYTHON*` variables and
+  user site-packages, which suits a stdlib-only tool. (`-P` would do the
+  first part, but only from 3.11.) All other logic is in Python, so the
+  coverage covers it. The tool finds the platform folder from its own
+  location, never from the current directory, so `make -C <platform> ...`
+  works. The shim finds its folder with
+  `CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
+  symlinked shim can't send it elsewhere. The Makefile calls it as
+  `sh "$(CURDIR)/platformctl"`, so a lost executable bit or a space in the
+  path doesn't matter.
+- **The version probe** also imports `json` and `urllib.request`, since
+  some minimal distro Pythons lack modules the tool needs.
 - **Line endings:** `.gitattributes` (new in step 2) forces LF for
   `platform/platformctl`, `*.sh` and `*.py`, so a Windows-side checkout
   can't give the shim CRLF line endings (`/bin/sh^M: bad interpreter`).

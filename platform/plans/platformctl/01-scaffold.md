@@ -18,8 +18,8 @@ step that may land before the hackathon freeze (2026-11-03).
   down to `python3.10`, `python3` (Homebrew's before `/usr/bin` on macOS),
   then `uv run --no-project --python '>=3.10' python`. If none works, prints
   one install command for the OS. Then
-  `exec env PYTHONPATH="<platform>/ctl" "$python" -m platformctl "$@"`
-  (`design.md`, "Runtime").
+  `exec "$python" -I "<platform>/ctl/run.py" "$@"`, so a `.py` file in the
+  current folder can't shadow the stdlib (`design.md`, "Runtime").
 - **Project** `platform/ctl/`: `pyproject.toml` (`requires-python >=3.10`,
   dev deps pytest, pytest-cov, ruff; branch coverage; the `live` marker),
   a committed `uv.lock`, `README.md`, `.gitignore`.
@@ -113,7 +113,8 @@ step that may land before the hackathon freeze (2026-11-03).
   command runs with `--verbose`, `--dry-run`, `--json` and forced failures;
   no sentinel may appear in stdout or stderr. Extended in every later step.
 - **Live:** the `--live` option and its refusal under coverage; the shim
-  from another directory; `doctor` against the real daemon.
+  from another directory, including one that holds a `json.py` and an
+  `argparse.py`; `doctor` against the real daemon.
 
 ## CI
 
