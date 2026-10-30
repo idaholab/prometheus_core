@@ -158,3 +158,117 @@ test("a reload shows the resume marker during getConfig() and drops it when getC
   assert.equal(readState().resumingConversationId, null);
   assert.equal(readState().ready, true);
 });
+
+/* Turn recovery: a long turn whose POST reply is dropped is settled from the
+ * stored transcript (turnRecovery.ts). Fake timers skip the grace period. */
+const msgs = (assistants: number) => [
+  { role: "user", content: "run it" },
+  ...Array.from({ length: assistants }, (_, i) => ({ role: "assistant", content: `reply ${i}` })),
+];
+
+async function bootToConversation(id: string, api: Api): Promise<void> {
+  installStorage(id);
+  g.__chatTestApi = { getConfig: async () => ({}), resumeConversation: async () => detail(id), ...api };
+  await chatStore.bootstrap("p");
+}
+
+test("a turn whose reply was dropped is settled from the stored transcript", async () => {
+  vi.useFakeTimers();
+  try {
+    let stored = msgs(0);
+    const post = deferred<unknown>(); // the POST reply never arrives
+    await bootToConversation("conv-R", {
+      getConversation: async () => ({ ...detail("conv-R"), messages: stored }),
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+
+    void chatStore.sendTurn("run it");
+    await vi.advanceTimersByTimeAsync(0);
+    assert.equal(readState().awaiting, true);
+
+    await vi.advanceTimersByTimeAsync(60_000); // grace: first poll, nothing stored yet
+    assert.equal(readState().awaiting, true);
+
+    stored = msgs(1); // the backend finished and stored the reply
+    await vi.advanceTimersByTimeAsync(15_000);
+    assert.equal(readState().awaiting, false);
+    const items = readState().items as { kind: string }[];
+    assert.ok(items.some((it) => it.kind === "assistant"), "the stored reply is rendered");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a turn answered by its POST reply never polls the transcript", async () => {
+  vi.useFakeTimers();
+  try {
+    let polls = 0;
+    await bootToConversation("conv-Q", {
+      getConversation: async () => {
+        polls += 1;
+        return { ...detail("conv-Q"), messages: msgs(0) };
+      },
+      sendMessage: async () => ({ status: "message", message: "done", turn_id: "t1", artifacts: [] }),
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+
+    await chatStore.sendTurn("quick");
+    const baselineReads = polls; // the send-time baseline read
+    await vi.advanceTimersByTimeAsync(120_000);
+    assert.equal(polls, baselineReads, "no poll after the turn settled");
+    assert.equal(readState().awaiting, false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a brand-new chat (404 baseline) still recovers its first reply", async () => {
+  vi.useFakeTimers();
+  try {
+    let stored: ReturnType<typeof msgs> | null = null; // 404 until the first turn is stored
+    const post = deferred<unknown>();
+    await bootToConversation("conv-N", {
+      getConversation: async () => {
+        if (stored === null) throw new ApiError(404, "not found");
+        return { ...detail("conv-N"), messages: stored };
+      },
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+
+    void chatStore.sendTurn("first");
+    await vi.advanceTimersByTimeAsync(60_000);
+    assert.equal(readState().awaiting, true);
+    stored = msgs(1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    assert.equal(readState().awaiting, false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("switching conversation stops the recovery poll", async () => {
+  vi.useFakeTimers();
+  try {
+    let polls = 0;
+    const post = deferred<unknown>();
+    await bootToConversation("conv-S", {
+      getConversation: async () => {
+        polls += 1;
+        return { ...detail("conv-S"), messages: msgs(0) };
+      },
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    void chatStore.sendTurn("long");
+    await vi.advanceTimersByTimeAsync(0);
+    g.__chatTestApi.resumeConversation = async () => detail("conv-T");
+    await chatStore.loadConversation("conv-T");
+    const before = polls;
+    await vi.advanceTimersByTimeAsync(120_000);
+    assert.equal(polls, before, "no poll for a conversation no longer on screen");
+  } finally {
+    vi.useRealTimers();
+  }
+});
