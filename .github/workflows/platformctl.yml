@@ -1,0 +1,218 @@
+name: platformctl
+
+# The platformctl tool (platform/ctl) and its shim (platform/platformctl). Runs only when
+# those paths change, and none of these jobs is a required check until step 2 of the plan
+# (platform/plans/platformctl/). They are a separate workflow, not part of test.yml, so a
+# change elsewhere doesn't pay for them and test.yml's jobs stay as they are
+
+on:
+  push:
+    branches: [devel]
+    paths:
+      - "platform/ctl/**"
+      - "platform/platformctl"
+      - ".github/workflows/platformctl.yml"
+  pull_request:
+    branches: [main, devel]
+    paths:
+      - "platform/ctl/**"
+      - "platform/platformctl"
+      - ".github/workflows/platformctl.yml"
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    name: "platformctl: unit ${{ matrix.os }} python ${{ matrix.python }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-latest
+            python: "3.12"
+    defaults:
+      run:
+        working-directory: platform/ctl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+      - name: Sync environment
+        run: uv sync --frozen
+      - name: Ruff
+        # The shared ruff job covers this project too; running it here as well keeps a lint
+        # failure next to the tests that fail with it
+        if: ${{ matrix.os == 'ubuntu-26.04' && matrix.python == '3.12' }}
+        run: |
+          uv run --frozen --no-sync ruff check --output-format=github .
+          uv run --frozen --no-sync ruff format --check --diff .
+      - name: Test
+        # Each leg writes its own data; the coverage job combines them and enforces 100%, so a
+        # branch that only one Python version takes still counts
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.os }}-${{ matrix.python }}
+        run: uv run --frozen --no-sync pytest --color=yes --cov --cov-branch --cov-fail-under=0
+      - name: Upload coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: platformctl-coverage-${{ matrix.os }}-${{ matrix.python }}
+          path: platform/ctl/.coverage.*
+          include-hidden-files: true
+          if-no-files-found: error
+
+  coverage:
+    name: "platformctl: coverage"
+    needs: unit
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: platform/ctl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+      - name: Sync environment
+        run: uv sync --frozen
+      - name: Download coverage data
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: platformctl-coverage-*
+          path: platform/ctl
+          merge-multiple: true
+      - name: Combine and enforce 100%
+        # [tool.coverage.paths] remaps the Linux and macOS paths onto one tree; fail_under = 100
+        # (lines and branches) is in pyproject.toml
+        run: |
+          uv run --frozen --no-sync coverage combine
+          uv run --frozen --no-sync coverage report
+          uv run --frozen --no-sync coverage xml
+      - name: Coverage
+        # This workflow only runs when platform/ctl changes, so the upload is not counted in
+        # codecov.yml's after_n_builds, and the flag carries its last result forward
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/coverage
+        with:
+          directory: platform/ctl
+          flag: platformctl
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  shim:
+    name: "platformctl: shim ${{ matrix.name }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "sh", os: ubuntu-26.04, shell: "sh" }
+          - { name: "dash", os: ubuntu-26.04, shell: "dash" }
+          - { name: "bash --posix", os: ubuntu-26.04, shell: "bash --posix" }
+          - { name: "busybox ash", os: ubuntu-26.04, shell: "busybox ash" }
+          - { name: "macOS /bin/sh", os: macos-latest, shell: "sh" }
+    defaults:
+      run:
+        working-directory: platform/ctl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+      - name: Install busybox
+        if: ${{ matrix.shell == 'busybox ash' }}
+        run: sudo apt-get install -y --no-install-recommends busybox
+      - name: Sync environment
+        run: uv sync --frozen
+      - name: Shim tests
+        # Stub interpreters on a PATH of fake python3.x and uv scripts: the search order,
+        # PLATFORMCTL_PYTHON, the uv fallback, the install message, CDPATH, a symlinked shim
+        env:
+          SHIM_SHELL: ${{ matrix.shell }}
+        run: uv run --frozen --no-sync pytest --color=yes tests/shim --shim-shell "$SHIM_SHELL"
+      - name: The file mode is executable
+        run: |
+          mode=$(git ls-files -s -- ../platformctl | cut -d' ' -f1)
+          [ "$mode" = 100755 ] || { echo "::error::platform/platformctl is mode $mode, not 100755"; exit 1; }
+      - name: Install Python 3.9
+        # The tests below run the real entry point and shim on a real 3.9. macOS runners
+        # also have /usr/bin/python3, the 3.9 of a stock Mac; uv's 3.9 covers Ubuntu
+        run: uv python install 3.9
+      - name: Python 3.9 tests
+        # PLATFORMCTL_REQUIRE_PY39 turns "no 3.9 found" into a failure, so this can't silently skip
+        env:
+          PLATFORMCTL_REQUIRE_PY39: "1"
+          SHIM_SHELL: ${{ matrix.shell }}
+        run: uv run --frozen --no-sync pytest --color=yes tests/shim/test_python39.py --shim-shell "$SHIM_SHELL"
+      - name: A Mac whose python3 is 3.9, with only uv to find a newer one
+        if: ${{ matrix.os == 'macos-latest' }}
+        # The real case: /usr/bin/python3 is 3.9, and the PATH has only the system tools and uv
+        run: |
+          /usr/bin/python3 --version
+          uv_dir=$(dirname "$(command -v uv)")
+          PATH="/usr/bin:/bin:$uv_dir" sh ../platformctl --version
+
+  live:
+    name: "platformctl: live (${{ matrix.store }} image store)"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The default-store leg only runs on devel: the unit tests cover docker info's output for it
+        store: ${{ fromJSON(github.ref == 'refs/heads/devel' && '["containerd", "default"]' || '["containerd"]') }}
+    defaults:
+      run:
+        working-directory: platform/ctl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Containerd image store
+        if: ${{ matrix.store == 'containerd' }}
+        uses: ./.github/actions/containerd-image-store
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+      - name: Sync environment
+        run: uv sync --frozen
+      - name: Live tests
+        # --live refuses to run with coverage, and these never count toward it
+        run: uv run --frozen --no-sync pytest --color=yes tests/live --live
+      - name: Doctor
+        # What a failed platform job will upload from step 3a on
+        run: sh ../platformctl doctor --json > "$RUNNER_TEMP/doctor.json" || true
+      - name: Upload doctor output
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: platformctl-doctor-${{ matrix.store }}
+          path: ${{ runner.temp }}/doctor.json

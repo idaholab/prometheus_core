@@ -66,8 +66,9 @@ Why `platform/ctl/`:
   `--default`). Debian 11 and RHEL 9 also ship 3.9. The shim tries, in order:
   `$PLATFORMCTL_PYTHON`, `python3.14` down to `python3.10`, `python3`, then
   `uv run --no-project --python '>=3.10' python`. Each candidate is checked
-  with a one-line version test. If none works, it prints one install command
-  for the OS. On macOS it tries Homebrew's Python before `/usr/bin/python3`,
+  with a one-line version test. If none works, its only suggestion is to
+  install uv, with uv's one-line installer (no `brew`, `apt` or other package
+  manager, whatever the OS). On macOS it tries Homebrew's Python before `/usr/bin/python3`,
   which opens an install dialog without the Command Line Tools.
 - **`__main__.py` parses on 3.9**: no 3.10+ syntax, and `cli` is imported
   only after the version check, so even a wrong interpreter gets a clear
@@ -83,7 +84,7 @@ Why `platform/ctl/`:
   coverage covers it. The tool finds the platform folder from its own
   location, never from the current directory, so `make -C <platform> ...`
   works. The shim finds its folder with
-  `CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
+  `CDPATH='' cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
   symlinked shim can't send it elsewhere. The Makefile calls it as
   `sh "$(CURDIR)/platformctl"`, so a lost executable bit or a space in the
   path doesn't matter.
@@ -734,6 +735,31 @@ restart.
 
 ### Unit (`tests/unit/`)
 
+- **Every function, global and class variable has a brief docstring**, in the code and in the
+  tests. A variable's docstring is a `"""foo"""` string literal on the line after the assignment,
+  for module globals and for dataclass fields alike:
+
+  ```python
+  MASK = "***"
+  """What a secret is replaced with."""
+
+  @dataclass
+  class Result:
+      """What one check found."""
+
+      status: str
+      """PASS, WARN, FAIL or SKIP."""
+  ```
+
+  `tests/unit/test_docstrings.py` reads every file with `ast` and lists what lacks one. Lambdas
+  and names inside a function body are exempt. A docstring says what the thing does or is for.
+- **The tests mirror the package:** `platformctl/system/compose.py` is tested in
+  `tests/unit/system/test_compose.py`, `actions/doctor.py` in
+  `tests/unit/actions/test_doctor.py`, and so on (`__init__.py` is `test_init.py`,
+  `__main__.py` is `test_main.py`). `tests/unit/test_rules.py` fails when a module that
+  defines code has no test file at its mirrored path, and when a test file matches no module.
+  The only exceptions are tests of the whole tool: the rules, the secrets canary and the
+  `--live` option. A new module starts with its test file.
 - `pytest --cov=platformctl --cov-branch`. 100% line and branch coverage of
   the **combined** report across the Python versions in CI (each version
   uploads its data, one job combines and enforces `fail_under = 100`), so a

@@ -1,0 +1,74 @@
+#!/bin/sh
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+# Shim for platformctl: find a Python 3.10+ and run ctl/run.py with it.
+# POSIX sh only. See plans/platformctl/design.md, "Runtime".
+
+# Follow symlinks to the real shim, so a link elsewhere (~/bin/platformctl) still
+# finds ctl/. A relative link target is relative to the link's own folder.
+self=$0
+while [ -L "$self" ]; do
+    target=$(readlink -- "$self") || exit 1
+    case "$target" in
+        /*) self=$target ;;
+        *) self=$(dirname -- "$self")/$target ;;
+    esac
+done
+here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" && pwd -P) || exit 1
+
+# One-line probe: new enough, and the stdlib modules the tool needs exist.
+probe='import sys, json, urllib.request; sys.exit(0 if sys.version_info >= (3, 10) else 1)'
+
+usable() {
+    "$1" -c "$probe" >/dev/null 2>&1
+}
+
+python=
+if [ -n "${PLATFORMCTL_PYTHON:-}" ]; then
+    if usable "$PLATFORMCTL_PYTHON"; then
+        python=$PLATFORMCTL_PYTHON
+    else
+        echo "platformctl: PLATFORMCTL_PYTHON ($PLATFORMCTL_PYTHON) is not a Python 3.10 or newer." >&2
+        exit 1
+    fi
+fi
+
+if [ -z "$python" ]; then
+    # On macOS, Homebrew's Python before /usr/bin/python3: without the Command Line
+    # Tools the latter opens an install dialog.
+    homebrew=
+    if [ "$(uname -s)" = Darwin ]; then
+        homebrew="/opt/homebrew/bin/python3 /usr/local/bin/python3"
+    fi
+    # shellcheck disable=SC2086 # $homebrew is a list of paths without spaces
+    for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 $homebrew python3; do
+        if usable "$candidate"; then
+            python=$candidate
+            break
+        fi
+    done
+fi
+
+if [ -z "$python" ] && command -v uv >/dev/null 2>&1; then
+    exec uv run --no-project --python '>=3.10' python -I "$here/ctl/run.py" "$@"
+fi
+
+if [ -z "$python" ]; then
+    echo "platformctl needs Python 3.10 or newer, and none was found." >&2
+    echo "Install uv, which finds or downloads a Python for you:" >&2
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+    echo "Then open a new terminal and run this again." >&2
+    exit 1
+fi
+
+exec "$python" -I "$here/ctl/run.py" "$@"
