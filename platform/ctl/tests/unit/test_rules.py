@@ -15,7 +15,11 @@
 from __future__ import annotations
 
 import ast
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 PACKAGE = Path(__file__).resolve().parents[2] / "platformctl"
 """The `platformctl` package folder."""
@@ -30,6 +34,20 @@ def test_no_pragma_no_cover_anywhere():
         if "pragma: no cover" in line or "pragma:no cover" in line
     ]
     assert offenders == []
+
+
+def test_git_keeps_the_shim_lf_even_on_a_windows_checkout():
+    """`#!/bin/sh\\r` is "bad interpreter" under WSL, before Python can explain; `.gitattributes` prevents it."""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not installed")
+    repo = PACKAGE.parents[2]
+    done = subprocess.run(
+        [git, "check-attr", "eol", "--", "platform/platformctl"], capture_output=True, text=True, cwd=repo, check=False
+    )
+    if done.returncode != 0:
+        pytest.skip("not a git checkout")
+    assert done.stdout.strip() == "platform/platformctl: eol: lf"
 
 
 def test_only_the_runner_starts_subprocesses():
