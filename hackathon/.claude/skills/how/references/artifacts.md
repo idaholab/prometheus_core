@@ -71,5 +71,7 @@ Deck 03, slides 18-20. Free ports 3000, 5000, 5432 first.
    `DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1`, `DEEPLYNX_ORG_ID=1`, `DEEPLYNX_PROJECT_ID`.
 5. `make down` in the agent folder, then `make restart` in the platform (it empties the registry).
 6. Copy the values into the agent, printing nothing:
-   `cd <agent> && { grep -v '^DEEPLYNX_' .env; grep '^DEEPLYNX_' <platform>/.env; } > .env.new && mv .env.new .env`.
+   `cd <agent> && { grep -v '^DEEPLYNX_' .env; grep -E '^DEEPLYNX_(BASE_URL|KEY|SECRET|JWT_TOKEN|ORG_ID|PROJECT_ID|DATA_SOURCE_ID)=' <platform>/.env; } > .env.new && mv .env.new .env`.
+   Only the client keys: the other `DEEPLYNX_*` lines in the platform `.env` are the DeepLynx server's own secrets.
+   This also drops them from an agent scaffolded before `setup_agent.py` stopped copying them.
 7. `make up` in the agent folder. Upload a small file in a fresh chat; `/artifacts` lists it.

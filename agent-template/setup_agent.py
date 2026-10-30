@@ -63,6 +63,19 @@ PLATFORM_SECRET_KEYS = (
     "LLM_API_KEY",
     "EMBEDDING_API_KEY",
 )
+# The DeepLynx client settings an agent reads (agent_template/docker-compose.yml).
+# Not a DEEPLYNX_ prefix: the platform .env also holds the local DeepLynx
+# server's own secrets (DB password, JWT and encryption keys), which an
+# agent must never get.
+PLATFORM_DEEPLYNX_KEYS = (
+    "DEEPLYNX_BASE_URL",
+    "DEEPLYNX_KEY",
+    "DEEPLYNX_SECRET",
+    "DEEPLYNX_JWT_TOKEN",
+    "DEEPLYNX_ORG_ID",
+    "DEEPLYNX_PROJECT_ID",
+    "DEEPLYNX_DATA_SOURCE_ID",
+)
 ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SECRET_GITIGNORE_ENTRIES = (".env",)
 
@@ -271,11 +284,7 @@ def platform_uses_local_sdk(assignments: dict[str, str]) -> bool:
 def select_platform_env_values(env_path: Path) -> dict[str, str]:
     """Select the platform env values that are useful to a generated agent."""
     assignments = read_env_assignments(env_path)
-    selected = {key: assignments[key] for key in PLATFORM_SECRET_KEYS if key in assignments}
-
-    for key, value in assignments.items():
-        if key.startswith("DEEPLYNX_"):
-            selected[key] = value
+    selected = {key: assignments[key] for key in PLATFORM_SECRET_KEYS + PLATFORM_DEEPLYNX_KEYS if key in assignments}
 
     # A platform built with LOCAL_SDK=true has no registry access; the agent
     # Makefile then builds FROM the base image the platform built locally.
@@ -326,7 +335,7 @@ def create_env_from_platform_if_requested(output_dir: Path, assume_defaults: boo
     local_sdk = "LOCAL_SDK" in selected_values
     create_env = confirm_action(
         f"\nFound '{PLATFORM_ENV_PATH}'. Create '{output_dir / '.env'}' with "
-        "DEEPLYNX_*, AGENT_SECRET, REDIS_PASSWORD, "
+        "DeepLynx client (DEEPLYNX_KEY, ...), AGENT_SECRET, REDIS_PASSWORD, "
         "LLM_CONFIG_PROFILE, LLM_API_KEY, EMBEDDING_API_KEY, and USER_IDENTITY_* values"
         f"{' (and the locally built base image, LOCAL_SDK=true)' if local_sdk else ''}? (yes/no)",
         "yes",

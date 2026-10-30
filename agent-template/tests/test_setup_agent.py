@@ -10,6 +10,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+import re
 import sys
 from pathlib import Path
 
@@ -87,6 +88,42 @@ def test_select_platform_env_values_includes_identity_verification_keys(tmp_path
     assert selected["USER_IDENTITY_AUD"] == "prometheus-agents"
     assert "USER_IDENTITY_PRIVATE_KEY" not in selected
     assert selected["DEEPLYNX_ORG_ID"] == "42"
+
+
+def test_select_platform_env_values_copies_only_deeplynx_client_keys(tmp_path):
+    """The platform .env also holds the local DeepLynx server's own secrets
+    (DB password, JWT and encryption keys) and ports. An agent only needs the
+    client settings, so none of the server values may be copied."""
+    client = {key: f"{key.lower()}-value" for key in setup_agent.PLATFORM_DEEPLYNX_KEYS}
+    server = (
+        "DEEPLYNX_DB_PASSWORD",
+        "DEEPLYNX_JWT_SECRET",
+        "DEEPLYNX_ENCRYPTION_KEY",
+        "DEEPLYNX_ENCRYPTION_IV",
+        "DEEPLYNX_UI_SECRET",
+        "DEEPLYNX_SERVER_PORT",
+        "DEEPLYNX_UI_PORT",
+    )
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text(
+        "".join(f"{key}={value}\n" for key, value in client.items())
+        + "".join(f"{key}=server-only\n" for key in server),
+        encoding="utf-8",
+    )
+
+    selected = setup_agent.select_platform_env_values(platform_env)
+
+    assert selected == client
+
+
+def test_platform_deeplynx_keys_cover_template_compose():
+    """Every DEEPLYNX_* the template compose file reads must be copied, so
+    adding one there without adding it to the list fails here."""
+    compose = (ROOT / "agent_template" / "docker-compose.yml").read_text(encoding="utf-8")
+    read_keys = set(re.findall(r"\$\{(DEEPLYNX_[A-Z_]+)", compose))
+
+    assert read_keys
+    assert read_keys <= set(setup_agent.PLATFORM_DEEPLYNX_KEYS)
 
 
 def test_select_platform_env_values_includes_llm_config_profile(tmp_path):
