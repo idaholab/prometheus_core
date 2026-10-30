@@ -889,6 +889,7 @@ step that removes the old one:
 | `doctor` preflight checks (1) | `check-local-prereqs.sh --compose` until step 3a | The start targets still run in Make until step 3a |
 | `doctor` platform checks (1, 4) | The hackathon `checks.md` one-liners: replaced in step 4 | Only the checks `doctor` has can be replaced; `llm-call` and code greps stay manual |
 | Commands in the hackathon material (2, 3a, 3b) | Slides and skills until step 3c | No mixed `make`/`./platformctl` blocks, and the hackathon freeze |
+| `config init`, `status --wait`, `deeplynx setup` (2) | The three `scripts/*`, as forwarding stubs, until step 3c | The hackathon material names them until it switches in 3c |
 | Agent folders (7) | The agent template's Makefile logic: replaced in step 7 | Agent repos copy the template, so it moves in one step |
 | `config init --instance` (7) | | Agent folders hardcode the network name until step 7 |
 | k3d target (8) | `cluster-up.sh`, `check-local-prereqs.sh --cluster`: replaced in step 8 | |

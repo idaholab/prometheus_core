@@ -38,6 +38,8 @@ CI job to `./platformctl`.
 
 ## Replaces
 
+- The three `scripts/*` stubs from step 2: deleted, now that the hackathon
+  material stops naming them.
 - The registry and discovery one-liners in the docs and skills
   (`registry-agents`, `registry-details`, `discovery-refresh`):
   `agents list --registered`, `agents refresh`.

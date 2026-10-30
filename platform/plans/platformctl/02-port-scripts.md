@@ -7,7 +7,8 @@ Lands after the hackathon (Day 2).
 ## Goal
 
 Move `scripts/init_env.py`, `scripts/check_platform.py` and
-`scripts/deeplynx_setup.py` into platformctl, and delete them.
+`scripts/deeplynx_setup.py` into platformctl, leaving each as a short
+deprecation stub until step 3c deletes them.
 
 ## Work
 
@@ -66,7 +67,11 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
   `scripts/check_platform.py` directly (`Makefile:259`); its recipe switches
   to `./platformctl status --wait`. `test_compose_static.py` parses that
   recipe; update it with it.
-- **Remove** the three scripts.
+- **Replace** the three scripts with stubs that print one line ("moved:
+  run `./platformctl config init`") and exec the new command. The hackathon
+  knowledge base and deck 03 (`checks.md`, `environment.md`,
+  `03-deployment.md`) and `platform/README.md` users still name them, and
+  the hackathon material can't change until 3c. Step 3c deletes the stubs.
 - **Moved from step 1** (it had to stay out of the hackathon freeze):
   - `make doctor`: `doctor: ##@ ...` forwarding to the shim.
   - **`.gitattributes`** (repo root, new): `platform/platformctl text
@@ -98,7 +103,8 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
 ## Replaces
 
 - `scripts/init_env.py`, `scripts/check_platform.py`,
-  `scripts/deeplynx_setup.py`: removed.
+  `scripts/deeplynx_setup.py`: stubs that forward to the new commands,
+  removed in step 3c.
 - `make init-env`, `make check`, `make deeplynx-setup` and `test-system`'s
   check forward to the new commands, and the start targets call
   `config init` and `status --wait` through the tool.
@@ -141,8 +147,8 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 
 ## Breaking changes
 
-- **B1:** the three scripts are removed; `make test-system` keeps working
-  through its updated recipe.
+- **B1:** the three scripts become forwarding stubs (removed in 3c);
+  `make test-system` keeps working through its updated recipe.
 - **B2:** `make init-env`, `make check`, `make deeplynx-setup` and every
   start target (which run `init-env`) now need Python 3.10+, which the shim
   finds.
@@ -175,7 +181,7 @@ Record each finding in the PR as fixed, deferred or rejected.
 
 ## Done when
 
-- The three scripts are gone and nothing outside the hackathon material and
-  agent-template docs references them.
+- The three scripts are stubs, and nothing outside the hackathon material
+  and agent-template docs references them.
 - CI's `platform: up` job passes (it runs `make init-env` and `make up`),
   and so does `make test-system`'s recipe test.
