@@ -122,6 +122,9 @@ today; CI proves it.
   values containing spaces, quotes and `$`, and parse what the tool would
   read; `MAKEFLAGS` never reaching a child; the secrets canary for every new
   command. On both the Ubuntu (Make 4.x) and macOS (Make 3.81) legs.
+- **Live canary** (`design.md`, "Secrets"): sentinels in a port, an image
+  and a label of the minimal project; `up --dry-run`, `build`, `status` and
+  `doctor` against real Compose; no sentinel in the captured output.
 - **Live:** `up`/`down`/`restart <service>`/`status`/`logs` (including
   `--tail` and `--no-follow`) on the minimal compose project; `reset
   registry` against real Valkey; Ctrl-C in the foreground (pseudo-terminal);

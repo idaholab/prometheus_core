@@ -71,7 +71,8 @@ step that may land before the hackathon freeze (2026-11-03).
   computes a path from the current directory or assumes an agent is under
   `platform/agents/` (`design.md`, "Agents in other repositories").
 - **Adapters:** `system/runner.py` (interactive mode, SIGINT, 128+n,
-  `execvp` passthrough, values by environment only), `system/docker.py`,
+  `execvp` passthrough, values by environment only, child output piped
+  through the scrubber), `system/docker.py`,
   `system/compose.py`, `system/host.py` (port check by `socket.bind`, holder
   from `docker ps`, `lsof`/`ss` optional; WSL and `/mnt/<drive>` detection;
   architecture from `docker info`), `system/http.py` (loopback bypasses the
@@ -111,9 +112,12 @@ step that may land before the hackathon freeze (2026-11-03).
   (`--set A=1 up --set B=2` keeps both); the `--` split; the `--help` layout;
   the JSON contract (golden files); the version check; the `# pragma: no
   cover` ban.
-- **Secrets canary:** every secret key gets a unique sentinel value; every
-  command runs with `--verbose`, `--dry-run`, `--json` and forced failures;
-  no sentinel may appear in stdout or stderr. Extended in every later step.
+- **Secrets canary:** every secret key gets a unique sentinel value
+  (multi-line, quoted, containing `$`, inside a URL); every command runs
+  with `--verbose`, `--dry-run`, `--json`, `--debug` and forced failures,
+  with the `FakeRunner` returning child output that contains the
+  sentinels; no sentinel may appear in stdout, stderr or a generated file.
+  Extended in every later step (`design.md`, "Secrets").
 - **Live:** the `--live` option and its refusal under coverage; the shim
   from another directory, including one that holds a `json.py` and an
   `argparse.py`; `doctor` against the real daemon.

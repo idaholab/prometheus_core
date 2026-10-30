@@ -413,10 +413,28 @@ The plan's rule is "never print a secret". This is how it's enforced:
   Keys the registry doesn't know, which Compose reads (`LLM_API_KEY`,
   `DEEPLYNX_SECRET`, `USER_IDENTITY_PRIVATE_KEY`, anything a user adds), are
   secret.
-- **One scrubber.** `output.py` replaces the exact value of every secret key
-  with `***` in everything the tool prints: steps, the command echo,
+- **One scrubber.** `output.py` replaces the value of every secret key with
+  `***` in everything the tool prints: steps, the command echo,
   `--verbose`, `--dry-run`, `--json`, errors and warnings. `config show`
   prints `set`/`blank` for secrets.
+  - **Encoded forms too.** Each value is matched as-is and as it appears
+    JSON-escaped, in `repr`, and line by line (a multi-line PEM key comes
+    out of `config --format json` as `line1\nline2`, verified), and inside
+    longer strings (`URL=https://u:${PW}@host` interpolates).
+  - **Not short or trivial values.** Values under 8 characters, `true`,
+    `false` and plain numbers aren't scrubbed: unknown keys count as secret
+    (`USER_IDENTITY_REQUIRED=true`), and scrubbing every `true` and `1`
+    would make the output useless. Keys `.env.example` documents as
+    non-secret settings are marked safe in the registry.
+- **Compose's output goes through the scrubber.** Compose's own errors print
+  interpolated `.env` values: with a sentinel in a port, `up --dry-run`
+  printed `invalid hostPort: notaport_canary...` (verified on Compose 5.6),
+  and a bad image reference prints the whole value. So for `build`, `up`
+  (detached) and `restart`, `runner.py` reads Compose's stdout and stderr
+  through a pipe and passes each line through the scrubber before printing
+  it. Only the true passthroughs keep the terminal: `up --foreground`,
+  following `logs`, and `compose --`. Their output can carry what an agent
+  logs, and `compose --` says so.
 - **Errors and tracebacks.** A top-level handler sends every error message
   through the scrubber. Tracebacks only with `--debug`, also scrubbed.
   `--dry-run` prints argv only, never the child environment.
@@ -431,8 +449,25 @@ The plan's rule is "never print a secret". This is how it's enforced:
   echo (`GetPassWarning`), it stops instead.
 - **Canary test** (step 1, extended in every step): give every secret key a
   unique sentinel value, run every command with `--verbose`, `--dry-run`,
-  `--json` and forced failures, and assert no sentinel appears in stdout or
-  stderr.
+  `--json`, `--debug` and forced failures, and assert no sentinel appears in
+  stdout or stderr, in any generated file (`docker-compose.platform.yml`,
+  `.platform.env`, the `doctor --json` CI uploads) or in a label value.
+  - **Sentinels of every shape:** multi-line, quoted, containing `$`, and
+    embedded in a URL.
+  - **Child output too:** the `FakeRunner` returns canned Compose and Docker
+    output (`config --format json`, errors on stderr) that contains the
+    sentinels, so a path that echoes child output is caught.
+  - **`config init` prompts** and the `--debug` traceback are covered.
+  - **A live canary** (step 3a): sentinels in a port, an image and a label
+    of the minimal project, then `up --dry-run`, `build`, `status` and
+    `doctor` against real Compose, with the captured output grepped. CI
+    logs and artifacts are public.
+- **Exception arguments are scrubbed** as well as messages:
+  `CalledProcessError` carries argv.
+- **The registry clear** passes the Valkey password as `REDISCLI_AUTH` in
+  `exec -e REDISCLI_AUTH` (taken from the tool's environment), never as
+  `valkey-cli -a`, which puts it in the container's process list (the
+  Makefile does that today, `Makefile:319`).
 
 ## Where the platform's code comes from
 
