@@ -1,6 +1,6 @@
 # The platform: how Prometheus works
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Prometheus is a chat front door to specialist agents (deck 01, slide 7). An orchestrator picks the agents, the
 order, and the files. You write one agent: a class with `_execute`, and a card.
@@ -10,7 +10,7 @@ order, and the files. You write one agent: a class with `_execute`, and a card.
 ```text
 Browser ─:5150─> frontend-dev ─/api/*─> backend (:8600) ─A2A SendStreamingMessage─> client-agent
 client-agent ─POST backend:8000/a2a/<route key>─> backend gateway ─Bearer <AGENT_SECRET>─> your agent (:8000)
-agent-valkey (:6379): conversations, status history, artifact catalog, sessions.  DeepLynx: files.
+redis (:6379): conversations, status history, artifact catalog, sessions.  DeepLynx: files.
 ```
 
 Source: `platform/docker-compose.yml`; deck 01, appendix. `client-agent` has no host port. The `backend` is also the
@@ -18,7 +18,7 @@ agent registry (`/v1/agents`, stored in Valkey under `prometheus:agent-registry`
 (`/a2a/<route key>`), both behind `Bearer <AGENT_SECRET>` (`backend/app/routers/agent_registry.py`). There is no
 LiteLLM and no LLM proxy: agents call their provider directly (`llm.md`). Each platform `make up` or `make restart`
 empties the registry (`clear-agent-registry`). `admin-db` holds users and signing keys; `redis` (container
-`agent-valkey`) holds the state. All join `prometheus_platform_agent-network`, and so does your agent after
+`prometheus_platform-redis-1`) holds the state. All join `prometheus_platform_agent-network`, and so does your agent after
 `make up`. Inside it, use service names (`http://backend:8000`, `redis://redis:6379`). `make up` waits until
 every container is healthy (`/healthz`), then `make check` waits until every agent is registered.
 

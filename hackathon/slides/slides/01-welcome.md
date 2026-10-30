@@ -465,7 +465,7 @@ Any service that speaks A2A and publishes a card can join. It can live in the pl
 </div>
 <div class="row" style="justify-content:flex-end; padding-right:150px"><div class="arrow-v" style="width:40px"><span>discovery + A2A</span></div></div>
 <div class="row" style="gap:18px; align-items:stretch">
-<div class="box teal" style="width:240px"><b>redis</b><span>Valkey 9.1 · :6379</span><span class="mono">agent-valkey</span></div>
+<div class="box teal" style="width:240px"><b>redis</b><span>Valkey 9.1 · :6379</span><span class="mono">prometheus_platform-redis-1</span></div>
 <div class="box gray" style="width:250px"><b>admin-db</b><span>Postgres 16</span><span class="mono">users · keys · OIDC</span></div>
 <div class="box orange" style="flex:1"><b>backend: agent registry + A2A gateway</b><span>GET/POST /v1/agents · POST /a2a/{agent_name}</span><span class="mono">registrations in Valkey · Bearer AGENT_SECRET</span></div>
 </div>
@@ -487,14 +487,14 @@ All containers share one bridge network, `prometheus_platform_agent-network`. Th
 ## Every service in `docker-compose.yml` {eyebrow="Service inventory"}
 
 {.sm}
-| Service | Container | Image / build | Host port | Role |
+| Service | Container `prometheus_platform-…-1` | Image / build | Host port | Role |
 |---|---|---|---|---|
-| **frontend-dev** | `frontend-dev` | `frontend/Dockerfile` target `dev` | 5150 | Vite dev server (profile `dev`, the default) |
-| **frontend-prod** | `frontend-prod` | same, target `prod` (nginx) | 8080 | Built SPA (profile `prod`) |
-| **backend** | `backend` | `./backend` (uv image + `../sdk`) | 8600 | Login, sessions, chat turn, SSE, uploads, artifacts, admin API, mesh conversion, **agent registry + A2A gateway** |
-| **client-agent** | `client-agent` | `./agents/client-agent` | (8001 in system-test mode) | Orchestrator: tool-calling loop, follow-ups, approval, dispatch |
-| **admin-db** | `admin-db` | `postgres:16-alpine` | — | Users (bcrypt), OIDC providers, RS256 signing keys |
-| **redis** | `agent-valkey` | `valkey/valkey-bundle:9.1.3` | 6379 | Conversation state, browser sessions, SSE event bus, artifact catalog, task graph, caches |
+| **frontend-dev** | `…-frontend-dev-1` | `frontend/Dockerfile` target `dev` | 5150 | Vite dev server (profile `dev`, the default) |
+| **frontend-prod** | `…-frontend-prod-1` | same, target `prod` (nginx) | 8080 | Built SPA (profile `prod`) |
+| **backend** | `…-backend-1` | `./backend` (uv image + `../sdk`) | 8600 | Login, sessions, chat turn, SSE, uploads, artifacts, admin API, mesh conversion, **agent registry + A2A gateway** |
+| **client-agent** | `…-client-agent-1` | `./agents/client-agent` | (8001 in system-test mode) | Orchestrator: tool-calling loop, follow-ups, approval, dispatch |
+| **admin-db** | `…-admin-db-1` | `postgres:16-alpine` | — | Users (bcrypt), OIDC providers, RS256 signing keys |
+| **redis** | `…-redis-1` | `valkey/valkey-bundle:9.1.3` | 6379 | Conversation state, browser sessions, SSE event bus, artifact catalog, task graph, caches |
 | **agents/\*** | per agent | `agents/<name>/docker-compose.yml` | — (8008 artifact-debug) | Included automatically by `make generate` |
 
 {.tiny}

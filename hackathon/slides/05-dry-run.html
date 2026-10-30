@@ -123,12 +123,12 @@ make logs</pre>
   <div class="content">
 <div class="col">
 <pre class="sm"><span class="c"># registered?</span>
-docker logs hello-<span class="p">&lt;you&gt;</span>-agent <span class="n">2</span>&gt;&amp;<span class="n">1</span> | grep <span class="s">&quot;Registered &#x27;&quot;</span>
+docker compose -p hello-<span class="p">&lt;you&gt;</span> logs <span class="n">2</span>&gt;&amp;<span class="n">1</span> | grep <span class="s">&quot;Registered &#x27;&quot;</span>
 curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span class="s">&quot;</span> <span class="s">\</span>
   localhost:8600/v1/agents | grep -o <span class="s">&#x27;&quot;agent_name&quot;: *&quot;[^&quot;]*&quot;&#x27;</span>
 
 <span class="c"># make the orchestrator notice now (else ≤ 60 s)</span>
-docker restart client-agent</pre>
+docker compose -p prometheus_platform restart client-agent</pre>
 <ol class="b sm">
 <li>Chat: <code>/agents</code> shows your agent</li>
 <li>Ask: &quot;Please greet Marie Curie on behalf of &lt;You&gt;&quot;</li>
@@ -149,11 +149,11 @@ docker restart client-agent</pre>
 </tr>
 <tr>
 <td>not in <code>/agents</code></td>
-<td>the platform was restarted: <code>docker restart hello-&lt;you&gt;-agent</code></td>
+<td>the platform was restarted: <code>docker compose -p hello-&lt;you&gt; restart</code></td>
 </tr>
 <tr>
 <td>never routed</td>
-<td>sharpen the description; <code>docker restart client-agent</code></td>
+<td>sharpen the description; <code>docker compose -p prometheus_platform restart client-agent</code></td>
 </tr>
 <tr>
 <td>LLM 401 (if you added LLM calls)</td>

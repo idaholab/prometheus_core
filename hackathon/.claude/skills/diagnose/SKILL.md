@@ -3,9 +3,9 @@ name: diagnose
 description: Finds and fixes what does not work for a Prometheus hackathon agent or the local platform, and explains why. It works out what is needed - fix an error or a symptom (a stack that won't start, an agent missing from /agents or never called, HTTP 401, LLMAliasError, "No 'userToken' found", ModuleNotFoundError, uploads, plots, DeepLynx), check that the laptop is ready (the homework checklist - tools, GitHub, Docker and the registry login, platform health, login, the LLM key, DeepLynx, shadowing personal skills, the agent .env), or rebuild one chat turn from Valkey and the logs (each LLM step, the skills called, the exact arguments, the results, the end state). Use for "diagnose", "it doesn't work", "debug this error", a pasted error, "is my laptop ready", "homework check", "check my setup", "trace my last chat", "why wasn't my agent called", or "what arguments did it send".
 argument-hint: "[what is wrong, an error, or a conversation id]"
 allowed-tools:
-  - Bash(docker restart *-agent)
-  - Bash(docker restart client-agent)
-  - "Bash(docker exec client-agent python -c \"import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())\")"
+  - Bash(docker compose -p * restart *-agent)
+  - Bash(docker compose -p prometheus_platform restart client-agent)
+  - "Bash(docker compose -p prometheus_platform exec -T client-agent python -c \"import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())\")"
 ---
 
 # /diagnose
@@ -18,7 +18,7 @@ Find why something does not work, explain the cause, and fix it. The argument: `
    `<root>/.claude/skills/how/references/`. Read `conventions.md`, `teaching.md`, `checks.md`, `troubleshooting.md`.
 2. Find the platform, the template, and the user's agent as `conventions.md` says ("Find the
    folders", "Find your agent"). Ask once for a missing path (header `Path`; add "Not cloned yet"
-   for a setup check). Note `<agent>` and `<container>` (`grep -m1 'container_name:' <agent>/docker-compose.yml`).
+   for a setup check). Note `<agent>`, `<project>`, and `<service>` (`conventions.md`, "Find your agent").
    No agent: skip the agent checks, and say so.
 3. Read the ports: `grep -E '^(BACKEND_PORT|FRONTEND_DEV_PORT|FRONTEND_PROD_PORT|REDIS_LOCAL_PORT)=' <platform>/.env`.
    The backend is the agent registry: `set -a; source <platform>/.env; set +a; curl -s -H "Authorization: Bearer $AGENT_SECRET" localhost:<BACKEND_PORT>/v1/agents`.
@@ -34,11 +34,11 @@ Find why something does not work, explain the cause, and fix it. The argument: `
 
 ## Fix kinds (`checks.md`)
 
-1. **Safe**: apply it, then explain it in one or two lines. Before `docker restart`, run
+1. **Safe**: apply it, then explain it in one or two lines. Before a restart, run
    `activity`; when it shows a recent line, say what the restart stops and ask (header
-   `Restart`). Restart only `<container>` or `client-agent`, never a platform agent. Run `make up`
+   `Restart`). Restart only `<service>` in `<project>`, or `client-agent`, never a platform agent. Run `make up`
    only as `cd <agent> && test -f agent_card.json && make up`, then wait for the registration:
-   `for i in $(seq 15); do docker logs --since 1m <container> 2>&1 | grep -q "Registered '" && break; sleep 2; done; docker logs --since 1m <container> 2>&1 | grep -E "Registered '|Registry registration attempt" | tail -n 2`.
+   `for i in $(seq 15); do docker compose -p <project> logs --no-log-prefix --since 1m <service> 2>&1 | grep -q "Registered '" && break; sleep 2; done; docker compose -p <project> logs --no-log-prefix --since 1m <service> 2>&1 | grep -E "Registered '|Registry registration attempt" | tail -n 2`.
    After a card or code change, run `discovery-refresh`.
 2. **Yes**: show the exact change (key names only for an `.env`; a diff and "Before a write" for
    an agent file), then ask (header `Fix`): "Apply the fix" (recommended, say why), "Show me the

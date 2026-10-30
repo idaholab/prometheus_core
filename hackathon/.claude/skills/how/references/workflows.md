@@ -1,6 +1,6 @@
 # Workflows: chain skills with a YAML file
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 A workflow is a fixed chain of skill calls (deck 04, A37-A38). Put `*.yaml` in `workflows/` (rename the
 template `.example` file); the base class merges it into the card at startup. The LLM sees one tool,
@@ -35,5 +35,5 @@ Workflows compile only at a discovery refresh (every 300 s): after `make up`, ru
 errors (no secret):
 
 ```sh
-docker exec client-agent python -c "import os, json, urllib.request as u; r=u.Request('http://localhost:8000/workflows/catalog', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); d=json.load(u.urlopen(r)); [print(w['id'], w['version'], '|', w['display_name'], '| owner:', w['owner']) for w in d['workflows']]; [print('ERROR:', e) for e in d.get('errors', [])]"
+docker compose -p prometheus_platform exec -T client-agent python -c "import os, json, urllib.request as u; r=u.Request('http://localhost:8000/workflows/catalog', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); d=json.load(u.urlopen(r)); [print(w['id'], w['version'], '|', w['display_name'], '| owner:', w['owner']) for w in d['workflows']]; [print('ERROR:', e) for e in d.get('errors', [])]"
 ```

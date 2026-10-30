@@ -1,6 +1,6 @@
 # Stale docs: what older docs say, and what the code does now
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 
@@ -16,6 +16,7 @@ Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 | A workflow YAML with no `description` | `description` is required (`workflow_library/schema.py:75`) |
 | LiteLLM on `:9977`, `LITELLM_MASTER_KEY`, `litellm_config.yaml`, "Admin › Signing Keys → generate" | The backend on `:8600` is the registry and gateway (`Bearer $AGENT_SECRET`); no LLM proxy; the signing key is automatic |
 | `get_provided_inputs`, `MissingInput(sensitive=…)`, `with_api_key(LITELLM_MASTER_KEY)` | answers in `params`; no `sensitive`; plain `self.llm_client(context)` |
+| `docker exec agent-valkey` / `docker restart <agent>` (fixed container names) | `docker compose -p prometheus_platform exec -T redis` / `docker compose -p <project> restart <service>` (no `container_name` since #310; `conventions.md`) |
 | `setup_agent.py --help` shows arguments | `main()` ignores them; it is interactive only (`setup_agent.py:389-400`) |
 | Host run with `AGENT_SECRET_REQUIRED=false` only | Also `USER_IDENTITY_REQUIRED=false`, else "No 'userToken' found" |
 

@@ -24,7 +24,7 @@ Other topics: the KB files of `index.md`; secrets use `secrets`; git uses `git-p
    it", "Keep both" with `<slug>-2`, "Open the old one", which skips to step 7).
 3. **Facts.** Read the topic's KB files. List `F1. <fact> (source: <deck label or path:line>)`.
    Give most room to the confusion. When the KB is silent, read the code with read-only Bash
-   (`prometheus_api` in `<agent>/.venv/lib/python3*/site-packages/` or `docker exec <container>`).
+   (`prometheus_api` in `<agent>/.venv/lib/python3*/site-packages/` or `docker compose -p <project> exec -T <service>`).
    Leave out what nothing settles, and name the mentor (`mentors.md`).
 4. **Draft.** Copy `explain-template.html` in this folder, and obey the rules in its top comment.
    Pitch the text at the `You know` answer. One panel answers the confusion. The last panel holds
@@ -39,7 +39,7 @@ Other topics: the KB files of `index.md`; secrets use `secrets`; git uses `git-p
    file and no state. Never show a secret: no cat on .env, env, printenv, docker inspect,
    docker compose config, curl -v. Paths: root <root>; KB <root>/.claude/skills/how/references/;
    platform <platform>; template <template>; agent <agent or none>; prometheus_api <path, "in
-   the container <container>", or none>; draft <root>/.explainers/<slug>.html. Read files
+   the container of <project>", or none>; draft <root>/.explainers/<slug>.html. Read files
    outside root with Bash (sed -n, grep -n). You have no slides: a deck claim is supported when
    a KB file states it. When the code disagrees with the KB, the code is correct.
    Claims: <C1 ...>

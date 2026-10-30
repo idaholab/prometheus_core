@@ -1,6 +1,6 @@
 # Teaching: the pattern and the check questions
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## The teaching pattern
 
@@ -54,7 +54,7 @@ same `contextId` and the original arguments plus the answers in `params`; local 
 ### registry-wipe
 
 `Registry`. You ran `make restart` in the platform. `/agents` no longer lists your agent. What now? A "make
-down-v". B "Restart your agent": `docker restart <slug>-agent`. C "Wait a minute". D "Rename the card". **B.** A
+down-v". B "Restart your agent": `docker compose -p <project> restart <service>`. C "Wait a minute". D "Rename the card". **B.** A
 platform `make up` or `restart` deletes the registrations (`clear-agent-registry`); your agent registers only at
 startup. `make down-v` also deletes your users and keys. Deck 03, "Once, then four commands"; `platform/Makefile`.
 

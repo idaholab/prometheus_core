@@ -2,15 +2,15 @@
 
 Rebuild one chat turn from Valkey, then the logs, and explain the orchestrator's choices. Run
 each command as written; replace only `<...>`. `client-agent/` means
-`prometheus_platform/agents/client-agent/`. Read Valkey only through `docker exec agent-valkey
+`prometheus_platform/agents/client-agent/`. Read Valkey only through `docker compose -p prometheus_platform exec -T redis
 sh -c '...'` (the container's own password) and through the filters below, which cut and redact.
 Never repeat a value that looks like a key.
 
 ## 1. Set up
 
 Read `card.md` ("What the orchestrator sees"). No agent is fine. Run
-`docker ps --format '{{.Names}}' | grep -x -e agent-valkey -e client-agent -e backend`;
-without `agent-valkey` or `client-agent`, go on with `fix-problem.md`. Primer: the LLM sees the
+`docker compose -p prometheus_platform ps --services | grep -x -e redis -e client-agent -e backend`;
+without `redis` or `client-agent`, go on with `fix-problem.md`. Primer: the LLM sees the
 conversation, the artifact catalog, and each skill and workflow as a tool; it calls, reads, and
 decides again, for at most 12 steps; the turn ends in one status (deck 01, A9-A11).
 
@@ -19,7 +19,7 @@ decides again, for at most 12 steps; the turn ends in one status (deck 01, A9-A1
 Use a conversation id from the argument. Otherwise list the recent ones (the list command):
 
 ```sh
-docker exec agent-valkey sh -c 'for k in $(valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --scan --pattern "agent:status_history:*"); do printf "%s\t" "${k#agent:status_history:}"; valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw LINDEX "$k" -1; done' | python3 -c '
+docker compose -p prometheus_platform exec -T redis sh -c 'for k in $(valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --scan --pattern "agent:status_history:*"); do printf "%s\t" "${k#agent:status_history:}"; valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw LINDEX "$k" -1; done' | python3 -c '
 import json, sys
 rows = []
 for line in sys.stdin:
@@ -37,7 +37,7 @@ minutes (`client-agent/orchestrator/runtime.py:149-159`). Offer a fresh retry, o
 ## 3. Read the status history
 
 ```sh
-docker exec agent-valkey sh -c 'valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw LRANGE "agent:status_history:$1" 0 -1' sh '<conversation_id>' | python3 -c '
+docker compose -p prometheus_platform exec -T redis sh -c 'valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw LRANGE "agent:status_history:$1" 0 -1' sh '<conversation_id>' | python3 -c '
 import json, re, sys
 S = re.compile(r"(sk-[A-Za-z0-9_-]{8,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.-]+|Bearer\s+\S+)")
 for n, line in enumerate(sys.stdin, 1):
@@ -63,7 +63,7 @@ call rejected before the dispatch has no "Next step": its error is only in the d
 ## 4. Read the conversation document
 
 ```sh
-docker exec agent-valkey sh -c 'valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw GET "conversation:$1"' sh '<conversation_id>' | python3 -c '
+docker compose -p prometheus_platform exec -T redis sh -c 'valkey-cli --no-auth-warning -a "$REDIS_PASSWORD" --raw GET "conversation:$1"' sh '<conversation_id>' | python3 -c '
 import json, re, sys
 S = re.compile(r"(sk-[A-Za-z0-9_-]{8,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_.-]+|Bearer\s+\S+)")
 def cut(v, n):
@@ -93,14 +93,14 @@ entry holds `tool_inputs` and `tool_results` (`orchestrator/chat_flow.py:157-168
 `<n>` = the minutes since the turn plus 2. The client-agent logs no status lines (deck 04, slide 19 is wrong):
 
 ```sh
-docker logs --since <n>m client-agent 2>&1 | grep -E "Cached capability|Capability cache refreshed|Tool call .* failed|Request failed for conversation|Traceback|Error" | tail -40
-docker logs --since <n>m backend 2>&1 | grep -E "A2A proxy to|Registered agent|Removed agent registration" | tail -20
-docker logs --since <n>m <container> 2>&1 | grep -E "Starting .* execution|Extracted parameter keys|execution completed successfully|Error during execution|Identity verification failed" | tail -30
+docker compose -p prometheus_platform logs --no-log-prefix --since <n>m client-agent 2>&1 | grep -E "Cached capability|Capability cache refreshed|Tool call .* failed|Request failed for conversation|Traceback|Error" | tail -40
+docker compose -p prometheus_platform logs --no-log-prefix --since <n>m backend 2>&1 | grep -E "A2A proxy to|Registered agent|Removed agent registration" | tail -20
+docker compose -p <project> logs --no-log-prefix --since <n>m <service> 2>&1 | grep -E "Starting .* execution|Extracted parameter keys|execution completed successfully|Error during execution|Identity verification failed" | tail -30
 ```
 
 The gateway line shows the route key (format not confirmed yet). "Extracted parameter keys" lists
 keys only (`base.py:479`); `skill_id`, `user_id`, `conversation_id`, `artifacts` come from the
-platform. A crash: `docker logs --since <n>m <container> 2>&1 | grep -A 20 "Error during execution" | tail -40`.
+platform. A crash: `docker compose -p <project> logs --no-log-prefix --since <n>m <service> 2>&1 | grep -A 20 "Error during execution" | tail -40`.
 
 ## 6. Rebuild and explain the turn
 
@@ -127,7 +127,7 @@ platform. A crash: `docker logs --since <n>m <container> 2>&1 | grep -A 20 "Erro
    | no `Next step`, end state `answer` | no tool fit, or the message looked conversational | improve the card (`/create-agent`) |
    | `Next step` names another agent's skill | another description fits better | name the neighbour in `usage_notes` |
    | a `RESULT` with "Invalid arguments", "Unknown artifact_id", "Missing required input(s)"; or wrong but accepted arguments | rejected before the dispatch; weak parameter descriptions; the previous result lacked a value | parameter descriptions, `x_artifact_ref`, `x_input_source`; the previous result |
-   | `Capability '<id>' is currently unavailable.` | not discovered | `discovery-refresh`; after a platform restart, `docker restart <container>` |
+   | `Capability '<id>' is currently unavailable.` | not discovered | `discovery-refresh`; after a platform restart, `docker compose -p <project> restart <service>` |
    | end state `needs_info` | a required field, `ask_user`, or the agent's own input request | expected; or fewer required fields |
    | `Invoking`, then `failed`; or `Request failed: ...` | an error dict or a crash; the orchestrator's own LLM call failed | `fix-problem.md` |
 5. For argument values, offer `logger.info("params: %s", params)` in `_execute` (a yes, then

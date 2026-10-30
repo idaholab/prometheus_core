@@ -1,6 +1,6 @@
 # Git and pull requests
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Code reaches `genesis/hackathon` `main` only through reviewed PRs from your fork (deck 02, slides 2-3). You need
 the team `open` (ask a mentor). Use SSH or `gh auth login --hostname github.inl.gov`, and

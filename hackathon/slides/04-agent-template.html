@@ -490,7 +490,7 @@ make logs                <span class="c"># &quot;Registered &#x27;neutron-table-
 make up                  <span class="c"># rebuilds and restarts</span>
 
 <span class="c"># after the PLATFORM restarted (registry wiped)</span>
-docker restart neutron-table-plot-agent</pre>
+docker compose -p neutron-agent restart</pre>
 <div class="col">
 <ul class="b sm">
 <li>At startup the agent <strong>registers itself</strong> with the platform <strong>backend</strong> (<code>REGISTRY_URL=http://backend:8000</code>). Nothing to configure beyond the <code>.env</code>.</li>
@@ -555,7 +555,7 @@ Start a <strong>fresh conversation</strong> for each test. Old uploads and resul
 </tr>
 </tbody>
 </table>
-<p class="small">What the orchestrator decided, and why: <code>docker logs -f client-agent</code> in the platform.</p>
+<p class="small">What the orchestrator decided, and why: <code>docker compose -p prometheus_platform logs --no-log-prefix -f client-agent</code> in the platform.</p>
   </div>
 </section>
 
@@ -1178,7 +1178,7 @@ parameters:
 <pre class="xs"><span class="c"># verify</span>
 curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span class="s">&quot;</span> <span class="s">\</span>
   http://localhost:8600/v1/agents | python3 -m json.tool
-docker logs hello-world-agent <span class="n">2</span>&gt;&amp;<span class="n">1</span> | grep <span class="s">&quot;Registered &#x27;&quot;</span>
+docker compose -p hello-world logs <span class="n">2</span>&gt;&amp;<span class="n">1</span> | grep <span class="s">&quot;Registered &#x27;&quot;</span>
 <span class="c"># → Registered &#x27;hello-world-agent&#x27; with LiteLLM at</span>
 <span class="c">#   http://backend:8000   (old log wording; it is the backend)</span></pre>
 </div>
@@ -1264,7 +1264,7 @@ docker logs hello-world-agent <span class="n">2</span>&gt;&amp;<span class="n">1
 </table>
 <div class="grid g2">
 <div class="callout warn">
-After every platform <code>make up</code>/<code>make restart</code> the registry is empty: <code>docker restart &lt;your-agent&gt;</code> to re-register (an unchanged container is left alone by a second <code>make up</code>). Stop your agent before <code>make down</code> in the platform, or the network cannot be removed.</div>
+After every platform <code>make up</code>/<code>make restart</code> the registry is empty: <code>docker compose -p &lt;agent-folder&gt; restart</code> to re-register (an unchanged container is left alone by a second <code>make up</code>). Stop your agent before <code>make down</code> in the platform, or the network cannot be removed.</div>
 
 <div class="callout">
 Standalone curl testing without any platform: <code>EXTERNAL_AGENT_HOST=localhost EXTERNAL_AGENT_PORT=8000 make up-fg</code>, with <code>USER_IDENTITY_REQUIRED=false</code> in <code>.env</code>.</div>

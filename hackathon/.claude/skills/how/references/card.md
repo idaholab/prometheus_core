@@ -1,6 +1,6 @@
 # The agent card
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Short paths: `base.py` and `registry.py` are in `prometheus_api/prometheus_api/agent/`; `orchestrator/...`,
 `capability_cache.py`, `tool_discovery.py`, `artifact_handling.py`, and `param_schema.py` are in
@@ -98,7 +98,7 @@ The agent `name`, `description`, and `version`; the skill `name`; `tags`, `examp
 Render your card file with the platform's own code (prints no secret):
 
 ```sh
-docker exec -i client-agent python -c "
+docker compose -p prometheus_platform exec -T client-agent python -c "
 import json, sys
 from capability_cache import AgentCapability
 from orchestrator import agent_loop as al
@@ -116,7 +116,7 @@ for s in card.get('skills', []):
 Render every skill tool of the last discovery (the live catalog):
 
 ```sh
-docker exec client-agent python -c "
+docker compose -p prometheus_platform exec -T client-agent python -c "
 import json
 from prometheus_api.redis_utils import create_redis_client
 from capability_cache import AgentCapability

@@ -1,6 +1,6 @@
 # Conventions for the hackathon skills
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## Find the folders
 
@@ -15,7 +15,14 @@ Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no Lite
 
 1. The candidates hold both `agent_card.json` and `.env`: `<root>/practice/*/`, `<root>/agents/*/`, `<root>/../hello-*/`.
 2. With one candidate, use it. With more, ask once, and keep the answer for the session.
-3. The container is the `container_name:` value: `grep -m1 'container_name:' docker-compose.yml` (`<slug>-agent`).
+3. The Compose project is the folder name in lowercase (`<project>`, e.g. `hello-max`); the service is
+   `grep -m1 -E '^  [a-z0-9_-]+:$' docker-compose.yml` (`<slug>-agent`, `<service>`). The container is
+   `<project>-<service>-1`. Address it by project and service, from any folder:
+   `docker compose -p <project> logs --no-log-prefix <service>`. The platform is the project
+   `prometheus_platform` (unless `COMPOSE_PROJECT_NAME` is set in `platform/.env`; participants keep the
+   default): `docker compose -p prometheus_platform exec -T redis ...`. Plain `docker compose` in the
+   agent folder fails (the network is in the `net_*` overlay files), and `docker exec <slug>-agent` or
+   `docker exec agent-valkey` (old docs) fails with "No such container".
 4. The route key is the card `name` in lowercase, spaces changed to hyphens: "Hello Max Agent" gives `hello-max-agent`.
 
 ## Secrets
@@ -25,7 +32,7 @@ an editor, then you check with `grep -c`. Settings you may print with an exact `
 `PROMETHEUS_API_BASE_IMAGE_HASH`, `LLM_CONFIG_PROFILE`, `LLM_CONFIG_FILE`, `USER_IDENTITY_REQUIRED`, `DEBUG_AGENTS`, `*_PORT`.
 
 - Check a key by a count: `grep -c '^KEY=.' <file>`. A placeholder (`sk-ant-...`, `change-me...`, empty) is missing.
-- Never run `cat .env`; `env`, `printenv`, or `docker exec <c> env` without a name filter;
+- Never run `cat .env`; `env`, `printenv`, or `docker compose exec <service> env` without a name filter;
   `docker compose config`; `docker inspect`; `curl -v`; `set -x`.
 - Load a key and use it in the same Bash call. Never echo it:
   `set -a; source <platform>/.env; set +a; curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $AGENT_SECRET" localhost:8600/v1/agents`
@@ -51,11 +58,11 @@ or a background task (`/tasks`), and say what the restart stops.
 - **`make up` in the agent folder** after an edit to `agent.py`, the card, `pyproject.toml`, the
   `Dockerfile`, `docker-compose.yml`, or `.env`. The image holds the code and the card, and the container
   reads `environment:` only when it is created. A plain restart keeps the old ones.
-- **`docker restart <slug>-agent`** registers the agent again after a platform restart. Only your own container.
+- **`docker compose -p <project> restart <service>`** registers the agent again after a platform restart. Only your own project.
 - **The discovery refresh** makes the orchestrator see a change now, not within 60 s. Expect
   `b'{"status":"ok","trigger":"api","tools":N,...}'`:
-  `docker exec client-agent python -c "import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())"`
-- **`docker restart client-agent`** only when the refresh fails. It stops the background tasks.
+  `docker compose -p prometheus_platform exec -T client-agent python -c "import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())"`
+- **`docker compose -p prometheus_platform restart client-agent`** only when the refresh fails. It stops the background tasks.
 
 ## Fixes that need a yes
 

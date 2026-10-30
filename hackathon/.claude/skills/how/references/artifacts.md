@@ -1,6 +1,6 @@
 # Files and artifacts
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Files travel as artifacts: your skill gets ids, not data (deck 04, slides 8-10 and 21). An upload goes to
 DeepLynx, the catalog gives it an id, and the orchestrator passes the id. The catalog is per conversation,
@@ -56,7 +56,7 @@ required DeepLynx configuration: …" (every call writes an execution record).
 Check the platform side (no secret):
 
 ```sh
-docker exec -i backend python -c "from prometheus_api.storage_client import ConnectionConfig, StorageClient; c=ConnectionConfig.from_env(); s=StorageClient(c); print('OK', c.base_url, len(s.items.list(page_size=5).items), 'items')"
+docker compose -p prometheus_platform exec -T backend python -c "from prometheus_api.storage_client import ConnectionConfig, StorageClient; c=ConnectionConfig.from_env(); s=StorageClient(c); print('OK', c.base_url, len(s.items.list(page_size=5).items), 'items')"
 ```
 
 ## Local DeepLynx

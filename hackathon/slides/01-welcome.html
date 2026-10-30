@@ -627,7 +627,7 @@ Next: GitHub &amp; PR workflow (1:00 pm). Keep your platform running.</div>
 </div>
 <div class="row" style="justify-content:flex-end; padding-right:150px"><div class="arrow-v" style="width:40px"><span>discovery + A2A</span></div></div>
 <div class="row" style="gap:18px; align-items:stretch">
-<div class="box teal" style="width:240px"><b>redis</b><span>Valkey 9.1 · :6379</span><span class="mono">agent-valkey</span></div>
+<div class="box teal" style="width:240px"><b>redis</b><span>Valkey 9.1 · :6379</span><span class="mono">prometheus_platform-redis-1</span></div>
 <div class="box gray" style="width:250px"><b>admin-db</b><span>Postgres 16</span><span class="mono">users · keys · OIDC</span></div>
 <div class="box orange" style="flex:1"><b>backend: agent registry + A2A gateway</b><span>GET/POST /v1/agents · POST /a2a/{agent_name}</span><span class="mono">registrations in Valkey · Bearer AGENT_SECRET</span></div>
 </div>
@@ -651,7 +651,7 @@ Next: GitHub &amp; PR workflow (1:00 pm). Keep your platform running.</div>
 <thead>
 <tr>
 <th>Service</th>
-<th>Container</th>
+<th>Container <code>prometheus_platform-…-1</code></th>
 <th>Image / build</th>
 <th>Host port</th>
 <th>Role</th>
@@ -660,42 +660,42 @@ Next: GitHub &amp; PR workflow (1:00 pm). Keep your platform running.</div>
 <tbody>
 <tr>
 <td><strong>frontend-dev</strong></td>
-<td><code>frontend-dev</code></td>
+<td><code>…-frontend-dev-1</code></td>
 <td><code>frontend/Dockerfile</code> target <code>dev</code></td>
 <td>5150</td>
 <td>Vite dev server (profile <code>dev</code>, the default)</td>
 </tr>
 <tr>
 <td><strong>frontend-prod</strong></td>
-<td><code>frontend-prod</code></td>
+<td><code>…-frontend-prod-1</code></td>
 <td>same, target <code>prod</code> (nginx)</td>
 <td>8080</td>
 <td>Built SPA (profile <code>prod</code>)</td>
 </tr>
 <tr>
 <td><strong>backend</strong></td>
-<td><code>backend</code></td>
+<td><code>…-backend-1</code></td>
 <td><code>./backend</code> (uv image + <code>../sdk</code>)</td>
 <td>8600</td>
 <td>Login, sessions, chat turn, SSE, uploads, artifacts, admin API, mesh conversion, <strong>agent registry + A2A gateway</strong></td>
 </tr>
 <tr>
 <td><strong>client-agent</strong></td>
-<td><code>client-agent</code></td>
+<td><code>…-client-agent-1</code></td>
 <td><code>./agents/client-agent</code></td>
 <td>(8001 in system-test mode)</td>
 <td>Orchestrator: tool-calling loop, follow-ups, approval, dispatch</td>
 </tr>
 <tr>
 <td><strong>admin-db</strong></td>
-<td><code>admin-db</code></td>
+<td><code>…-admin-db-1</code></td>
 <td><code>postgres:16-alpine</code></td>
 <td>—</td>
 <td>Users (bcrypt), OIDC providers, RS256 signing keys</td>
 </tr>
 <tr>
 <td><strong>redis</strong></td>
-<td><code>agent-valkey</code></td>
+<td><code>…-redis-1</code></td>
 <td><code>valkey/valkey-bundle:9.1.3</code></td>
 <td>6379</td>
 <td>Conversation state, browser sessions, SSE event bus, artifact catalog, task graph, caches</td>

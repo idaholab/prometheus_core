@@ -1,6 +1,6 @@
 # Agent code: the `_execute` contract
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 You write one class with one method, plus `agent_card.json` (deck 04, slides 2-3). The base class
 `PrometheusAgent` (`prometheus_api/prometheus_api/agent/base.py:570`) gives the A2A server, the card, the
@@ -88,5 +88,5 @@ Import `MissingInput` and `PrometheusWorker` from `prometheus_api.agent`.
   `uvicorn`: the base image has them (deck 04, A5). Commit `uv.lock` with it.
 - `Dockerfile`: it copies only `agent.py`, `agent_card.json`, `prompts/`, and `workflows/`
   (`agent_template/Dockerfile:46-49`). Add a `COPY` line per new module, else `ModuleNotFoundError`.
-- `Makefile`: `up`, `up-fg`, `down`, `logs`. `make logs` never ends; use `docker logs <slug>-agent`.
+- `Makefile`: `up`, `up-fg`, `down`, `logs`. `make logs` never ends; use `docker compose -p <project> logs --no-log-prefix <service>`.
 - `docker-compose.yml`: the container gets only the variables that `environment:` lists.
