@@ -22,9 +22,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
   (`EXTERNAL_AGENT_HOST`, `EXTERNAL_AGENT_PORT`).
 - `agent-template/setup_agent.py` copies values from `../platform/.env`,
   found relative to the template in this checkout, with its own parser, and
-  copies the precedence rule for `LOCAL_SDK`. (Its DeepLynx over-sharing is
-  fixed separately, before this plan: it copies an explicit list of client
-  keys.)
+  copies the precedence rule for `LOCAL_SDK`. (Its DeepLynx over-sharing was
+  fixed in #311: it copies an explicit list of client keys.)
 - `setup_agent.py` defaults the output to `../<slug>`, inside the
   `prometheus_core` checkout.
 - Agents in other repositories find the platform only by convention: the

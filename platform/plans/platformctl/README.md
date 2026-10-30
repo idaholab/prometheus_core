@@ -27,6 +27,19 @@ Only step 1 may land before the freeze, and it touches nothing outside
 `platform/ctl/` and the `platform/platformctl` shim: no Makefile, docs,
 slides, skills or required CI jobs. Steps 2 onward land after Day 2.
 
+**Before the freeze, separately from this plan:** the hackathon skills and
+knowledge base still use container names that #310 removed
+(`docker exec agent-valkey`, `docker restart client-agent` in the
+`diagnose` and `create-agent` skills' `allowed-tools`, `trace-turn.md`).
+That fix is a prerequisite for the event and for step 3c, which builds on
+it. `setup_agent.py`'s DeepLynx key copying was fixed in #311.
+
+**Open PRs that touch the same files:** #214 (Google ADK: adds the
+`ADK_DB_PASSWORD` secret, which the settings registry and step 7's sync
+list must include once it merges), #223 (adds `osti-eval` Make targets,
+which step 3a must forward), #197 (removes the `clear-litellm-db` and
+LiteLLM text that step 6 fixes). Check them again before each step.
+
 ## Steps
 
 | # | File | Summary | Depends on | Status |

@@ -9,11 +9,12 @@ Fixed separately, before this plan, and not part of it:
   removed (`docker exec agent-valkey`, `docker restart <agent>`, the skills'
   `allowed-tools`): a standalone fix before the hackathon;
 - `agent-template/setup_agent.py` copying the local DeepLynx server's own
-  secrets into agent `.env` files: a standalone fix.
+  secrets into agent `.env` files: fixed in #311.
 
 ## Work
 
-- `make clear-litellm-db` is documented but doesn't exist
+- (If #197 hasn't merged by then; drop these two items if it has.)
+  `make clear-litellm-db` is documented but doesn't exist
   (`platform/README.md`, `platform/CLAUDE.md`). It was replaced by
   `clear-agent-registry` (see `sdk/docs/agent/AGENT_MIGRATIONS.md:31`);
   with platformctl it's `./platformctl reset registry`.

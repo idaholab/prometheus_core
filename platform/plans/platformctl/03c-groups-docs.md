@@ -45,7 +45,8 @@ CI job to `./platformctl`.
   (`registry-agents`, `registry-details`, `discovery-refresh`):
   `agents list --registered`, `agents refresh`.
 - `docker compose -p prometheus_platform restart|logs|exec <service>` in
-  the hackathon material (from the container-name fix before the event):
+  the hackathon material (from the container-name fix before the event; see
+  README "Timing"):
   `./platformctl restart|logs|compose -- exec <service>`.
 - The CI card check's inline curl and Python (`agent-template: platform`):
   `agents list --registered --json`.
