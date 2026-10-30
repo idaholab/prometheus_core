@@ -128,6 +128,23 @@ def test_parse_set_needs_key_value(item):
         parse_set([item])
 
 
+@pytest.mark.parametrize(
+    ("item", "shown"),
+    [
+        ("NOEQUALS", True),  # looks like a setting name: safe to show
+        ("sk-ant-NOTINDOTENV123456", False),  # `--set $LLM_API_KEY`: a value, not a name
+        ("=sk-ant-NOTINDOTENV123456", False),
+        ("sk-ant-NOTINDOTENV123456=x", False),  # a value in the key position
+    ],
+)
+def test_parse_set_errors_do_not_echo_what_might_be_a_secret(item, shown):
+    """Only text shaped like a setting name is echoed; the scrubber doesn't know a value outside `.env`."""
+    with pytest.raises(ConfigError) as info:
+        parse_set([item])
+    assert ("NOEQUALS" in str(info.value)) is shown
+    assert "NOTINDOTENV" not in str(info.value)
+
+
 @pytest.mark.parametrize("key", ["LLM_API_KEY", "AGENT_SECRET", "SOMETHING_UNKNOWN"])
 def test_parse_set_refuses_secrets_and_unknown_keys(key):
     """Parse set refuses secrets and unknown keys."""

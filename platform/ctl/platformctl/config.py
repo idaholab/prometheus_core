@@ -131,14 +131,25 @@ def is_safe(name: str) -> bool:
     return bool(setting and setting.safe)
 
 
+_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+"""What a setting name looks like. Anything else a user typed might be a secret, so it isn't echoed."""
+
+
 def parse_set(items: list[str]) -> dict[str, str]:
-    """`--set KEY=VALUE` pairs. Refuses secret keys: they'd land in history and `ps`."""
+    """`--set KEY=VALUE` pairs. Refuses secret keys: they'd land in history and `ps`.
+
+    An error echoes the text only if it looks like a setting name: `--set $LLM_API_KEY` (no `=`)
+    is a likely mistake, and the scrubber doesn't know a value that isn't in `.env`.
+    """
     result: dict[str, str] = {}
     for item in items:
         key, sep, value = item.partition("=")
         if not sep or not key:
-            raise ConfigError(f"--set expects KEY=VALUE, got {key or item!r}")
+            shown = f", got {item!r}" if _NAME.fullmatch(item) else ""
+            raise ConfigError(f"--set expects KEY=VALUE{shown}")
         if not is_safe(key):
+            if not _NAME.fullmatch(key):
+                raise ConfigError("--set expects a setting name before the =")
             raise ConfigError(f"{key} can't be set with --set (it may be a secret): set {key} in .env instead")
         result[key] = value
     return result
