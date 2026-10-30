@@ -71,6 +71,39 @@ def test_read(tmp_path: Path):
     assert envfile.read(path) == {"A": "1"}
 
 
+def test_read_a_file_that_is_not_utf8_hides_the_offset(tmp_path: Path):
+    """A decode error names the offset of the bad byte, so the error doesn't carry it."""
+    path = tmp_path / ".env"
+    path.write_bytes(b"A=\xff\xfe\n")
+    with pytest.raises(envfile.EnvFileError, match="not valid UTF-8") as info:
+        envfile.read(path)
+    assert "position" not in str(info.value) and "0xff" not in str(info.value)
+
+
+def test_read_a_file_that_cannot_be_read(tmp_path: Path, monkeypatch):
+    """An unreadable file (a mode-000 `.env`, a folder) is an `EnvFileError`, not an `OSError`."""
+
+    def refuse(self, *args, **kwargs):
+        """Fail like a file without read permission."""
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    with pytest.raises(envfile.EnvFileError, match=r"can't be read \(Permission denied\)"):
+        envfile.read(tmp_path / ".env")
+
+
+def test_read_an_oserror_without_a_message(tmp_path: Path, monkeypatch):
+    """An `OSError` with no `strerror` is named by its type."""
+
+    def refuse(self, *args, **kwargs):
+        """Fail with a bare OSError."""
+        raise OSError
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    with pytest.raises(envfile.EnvFileError, match=r"can't be read \(OSError\)"):
+        envfile.read(tmp_path / ".env")
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [

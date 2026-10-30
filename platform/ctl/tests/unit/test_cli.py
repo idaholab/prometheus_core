@@ -240,6 +240,17 @@ def test_json_stdout_is_only_the_object_even_for_errors(env):
     assert "LLM_API_KEY" in json.loads(out)["error"]["message"]
 
 
+def test_an_env_file_that_is_not_text_is_still_one_json_object(env, tmp_path):
+    """A `.env` that isn't UTF-8 gives JSON and no traceback: `--version` ignores it, `doctor` reports it."""
+    (tmp_path / ".env").write_bytes(b"A=\xff\xfe\n")
+    code, out, err = call("--version", "--json", env=env)
+    assert code == 0 and json.loads(out)["ok"] is True and err == ""
+    code, out, err = call("doctor", "platform-env", "--json", env=env)
+    body = json.loads(out)
+    assert code == 1 and body["checks"][0]["status"] == "FAIL"
+    assert "Traceback" not in out + err and "position" not in out
+
+
 def test_set_refusing_a_secret_in_text_mode(env):
     """Set refusing a secret in text mode."""
     code, out, err = call("doctor", "--set", "AGENT_SECRET=hunter2hunter2", env=env)

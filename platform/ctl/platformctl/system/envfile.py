@@ -79,8 +79,17 @@ def parse(text: str) -> dict[str, str]:
 
 
 def read(path: Path) -> dict[str, str]:
-    """Parse the dotenv file at `path`."""
-    return parse(path.read_text(encoding="utf-8"))
+    """Parse the dotenv file at `path`; a file that can't be read as UTF-8 text is an `EnvFileError`.
+
+    The message says why in general terms only: a decode error names the offset of the bad byte.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise EnvFileError("the file is not valid UTF-8 text") from None
+    except OSError as exc:
+        raise EnvFileError(f"the file can't be read ({exc.strerror or type(exc).__name__})") from None
+    return parse(text)
 
 
 def _format(value: str) -> str:
