@@ -31,8 +31,12 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
     already set unless a flag asks. Today the hackathon tells people to
     `echo "LOCAL_SDK=true" >> .env` by hand (deck 03) and walks them through
     DeepLynx in the browser.
-  - **No terminal:** asks nothing, uses flags and the environment as today,
-    and exits 1 listing what it couldn't answer.
+  - **No terminal:** asks nothing and uses flags and the environment as
+    today. It exits 1 only where `init_env.py` does today (no LLM profile
+    or key). The new questions don't fail it: an unanswered `LOCAL_SDK` or
+    `LOCAL_DEEPLYNX` keeps today's default (off), with a one-line note
+    naming the flag. Otherwise CI and assistant runs of every start target
+    (which run `config init`) would start failing.
   - `.env` is created 0600 and written atomically; the LLM key is read with
     `getpass`, which stops rather than echo.
   - `--instance <name>` is **not** in this step: agent folders hardcode the

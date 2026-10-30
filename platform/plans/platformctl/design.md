@@ -664,8 +664,9 @@ restart.
   - commands that ask (`reset ...`, `down --volumes`, `down --agents`) take
     `--yes` (and `reset data`/`down --volumes` take `--confirm clobber`);
     without a terminal and without the flag they exit 2 and say which flag;
-  - `config init` without a terminal asks nothing, and exits 1 listing what
-    it couldn't answer;
+  - `config init` without a terminal asks nothing; it exits 1 listing what
+    it couldn't answer only for what `init_env.py` requires today (the LLM
+    profile and key), and keeps today's default for the new questions;
   - `logs` follows only on a terminal; `--tail N` or a non-terminal stdout
     prints and exits;
   - `restart --if-idle` exits 1 instead of restarting when chat turns are
