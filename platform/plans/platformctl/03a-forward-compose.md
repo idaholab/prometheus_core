@@ -37,7 +37,8 @@ today; CI proves it.
   - `agents generate`, `agents clean`; `reset registry|users|data` with the
     behaviour of the Make targets they replace (the `agents` and `reset`
     groups grow in 3c)
-- **Adapter:** `system/valkey.py`, through the target's `exec`.
+- **Target method:** `clear_registry()` in `targets/compose.py`, through
+  its `exec` (`design.md`, "Targets").
 - **`build --base-only`** runs `make -C ../sdk build-local` with the
   variables it needs passed explicitly (`LOCAL_IMAGE`, `CACHE_FROM`).
   `runner.py` strips `MAKEFLAGS` and the other Make variables from its

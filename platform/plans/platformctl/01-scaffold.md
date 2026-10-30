@@ -82,9 +82,9 @@ step that may land before the hackathon freeze (2026-11-03).
 - **Targets:** `targets/base.py` (with capabilities as a frozenset) and
   `targets/compose.py`. `k3d` exits with "not supported yet".
 - **Discovery:** `compose_files.py` returning agent records and the compose
-  file list, and the writer of the generated files (`design.md`, "The
-  compose entry file"). Nothing runs it yet; step 3a switches the compose
-  commands to it.
+  file list (without the build-cache file, which `generate()` adds), and
+  the writer of the generated files (`design.md`, "The compose entry
+  file"). Nothing runs it yet; step 3a switches the compose commands to it.
 - **Diagnostics:** the framework (ids matching `checks.md`, tags, targets,
   dependencies, statuses, `fix_kind`) and the first checks:
   - `docker`: daemon down vs no socket permission vs rootless

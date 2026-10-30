@@ -205,7 +205,6 @@ through `ctx.target`.
 | `compose.py` | A compose project: `-f` entry file, profiles, `up`/`down`/`exec`/`ps`/`logs`/`config`/`restart` |
 | `envfile.py` | Parse `.env` and `.env.example` (dotenv rules, stripping `\r` and a BOM); update keys in place. Writes are atomic: `mkstemp` in the same folder (0600 from the start), `fchmod` to the target's mode, write, `fsync`, then `os.replace`. New files are 0600. A symlinked `.env` is written through to its target, never replaced by a plain file. Parse errors name the line number, never its text |
 | `http.py` | `urllib` polling helpers. Loopback URLs bypass any proxy (`ProxyHandler({})`), so `HTTP_PROXY` without `NO_PROXY` can't break health checks. Never prints request headers or bodies |
-| `valkey.py` | The agent-registry clear, through the target's `exec` |
 | `deeplynx.py` | The DeepLynx API client |
 | `host.py` | Whether a port is free: `socket.bind` without `SO_REUSEADDR` on both `0.0.0.0` and `::` (with `IPV6_V6ONLY`), plus a `connect` to `127.0.0.1` and `::1`. A bind alone misses a holder on `::1` only (Vite binds `localhost` there) and, on macOS, one on `127.0.0.1` when binding `0.0.0.0` with `SO_REUSEADDR` (both verified in review). Ports held by the platform's own project count as free, so `restart` doesn't trip on itself. Then name the holder: from `docker ps --filter publish=<port>` (another container, or another platform by its labels), else the process name from `lsof -nP -iTCP:<port> -sTCP:LISTEN` or `ss -ltnp`, else "another process". On WSL, optionally `powershell.exe Get-NetTCPConnection -LocalPort <port>` for a Windows-side holder. Also OS, WSL (1 vs 2), and the checkout being on `/mnt/<drive>` |
 | later: `k3d.py`, `kubectl.py` | For the k3d target |
@@ -228,6 +227,10 @@ inject a `FakeRunner` that records each argv and returns canned output.
   `stop(volumes)`
 - `status()`, `logs(services, tail, follow, since)`
 - `exec(service, argv, interactive)`
+- `clear_registry()`: delete the agent registrations (for compose, a
+  `valkey-cli` run through `exec`, with the password as `REDISCLI_AUTH`).
+  An adapter calling the target would reverse the layering, so this lives
+  in the target, not in `system/`
 - `service_url(service)`: the host URL for checks
 - `restart(services)`: restart only those services
 - `volumes(names)`: for `reset data`
@@ -250,8 +253,10 @@ target `<name>`", so a new target implements only what it can.
 Finds `agents/*/docker-compose.yml`, plus `agents/debug-agents/*` with
 `DEBUG_AGENTS` and `agents/optional/*` with `OPTIONAL_AGENTS`. Returns agent
 records (directory, card, compose file), not bare paths, so the k3d target
-can attach its own manifests later. Builds the compose file list: base,
-system-test, agents, DeepLynx, build cache, override.
+can attach its own manifests later. Builds the compose file list from the
+inputs: base, system-test, agents, DeepLynx, override. Whether the build
+cache file is added (`USE_BUILD_CACHE`, the image store) is an image
+decision, so `generate()` makes it, with the other image choices.
 
 ### The compose entry file
 
