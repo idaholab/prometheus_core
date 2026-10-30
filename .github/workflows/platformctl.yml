@@ -155,6 +155,16 @@ jobs:
         run: |
           mode=$(git ls-files -s -- ../platformctl | cut -d' ' -f1)
           [ "$mode" = 100755 ] || { echo "::error::platform/platformctl is mode $mode, not 100755"; exit 1; }
+      - name: Install Python 3.9
+        # The tests below run the real entry point and shim on a real 3.9. macOS runners
+        # also have /usr/bin/python3, the 3.9 of a stock Mac; uv's 3.9 covers Ubuntu
+        run: uv python install 3.9
+      - name: Python 3.9 tests
+        # PLATFORMCTL_REQUIRE_PY39 turns "no 3.9 found" into a failure, so this can't silently skip
+        env:
+          PLATFORMCTL_REQUIRE_PY39: "1"
+          SHIM_SHELL: ${{ matrix.shell }}
+        run: uv run --frozen --no-sync pytest --color=yes tests/shim/test_python39.py --shim-shell "$SHIM_SHELL"
       - name: A Mac whose python3 is 3.9, with only uv to find a newer one
         if: ${{ matrix.os == 'macos-latest' }}
         # The real case: /usr/bin/python3 is 3.9, and the PATH has only the system tools and uv
@@ -162,15 +172,6 @@ jobs:
           /usr/bin/python3 --version
           uv_dir=$(dirname "$(command -v uv)")
           PATH="/usr/bin:/bin:$uv_dir" sh ../platformctl --version
-      - name: Python 3.9 as python3, 3.12 as python3.12
-        if: ${{ matrix.os == 'ubuntu-26.04' && matrix.shell == 'sh' }}
-        run: |
-          uv python install 3.9 3.12
-          bin="$RUNNER_TEMP/pybin"
-          mkdir "$bin"
-          ln -s "$(uv python find 3.9)" "$bin/python3"
-          ln -s "$(uv python find 3.12)" "$bin/python3.12"
-          PATH="$bin:/usr/bin:/bin" sh ../platformctl --version
 
   live:
     name: "platformctl: live (${{ matrix.store }} image store)"
