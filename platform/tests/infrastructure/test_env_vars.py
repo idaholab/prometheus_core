@@ -13,6 +13,9 @@
 """Validate .env.example completeness and cross-references with docker-compose.yml."""
 
 import importlib.util
+import os
+import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -105,6 +108,34 @@ def test_init_env_fills_secrets_and_checks_llm_key(tmp_path, env_example_path, m
     assert {k: v for k, v in second.items() if k not in llm_vars} == {
         k: v for k, v in first.items() if k not in llm_vars
     }, "existing values must never be overwritten"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX file modes")
+def test_init_env_creates_an_owner_only_env_and_keeps_an_existing_mode(tmp_path, env_example_path, monkeypatch):
+    """A new .env is 0600 from the start, through every later rewrite; an existing one keeps its mode."""
+    init_env = _load_init_env()
+    example = tmp_path / ".env.example"
+    example.write_text(env_example_path.read_text())
+    env = tmp_path / ".env"
+    monkeypatch.setattr(init_env, "EXAMPLE", example)
+    monkeypatch.setattr(init_env, "ENV", env)
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+    monkeypatch.setenv("LLM_CONFIG_PROFILE", "anthropic")
+    monkeypatch.setenv("LLM_API_KEY", "sk-ant-x")
+    old_umask = os.umask(0o022)  # the usual one, under which a plain copy would be 0644
+    try:
+        assert init_env.main() == 0
+    finally:
+        os.umask(old_umask)
+    assert stat.S_IMODE(env.stat().st_mode) == 0o600, "secrets were written to a world-readable file"
+    assert init_env.values(env.read_text())["LLM_API_KEY"] == "sk-ant-x"
+
+    # An existing .env that gets a missing value filled in keeps whatever mode its owner chose
+    env.chmod(0o640)
+    env.write_text(env.read_text().replace("AGENT_SECRET=" + init_env.values(env.read_text())["AGENT_SECRET"], "AGENT_SECRET="))
+    assert init_env.main() == 0
+    assert init_env.values(env.read_text())["AGENT_SECRET"], "the blank secret was regenerated"
+    assert stat.S_IMODE(env.stat().st_mode) == 0o640, "an existing .env's mode must be left alone"
 
 
 def test_init_env_requires_a_profile(tmp_path, env_example_path, monkeypatch, capsys):
