@@ -24,7 +24,7 @@ while [ -L "$self" ]; do
         *) self=$(dirname -- "$self")/$target ;;
     esac
 done
-here=$(CDPATH= cd -P -- "$(dirname -- "$self")" && pwd -P) || exit 1
+here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" && pwd -P) || exit 1
 
 # One-line probe: new enough, and the stdlib modules the tool needs exist.
 probe='import sys, json, urllib.request; sys.exit(0 if sys.version_info >= (3, 10) else 1)'
