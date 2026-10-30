@@ -152,12 +152,15 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 - **B2:** `make init-env`, `make check`, `make deeplynx-setup` and every
   start target (which run `init-env`) now need Python 3.10+, which the shim
   finds.
+- **B4:** `sudo make up` is refused, with both fixes in the message.
 - **C10:** `config init` asks two more questions on a first run (Enter
   accepts the recommended answers) and reports missing keys.
 
 ## Tests
 
-- **Unit:** the ported behaviour at 100%, with each quoted message pinned;
+- **Unit:** the ported behaviour at 100%, with each quoted message pinned
+  (move `test_deeplynx_setup.py`'s pin on "make init-env" to the new
+  wording, `./platformctl config init`);
   the local SDK and DeepLynx questions (asked, skipped when set, flags, no
   terminal, the pull timeout); `config set` (refusing secrets) and
   `config set --from-env` (a missing key); file mode and atomic

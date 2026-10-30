@@ -30,8 +30,8 @@ today; CI proves it.
   - `restart` (the platform without rebuilding) and `restart <service...>`
     (only those services, with "not rebuilt" in its output)
   - `build` (`--plain`, `--base-only`)
-  - `logs [service...]` (`--tail N`, `--since`, `--no-follow`; no follow
-    when stdout isn't a terminal)
+  - `logs [service...]` (`--tail N`, `--since`, `--no-follow`, `--follow`;
+    no follow when stdout isn't a terminal unless `--follow`)
   - `status`: add the service states to step 2's check (`--json`, exit 3
     when not running)
   - `agents generate`, `agents clean`; `reset registry|users|data` with the
@@ -110,6 +110,8 @@ today; CI proves it.
 - **C7, C8, C9:** `UP_ARGS` on every variant, `build-plain` fixed, the
   preflight checks through `doctor` on every Docker command.
 - **C15:** quoted `.env` values lose their quotes.
+- **B5:** `logs` stops following when piped (`--follow` keeps it).
+- **C17:** `make ps` maps `status`'s exit 3 to 0.
 
 ## Tests
 

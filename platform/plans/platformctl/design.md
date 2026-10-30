@@ -668,7 +668,7 @@ restart.
     it couldn't answer only for what `init_env.py` requires today (the LLM
     profile and key), and keeps today's default for the new questions;
   - `logs` follows only on a terminal; `--tail N` or a non-terminal stdout
-    prints and exits;
+    prints and exits, and `--follow` follows anyway;
   - `restart --if-idle` exits 1 instead of restarting when chat turns are
     open.
 

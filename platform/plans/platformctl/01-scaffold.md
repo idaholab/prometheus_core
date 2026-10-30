@@ -166,7 +166,8 @@ step that may land before the hackathon freeze (2026-11-03).
 
 ## Breaking changes
 
-- None: nothing outside `platform/ctl/` and the shim changes, and `make`
+- None (B4, refusing `sudo`, applies once `make` calls the tool in step
+  2): nothing outside `platform/ctl/` and the shim changes, and `make`
   doesn't call the tool until step 2. `./platformctl doctor` needs Python
   3.10+, found by the shim.
 
