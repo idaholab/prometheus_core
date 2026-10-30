@@ -7,15 +7,23 @@
 
 - **CI is its own workflow**, `.github/workflows/platformctl.yml` (path-filtered, not
   required), not new jobs in `test.yml`: a `paths:` filter applies to a whole workflow. Only the
-  `ruff` project list in `test.yml` changed. No Codecov upload or `codecov.yml` flag yet:
-  `after_n_builds` waits for a fixed number of uploads, so an upload that exists only on some PRs
-  would stall everyone else's report. Step 2 adds both when the jobs become unconditional.
+  `ruff` project list in `test.yml` changed. **Codecov:** the coverage job uploads with a
+  `platformctl` flag, defined in `codecov.yml` with `carryforward`, but the upload is not counted
+  in `after_n_builds` (still 16): the workflow runs only when `platform/ctl` changes, so counting
+  it would stall every other PR's status. Step 2 raises the count when the jobs become
+  unconditional.
 - **Not done:** the measurement of the oldest Compose that supports `include` with `env_file`
   (and the live leg on it), and the manual WSL checklist. `MIN_VERSION` in
   `system/compose.py` is still 2.20, from deck 03, and unverified for `env_file`.
-- **Not run locally:** the workflow itself (no actionlint/zizmor here), and the busybox, macOS
-  `/usr/bin/python3` 3.9 and Python 3.9 legs. The shim tests pass under `sh`, `dash`, `bash` and
-  `ksh` on macOS.
+- **Python 3.9 is tested for real**, not only with stubs: `tests/shim/test_python39.py` runs the
+  entry point and the shim on a real 3.9, and CI installs one with `uv python install 3.9` and
+  sets `PLATFORMCTL_REQUIRE_PY39=1` so a missing 3.9 fails instead of skipping. Locally it ran
+  against the Mac's `/usr/bin/python3` (3.9.6).
+- **The shim's uv fallback has a live test** (`tests/live/shim/test_uv_fallback.py`): a PATH
+  with only `uv` and the system tools, `UV_PYTHON_PREFERENCE=only-managed`, and an assertion on
+  the exact `uv run` command. The shim already used uv only when no Python 3.10+ is found.
+- **Not run locally:** the workflow itself (no actionlint/zizmor here), and the busybox leg. The
+  shim tests pass under `sh`, `dash`, `bash` and `ksh` on macOS.
 - **Added to the shim:** it follows symlinks to find `ctl/` (found by the live test).
 - **Added to `config`:** a malformed `.env` is recorded, not raised, so `doctor` can report it
   while every other command stops on it.
