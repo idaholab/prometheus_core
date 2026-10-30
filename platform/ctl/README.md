@@ -55,6 +55,19 @@ platformctl/            the package
 tests/{unit,shim,live}/
 ```
 
+## Reading `--json` output
+
+Every exit path prints one object with `schema_version`, `command`, `ok` and `platform`. `ok`
+means the command did what it was asked, not that the platform is healthy:
+
+- `doctor` found problems: exit 1, `ok` **true**, and `counts.fail` (or a check's `status`) says
+  which. `WARN` alone exits 0.
+- `doctor` could not run (a usage error, a bad `--set`): `ok` **false** and an `error` object.
+- `--list` and `--version` set `ok` true.
+
+So to ask "is it healthy?", read `ok` and `counts.fail == 0` (or the exit code), never `ok` alone.
+`design.md` ("Output") has the full contract, and `tests/unit/actions/test_doctor.py` pins this rule.
+
 ## Add an action
 
 Add a module to `platformctl/actions/`; it is found automatically.
