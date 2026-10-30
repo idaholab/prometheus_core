@@ -20,6 +20,7 @@ to try another shell.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -30,7 +31,11 @@ import pytest
 SHIM = Path(__file__).resolve().parents[3] / "platformctl"
 """The real `platformctl` shim."""
 SYSTEM_PATH = "/usr/bin:/bin"
-"""The system directories appended to every stub PATH."""
+"""The system directories, for the one test that runs the real Python."""
+TOOLS = ("uname", "dirname", "readlink")
+"""The system tools the shim itself runs. Python is deliberately not among them."""
+HOMEBREW_PYTHONS = ("/opt/homebrew/bin/python3", "/usr/local/bin/python3")
+"""Where a Mac's Homebrew Python lives; the shim tries these paths by name, not through PATH."""
 
 SHELL: list[str] = ["sh"]
 """The shell that runs the shim; set per session from `--shim-shell`."""
@@ -60,10 +65,31 @@ def python_stub(directory: Path, name: str, version: tuple[int, int], marker: st
     )
 
 
+def tool_dir(tmp_path: Path) -> Path:
+    """A directory holding only the system tools the shim runs, so no system Python can be found."""
+    path = tmp_path / "tools"
+    if not path.exists():
+        path.mkdir()
+        for tool in TOOLS:
+            (path / tool).symlink_to(shutil.which(tool))
+    return path
+
+
+def skip_if_homebrew_python():
+    """Skip on a Mac with a Homebrew Python: the shim tries those paths before `python3` and uv."""
+    if sys.platform == "darwin" and any(Path(path).exists() for path in HOMEBREW_PYTHONS):
+        pytest.skip("this Mac has a Homebrew Python, which the shim would use")
+
+
 def run(tmp_path: Path, path_dirs: list[Path], *args: str, env_extra: dict | None = None, shim: Path = SHIM):
-    """Run the shim with a PATH of `path_dirs` plus the system directories."""
-    env = {"PATH": ":".join([*map(str, path_dirs), SYSTEM_PATH]), "HOME": str(tmp_path), **(env_extra or {})}
-    return subprocess.run([*SHELL, str(shim), *args], capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60)
+    """Run the shim with a PATH of `path_dirs` plus the few system tools it needs, and no system Python."""
+    env = {
+        "PATH": ":".join([*map(str, path_dirs), str(tool_dir(tmp_path))]),
+        "HOME": str(tmp_path),
+        **(env_extra or {}),
+    }
+    shell = [shutil.which(SHELL[0]), *SHELL[1:]]  # absolute: the child's PATH has no shells
+    return subprocess.run([*shell, str(shim), *args], capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60)
 
 
 @pytest.fixture
@@ -93,6 +119,7 @@ def test_a_mac_whose_python3_is_3_9_finds_python3_12(tmp_path, bin_dir):
 
 def test_python3_is_used_when_it_is_new_enough(tmp_path, bin_dir):
     """Python3 is used when it is new enough."""
+    skip_if_homebrew_python()
     python_stub(bin_dir, "python3", (3, 11))
     assert run(tmp_path, [bin_dir]).stdout.startswith("ran python3:")
 
@@ -122,6 +149,7 @@ def test_platformctl_python_that_is_too_old_is_an_error_not_a_fallback(tmp_path,
 
 def test_uv_is_the_fallback(tmp_path, bin_dir):
     """With no Python 3.10+, the shim runs the tool through `uv run --no-project --python >=3.10`."""
+    skip_if_homebrew_python()
     stub(bin_dir, "uv", 'echo "uv $*"\n')
     done = run(tmp_path, [bin_dir], "doctor")
     assert done.returncode == 0
@@ -131,10 +159,8 @@ def test_uv_is_the_fallback(tmp_path, bin_dir):
 
 def test_nothing_found_prints_one_install_command(tmp_path, bin_dir):
     """With no Python 3.10+ and no uv, the shim prints exactly one install command."""
-    # A PATH with only the system tools the shim needs.
+    skip_if_homebrew_python()
     done = run(tmp_path, [bin_dir])
-    if done.returncode == 0:  # this machine has a system Python 3.10+ in /usr/bin
-        pytest.skip("a Python 3.10+ is in /usr/bin")
     assert done.returncode == 1
     assert "needs Python 3.10 or newer" in done.stderr
     assert done.stderr.count("Install one with:") == 1
