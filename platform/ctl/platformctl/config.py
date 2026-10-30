@@ -46,11 +46,17 @@ class Setting:
     """One setting: its name, default, what a blank means, and whether it is safe to print."""
 
     name: str
+    """The setting's name, as in `.env`."""
     default: str
+    """The value used when nothing sets it."""
     description: str
+    """A one-line description, for `config show` and the docs."""
     blank_means_default: bool = False
+    """Whether a blank value means the default (the base image pin) rather than blank."""
     safe: bool = True
+    """Whether the value may be printed; everything not registered is secret."""
     kind: str = "str"  # str | bool | int
+    """The value's type: `str`, `bool` or `int`."""
 
 
 def _s(name: str, default: str, description: str, **kw) -> Setting:
@@ -174,7 +180,9 @@ class Value:
     """A resolved setting and where it came from."""
 
     value: str
+    """The resolved value."""
     source: str
+    """Where it came from: default, environment, `.env`, make or `--set`."""
 
 
 class PlatformConfig:

@@ -34,9 +34,13 @@ class Result:
     """The outcome of a subprocess."""
 
     argv: list[str]
+    """The command that ran."""
     returncode: int
+    """Its exit code; a signal death is 128 plus the signal."""
     stdout: str = ""
+    """What it printed, scrubbed."""
     stderr: str = ""
+    """What it printed on stderr, scrubbed."""
 
     @property
     def ok(self) -> bool:

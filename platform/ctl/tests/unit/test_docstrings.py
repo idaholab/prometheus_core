@@ -52,11 +52,7 @@ def assigned_names(node: ast.stmt) -> list[str]:
     return []
 
 
-CLASS_VARIABLES = False
-"""Whether variables in a class body (dataclass fields, class attributes) need a docstring."""
-
-
-def missing_in(body: list[ast.stmt], where: str, in_class: bool = False) -> list[str]:
+def missing_in(body: list[ast.stmt], where: str) -> list[str]:
     """The undocumented functions and variables of one module or class body, recursing into classes."""
     missing: list[str] = []
     for index, node in enumerate(body):
@@ -66,12 +62,10 @@ def missing_in(body: list[ast.stmt], where: str, in_class: bool = False) -> list
         elif isinstance(node, ast.ClassDef):
             if ast.get_docstring(node) is None:
                 missing.append(f"{where}:{node.lineno} class {node.name}")
-            missing += missing_in(node.body, where, in_class=True)
+            missing += missing_in(node.body, where)
         elif isinstance(node, ast.If):
             # `if TYPE_CHECKING:` and `if __name__ == ...:` blocks hold module-level names too
-            missing += missing_in(node.body + node.orelse, where, in_class)
-        elif in_class and not CLASS_VARIABLES:
-            continue
+            missing += missing_in(node.body + node.orelse, where)
         else:
             names = [n for n in assigned_names(node) if n not in EXEMPT_NAMES]
             following = body[index + 1] if index + 1 < len(body) else None
@@ -113,8 +107,12 @@ def test_the_checker_finds_what_it_should():
         'if True:\n    Z = 2\n    """A Z."""\n'
         "__all__ = []\n"
     )
-    names = [m.split(" ", 1)[1] for m in missing_in(bad.body, "bad")]
-    assert names == (
-        ["X", "def f", "class C", "y", "def m", "Z"] if CLASS_VARIABLES else ["X", "def f", "class C", "def m", "Z"]
-    )
+    assert [m.split(" ", 1)[1] for m in missing_in(bad.body, "bad")] == [
+        "X",
+        "def f",
+        "class C",
+        "y",
+        "def m",
+        "Z",
+    ]
     assert missing_in(good.body, "good") == []

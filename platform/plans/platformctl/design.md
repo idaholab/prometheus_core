@@ -734,12 +734,20 @@ restart.
 
 ### Unit (`tests/unit/`)
 
-- **Every function and global has a brief docstring**, in the code and in the tests. A
-  global's docstring is a string literal on the line after the assignment:
+- **Every function, global and class variable has a brief docstring**, in the code and in the
+  tests. A variable's docstring is a `"""foo"""` string literal on the line after the assignment,
+  for module globals and for dataclass fields alike:
 
   ```python
   MASK = "***"
   """What a secret is replaced with."""
+
+  @dataclass
+  class Result:
+      """What one check found."""
+
+      status: str
+      """PASS, WARN, FAIL or SKIP."""
   ```
 
   `tests/unit/test_docstrings.py` reads every file with `ast` and lists what lacks one. Lambdas

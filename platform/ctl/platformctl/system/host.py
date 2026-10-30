@@ -84,9 +84,13 @@ class Holder:
     """Who holds a port."""
 
     kind: str  # container | process | unknown
+    """container, process or unknown."""
     name: str = ""
+    """The container or process name."""
     project: str = ""
+    """The Compose project of a container."""
     root: str = ""
+    """The platform folder of a container, from its label."""
 
 
 def parse_lsof(text: str) -> str | None:
@@ -109,9 +113,13 @@ class Host:
     """The host: its OS, WSL, and who holds a port."""
 
     runner: Runner
+    """Starts the subprocesses."""
     docker: Docker
+    """The `docker` CLI, to find a container that holds a port."""
     system: str = sys.platform
+    """The platform name, as in `sys.platform`."""
     release_reader: Callable[[], str] = lambda: Path("/proc/sys/kernel/osrelease").read_text()
+    """Reads the kernel release, which tells WSL from Linux (replaced in tests)."""
 
     # -- OS ------------------------------------------------------------
 

@@ -36,9 +36,13 @@ class FakeRunner:
     """
 
     responses: dict[tuple[str, ...], Result] = field(default_factory=dict)
+    """Canned results by argv prefix."""
     calls: list[list[str]] = field(default_factory=list)
+    """Every argv run, in order."""
     envs: list[Mapping[str, str] | None] = field(default_factory=list)
+    """The environment each call was given."""
     raises: dict[str, Exception] = field(default_factory=dict)
+    """Exceptions to raise, by command name."""
 
     def run(self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, **_: object) -> Result:
         """Record the call and return the canned result with the longest matching prefix, else success."""

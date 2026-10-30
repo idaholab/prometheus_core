@@ -33,7 +33,9 @@ class Paths:
     """The two folders the tool knows: the platform it belongs to and the agent folder it acts on."""
 
     root: Path
+    """The platform folder."""
     agent: Path | None = None
+    """The agent folder being acted on, or None."""
 
     @classmethod
     def default(cls, agent: str | Path | None = None) -> Paths:

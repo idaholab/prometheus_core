@@ -33,7 +33,9 @@ class Target(ABC):
     """A place the platform runs, and what actions can ask of it."""
 
     name: str = ""
+    """The name `--target` and `PLATFORM_TARGET` select it by."""
     capabilities: frozenset[str] = frozenset()
+    """What the target supports, as a set of capability names."""
 
     def require(self, capability: str, command: str) -> None:
         """Raise `UnsupportedError` unless the target has the capability the command needs."""

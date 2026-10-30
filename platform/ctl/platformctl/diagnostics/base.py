@@ -40,9 +40,13 @@ class Result:
     """What one check found."""
 
     status: str
+    """PASS, WARN, FAIL or SKIP."""
     evidence: str = ""
+    """What was found, with no secret values."""
     fix: str = ""
+    """What to do about a WARN or FAIL."""
     skipped_because: str = ""
+    """The check or reason that caused a SKIP."""
 
 
 @dataclass
@@ -50,14 +54,22 @@ class Check:
     """A diagnostic: its id, tags, targets, dependencies and the function that runs it."""
 
     id: str
+    """The check's id, matching the hackathon `checks.md` where one exists."""
     area: str
+    """What the check is about: laptop, platform and so on."""
     tags: tuple[str, ...]
+    """`preflight` and `diagnose`, which `--tag` selects by."""
     run: Callable[[Context], Result]
+    """The function that runs the check."""
     depends_on: tuple[str, ...] = ()
+    """Ids of checks that must not FAIL or SKIP, or this one is skipped."""
     targets: tuple[str, ...] = ("compose",)
+    """The targets the check applies to."""
     fix_kind: str = FIX_YOU
+    """Who may apply the fix: `safe`, `yes` (after asking) or `you`."""
     # Conflicts with the hackathon checks.md ids are renamed with an alias, never silently.
     aliases: tuple[str, ...] = ()
+    """Old ids that still select this check."""
 
 
 @dataclass
@@ -65,7 +77,9 @@ class Outcome:
     """A check and what it found."""
 
     check: Check
+    """The check that ran."""
     result: Result
+    """What it found."""
 
 
 @dataclass
@@ -73,6 +87,7 @@ class Registry:
     """All the checks, in an order where each check's dependencies come first."""
 
     checks: list[Check] = field(default_factory=list)
+    """The registered checks, in run order."""
 
     def add(self, check: Check) -> Check:
         """Register a check; refuse a duplicate id."""
