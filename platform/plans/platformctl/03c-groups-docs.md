@@ -92,7 +92,7 @@ CI job to `./platformctl`.
   - **Prerequisites:** deck 03's "Before you clone" table
     (`03-deployment.md`, "GNU make, git, python3" row) says Python 3.10+,
     found automatically, with one copy-paste install line if there's none
-    (`brew install python@3.12`, or the uv installer); uv and Python 3.12
+    (the uv installer, the shim's only suggestion); uv and Python 3.12
     stop being "only for outside Docker". The "What `make init-env` does"
     slide becomes `config init`.
   - **Older clones:** next to the first `./platformctl` command, one line:
