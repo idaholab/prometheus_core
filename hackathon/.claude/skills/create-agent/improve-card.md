@@ -7,7 +7,7 @@ the slide or `path:line` that it cites.
 ## 1. Read the card
 
 1. A path in the argument is the card; its folder is the agent. Else find the agent
-   ("Find your agent"). `<container>` from `docker-compose.yml`.
+   ("Find your agent"). `<project>` and `<service>` as in "Find your agent".
 2. `python3 -m json.tool <folder>/agent_card.json > /dev/null && echo valid`. On an error, fix
    only the syntax ("Before a write").
 3. Read the card and `agent.py`: the `send_status_update`, `declare_long_running`, and
@@ -24,7 +24,7 @@ the slide or `path:line` that it cites.
    step 4 fixes it:
 
    ```sh
-   diff <(docker exec <container> python -c "import json, urllib.request as u; print(json.dumps([{k: s.get(k) for k in ('id', 'description', 'usage_notes', 'requires_approval', 'inputSchema')} for s in json.load(u.urlopen('http://localhost:8000/api/agent-card'))['skills']], indent=1, sort_keys=True))") <(python3 -c "import json, sys; print(json.dumps([{k: s.get(k) for k in ('id', 'description', 'usage_notes', 'requires_approval', 'inputSchema')} for s in json.load(open(sys.argv[1]))['skills']], indent=1, sort_keys=True))" <folder>/agent_card.json) && echo same
+   diff <(docker compose -p <project> exec -T <service> python -c "import json, urllib.request as u; print(json.dumps([{k: s.get(k) for k in ('id', 'description', 'usage_notes', 'requires_approval', 'inputSchema')} for s in json.load(u.urlopen('http://localhost:8000/api/agent-card'))['skills']], indent=1, sort_keys=True))") <(python3 -c "import json, sys; print(json.dumps([{k: s.get(k) for k in ('id', 'description', 'usage_notes', 'requires_approval', 'inputSchema')} for s in json.load(open(sys.argv[1]))['skills']], indent=1, sort_keys=True))" <folder>/agent_card.json) && echo same
    ```
 
 4. Collisions: the second command of "See the rendering yourself" (the live catalog). Report a
@@ -53,11 +53,11 @@ card name gives a new route key. With nothing weak, go to step 5.
 1. "Before a write", then `Edit`. Check the JSON again, render again, and show each changed tool
    before and after. After an id change, run the tests.
 2. Check for activity:
-   `docker logs --since 5m <container> 2>&1 | grep -E 'Starting .* execution|execution completed|Error during execution' | tail -3`.
+   `docker compose -p <project> logs --no-log-prefix --since 5m <service> 2>&1 | grep -E 'Starting .* execution|execution completed|Error during execution' | tail -3`.
    A last "Starting" line means a running call: ask before `make up`.
 3. `make up` (the image holds the card). Wait for `Registered '<route key>'`, up to 5 tries. Then
    the discovery refresh: dispatch tools can stay old for 300 s otherwise. When it fails, warn
-   that a client-agent restart stops running turns, then `docker restart client-agent`. Compare
+   that a client-agent restart stops running turns, then `docker compose -p prometheus_platform restart client-agent`. Compare
    again: expect `same`.
 
 ## 5. Hand off

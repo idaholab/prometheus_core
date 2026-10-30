@@ -67,7 +67,7 @@ gh pr create --repo &lt;owner&gt;/&lt;team&gt;-agent --base main</pre>
 <pre>cd ~/prometheus/&lt;team&gt;-agent
 make up              # build, start, register
 make logs            # your tracebacks are here
-docker restart &lt;slug&gt;-agent   # after a PLATFORM restart
+docker compose -p &lt;team&gt;-agent restart   # after a PLATFORM restart
 
 # registered? (AGENT_SECRET from your .env)
 curl -s -H "Authorization: Bearer $AGENT_SECRET" \
@@ -76,7 +76,7 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
 # in the chat
 /agents   /artifacts   /tasks
 
-docker logs -f client-agent   # what the orchestrator did</pre>
+docker compose -p prometheus_platform logs --no-log-prefix -f client-agent   # what the orchestrator did</pre>
       <p>Test in a <b>fresh conversation</b>. New or changed agents are picked up within about a minute.</p>
     </section>
 
@@ -170,7 +170,7 @@ async with self.llm_client(context) as llm:
       <h2>When it breaks</h2>
       <table class="t">
         <tr><th>Symptom</th><th>Fix</th></tr>
-        <tr><td>Not in <code>/agents</code></td><td><code>docker restart &lt;slug&gt;-agent</code>, else <code>make up</code>; <code>make logs</code></td></tr>
+        <tr><td>Not in <code>/agents</code></td><td><code>docker compose -p &lt;team&gt;-agent restart</code>, else <code>make up</code>; <code>make logs</code></td></tr>
         <tr><td>Base image <code>unauthorized</code></td><td><code>LOCAL_SDK=true</code> in <code>platform/.env</code>; re-run <code>setup_agent.py</code> or set <code>PROMETHEUS_API_BASE_IMAGE_REPO=prometheus_api</code>, <code>…_HASH=local</code> in the agent <code>.env</code></td></tr>
         <tr><td>Never called</td><td>sharpen <code>description</code> / <code>usage_notes</code></td></tr>
         <tr><td>Agent exits at startup</td><td><code>make logs</code>: <code>DEEPLYNX_*</code> missing (required for every agent), or <code>LLM_CONFIG_PROFILE</code> unset</td></tr>
@@ -178,7 +178,7 @@ async with self.llm_client(context) as llm:
         <tr><td><code>LLMProviderError</code> 401</td><td><code>LLM_API_KEY</code> in <code>.env</code></td></tr>
         <tr><td><code>LLMConfigError</code></td><td><code>LLM_CONFIG_PROFILE</code> spelling; the message lists the profiles</td></tr>
         <tr><td>Upload ignored, plot missing</td><td>DeepLynx settings; <code>mime_type="image/png"</code></td></tr>
-        <tr><td>"not stored as a platform artifact"</td><td>re-upload in a fresh conversation; <code>docker logs client-agent 2&gt;&amp;1 | grep 'Failed to upload'</code></td></tr>
+        <tr><td>"not stored as a platform artifact"</td><td>re-upload in a fresh conversation; <code>docker compose -p prometheus_platform logs --no-log-prefix client-agent 2&gt;&amp;1 | grep 'Failed to upload'</code></td></tr>
         <tr><td>"No 'userToken' found"</td><td>platform backend log: <code>ADMIN_DB_ENCRYPTION_KEY</code> set? (the signing key is created automatically)</td></tr>
         <tr><td><code>ModuleNotFoundError</code></td><td><code>uv add</code> it; Dockerfile <code>COPY</code></td></tr>
       </table>

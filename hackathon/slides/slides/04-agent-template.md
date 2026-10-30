@@ -421,7 +421,7 @@ make logs                # "Registered 'neutron-table-plot-agent' …"
 make up                  # rebuilds and restarts
 
 # after the PLATFORM restarted (registry wiped)
-docker restart neutron-table-plot-agent
+docker compose -p neutron-agent restart
 ```
 
 |||
@@ -454,7 +454,7 @@ Start a **fresh conversation** for each test. Old uploads and results stay visib
 | `ModuleNotFoundError` in the container | `uv add` the package; a `COPY` line for your own modules |
 
 {.small}
-What the orchestrator decided, and why: `docker logs -f client-agent` in the platform.
+What the orchestrator decided, and why: `docker compose -p prometheus_platform logs --no-log-prefix -f client-agent` in the platform.
 
 ---
 
@@ -923,7 +923,7 @@ Retries: `REGISTRY_MAX_RETRIES` (default 10), backoff 2 s → ×2 → capped at 
 # verify
 curl -s -H "Authorization: Bearer $AGENT_SECRET" \
   http://localhost:8600/v1/agents | python3 -m json.tool
-docker logs hello-world-agent 2>&1 | grep "Registered '"
+docker compose -p hello-world logs 2>&1 | grep "Registered '"
 # → Registered 'hello-world-agent' with LiteLLM at
 #   http://backend:8000   (old log wording; it is the backend)
 ```
@@ -988,7 +988,7 @@ Restart the agent (re-registers), then refresh discovery or restart the client-a
 
 :::: grid 2
 ::: callout warn
-After every platform `make up`/`make restart` the registry is empty: `docker restart <your-agent>` to re-register (an unchanged container is left alone by a second `make up`). Stop your agent before `make down` in the platform, or the network cannot be removed.
+After every platform `make up`/`make restart` the registry is empty: `docker compose -p <agent-folder> restart` to re-register (an unchanged container is left alone by a second `make up`). Stop your agent before `make down` in the platform, or the network cannot be removed.
 :::
 
 ::: callout

@@ -1,6 +1,6 @@
 # Long-running and blocking work
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Your agent has one asyncio loop. A heartbeat runs on it every 15 s (`prometheus_api/prometheus_api/agent/base.py:294-307`).
 A call that does not `await` (a solver, `time.sleep`, pandas, matplotlib) freezes it, and the streaming

@@ -1,6 +1,6 @@
 # Glossary
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 - **A2A.** Agent-to-Agent protocol 1.0: JSON-RPC `SendMessage`, `SendStreamingMessage` on `POST /`. Old `message/send` fails with `-32601`.
 - **Agent.** A `PrometheusAgent` subclass that does skills. You write `_execute(params, context, event_queue)` (`agent-code.md`).
@@ -28,6 +28,6 @@ Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no Lite
 - **Skill / skill id.** One thing an agent does; one tool. The id: `[a-zA-Z0-9_-]`, at most 64, unique; it arrives as `params["skill_id"]`.
 - **Status update.** A `send_status_update` line; it shows live only with `capabilities.streaming: true`.
 - **`usage_notes`.** Shown to the LLM as `Usage: <usage_notes>`: when to use the skill, and when not.
-- **Valkey.** The state store: service `redis`, container `agent-valkey`, port 6379.
+- **Valkey.** The state store: service `redis`, container `prometheus_platform-redis-1`, port 6379.
 - **Workflow.** A YAML template that chains skills; a `workflow_*` tool and a slash command (`workflows.md`).
 - **`x_artifact_ref`, `x_input_source: runtime`.** Marks on a property: an artifact id; a value that another skill makes.

@@ -84,7 +84,8 @@ Note: Fill in judge names. Weights can be adjusted; hidden test + rubric must st
 
 ```bash {.xs}
 # 2 · no host port: read the card from inside client-agent
-docker exec client-agent python -c "import json,urllib.request as u; c=json.load(u.urlopen('http://<slug>-agent:8000/api/agent-card')); print(c['name'], [s['id'] for s in c['skills']])"
+docker compose -p prometheus_platform exec -T client-agent \
+  python -c "import json,urllib.request as u; c=json.load(u.urlopen('http://<slug>-agent:8000/api/agent-card')); print(c['name'], [s['id'] for s in c['skills']])"
 # 6 · install the SDK
 uv pip install "git+https://github.com/idaholab/prometheus_core.git@devel#subdirectory=sdk"
 ```
@@ -119,7 +120,7 @@ Judges bring a **markdown file and a CSV file nobody has seen**, written with th
 
 - The team may not touch the keyboard or explain the prompt to the agent.
 - Each prompt gets **one** attempt; follow-up questions are answered by the judge. "Offers the real names" counts only for the agent's dropdown, not a free-text question from the orchestrator.
-- An upload that fails on the platform side (the chat says the file "was not stored as a platform artifact") is redone in a fresh conversation and doesn't use the attempt. Confirm with `docker logs client-agent 2>&1 | grep 'Failed to upload'`.
+- An upload that fails on the platform side (the chat says the file "was not stored as a platform artifact") is redone in a fresh conversation and doesn't use the attempt. Confirm with `docker compose -p prometheus_platform logs --no-log-prefix client-agent 2>&1 | grep 'Failed to upload'`.
 - Score the plot itself, not the orchestrator's summary of it. A text-vs-text plot was summarized as "the count of each machine type".
 - A timeout of 3 minutes per prompt.
 - Plotting extra series alongside the right one, or asking a sensible clarifying question, is fine.

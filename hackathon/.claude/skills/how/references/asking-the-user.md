@@ -1,6 +1,6 @@
 # Asking the user
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The platform asks the user for you. You never parse chat text (deck 04, slides 2 and 21). Short paths:
 `base.py` and `context_state.py` are in `prometheus_api/prometheus_api/agent/`; `agent_loop.py` is in

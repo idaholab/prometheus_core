@@ -1,6 +1,6 @@
 # Environment: prerequisites, .env files, and the base image
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The laptop needs (deck 01, homework; deck 03, bonus; each has a check in `checks.md`): Docker
 with Compose 2.20+ (`docker`), make, git, uv and Python 3.12 (`tools`), a clone of

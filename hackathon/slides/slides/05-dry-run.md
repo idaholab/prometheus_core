@@ -132,12 +132,12 @@ make logs
 ::: col
 ```bash {.sm}
 # registered?
-docker logs hello-<you>-agent 2>&1 | grep "Registered '"
+docker compose -p hello-<you> logs 2>&1 | grep "Registered '"
 curl -s -H "Authorization: Bearer $AGENT_SECRET" \
   localhost:8600/v1/agents | grep -o '"agent_name": *"[^"]*"'
 
 # make the orchestrator notice now (else ≤ 60 s)
-docker restart client-agent
+docker compose -p prometheus_platform restart client-agent
 ```
 
 {.sm}
@@ -150,8 +150,8 @@ docker restart client-agent
 | If… | then |
 |---|---|
 | "The Prometheus Platform must be launched first" | start the platform first (the network is missing) |
-| not in `/agents` | the platform was restarted: `docker restart hello-<you>-agent` |
-| never routed | sharpen the description; `docker restart client-agent` |
+| not in `/agents` | the platform was restarted: `docker compose -p hello-<you> restart` |
+| never routed | sharpen the description; `docker compose -p prometheus_platform restart client-agent` |
 | LLM 401 (if you added LLM calls) | the key for your `LLM_CONFIG_PROFILE` in `.env` |
 | exits at startup: "Invalid required DeepLynx configuration" | `DEEPLYNX_*` in `.env` (deck 03) |
 | `ModuleNotFoundError` in the container | `uv add <pkg>`; a `COPY` line for your own modules |

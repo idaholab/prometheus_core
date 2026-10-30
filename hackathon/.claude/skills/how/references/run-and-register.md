@@ -1,6 +1,6 @@
 # Run and register your agent
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## Start it
 
@@ -9,7 +9,7 @@ Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no Lite
 stops with "The Prometheus Platform must be launched first…". The build needs a committed `uv.lock`
 (`uv add <pkg>`, then commit it with `pyproject.toml`; `agent-lockfile`). The image holds the code and the
 card (`agent_template/Dockerfile:46-49`), and Compose reads `environment:` only on create: after
-any change, run `make up`, not `docker restart`. `make logs` never ends; use `docker logs`. The agent exits at
+any change, run `make up`, not a restart. `make logs` never ends; use `docker compose -p <project> logs --no-log-prefix`. The agent exits at
 startup with "Invalid required DeepLynx configuration: …" without the `DEEPLYNX_*` values (`deeplynx-env`).
 
 ## Registration and the route key
@@ -41,8 +41,8 @@ and once on an unknown skill (`orchestrator/runtime.py:209-217`). `discovery-ref
 | what changed | run |
 |---|---|
 | code, card, `pyproject.toml`, `Dockerfile`, compose, or the agent `.env` | `make up` in the agent folder, then `discovery-refresh` |
-| the platform restarted (it empties the registry: `clear-agent-registry`) | `docker restart <container>`, or `make up` after a `make down` |
-| `docker restart` fails: "network … not found" | `make down`, then `make up` |
+| the platform restarted (it empties the registry: `clear-agent-registry`) | `docker compose -p <project> restart <service>`, or `make up` after a `make down` |
+| The restart fails: "network … not found" | `make down`, then `make up` |
 | any of these, before a chat test | a fresh chat conversation (deck 04, slide 18) |
 
 ## Without the platform: the debug route

@@ -1,6 +1,6 @@
 # Testing your agent
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Test without a platform (deck 04, slide 20 and A21): plain functions for the logic, mocks for
 `_execute`, never a real LLM. `uv run pytest` and `uv run ruff check .` must pass (ruff: `E`,

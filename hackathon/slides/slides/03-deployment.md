@@ -96,7 +96,7 @@ make down                      # stop
 :::
 
 ::: callout bad
-**Every `make up` or `make restart` empties the agent registry** (`clear-agent-registry`). The platform's own agents re-register by themselves. **Your agent doesn't**: restart it afterwards with `docker restart <your-agent>`.
+**Every `make up` or `make restart` empties the agent registry** (`clear-agent-registry`). The platform's own agents re-register by themselves. **Your agent doesn't**: restart it afterwards with `docker compose -p <agent-folder> restart`.
 :::
 ::::
 
@@ -384,7 +384,7 @@ Agent running on the host (not in Docker)? Use `http://localhost:5000/api/v1`.
 ::: col
 ```python {.sm}
 # from inside the backend container (has DEEPLYNX_* env)
-docker exec -i backend python - <<'EOF'
+docker compose -p prometheus_platform exec -T backend python - <<'EOF'
 from prometheus_api.storage_client import (
     ConnectionConfig, StorageClient)
 cfg = ConnectionConfig.from_env()
@@ -406,7 +406,7 @@ Then upload a file in the chat. It should appear in the DeepLynx UI under your p
 | Symptom | Fix |
 |---|---|
 | Agent exits: "Invalid required DeepLynx configuration: …" | set `DEEPLYNX_KEY` + `DEEPLYNX_SECRET`, `DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID` in its `.env` |
-| Your agent disappeared from `/agents` | the platform restarted: `docker restart <your-agent>` |
+| Your agent disappeared from `/agents` | the platform restarted: `docker compose -p <agent-folder> restart` |
 | LLM call gets HTTP 401 | the key for your `LLM_CONFIG_PROFILE` is missing or wrong in the agent's `.env` |
 | `LLMConfigError` / "set LLM_CONFIG_PROFILE in .env" | the profile is empty or misspelled; the message lists the installed ones |
 | "DeepLynx storage is not configured" | set the `DEEPLYNX_*` lines, `make restart` |
@@ -936,8 +936,8 @@ Redo the wizard with `make clear-admin-users`. Sessions live in Valkey: a backen
 source .env   # for the variables below
 
 make ps                                                     # everything "Up (healthy)"
-docker exec agent-valkey valkey-cli -a "$REDIS_PASSWORD" ping  # → PONG
-docker exec admin-db pg_isready -U admin                     # → accepting connections
+docker compose -p prometheus_platform exec -T redis valkey-cli -a "$REDIS_PASSWORD" ping  # → PONG
+docker compose -p prometheus_platform exec -T admin-db pg_isready -U admin                     # → accepting connections
 
 curl -s http://localhost:8600/healthz                          # → {"status":"ok"}  (alive)
 curl -s http://localhost:8600/readyz                           # → 200 once Valkey + admin-db answer
@@ -946,7 +946,7 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
      http://localhost:8600/v1/agents | python3 -m json.tool    # → registered agents
 make check                                                     # all of the above, for every agent
 
-docker exec client-agent python -c "import urllib.request as u; \
+docker compose -p prometheus_platform exec -T client-agent python -c "import urllib.request as u; \
   print(u.urlopen('http://synthesis-agent:8000/healthz').read())"   # → {"ok": true, "status": "healthy", …}
 ```
 
@@ -1004,7 +1004,7 @@ make logs SERVICE=backend
 In the client-agent log you see discovery (`GET backend:8000/v1/agents`), each tool call the loop makes (status "Next step: …"), and the `/a2a/{agent}` call through the backend.
 
 ::: callout
-A newly registered agent reaches the orchestrator's tool list within about 60 s (the capability-cache TTL), immediately on a skill miss, or right after `docker restart client-agent`.
+A newly registered agent reaches the orchestrator's tool list within about 60 s (the capability-cache TTL), immediately on a skill miss, or right after `docker compose -p prometheus_platform restart client-agent`.
 :::
 ::::
 
@@ -1169,7 +1169,7 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 | "userToken has expired" | A long turn exceeded `USER_IDENTITY_TTL` (7200 s). Raise it. |
 | `LLMAliasError`: alias 'small' not available | The active profile has no model for that flavor. Switch `LLM_CONFIG_PROFILE`, or use a custom `LLM_CONFIG_FILE` (next session). |
 | `LLMProviderError` (401/403) from an LLM call | `LLM_API_KEY` is missing or wrong in the agent's `.env`, or it belongs to another profile. |
-| The agent is running but not in `/agents` | The registration was wiped by `make up`/`restart`. `docker restart <agent>` re-registers it; it is routable within about 60 s. |
+| The agent is running but not in `/agents` | The registration was wiped by `make up`/`restart`. `docker compose -p <agent-folder> restart` re-registers it; it is routable within about 60 s. |
 
 ---
 
@@ -1195,8 +1195,9 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 ```bash {.xs}
 make logs                    # all
 make logs SERVICE=backend
-docker logs -f client-agent
-docker logs <agent> 2>&1 \
+docker compose -p prometheus_platform \
+  logs --no-log-prefix -f client-agent
+docker compose -p <agent-folder> logs 2>&1 \
   | grep -i "Registered '"
 ```
 
@@ -1208,7 +1209,7 @@ Everything logs to stdout. The "Registered" line appears only if the agent logs 
 #### State
 
 ```bash {.xs}
-docker exec -it agent-valkey \
+docker compose -p prometheus_platform exec redis \
   valkey-cli -a "$REDIS_PASSWORD"
 > KEYS artifacts:conv:*
 > KEYS conversation:*
@@ -1224,10 +1225,12 @@ Conversation state, artifact catalog, the agent registry, task graph, browser se
 #### Inside a container
 
 ```python {.xs}
-docker exec client-agent env \
+docker compose -p prometheus_platform \
+  exec -T client-agent env \
   | grep -E '^(REGISTRY_URL|LLM_CONFIG_)'
 # REGISTRY_URL=http://backend:8000
-docker exec client-agent python -c "
+docker compose -p prometheus_platform \
+  exec -T client-agent python -c "
 import os, urllib.request as u
 r = u.Request(
  'http://localhost:8000'
@@ -1244,5 +1247,5 @@ Force a discovery refresh. The images have Python but no `curl`.
 ::::
 
 ::: callout
-Reset ladder, from least to most destructive: `docker restart <svc>` → `make restart` → `make up` → `make clear-admin-users` → `make clobber` (deletes users, keys, and history) → `make down-v` (also the caches).
+Reset ladder, from least to most destructive: `docker compose -p prometheus_platform restart <svc>` → `make restart` → `make up` → `make clear-admin-users` → `make clobber` (deletes users, keys, and history) → `make down-v` (also the caches).
 :::

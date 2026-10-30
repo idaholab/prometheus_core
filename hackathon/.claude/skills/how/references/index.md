@@ -1,6 +1,6 @@
 # Hackathon knowledge base: start here
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The KB distills the five Day 1 decks (01 Welcome, 02 GitHub & PRs, 03 Local platform, 04 Building an agent, 05
 Dry run) against the code. `deck 04, slide 7` is the main part, `deck 04, A42` the appendix.

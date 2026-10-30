@@ -3,8 +3,8 @@ name: create-agent
 description: Builds the user's Prometheus agent (an A2A service that the Prometheus chat routes to, not a Claude Code subagent) and teaches each step. It works out what is needed - set up a new agent from prometheus_core/agent-template that runs and is registered, add one platform feature (read an upload, publish a JSON table or a PNG, status updates, ask the user, approval, call an LLM, a structured answer, long-running work, a second skill, a workflow), or improve the agent card so that the orchestrator picks the right skill. Use for "create an agent", "new agent", "Day 1 hello agent", "start our team agent", "add a feature", "read the upload", "publish a plot", "call an LLM from my agent", "add a second skill", "review my card", "improve my skill description", or "my agent is never called".
 argument-hint: "[what you want, e.g. an agent name, add a file upload, improve my card]"
 allowed-tools:
-  - Bash(docker restart client-agent)
-  - "Bash(docker exec client-agent python -c \"import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())\")"
+  - Bash(docker compose -p prometheus_platform restart client-agent)
+  - "Bash(docker compose -p prometheus_platform exec -T client-agent python -c \"import os, urllib.request as u; r=u.Request('http://localhost:8000/discovery/refresh', method='POST', headers={'Authorization':'Bearer '+os.environ['AGENT_SECRET']}); print(u.urlopen(r).read())\")"
 ---
 
 # /create-agent

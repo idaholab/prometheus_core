@@ -7,7 +7,7 @@ hard-codes no model ID, and calls `self.llm_client(context)` with no key swap.
 ## 1. Find the agent and the feature
 
 1. Find the agent ("Find your agent" in `conventions.md`). With none, run `new-agent.md` first.
-   `<container>` = `grep -m1 'container_name:' <agent>/docker-compose.yml`. Read `agent.py`,
+   `<project>` and `<service>` as in "Find your agent". Read `agent.py`,
    `agent_card.json`, `pyproject.toml`, `Dockerfile`, and `tests/`.
 2. Match the argument to a row below. Else ask (header `Group`): "Files and artifacts", "Talk to
    the user", "Call an LLM", "Structure and long work"; then (header `Pattern`) its rows. With
@@ -32,7 +32,7 @@ the KB file, the reference, and what changes in the card, the code, and the chat
 | A workflow | `workflows.md` | `artifact-debug-agent/workflows/patriotic_usa_png.yaml` | nothing (merged at startup) | nothing | a `workflow_*` tool; `/workflows` |
 
 Read SDK code from the image:
-`docker exec <container> python -c "import inspect, prometheus_api.llm_client.tools as t; print(inspect.getsource(t.acall_tool))"`.
+`docker compose -p <project> exec -T <service> python -c "import inspect, prometheus_api.llm_client.tools as t; print(inspect.getsource(t.acall_tool))"`.
 The debug agents run only with `make DEBUG_AGENTS=true up` in the platform; that empties the
 registry, so ask first (header `Debug run`), and `make up` the agent again after it.
 
@@ -56,7 +56,7 @@ LLM rows: read the flavors first (`llm.md`). List them for the agent's profile:
 `grep 'model_name:' <platform>/../sdk/prometheus_api/llm_configs/$(grep '^LLM_CONFIG_PROFILE=' <agent>/.env | tail -n 1 | cut -d= -f2).yaml`.
 Pick one that exists. Teach `LLMAliasError` and `LLMProviderError` in two lines. Check the key
 in the container:
-`docker exec <container> sh -c 'test -n "$<KEY>" && echo set || echo missing'`.
+`docker compose -p <project> exec -T <service> sh -c 'test -n "$<KEY>" && echo set || echo missing'`.
 
 ## 4. Write, test, run
 
@@ -70,7 +70,7 @@ in the container:
 3. Tests with the mocks of `testing.md`, `skill_id` in the params, both calls for input-required.
    `uv run pytest && uv run ruff check .` (`--fix` for import order).
 4. Say that `make up` stops a running call of this agent. `make up`, wait for
-   `docker logs <container> 2>&1 | grep "Registered '" | tail -1`, then the discovery refresh.
+   `docker compose -p <project> logs --no-log-prefix <service> 2>&1 | grep "Registered '" | tail -1`, then the discovery refresh.
    Give one chat prompt for a fresh conversation. Errors go to `/diagnose`; not called or wrong
    arguments go to `/diagnose trace my last chat`.
 5. Sum up in three lines. Offer `/how explain <pattern>`, and another pattern.

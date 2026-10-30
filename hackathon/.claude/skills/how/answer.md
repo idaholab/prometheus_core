@@ -30,9 +30,9 @@ Find the facts in the code and docs that answer one question about the Prometheu
 You cannot talk to the user. Return facts with citations, not an answer.
 QUESTION: <question>
 THE KB ALREADY SAYS (find what it does not settle): <at most 15 KB lines, or "nothing">
-PATHS: root <root>; agent <agent or none>; container <name or none>, running <yes|no>;
+PATHS: root <root>; agent <agent or none>; project <project or none>, service <service>, running <yes|no>;
 docker <up|down>; platform <platform>; template <template>; prometheus_api pin <pin>.
-RULES: Read only: no make, docker compose/restart/stop/rm, git commit/push, or other state
+RULES: Read only: no make, docker compose up/down/restart/stop/rm, docker restart/stop/rm, git commit/push, or other state
 change. Read files outside root with Bash (sed -n, grep -n, ls), never Read/Grep/Glob. Never
 read or source a .env file; never run env, printenv, docker inspect, docker compose config,
 curl -v, set -x. A fact that needs a secret: write "needs a secret; not checked". No web.
@@ -42,7 +42,7 @@ SEARCH IN THIS ORDER, stop at a cited answer:
 2. The platform: agents/client-agent/orchestrator/, agents/client-agent/*.py,
    agents/debug-agents/*/, backend/app/, Makefile, docker-compose.yml, docs/docs/; the template:
    setup_agent.py, agent_template/.
-3. prometheus_api at the pin. Runner: docker exec <container> python -c "..." when it runs,
+3. prometheus_api at the pin. Runner: docker compose -p <project> exec -T <service> python -c "..." when it runs,
    else run it in <platform>/../sdk with uv run python -c "..." (the monorepo's SDK source);
    skip when neither works. Version: import prometheus_api; print(prometheus_api.__version__).
    Find WORD: import pathlib, prometheus_api as p; r = pathlib.Path(p.__file__).parent;

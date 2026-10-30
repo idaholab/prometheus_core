@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The deck symptom tables (deck 03, slides 11, 17, A18-A21; deck 04, slide 19; deck 05). Run the
 named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`down`, run
@@ -26,13 +26,13 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 
 | symptom | cause → fix | checks |
 |---|---|---|
-| My agent is not in `/agents`, or it disappeared | The platform restarted and emptied the registry. `docker restart <container>`, then a discovery refresh. | [agent-running](checks.md#agent-running), [registry-agents](checks.md#registry-agents), [agent-registered-log](checks.md#agent-registered-log), [discovery-refresh](checks.md#discovery-refresh) |
+| My agent is not in `/agents`, or it disappeared | The platform restarted and emptied the registry. `docker compose -p <project> restart <service>`, then a discovery refresh. | [agent-running](checks.md#agent-running), [registry-agents](checks.md#registry-agents), [agent-registered-log](checks.md#agent-registered-log), [discovery-refresh](checks.md#discovery-refresh) |
 | Listed, but never called | A weak `description` or `usage_notes`, a duplicate skill id, an unreachable or old card. Try other phrasings in fresh conversations, then `/diagnose trace my last chat` and `/create-agent improve my card`. | [registry-details](checks.md#registry-details), [card-in-image](checks.md#card-in-image), [client-agent-reaches-agent](checks.md#client-agent-reaches-agent), [discovery-refresh](checks.md#discovery-refresh) |
 | `make up` fails: "The Prometheus Platform must be launched first…" | The platform network is missing. Start the platform. | [stack-ps](checks.md#stack-ps) |
 | Called with the wrong arguments | Weak parameter descriptions, or the previous result lacks a value. Trace the turn, then improve the card. | [card-in-image](checks.md#card-in-image) |
 | "Registry registration attempt … failed" or "Continuing without registration" | A 401: the agent's `AGENT_SECRET` differs (its compose must set `LITELLM_MASTER_KEY: ${AGENT_SECRET}`). A connection error: the backend is down, `REGISTRY_URL` still points at `litellm`, or the network mode is wrong. | [agent-registered-log](checks.md#agent-registered-log), [agent-env-sync](checks.md#agent-env-sync), [platform-check](checks.md#platform-check) |
 | The agent container exits or restarts | Read the traceback: often `ModuleNotFoundError`, or "AGENT_SECRET_REQUIRED=true but AGENT_SECRET is not set". | [agent-running](checks.md#agent-running), [agent-logs](checks.md#agent-logs) |
-| The chat still uses the old card or code | `docker restart` keeps the old image. `make up`, then a discovery refresh. | [card-in-image](checks.md#card-in-image), [discovery-refresh](checks.md#discovery-refresh) |
+| The chat still uses the old card or code | A restart keeps the old image. `make up`, then a discovery refresh. | [card-in-image](checks.md#card-in-image), [discovery-refresh](checks.md#discovery-refresh) |
 | Two agents replace each other in `/agents` | Same card name, same route key (deck 05, slide 1). Use your own names. | [registry-details](checks.md#registry-details) |
 | "Capability '<skill_id>' is currently unavailable." | The client-agent did not discover the skill. | [registry-agents](checks.md#registry-agents), [client-agent-reaches-agent](checks.md#client-agent-reaches-agent) |
 
@@ -81,14 +81,14 @@ your own agent. Each step after the first empties the registry.
 
 | step | you lose |
 |---|---|
-| `docker restart <name>` | the work in progress of that container |
+| `docker compose -p <project> restart <service>` | the work in progress of that container |
 | `make restart` / `make up` | the agent registry (`make up` also builds) |
 | `make clear-admin-users` | all users: the setup wizard runs again |
 | `make down-v` | all volumes: conversations, sessions, registry, users, signing keys, identity providers, mesh cache |
 
 ## Debug commands
 
-Use `docker logs --tail 100 <container> 2>&1` (`make logs` never ends; the registry and gateway
-log in `backend`). Read Valkey only with the container's own password, as in `activity`. The images
+Use `docker compose -p <project> logs --no-log-prefix --tail 100 <service> 2>&1` (`make logs` never ends; the registry and gateway
+log in `backend`: `docker compose -p prometheus_platform logs --no-log-prefix --tail 100 backend`). Read Valkey only with the container's own password, as in `activity`. The images
 have no `curl`: use `python -c "import urllib.request …"`. Deck commands that print secrets: never
 pipe `/v1/agents` to `json.tool`, never `export GITHUB_PAT` (use `read -rs`).

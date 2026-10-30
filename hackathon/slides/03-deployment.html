@@ -109,7 +109,7 @@ make down                      <span class="c"># stop</span></pre>
 <strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>): no registry, no token. Without it, <code>make up</code> tries to pull from <code>containers.github.inl.gov</code> and fails with <code>unauthorized</code>. Put it in <code>.env</code> after <code>make init-env</code>, so every later <code>make up</code> sees it.</div>
 
 <div class="callout bad">
-<strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker restart &lt;your-agent&gt;</code>.</div>
+<strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
 
 </div>
 </div>
@@ -435,7 +435,7 @@ DEEPLYNX_PROJECT_ID=1</pre>
   <div class="content">
 <div class="col">
 <pre class="sm"><span class="c"># from inside the backend container (has DEEPLYNX_* env)</span>
-docker exec -i backend python - &lt;&lt;<span class="s">&#x27;EOF&#x27;</span>
+docker compose -p prometheus_platform exec -T backend python - &lt;&lt;<span class="s">&#x27;EOF&#x27;</span>
 <span class="k">from</span> prometheus_api.storage_client <span class="k">import</span> (
     ConnectionConfig, StorageClient)
 cfg = ConnectionConfig.from_env()
@@ -466,7 +466,7 @@ EOF</pre>
 </tr>
 <tr>
 <td>Your agent disappeared from <code>/agents</code></td>
-<td>the platform restarted: <code>docker restart &lt;your-agent&gt;</code></td>
+<td>the platform restarted: <code>docker compose -p &lt;agent-folder&gt; restart</code></td>
 </tr>
 <tr>
 <td>LLM call gets HTTP 401</td>
@@ -1307,8 +1307,8 @@ args:
 <pre class="sm">source .env   <span class="c"># for the variables below</span>
 
 make ps                                                     <span class="c"># everything &quot;Up (healthy)&quot;</span>
-docker exec agent-valkey valkey-cli -a <span class="s">&quot;</span>$REDIS_PASSWORD<span class="s">&quot;</span> ping  <span class="c"># → PONG</span>
-docker exec admin-db pg_isready -U admin                     <span class="c"># → accepting connections</span>
+docker compose -p prometheus_platform exec -T redis valkey-cli -a <span class="s">&quot;</span>$REDIS_PASSWORD<span class="s">&quot;</span> ping  <span class="c"># → PONG</span>
+docker compose -p prometheus_platform exec -T admin-db pg_isready -U admin                     <span class="c"># → accepting connections</span>
 
 curl -s http://localhost:8600/healthz                          <span class="c"># → {&quot;status&quot;:&quot;ok&quot;}  (alive)</span>
 curl -s http://localhost:8600/readyz                           <span class="c"># → 200 once Valkey + admin-db answer</span>
@@ -1317,7 +1317,7 @@ curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span
      http://localhost:8600/v1/agents | python3 -m json.tool    <span class="c"># → registered agents</span>
 make check                                                     <span class="c"># all of the above, for every agent</span>
 
-docker exec client-agent python -c <span class="s">&quot;import urllib.request as u; \</span>
+docker compose -p prometheus_platform exec -T client-agent python -c <span class="s">&quot;import urllib.request as u; \</span>
 <span class="s">  print(u.urlopen(&#x27;http://synthesis-agent:8000/healthz&#x27;).read())&quot;</span>   <span class="c"># → {&quot;ok&quot;: true, &quot;status&quot;: &quot;healthy&quot;, …}</span></pre>
 <div class="grid g3">
 <div class="card">
@@ -1388,7 +1388,7 @@ make logs SERVICE=form-filler-agent
 make logs SERVICE=backend</pre>
 <p class="small">In the client-agent log you see discovery (<code>GET backend:8000/v1/agents</code>), each tool call the loop makes (status &quot;Next step: …&quot;), and the <code>/a2a/{agent}</code> call through the backend.</p>
 <div class="callout">
-A newly registered agent reaches the orchestrator's tool list within about 60 s (the capability-cache TTL), immediately on a skill miss, or right after <code>docker restart client-agent</code>.</div>
+A newly registered agent reaches the orchestrator's tool list within about 60 s (the capability-cache TTL), immediately on a skill miss, or right after <code>docker compose -p prometheus_platform restart client-agent</code>.</div>
 
 </div>
 </div>
@@ -1688,7 +1688,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </tr>
 <tr>
 <td>The agent is running but not in <code>/agents</code></td>
-<td>The registration was wiped by <code>make up</code>/<code>restart</code>. <code>docker restart &lt;agent&gt;</code> re-registers it; it is routable within about 60 s.</td>
+<td>The registration was wiped by <code>make up</code>/<code>restart</code>. <code>docker compose -p &lt;agent-folder&gt; restart</code> re-registers it; it is routable within about 60 s.</td>
 </tr>
 </tbody>
 </table>
@@ -1739,15 +1739,16 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 <h4>Logs</h4>
 <pre class="xs">make logs                    <span class="c"># all</span>
 make logs SERVICE=backend
-docker logs -f client-agent
-docker logs <span class="p">&lt;agent&gt;</span> <span class="n">2</span>&gt;&amp;<span class="n">1</span> <span class="s">\</span>
+docker compose -p prometheus_platform <span class="s">\</span>
+  logs --no-log-prefix -f client-agent
+docker compose -p <span class="p">&lt;agent-folder&gt;</span> logs <span class="n">2</span>&gt;&amp;<span class="n">1</span> <span class="s">\</span>
   | grep -i <span class="s">&quot;Registered &#x27;&quot;</span></pre>
 <p class="small">Everything logs to stdout. The &quot;Registered&quot; line appears only if the agent logs at INFO (the template does); <code>/v1/agents</code> is authoritative.</p>
 </div>
 
 <div class="card">
 <h4>State</h4>
-<pre class="xs">docker exec -it agent-valkey <span class="s">\</span>
+<pre class="xs">docker compose -p prometheus_platform exec redis <span class="s">\</span>
   valkey-cli -a <span class="s">&quot;</span>$REDIS_PASSWORD<span class="s">&quot;</span>
 &gt; KEYS artifacts:conv:*
 &gt; KEYS conversation:*
@@ -1758,10 +1759,12 @@ docker logs <span class="p">&lt;agent&gt;</span> <span class="n">2</span>&gt;&am
 
 <div class="card">
 <h4>Inside a container</h4>
-<pre class="xs">docker exec client-agent env \
+<pre class="xs">docker compose -p prometheus_platform \
+  exec -T client-agent env \
   | grep -E <span class="s">&#x27;^(REGISTRY_URL|LLM_CONFIG_)&#x27;</span>
 <span class="c"># REGISTRY_URL=http://backend:8000</span>
-docker exec client-agent python -c <span class="s">&quot;</span>
+docker compose -p prometheus_platform \
+  exec -T client-agent python -c <span class="s">&quot;</span>
 <span class="k">import</span> os, urllib.request <span class="k">as</span> u
 r = u.Request(
  <span class="s">&#x27;http://localhost:8000&#x27;</span>
@@ -1776,7 +1779,7 @@ print(u.urlopen(r).read())<span class="s">&quot;</span></pre>
 </div>
 
 <div class="callout">
-Reset ladder, from least to most destructive: <code>docker restart &lt;svc&gt;</code> → <code>make restart</code> → <code>make up</code> → <code>make clear-admin-users</code> → <code>make clobber</code> (deletes users, keys, and history) → <code>make down-v</code> (also the caches).</div>
+Reset ladder, from least to most destructive: <code>docker compose -p prometheus_platform restart &lt;svc&gt;</code> → <code>make restart</code> → <code>make up</code> → <code>make clear-admin-users</code> → <code>make clobber</code> (deletes users, keys, and history) → <code>make down-v</code> (also the caches).</div>
 
   </div>
 </section>

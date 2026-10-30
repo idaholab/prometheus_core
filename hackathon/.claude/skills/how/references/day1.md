@@ -1,6 +1,6 @@
 # Day 1: the hello-world agent
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Four parts (deck 05, slide 1). You are done when `/agents` lists your agent, the chat returns your greeting, and
 your PR is approved. With Claude Code, `/diagnose` checks the laptop, and `/create-agent` does steps 2 to 4.
@@ -32,7 +32,7 @@ by name on behalf of <You>.`; skill id `hello_<you>_greeting`; skill name `Hello
 
 ## Step 4. Run it and see it routed
 
-Run `make up`; expect `Registered 'hello-<you>-agent'` in `docker logs hello-<you>-agent`. Run the discovery
+Run `make up`; expect `Registered 'hello-<you>-agent'` in `docker compose -p hello-<you> logs --no-log-prefix`. Run the discovery
 refresh (`conventions.md`). In a new conversation, type `/agents`, then "Please greet Marie Curie on behalf of
 <You>". After each edit, run `make up` again. Problems: `troubleshooting.md`.
 

@@ -5,8 +5,8 @@ is the agent name. KB: `card.md`, `agent-code.md`, `run-and-register.md`, `testi
 
 ## 1. Preconditions
 
-Check with a mark each: `test -f <platform>/.env`; `make ps` in `<platform>` shows `backend`,
-`client-agent`, `agent-valkey`, `admin-db`; `curl -s localhost:8600/healthz` gives
+Check with a mark each: `test -f <platform>/.env`; `make ps` in `<platform>` shows the services `backend`,
+`client-agent`, `redis`, `admin-db`; `curl -s localhost:8600/healthz` gives
 `{"status":"ok"}`; `uv --version`; Python 3.9+; the platform `.env` has `DEEPLYNX_KEY`, `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID` (`grep -c`; agents exit at startup without them). On a fail, send to `/diagnose check my laptop`.
 
 ## 2. Day 1 or Day 2
@@ -183,12 +183,12 @@ Day 2:
 3. Wait for the registration (never `make logs`; when `sleep` is refused, `run_in_background`):
 
    ```sh
-   for i in $(seq 15); do docker logs <slug>-agent 2>&1 | grep "Registered '" && break; sleep 2; done
+   for i in $(seq 15); do docker compose -p <project> logs --no-log-prefix <slug>-agent 2>&1 | grep "Registered '" && break; sleep 2; done
    ```
 
    Expect `Registered '<route key>' with LiteLLM at http://backend:8000` (old SDK wording; the URL is
-   the backend). Else send the user to `/diagnose`.
-4. Run the discovery refresh of `conventions.md` (on a fail, `docker restart client-agent`).
+   the backend). `<project>` is the folder name of `<OUTPUT_DIR>`, in lowercase. Else send the user to `/diagnose`.
+4. Run the discovery refresh of `conventions.md` (on a fail, `docker compose -p prometheus_platform restart client-agent`).
 
 ## 10. Day 1: chat, then the practice files
 

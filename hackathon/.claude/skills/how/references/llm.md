@@ -1,6 +1,6 @@
 # Calling an LLM
 
-Facts as of `prometheus_core` `devel` 2026-10-29 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Your code picks a flavor (`small`, `medium`, `large`, `vision`, `embedding`, `default`). The `.env` profile
 picks the model behind it (deck 04, slides 14-15). Import no provider SDK and hard-code no model ID.
@@ -61,4 +61,4 @@ For `<KEY>` (`LLM_API_KEY`, or `EMBEDDING_API_KEY` for embeddings):
 
 1. `grep -c '^<KEY>=.' .env`. When `0`, copy it: `grep '^<KEY>=' <platform>/.env >> .env`, or add it in your editor.
 2. Add `<KEY>: ${<KEY>:-}` under `environment:` in the agent `docker-compose.yml`, then `make up`.
-3. Check: `docker exec <slug>-agent sh -c 'test -n "$<KEY>" && echo set || echo missing'`.
+3. Check: `docker compose -p <project> exec -T <service> sh -c 'test -n "$<KEY>" && echo set || echo missing'`.

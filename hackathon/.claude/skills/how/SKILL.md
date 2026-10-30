@@ -17,7 +17,7 @@ The request: `$ARGUMENTS`
    `<root>/../prometheus_core/agent-template`. Check each with `test -d <path> && echo ok`. When one is
    missing and the request needs it, ask once for its path (header `Folder`).
 4. For a request about the user's own agent, find it by "Find your agent" in `conventions.md`,
-   and read `<container>` with `grep -m1 'container_name:' <agent>/docker-compose.yml`. No agent
+   and note `<project>` and `<service>` ("Find your agent"). No agent
    is fine.
 
 ## Rules
