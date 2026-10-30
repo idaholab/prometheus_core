@@ -24,9 +24,12 @@ agents register again after a platform restart without you doing anything.
     `com.docker.compose.project.working_dir`; folders compared with
     `realpath`, case-insensitively on macOS): stop with where it runs, that
     checkout's version, and `./platformctl down` there;
-  - every host port the stack will publish: free (`host.py`), or stop
-    naming what holds it (another platform, AirPlay on 5000, a local
-    Postgres or Redis, "another process") and the exact fix.
+  - every host port the stack will publish: free (`host.py`: IPv4 and IPv6,
+    bind and connect; the platform's own ports count as free), or stop
+    naming what holds it (another platform, another container, AirPlay on
+    5000, a local Postgres or Redis, the process name) and the lasting fix
+    (`design.md`, "Running elsewhere"; for 5000, AirPlay off, never a port
+    change).
 - **The agent label.** The agent template's compose file gets
   `labels: {io.prometheus.agent: "true"}` (`agent-template/agent_template/
   docker-compose.yml`).
@@ -94,7 +97,8 @@ agents register again after a platform restart without you doing anything.
   naming from recorded output; which containers count as your agents
   (labelled, running, outside the project, not another platform's); the
   open-turn warning; a same-folder `restart` never trips the
-  "elsewhere" stop.
+  "elsewhere" stop or the port check; a port held on `::1` only, and on
+  `127.0.0.1` only, is reported busy.
 - **Live:** a labelled container from a second project is restarted by `up`
   and left running by `down`; an unlabelled one is listed, not touched; the
   network and containers survive a new commit (no recreate) while an agent

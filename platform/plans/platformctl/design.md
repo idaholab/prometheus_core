@@ -207,7 +207,7 @@ through `ctx.target`.
 | `http.py` | `urllib` polling helpers. Loopback URLs bypass any proxy (`ProxyHandler({})`), so `HTTP_PROXY` without `NO_PROXY` can't break health checks. Never prints request headers or bodies |
 | `valkey.py` | The agent-registry clear, through the target's `exec` |
 | `deeplynx.py` | The DeepLynx API client |
-| `host.py` | Whether a port is free: try `socket.bind` (works on every OS), then name the holder from `docker ps` published ports and platform labels; `lsof`/`ss` only as optional extra detail ("held by an unknown process, maybe on the Windows side"). Also OS, WSL, and the checkout being on `/mnt/<drive>` |
+| `host.py` | Whether a port is free: `socket.bind` without `SO_REUSEADDR` on both `0.0.0.0` and `::` (with `IPV6_V6ONLY`), plus a `connect` to `127.0.0.1` and `::1`. A bind alone misses a holder on `::1` only (Vite binds `localhost` there) and, on macOS, one on `127.0.0.1` when binding `0.0.0.0` with `SO_REUSEADDR` (both verified in review). Ports held by the platform's own project count as free, so `restart` doesn't trip on itself. Then name the holder: from `docker ps --filter publish=<port>` (another container, or another platform by its labels), else the process name from `lsof -nP -iTCP:<port> -sTCP:LISTEN` or `ss -ltnp`, else "another process". On WSL, optionally `powershell.exe Get-NetTCPConnection -LocalPort <port>` for a Windows-side holder. Also OS, WSL (1 vs 2), and the checkout being on `/mnt/<drive>` |
 | later: `k3d.py`, `kubectl.py` | For the k3d target |
 
 The architecture for the build cache comes from the daemon
@@ -959,10 +959,17 @@ folder's containers (verified).
     `./platformctl down`." The second-instance option comes last.
   - **Every host port the stack will publish** is free (`host.py`). If not,
     stop before Compose fails, naming what holds it: another platform
-    (project, folder, version), a known case (AirPlay on 5000 on macOS, a
-    local Postgres or Redis), or "another process". Then the exact fix
-    (`./platformctl down` there, turn off AirPlay Receiver, or
-    `--set DEEPLYNX_SERVER_PORT=5001`).
+    (project, folder, version), another container (its name), a known case
+    (AirPlay on 5000 on macOS, a local Postgres or Redis), or the process
+    name. Then the exact, lasting fix:
+    - another platform: `./platformctl down` there;
+    - AirPlay on 5000: "turn off AirPlay Receiver (System Settings >
+      General > AirDrop & Handoff), then run `./platformctl up` again".
+      Not a port change: the DeepLynx UI calls its API at `localhost:5000`,
+      baked into the image (`docker-compose.deeplynx.yml`), so it only
+      works on 5000;
+    - any other port: `./platformctl config set <X>_PORT=<free port>`, which
+      lasts, rather than a one-run `--set`.
 - **`status`** prints the folder and version in its summary, and lists other
   running platforms. **`doctor`'s `ports-free`** check is the same code.
 - Step 7 uses the `root` label to find the running platform's checkout for
