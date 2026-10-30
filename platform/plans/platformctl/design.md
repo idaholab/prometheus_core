@@ -1094,4 +1094,24 @@ From a review of every tracked doc, slide, skill and workflow:
 - Docker problems on Linux and WSL are told apart: daemon down, no
   permission on the socket (not in the `docker` group), rootless
   `DOCKER_HOST`, the Docker context in use, and Docker Desktop vs an Engine
-  inside WSL. Compose has a minimum version (`include` with `env_file`).
+  inside WSL. **Compose's minimum version** is stated and checked: 2.20
+  for `include:` and `additional_contexts` (deck 03 already says so), and
+  `include` with `env_file` needs a later 2.x. Step 1 measures the exact
+  version against the oldest distro Compose (Ubuntu's `docker-compose-v2`)
+  and adds a live CI leg on it; the precedence rules were only verified on
+  Compose 5.6. `doctor` also recognises "'compose' is not a docker
+  command" (Debian's `docker.io` without the plugin) and prints the plugin
+  install command.
+- **Podman** (`podman-docker` on RHEL works with today's Makefile): the
+  `docker` check detects it, and the containerd-store and architecture
+  checks are SKIP there instead of FAIL, since `docker info` reports
+  different fields.
+- **WSL1** can't run Docker: `host.py` tells it apart from WSL2 (the kernel
+  release has no `WSL2`) and `doctor` says to convert the distro. The
+  step 4 `host-gateway` check notes that on WSL it reaches the WSL VM, not
+  Windows services.
+- **CRLF shim.** A CRLF `sh platformctl` fails before Python starts, so the
+  `checkout-path` check can't report it. The Make forwards check the shim
+  for `\r` first and print `git add --renormalize .` or "re-clone with
+  `core.autocrlf input`". `.gitattributes` only affects new checkouts, so
+  this covers existing ones.

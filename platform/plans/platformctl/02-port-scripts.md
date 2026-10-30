@@ -76,7 +76,9 @@ deprecation stub until step 3c deletes them.
 - **Moved from step 1** (it had to stay out of the hackathon freeze):
   - `make doctor`: `doctor: ##@ ...` forwarding to the shim.
   - **`.gitattributes`** (repo root, new): `platform/platformctl text
-    eol=lf`, `*.sh text eol=lf`, `*.py text eol=lf`.
+    eol=lf`, `*.sh`, `*.py`, `Makefile`, `Dockerfile`, `*.yml`, `.env.example`
+    and `*.md` as `text eol=lf`. `NOTICE.txt` is already committed with CRLF
+    and a BOM; give it `-text` so nothing changes for it.
   - The step 1 CI jobs become required, and their path filter widens to
     `platform/Makefile`, `platform/scripts/` and the compose files.
 - **Tests:** move `tests/infrastructure/test_check_platform.py`,

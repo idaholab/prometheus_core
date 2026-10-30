@@ -119,7 +119,8 @@ agents register again after a platform restart without you doing anything.
   project is
   stopped with the right message; a port held by a plain socket is named.
 - **Manual (PR checklist):** WSL with Docker Desktop integration and with
-  Engine in the distro.
+  Engine in the distro, including a Windows process holding a platform port
+  (reported busy, with the `Get-NetTCPConnection` hint).
 
 ## Review
 

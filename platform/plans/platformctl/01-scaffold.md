@@ -142,8 +142,12 @@ step that may land before the hackathon freeze (2026-11-03).
   no-containerd-store and rootless legs only on `devel`).
 - `make help`/`make doctor` smoke tests join in step 2, with the Makefile
   change.
-- PR checklist: a manual WSL run (Docker Desktop integration, Engine in the
-  distro, a `/mnt/c` checkout).
+- A live leg on the oldest Compose the plan supports (`design.md`,
+  "Compatibility notes"), on `devel`.
+- PR checklist, a manual WSL run: Docker Desktop integration and Engine in
+  the distro; a `/mnt/c` checkout with `core.autocrlf=true`; Ctrl-C in
+  `up --foreground`; a Windows process holding 8600; running without the
+  `docker` group.
 
 ## Output
 
