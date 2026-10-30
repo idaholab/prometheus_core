@@ -19,6 +19,7 @@ from platformctl.targets.base import UnsupportedError
 
 
 def test_check_name():
+    """`compose` is accepted, `k3d` is not supported yet, and other names are unknown."""
     assert SUPPORTED == ("compose",)
     assert check_name("compose") == "compose"
     with pytest.raises(UnsupportedError, match="k3d` is not supported yet"):

@@ -21,9 +21,11 @@ import os
 import sys
 
 MIN_PYTHON = (3, 10)
+"""The oldest Python the tool runs on, as (major, minor)."""
 
 
 def main(argv=None):
+    """Check the Python version and the user, then hand over to `cli.main`; return the exit code."""
     if sys.version_info < MIN_PYTHON:
         need = "{}.{}".format(*MIN_PYTHON)
         have = "{}.{}".format(*sys.version_info[:2])

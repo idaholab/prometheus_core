@@ -37,7 +37,9 @@ from platformctl.system.runner import Runner, RunnerError
 from platformctl.targets.base import UnsupportedError
 
 PROG = "platformctl"
+"""The program name."""
 SUB_PREFIX = "sub_"
+"""Prefix of the `dest` of each global option's copy on a subcommand, so the two copies can be merged."""
 
 
 class UsageError(Exception):
@@ -45,7 +47,10 @@ class UsageError(Exception):
 
 
 class Parser(argparse.ArgumentParser):
+    """An argument parser that raises `UsageError` instead of printing and exiting, so `--json` can report it."""
+
     def error(self, message: str) -> NoReturn:
+        """Raise `UsageError` with the message and the usage line."""
         raise UsageError(f"{self.prog}: {message}\n\n{self.format_usage().strip()}")
 
 
@@ -90,6 +95,7 @@ def merge_globals(args: argparse.Namespace) -> argparse.Namespace:
     """Combine the copy before the command with the copy after it: lists concatenate, flags OR."""
 
     def sub(name: str):
+        """The subcommand's copy of a global option, or None when it has none."""
         return getattr(args, SUB_PREFIX + name, None)
 
     args.set = [*args.set, *(sub("set") or [])]
@@ -109,6 +115,7 @@ def split_double_dash(argv: Sequence[str]) -> tuple[list[str], list[str]]:
 
 
 def _group_leaves(module: ModuleType) -> list[ModuleType]:
+    """The subcommands of a group module, or an empty list for a plain command."""
     return list(getattr(module, "SUBCOMMANDS", []))
 
 
@@ -132,6 +139,7 @@ def aliases_of(modules: list[ModuleType]) -> dict[str, str]:
 
 
 def build_parser(modules: list[ModuleType] | None = None) -> argparse.ArgumentParser:
+    """Build the parser from the action modules, with the global options before and after each command."""
     modules = actions.discover() if modules is None else modules
     parser = Parser(
         prog="./platformctl",
@@ -164,10 +172,12 @@ def build_parser(modules: list[ModuleType] | None = None) -> argparse.ArgumentPa
 
 
 def _wants_json(argv: Sequence[str]) -> bool:
+    """Whether `--json` is given, so even a usage error can be reported as JSON."""
     return "--json" in split_double_dash(argv)[0]
 
 
 def _version_info(paths: Paths, config: PlatformConfig, runner: Runner, modules: list[ModuleType]) -> dict:
+    """The fields of `--version`: the tool and platform versions, the commands and the features."""
     return {
         "version": __version__,
         "platform_version": platform_version(paths.root, runner),
@@ -177,6 +187,7 @@ def _version_info(paths: Paths, config: PlatformConfig, runner: Runner, modules:
 
 
 def main(argv: Sequence[str] | None = None, *, env: dict[str, str] | None = None, out=None, err=None) -> int:
+    """Parse the arguments, build the context, run the action and return its exit code; no error escapes unscrubbed."""
     argv = list(sys.argv[1:] if argv is None else argv)
     env = dict(os.environ if env is None else env)
     out = out or sys.stdout
@@ -193,6 +204,7 @@ def main(argv: Sequence[str] | None = None, *, env: dict[str, str] | None = None
     scrubber.add_all(PlatformConfig(paths.root, env).secret_values())
 
     def fail(command: str, code: str, message: str, hint: str = "", exit_code: int = jsonout.EXIT_FAIL) -> int:
+        """Report a failure as JSON or as an error line, and return the exit code."""
         if wants_json:
             platform = {
                 "root": str(paths.root),

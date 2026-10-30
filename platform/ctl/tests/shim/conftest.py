@@ -18,6 +18,7 @@ import pytest
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register `--shim-shell`, the shell that runs the shim."""
     parser.addoption(
         "--shim-shell",
         default="sh",
@@ -27,6 +28,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 @pytest.fixture(scope="session")
 def shim_shell(pytestconfig: pytest.Config) -> list[str]:
+    """The shell command that runs the shim, as a list."""
     import shlex
 
     return shlex.split(pytestconfig.getoption("--shim-shell"))

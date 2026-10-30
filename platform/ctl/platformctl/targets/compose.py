@@ -28,13 +28,17 @@ _PORT_SETTINGS = {
     "client-agent": "CLIENT_AGENT_PORT",
     "redis": "REDIS_LOCAL_PORT",
 }
+"""The setting that holds each service's host port."""
 
 
 class ComposeTarget(Target):
+    """The platform on Docker Compose, through the generated entry file."""
+
     name = "compose"
     capabilities = frozenset({PASSTHROUGH, YOUR_AGENTS, FOREGROUND})
 
     def __init__(self, paths: Paths, config: PlatformConfig, compose: Compose, docker: Docker) -> None:
+        """Keep the paths, settings and adapters the target works through."""
         self.paths = paths
         self.config = config
         self.compose = compose
@@ -45,6 +49,7 @@ class ComposeTarget(Target):
         return self.config.flag("USE_BUILD_CACHE") and self.docker.info().containerd_store
 
     def generate(self) -> dict[str, str]:
+        """Write the generated compose files, with the build cache only if the image store allows it."""
         agents = compose_files.discover_agents(self.paths.root, self.config)
         info = self.docker.info()
         written = compose_files.write_generated(
@@ -57,5 +62,6 @@ class ComposeTarget(Target):
         return {name: str(path) for name, path in written.items()}
 
     def service_url(self, service: str) -> str | None:
+        """The host URL of a service, from its port setting, or None when it has none."""
         setting = _PORT_SETTINGS.get(service)
         return f"http://localhost:{self.config.int(setting)}" if setting else None

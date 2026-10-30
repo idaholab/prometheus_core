@@ -38,9 +38,11 @@ PLATFORM_PORTS = (
     ("BACKEND_PORT", "the backend"),
     ("REDIS_LOCAL_PORT", "Valkey"),
 )
+"""The settings of the ports every start publishes, and what each is for."""
 
 
 def _ports(ctx: Context) -> list[tuple[str, int, str]]:
+    """The (setting, port, purpose) of every port the configured stack publishes."""
     ports = [(name, ctx.config.int(name), what) for name, what in PLATFORM_PORTS]
     if ctx.config.flag("PROMETHEUS_SYSTEM_TESTING"):
         ports.append(("CLIENT_AGENT_PORT", ctx.config.int("CLIENT_AGENT_PORT"), "the client agent"))
@@ -51,6 +53,7 @@ def _ports(ctx: Context) -> list[tuple[str, int, str]]:
 
 
 def _describe(holder: hostmod.Holder) -> str:
+    """Say who holds a port, in plain words."""
     if holder.kind == "container":
         origin = f" (project {holder.project}, from {holder.root})" if holder.project else ""
         return f"container {holder.name}{origin}"
@@ -60,6 +63,7 @@ def _describe(holder: hostmod.Holder) -> str:
 
 
 def check_ports_free(ctx: Context) -> Result:
+    """Check that the ports the platform publishes are free, naming the holder of any that is not."""
     taken: list[str] = []
     fixes: list[str] = []
     for name, port, what in _ports(ctx):
@@ -82,6 +86,7 @@ def check_ports_free(ctx: Context) -> Result:
 
 
 def check_checkout_path(ctx: Context) -> Result:
+    """Warn about WSL 1, a CRLF shim and a checkout on a Windows drive."""
     problems: list[str] = []
     fixes: list[str] = []
     if ctx.host.wsl_version == 1:
@@ -100,4 +105,6 @@ def check_checkout_path(ctx: Context) -> Result:
 
 
 PORTS_FREE = Check("ports-free", "laptop", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_ports_free, fix_kind=FIX_YES)
+"""The `ports-free` check."""
 CHECKOUT_PATH = Check("checkout-path", "laptop", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_checkout_path, fix_kind=FIX_YOU)
+"""The `checkout-path` check."""

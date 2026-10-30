@@ -41,6 +41,7 @@ class FakeRunner:
     raises: dict[str, Exception] = field(default_factory=dict)
 
     def run(self, argv: Sequence[str], *, env: Mapping[str, str] | None = None, **_: object) -> Result:
+        """Record the call and return the canned result with the longest matching prefix, else success."""
         argv = list(argv)
         self.calls.append(argv)
         self.envs.append(env)
@@ -53,10 +54,12 @@ class FakeRunner:
         return Result(argv, 0)
 
     def execvp(self, argv: Sequence[str], *, env: Mapping[str, str] | None = None) -> None:
+        """Record the call instead of replacing the process."""
         self.calls.append(list(argv))
         self.envs.append(env)
 
     def reply(self, *prefix: str, code: int = 0, stdout: str = "", stderr: str = "") -> None:
+        """Make commands starting with `prefix` return this result."""
         self.responses[prefix] = Result(list(prefix), code, stdout, stderr)
 
 
@@ -65,10 +68,12 @@ DOCKER_INFO = (
     ' "DriverStatus": [["driver-type", "io.containerd.snapshotter.v1"]], "SecurityOptions": ["name=seccomp"],'
     ' "Name": "docker-desktop", "ClientInfo": {"Context": "desktop-linux"}}'
 )
+"""A recorded `docker info` from Docker Desktop on a Mac with the containerd store."""
 
 
 @pytest.fixture
 def runner() -> FakeRunner:
+    """A `FakeRunner` that answers `docker info`, `docker compose version` and `git log` like a healthy machine."""
     fake = FakeRunner()
     fake.reply("docker", "info", stdout=DOCKER_INFO)
     fake.reply("docker", "compose", "version", stdout="v2.40.0\n")
@@ -89,6 +94,7 @@ def platform_root(tmp_path: Path) -> Path:
 def make_context(
     root: Path, runner: FakeRunner, env: dict[str, str] | None = None, sets: dict[str, str] | None = None, **kw
 ) -> tuple[Context, io.StringIO, io.StringIO]:
+    """Build a real `Context` over a fake runner, returning it with its captured stdout and stderr."""
     out, err = io.StringIO(), io.StringIO()
     env = {"PATH": "/usr/bin"} if env is None else env
     config = PlatformConfig(root, env, sets)
@@ -101,7 +107,10 @@ def make_context(
 
 @pytest.fixture
 def ctx_factory(platform_root: Path, runner: FakeRunner):
+    """A function that builds a context over the temporary platform folder and the fake runner."""
+
     def factory(env=None, sets=None, **kw):
+        """Build a context with the given environment, `--set` values and options."""
         return make_context(platform_root, runner, env, sets, **kw)
 
     return factory

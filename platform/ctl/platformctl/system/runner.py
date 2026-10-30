@@ -25,12 +25,14 @@ import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-# Make's own variables never reach a child process.
 MAKE_VARIABLES = ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES")
+"""Make's own variables, which never reach a child process."""
 
 
 @dataclass
 class Result:
+    """The outcome of a subprocess."""
+
     argv: list[str]
     returncode: int
     stdout: str = ""
@@ -38,6 +40,7 @@ class Result:
 
     @property
     def ok(self) -> bool:
+        """Whether it exited with 0."""
         return self.returncode == 0
 
 
@@ -46,9 +49,11 @@ class RunnerError(RuntimeError):
 
 
 Scrub = Callable[[str], str]
+"""A function that removes secrets from text."""
 
 
 def _clean_env(env: Mapping[str, str] | None) -> dict[str, str]:
+    """The child environment: the given one, or ours, without Make's variables."""
     base = dict(os.environ if env is None else env)
     for name in MAKE_VARIABLES:
         base.pop(name, None)
@@ -61,7 +66,10 @@ def exit_code(returncode: int) -> int:
 
 
 class Runner:
+    """Starts every subprocess, scrubbing what they print."""
+
     def __init__(self, scrub: Scrub | None = None, echo: Callable[[Sequence[str]], None] | None = None) -> None:
+        """Keep the scrubber and the function that echoes each command."""
         self.scrub = scrub or (lambda text: text)
         self.echo = echo
 
@@ -110,6 +118,7 @@ class Runner:
             raise RunnerError(f"can't run {argv[0]}: {exc.strerror or exc}") from None
 
     def _interactive(self, argv: list[str], env: dict[str, str], cwd: str | os.PathLike[str] | None) -> Result:
+        """Run with the terminal, ignoring Ctrl-C in the parent until the child exits."""
         proc = subprocess.Popen(argv, env=env, cwd=cwd)  # noqa: S603
         previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
@@ -119,6 +128,7 @@ class Runner:
         return Result(argv, exit_code(code))
 
     def _streamed(self, argv: list[str], env: dict[str, str], cwd: str | os.PathLike[str] | None) -> Result:
+        """Run and print each scrubbed line as it arrives."""
         proc = subprocess.Popen(  # noqa: S603
             argv,
             env=env,

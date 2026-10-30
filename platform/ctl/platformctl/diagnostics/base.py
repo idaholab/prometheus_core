@@ -37,6 +37,8 @@ TAG_PREFLIGHT, TAG_DIAGNOSE = "preflight", "diagnose"
 
 @dataclass
 class Result:
+    """What one check found."""
+
     status: str
     evidence: str = ""
     fix: str = ""
@@ -45,6 +47,8 @@ class Result:
 
 @dataclass
 class Check:
+    """A diagnostic: its id, tags, targets, dependencies and the function that runs it."""
+
     id: str
     area: str
     tags: tuple[str, ...]
@@ -58,21 +62,27 @@ class Check:
 
 @dataclass
 class Outcome:
+    """A check and what it found."""
+
     check: Check
     result: Result
 
 
 @dataclass
 class Registry:
+    """All the checks, in an order where each check's dependencies come first."""
+
     checks: list[Check] = field(default_factory=list)
 
     def add(self, check: Check) -> Check:
+        """Register a check; refuse a duplicate id."""
         if any(c.id == check.id for c in self.checks):
             raise ValueError(f"duplicate check id {check.id!r}")
         self.checks.append(check)
         return check
 
     def find(self, ident: str) -> Check | None:
+        """The check with this id or alias, or None."""
         for check in self.checks:
             if ident == check.id or ident in check.aliases:
                 return check
@@ -109,6 +119,7 @@ def run_checks(ctx: Context, registry: Registry, selected: list[Check]) -> list[
 
 
 def counts(outcomes: list[Outcome]) -> dict[str, int]:
+    """Tally the outcomes by status as `pass`, `warn`, `fail` and `skip`."""
     tally = {PASS: 0, WARN: 0, FAIL: 0, SKIP: 0}
     for outcome in outcomes:
         tally[outcome.result.status] += 1

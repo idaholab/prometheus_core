@@ -36,9 +36,11 @@ if TYPE_CHECKING:
 COMPOSE_INSTALL_LINUX = (
     "sudo apt install docker-compose-v2   (or follow https://docs.docker.com/compose/install/linux/)"
 )
+"""The command that installs the Compose plugin on Debian and Ubuntu."""
 
 
 def _start_docker_fix(ctx: Context) -> str:
+    """How to start Docker on this OS, in plain words."""
     if ctx.host.is_mac:
         return "Start Docker Desktop, wait until it says it is running, then run this again."
     if ctx.host.is_wsl:
@@ -47,6 +49,7 @@ def _start_docker_fix(ctx: Context) -> str:
 
 
 def check_docker(ctx: Context) -> Result:
+    """Check the daemon, the socket permission and the Compose plugin, each with its own fix."""
     info = ctx.docker.info()
     if info.state == dockermod.MISSING:
         return Result(
@@ -93,6 +96,7 @@ def check_docker(ctx: Context) -> Result:
 
 
 def check_build_cache_store(ctx: Context) -> Result:
+    """Check the containerd image store, which the registry build cache needs."""
     info = ctx.docker.info()
     if info.podman:
         return Result(SKIP, "Podman reports different fields")
@@ -109,6 +113,8 @@ def check_build_cache_store(ctx: Context) -> Result:
 
 
 DOCKER = Check("docker", "laptop", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_docker, fix_kind=FIX_YOU)
+"""The `docker` check."""
 BUILD_CACHE_STORE = Check(
     "build-cache-store", "laptop", (TAG_PREFLIGHT,), check_build_cache_store, depends_on=("docker",), fix_kind=FIX_YOU
 )
+"""The `build-cache-store` check."""

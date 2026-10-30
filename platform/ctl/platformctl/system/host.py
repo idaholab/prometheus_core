@@ -38,6 +38,7 @@ def _bind(family: int, address: str, port: int) -> bool:
 
 
 def _connects(family: int, address: str, port: int) -> bool:
+    """Whether something accepts a connection on the address and port."""
     with socket.socket(family, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.3)
         return sock.connect_ex((address, port)) == 0
@@ -60,6 +61,7 @@ def port_free(port: int) -> bool:
 
 
 def _ipv6_usable() -> bool:
+    """Whether this host can bind an IPv6 loopback address."""
     try:
         with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
             sock.bind(("::1", 0))
@@ -69,14 +71,18 @@ def _ipv6_usable() -> bool:
 
 
 _LSOF = re.compile(r"^(?P<name>\S+)\s+(?P<pid>\d+)\s")
+"""Matches a process row of `lsof` output."""
 _SS = re.compile(r'users:\(\("(?P<name>[^"]+)"')
+"""Matches the process in `ss -ltnp` output."""
 
-# Ports with a well-known holder on a stock laptop.
 KNOWN_HOLDERS = {5000: "AirPlay Receiver on macOS (System Settings > General > AirDrop & Handoff)"}
+"""Ports with a well-known holder on a stock laptop, and how to name it."""
 
 
 @dataclass
 class Holder:
+    """Who holds a port."""
+
     kind: str  # container | process | unknown
     name: str = ""
     project: str = ""
@@ -100,6 +106,8 @@ def parse_ss(text: str) -> str | None:
 
 @dataclass
 class Host:
+    """The host: its OS, WSL, and who holds a port."""
+
     runner: Runner
     docker: Docker
     system: str = sys.platform
@@ -109,13 +117,16 @@ class Host:
 
     @property
     def is_mac(self) -> bool:
+        """Whether this is macOS."""
         return self.system == "darwin"
 
     @property
     def is_linux(self) -> bool:
+        """Whether this is Linux, including WSL."""
         return self.system.startswith("linux")
 
     def kernel_release(self) -> str:
+        """The kernel release, or an empty string if it can't be read."""
         try:
             return self.release_reader().strip()
         except OSError:
@@ -123,6 +134,7 @@ class Host:
 
     @property
     def is_wsl(self) -> bool:
+        """Whether this is Linux running under WSL."""
         return self.is_linux and "microsoft" in self.kernel_release().lower()
 
     @property

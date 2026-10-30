@@ -734,6 +734,16 @@ restart.
 
 ### Unit (`tests/unit/`)
 
+- **Every function and global has a brief docstring**, in the code and in the tests. A
+  global's docstring is a string literal on the line after the assignment:
+
+  ```python
+  MASK = "***"
+  """What a secret is replaced with."""
+  ```
+
+  `tests/unit/test_docstrings.py` reads every file with `ast` and lists what lacks one. Lambdas
+  and names inside a function body are exempt. A docstring says what the thing does or is for.
 - **The tests mirror the package:** `platformctl/system/compose.py` is tested in
   `tests/unit/system/test_compose.py`, `actions/doctor.py` in
   `tests/unit/actions/test_doctor.py`, and so on (`__init__.py` is `test_init.py`,

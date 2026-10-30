@@ -18,6 +18,7 @@ import pytest
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register `--live`, which runs the live tests against the real Docker."""
     parser.addoption("--live", action="store_true", default=False, help="Run the live tests against the real Docker")
 
 
@@ -27,6 +28,7 @@ def coverage_active(config: pytest.Config) -> bool:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip the live tests unless `--live` is given, and refuse `--live` under coverage."""
     live = config.getoption("--live")
     if live and coverage_active(config):
         raise pytest.UsageError("--live can't run with coverage: live tests never count toward it")

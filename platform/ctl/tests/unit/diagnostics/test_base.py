@@ -18,7 +18,10 @@ from platformctl.diagnostics.base import FAIL, PASS, SKIP, WARN, Check, Registry
 
 
 def check(ident, status=PASS, depends=(), targets=("compose",), aliases=(), calls=None):
+    """A check that returns `status` and records that it ran."""
+
     def run(ctx):
+        """Record the run and return the check's canned result."""
         if calls is not None:
             calls.append(ident)
         return Result(status, f"{ident} evidence")
@@ -27,6 +30,7 @@ def check(ident, status=PASS, depends=(), targets=("compose",), aliases=(), call
 
 
 def test_duplicate_ids_are_refused():
+    """Registering two checks with the same id raises."""
     registry = Registry()
     registry.add(check("a"))
     with pytest.raises(ValueError, match="duplicate check id 'a'"):
@@ -34,6 +38,7 @@ def test_duplicate_ids_are_refused():
 
 
 def test_find_by_id_or_alias():
+    """Find by id or alias."""
     registry = Registry()
     a = registry.add(check("a", aliases=("old-a",)))
     assert registry.find("a") is a and registry.find("old-a") is a
@@ -41,6 +46,7 @@ def test_find_by_id_or_alias():
 
 
 def test_validate_requires_dependencies_to_come_first():
+    """Validate requires dependencies to come first."""
     registry = Registry()
     registry.add(check("b", depends=("a",)))
     with pytest.raises(ValueError, match="'b' depends on 'a'"):
@@ -52,6 +58,7 @@ def test_validate_requires_dependencies_to_come_first():
 
 
 def test_a_failed_dependency_skips_what_depends_on_it(ctx_factory):
+    """A failed dependency skips what depends on it."""
     ctx, _, _ = ctx_factory()
     calls: list[str] = []
     registry = Registry()
@@ -72,6 +79,7 @@ def test_a_failed_dependency_skips_what_depends_on_it(ctx_factory):
 
 
 def test_a_warning_does_not_block_dependents(ctx_factory):
+    """A warning does not block dependents."""
     ctx, _, _ = ctx_factory()
     registry = Registry()
     registry.add(check("a", WARN))
@@ -80,6 +88,7 @@ def test_a_warning_does_not_block_dependents(ctx_factory):
 
 
 def test_only_selected_checks_run_in_registry_order(ctx_factory):
+    """Only selected checks run in registry order."""
     ctx, _, _ = ctx_factory()
     registry = Registry()
     for ident in ("a", "b", "c"):
@@ -89,6 +98,7 @@ def test_only_selected_checks_run_in_registry_order(ctx_factory):
 
 
 def test_a_check_for_another_target_is_skipped(ctx_factory):
+    """A check for another target is skipped."""
     ctx, _, _ = ctx_factory()
     registry = Registry()
     registry.add(check("k3d-only", targets=("k3d",)))
@@ -97,6 +107,7 @@ def test_a_check_for_another_target_is_skipped(ctx_factory):
 
 
 def test_counts(ctx_factory):
+    """The outcomes are tallied by status."""
     ctx, _, _ = ctx_factory()
     registry = Registry()
     for ident, status in (("a", PASS), ("b", WARN), ("c", FAIL), ("d", PASS)):

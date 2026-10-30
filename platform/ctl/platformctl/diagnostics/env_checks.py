@@ -35,8 +35,8 @@ from platformctl.diagnostics.base import (
 if TYPE_CHECKING:
     from platformctl.context import Context
 
-# Blank or placeholder values `.env.example` ships with.
 PLACEHOLDERS = ("sk-ant-...", "sk-change-me", "change-me")
+"""Values `.env.example` ships that mean "not set yet"."""
 REQUIRED = (
     "AGENT_SECRET",
     "REDIS_PASSWORD",
@@ -45,13 +45,16 @@ REQUIRED = (
     "ADMIN_DB_ENCRYPTION_KEY",
     "LLM_CONFIG_PROFILE",
 )
+"""The `.env` keys that must be set for the platform to start."""
 
 
 def _unset(value: str | None) -> bool:
+    """Whether a value is missing, blank or a placeholder."""
     return not value or value.startswith(("change-me", "your-")) or value in PLACEHOLDERS
 
 
 def check_platform_env(ctx: Context) -> Result:
+    """Check that `.env` exists, parses and sets the required keys, naming the unset ones."""
     path = ctx.paths.env
     if not path.exists():
         return Result(
@@ -73,6 +76,7 @@ def check_platform_env(ctx: Context) -> Result:
 
 
 def check_base_image_pin(ctx: Context) -> Result:
+    """Check the base image: `LOCAL_SDK`, or a pin that is not blank."""
     dotenv = ctx.config.dotenv
     if ctx.config.local_sdk:
         return Result(PASS, "LOCAL_SDK=true: the base image is built from ../sdk")
@@ -88,6 +92,7 @@ def check_base_image_pin(ctx: Context) -> Result:
 
 
 def check_env_hides_environment(ctx: Context) -> Result:
+    """Warn when a `.env` value hides a different value from the environment, by key name only."""
     hidden = ctx.config.env_hiding_value()
     if not hidden:
         return Result(PASS, "no .env value hides a different environment value")
@@ -99,6 +104,7 @@ def check_env_hides_environment(ctx: Context) -> Result:
 
 
 def check_env_derived_keys(ctx: Context) -> Result:
+    """Warn when `.env` sets a key the tool derives, which a hand-run Compose would use instead."""
     keys = [k for k in ctx.config.hidden_by_dotenv(DERIVED_KEYS)]
     if not keys:
         return Result(PASS, ".env sets no key the tool derives")
@@ -110,6 +116,7 @@ def check_env_derived_keys(ctx: Context) -> Result:
 
 
 def check_env_file(ctx: Context) -> Result:
+    """Warn when `.env` is readable by others, tracked by git or not ignored."""
     path = ctx.paths.env
     if not path.exists():
         return Result(SKIP, ".env does not exist")
@@ -131,6 +138,7 @@ def check_env_file(ctx: Context) -> Result:
 
 
 def _tracked_or_unignored(ctx: Context) -> bool:
+    """Whether `.env` is tracked by git, or not ignored in a git checkout."""
     root = str(ctx.paths.root)
     if ctx.runner.run(["git", "-C", root, "ls-files", "--error-unmatch", ".env"]).ok:
         return True  # tracked
@@ -140,11 +148,16 @@ def _tracked_or_unignored(ctx: Context) -> bool:
 
 
 PLATFORM_ENV = Check("platform-env", "platform", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_platform_env, fix_kind=FIX_YES)
+"""The `platform-env` check."""
 BASE_IMAGE_PIN = Check(
     "base-image-pin", "laptop", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_base_image_pin, fix_kind=FIX_YES
 )
+"""The `base-image-pin` check."""
 ENV_HIDES_ENVIRONMENT = Check(
     "env-hides-environment", "platform", (TAG_DIAGNOSE,), check_env_hides_environment, fix_kind=FIX_YOU
 )
+"""The `env-hides-environment` check."""
 ENV_DERIVED_KEYS = Check("env-derived-keys", "platform", (TAG_DIAGNOSE,), check_env_derived_keys, fix_kind=FIX_YOU)
+"""The `env-derived-keys` check."""
 ENV_FILE = Check("env-file", "platform", (TAG_PREFLIGHT, TAG_DIAGNOSE), check_env_file, fix_kind=FIX_SAFE)
+"""The `env-file` check."""

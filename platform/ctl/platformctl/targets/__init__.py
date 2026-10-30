@@ -17,6 +17,7 @@ from __future__ import annotations
 from platformctl.targets.base import UnsupportedError
 
 SUPPORTED = ("compose",)
+"""The targets that work today."""
 
 
 def check_name(name: str) -> str:

@@ -24,9 +24,11 @@ from collections.abc import Callable
 from urllib.parse import urlparse
 
 _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+"""The host names that mean this machine."""
 
 
 def _opener(url: str) -> urllib.request.OpenerDirector:
+    """An opener that skips any proxy for a loopback URL."""
     host = urlparse(url).hostname or ""
     if host in _LOOPBACK:
         return urllib.request.build_opener(urllib.request.ProxyHandler({}))

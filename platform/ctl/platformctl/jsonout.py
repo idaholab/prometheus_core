@@ -22,8 +22,8 @@ import json
 from typing import Any, TextIO
 
 SCHEMA_VERSION = 1
+"""The version of the JSON contract; removing or changing a field bumps it."""
 
-# A fixed list. New codes are added, never renamed.
 ERROR_CODES = (
     "usage",
     "needs_terminal",
@@ -36,12 +36,13 @@ ERROR_CODES = (
     "check_failed",
     "internal",
 )
+"""The fixed list of error codes; new ones are added, never renamed."""
 
 # Exit codes: 0 OK, 1 failure, 2 usage error, 3 platform not running, 130 interrupted.
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_NOT_RUNNING, EXIT_INTERRUPTED = 0, 1, 2, 3, 130
 
-# What this version supports, so a skill can branch on it instead of parsing versions.
 FEATURES = ("doctor.checks.v1",)
+"""What this version supports, so a script can branch on it without parsing versions."""
 
 
 def result(
@@ -75,6 +76,7 @@ def result(
 def error_object(
     command: str, platform: dict[str, Any], code: str, message: str, hint: str = "", check: str = ""
 ) -> dict[str, Any]:
+    """Build the JSON object for a failure, with the fixed `error` fields."""
     return result(command, platform, ok=False, error={"code": code, "message": message, "hint": hint, "check": check})
 
 

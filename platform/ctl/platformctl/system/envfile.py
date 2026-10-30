@@ -27,6 +27,7 @@ import tempfile
 from pathlib import Path
 
 _KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
+"""Matches a valid variable name."""
 
 
 class EnvFileError(ValueError):
@@ -34,6 +35,7 @@ class EnvFileError(ValueError):
 
 
 def _unquote(raw: str, lineno: int) -> str:
+    """Strip the quotes from a value, or a trailing comment from an unquoted one."""
     raw = raw.strip()
     if raw[:1] in ("'", '"'):
         quote = raw[0]
@@ -77,10 +79,12 @@ def parse(text: str) -> dict[str, str]:
 
 
 def read(path: Path) -> dict[str, str]:
+    """Parse the dotenv file at `path`."""
     return parse(path.read_text(encoding="utf-8"))
 
 
 def _format(value: str) -> str:
+    """Quote a value for `.env` only if it needs it."""
     if value == "" or re.fullmatch(r"[\w@%+=:,./-]+", value):
         return value
     if "\n" in value or '"' in value or "$" in value or "#" in value or " " in value or "'" in value:

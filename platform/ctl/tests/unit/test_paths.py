@@ -18,6 +18,7 @@ from platformctl.paths import PLATFORM_ROOT, Paths
 
 
 def test_platform_root_comes_from_the_tools_location_not_the_cwd(tmp_path, monkeypatch):
+    """Platform root comes from the tools location not the cwd."""
     monkeypatch.chdir(tmp_path)
     assert Paths.default().root == PLATFORM_ROOT
     assert (PLATFORM_ROOT / "platformctl").is_file()
@@ -25,6 +26,7 @@ def test_platform_root_comes_from_the_tools_location_not_the_cwd(tmp_path, monke
 
 
 def test_agent_is_separate_from_the_platform(tmp_path):
+    """Agent is separate from the platform."""
     paths = Paths.default(agent=tmp_path)
     assert paths.agent == tmp_path.resolve()
     assert paths.root == PLATFORM_ROOT
@@ -32,6 +34,7 @@ def test_agent_is_separate_from_the_platform(tmp_path):
 
 
 def test_every_path_is_under_the_root():
+    """Every path is under the root."""
     root = Path("/p/platform")
     paths = Paths(root)
     for name in (

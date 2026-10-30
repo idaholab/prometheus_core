@@ -42,6 +42,7 @@ SENTINELS = {
     "env_only": "CANARYENVIRONMENT0007",
     "argv": "CANARYARGVVALUE0008",
 }
+"""A unique value for each shape of secret: plain, with `$`, quoted, in a URL, multi-line, from the environment, from argv."""
 
 DOTENV = f"""LLM_CONFIG_PROFILE=anthropic
 LLM_API_KEY={SENTINELS["plain"]}
@@ -58,8 +59,8 @@ BACKEND_JWT_SECRET=aaaaaaaaaaaaaaaaaaaa
 ADMIN_DB_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbb
 DEEPLYNX_SECRET=something-else-secret
 """
+"""A `.env` holding the sentinels as secrets."""
 
-# What a misbehaving docker might print: the sentinels, in the shapes Compose and Docker use.
 FAKE_DOCKER = f"""#!/bin/sh
 case "$1 $2" in
   "info --format")
@@ -82,6 +83,7 @@ case "$1 $2" in
     ;;
 esac
 """
+"""A `docker` that prints the sentinels, on stdout and stderr, in the shapes Compose and Docker use."""
 
 COMMANDS = [
     ["doctor"],
@@ -108,12 +110,12 @@ COMMANDS = [
     ["doctor", "--set", f"BACKEND_PORT={SENTINELS['argv']}"],
     ["doctor", "--target", SENTINELS["argv"]],
 ]
-
-ALL_SENTINELS = [v for k, v in SENTINELS.items() if k != "env_only"] + [SENTINELS["env_only"]]
+"""Every command line to run, including forced failures that echo the user's argv."""
 
 
 @pytest.fixture
 def canary_env(tmp_path, monkeypatch):
+    """A platform folder with the canary `.env`, a fake `docker` on PATH, and an environment holding more secrets."""
     platform = tmp_path / "platform"
     platform.mkdir()
     (platform / ".env").write_text(DOTENV)
@@ -138,12 +140,14 @@ def canary_env(tmp_path, monkeypatch):
 
 
 def run(argv, env, **extra):
+    """Run `cli.main` and return the exit code, stdout and stderr."""
     out, err = io.StringIO(), io.StringIO()
     code = cli.main(argv, env={**env, **extra}, out=out, err=err)
     return code, out.getvalue(), err.getvalue()
 
 
 def assert_clean(text: str, where: str) -> None:
+    """Fail if any sentinel, or any line of one, appears in the text."""
     for name, sentinel in SENTINELS.items():
         assert sentinel not in text, f"sentinel {name} leaked in {where}"
         for line in sentinel.splitlines():
@@ -155,6 +159,7 @@ def assert_clean(text: str, where: str) -> None:
 @pytest.mark.parametrize("argv", COMMANDS, ids=lambda a: " ".join(a)[:60])
 @pytest.mark.parametrize("fail", [False, True], ids=["docker-ok", "docker-fails"])
 def test_no_sentinel_in_stdout_or_stderr(canary_env, argv, fail):
+    """No sentinel in stdout or stderr."""
     _, env = canary_env
     _, out, err = run(argv, env, **({"CANARY_FAIL": "1"} if fail else {}))
     assert_clean(out, f"stdout of {argv}")
@@ -180,6 +185,7 @@ def test_the_canary_would_notice_a_leak(canary_env):
 
 
 def test_child_output_is_scrubbed_before_anyone_sees_it(canary_env):
+    """Child output is scrubbed before anyone sees it."""
     platform, env = canary_env
     from platformctl.config import PlatformConfig
     from platformctl.output import Scrubber
@@ -194,6 +200,7 @@ def test_child_output_is_scrubbed_before_anyone_sees_it(canary_env):
 
 
 def test_doctor_json_is_valid_and_clean(canary_env):
+    """Doctor json is valid and clean."""
     import json
 
     _, env = canary_env
@@ -204,6 +211,7 @@ def test_doctor_json_is_valid_and_clean(canary_env):
 
 
 def test_generated_files_have_no_sentinel(canary_env):
+    """Generated files have no sentinel."""
     platform, env = canary_env
     ctx, _, _ = make_context(platform, __import__("platformctl.system.runner", fromlist=["Runner"]).Runner(), env)
     ctx.target.generate()
@@ -218,6 +226,7 @@ def test_generated_files_have_no_sentinel(canary_env):
 
 
 def test_platform_env_has_only_registered_safe_keys(canary_env):
+    """Platform env has only registered safe keys."""
     from platformctl import config as cfg
     from platformctl.system import envfile
 
@@ -229,6 +238,7 @@ def test_platform_env_has_only_registered_safe_keys(canary_env):
 
 
 def test_the_env_file_itself_is_untouched_by_doctor(canary_env):
+    """The env file itself is untouched by doctor."""
     platform, env = canary_env
     before = (platform / ".env").read_text()
     run(["doctor"], env)
@@ -237,4 +247,5 @@ def test_the_env_file_itself_is_untouched_by_doctor(canary_env):
 
 
 def test_this_test_runs_the_real_python_not_a_stub():
+    """This test runs the real python not a stub."""
     assert sys.version_info >= (3, 10) and Path(cli.__file__).exists()

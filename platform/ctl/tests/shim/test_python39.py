@@ -30,12 +30,15 @@ import pytest
 from tests.shim.test_shim import SHIM
 
 CTL = SHIM.parent / "ctl"
+"""The `ctl/` folder next to the shim."""
 RUN_PY = CTL / "run.py"
+"""The entry point the shim runs."""
 REQUIRE = os.environ.get("PLATFORMCTL_REQUIRE_PY39") == "1"
-# The system tools the shim itself runs. Python is deliberately not among them.
+"""Whether a missing Python 3.9 fails the tests instead of skipping them (CI sets this)."""
 SHIM_TOOLS = ("uname", "dirname", "readlink")
-# Where a Mac's Homebrew Python lives; the shim tries these paths by name, not through PATH.
+"""The system tools the shim itself runs; Python is deliberately not among them."""
 HOMEBREW_PYTHONS = ("/opt/homebrew/bin/python3", "/usr/local/bin/python3")
+"""Where a Mac's Homebrew Python lives; the shim tries these paths by name, not through PATH."""
 
 
 def minor_version(python: str) -> str | None:
