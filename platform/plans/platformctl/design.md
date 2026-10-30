@@ -83,7 +83,7 @@ Why `platform/ctl/`:
   coverage covers it. The tool finds the platform folder from its own
   location, never from the current directory, so `make -C <platform> ...`
   works. The shim finds its folder with
-  `CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
+  `CDPATH='' cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
   symlinked shim can't send it elsewhere. The Makefile calls it as
   `sh "$(CURDIR)/platformctl"`, so a lost executable bit or a space in the
   path doesn't matter.
