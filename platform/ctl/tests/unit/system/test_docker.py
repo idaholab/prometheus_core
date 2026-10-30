@@ -23,12 +23,14 @@ from tests.unit.conftest import DOCKER_INFO, FakeRunner
 
 
 def docker_with(info_stdout="", info_code=0, info_stderr="", env=None) -> tuple[Docker, FakeRunner]:
+    """A `Docker` whose `docker info` returns the given result."""
     runner = FakeRunner()
     runner.reply("docker", "info", code=info_code, stdout=info_stdout, stderr=info_stderr)
     return Docker(runner, env), runner
 
 
 def test_info_ok_desktop_with_containerd():
+    """Info ok desktop with containerd."""
     docker, runner = docker_with(DOCKER_INFO)
     info = docker.info()
     assert info.state == dockermod.OK
@@ -38,6 +40,7 @@ def test_info_ok_desktop_with_containerd():
 
 
 def test_info_engine_without_containerd_store_and_rootless():
+    """Info engine without containerd store and rootless."""
     data = {
         "ServerVersion": "27.0",
         "OperatingSystem": "Ubuntu 24.04",
@@ -52,6 +55,7 @@ def test_info_engine_without_containerd_store_and_rootless():
 
 @pytest.mark.parametrize("name", ["podman", "x"])
 def test_info_detects_podman(name):
+    """Podman is recognised by the server's name or version."""
     data = {"Name": name, "ServerVersion": "5.0" if name != "x" else "podman 5"}
     assert docker_with(json.dumps(data))[0].info().podman
 
@@ -68,6 +72,7 @@ def test_info_detects_podman(name):
     ],
 )
 def test_info_failures_are_told_apart_and_never_echo_output(stderr, state):
+    """Info failures are told apart and never echo output."""
     info = docker_with(info_code=1, info_stderr=stderr, env={"DOCKER_HOST": "tcp://h:1"})[0].info()
     assert info.state == state
     assert info.docker_host == "tcp://h:1"
@@ -75,16 +80,19 @@ def test_info_failures_are_told_apart_and_never_echo_output(stderr, state):
 
 
 def test_info_unreadable_output():
+    """Output that isn't JSON is an error state."""
     assert docker_with("not json")[0].info().state == dockermod.UNKNOWN_ERROR
 
 
 def test_info_missing_docker():
+    """A missing `docker` command is the `missing` state."""
     runner = FakeRunner(raises={"docker": RunnerError("nope")})
     info = Docker(runner).info()
     assert info.state == dockermod.MISSING
 
 
 def test_compose_version():
+    """The Compose version is returned, or None when the plugin is missing or prints nothing."""
     runner = FakeRunner()
     runner.reply("docker", "compose", "version", stdout="v2.40.0\n")
     assert Docker(runner).compose_version() == "2.40.0"
@@ -98,6 +106,7 @@ def test_compose_version():
 
 
 def test_volumes_and_image_exists():
+    """`volumes` filters by project and volume label, and `image_exists` follows the exit code."""
     runner = FakeRunner()
     runner.reply("docker", "volume", stdout="vol1\nvol2\n")
     docker = Docker(runner)
@@ -112,6 +121,7 @@ def test_volumes_and_image_exists():
 
 
 def test_holders():
+    """Containers publishing a port are listed with their project and platform labels, skipping junk lines."""
     row = {
         "Names": "other-backend-1",
         "Labels": "com.docker.compose.project=other,io.prometheus.platform.root=/x/platform,nolabel,com.docker.compose.project.working_dir=/x/platform",

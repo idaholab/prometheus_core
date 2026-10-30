@@ -25,6 +25,7 @@ from platformctl.targets.base import UnsupportedError
 
 
 def module(name, section="run", order=10, aliases=(), subcommands=None, run=None, help_text="help"):
+    """A fake action module, optionally with aliases and subcommands."""
     ns = types.SimpleNamespace(
         NAME=name,
         HELP=f"{help_text} for {name}",
@@ -43,6 +44,7 @@ def module(name, section="run", order=10, aliases=(), subcommands=None, run=None
 
 
 def leaf(name, aliases=()):
+    """A fake subcommand."""
     return types.SimpleNamespace(
         NAME=name,
         HELP=f"leaf {name}",
@@ -58,9 +60,11 @@ MODULES = [
     module("config", "setup", 10, subcommands=[leaf("init"), leaf("set", aliases=["put"])]),
     module("doctor", "troubleshoot", 10),
 ]
+"""A small set of fake commands across the three sections."""
 
 
 def parse(*argv):
+    """Parse arguments with the fake commands and merge the global options."""
     parser = cli.build_parser(MODULES)
     return cli.merge_globals(parser.parse_args(cli.split_double_dash(argv)[0]))
 
@@ -69,21 +73,25 @@ def parse(*argv):
 
 
 def test_global_options_before_and_after_the_command():
+    """Global options before and after the command."""
     args = parse("--verbose", "up", "--dry-run")
     assert args.verbose and args.dry_run and not args.quiet
 
 
 def test_mixed_set_keeps_both():
+    """`--set` before and after the command are both kept."""
     args = parse("--set", "A=1", "up", "--set", "B=2")
     assert args.set == ["A=1", "B=2"]
 
 
 def test_set_only_after_or_only_before():
+    """Set only after or only before."""
     assert parse("up", "--set", "B=2").set == ["B=2"]
     assert parse("--set", "A=1", "up").set == ["A=1"]
 
 
 def test_target_from_either_position_after_wins():
+    """Target from either position after wins."""
     assert parse("--target", "compose", "up").target == "compose"
     assert parse("up", "--target", "k3d").target == "k3d"
     assert parse("--target", "compose", "up", "--target", "k3d").target == "k3d"
@@ -91,16 +99,19 @@ def test_target_from_either_position_after_wins():
 
 
 def test_all_flags_or_together():
+    """A flag given in either position is on."""
     args = parse("--json", "--yes", "up", "--quiet", "--debug")
     assert (args.json, args.yes, args.quiet, args.debug) == (True, True, True, True)
 
 
 def test_subcommands_get_the_global_options_too():
+    """Subcommands get the global options too."""
     args = parse("--set", "A=1", "config", "init", "--set", "B=2", "--json")
     assert args.set == ["A=1", "B=2"] and args.json and args.subcommand == "init"
 
 
 def test_split_double_dash():
+    """Arguments after the first `--` are split off for the action."""
     assert cli.split_double_dash(["restart", "backend", "--", "--force-recreate", "--", "x"]) == (
         ["restart", "backend"],
         ["--force-recreate", "--", "x"],
@@ -109,6 +120,7 @@ def test_split_double_dash():
 
 
 def test_services_are_not_swallowed_by_the_double_dash():
+    """Services are not swallowed by the double dash."""
     own, extra = cli.split_double_dash(["restart", "backend", "--", "--force-recreate"])
     assert parse(*own).services == ["backend"] and extra == ["--force-recreate"]
 
@@ -117,6 +129,7 @@ def test_services_are_not_swallowed_by_the_double_dash():
 
 
 def test_sections_epilog_lists_commands_by_section_most_used_first():
+    """Sections epilog lists commands by section most used first."""
     epilog = cli.sections_epilog(MODULES)
     lines = epilog.splitlines()
     assert lines[0] == "Run the platform:"
@@ -127,11 +140,13 @@ def test_sections_epilog_lists_commands_by_section_most_used_first():
 
 
 def test_empty_sections_are_left_out():
+    """Empty sections are left out."""
     epilog = cli.sections_epilog([module("up")])
     assert "Set up:" not in epilog and "Run the platform:" in epilog
 
 
 def test_top_level_help_is_pinned(monkeypatch):
+    """Top level help is pinned."""
     monkeypatch.setenv("COLUMNS", "100")
     help_text = cli.build_parser(MODULES).format_help()
     assert help_text.endswith(
@@ -155,6 +170,7 @@ def test_top_level_help_is_pinned(monkeypatch):
     "argv", [["up"], ["restart"], ["bounce"], ["config"], ["config", "init"], ["config", "put"], ["doctor"]]
 )
 def test_every_command_subcommand_and_alias_parses_help(argv, capsys):
+    """Every command subcommand and alias parses help."""
     with pytest.raises(cli.UsageError if argv == ["config"] else SystemExit) as info:
         cli.build_parser(MODULES).parse_args([*argv, "--help"] if argv != ["config"] else argv)
     if isinstance(info.value, SystemExit):
@@ -163,10 +179,12 @@ def test_every_command_subcommand_and_alias_parses_help(argv, capsys):
 
 
 def test_aliases_map_to_the_real_name():
+    """Aliases map to the real name."""
     assert cli.aliases_of(MODULES) == {"bounce": "restart"}
 
 
 def test_parser_errors_raise_usage_error_instead_of_exiting():
+    """Parser errors raise usage error instead of exiting."""
     with pytest.raises(cli.UsageError, match="unrecognized arguments"):
         cli.build_parser(MODULES).parse_args(["up", "--nope"])
 
@@ -176,17 +194,20 @@ def test_parser_errors_raise_usage_error_instead_of_exiting():
 
 @pytest.fixture
 def env(monkeypatch, tmp_path):
+    """A clean environment, with the tool's platform folder pointed at a temporary folder."""
     monkeypatch.setattr(cli.Paths, "default", classmethod(lambda cls, agent=None: cli.Paths(tmp_path)))
     return {"PATH": "/usr/bin"}
 
 
 def call(*argv, env=None, modules=None):
+    """Run `cli.main` and return the exit code, stdout and stderr."""
     out, err = io.StringIO(), io.StringIO()
     code = cli.main(list(argv), env=env if env is not None else {"PATH": "/usr/bin"}, out=out, err=err)
     return code, out.getvalue(), err.getvalue()
 
 
 def test_version_text_and_json(env):
+    """`--version` prints text, or one JSON object with the commands and features."""
     code, out, _ = call("--version", env=env)
     assert code == 0 and out.startswith("platformctl 0.1.0 (platform ")
     code, out, _ = call("--version", "--json", env=env)
@@ -197,11 +218,13 @@ def test_version_text_and_json(env):
 
 
 def test_no_command_prints_help(env):
+    """With no command, the help is printed and the exit code is 0."""
     code, out, _ = call(env=env)
     assert code == 0 and "Troubleshoot:" in out
 
 
 def test_usage_error_text_and_json(env):
+    """Usage error text and json."""
     code, out, err = call("nope", env=env)
     assert code == 2 and out == "" and "invalid choice" in err
     code, out, err = call("--json", "doctor", "--nope", env=env)
@@ -210,6 +233,7 @@ def test_usage_error_text_and_json(env):
 
 
 def test_json_stdout_is_only_the_object_even_for_errors(env):
+    """Json stdout is only the object even for errors."""
     code, out, err = call("--json", "doctor", "--set", "LLM_API_KEY=x", env=env)
     assert code == 1
     assert json.loads(out)["error"]["code"] == "config_invalid"
@@ -217,16 +241,19 @@ def test_json_stdout_is_only_the_object_even_for_errors(env):
 
 
 def test_set_refusing_a_secret_in_text_mode(env):
+    """Set refusing a secret in text mode."""
     code, out, err = call("doctor", "--set", "AGENT_SECRET=hunter2hunter2", env=env)
     assert code == 1 and "set AGENT_SECRET in .env instead" in err and "hunter2" not in err + out
 
 
 def test_k3d_target_is_refused(env):
+    """`--target k3d` exits 1 with "not supported yet"."""
     code, _, err = call("doctor", "--target", "k3d", env=env)
     assert code == 1 and "k3d` is not supported yet" in err
 
 
 def test_a_malformed_env_stops_every_command_but_doctor(env, tmp_path):
+    """A malformed env stops every command but doctor."""
     (tmp_path / ".env").write_text("AGENT_SECRET=ok\nsk-live-supersecretvalue\n")
     code, _, err = call("doctor", "--list", env=env)
     assert code == 0
@@ -235,6 +262,7 @@ def test_a_malformed_env_stops_every_command_but_doctor(env, tmp_path):
     stopped = {"code": 0}
 
     def fake(ctx, args):
+        """Record that the action ran."""
         stopped["code"] = 99
         return 0
 
@@ -252,9 +280,11 @@ def test_a_malformed_env_stops_every_command_but_doctor(env, tmp_path):
 
 
 def test_dispatch_runs_the_action_with_the_merged_args_and_extra(env, monkeypatch):
+    """Dispatch runs the action with the merged args and extra."""
     seen = {}
 
     def run(ctx, args):
+        """Record what the action was given."""
         seen.update(services=args.services, extra=args.extra, dry=ctx.dry_run, yes=ctx.yes, set=args.set)
         return 7
 
@@ -274,12 +304,14 @@ def test_dispatch_runs_the_action_with_the_merged_args_and_extra(env, monkeypatc
 
 
 def test_a_deprecated_alias_still_works_and_says_so(env, monkeypatch):
+    """A deprecated alias still works and says so."""
     monkeypatch.setattr(cli.actions, "discover", lambda: [module("restart", aliases=["bounce"])])
     code, _, err = call("bounce", env=env)
     assert code == 0 and "`bounce` is deprecated; use `restart`." in err
 
 
 def test_group_dispatch(env, monkeypatch):
+    """A subcommand of a group is dispatched."""
     ran = []
     group = module(
         "config",
@@ -299,7 +331,10 @@ def test_group_dispatch(env, monkeypatch):
 
 
 def test_secrets_in_the_environment_are_scrubbed_from_every_message(env, monkeypatch):
+    """Secrets in the environment are scrubbed from every message."""
+
     def run(ctx, args):
+        """Print an error that contains a secret."""
         ctx.output.error("failed with fake-secret-fake-secret")
         return 1
 
@@ -318,7 +353,10 @@ def test_secrets_in_the_environment_are_scrubbed_from_every_message(env, monkeyp
     ],
 )
 def test_errors_become_json_with_a_fixed_code_and_text_with_a_hint(env, monkeypatch, exc, code_name):
+    """Errors become json with a fixed code and text with a hint."""
+
     def run(ctx, args):
+        """Raise the error under test."""
         raise exc
 
     monkeypatch.setattr(cli.actions, "discover", lambda: [module("up", run=run)])
@@ -331,7 +369,10 @@ def test_errors_become_json_with_a_fixed_code_and_text_with_a_hint(env, monkeypa
 
 
 def test_unexpected_errors_show_a_traceback_only_with_debug(env, monkeypatch):
+    """Unexpected errors show a traceback only with debug."""
+
     def run(ctx, args):
+        """Raise an unexpected error."""
         raise RuntimeError("boom")
 
     monkeypatch.setattr(cli.actions, "discover", lambda: [module("up", run=run)])
@@ -342,7 +383,10 @@ def test_unexpected_errors_show_a_traceback_only_with_debug(env, monkeypatch):
 
 
 def test_a_traceback_is_scrubbed(env, monkeypatch):
+    """A secret in a traceback printed with `--debug` is scrubbed."""
+
     def run(ctx, args):
+        """Raise an error whose message and source line hold a secret."""
         secret = "fake-secret-fake-secret"  # noqa: F841 - appears in the traceback's source line
         raise RuntimeError("fake-secret-fake-secret")
 
@@ -352,7 +396,10 @@ def test_a_traceback_is_scrubbed(env, monkeypatch):
 
 
 def test_ctrl_c_exits_130(env, monkeypatch):
+    """Ctrl-C exits with 130."""
+
     def run(ctx, args):
+        """Act like Ctrl-C."""
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cli.actions, "discover", lambda: [module("up", run=run)])
@@ -360,17 +407,20 @@ def test_ctrl_c_exits_130(env, monkeypatch):
 
 
 def test_main_defaults_to_the_process_argv_env_and_streams(monkeypatch, capsys, env):
+    """Main defaults to the process argv env and streams."""
     monkeypatch.setattr(cli.sys, "argv", ["platformctl", "--version"])
     assert cli.main() == 0
     assert capsys.readouterr().out.startswith("platformctl ")
 
 
 def test_command_label_for_errors_skips_option_values():
+    """Command label for errors skips option values."""
     assert cli._command(["--json", "--set", "A=1", "doctor"], MODULES) == "doctor"
     assert cli._command(["bounce"], MODULES) == "bounce"
     assert cli._command(["--json"], MODULES) == ""
 
 
 def test_the_error_json_names_the_command(env):
+    """The error json names the command."""
     _, out, _ = call("--json", "--set", "AGENT_SECRET=x", "doctor", env=env)
     assert json.loads(out)["command"] == "doctor"

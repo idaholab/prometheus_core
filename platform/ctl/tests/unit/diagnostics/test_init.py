@@ -16,6 +16,7 @@ from platformctl.diagnostics import default_registry
 
 
 def test_default_registry_is_valid_and_has_the_planned_ids():
+    """Default registry is valid and has the planned ids."""
     registry = default_registry()
     ids = [c.id for c in registry.checks]
     assert ids == [

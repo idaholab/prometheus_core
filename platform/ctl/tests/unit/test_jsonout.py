@@ -20,14 +20,17 @@ import pytest
 from platformctl import jsonout
 
 PLATFORM = {"root": "/p", "project": "x", "version": "v"}
+"""A `platform` block for the JSON objects."""
 
 
 def test_result_shape():
+    """Every object has the schema version, command, ok and platform, plus the extra fields."""
     body = jsonout.result("status", PLATFORM, services=[1])
     assert body == {"schema_version": 1, "command": "status", "ok": True, "platform": PLATFORM, "services": [1]}
 
 
 def test_error_object_has_every_field():
+    """Error object has every field."""
     body = jsonout.error_object("up", PLATFORM, "port_in_use", "8600 is taken", "run down", "ports-free")
     assert body["ok"] is False
     assert body["error"] == {
@@ -40,6 +43,7 @@ def test_error_object_has_every_field():
 
 
 def test_error_codes_are_the_fixed_list():
+    """Error codes are the fixed list."""
     assert jsonout.ERROR_CODES == (
         "usage",
         "needs_terminal",
@@ -57,6 +61,7 @@ def test_error_codes_are_the_fixed_list():
 
 
 def test_exit_codes():
+    """The exit codes are 0, 1, 2, 3 and 130."""
     assert (
         jsonout.EXIT_OK,
         jsonout.EXIT_FAIL,
@@ -67,6 +72,7 @@ def test_exit_codes():
 
 
 def test_emit_prints_one_scrubbed_object():
+    """Emit prints one scrubbed object."""
     out = io.StringIO()
     jsonout.emit(
         jsonout.result("x", PLATFORM, note="hide-this-value"), out, lambda text: text.replace("hide-this-value", "***")

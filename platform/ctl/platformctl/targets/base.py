@@ -18,8 +18,11 @@ from abc import ABC, abstractmethod
 
 # Capabilities a target may declare; an action needing one the target lacks fails clearly.
 PASSTHROUGH = "passthrough"
+"""Capability: run raw tool commands (`compose --`)."""
 YOUR_AGENTS = "your_agents"
+"""Capability: find and restart the developer's own agent containers."""
 FOREGROUND = "foreground"
+"""Capability: run in the foreground with the terminal."""
 
 
 class UnsupportedError(RuntimeError):
@@ -27,10 +30,13 @@ class UnsupportedError(RuntimeError):
 
 
 class Target(ABC):
+    """A place the platform runs, and what actions can ask of it."""
+
     name: str = ""
     capabilities: frozenset[str] = frozenset()
 
     def require(self, capability: str, command: str) -> None:
+        """Raise `UnsupportedError` unless the target has the capability the command needs."""
         if capability not in self.capabilities:
             raise UnsupportedError(f"`{command}` is not supported on target `{self.name}`")
 

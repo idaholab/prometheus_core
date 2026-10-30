@@ -23,6 +23,7 @@ from platformctl.system.runner import Result, Runner
 
 # Compose 2.20 added `include:` and `additional_contexts`; `include: env_file` needs a later 2.x.
 MIN_VERSION = (2, 20)
+"""The oldest Compose that supports `include:` (2.20; `env_file` under it is unverified)."""
 
 
 def parse_version(text: str) -> tuple[int, ...] | None:
@@ -36,6 +37,8 @@ def parse_version(text: str) -> tuple[int, ...] | None:
 
 @dataclass
 class Compose:
+    """A compose project, run through the generated entry file."""
+
     runner: Runner
     entry_file: Path
     cwd: Path
@@ -50,6 +53,7 @@ class Compose:
         return [*argv, *args]
 
     def run(self, *args: str, capture: bool = True, interactive: bool = False, timeout: float | None = None) -> Result:
+        """Run a Compose command and return its result."""
         return self.runner.run(
             self.argv(*args), env=self.env, cwd=self.cwd, capture=capture, interactive=interactive, timeout=timeout
         )
@@ -65,10 +69,12 @@ class Compose:
             return None
 
     def services(self) -> list[str]:
+        """The names of the services in the project."""
         done = self.run("config", "--services")
         return done.stdout.split() if done.ok else []
 
     def ps(self) -> list[dict]:
+        """The project's containers, including stopped ones, as dicts."""
         done = self.run("ps", "--all", "--format", "json")
         rows: list[dict] = []
         for line in done.stdout.splitlines():
@@ -89,6 +95,7 @@ class Compose:
         extra: Sequence[str] = (),
         capture: bool = False,
     ) -> Result:
+        """Run `up`, optionally building, detached and waiting for health."""
         args = ["up"]
         if build:
             args.append("--build")
@@ -99,6 +106,7 @@ class Compose:
         return self.run(*args, *extra, *services, capture=capture, interactive=not detach)
 
     def down(self, *, volumes: bool = False, remove_orphans: bool = False) -> Result:
+        """Run `down`, optionally removing volumes and orphans."""
         args = ["down"]
         if remove_orphans:
             args.append("--remove-orphans")

@@ -22,17 +22,22 @@ from platformctl.system import http
 
 
 class Handler(BaseHTTPRequestHandler):
+    """A server handler that answers 200, or 404 for `/missing`."""
+
     def do_GET(self):  # noqa: N802
+        """Answer a GET."""
         code = 404 if self.path == "/missing" else 200
         self.send_response(code)
         self.end_headers()
 
     def log_message(self, *_):
+        """Stay quiet."""
         pass
 
 
 @pytest.fixture
 def server():
+    """A local HTTP server for the test, stopped afterwards."""
     srv = HTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
@@ -41,26 +46,31 @@ def server():
 
 
 def test_status(server):
+    """`status` returns the HTTP status, including error statuses."""
     assert http.status(server + "/") == 200
     assert http.status(server + "/missing") == 404
 
 
 def test_status_nothing_listening_and_bad_url():
+    """Status nothing listening and bad url."""
     assert http.status("http://127.0.0.1:1/") is None
     assert http.status("not a url") is None
 
 
 def test_loopback_bypasses_the_proxy(server, monkeypatch):
+    """A loopback URL ignores `HTTP_PROXY`."""
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
     assert http.status(server + "/") == 200
 
 
 def test_non_loopback_uses_the_default_opener(monkeypatch):
+    """Non loopback uses the default opener."""
     seen = []
 
     class Opener:
         def open(self, request, timeout):
+            """Record the URL and fail like an unreachable network."""
             seen.append(request.full_url)
             raise urllib.error.URLError("no network")
 
@@ -70,17 +80,21 @@ def test_non_loopback_uses_the_default_opener(monkeypatch):
 
 
 def test_wait_succeeds_immediately(server):
+    """`wait` returns True as soon as the URL answers."""
     assert http.wait(server + "/", 5)
 
 
 def test_wait_polls_until_the_deadline():
+    """Wait polls until the deadline."""
     now = [0.0]
     slept = []
 
     def clock():
+        """The fake clock."""
         return now[0]
 
     def sleep(seconds):
+        """Advance the fake clock instead of sleeping."""
         slept.append(seconds)
         now[0] += seconds
 
@@ -89,5 +103,6 @@ def test_wait_polls_until_the_deadline():
 
 
 def test_wait_uses_the_ok_predicate(server):
+    """Wait uses the ok predicate."""
     assert not http.wait(server + "/missing", 0, ok=lambda code: code == 200)
     assert http.wait(server + "/missing", 0, ok=lambda code: code == 404)

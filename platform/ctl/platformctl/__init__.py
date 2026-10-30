@@ -13,3 +13,4 @@
 """platformctl: run and diagnose the Prometheus platform."""
 
 __version__ = "0.1.0"
+"""The tool's version, shown by `--version`."""

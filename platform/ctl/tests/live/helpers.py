@@ -18,7 +18,9 @@ import subprocess
 from pathlib import Path
 
 PLATFORM = Path(__file__).resolve().parents[3]
+"""The platform folder."""
 SHIM = PLATFORM / "platformctl"
+"""The real `platformctl` shim."""
 
 
 def shim(*args: str, cwd: Path, env: dict | None = None) -> subprocess.CompletedProcess:

@@ -22,11 +22,13 @@ from platformctl.system import envfile
 
 
 def test_parse_dotenv_rules():
+    """Quotes are stripped, `$` is not expanded, and comments, `export`, a BOM and CRLF are handled."""
     text = "\ufeff# comment\nA=1\nexport B=two words # trailing\nC=\"quoted $HOME\"\nD='single'\nE=\n\nF=x\r\n"
     assert envfile.parse(text) == {"A": "1", "B": "two words", "C": "quoted $HOME", "D": "single", "E": "", "F": "x"}
 
 
 def test_parse_multiline_and_escapes():
+    """Multi-line values and escaped quotes in double quotes parse."""
     text = 'KEY="line1\nline2"\nQ="say \\"hi\\"\\nnext"\nS=\'it\'\n'
     parsed = envfile.parse(text)
     assert parsed["KEY"] == "line1\nline2"
@@ -36,6 +38,7 @@ def test_parse_multiline_and_escapes():
 
 @pytest.mark.parametrize("text", ["not a pair\n", "1BAD=x\n", "A=1\n=x\n"])
 def test_parse_error_names_the_line_not_its_text(text):
+    """Parse error names the line not its text."""
     with pytest.raises(envfile.EnvFileError) as info:
         envfile.parse(text)
     assert "line" in str(info.value)
@@ -43,22 +46,26 @@ def test_parse_error_names_the_line_not_its_text(text):
 
 
 def test_parse_unterminated_quote_hides_the_value():
+    """Parse unterminated quote hides the value."""
     with pytest.raises(envfile.EnvFileError) as info:
         envfile.parse('SECRET="abc\n')
     assert "abc" not in str(info.value)
 
 
 def test_unquote_unterminated_single_line():
+    """An unterminated quote is an error."""
     with pytest.raises(envfile.EnvFileError, match="unterminated"):
         envfile._unquote('"abc', 3)
 
 
 def test_escaped_quote_then_unterminated():
+    """A quote that is only escaped doesn't close the value."""
     with pytest.raises(envfile.EnvFileError, match="unterminated"):
         envfile._unquote('"abc\\"', 1)
 
 
 def test_read(tmp_path: Path):
+    """`read` parses the file at a path."""
     path = tmp_path / ".env"
     path.write_text("A=1\n")
     assert envfile.read(path) == {"A": "1"}
@@ -78,30 +85,36 @@ def test_read(tmp_path: Path):
     ],
 )
 def test_format(value, expected):
+    """Values are quoted only when they need it."""
     assert envfile._format(value) == expected
 
 
 def test_formatted_values_round_trip():
+    """Whatever `update_text` writes, `parse` reads back unchanged."""
     values = {"A": "two words", "B": "it's", "C": "a\nb", "D": 'say "x"', "E": "has$dollar", "F": ""}
     text = envfile.update_text("", values)
     assert envfile.parse(text) == values
 
 
 def test_update_text_sets_in_place_and_appends():
+    """Update text sets in place and appends."""
     text = "# head\nA=1\nexport B=2\n#C=old\nA_OTHER=x\n"
     updated = envfile.update_text(text, {"A": "9", "B": "8", "C": "new"})
     assert updated == "# head\nA=9\nB=8\n#C=old\nA_OTHER=x\nC=new\n"
 
 
 def test_update_text_without_trailing_newline():
+    """Update text without trailing newline."""
     assert envfile.update_text("A=1", {"B": "2"}) == "A=1\nB=2\n"
 
 
 def test_update_text_from_nothing():
+    """Updating empty text writes the keys."""
     assert envfile.update_text("", {"A": "1"}) == "A=1\n"
 
 
 def test_write_atomic_new_file_is_0600(tmp_path: Path):
+    """Write atomic new file is 0600."""
     path = tmp_path / ".env"
     envfile.write_atomic(path, "A=1\n")
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -109,6 +122,7 @@ def test_write_atomic_new_file_is_0600(tmp_path: Path):
 
 
 def test_write_atomic_keeps_mode(tmp_path: Path):
+    """Rewriting a file keeps its mode and leaves no temporary file."""
     path = tmp_path / ".env"
     path.write_text("A=1\n")
     path.chmod(0o640)
@@ -118,6 +132,7 @@ def test_write_atomic_keeps_mode(tmp_path: Path):
 
 
 def test_write_atomic_writes_through_a_symlink(tmp_path: Path):
+    """Write atomic writes through a symlink."""
     real = tmp_path / "real.env"
     real.write_text("A=1\n")
     link = tmp_path / ".env"
@@ -128,9 +143,11 @@ def test_write_atomic_writes_through_a_symlink(tmp_path: Path):
 
 
 def test_write_atomic_cleans_up_when_the_replace_fails(tmp_path: Path, monkeypatch):
+    """Write atomic cleans up when the replace fails."""
     path = tmp_path / ".env"
 
     def boom(*_):
+        """Fail like a full disk."""
         raise OSError("disk full")
 
     monkeypatch.setattr(os, "replace", boom)
@@ -140,6 +157,7 @@ def test_write_atomic_cleans_up_when_the_replace_fails(tmp_path: Path, monkeypat
 
 
 def test_update_creates_then_edits(tmp_path: Path):
+    """`update` creates the file, then edits it in place."""
     path = tmp_path / ".env"
     envfile.update(path, {"A": "1"})
     envfile.update(path, {"A": "2", "B": "3"})
@@ -147,14 +165,17 @@ def test_update_creates_then_edits(tmp_path: Path):
 
 
 def test_update_text_with_every_key_already_present_appends_nothing():
+    """Update text with every key already present appends nothing."""
     assert envfile.update_text("A=1\nB=2\n", {"A": "3"}) == "A=3\nB=2\n"
 
 
 def test_write_atomic_failure_after_the_temp_file_is_gone_is_still_clean(tmp_path: Path, monkeypatch):
+    """Write atomic failure after the temp file is gone is still clean."""
     path = tmp_path / ".env"
     real_unlink = os.unlink
 
     def replace_then_fail(src, dst):
+        """Delete the temporary file, then fail."""
         real_unlink(src)  # the temp file vanished before cleanup
         raise OSError("gone")
 

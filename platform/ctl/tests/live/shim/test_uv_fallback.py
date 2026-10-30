@@ -32,10 +32,10 @@ from tests.live.helpers import SHIM
 
 pytestmark = pytest.mark.live
 
-# The system tools the shim itself runs. Python is deliberately not among them.
 SHIM_TOOLS = ("uname", "dirname", "readlink")
-# Where a Mac's Homebrew Python lives; the shim tries these paths by name, not through PATH.
+"""The system tools the shim itself runs; Python is deliberately not among them."""
 HOMEBREW_PYTHONS = ("/opt/homebrew/bin/python3", "/usr/local/bin/python3")
+"""Where a Mac's Homebrew Python lives; the shim tries these paths by name, not through PATH."""
 
 
 def test_the_shim_falls_back_to_uv_run_when_no_python_is_found(tmp_path):

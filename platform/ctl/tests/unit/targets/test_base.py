@@ -18,14 +18,18 @@ from platformctl.targets.base import PASSTHROUGH, Target, UnsupportedError
 
 
 def test_capabilities_are_enforced():
+    """A target without a capability refuses the command that needs it."""
+
     class Minimal(Target):
         name = "minimal"
         capabilities = frozenset()
 
         def generate(self):
+            """Generate nothing."""
             return {}
 
         def service_url(self, service):
+            """Have no URL for any service."""
             return None
 
     target = Minimal()

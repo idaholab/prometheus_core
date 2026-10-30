@@ -31,25 +31,30 @@ from platformctl.system import envfile
 from platformctl.system.runner import MAKE_VARIABLES, Runner, RunnerError
 
 DEFAULT_BASE_IMAGE_REPO = "containers.github.inl.gov/genesis/prometheus_api"
+"""The registry repository of the `prometheus_api` base image."""
 DEFAULT_BASE_IMAGE_HASH = "1914b55"
+"""The tag of the `prometheus_api` base image the platform is pinned to."""
 DEFAULT_BUILD_CACHE = "ghcr.io/idaholab/prometheus_core/buildcache-prometheus"
+"""The prefix of the registry build cache that the publish workflow writes."""
 
 TRUE_VALUES = {"true"}
+"""The values a boolean setting counts as true."""
 
 
 @dataclass(frozen=True)
 class Setting:
+    """One setting: its name, default, what a blank means, and whether it is safe to print."""
+
     name: str
     default: str
     description: str
-    # A blank `.env` line normally wins ("kept blank"); these fall back to the default instead.
     blank_means_default: bool = False
-    # Safe to print. Anything not in the registry is secret.
     safe: bool = True
     kind: str = "str"  # str | bool | int
 
 
 def _s(name: str, default: str, description: str, **kw) -> Setting:
+    """Shorthand for declaring a `Setting` in the registry."""
     return Setting(name, default, description, **kw)
 
 
@@ -93,10 +98,11 @@ SETTINGS: tuple[Setting, ...] = (
     _s("PLATFORM_TARGET", "compose", "Where the platform runs: compose (k3d: not supported yet)"),
     _s("PLATFORM_SOURCE", "build", "Where the code comes from: build (image: not supported yet)"),
 )
+"""Every setting, in the order the docs list them."""
 
 REGISTRY: dict[str, Setting] = {s.name: s for s in SETTINGS}
+"""The settings by name."""
 
-# Settings a hand-run Compose reads from .env, so a `.env` value hides the derived one.
 DERIVED_KEYS = (
     "PROMETHEUS_API_BASE_IMAGE_REPO",
     "PROMETHEUS_API_BASE_IMAGE_HASH",
@@ -104,6 +110,7 @@ DERIVED_KEYS = (
     "BUILD_CACHE_PLATFORM",
     "USE_BUILD_CACHE",
 )
+"""The settings the tool derives, which a hand-run Compose reads from `.env` instead if it sets them."""
 
 SOURCE_DEFAULT, SOURCE_ENV, SOURCE_DOTENV, SOURCE_SET, SOURCE_MAKE = "default", "environment", ".env", "--set", "make"
 
@@ -164,6 +171,8 @@ def platform_version(root: Path, runner: Runner) -> str:
 
 @dataclass(frozen=True)
 class Value:
+    """A resolved setting and where it came from."""
+
     value: str
     source: str
 
@@ -177,6 +186,7 @@ class PlatformConfig:
         env: Mapping[str, str] | None = None,
         sets: dict[str, str] | None = None,
     ) -> None:
+        """Read `.env` and the Make overrides; a malformed `.env` is recorded, not raised."""
         self.root = root
         self.env = dict(os.environ if env is None else env)
         self.dotenv_path = root / ".env"
@@ -194,12 +204,14 @@ class PlatformConfig:
         self._cache: dict[str, Value] = {}
 
     def require_valid_dotenv(self) -> None:
+        """Raise the recorded `.env` error, if there is one."""
         if self.dotenv_error is not None:
             raise self.dotenv_error
 
     # -- resolution ----------------------------------------------------
 
     def resolve(self, name: str) -> Value:
+        """The value of a setting and its source: defaults, then the environment, `.env`, make, then `--set`."""
         if name in self._cache:
             return self._cache[name]
         setting = REGISTRY.get(name)
@@ -220,12 +232,15 @@ class PlatformConfig:
         return value
 
     def get(self, name: str) -> str:
+        """The value of a setting as a string."""
         return self.resolve(name).value
 
     def flag(self, name: str) -> bool:
+        """The value of a boolean setting."""
         return self.get(name).strip().lower() in TRUE_VALUES
 
     def int(self, name: str) -> int:
+        """The value of a numeric setting; raise `ConfigError` if it is blank or not a number."""
         raw = self.get(name).strip()
         try:
             return int(raw)
@@ -238,10 +253,12 @@ class PlatformConfig:
 
     @property
     def project(self) -> str:
+        """The Compose project name."""
         return self.get("COMPOSE_PROJECT_NAME") or "prometheus_platform"
 
     @property
     def local_sdk(self) -> bool:
+        """Whether the base image is built from `../sdk`."""
         return self.flag("LOCAL_SDK")
 
     def base_image(self) -> tuple[str, str]:
@@ -251,6 +268,7 @@ class PlatformConfig:
         return self.get("PROMETHEUS_API_BASE_IMAGE_REPO"), self.get("PROMETHEUS_API_BASE_IMAGE_HASH")
 
     def frontend_profile(self) -> str:
+        """The frontend profile (`dev` or `prod`), or an empty string for none."""
         profile = self.get("PROFILE").strip()
         return profile if profile in ("dev", "prod") else ""
 
@@ -278,6 +296,7 @@ class PlatformConfig:
         return values
 
     def secret_keys(self) -> list[str]:
+        """The keys in `.env` or `--set` that are not safe to print, sorted."""
         return sorted({k for k in {*self.dotenv, *self.sets} if not is_safe(k)})
 
     def child_env(self, extra: Mapping[str, str] | None = None) -> dict[str, str]:
@@ -308,6 +327,7 @@ class PlatformConfig:
 
 
 _SECRET_NAME = re.compile(r"KEY|SECRET|TOKEN|PASS|CREDENTIAL|PRIVATE|AUTH", re.I)
+"""Environment variable names that look like they hold a secret."""
 
 
 def host_arch(docker_arch: str | None = None) -> str:
@@ -317,4 +337,5 @@ def host_arch(docker_arch: str | None = None) -> str:
 
 
 def now_iso() -> str:
+    """The current UTC time, formatted like `2026-10-30T12:00:00Z`."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

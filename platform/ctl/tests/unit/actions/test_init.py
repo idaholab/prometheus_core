@@ -18,13 +18,17 @@ from platformctl import actions
 
 
 def test_discover_finds_doctor_in_the_right_section():
+    """Discover finds doctor in the right section."""
     modules = actions.discover()
     assert [m.NAME for m in modules] == ["doctor"]
     assert modules[0].SECTION in dict(actions.SECTIONS)
 
 
 def test_discover_orders_by_section_then_order_then_name(monkeypatch):
+    """Discover orders by section then order then name."""
+
     def module(name, section, order):
+        """A fake action module."""
         return types.SimpleNamespace(NAME=name, SECTION=section, ORDER=order)
 
     mods = {

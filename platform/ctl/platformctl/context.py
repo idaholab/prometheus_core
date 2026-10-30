@@ -30,6 +30,8 @@ from platformctl.targets.compose import ComposeTarget
 
 @dataclass
 class Context:
+    """Everything an action needs: paths, settings, output, adapters, the target and the global flags."""
+
     paths: Paths
     config: PlatformConfig
     output: Output
@@ -64,6 +66,7 @@ def build(
     json_mode: bool = False,
     debug: bool = False,
 ) -> Context:
+    """Build the Context for one run, refusing a target or source that is not supported yet."""
     check_name(target or config.get("PLATFORM_TARGET"))
     if config.get("PLATFORM_SOURCE") != "build":
         from platformctl.targets.base import UnsupportedError

@@ -21,10 +21,13 @@ from dataclasses import dataclass, field
 from platformctl.system.runner import Result, Runner, RunnerError
 
 _PERMISSION = re.compile(r"permission denied.*docker\.sock|connect: permission denied", re.I)
+"""Matches the error for no permission on the Docker socket."""
 _NO_DAEMON = re.compile(
     r"cannot connect to the docker daemon|is the docker daemon running|connection refused|no such file", re.I
 )
+"""Matches the errors for a Docker daemon that is not running."""
 _NO_COMPOSE = re.compile(r"'compose' is not a docker command|unknown shorthand flag|docker: unknown command", re.I)
+"""Matches the errors for a missing Compose plugin."""
 
 # Daemon states, told apart because each has its own fix.
 OK, MISSING, DAEMON_DOWN, NO_PERMISSION, UNKNOWN_ERROR = "ok", "missing", "daemon_down", "no_permission", "error"
@@ -32,6 +35,8 @@ OK, MISSING, DAEMON_DOWN, NO_PERMISSION, UNKNOWN_ERROR = "ok", "missing", "daemo
 
 @dataclass
 class DockerInfo:
+    """What `docker info` says, or why it could not."""
+
     state: str = UNKNOWN_ERROR
     detail: str = ""  # the error class only, never raw output
     server_version: str = ""
@@ -50,18 +55,24 @@ class DockerInfo:
 
     @property
     def desktop(self) -> bool:
+        """Whether the daemon is Docker Desktop."""
         return "docker desktop" in self.operating_system.lower()
 
 
 class Docker:
+    """The `docker` CLI."""
+
     def __init__(self, runner: Runner, env: dict[str, str] | None = None) -> None:
+        """Keep the runner and the environment to run `docker` with."""
         self.runner = runner
         self.env = env
 
     def _run(self, *args: str, **kw) -> Result:
+        """Run `docker` with the arguments."""
         return self.runner.run(["docker", *args], env=self.env, **kw)
 
     def info(self) -> DockerInfo:
+        """Run `docker info` and tell a missing docker, a stopped daemon and a permission error apart."""
         try:
             done = self._run("info", "--format", "{{json .}}", timeout=30)
         except RunnerError:
@@ -106,6 +117,7 @@ class Docker:
         return version or None
 
     def volumes(self, project: str, volume: str) -> list[str]:
+        """The names of a project's volumes with this compose volume label."""
         done = self._run(
             "volume", "ls", "-q",
             "--filter", f"label=com.docker.compose.project={project}",
@@ -114,6 +126,7 @@ class Docker:
         return done.stdout.split() if done.ok else []
 
     def image_exists(self, ref: str) -> bool:
+        """Whether the image is in the local store."""
         return self._run("image", "inspect", "--format", "{{.Id}}", ref).ok
 
     def holders(self, port: int) -> list[dict[str, str]]:

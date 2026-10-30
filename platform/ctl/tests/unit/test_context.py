@@ -18,6 +18,7 @@ from platformctl.targets.base import FOREGROUND, PASSTHROUGH, YOUR_AGENTS, Unsup
 
 
 def test_context_wires_the_adapters(ctx_factory):
+    """The context's adapters share the platform's paths, profile and project."""
     ctx, _, _ = ctx_factory(sets={"PROFILE": "prod"})
     assert ctx.compose.profiles == ["prod"]
     assert ctx.compose.entry_file == ctx.paths.entry_file
@@ -27,16 +28,19 @@ def test_context_wires_the_adapters(ctx_factory):
 
 
 def test_no_profile_means_no_frontend(ctx_factory):
+    """No profile means no frontend."""
     ctx, _, _ = ctx_factory(sets={"PROFILE": ""})
     assert ctx.compose.profiles == []
 
 
 def test_flags_are_carried(ctx_factory):
+    """The global flags reach the context."""
     ctx, _, _ = ctx_factory(dry_run=True, yes=True, json_mode=True, debug=True)
     assert (ctx.dry_run, ctx.yes, ctx.json_mode, ctx.debug) == (True, True, True, True)
 
 
 def test_platform_info(ctx_factory, platform_root):
+    """The platform block has the root, the project and the git version."""
     ctx, _, _ = ctx_factory()
     assert ctx.platform_info() == {
         "root": str(platform_root),
@@ -46,6 +50,7 @@ def test_platform_info(ctx_factory, platform_root):
 
 
 def test_k3d_and_unknown_targets_are_refused(ctx_factory):
+    """K3d and unknown targets are refused."""
     with pytest.raises(UnsupportedError, match="k3d` is not supported yet"):
         ctx_factory(target="k3d")
     with pytest.raises(UnsupportedError, match="k3d"):
@@ -53,10 +58,12 @@ def test_k3d_and_unknown_targets_are_refused(ctx_factory):
 
 
 def test_image_source_is_refused(ctx_factory):
+    """`PLATFORM_SOURCE=image` is not supported yet."""
     with pytest.raises(UnsupportedError, match="PLATFORM_SOURCE `image` is not supported yet"):
         ctx_factory(sets={"PLATFORM_SOURCE": "image"})
 
 
 def test_the_target_flag_beats_the_setting(ctx_factory):
+    """The target flag beats the setting."""
     ctx, _, _ = ctx_factory(target="compose", sets={"PLATFORM_TARGET": "k3d"})
     assert ctx.target.name == "compose"

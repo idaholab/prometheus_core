@@ -22,9 +22,11 @@ GOOD = (
     "AGENT_SECRET=aaaaaaaaaaaaaaaa\nREDIS_PASSWORD=bbbbbbbbbbbbbbbb\nADMIN_DB_PASSWORD=cccccccccccccccc\n"
     "BACKEND_JWT_SECRET=dddddddddddddddd\nADMIN_DB_ENCRYPTION_KEY=eeeeeeeeeeeeeeee\nLLM_CONFIG_PROFILE=anthropic\n"
 )
+"""A `.env` that sets every required key."""
 
 
 def run(check, root, runner, dotenv=None, env=None, sets=None):
+    """Run a check, writing `dotenv` to the platform's `.env` first if given."""
     if dotenv is not None:
         (root / ".env").write_text(dotenv)
     ctx, _, _ = make_context(root, runner, env, sets)
@@ -35,17 +37,20 @@ def run(check, root, runner, dotenv=None, env=None, sets=None):
 
 
 def test_platform_env_pass(platform_root, runner):
+    """A `.env` that sets all six required keys passes."""
     result = run(ec.PLATFORM_ENV, platform_root, runner, GOOD)
     assert (result.status, result.evidence) == (PASS, "6 required values are set")
 
 
 def test_platform_env_missing_file(platform_root, runner):
+    """A missing `.env` is a FAIL that points to `make init-env`."""
     result = run(ec.PLATFORM_ENV, platform_root, runner)
     assert result.status == FAIL and result.evidence == ".env does not exist" and "make init-env" in result.fix
 
 
 @pytest.mark.parametrize("placeholder", ["", "sk-ant-...", "sk-change-me", "change-me-please", "your-key-here"])
 def test_platform_env_names_what_is_unset_but_never_a_value(platform_root, runner, placeholder):
+    """Platform env names what is unset but never a value."""
     dotenv = GOOD.replace("LLM_CONFIG_PROFILE=anthropic", f"LLM_CONFIG_PROFILE={placeholder}").replace(
         "aaaaaaaaaaaaaaaa", ""
     )
@@ -56,11 +61,13 @@ def test_platform_env_names_what_is_unset_but_never_a_value(platform_root, runne
 
 
 def test_platform_env_missing_key_entirely(platform_root, runner):
+    """Platform env missing key entirely."""
     result = run(ec.PLATFORM_ENV, platform_root, runner, "AGENT_SECRET=aaaaaaaaaaaaaaaa\n")
     assert result.evidence.startswith("not set: REDIS_PASSWORD")
 
 
 def test_platform_env_bad_line_names_the_line_not_its_text(platform_root, runner):
+    """Platform env bad line names the line not its text."""
     result = run(ec.PLATFORM_ENV, platform_root, runner, "AGENT_SECRET=ok\nsk-live-supersecretvalue\n")
     assert result.status == FAIL
     assert "line 2" in result.evidence and "supersecret" not in result.evidence
@@ -70,17 +77,20 @@ def test_platform_env_bad_line_names_the_line_not_its_text(platform_root, runner
 
 
 def test_base_image_pin_local_sdk(platform_root, runner):
+    """Base image pin local sdk."""
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner, "LOCAL_SDK=true\n")
     assert result.status == PASS and "built from ../sdk" in result.evidence
 
 
 def test_base_image_pin_default(platform_root, runner):
+    """Without `LOCAL_SDK` or a blank pin, the default base image passes."""
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner)
     assert result.status == PASS and "prometheus_api:1914b55" in result.evidence
 
 
 @pytest.mark.parametrize("key", ["PROMETHEUS_API_BASE_IMAGE_HASH", "PROMETHEUS_API_BASE_IMAGE_REPO"])
 def test_base_image_pin_blank_line_warns(platform_root, runner, key):
+    """Base image pin blank line warns."""
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner, f"{key}=\n")
     assert result.status == WARN and key in result.evidence and f"Remove the empty {key}= line" in result.fix
 
@@ -89,6 +99,7 @@ def test_base_image_pin_blank_line_warns(platform_root, runner, key):
 
 
 def test_env_hides_environment(platform_root, runner):
+    """A `.env` value that differs from the environment's warns, by key name only."""
     assert run(ec.ENV_HIDES_ENVIRONMENT, platform_root, runner).status == PASS
     result = run(
         ec.ENV_HIDES_ENVIRONMENT,
@@ -102,6 +113,7 @@ def test_env_hides_environment(platform_root, runner):
 
 
 def test_env_derived_keys(platform_root, runner):
+    """A `.env` that sets a derived key warns that a hand-run Compose will use it."""
     assert run(ec.ENV_DERIVED_KEYS, platform_root, runner, "BACKEND_PORT=1\n").status == PASS
     result = run(ec.ENV_DERIVED_KEYS, platform_root, runner, "PROMETHEUS_API_BASE_IMAGE_HASH=abc\nBUILD_CACHE=x\n")
     assert result.status == WARN
@@ -115,6 +127,7 @@ def test_env_derived_keys(platform_root, runner):
 
 
 def set_git(runner, root, *, tracked=False, ignored=True, inside=True):
+    """Answer the git questions the `env-file` check asks: tracked, ignored, inside a checkout."""
     from platformctl.system.runner import Result
 
     for verb, ok in (("ls-files", tracked), ("check-ignore", ignored), ("rev-parse", inside)):
@@ -122,11 +135,13 @@ def set_git(runner, root, *, tracked=False, ignored=True, inside=True):
 
 
 def test_env_file_skipped_without_a_file(platform_root, runner):
+    """Env file skipped without a file."""
     result = run(ec.ENV_FILE, platform_root, runner)
     assert result.status == SKIP
 
 
 def test_env_file_ok(platform_root, runner):
+    """A mode-0600, git-ignored `.env` passes."""
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o600)
     set_git(runner, platform_root)
@@ -136,6 +151,7 @@ def test_env_file_ok(platform_root, runner):
 
 
 def test_env_file_group_readable_and_tracked(platform_root, runner):
+    """Env file group readable and tracked."""
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o644)
     set_git(runner, platform_root, tracked=True)
@@ -146,6 +162,7 @@ def test_env_file_group_readable_and_tracked(platform_root, runner):
 
 
 def test_env_file_not_ignored(platform_root, runner):
+    """A `.env` that git doesn't ignore warns."""
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o600)
     set_git(runner, platform_root, ignored=False)
@@ -154,6 +171,7 @@ def test_env_file_not_ignored(platform_root, runner):
 
 
 def test_env_file_outside_a_git_checkout_is_not_a_problem(platform_root, runner):
+    """Env file outside a git checkout is not a problem."""
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o600)
     set_git(runner, platform_root, ignored=False, inside=False)
@@ -162,6 +180,7 @@ def test_env_file_outside_a_git_checkout_is_not_a_problem(platform_root, runner)
 
 
 def test_env_file_mode_is_skipped_on_a_windows_drive(platform_root, runner, monkeypatch):
+    """Env file mode is skipped on a windows drive."""
     (platform_root / ".env").write_text("A=1\n")
     ctx, _, _ = make_context(platform_root, runner)
     monkeypatch.setattr(type(ctx.host), "on_windows_drive", staticmethod(lambda path: True))

@@ -18,6 +18,7 @@ import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "platformctl"
+"""The `platformctl` package folder."""
 
 
 def test_no_pragma_no_cover_anywhere():
@@ -42,9 +43,10 @@ def test_only_the_runner_starts_subprocesses():
 
 
 UNIT = Path(__file__).resolve().parent
+"""The unit tests folder."""
 
-# Tests that cover the whole tool rather than one module.
-CROSS_CUTTING = {"test_rules.py", "test_secrets_canary.py", "test_live_option.py"}
+CROSS_CUTTING = {"test_rules.py", "test_docstrings.py", "test_secrets_canary.py", "test_live_option.py"}
+"""Tests that cover the whole tool rather than one module."""
 
 
 def expected_test_for(source: Path) -> Path:
@@ -81,6 +83,7 @@ def test_every_test_file_mirrors_a_module_or_is_cross_cutting():
 
 
 def test_the_standard_library_is_the_only_runtime_dependency():
+    """The package declares no runtime dependencies, so running the platform needs only Python."""
     # No tomllib: it needs Python 3.11 and the tests run on 3.10.
     text = (PACKAGE.parent / "pyproject.toml").read_text()
     assert "\ndependencies = []\n" in text

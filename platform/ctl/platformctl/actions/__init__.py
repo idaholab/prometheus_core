@@ -24,12 +24,12 @@ import importlib
 import pkgutil
 from types import ModuleType
 
-# (section id, heading), in the order `--help` lists them.
 SECTIONS = (
     ("run", "Run the platform"),
     ("setup", "Set up"),
     ("troubleshoot", "Troubleshoot"),
 )
+"""The `--help` sections as (id, heading), in the order they are listed."""
 
 
 def discover() -> list[ModuleType]:

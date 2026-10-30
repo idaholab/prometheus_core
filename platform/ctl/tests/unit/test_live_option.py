@@ -19,9 +19,11 @@ import sys
 from pathlib import Path
 
 CTL = Path(__file__).resolve().parents[2]
+"""The `platform/ctl` folder."""
 
 
 def pytest_run(*args: str) -> subprocess.CompletedProcess:
+    """Run pytest in a subprocess, from `platform/ctl`."""
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--rootdir", str(CTL), *args],
         cwd=CTL,
@@ -32,6 +34,7 @@ def pytest_run(*args: str) -> subprocess.CompletedProcess:
 
 
 def test_live_tests_are_skipped_without_the_option():
+    """Live tests are skipped without the option."""
     done = pytest_run("tests/live", "-q", "-rs")
     assert done.returncode == 0, done.stdout + done.stderr
     assert "live test: run with --live" in done.stdout
@@ -39,11 +42,13 @@ def test_live_tests_are_skipped_without_the_option():
 
 
 def test_live_refuses_to_run_under_coverage():
+    """Live refuses to run under coverage."""
     done = pytest_run("tests/live", "--live", "--cov=platformctl", "-q")
     assert done.returncode != 0
     assert "--live can't run with coverage" in done.stdout + done.stderr
 
 
 def test_the_live_marker_is_registered():
+    """The live marker is registered."""
     done = pytest_run("--markers")
     assert "live: runs against the real Docker" in done.stdout

@@ -22,18 +22,24 @@ from platformctl.diagnostics import default_registry
 from platformctl.diagnostics.base import FAIL, WARN, Outcome, counts, run_checks
 
 NAME = "doctor"
+"""The command's name."""
 HELP = "Diagnose common problems and say how to fix them"
+"""The command's one-line description in `--help`."""
 SECTION = "troubleshoot"
+"""The `--help` section the command is listed in."""
 ORDER = 10
+"""Where the command sits within its section; lower is listed first."""
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add `doctor`'s positional check ids and its options to its parser."""
     parser.add_argument("checks", nargs="*", metavar="check-id", help="Run only these checks")
     parser.add_argument("--tag", choices=["preflight", "diagnose"], help="Only the checks with this tag")
     parser.add_argument("--list", action="store_true", help="List the check ids, their tags and targets")
 
 
 def _select(registry, ids: list[str], tag: str | None):
+    """Choose the checks to run from the ids and tag given, and name the ids that match none."""
     if ids:
         found = [registry.find(i) for i in ids]
         unknown = [i for i, c in zip(ids, found, strict=True) if c is None]
@@ -42,10 +48,12 @@ def _select(registry, ids: list[str], tag: str | None):
 
 
 def _listing(registry) -> list[dict]:
+    """Describe every registered check for `--list`."""
     return [{"id": c.id, "area": c.area, "tags": list(c.tags), "targets": list(c.targets)} for c in registry.checks]
 
 
 def _check_json(outcome: Outcome) -> dict:
+    """Describe one check's outcome as the JSON object `doctor --json` prints."""
     check, result = outcome.check, outcome.result
     return {
         "id": check.id,
@@ -60,6 +68,7 @@ def _check_json(outcome: Outcome) -> dict:
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
+    """Run the selected checks, print them as text or JSON, and return the exit code (1 on any FAIL)."""
     registry = default_registry()
     out = ctx.output
 

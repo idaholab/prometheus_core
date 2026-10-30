@@ -21,6 +21,7 @@ from tests.unit.conftest import make_context
 
 
 def ctx_for(root, runner, *, system="darwin", release="", sets=None, env=None):
+    """A context on a pretend OS and kernel release."""
     ctx, _, _ = make_context(root, runner, env, sets)
     ctx.host.system = system
     ctx.host.release_reader = lambda: release
@@ -37,11 +38,13 @@ def taken(monkeypatch):
 
 
 def test_all_ports_free(platform_root, runner, taken):
+    """With nothing on the ports, the check passes and counts three."""
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert (result.status, result.evidence) == (PASS, "3 ports are free")
 
 
 def test_ports_follow_the_settings(platform_root, runner, taken):
+    """The ports checked follow the port settings and the features turned on."""
     ctx = ctx_for(
         platform_root,
         runner,
@@ -58,6 +61,7 @@ def test_ports_follow_the_settings(platform_root, runner, taken):
 
 
 def test_a_process_holding_a_port(platform_root, runner, taken):
+    """A process holding a port."""
     taken[6379] = hostmod.Holder("process", "redis-server")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert result.status == FAIL
@@ -66,12 +70,14 @@ def test_a_process_holding_a_port(platform_root, runner, taken):
 
 
 def test_airplay_on_macos_gets_its_own_fix(platform_root, runner, taken):
+    """Airplay on macos gets its own fix."""
     taken[5000] = hostmod.Holder("process", "ControlCe")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner, sets={"LOCAL_DEEPLYNX": "true"}))
     assert "AirPlay Receiver" in result.fix and "Turn off" in result.fix
 
 
 def test_port_5000_on_linux_is_just_a_busy_port(platform_root, runner, taken):
+    """Port 5000 on linux is just a busy port."""
     taken[5000] = hostmod.Holder("process", "something")
     result = hc.PORTS_FREE.run(
         ctx_for(platform_root, runner, system="linux", release="6.8", sets={"LOCAL_DEEPLYNX": "true"})
@@ -80,6 +86,7 @@ def test_port_5000_on_linux_is_just_a_busy_port(platform_root, runner, taken):
 
 
 def test_another_platform_is_named_with_the_fix_to_stop_it(platform_root, runner, taken):
+    """Another platform is named with the fix to stop it."""
     taken[8600] = hostmod.Holder("container", "other-backend-1", "other_project", "/x/platform")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert "container other-backend-1 (project other_project, from /x/platform)" in result.evidence
@@ -87,6 +94,7 @@ def test_another_platform_is_named_with_the_fix_to_stop_it(platform_root, runner
 
 
 def test_a_container_without_a_project(platform_root, runner, taken):
+    """A container without a project."""
     taken[8600] = hostmod.Holder("container", "loose", "", "")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert result.evidence == "8600 (the backend) is held by container loose"
@@ -94,11 +102,13 @@ def test_a_container_without_a_project(platform_root, runner, taken):
 
 
 def test_the_platforms_own_containers_do_not_count(platform_root, runner, taken):
+    """The platforms own containers do not count."""
     taken[8600] = hostmod.Holder("container", "prometheus_platform-backend-1", "prometheus_platform", "/here")
     assert hc.PORTS_FREE.run(ctx_for(platform_root, runner)).status == PASS
 
 
 def test_unknown_holder_and_repeated_fixes_are_listed_once(platform_root, runner, taken):
+    """Unknown holder and repeated fixes are listed once."""
     taken[8600] = hostmod.Holder("unknown")
     taken[5150] = hostmod.Holder("unknown")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
@@ -110,16 +120,19 @@ def test_unknown_holder_and_repeated_fixes_are_listed_once(platform_root, runner
 
 
 def test_checkout_path_ok(platform_root, runner):
+    """A normal checkout with an LF shim passes."""
     (platform_root / "platformctl").write_bytes(b"#!/bin/sh\n")
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner))
     assert (result.status, result.evidence) == (PASS, "the checkout location is fine")
 
 
 def test_checkout_path_without_a_shim_is_fine(platform_root, runner):
+    """Checkout path without a shim is fine."""
     assert hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner)).status == PASS
 
 
 def test_crlf_in_the_shim(platform_root, runner):
+    """A shim with CRLF line endings warns, with the fix for an existing checkout."""
     (platform_root / "platformctl").write_bytes(b"#!/bin/sh\r\nexit 0\r\n")
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner))
     assert result.status == WARN and "CRLF" in result.evidence
@@ -127,11 +140,13 @@ def test_crlf_in_the_shim(platform_root, runner):
 
 
 def test_wsl1(platform_root, runner):
+    """WSL 1 warns, because it can't run Docker."""
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner, system="linux", release="4.4.0-19041-Microsoft"))
     assert result.status == WARN and "WSL 1" in result.evidence and "set-version" in result.fix
 
 
 def test_checkout_on_a_windows_drive(platform_root, runner, monkeypatch):
+    """Checkout on a windows drive."""
     monkeypatch.setattr(hostmod.Host, "on_windows_drive", staticmethod(lambda path: True))
     result = hc.CHECKOUT_PATH.run(
         ctx_for(platform_root, runner, system="linux", release="5.15-microsoft-standard-WSL2")
@@ -140,6 +155,7 @@ def test_checkout_on_a_windows_drive(platform_root, runner, monkeypatch):
 
 
 def test_all_problems_are_listed_together(platform_root, runner, monkeypatch):
+    """All problems are listed together."""
     (platform_root / "platformctl").write_bytes(b"x\r\n")
     monkeypatch.setattr(hostmod.Host, "on_windows_drive", staticmethod(lambda path: True))
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner, system="linux", release="4.4-Microsoft"))
