@@ -1,6 +1,27 @@
 # 1: Scaffold
 
-> **Status: Not started**
+> **Status: Code complete, not yet merged** (branch `worktree-patformctl-1`; set to
+> `Done (<date>, #<PR>)` when the PR merges)
+
+**Differs from the plan, or not done yet:**
+
+- **CI is its own workflow**, `.github/workflows/platformctl.yml` (path-filtered, not
+  required), not new jobs in `test.yml`: a `paths:` filter applies to a whole workflow. Only the
+  `ruff` project list in `test.yml` changed. No Codecov upload or `codecov.yml` flag yet:
+  `after_n_builds` waits for a fixed number of uploads, so an upload that exists only on some PRs
+  would stall everyone else's report. Step 2 adds both when the jobs become unconditional.
+- **Not done:** the measurement of the oldest Compose that supports `include` with `env_file`
+  (and the live leg on it), and the manual WSL checklist. `MIN_VERSION` in
+  `system/compose.py` is still 2.20, from deck 03, and unverified for `env_file`.
+- **Not run locally:** the workflow itself (no actionlint/zizmor here), and the busybox, macOS
+  `/usr/bin/python3` 3.9 and Python 3.9 legs. The shim tests pass under `sh`, `dash`, `bash` and
+  `ksh` on macOS.
+- **Added to the shim:** it follows symlinks to find `ctl/` (found by the live test).
+- **Added to `config`:** a malformed `.env` is recorded, not raised, so `doctor` can report it
+  while every other command stops on it.
+- **Flaky test, not ours:** `platform/tests/infrastructure/test_deeplynx_setup.py::
+  test_find_or_create_project_raises_on_errors[POST]` fails about one run in three on macOS
+  (`ConnectionResetError` from its stub server); it also fails with this step's changes removed.
 
 ## Goal
 
