@@ -203,7 +203,7 @@ through `ctx.target`.
 | `runner.py` | The only module that starts subprocesses: `run(argv, *, env, check, capture, interactive)`. Values go to children through the environment, never as `-e KEY=value` argv. In interactive mode the parent ignores SIGINT while it waits (Ctrl-C reaches the child), a negative return code maps to 128+n, and pure passthroughs (`compose --`, `logs` following) use `os.execvp`. Passes `exec -T` when stdin isn't a terminal |
 | `docker.py` | `docker info` (context, OS, architecture, image store), `version`, `volume`, `pull`, `image inspect`, `ps` with published ports |
 | `compose.py` | A compose project: `-f` entry file, profiles, `up`/`down`/`exec`/`ps`/`logs`/`config`/`restart` |
-| `envfile.py` | Parse `.env` and `.env.example` (dotenv rules); update keys in place. Writes are atomic (a temp file in the same folder, then `os.replace`), keep the existing mode, and create new files 0600. Parse errors name the line number, never its text |
+| `envfile.py` | Parse `.env` and `.env.example` (dotenv rules, stripping `\r` and a BOM); update keys in place. Writes are atomic: `mkstemp` in the same folder (0600 from the start), `fchmod` to the target's mode, write, `fsync`, then `os.replace`. New files are 0600. A symlinked `.env` is written through to its target, never replaced by a plain file. Parse errors name the line number, never its text |
 | `http.py` | `urllib` polling helpers. Loopback URLs bypass any proxy (`ProxyHandler({})`), so `HTTP_PROXY` without `NO_PROXY` can't break health checks. Never prints request headers or bodies |
 | `valkey.py` | The agent-registry clear, through the target's `exec` |
 | `deeplynx.py` | The DeepLynx API client |
@@ -385,7 +385,11 @@ today.
   unchanged.
 - Each setting declares what a blank value means: kept blank (`PROFILE=`
   means no frontend), or the default (the base-image pin).
-- Values from the environment are never copied into `.env`.
+- Values from the environment are never copied into `.env` implicitly,
+  with the two exceptions `init_env.py` has today and `config init` keeps
+  word for word: `LLM_CONFIG_PROFILE` and the LLM key, when `.env` lacks
+  them ("Saved ... from the environment in .env."). `config set --from-env`
+  copies only the keys it's given.
 
 **One registry of settings.** Each setting is one entry: name, default,
 type, what a blank means, whether it's safe to print, and a one-line
@@ -453,7 +457,10 @@ The plan's rule is "never print a secret". This is how it's enforced:
   value.
 - **Files.** `.env` and agent `.env` files are created 0600 and written
   atomically. `doctor` warns when one is group- or world-readable, or when
-  `.env` isn't git-ignored (or is tracked).
+  `.env` isn't git-ignored (or is tracked). On a WSL `/mnt/<drive>`
+  checkout without the `metadata` mount option, `chmod` has no effect, so
+  the mode check is skipped there (the `checkout-path` check already warns
+  about that location).
 - **Prompts.** `config init` reads keys with `getpass`. If `getpass` would
   echo (`GetPassWarning`), it stops instead.
 - **Canary test** (step 1, extended in every step): give every secret key a
