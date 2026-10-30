@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import pytest
 
-from platformctl.diagnostics import default_registry
 from platformctl.diagnostics.base import FAIL, PASS, SKIP, WARN, Check, Registry, Result, counts, run_checks
 
 
@@ -103,22 +102,3 @@ def test_counts(ctx_factory):
     for ident, status in (("a", PASS), ("b", WARN), ("c", FAIL), ("d", PASS)):
         registry.add(check(ident, status))
     assert counts(run_checks(ctx, registry, registry.checks)) == {"pass": 2, "warn": 1, "fail": 1, "skip": 0}
-
-
-def test_default_registry_is_valid_and_has_the_planned_ids():
-    registry = default_registry()
-    ids = [c.id for c in registry.checks]
-    assert ids == [
-        "docker",
-        "build-cache-store",
-        "platform-env",
-        "base-image-pin",
-        "env-hides-environment",
-        "env-derived-keys",
-        "env-file",
-        "ports-free",
-        "checkout-path",
-    ]
-    for c in registry.checks:
-        assert c.fix_kind in ("safe", "yes", "you")
-        assert c.tags and set(c.tags) <= {"preflight", "diagnose"}

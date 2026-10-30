@@ -16,8 +16,7 @@ import pytest
 
 from platformctl.diagnostics import env_checks as ec
 from platformctl.diagnostics.base import FAIL, PASS, SKIP, WARN
-
-from .conftest import make_context
+from tests.unit.conftest import make_context
 
 GOOD = (
     "AGENT_SECRET=aaaaaaaaaaaaaaaa\nREDIS_PASSWORD=bbbbbbbbbbbbbbbb\nADMIN_DB_PASSWORD=cccccccccccccccc\n"

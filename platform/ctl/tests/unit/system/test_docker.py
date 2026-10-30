@@ -19,8 +19,7 @@ import pytest
 from platformctl.system import docker as dockermod
 from platformctl.system.docker import Docker
 from platformctl.system.runner import RunnerError
-
-from .conftest import DOCKER_INFO, FakeRunner
+from tests.unit.conftest import DOCKER_INFO, FakeRunner
 
 
 def docker_with(info_stdout="", info_code=0, info_stderr="", env=None) -> tuple[Docker, FakeRunner]:

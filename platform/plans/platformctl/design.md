@@ -734,6 +734,13 @@ restart.
 
 ### Unit (`tests/unit/`)
 
+- **The tests mirror the package:** `platformctl/system/compose.py` is tested in
+  `tests/unit/system/test_compose.py`, `actions/doctor.py` in
+  `tests/unit/actions/test_doctor.py`, and so on (`__init__.py` is `test_init.py`,
+  `__main__.py` is `test_main.py`). `tests/unit/test_rules.py` fails when a module that
+  defines code has no test file at its mirrored path, and when a test file matches no module.
+  The only exceptions are tests of the whole tool: the rules, the secrets canary and the
+  `--live` option. A new module starts with its test file.
 - `pytest --cov=platformctl --cov-branch`. 100% line and branch coverage of
   the **combined** report across the Python versions in CI (each version
   uploads its data, one job combines and enforces `fail_under = 100`), so a

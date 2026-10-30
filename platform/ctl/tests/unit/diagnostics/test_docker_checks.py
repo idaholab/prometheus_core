@@ -18,8 +18,7 @@ import pytest
 
 from platformctl.diagnostics import docker_checks as dc
 from platformctl.diagnostics.base import FAIL, PASS, SKIP, WARN
-
-from .conftest import make_context
+from tests.unit.conftest import make_context
 
 # Recorded `docker info` / error output.
 MAC_DESKTOP = json.dumps(

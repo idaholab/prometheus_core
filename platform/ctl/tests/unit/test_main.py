@@ -14,13 +14,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 from platformctl import __main__ as entry
-from platformctl import actions
-
-# -- __main__ ----------------------------------------------------------------------------------
 
 
 def test_old_python_gets_a_clear_message(monkeypatch, capsys):
@@ -67,34 +63,3 @@ def test_run_py_runs_from_any_directory_without_picking_up_local_modules(tmp_pat
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout.startswith("platformctl ")
-
-
-# -- actions registry --------------------------------------------------------------------------
-
-
-def test_discover_finds_doctor_in_the_right_section():
-    modules = actions.discover()
-    assert [m.NAME for m in modules] == ["doctor"]
-    assert modules[0].SECTION in dict(actions.SECTIONS)
-
-
-def test_discover_orders_by_section_then_order_then_name(monkeypatch):
-    def module(name, section, order):
-        return types.SimpleNamespace(NAME=name, SECTION=section, ORDER=order)
-
-    mods = {
-        "z": module("zeta", "troubleshoot", 10),
-        "a": module("alpha", "troubleshoot", 10),
-        "u": module("up", "run", 20),
-        "d": module("down", "run", 10),
-        "c": module("config", "setup", 10),
-    }
-    monkeypatch.setattr(
-        actions.pkgutil,
-        "iter_modules",
-        lambda path: [types.SimpleNamespace(name=k) for k in mods] + [types.SimpleNamespace(name="helper")],
-    )
-    monkeypatch.setattr(
-        actions.importlib, "import_module", lambda name: mods.get(name.rsplit(".", 1)[1], types.SimpleNamespace())
-    )
-    assert [m.NAME for m in actions.discover()] == ["down", "up", "config", "alpha", "zeta"]

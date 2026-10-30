@@ -21,8 +21,7 @@ from platformctl.system import host as hostmod
 from platformctl.system.docker import Docker
 from platformctl.system.host import Host
 from platformctl.system.runner import RunnerError
-
-from .conftest import FakeRunner
+from tests.unit.conftest import FakeRunner
 
 # Recorded output.
 LSOF_MAC = """COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
