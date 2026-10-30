@@ -40,10 +40,15 @@ class Compose:
     """A compose project, run through the generated entry file."""
 
     runner: Runner
+    """Starts the subprocesses."""
     entry_file: Path
+    """The generated `docker-compose.platform.yml`."""
     cwd: Path
+    """The folder Compose runs in."""
     profiles: Sequence[str] = ()
+    """The profiles to enable, such as `dev`."""
     env: Mapping[str, str] | None = None
+    """The environment for Compose, which pins the project's settings."""
 
     def argv(self, *args: str) -> list[str]:
         """`docker compose -f <entry> [--profile p]... <args>`."""

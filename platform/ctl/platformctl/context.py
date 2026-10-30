@@ -33,17 +33,29 @@ class Context:
     """Everything an action needs: paths, settings, output, adapters, the target and the global flags."""
 
     paths: Paths
+    """Where the platform is, and the agent folder being acted on."""
     config: PlatformConfig
+    """The resolved settings."""
     output: Output
+    """Where to print: steps, summaries, errors, all scrubbed."""
     runner: Runner
+    """Starts every subprocess."""
     docker: Docker
+    """The `docker` CLI."""
     host: Host
+    """The host: ports, OS, WSL."""
     compose: Compose
+    """The compose project."""
     target: ComposeTarget
+    """Where the platform runs."""
     dry_run: bool = False
+    """Print the commands instead of running them (`--dry-run`)."""
     yes: bool = False
+    """Answer yes to confirmations (`--yes`)."""
     json_mode: bool = False
+    """Print one JSON object on stdout (`--json`)."""
     debug: bool = False
+    """Show scrubbed tracebacks on an unexpected error (`--debug`)."""
 
     def platform_info(self) -> dict[str, Any]:
         """The `platform{root, project, version}` block of every JSON object."""

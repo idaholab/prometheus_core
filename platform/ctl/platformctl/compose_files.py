@@ -35,9 +35,13 @@ class Agent:
     """One agent found on disk, with why it is included."""
 
     directory: Path
+    """The agent's folder."""
     compose_file: Path
+    """The agent's `docker-compose.yml`."""
     card: Path | None
+    """The agent's `agent_card.json`, or None when it has none."""
     group: str  # in-tree | debug | optional
+    """Why the agent is included: `in-tree`, `debug` or `optional`."""
 
     @property
     def name(self) -> str:

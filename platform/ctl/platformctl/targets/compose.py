@@ -35,7 +35,9 @@ class ComposeTarget(Target):
     """The platform on Docker Compose, through the generated entry file."""
 
     name = "compose"
+    """The target's name."""
     capabilities = frozenset({PASSTHROUGH, YOUR_AGENTS, FOREGROUND})
+    """What this target supports."""
 
     def __init__(self, paths: Paths, config: PlatformConfig, compose: Compose, docker: Docker) -> None:
         """Keep the paths, settings and adapters the target works through."""

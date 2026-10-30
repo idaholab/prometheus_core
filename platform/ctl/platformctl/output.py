@@ -202,6 +202,7 @@ class _Step:
     """One `[n/N] title ..... result` line, with `::group::` in CI."""
 
     WIDTH = 44
+    """The column the step's result is aligned to."""
 
     def __init__(self, output: Output, title: str) -> None:
         """Start a step, opening a `::group::` in CI."""

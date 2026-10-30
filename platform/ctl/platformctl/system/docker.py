@@ -38,15 +38,25 @@ class DockerInfo:
     """What `docker info` says, or why it could not."""
 
     state: str = UNKNOWN_ERROR
+    """ok, missing, daemon_down, no_permission or error."""
     detail: str = ""  # the error class only, never raw output
+    """The error class only, never the raw output."""
     server_version: str = ""
+    """The Docker server's version."""
     operating_system: str = ""
+    """The server's operating system, such as `Docker Desktop`."""
     architecture: str = ""
+    """The daemon's architecture, as Docker reports it."""
     driver_status: list[list[str]] = field(default_factory=list)
+    """The storage driver's status rows."""
     context: str = ""
+    """The Docker context in use."""
     docker_host: str = ""
+    """Whether `DOCKER_HOST` is set (its value is never kept)."""
     rootless: bool = False
+    """Whether the daemon is rootless."""
     podman: bool = False
+    """Whether `docker` is really Podman."""
 
     @property
     def containerd_store(self) -> bool:

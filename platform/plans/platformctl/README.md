@@ -70,9 +70,10 @@ When a step is done, set its status here and in its file to `Done (<date>,
   never count toward coverage.
 - Commands are grouped by what they act on, not by Make target names (see
   `commands.md`); Make only forwards.
-- **Every function and global has its own brief docstring**, in the package and in the tests
-  (test functions, fixtures, helpers and test constants alike). A global's docstring is a string
-  on the line after its assignment. `tests/unit/test_docstrings.py` fails on a missing one. A
+- **Every function, global and class variable has its own brief docstring**, in the package and
+  in the tests (test functions, fixtures, helpers and test constants alike). That includes every
+  field of a dataclass and every class attribute. A variable's docstring is a `"""foo"""` string on
+  the line after its assignment. `tests/unit/test_docstrings.py` fails on a missing one. A
   docstring says what the thing does or is for, not its name again: "Two problems are counted
   as \"2 problems\"", not "Several problems are plural".
 - **Tests mirror the code.** The unit tests for `platformctl/system/compose.py` are in
