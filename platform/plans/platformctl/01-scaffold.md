@@ -131,13 +131,15 @@ step that may land before the hackathon freeze (2026-11-03).
   it for the committed `uv.lock`).
 - New job `platformctl: unit`: `uv sync --frozen`, ruff check and format,
   then the unit tests on Python 3.10 to 3.14 on Ubuntu, plus one
-  `macos-latest` leg; a final step combines the coverage data and enforces
-  100% (lines and branches).
-- New job `platformctl: shim`: on Python 3.9 the shim prints the version
-  message and exits non-zero; with 3.9 as `python3` and 3.12 as
-  `python3.12`, it finds 3.12.
-- New job `platformctl: live` on Ubuntu Docker Engine, with and without the
-  containerd image store.
+  `macos-latest` leg; a final step combines the coverage data (paths
+  remapped across OSes) and enforces 100% (lines and branches).
+- New job `platformctl: shim`: the stub-`PATH` shim tests under several
+  shells, the real Python 3.9 cases, and a `macos-latest` leg with
+  `/usr/bin/python3` (`design.md`, "CI").
+- New job `platformctl: live` on Ubuntu Docker Engine (the
+  no-containerd-store and rootless legs only on `devel`).
+- `make help`/`make doctor` smoke tests join in step 2, with the Makefile
+  change.
 - PR checklist: a manual WSL run (Docker Desktop integration, Engine in the
   distro, a `/mnt/c` checkout).
 

@@ -719,7 +719,12 @@ restart.
   against recorded `lsof`/`ss`/`docker info` output from macOS, Ubuntu and
   WSL.
 - Messages that docs, slides or CI quote are pinned by tests. So is the
-  `--json` output (golden files) and the `--help` layout.
+  `--json` output (golden files) and the `--help` layout: only the custom
+  sections epilog, with `COLUMNS` fixed and colour off, since argparse's
+  own option lines differ by version (`-s KV, --set KV` on 3.10,
+  `-s, --set KV` on 3.13 and 3.14, and colour on 3.14; verified in review).
+- A test builds the parser and parses `<cmd> --help` for every command,
+  subcommand and alias.
 - **Make equivalence, as a migration test.** A golden file written from the
   new `--dry-run` output can't show what `make` used to do. So step 2,
   while the Makefile logic still exists, records `make -n <target>` for
@@ -755,14 +760,36 @@ restart.
   job uses `uv sync --frozen`.
 - `platformctl: unit`: ruff, then unit tests on Python 3.10 to 3.14 on
   Ubuntu, plus one `macos-latest` leg; then the combined coverage check.
-- `platformctl: shim`: the shim on Python 3.9 (setup-python) prints the
-  version message and exits non-zero; with 3.9 as `python3` and 3.12 as
-  `python3.12`, it finds 3.12.
-- `platformctl: live`: the live tests on Ubuntu Docker Engine, twice: with
-  and without the containerd image store (the build-cache fallback).
+  Each leg uploads its coverage data; the combine step remaps paths with
+  `[tool.coverage.paths]` (Linux and macOS paths differ), runs
+  `coverage combine`, enforces 100%, and uploads through
+  `.github/actions/coverage` with a `platformctl` flag, as the sdk, backend
+  and agent-template do. The same job runs `make -C platform help` and
+  `make -C platform doctor`, and checks every `##@` target still exists.
+- `platformctl: shim`: a pytest that runs `sh platformctl` with a `PATH` of
+  fake `python3.x` and `uv` stub scripts in `tmp_path`: the search order,
+  `$PLATFORMCTL_PYTHON`, the uv fallback, the "none found" install message,
+  a CRLF shim, `CDPATH` set, a symlinked shim. Under `dash`, `bash --posix`
+  and busybox `ash` on Ubuntu, and macOS `/bin/sh`. Plus the real cases:
+  Python 3.9 alone (setup-python) prints the version message and exits
+  non-zero; 3.9 as `python3` and 3.12 as `python3.12` finds 3.12; and a
+  `macos-latest` leg with `PATH=/usr/bin:/bin:<uv>`, where
+  `/usr/bin/python3` is 3.9, the real "Mac with 3.9" case. It also asserts
+  `git ls-files -s platform/platformctl` is mode 100755.
+- `platformctl: live`: the live tests on Ubuntu Docker Engine, with
+  `timeout-minutes`, random host ports, and readiness polling instead of
+  sleeps. The second leg, without the containerd image store, runs only on
+  `devel` (the unit tests cover `docker info`'s output for it). A
+  rootless-Docker leg (`dockerd-rootless-setuptool.sh`) also runs on
+  `devel`.
+- **First run** (live, from step 3c): on the minimal project with no `.env`
+  and no terminal, `up` exits naming what it can't answer; after
+  `config init` with flags and `config set`, `up` succeeds; a second `up`
+  leaves `.env` unchanged.
 - The platform jobs (`platform: up` and the others that start the stack)
-  depend on `platformctl: unit`, so a broken tool fails in seconds, not
-  after a 15-minute build.
+  depend on the Ubuntu 3.12 leg of `platformctl: unit` only, not the macOS
+  leg or the combine step, so a broken tool fails in seconds and the macOS
+  queue can't hold up a 15-minute build.
 - In CI (`CI` or `GITHUB_ACTIONS` set), the tool turns `--verbose` on and
   wraps each step in `::group::`, so failure logs keep Compose's full output.
 - On failure, the platform jobs upload `doctor --json` as an artifact.

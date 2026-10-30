@@ -139,9 +139,12 @@ today; CI proves it.
   `.env` of fixed placeholders (`config set ...`), compare
   `docker compose -f docker-compose.platform.yml config --format json` with
   the old `-f` list's output, normalised for `name` and paths, for every
-  combination the job covers plus `LOCAL_SDK` and `USE_BUILD_CACHE`. Keep
-  the old file-list loop for one release, so a failure shows which side is
-  wrong.
+  combination the job covers plus `LOCAL_SDK` and `USE_BUILD_CACHE`, with
+  both `--profile dev --profile prod`, as the job does today. Keep the job's
+  "fail on any Compose warning" rule: `include:` can add warnings of its
+  own. Keep the old file-list loop until step 3c merges, so a failure shows
+  which side is wrong. Cap the matrix: every combination on `devel`, a
+  representative subset on PRs.
 - **Which jobs use what:** `platform: up` stays on `make` (the documented
   path; it covers every forward, including `ng-restart` and `down-v`).
   `platform: up deeplynx` switches to `./platformctl`, keeping every `.env`
