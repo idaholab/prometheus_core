@@ -97,7 +97,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
 - **Old agent folders:** `doctor --agent` recognises the old Makefile and
   prints a one-line migration (`setup_agent.py --upgrade-makefile`).
 - **Agent label:** agents scaffolded before step 3b get the
-  `io.prometheus.agent` label through `--upgrade-makefile` too.
+  `io.prometheus.agent` label through `--upgrade-makefile` too. The docs'
+  caveat for unlabelled agents (from 3c) goes away here.
 - **The template's docs and `success_message.txt`** describe the submodule
   layout as the default for a new repo, and how to upgrade the platform
   version (bump the submodule, then `doctor --agent`).

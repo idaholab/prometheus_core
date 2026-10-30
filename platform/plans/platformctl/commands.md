@@ -129,7 +129,7 @@ Exit codes: 0 OK, 1 failure, 2 usage error (including "needs a terminal or
 | `down` | Stop all services. Your agents keep running, as today, and are named |
 | `down --volumes` | Stop and delete all volumes, after you type `clobber` (`--yes --confirm clobber` for scripts) |
 | `down --agents` | Also stop your agents, after confirming |
-| `restart` | `up --no-build`. Takes `--foreground`, `--no-check`, `--no-restart-agents`, `--frontend`, `--if-idle`. Warns about open chat turns |
+| `restart` | `up --no-build`. Takes `--foreground`, `--no-check`, `--no-restart-agents`, `--frontend`, `--if-idle`. Asks first when a chat is still answering (on a terminal; without one it only says so) |
 | `restart <service...>` | Restart only those services, without rebuilding |
 | `restart --if-idle` | Exit 1 instead of restarting when chat turns are open |
 | `build` | Generate the compose files and build the images (the base image first if `LOCAL_SDK`) |

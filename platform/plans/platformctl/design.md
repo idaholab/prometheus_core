@@ -600,20 +600,38 @@ platform `down` and `up` (verified), but it never registers again. Today the
 docs tell people to restart their agent by hand after every platform
 restart.
 
-- **Which containers.** Only running containers on the platform network,
-  outside the platform project, **that carry the agent label**
-  `io.prometheus.agent=true`. The agent template's compose file sets it
-  (step 3b adds it to the template; agents scaffolded earlier are listed as
-  "found on the network, not restarted: add the label or restart it
-  yourself"). Never a stopped container, never one with another platform's
-  `io.prometheus.platform.root`, never anything else (debuggers, DB clients,
-  another user's containers).
+- **Which containers.** Only running containers outside the platform
+  project **that carry the agent label** `io.prometheus.agent=true`: on the
+  platform network, or (external mode) found by the label alone and listed
+  with why. The agent template's compose file sets it (step 3b adds it to
+  the template). Never a stopped container, never one with another
+  platform's `io.prometheus.platform.root`, never anything else (debuggers,
+  DB clients, another user's containers).
+- **Agents scaffolded before the label** (every hackathon agent) are on the
+  network but unlabelled, so they're listed, not restarted, with the exact
+  fix in plain words: "Your agent `<name>` wasn't restarted, so it isn't
+  registered. Run: `docker restart <name>`. To have it restarted for you
+  next time, add these two lines to `<working_dir>/docker-compose.yml`:"
+  and the `labels:` snippet, with the path from
+  `com.docker.compose.project.working_dir`. Slides and skills keep the
+  "restart your agent after a platform restart" caveat for older agents
+  until step 7's `--upgrade-makefile` adds the label.
 - **What happens.** After the platform is up and healthy, `up` and `restart`
   restart them, and say so in plain words: "Restarting your agent
-  `<name>` (running outside the platform) so it registers again." If chat
-  turns are open, they're warned about first (a restart ends them). If the
-  restart fails (e.g. "network not found"), the tool prints the command to
-  run in the agent's folder, from its `com.docker.compose.project.working_dir`.
+  `<name>` (running outside the platform) so it registers again." Then they
+  wait for each to register and run `agents refresh`: the client-agent's
+  discovery already ran at its own startup, and its next refresh is 300 s
+  later (`DISCOVERY_REFRESH_SECONDS`, `client-agent/orchestrator/runtime.py`),
+  so without it the orchestrator wouldn't offer your agent for up to five
+  minutes. If the restart fails (e.g. "network not found"), the tool prints
+  the command to run in the agent's folder, from its
+  `com.docker.compose.project.working_dir`.
+- **Open chats.** A restart ends a chat that is still answering. On a
+  terminal, `restart` and `up` ask first: "1 chat is still answering;
+  restarting stops it. Continue? [y/N]". Without a terminal they never
+  prompt: they print the same line and go on, so scripts and assistants
+  aren't blocked; `restart --if-idle` exits 1 instead, and the skills
+  always use it.
 - `--no-restart-agents` (Make: `RESTART_AGENTS=false`) only prints them.
   With `--foreground`, the tool can't act once Compose has the terminal, so
   it prints them instead. If none are found, it says "none on this Docker

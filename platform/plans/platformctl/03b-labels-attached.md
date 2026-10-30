@@ -32,12 +32,17 @@ agents register again after a platform restart without you doing anything.
   docker-compose.yml`).
 - **Restarting your agents** (`design.md`, "Restarting your agents"): after
   `up`/`restart` is healthy, restart running containers on the platform
-  network, outside the platform project, that carry the agent label. Open
-  chat turns are warned about first (moved here from step 4, since this is
-  the step that restarts things). Agents without the label are listed, not
-  restarted. A failed restart prints the command to run in the agent's
-  folder. `--no-restart-agents` (Make: `RESTART_AGENTS=false`) and
-  `--foreground` only print them.
+  network, outside the platform project, that carry the agent label, then
+  wait for them to register and run `agents refresh`, so the client-agent
+  offers them at once instead of after its 300 s refresh. Open chats are
+  asked about first on a terminal, and only printed without one (moved here
+  from step 4, since this is the step that restarts things). Agents without
+  the label are listed with `docker restart <name>` and the `labels:`
+  snippet to add, with the file path. A failed restart prints the command
+  to run in the agent's folder. `--no-restart-agents` (Make:
+  `RESTART_AGENTS=false`) and `--foreground` only print them.
+- **`agents refresh`** (the client-agent's `/discovery/refresh`) arrives
+  here rather than in 3c, since the restart needs it.
 - **`down`** names your agents it leaves running; `down --agents` stops
   them after confirming.
 - **`down --volumes`** asks for `clobber` like `reset data`
@@ -59,7 +64,8 @@ agents register again after a platform restart without you doing anything.
 
 ## Replaces
 
-- "Restart your agent after every platform restart": done by the tool.
+- "Restart your agent after every platform restart": done by the tool for
+  labelled agents. The docs keep the caveat for older, unlabelled agents.
 - Compose's "port is already allocated" for every port the platform
   publishes.
 
@@ -92,7 +98,9 @@ agents register again after a platform restart without you doing anything.
 - **Live:** a labelled container from a second project is restarted by `up`
   and left running by `down`; an unlabelled one is listed, not touched; the
   network and containers survive a new commit (no recreate) while an agent
-  is attached, and the agent registers again; a second checkout of the minimal project is
+  is attached, and the agent registers again and is in the client-agent's
+  discovery right after `up` returns; a second checkout of the minimal
+  project is
   stopped with the right message; a port held by a plain socket is named.
 - **Manual (PR checklist):** WSL with Docker Desktop integration and with
   Engine in the distro.
@@ -106,4 +114,5 @@ Record each finding in the PR as fixed, deferred or rejected.
 
 - A second `up` from another folder stops with where the first one runs.
 - A labelled agent is back in `agents list --registered` after
-  `./platformctl restart`, with no manual step.
+  `./platformctl restart`, with no manual step, and the client-agent has
+  cached its skills (the `discovery-refresh` check passes).

@@ -19,7 +19,7 @@ CI job to `./platformctl`.
 - **`agents list`** (agent, included, why) and `agents list --registered`
   (route key, card URL, skill ids; flags duplicate route keys and skill ids;
   `--json`; never prints `AGENT_SECRET`).
-- **`agents refresh`** (the client-agent's `/discovery/refresh`).
+- **`agents refresh`** arrived in 3b; 3c adds it to the docs.
 - **`compose -- <args>`** (refuses `config`/`convert` unless
   `--no-interpolate` without `--environment`; prints "output is not
   redacted" on stderr every run, and its help says so) and
@@ -63,17 +63,21 @@ CI job to `./platformctl`.
   switch together.
   - Skills check `./platformctl --version --json` and fall back to the old
     commands when it's missing (a participant's clone can be older).
-  - "Restart your agent after every platform restart" goes away from
-    `run-and-register.md`, `troubleshooting.md`, `conventions.md` and the
-    `diagnose` skill.
+  - "Restart your agent after every platform restart" becomes "the tool
+    restarts your agent; an agent scaffolded before <date> needs the label
+    first, or `docker restart <name>`" in `run-and-register.md`,
+    `troubleshooting.md`, `conventions.md` and the `diagnose` skill. It goes
+    away entirely in step 7.
   - The registry and discovery one-liners become `agents list --registered`
     and `agents refresh`.
   - The reset ladder uses `reset registry|users|data` and `down --volumes`.
   - Deck 03: `config init` with its new questions replaces the
     `echo "LOCAL_SDK=true" >> .env` step and its callout; the
     "**Every `make up` or `make restart` empties the agent registry ...
-    restart it afterwards**" callout becomes one line saying the tool
-    re-registers your agent. Decks 01, 04 and 05: the same command changes.
+    restart it afterwards**" callout becomes: "`./platformctl up` restarts
+    your agent so it shows up again. Agent made before <date>? Restart it
+    yourself, or add the label it prints." Decks 01, 04 and 05: the same
+    command changes.
   - `make DEBUG_AGENTS=true up` (deck 03) becomes
     `./platformctl up --set DEBUG_AGENTS=true`.
   - The hackathon `CLAUDE.md` rule 3 and `conventions.md` add
