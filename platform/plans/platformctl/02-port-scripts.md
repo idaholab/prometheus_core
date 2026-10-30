@@ -136,6 +136,11 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
   `agent-template: platform`) become `make init-env` followed by
   `./platformctl config init --set DEEPLYNX_KEY=... ...`.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - The three scripts are gone and nothing outside the hackathon material and

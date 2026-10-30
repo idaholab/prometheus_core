@@ -101,6 +101,11 @@ None beyond 3a and 3b.
   for `test_integration_{backend,postgres,redis}.py`, split off
   `platform: up`.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - No doc, slide or skill teaches a platform `make` command or a raw

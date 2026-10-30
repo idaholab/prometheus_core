@@ -170,3 +170,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
 `system/envfile.py`, `config.py`, the `Paths` object (platform root and agent
 folder kept separate), agent discovery and the agent checks don't depend on
 the agent being inside the platform folder.
+
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Record each finding in the PR as fixed, deferred or rejected.

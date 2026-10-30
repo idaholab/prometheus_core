@@ -139,6 +139,11 @@ today; CI proves it.
   before writing the entry file. Failures also upload `doctor --json`.
 - The platform jobs depend on `platformctl: unit`.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - Every Make target behaves as before (golden files, compose equivalence).

@@ -167,6 +167,11 @@ before the hackathon.
 - None for existing commands: `make` doesn't call the tool until step 2.
   `./platformctl doctor` needs Python 3.10+, found by the shim.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, Linux/WSL, AI skills.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - `./platformctl --help` and `./platformctl doctor` work from any directory,

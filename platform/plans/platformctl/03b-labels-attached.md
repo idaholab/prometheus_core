@@ -96,6 +96,11 @@ agents register again after a platform restart without you doing anything.
 - **Manual (PR checklist):** WSL with Docker Desktop integration and with
   Engine in the distro.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - A second `up` from another folder stops with where the first one runs.

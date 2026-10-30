@@ -50,3 +50,8 @@ and `cluster-up` keeps its "already running" message.
 - Containers are found by service, never by name.
 - Checks declare the targets they apply to.
 - Agent discovery returns records, not compose file paths.
+
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, Linux/WSL.
+Record each finding in the PR as fixed, deferred or rejected.

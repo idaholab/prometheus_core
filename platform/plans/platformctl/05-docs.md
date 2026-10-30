@@ -45,6 +45,11 @@ change platformctl, and a final sweep.
 
 None.
 
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: user, technical, AI skills.
+Record each finding in the PR as fixed, deferred or rejected.
+
 ## Done when
 
 - A new contributor can add an action and a check from `ctl/README.md` alone.

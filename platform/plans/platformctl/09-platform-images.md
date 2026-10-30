@@ -87,3 +87,8 @@ None: `PLATFORM_SOURCE` defaults to `build`.
 - The entry file's `include` list is generated, so adding an images file
   changes nothing else.
 - Step 7 finds the platform through a submodule and compares versions.
+
+## Review
+
+Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, agent developer.
+Record each finding in the PR as fixed, deferred or rejected.

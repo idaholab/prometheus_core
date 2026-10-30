@@ -9,6 +9,8 @@ working by forwarding to it.
 - Command reference and the Make mapping: [`commands.md`](commands.md)
 - What breaks, and what only behaves differently:
   [`breaking-changes.md`](breaking-changes.md)
+- The independent reviews each step gets before merging:
+  [`reviews.md`](reviews.md)
 - One file per step below. Each step is one pull request and leaves `devel`
   working.
 
@@ -79,6 +81,12 @@ When a step is done, set its status here and in its file to `Done (<date>,
 - **Useful output:** each command says what it's doing and ends with what
   the user needs next, e.g. `up` ends with what's running and the URLs
   (`design.md`, "Output"). Each step lists the output it adds.
+- **Every step is reviewed before merging** by the reviewer agents listed for
+  it in `reviews.md` (user, agent developer, technical, CI, security,
+  rollout, Linux/WSL, AI skills), each with fresh context; the PR records
+  what was fixed, deferred or rejected. The CI reviewer looks above all for
+  what would break for a user that no test catches, and the simplest test
+  that would.
 - Every PR lists its **breaking changes** (`breaking-changes.md`) and has a
   short "What changes for you" block: commands, files created, first-run
   effects, how to roll back.
