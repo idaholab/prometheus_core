@@ -15,6 +15,10 @@ runs:
         report="$RUNNER_TEMP/doctor.json"
         ./platformctl doctor --json > "$report" || true
         jq -r '.checks[] | "\(.status)  \(.id)  \(.evidence)" + (if .fix != "" then "\n      fix: \(.fix)" else "" end)' "$report"
+        # The whole report as JSON, pass or fail: it is what a script or a skill would read
+        echo "::group::doctor --json"
+        cat "$report"
+        echo "::endgroup::"
         if ! jq -e '.ok and ([.checks[] | select(.status != "PASS")] | length == 0)' "$report" > /dev/null; then
           echo "::error::platformctl doctor did not report every check as PASS"
           exit 1
