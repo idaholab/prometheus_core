@@ -48,8 +48,9 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
   menu, "Saved LLM_CONFIG_PROFILE=... in .env."), and CI relies on the
   others.
 - **Makefile:** `init-env` → `config init`, `check` → `status --wait`,
-  `deeplynx-setup` → `deeplynx setup`, each forwarding `$(MAKEOVERRIDES)` as
-  `--set` and printing the new command. **`test-system`** calls
+  `deeplynx-setup` → `deeplynx setup`, each setting `PLATFORMCTL_VIA_MAKE=1`
+  (so the tool reads Make's command-line variables) and printing the new
+  command. **`test-system`** calls
   `scripts/check_platform.py` directly (`Makefile:259`); its recipe switches
   to `./platformctl status --wait`. `test_compose_static.py` parses that
   recipe; update it with it.

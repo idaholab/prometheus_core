@@ -16,10 +16,11 @@ still works, but differently.
 | B2 | 2 | Running the platform needs Python 3.10 or newer. Today `make up` runs `init_env.py` with any `python3`, including 3.9 | Only machines with no Python 3.10+ at all. The shim finds `python3.1x` and uv-managed Pythons, so a Mac with the built-in 3.9 `python3` plus uv's 3.12 works | Install Python 3.10+ (or uv). The shim prints the one command to run |
 | B3 | 3a | Make variables that were only internal plumbing are no longer read: `COMPOSE`, `COMPOSE_BASE`, `COMPOSE_AGENTS`, `COMPOSE_FILES`, `COMPOSE_FILES_NG`, `CLEAR_COMPOSE_FILES`, `UP_WAIT`, `RUN_CHECK`, `BASE_IMAGE_DEP`, `DEEPLYNX_DEP`, `AGENT_COMPOSE_FILES`, `PROFILE_FLAGS`, `INFRA_SCRIPTS` | Anyone overriding them on the command line (none found in docs or CI) | The documented settings and `--set` |
 
-`make <target> KEY=value` keeps beating `.env`, as today: the Makefile
-forwards its command-line variables (`$(MAKEOVERRIDES)`) as `--set`
-(`design.md`, "Settings and precedence"). `make logs SERVICE=...`, which
-deck 03 uses throughout, is unaffected.
+`make <target> KEY=value` keeps beating `.env`, as today, including secret
+keys and values with spaces: the tool reads Make's command-line variables
+from `MAKEFLAGS` and the environment (`design.md`, "Settings and
+precedence"). `make logs SERVICE=...`, which deck 03 uses throughout, is
+unaffected.
 
 ## Behaviour changes
 

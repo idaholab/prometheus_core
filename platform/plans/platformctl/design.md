@@ -344,15 +344,28 @@ Every Make variable becomes a setting with the same name and default.
 **Order:** defaults < environment < `.env` < `--set`, the same as Make
 today.
 
-- **`make X=y` keeps beating `.env`.** Make lists command-line variables in
-  `$(MAKEOVERRIDES)` (`make t X=cmd` gives `X=cmd`, `X=env make t` gives
-  nothing; verified with GNU Make 3.81). The Makefile forwards them:
-  `$(foreach v,$(MAKEOVERRIDES),--set '$(v)')`. A shell variable
-  (`X=y make up`) still loses to `.env`, as today. `doctor` warns, by key
-  name only, when `.env` hides a value from the environment.
+- **`make X=y` keeps beating `.env`.** The Makefile doesn't build argv from
+  its variables: `--set '$(v)'` over `$(MAKEOVERRIDES)` splits a value at
+  its spaces and is a shell syntax error on a `'` (verified with GNU Make
+  3.81). Instead the forwarding recipes set `PLATFORMCTL_VIA_MAKE=1`, and
+  the tool reads the names of Make's command-line variables from the
+  `MAKEFLAGS` environment variable (the words after ` -- `, with `\ `
+  unescaped) and their values from its own environment, where Make exports
+  them (verified: `make t "X=a b 'q'"` gives `MAKEFLAGS=... -- X=a\ b\ 'q'`
+  and `X=a b 'q'` in the recipe). `X=env make t` isn't in `MAKEFLAGS`, so a
+  shell variable (`X=y make up`) still loses to `.env`, as today. The
+  registry alone decides what each name is: a setting (it beats `.env`, like
+  `--set`), a Make variable mapped to an option (`SERVICE`, `TAIL`,
+  `FOLLOW`, `AGENT`), or unknown (ignored, with a one-line warning naming
+  it). A secret key given this way is accepted, as today: it's already on
+  the user's command line, and the value never passes through argv. `doctor`
+  warns, by key name only, when `.env` hides a value from the environment.
 - **`--set` refuses keys the registry marks secret** (they'd land in shell
-  history and `ps`): "set `LLM_API_KEY` in .env instead". The Makefile only
-  forwards non-secret keys, and says so for the rest.
+  history and `ps`): "set `LLM_API_KEY` in .env instead".
+- **Child processes don't inherit Make's variables.** `runner.py` drops
+  `MAKEFLAGS`, `MFLAGS`, `MAKELEVEL` and `MAKEOVERRIDES` from every child's
+  environment, so `make -C ../sdk` (from `build --base-only`) gets only the
+  variables the tool passes it.
 - **A blank `.env` line wins** over the environment, as with Make today. The
   one exception: a blank `PROMETHEUS_API_BASE_IMAGE_HASH` or
   `PROMETHEUS_API_BASE_IMAGE_REPO` falls back to the default (it currently

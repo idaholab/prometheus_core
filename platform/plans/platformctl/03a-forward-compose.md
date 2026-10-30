@@ -39,8 +39,9 @@ today; CI proves it.
     groups grow in 3c)
 - **Adapter:** `system/valkey.py`, through the target's `exec`.
 - **`build --base-only`** runs `make -C ../sdk build-local` with the
-  variables it needs passed explicitly (`LOCAL_IMAGE`, `CACHE_FROM`), since
-  they no longer arrive through `MAKEFLAGS`.
+  variables it needs passed explicitly (`LOCAL_IMAGE`, `CACHE_FROM`).
+  `runner.py` strips `MAKEFLAGS` and the other Make variables from its
+  environment, so nothing else leaks in from an outer `make`.
 - **Prerequisites:** every command that needs Docker runs the `preflight`
   checks first (today `down`, `logs`, `ps` and `test-integration` depend on
   `check-prerequisites` too); `SKIP_PREREQUISITES=1` skips them.
@@ -50,10 +51,13 @@ today; CI proves it.
     as in the "Make targets" table of `commands.md`.
   - Calls the shim as `sh $(CURDIR)/platformctl`, so `make -C` works and a
     lost executable bit doesn't matter.
-  - Forwards command-line variables: `$(foreach v,$(MAKEOVERRIDES),--set
-    '$(v)')`, so `make up LOCAL_SDK=true` still beats `.env`.
-  - Maps `SERVICE=` to `logs` arguments, `TAIL=`/`FOLLOW=` to the new
-    options, `AGENT=` to `doctor --agent`.
+  - Sets `PLATFORMCTL_VIA_MAKE=1` in each forwarding recipe. The tool reads
+    Make's command-line variables from `MAKEFLAGS` and the environment
+    (`design.md`, "Settings and precedence"), so `make up LOCAL_SDK=true`
+    still beats `.env` and values with spaces or quotes arrive intact. The
+    Makefile builds no `--set` arguments.
+  - The tool maps `SERVICE=` to `logs` arguments, `TAIL=`/`FOLLOW=` to the
+    new options, `AGENT=` to `doctor --agent`, from the same registry.
   - `down-v` passes `--yes --confirm clobber`, `clear-agent-registry` and
     `clear-admin-users` pass `--yes`: no new prompts for Make users or CI.
   - Each forwarded target prints the command it runs on stderr
@@ -113,8 +117,11 @@ today; CI proves it.
   Compose argv in table-driven golden tests of `targets/compose.py`; for
   each Make target, its `--dry-run` command sequence as a golden file
   (kept permanently, so later refactors can't drift from `make`); the
-  confirmation flags; Ctrl-C and exit codes; the Makefile forwarding,
-  including `MAKEOVERRIDES`; the secrets canary for every new command.
+  confirmation flags; Ctrl-C and exit codes; the Makefile forwarding: run
+  the real `make -n` against a copy of the Makefile in `tmp_path` with
+  values containing spaces, quotes and `$`, and parse what the tool would
+  read; `MAKEFLAGS` never reaching a child; the secrets canary for every new
+  command. On both the Ubuntu (Make 4.x) and macOS (Make 3.81) legs.
 - **Live:** `up`/`down`/`restart <service>`/`status`/`logs` (including
   `--tail` and `--no-follow`) on the minimal compose project; `reset
   registry` against real Valkey; Ctrl-C in the foreground (pseudo-terminal);

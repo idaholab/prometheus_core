@@ -99,7 +99,7 @@ Review the architecture and the tests:
    abstraction (an action calling Docker directly, a second place deciding
    images, a setting outside the registry)? Is anything over-engineered?
 2. **Correctness:** precedence (defaults < environment < `.env` <
-   `--set`, `MAKEOVERRIDES`), the compose entry file and `.platform.env`,
+   `--set`, Make's variables via `MAKEFLAGS`), the compose entry file and `.platform.env`,
    labels, signals and the terminal, argparse behaviour. Verify claims with
    small experiments in a temp folder rather than trusting the plan.
 3. **Tests:** run them. Is the coverage meaningful or does it restate the
