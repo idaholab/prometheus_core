@@ -76,6 +76,7 @@ jobs:
           projects=(
             sdk
             platform/backend
+            platform/ctl
             platform/tests
             platform/scripts:../tests
             platform/agents
