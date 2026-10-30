@@ -268,7 +268,7 @@ include:
   - path: [docker-compose.yml, docker-compose.agents.yml,
            docker-compose.build-cache.yml, docker-compose.override.yml,
            docker-compose.labels.yml]     # labels: from step 3b, always last
-    env_file: [.env, .platform.env]
+    env_file: [.platform.env]
 ```
 
 - `path` is exactly the compose file list above (only the files that apply
@@ -284,7 +284,9 @@ include:
   `.platform.env` is already covered by `*.env`.
 - **`.env` wins over `.platform.env`.** Retested with Compose 5.6: when
   `.env` sets a key, even to a blank value, Compose uses the `.env` value,
-  whatever the `env_file` order. Compose always loads the project's `.env`.
+  whatever the `env_file` order. Compose always loads the project's `.env`,
+  so `env_file` lists only `.platform.env` (verified: the same result, and
+  no "stat .env: no such file" when `.env` is missing).
   Only an exported shell variable beats it. `.platform.env` only fills keys
   that `.env` doesn't set. So:
   - **The tool** passes every derived value in its child environment, which
@@ -310,10 +312,11 @@ include:
 - **Why not `compose.yaml`?** Compose would pick it up automatically, but
   with `docker-compose.yml` next to it, Compose warns about "multiple config
   files" on every run.
-- `include: env_file` needs `.env` to exist, and Compose doesn't accept
-  `required: false` there (verified). The tool always runs `config init`
-  first; the generated header and `doctor` explain it for people running
-  Compose by hand.
+- `include: env_file` needs each file it lists to exist, and Compose doesn't
+  accept `required: false` there (verified). The tool always writes
+  `.platform.env` with the entry file, so a hand-run Compose works even
+  before `config init` has created `.env` (the `:?` messages in the compose
+  files then say which secret is missing).
 - `docker-compose.yml` gains one line,
   `name: ${COMPOSE_PROJECT_NAME:-prometheus_platform}`, so even
   `docker compose -f docker-compose.yml` can't silently create a second
