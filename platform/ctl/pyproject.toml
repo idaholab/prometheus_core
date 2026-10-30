@@ -30,7 +30,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["platformctl"]
+source_pkgs = ["platformctl"]
 relative_files = true
 
 [tool.coverage.paths]
