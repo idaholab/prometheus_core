@@ -25,6 +25,16 @@
 >   `git archive <sha> | tar -x -C "$TMPDIR/<you>"`. The export has no `.git`, so put checks
 >   that need git under Not covered, and don't report them as findings."
 >
+> Stay on your brief. You are one of several reviewers running in parallel, each with its own
+> perspective, and the others cover what your brief leaves out. What you add to the panel is
+> depth on your own questions, so spend your time and your word budget there. When you notice
+> something outside your brief, follow it only if it bears on one of your questions (for
+> example, a security reviewer tracing a token into a log line, or a user reviewer hitting a
+> crash while walking through setup). Otherwise don't investigate it. If it looks serious, name
+> it in one line under "Outside my focus" and go back to your brief. An off-brief finding
+> usually repeats another reviewer's, and it costs the time you didn't spend on your own
+> questions.
+>
 > Rules: don't modify tracked files. Never print secrets: never `cat` a `.env`, never run `env`,
 > `printenv`, `docker compose config` or `docker inspect` on a real stack, and read `.env.example`
 > instead. Start containers only in a throwaway project with your own project name and ports
@@ -44,4 +54,5 @@
 >
 > Works well: <at most 3 short items>
 > Not covered: <checks you couldn't run, and why>
+> Outside my focus: <at most 2 one-line notes on things you saw but didn't investigate, or "none">
 > ```
