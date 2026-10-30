@@ -176,9 +176,12 @@ Global options (`--set`, `--target`, `--dry-run`, `--verbose`, `--quiet`,
   itself in the epilog. A test pins the `--help` output, so a new command
   lands in the right place.
 - **Global options after the command** (`up --set X=1`, as people will
-  type): each subparser gets the global options through `parents=`, with
-  `default=SUPPRESS` so a subparser can't overwrite a value parsed before the
-  command. Both positions work.
+  type): each subparser gets the global options through `parents=`, but
+  with its own `dest` (`sub_set`, `sub_verbose`, ...). `cli.py` merges the
+  two copies after parsing: repeatable options (`--set`) concatenate, flags
+  OR. `default=SUPPRESS` alone isn't enough: `--set A=1 up --set B=2` then
+  parses to `['B=2']` and `A=1` is lost (verified on 3.10 and 3.14). A test
+  covers the mixed case.
 - **`-- <args>`:** `nargs="*"` swallows what follows `--`
   (`restart backend -- --force-recreate` parses as two services). `cli.py`
   splits argv at the first `--` before parsing and hands the rest to the

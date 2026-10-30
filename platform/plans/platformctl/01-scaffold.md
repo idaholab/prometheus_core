@@ -47,8 +47,9 @@ step that may land before the hackathon freeze (2026-11-03).
   - `cli.py`: parser from the action registry (plain commands, groups,
     `ALIASES` with the tool's own deprecation notice, hidden flags); the
     sectioned `--help` (custom listing) and option groups, most used first;
-    global options accepted before or after the command (`parents=`,
-    `default=SUPPRESS`); argv split at the first `--`; `--version [--json]`;
+    global options accepted before or after the command (`parents=` with a
+    separate `dest` per position, merged in `cli.py`); argv split at the
+    first `--`; `--version [--json]`;
     the exit codes (0, 1, 2, 3, 130); a top-level error handler that scrubs
     messages and shows tracebacks only with `--debug` (`design.md`, "Help
     layout", "Extending and changing commands").
@@ -106,7 +107,8 @@ step that may land before the hackathon freeze (2026-11-03).
   entry file and `.platform.env` for each (and that `.platform.env` never
   has a secret key); each check passing, failing and skipped, against
   recorded output from macOS, Ubuntu and WSL; aliases and hidden flags;
-  global options in both positions; the `--` split; the `--help` layout;
+  global options in both positions, including mixed
+  (`--set A=1 up --set B=2` keeps both); the `--` split; the `--help` layout;
   the JSON contract (golden files); the version check; the `# pragma: no
   cover` ban.
 - **Secrets canary:** every secret key gets a unique sentinel value; every
