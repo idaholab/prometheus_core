@@ -29,8 +29,10 @@ here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" && pwd -P) || exit 1
 # One-line probe: new enough, and the stdlib modules the tool needs exist.
 probe='import sys, json, urllib.request; sys.exit(0 if sys.version_info >= (3, 10) else 1)'
 
+# -I, like the final run: the probe imports json, which a json.py in the current
+# folder would otherwise replace (and run).
 usable() {
-    "$1" -c "$probe" >/dev/null 2>&1
+    "$1" -I -c "$probe" >/dev/null 2>&1
 }
 
 python=

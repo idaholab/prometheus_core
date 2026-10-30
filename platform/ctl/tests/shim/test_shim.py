@@ -61,7 +61,7 @@ def python_stub(directory: Path, name: str, version: tuple[int, int], marker: st
     return stub(
         directory,
         name,
-        f'case "$1" in -c) exit {ok} ;; esac\necho "ran {marker or name}: $*"\n',
+        f'case "$*" in "-I -c "*) exit {ok} ;; esac\necho "ran {marker or name}: $*"\n',
     )
 
 
@@ -206,6 +206,16 @@ def test_the_shim_is_posix_sh_and_executable():
     for bashism in ("[[", "local ", "function ", "<(", "${BASH", "source "):
         assert bashism not in text
     assert SHIM.stat().st_mode & stat.S_IXUSR
+
+
+def test_a_json_py_in_the_current_folder_is_not_run_by_the_probe(tmp_path):
+    """The probe imports json, so it runs isolated (-I) like the tool: a `json.py` here must not run."""
+    marker = tmp_path / "marker"
+    (tmp_path / "json.py").write_text(f"open({str(marker)!r}, 'w').write('ran')\n")
+    env = {"PATH": f"{Path(sys.executable).parent}:{SYSTEM_PATH}", "PLATFORMCTL_PYTHON": sys.executable}
+    done = subprocess.run([*SHELL, str(SHIM), "--version"], capture_output=True, text=True, env=env, cwd=tmp_path)
+    assert done.returncode == 0 and done.stdout.startswith("platformctl "), done.stderr
+    assert not marker.exists()
 
 
 def test_the_real_python_runs_the_real_tool(tmp_path):
