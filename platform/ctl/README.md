@@ -18,7 +18,7 @@ scaffold and `doctor`. Nothing else calls it yet, and the Makefile is unchanged.
 ```sh
 cd platform/ctl
 uv sync                                                    # once
-uv run pytest --cov=platformctl --cov-branch               # unit tests; 100% line and branch coverage
+uv run pytest --cov --cov-branch               # unit tests; 100% line and branch coverage
 uv run pytest tests/shim                                   # the shim, against stub interpreters
 uv run pytest tests/shim --shim-shell dash                 # ...under another shell
 uv run pytest tests/live --live                            # real shim, real Docker; never with --cov

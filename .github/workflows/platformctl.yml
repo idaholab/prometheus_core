@@ -67,7 +67,7 @@ jobs:
         # branch that only one Python version takes still counts
         env:
           COVERAGE_FILE: .coverage.${{ matrix.os }}-${{ matrix.python }}
-        run: uv run --frozen --no-sync pytest --color=yes --cov=platformctl --cov-branch --cov-fail-under=0
+        run: uv run --frozen --no-sync pytest --color=yes --cov --cov-branch --cov-fail-under=0
       - name: Upload coverage data
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -108,12 +108,16 @@ jobs:
         run: |
           uv run --frozen --no-sync coverage combine
           uv run --frozen --no-sync coverage report
-          total=$(uv run --frozen --no-sync coverage report --format=total --fail-under=0)
-          echo "platformctl line and branch coverage: **${total}%**" >> "$GITHUB_STEP_SUMMARY"
-      # No Codecov upload yet: codecov.yml waits for a fixed number of uploads
-      # (after_n_builds), and this workflow only runs when platform/ctl changes, so a
-      # new upload would stall the reports of every other PR. Step 2 makes these jobs
-      # unconditional and adds the upload and the flag together
+          uv run --frozen --no-sync coverage xml
+      - name: Coverage
+        # This workflow only runs when platform/ctl changes, so the upload is not counted in
+        # codecov.yml's after_n_builds, and the flag carries its last result forward
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/coverage
+        with:
+          directory: platform/ctl
+          flag: platformctl
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   shim:
     name: "platformctl: shim ${{ matrix.name }}"
