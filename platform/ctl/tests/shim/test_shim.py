@@ -158,13 +158,13 @@ def test_uv_is_the_fallback(tmp_path, bin_dir):
 
 
 def test_nothing_found_prints_one_install_command(tmp_path, bin_dir):
-    """With no Python 3.10+ and no uv, the shim prints exactly one install command."""
+    """With no Python 3.10+ and no uv, the shim's only suggestion is to install uv, with one command."""
     skip_if_homebrew_python()
     done = run(tmp_path, [bin_dir])
     assert done.returncode == 1
     assert "needs Python 3.10 or newer" in done.stderr
-    assert done.stderr.count("Install one with:") == 1
-    assert ("brew install" in done.stderr) or ("apt install" in done.stderr)
+    assert done.stderr.count("curl -LsSf https://astral.sh/uv/install.sh | sh") == 1
+    assert "brew" not in done.stderr and "apt" not in done.stderr
 
 
 def test_the_arguments_are_passed_through_untouched(tmp_path, bin_dir):

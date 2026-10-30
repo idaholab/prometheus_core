@@ -66,8 +66,9 @@ Why `platform/ctl/`:
   `--default`). Debian 11 and RHEL 9 also ship 3.9. The shim tries, in order:
   `$PLATFORMCTL_PYTHON`, `python3.14` down to `python3.10`, `python3`, then
   `uv run --no-project --python '>=3.10' python`. Each candidate is checked
-  with a one-line version test. If none works, it prints one install command
-  for the OS. On macOS it tries Homebrew's Python before `/usr/bin/python3`,
+  with a one-line version test. If none works, its only suggestion is to
+  install uv, with uv's one-line installer (no `brew`, `apt` or other package
+  manager, whatever the OS). On macOS it tries Homebrew's Python before `/usr/bin/python3`,
   which opens an install dialog without the Command Line Tools.
 - **`__main__.py` parses on 3.9**: no 3.10+ syntax, and `cli` is imported
   only after the version check, so even a wrong interpreter gets a clear

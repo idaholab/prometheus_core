@@ -64,12 +64,10 @@ if [ -z "$python" ] && command -v uv >/dev/null 2>&1; then
 fi
 
 if [ -z "$python" ]; then
-    case "$(uname -s)" in
-        Darwin) install='brew install python@3.12   (or: brew install uv)' ;;
-        *) install='sudo apt install python3   (or: curl -LsSf https://astral.sh/uv/install.sh | sh)' ;;
-    esac
     echo "platformctl needs Python 3.10 or newer, and none was found." >&2
-    echo "Install one with: $install" >&2
+    echo "Install uv, which finds or downloads a Python for you:" >&2
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+    echo "Then open a new terminal and run this again." >&2
     exit 1
 fi
 

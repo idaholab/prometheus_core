@@ -119,14 +119,15 @@ def test_a_python3_that_is_3_9_is_skipped_for_a_newer_python(python39, shim_shel
 
 
 def test_a_lone_python_3_9_gets_the_install_message(python39, shim_shell, tool_dir, tmp_path):
-    """With only a 3.9 (and no uv), the shim prints one install command, not a traceback."""
+    """With only a 3.9 (and no uv), the shim suggests installing uv, not a traceback."""
     if sys.platform == "darwin" and any(Path(p).exists() for p in HOMEBREW_PYTHONS):
         pytest.skip("this Mac has a Homebrew Python, which the shim would use")
     (tool_dir / "python3").symlink_to(python39)
     done = run_shim(shim_shell, tool_dir, tmp_path, "--version")
     assert done.returncode == 1
     assert "needs Python 3.10 or newer, and none was found" in done.stderr
-    assert done.stderr.count("Install one with:") == 1
+    assert done.stderr.count("curl -LsSf https://astral.sh/uv/install.sh | sh") == 1
+    assert "brew" not in done.stderr and "apt" not in done.stderr
     assert "Traceback" not in done.stderr and done.stdout == ""
 
 
