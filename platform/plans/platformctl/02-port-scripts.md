@@ -152,6 +152,9 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
   terminal, the pull timeout); `config set` (refusing secrets) and
   `config set --from-env` (a missing key); file mode and atomic
   writes; the secrets canary for the new commands.
+- **`make -n` fixtures for step 3a** (`design.md`, "Tests"): record
+  `make -n <target>` for every compose target over the variable matrix,
+  with a placeholder `.env`, while the Makefile logic still exists.
 - **Live:** `config init` on a real file in `tmp_path`, including its menu
   in a pseudo-terminal; `status --wait` against a stub server.
 

@@ -115,8 +115,9 @@ today; CI proves it.
 
 - **Unit:** actions against a fake `Target` (what they ask for); the exact
   Compose argv in table-driven golden tests of `targets/compose.py`; for
-  each Make target, its `--dry-run` command sequence as a golden file
-  (kept permanently, so later refactors can't drift from `make`); the
+  each Make target, its `--dry-run` compared with the `make -n` fixtures
+  step 2 recorded (a migration test: the fixtures are deleted once this
+  step merges; `design.md`, "Tests"); the
   confirmation flags; Ctrl-C and exit codes; the Makefile forwarding: run
   the real `make -n` against a copy of the Makefile in `tmp_path` with
   values containing spaces, quotes and `$`, and parse what the tool would
@@ -158,7 +159,8 @@ Record each finding in the PR as fixed, deferred or rejected.
 
 ## Done when
 
-- Every Make target behaves as before (golden files, compose equivalence).
+- Every Make target behaves as before (the `make -n` fixtures, compose
+  equivalence).
 - `docker compose -f docker-compose.platform.yml --profile dev up -d` starts
   the same stack as `make up` (without the setup steps it skips).
 - CI's `platform: up` job (which runs `make up`, `restart`, `ng-restart`,

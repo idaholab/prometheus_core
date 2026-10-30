@@ -720,9 +720,17 @@ restart.
   WSL.
 - Messages that docs, slides or CI quote are pinned by tests. So is the
   `--json` output (golden files) and the `--help` layout.
-- **Make equivalence, kept permanently.** For each Make target, the
-  `--dry-run` command sequence is a golden file, so later refactors can't
-  drift from what `make` used to do.
+- **Make equivalence, as a migration test.** A golden file written from the
+  new `--dry-run` output can't show what `make` used to do. So step 2,
+  while the Makefile logic still exists, records `make -n <target>` for
+  every compose target over a variable matrix (`PROFILE`, `CHECK=false`,
+  `LOCAL_SDK`, `DEBUG_AGENTS`, with and without the override file) as
+  fixtures, using a `.env` of placeholders (never a real `.env`: `make -n`
+  expands values). Step 3a compares each target's `--dry-run` with them,
+  normalising only the `-f` list into the entry file, and deletes the
+  fixtures once it merges. After that, the compose-equivalence CI job
+  (`config --format json`) is the lasting guard, and the Compose argv stays
+  pinned in one place, `targets/compose.py`.
 - The secrets canary test (see "Secrets").
 
 ### Live (`tests/live/`)
