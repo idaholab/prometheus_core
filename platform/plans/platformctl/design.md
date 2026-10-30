@@ -78,7 +78,7 @@ Why `platform/ctl/`:
   platform folder from its own location, never from the current directory,
   so `make -C <platform> ...` works. The Makefile calls it as
   `sh $(CURDIR)/platformctl`, so a lost executable bit doesn't matter.
-- **Line endings:** `.gitattributes` (new in step 1) forces LF for
+- **Line endings:** `.gitattributes` (new in step 2) forces LF for
   `platform/platformctl`, `*.sh` and `*.py`, so a Windows-side checkout
   can't give the shim CRLF line endings (`/bin/sh^M: bad interpreter`).
 - **Not under `sudo`:** the tool refuses to run as root via `sudo`
@@ -691,9 +691,10 @@ Written for the person using the platform, not for contributors:
 - **`from-make.md`** is one table: make command, new command, and one line
   on what it now does for you that make didn't (e.g. `make up` →
   `./platformctl up`: "also re-registers your agent and prints the URLs").
-- Pages only describe commands that exist. Step 1 creates the section with
-  `index.md` (`doctor`) and an empty `from-make.md`; each step adds its
-  commands to the pages and rows to the table.
+- Pages only describe commands that exist. Step 2 creates the section with
+  `index.md` (`doctor`) and `from-make.md` (step 1 stays out of the docs for
+  the hackathon freeze); each step adds its commands to the pages and rows
+  to the table.
 - `prometheus-platform.md`'s "Getting started" and "Common commands" link
   to the section instead of repeating it. `index.md` (site home) links to
   it.
@@ -711,7 +712,7 @@ the docs stop teaching them. The user guide above is updated in every step.
   when every command they use exists. Steps 2 and 3a update only the pages
   that cover their own commands.
 - **The hackathon freeze.** Nothing participants use (slides, skills,
-  knowledge base, `platform/Makefile`) changes from shortly before the event
+  knowledge base, `platform/Makefile`, the docs) changes from 2026-11-03
   until after Day 2. Steps that touch them wait.
 - **Skills and clones can differ.** Participants run the skills against
   their own `prometheus_core` clone at any commit. Skills check

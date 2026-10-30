@@ -54,6 +54,12 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
   to `./platformctl status --wait`. `test_compose_static.py` parses that
   recipe; update it with it.
 - **Remove** the three scripts.
+- **Moved from step 1** (it had to stay out of the hackathon freeze):
+  - `make doctor`: `doctor: ##@ ...` forwarding to the shim.
+  - **`.gitattributes`** (repo root, new): `platform/platformctl text
+    eol=lf`, `*.sh text eol=lf`, `*.py text eol=lf`.
+  - The step 1 CI jobs become required, and their path filter widens to
+    `platform/Makefile`, `platform/scripts/` and the compose files.
 - **Tests:** move `tests/infrastructure/test_check_platform.py`,
   `test_deeplynx_setup.py` and the `init_env` parts of `test_env_vars.py`
   into `ctl/tests/unit/` in this PR. Keep the parts of `test_env_vars.py`
@@ -90,9 +96,18 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
 
 ## Docs and slides
 
+- **Set up the user guide** (moved from step 1) on the docs site,
+  `platform/docs/docs/platformctl/` (`design.md`, "User guide"): `index.md`
+  with what platformctl is, how to run it, and `./platformctl doctor`;
+  `troubleshooting.md` with `doctor`; `from-make.md` with its table header
+  and the `check-prerequisites` and `doctor` rows. Link the section from the
+  site's `index.md` and from `prometheus-platform.md`'s "Getting started".
+  Check it with `uv run zensical build` in `platform/docs`.
 - **User guide:** `setup.md` (`config init`, its questions, `config show`,
   `deeplynx setup`), `everyday.md` started with `status --wait`;
   `from-make.md` rows for `init-env`, `check`, `deeplynx-setup`.
+- `platform/README.md`: a short "platformctl" section that links to the user
+  guide (moved from step 1).
 
 Switch to `./platformctl config init`, `./platformctl status --wait` and
 `./platformctl deeplynx setup` in:

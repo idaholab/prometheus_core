@@ -21,17 +21,18 @@ any code was written.
 ## Timing
 
 The hackathon runs on 2026-11-06 (Day 2 follows). Its slides, skills and
-knowledge base are frozen from shortly before the event until after Day 2,
-and so is `platform/Makefile`. Only step 1 may land before the event, and it
-changes nothing participants use (no Makefile, slides or skills changes).
-Steps 2 onward land after Day 2.
+knowledge base are frozen from 2026-11-03 until after Day 2, and so are
+`platform/Makefile`, the docs and repo-wide files such as `.gitattributes`.
+Only step 1 may land before the freeze, and it touches nothing outside
+`platform/ctl/` and the `platform/platformctl` shim: no Makefile, docs,
+slides, skills or required CI jobs. Steps 2 onward land after Day 2.
 
 ## Steps
 
 | # | File | Summary | Depends on | Status |
 |---|------|---------|------------|--------|
-| 1 | [`01-scaffold.md`](01-scaffold.md) | Shim, package, settings, runner, compose target, output, `doctor` framework, the user guide, test setup, CI | - | Not started |
-| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts | 1 | Not started |
+| 1 | [`01-scaffold.md`](01-scaffold.md) | Shim, package, settings, runner, compose target, output, `doctor` framework, test setup, path-filtered CI | - | Not started |
+| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts; `make doctor`, `.gitattributes`, the user guide, required CI | 1 | Not started |
 | 3a | [`03a-forward-compose.md`](03a-forward-compose.md) | The compose entry file; the Makefile forwards every compose target with the same behaviour | 2 | Not started |
 | 3b | [`03b-labels-attached.md`](03b-labels-attached.md) | Platform labels, "already running elsewhere", port checks, restarting your agent | 3a | Not started |
 | 3c | [`03c-groups-docs.md`](03c-groups-docs.md) | `agents`, `reset`, `compose`, per-service `up`; switch docs, slides and CI to `./platformctl` | 3b | Not started |
@@ -73,7 +74,7 @@ When a step is done, set its status here and in its file to `Done (<date>,
 - Every step updates the docs and hackathon slides it touches, in the same
   PR, and switches them straight to the new commands (`./platformctl ...`).
   Where something gets simpler, the slide gets simpler too. The user guide on
-  the docs site (`platform/docs/docs/platformctl/`, set up in step 1) is
+  the docs site (`platform/docs/docs/platformctl/`, set up in step 2) is
   updated in every step. Exception: nothing participants use changes during
   the hackathon freeze (see Timing).
 - **Replace as you go:** a step that adds a capability also replaces the old

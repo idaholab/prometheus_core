@@ -5,10 +5,11 @@
 ## Goal
 
 Add the shim, the package and its test setup, with the core pieces every
-later step builds on, and a first `doctor`. No existing behaviour changes,
-and nothing participants use changes: the Makefile only gains `make doctor`,
-and the hackathon material is untouched. This is the one step that may land
-before the hackathon.
+later step builds on, and a first `doctor`. No existing behaviour changes:
+the change stays inside `platform/ctl/` and the `platform/platformctl` shim.
+No Makefile, docs, slides, skills or repo-wide files change, and the new CI
+jobs run only when those paths change and aren't required. This is the one
+step that may land before the hackathon freeze (2026-11-03).
 
 ## Work
 
@@ -19,8 +20,6 @@ before the hackathon.
   one install command for the OS. Then
   `exec env PYTHONPATH="<platform>/ctl" "$python" -m platformctl "$@"`
   (`design.md`, "Runtime").
-- **`.gitattributes`** (repo root, new): `platform/platformctl text eol=lf`,
-  `*.sh text eol=lf`, `*.py text eol=lf`.
 - **Project** `platform/ctl/`: `pyproject.toml` (`requires-python >=3.10`,
   dev deps pytest, pytest-cov, ruff; branch coverage; the `live` marker),
   a committed `uv.lock`, `README.md`, `.gitignore`.
@@ -94,8 +93,8 @@ before the hackathon.
     hand-run Compose will use it), `.env` file mode and git-ignore
   - `checkout-path`: CRLF in the shim, a checkout on `/mnt/<drive>` (WSL)
 - **Actions:** `doctor` (with `--json`, `--list`, `--tag`).
-- **Makefile:** `doctor: ##@ ...` forwarding to `sh $(CURDIR)/platformctl
-  doctor`.
+- **Not in this step** (moved to step 2, after the freeze): `make doctor`,
+  `.gitattributes`, the user guide and `platform/README.md`.
 
 ## Tests
 
@@ -118,6 +117,8 @@ before the hackathon.
 
 ## CI
 
+- **Path filter:** the new jobs run only when `platform/ctl/**` or
+  `platform/platformctl` changes, and aren't required checks until step 2.
 - **Plumbing:** add `platform/ctl` to the `ruff` job's project list; list
   `platform/ctl` in `.github/dependabot.yml` (`test_dependabot.py` requires
   it for the committed `uv.lock`).
@@ -147,25 +148,18 @@ before the hackathon.
 
 ## Docs and slides
 
-- **Set up the user guide** on the docs site,
-  `platform/docs/docs/platformctl/` (`design.md`, "User guide"): `index.md`
-  with what platformctl is, how to run it, and `./platformctl doctor`;
-  `troubleshooting.md` with `doctor`; `from-make.md` with its table header
-  and the `check-prerequisites` row. Link the section from the site's
-  `index.md` and from `prometheus-platform.md`'s "Getting started". Check it
-  with `uv run zensical build` in `platform/docs`.
 - `ctl/README.md`: what platformctl is, how to run it and its tests, how to
   add an action or a check, and the "Update the docs too" section (first
   version; step 5 completes it).
-- `platform/README.md`: a short "platformctl" section that links to the user
-  guide, and Python 3.10+ (found automatically) in its prerequisites.
-- **Hackathon: nothing.** The material is frozen for the event, and
-  `doctor` reaches it in step 4.
+- **Nothing else.** The user guide and `platform/README.md` follow in step 2;
+  the hackathon material is frozen for the event, and `doctor` reaches it in
+  step 4.
 
 ## Breaking changes
 
-- None for existing commands: `make` doesn't call the tool until step 2.
-  `./platformctl doctor` needs Python 3.10+, found by the shim.
+- None: nothing outside `platform/ctl/` and the shim changes, and `make`
+  doesn't call the tool until step 2. `./platformctl doctor` needs Python
+  3.10+, found by the shim.
 
 ## Review
 
