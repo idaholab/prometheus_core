@@ -19,9 +19,13 @@
 - **Added to the shim:** it follows symlinks to find `ctl/` (found by the live test).
 - **Added to `config`:** a malformed `.env` is recorded, not raised, so `doctor` can report it
   while every other command stops on it.
-- **Flaky test, not ours:** `platform/tests/infrastructure/test_deeplynx_setup.py::
-  test_find_or_create_project_raises_on_errors[POST]` fails about one run in three on macOS
-  (`ConnectionResetError` from its stub server); it also fails with this step's changes removed.
+- **Flaky test, cause not established:** `platform/tests/infrastructure/test_deeplynx_setup.py::
+  test_find_or_create_project_raises_on_errors[POST]` failed in about 3 of 8 isolated runs and 1
+  of 3 full static runs with this step's changes applied (`ConnectionResetError` from its stub
+  server). On the baseline it passed the one time I ran it, which is too few runs to say it is
+  flaky there too. Nothing in that test or in `platform/tests/infrastructure/` references
+  platformctl, so a link is unlikely, but I did not rule it out. Check it on a clean `devel` a
+  few times before merging.
 
 ## Goal
 
