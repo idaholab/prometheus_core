@@ -27,7 +27,8 @@ today; CI proves it.
   - `up` (`--no-build`, `--foreground`, `--no-check`, `--frontend`,
     `-- <args>`, hidden `--no-generate`)
   - `down` (`--volumes`)
-  - `restart` (the platform without rebuilding) and `restart <service...>`
+  - `restart` (the platform without rebuilding; hidden `--no-generate`)
+    and `restart <service...>`
     (only those services, with "not rebuilt" in its output)
   - `build` (`--plain`, `--base-only`)
   - `logs [service...]` (`--tail N`, `--since`, `--no-follow`, `--follow`;

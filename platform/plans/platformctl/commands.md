@@ -53,7 +53,7 @@ to one of them (see "Make targets" below).
 
 **Global options** (before or after the command)
 - `--set KEY=VALUE`, `--target compose|k3d`, `--dry-run`, `--verbose`,
-  `--quiet`, `--json`, `--version`, `--yes`
+  `--quiet`, `--json`, `--version`, `--yes`, `--debug`
 
 **Later**
 - `up`, `down`, `logs`, `doctor` with `--agent <dir>` for agent folders,
@@ -90,7 +90,7 @@ layout" in `design.md`):
 Run the platform:   up, down, restart, status, logs, build
 Set up:             config, agents, deeplynx
 Troubleshoot:       doctor, reset, compose
-Global options:     --set, --target, --dry-run, --verbose, --quiet, --json, --version, --yes
+Global options:     --set, --target, --dry-run, --verbose, --quiet, --json, --yes, --debug, --version
 ```
 
 ## Global options
@@ -108,6 +108,7 @@ Accepted before or after the command (`./platformctl --set X=1 up` and
 | `--json` | On `status`, `agents list`, `doctor`, `config show` and `--version`: versioned, machine-readable output (`design.md`, "JSON contract") |
 | `--version` | The tool and platform version, and what this version supports |
 | `--yes` | Answer yes to confirmations, for scripts and CI (`reset data` and `down --volumes` also need `--confirm clobber`) |
+| `--debug` | Show tracebacks (scrubbed) on an unexpected error. Off in CI |
 | `-h`, `--help` | Help for the tool, a group or a command |
 
 Exit codes: 0 OK, 1 failure, 2 usage error (including "needs a terminal or
@@ -125,7 +126,7 @@ Exit codes: 0 OK, 1 failure, 2 usage error (including "needs a terminal or
 | `up --no-restart-agents` | Only print your agents instead of restarting them |
 | `up --frontend dev\|prod\|none` | Which React frontend to include (default `dev`; the `PROFILE` setting) |
 | `up -- <args>` | Extra arguments for `docker compose up` |
-| `up --no-generate` (hidden) | Keep the existing agents file; only for the `ng-*` Make targets |
+| `up --no-generate`, `restart --no-generate` (hidden) | Keep the existing agents file; only for the `ng-*` Make targets |
 | `down` | Stop all services. Your agents keep running, as today, and are named |
 | `down --volumes` | Stop and delete all volumes, after you type `clobber` (`--yes --confirm clobber` for scripts) |
 | `down --agents` | Also stop your agents, after confirming |

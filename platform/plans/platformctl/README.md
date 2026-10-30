@@ -49,7 +49,7 @@ LiteLLM text that step 6 fixes). Check them again before each step.
 | 3a | [`03a-forward-compose.md`](03a-forward-compose.md) | The compose entry file; the Makefile forwards every compose target with the same behaviour | 2 | Not started |
 | 3b | [`03b-labels-attached.md`](03b-labels-attached.md) | Platform labels, "already running elsewhere", port checks, restarting your agent | 3a | Not started |
 | 3c | [`03c-groups-docs.md`](03c-groups-docs.md) | `agents`, `reset`, `compose`, per-service `up`; switch docs, slides and CI to `./platformctl` | 3b | Not started |
-| 4 | [`04-doctor.md`](04-doctor.md) | Full platform and agent-folder checks; open chat turns; hints on failure | 3c | Not started |
+| 4 | [`04-doctor.md`](04-doctor.md) | Full platform and agent-folder checks; hints on failure | 3c | Not started |
 | 5 | [`05-docs.md`](05-docs.md) | Contributor docs and a final sweep | 4 | Not started |
 | 6 | [`06-fix-existing-docs.md`](06-fix-existing-docs.md) | Follow-on: fix doc problems that predate this work | 5 | Not started |
 | 7 | [`07-agent-folders.md`](07-agent-folders.md) | Follow-on: agent folders, in this repo and in their own repositories, on platformctl | 4 | Not started |

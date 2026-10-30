@@ -165,7 +165,7 @@ The same applies inside a command: its options are grouped
 | Advanced | `-- <compose args>`; hidden: `--no-generate` |
 
 Global options (`--set`, `--target`, `--dry-run`, `--verbose`, `--quiet`,
-`--json`, `--version`) are listed last.
+`--json`, `--yes`, `--debug`, `--version`) are listed last.
 
 **What argparse can and can't do here** (checked on 3.10, 3.13, 3.14):
 
@@ -300,7 +300,8 @@ include:
     derived key (the base-image pin or repo, `BUILD_CACHE*`), a hand-run
     Compose uses that value instead of the derived one, e.g. with
     `LOCAL_SDK=true` plus an uncommented pin, or a blank pin line.
-  - The compose files stay as they are. Instead, `doctor` warns, and `up`
+  - The compose files stay as they are, apart from the one `name:` line
+    below. Instead, `doctor` warns, and `up`
     prints a one-line note, when `.env` sets a derived key, naming the key
     and saying a hand-run Compose will use it. The user guide's
     `compose.md` says the same.
@@ -352,7 +353,11 @@ include:
 
 ## Settings and precedence
 
-Every Make variable becomes a setting with the same name and default.
+Every documented Make variable becomes a setting with the same name and
+default. The exceptions: the Makefile's internal plumbing, which is no
+longer read (`breaking-changes.md`, B3), and `SERVICE`, `TAIL`, `FOLLOW`
+and `AGENT`, which the registry maps to command options rather than
+settings.
 
 **Order:** defaults < environment < `.env` < `--set`, the same as Make
 today.
@@ -413,7 +418,7 @@ Settings: `COMPOSE_PROJECT_NAME`, `LOCAL_SDK`, `PROMETHEUS_API_BASE_IMAGE_REPO`,
 `CLIENT_AGENT_PORT`, `PROFILE` (`--frontend`), `UP_ARGS`, `CHECK`,
 `RESTART_AGENTS`, `WAIT_TIMEOUT`, `CHECK_TIMEOUT`, `BACKEND_PORT`,
 `FRONTEND_DEV_PORT`, `FRONTEND_PROD_PORT`, `REDIS_LOCAL_PORT`,
-`LITELLM_LOCAL_PORT`, `USE_BUILD_CACHE`, `BUILD_CACHE`,
+`USE_BUILD_CACHE`, `BUILD_CACHE`,
 `BUILD_CACHE_PLATFORM`, `SKIP_PREREQUISITES`, `PLATFORM_TARGET`,
 `PLATFORM_SOURCE`.
 
