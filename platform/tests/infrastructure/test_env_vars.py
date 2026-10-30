@@ -132,7 +132,9 @@ def test_init_env_creates_an_owner_only_env_and_keeps_an_existing_mode(tmp_path,
 
     # An existing .env that gets a missing value filled in keeps whatever mode its owner chose
     env.chmod(0o640)
-    env.write_text(env.read_text().replace("AGENT_SECRET=" + init_env.values(env.read_text())["AGENT_SECRET"], "AGENT_SECRET="))
+    env.write_text(
+        env.read_text().replace("AGENT_SECRET=" + init_env.values(env.read_text())["AGENT_SECRET"], "AGENT_SECRET=")
+    )
     assert init_env.main() == 0
     assert init_env.values(env.read_text())["AGENT_SECRET"], "the blank secret was regenerated"
     assert stat.S_IMODE(env.stat().st_mode) == 0o640, "an existing .env's mode must be left alone"
