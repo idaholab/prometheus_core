@@ -777,7 +777,6 @@ jobs:
       LITELLM_MASTER_KEY: placeholder
       LLM_API_KEY: placeholder
       LLM_CONFIG_PROFILE: placeholder
-      PROMETHEUS_API_BASE_IMAGE_HASH: placeholder
       REDIS_PASSWORD: placeholder
       # For docker-compose.build-cache.yml, with BUILD_CACHE from the workflow
       BUILD_CACHE_PLATFORM: amd64
@@ -798,7 +797,7 @@ jobs:
               for system_test in false true; do
                 combo="debug=$debug optional=$optional system-test=$system_test"
                 echo "::group::compose $combo"
-                files=(-f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.build-cache.yml)
+                files=(-f docker-compose.yml -f docker-compose.agents.yml -f docker-compose.build-cache.yml -f docker-compose.agents.build-cache.yml)
                 if [ "$system_test" = true ]; then
                   files+=(-f docker-compose.system-test.yml)
                 fi
@@ -882,7 +881,8 @@ jobs:
         working-directory: platform
     env:
       # CI only: build the prometheus_api base image from ../sdk, so the PR's
-      # SDK is tested, instead of pulling the pinned registry image
+      # SDK is tested, instead of pulling the pinned registry image. Only the
+      # scaffolded agent builds FROM it; the in-repo agents install ../sdk
       LOCAL_SDK: "true"
       # The default agents (client-agent, form-filler, synthesis) start with the
       # scaffolded one. No debug or optional agents, and no frontend
@@ -1018,8 +1018,6 @@ jobs:
       run:
         working-directory: platform
     env:
-      # Build the prometheus_api base image from ../sdk instead of pulling it
-      LOCAL_SDK: "true"
       DEBUG_AGENTS: "true"
       OPTIONAL_AGENTS: "false"
       PROFILE: prod

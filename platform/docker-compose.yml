@@ -47,13 +47,6 @@ x-common-env: &common-env
 x-host-gateway: &host-gateway
   - "prometheus.host.internal:host-gateway"
 
-x-build-args: &prometheus-api-build-args
-  PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
-  PROMETHEUS_API_BASE_IMAGE_HASH: ${PROMETHEUS_API_BASE_IMAGE_HASH:-}
-  HTTP_PROXY: ${HTTP_PROXY:-}
-  HTTPS_PROXY: ${HTTPS_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-}
-
 networks:
   agent-network:
     driver: bridge
@@ -108,8 +101,14 @@ services:
   client-agent:
     build:
       context: ./agents/client-agent
+      # Built from the checked-out SDK, like backend and the other agents.
+      additional_contexts:
+        sdk: ../sdk
+        certs: ../common/certs
       args:
-        <<: *prometheus-api-build-args
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
     container_name: client-agent
     extra_hosts: *host-gateway
     networks:

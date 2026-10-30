@@ -150,24 +150,45 @@ uvicorn
 # Local
 uv run agent.py
 
-# Docker
-docker build -t my-analysis-agent .
+# Docker (from agents/my-analysis-agent; see "Dockerfile" below for the contexts)
+docker build --build-context sdk=../../../sdk --build-context certs=../../../common/certs \
+  -t my-analysis-agent .
 docker run -p 8000:8000 --env-file .env my-analysis-agent
 ```
 
 The agent starts a uvicorn server and registers with LiteLLM (if `REGISTRY_URL` is set).
 Keep `AGENT_SECRET_REQUIRED=true` for local runs as well.
 
+### Dockerfile
+
+Copy the `Dockerfile` of an existing in-repo agent, such as
+`agents/form-filler-agent/Dockerfile`, and change only the part after
+`# The agent's own steps from here`. The lines above it install
+`prometheus_api` from the checked-out `../sdk` (the `sdk` and `certs` named
+build contexts) the same way `sdk/Dockerfile` does, and must stay identical in
+every agent so their build cache is shared (see "Container images" in the root
+`STANDARDS.md`). Don't build `FROM` the `prometheus_api` base image: BuildKit
+keys the cache on that image's digest, so the agent's registry cache would only
+hit with the one published image.
+
+An agent scaffolded from `agent-template/` is different: its Dockerfile builds
+`FROM` the `prometheus_api` base image (`PROMETHEUS_API_BASE_IMAGE_REPO` /
+`PROMETHEUS_API_BASE_IMAGE_HASH`, or `LOCAL_SDK=true`), because it is meant to
+live in its own repository. It still works when copied into `agents/`; convert
+it to the in-repo prefix if it is going to stay here.
+
 ### 5. Add to Docker Compose
 
-Add a service block to `docker-compose.yml`:
+Add a service block to `agents/my-analysis-agent/docker-compose.yml`. Paths
+are relative to that file:
 
 ```yaml
 my-analysis-agent:
   build:
-    context: ./agents/my-analysis-agent
+    context: .
     additional_contexts:
-      prometheus_api: ./prometheus_api
+      sdk: ../../../sdk
+      certs: ../../../common/certs
   container_name: my-analysis-agent
   ports:
     - "8010:8000"

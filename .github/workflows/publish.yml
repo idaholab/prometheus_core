@@ -40,6 +40,8 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       prefix: ${{ steps.meta.outputs.prefix }}
       suffix: ${{ steps.meta.outputs.suffix }}
+      agents: ${{ steps.agents.outputs.agents }}
+      agent-names: ${{ steps.agents.outputs.names }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,6 +65,32 @@ jobs:
             echo "prefix=$prefix"
             echo "suffix=-devel"
           } >> "$GITHUB_OUTPUT"
+      - name: List agents
+        id: agents
+        # Every agent the platform starts by default or with DEBUG_AGENTS=true,
+        # as {name, context}. The name is the compose service, the first one in
+        # the agent's docker-compose.yml, which docker-compose.agents.build-cache.yml
+        # (platform/Makefile) names the cache after. The optional agents aren't
+        # published: no CI job starts them, and their ML dependencies would
+        # make a large cache
+        run: |
+          entries=('{"name":"client-agent","context":"platform/agents/client-agent"}')
+          names=(client-agent)
+          for f in platform/agents/*/docker-compose.yml platform/agents/debug-agents/*/docker-compose.yml; do
+            name=$(sed -n '/^services:/{n;s/^  \([A-Za-z0-9_.-]*\):.*/\1/p;q;}' "$f")
+            if [ -z "$name" ]; then
+              echo "::error file=$f::No service found"
+              exit 1
+            fi
+            entries+=("{\"name\":\"$name\",\"context\":\"$(dirname "$f")\"}")
+            names+=("$name")
+          done
+          agents=$(IFS=,; echo "[${entries[*]}]")
+          echo "$agents"
+          {
+            echo "agents=$agents"
+            echo "names=${names[*]}"
+          } >> "$GITHUB_OUTPUT"
 
   sdk:
     name: "sdk ${{ needs.meta.outputs.tag }}"
@@ -80,6 +108,32 @@ jobs:
       context: sdk
       file: sdk/Dockerfile
       build-contexts: certs=common/certs
+
+  agents:
+    name: "${{ matrix.agent.name }} ${{ needs.meta.outputs.tag }}"
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(needs.meta.outputs.agents) }}
+    uses: ./.github/workflows/build-image.yml
+    with:
+      prefix: ${{ needs.meta.outputs.prefix }}
+      name: ${{ matrix.agent.name }}
+      suffix: ${{ needs.meta.outputs.suffix }}
+      tag: ${{ needs.meta.outputs.tag }}
+      sha: ${{ needs.meta.outputs.sha }}
+      context: ${{ matrix.agent.context }}
+      file: ${{ matrix.agent.context }}/Dockerfile
+      # Same sdk/certs contexts as the agents' docker-compose.yml: they
+      # install prometheus_api from sdk/, like the backend, rather than
+      # building FROM the sdk image
+      build-contexts: |
+        sdk=sdk
+        certs=common/certs
 
   backend:
     name: "backend ${{ needs.meta.outputs.tag }}"
@@ -124,7 +178,7 @@ jobs:
     name: "summary"
     # Also report which images failed, as long as there was a tag to publish
     if: ${{ always() && needs.meta.result == 'success' }}
-    needs: [meta, sdk, backend, frontend]
+    needs: [meta, sdk, agents, backend, frontend]
     runs-on: ubuntu-slim
     steps:
       - name: Write summary
@@ -132,8 +186,10 @@ jobs:
           PREFIX: ${{ needs.meta.outputs.prefix }}
           SUFFIX: ${{ needs.meta.outputs.suffix }}
           TAG: ${{ needs.meta.outputs.tag }}
+          AGENT_NAMES: ${{ needs.meta.outputs.agent-names }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           SDK_RESULT: ${{ needs.sdk.result }}
+          AGENTS_RESULT: ${{ needs.agents.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
         run: |
@@ -161,4 +217,9 @@ jobs:
             row sdk "$SDK_RESULT"
             row backend "$BACKEND_RESULT"
             row frontend "$FRONTEND_RESULT"
+            # A matrix has one result for all of its jobs; the job list shows
+            # which agent failed
+            for name in $AGENT_NAMES; do
+              row "$name" "$AGENTS_RESULT"
+            done
           } >> "$GITHUB_STEP_SUMMARY"

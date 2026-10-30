@@ -2,9 +2,10 @@ services:
   thread-pattern-agent:
     build:
       context: .
+      additional_contexts:
+        sdk: ../../../../sdk
+        certs: ../../../../common/certs
       args:
-        - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
-        - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
         - HTTP_PROXY=${HTTP_PROXY:-}
         - HTTPS_PROXY=${HTTPS_PROXY:-}
         - NO_PROXY=${NO_PROXY:-}

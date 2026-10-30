@@ -1,3 +1,6 @@
+# The agents in platform/agents/ repeat these steps at the top of their own
+# Dockerfiles rather than building FROM this image; keep them in step (see
+# "Container images" in STANDARDS.md).
 FROM ghcr.io/astral-sh/uv:0.13.6-python3.12-trixie-slim@sha256:bf889bda77474aa50c351caf1538b855ef2b7a30add45f26ca50dcb6ade06402
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

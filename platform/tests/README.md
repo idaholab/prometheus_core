@@ -20,9 +20,7 @@ backend.
   services, plus client-agent and backend, from `docker-compose.yml` using a
   generated `.env.test` (throwaway secrets, offset ports). When the session
   ends, it tears them down along with their volumes. This path is currently
-  broken: `.env.test` lacks `ADMIN_DB_PASSWORD`, and the client-agent build
-  needs the `PROMETHEUS_API_BASE_IMAGE_*` values that only the Makefile sets.
-  Use `make up` first.
+  broken: `.env.test` lacks `ADMIN_DB_PASSWORD`. Use `make up` first.
 
 The containers have fixed names, so the two can't run side by side. Stop a
 running stack first if you want the fixture's own one.
@@ -30,7 +28,7 @@ running stack first if you want the fixture's own one.
 ### CI
 
 The `platform: up` job in `.github/workflows/test.yml` runs this suite. It runs
-`make up LOCAL_SDK=true`, which waits for every healthcheck and for every
+`make up`, which waits for every healthcheck and for every
 agent to register with LiteLLM, then runs `make test-integration` against that
 stack and always runs `make down-v`. If the job fails, the container logs (one
 file per service plus a combined one) are uploaded as the

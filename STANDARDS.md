@@ -159,6 +159,20 @@ that one change re-runs as little as possible:
   (`**/__pycache__`); without it a pattern matches only at the context root.
 - **Share the uv cache mount** (`--mount=type=cache,id=prometheus-uv-cache,...`)
   across images.
+- **Don't build FROM an image built in this repository.** BuildKit keys every
+  layer after a `FROM` on the base image's digest, which only the published
+  image has, so a local or CI build of the same sources never hits the
+  registry cache. Install the SDK from the `sdk` build context instead, as
+  `platform/backend/Dockerfile` and the agents in `platform/agents/` do.
+  (Agents scaffolded from `agent-template/` build FROM the published
+  `prometheus_api` image, because they live outside this repository.)
+- **Keep the agents' SDK prefix identical.** Every Dockerfile under
+  `platform/agents/` starts with the same lines, from `# syntax` through the
+  `prometheus_api` install, which repeat the steps in `sdk/Dockerfile`. Keep
+  them byte-for-byte the same in every agent so a local build creates those
+  layers once and the registry caches share them. When you change
+  `sdk/Dockerfile`, change them too. A difference only costs cache hits; each
+  build still works.
 - **Check it:** change one source file and rebuild. Only the layers from that
   file's `COPY` onward should run again.
 
