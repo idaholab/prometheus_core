@@ -81,6 +81,18 @@ agents register again after a platform restart without you doing anything.
   it.
 - **Not yet:** the hackathon material (step 3c).
 
+## What changes for you
+
+- **Commands:** none new to learn. `up` and `restart` now restart your
+  labelled agents and refresh discovery; `down --volumes` (`make down-v`
+  passes the flags) asks you to type `clobber`.
+- **Files created:** `docker-compose.labels.yml` (generated, git-ignored).
+- **First run:** the first `up` recreates every platform container to add
+  the labels; your data is kept. An agent scaffolded earlier is listed with
+  `docker restart <name>` and the label to add.
+- **Roll back:** revert the PR. The next `up` recreates the containers
+  again (data kept).
+
 ## Breaking changes
 
 - **C5:** your agents are restarted after `up`/`restart` (labelled ones

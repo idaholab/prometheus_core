@@ -85,6 +85,14 @@ reason. The PR updates this table if it finds more.
   A18-A21) point to `./platformctl doctor`. Rebuild the decks in a separate
   last commit.
 
+## What changes for you
+
+- **Commands:** `./platformctl doctor` now covers the hackathon checks;
+  failed starts end with the likely cause.
+- **Files created:** none (`doctor` only reads).
+- **First run:** nothing.
+- **Roll back:** revert the PR.
+
 ## Breaking changes
 
 None. `doctor` only reads, and the new warnings don't change what any

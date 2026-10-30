@@ -39,6 +39,12 @@ on the local k3d cluster, with no changes to the actions.
   to `./platformctl cluster ...` and `--target k3d`.
 - Hackathon deck 03 (deployment) if it covers the cluster; rebuild.
 
+## What changes for you
+
+- **Commands:** `make cluster-*` forward to `./platformctl cluster ...`.
+  Nothing changes for the compose platform.
+- **Roll back:** revert the PR.
+
 ## Breaking changes
 
 None expected: `cluster-up`, `cluster-down` and `cluster-reset` forward,

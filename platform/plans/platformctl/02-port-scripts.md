@@ -145,6 +145,21 @@ agent-template docs. Their setup blocks also use `make up`, so they switch
 together in step 3c, with no mixed `make`/`./platformctl` blocks
 (`design.md`, "Documentation and slides").
 
+## What changes for you
+
+- **Commands:** `make init-env`, `make check`, `make deeplynx-setup` work as
+  before; the docs now say `./platformctl config init`, `status --wait`,
+  `deeplynx setup`. `python3 scripts/init_env.py` still works, with a
+  one-line "moved" notice. `make doctor` is new.
+- **Files created:** none new. `.env` gets `LOCAL_SDK` and `LOCAL_DEEPLYNX`
+  if you answer the new questions.
+- **First run:** `config init` (and so `make up`) may ask two new questions;
+  Enter accepts the recommended answer. It lists keys `.env.example` has
+  and your `.env` lacks.
+- **Needs:** Python 3.10+, found by the shim. `sudo make up` is refused.
+- **Roll back:** revert the PR. The two new `.env` lines are harmless to the
+  old Makefile (delete them if you like).
+
 ## Breaking changes
 
 - **B1:** the three scripts become forwarding stubs (removed in 3c);

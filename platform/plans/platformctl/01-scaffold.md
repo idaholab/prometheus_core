@@ -164,6 +164,14 @@ step that may land before the hackathon freeze (2026-11-03).
   the hackathon material is frozen for the event, and `doctor` reaches it in
   step 4.
 
+## What changes for you
+
+- **Commands:** none change. `./platformctl doctor` and `--help` are new
+  and optional.
+- **Files created:** none outside `platform/ctl/` and the shim.
+- **First run:** nothing; `make` doesn't call the tool yet.
+- **Roll back:** revert the PR.
+
 ## Breaking changes
 
 - None (B4, refusing `sudo`, applies once `make` calls the tool in step

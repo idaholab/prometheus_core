@@ -40,6 +40,10 @@ Line numbers are from 2026-10-30; search again before editing.
 - The hackathon's manual DeepLynx clone, build and browser steps:
   `LOCAL_DEEPLYNX=true` with `deeplynx setup`.
 
+## What changes for you
+
+- Docs only. Roll back: revert the PR.
+
 ## Breaking changes
 
 None.

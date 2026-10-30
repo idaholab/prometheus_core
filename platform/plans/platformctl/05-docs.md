@@ -41,6 +41,10 @@ change platformctl, and a final sweep.
   3a) are the exceptions. The docs test (every `./platformctl` line parses)
   must pass over everything the sweep touched.
 
+## What changes for you
+
+- Docs only. Roll back: revert the PR.
+
 ## Breaking changes
 
 None.

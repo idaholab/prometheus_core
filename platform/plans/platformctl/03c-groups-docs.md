@@ -87,6 +87,15 @@ CI job to `./platformctl`.
     never run to read a value, pointing to `config show --json`.
   - Rebuild the decks in a separate last commit.
 
+## What changes for you
+
+- **Commands:** the slides, skills and docs now use `./platformctl`
+  everywhere. `make` still works. New: `up <service>`, `agents list`,
+  `compose --`, `compose --print`. The old `scripts/*` stubs are gone.
+- **Files created:** none.
+- **First run:** nothing new.
+- **Roll back:** revert the PR (the docs go back to `make`).
+
 ## Breaking changes
 
 None beyond 3a and 3b.

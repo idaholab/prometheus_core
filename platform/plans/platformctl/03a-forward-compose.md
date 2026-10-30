@@ -100,6 +100,20 @@ today; CI proves it.
 - `platform/CLAUDE.md` and `platform/AGENTS.md`: the command block.
 - **Not yet:** the hackathon material and agent-template docs (step 3c).
 
+## What changes for you
+
+- **Commands:** every `make` target works as before and prints the
+  `./platformctl` command it runs. The docs show `./platformctl up`, `down`,
+  `restart`, `logs`, `status`.
+- **Files created:** `docker-compose.platform.yml` and `.platform.env` in
+  `platform/` (generated, git-ignored).
+- **First run:** the output is numbered steps and a summary with the URLs,
+  instead of Compose's output. A stack you started with a plain
+  `docker compose` in `platform/` (project `platform`) is left behind:
+  `docker compose -p platform down`.
+- **Roll back:** revert the PR. The two generated files are left behind and
+  harmless.
+
 ## Breaking changes
 
 - **B3:** Makefile-internal variables are no longer read.

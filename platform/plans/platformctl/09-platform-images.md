@@ -74,6 +74,12 @@ See `design.md`, "Where the platform's code comes from".
   (deck 03) and `environment.md` can drop the first long build. Rebuild the
   decks.
 
+## What changes for you
+
+- **Commands:** nothing changes unless you set `PLATFORM_SOURCE=image`.
+- **Files created:** `docker-compose.images.yml` (generated) in image mode.
+- **Roll back:** revert the PR, or set `PLATFORM_SOURCE=build`.
+
 ## Breaking changes
 
 None: `PLATFORM_SOURCE` defaults to `build`.

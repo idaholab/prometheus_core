@@ -138,6 +138,18 @@ separate repository that pins `prometheus_core` as a git submodule. See
   `config sync --agent` instead of `setup_agent.py --env-only` and the copy
   one-liners. Rebuild the decks in a separate last commit.
 
+## What changes for you
+
+- **Commands:** in a new agent folder, `./platformctl up` (the stub)
+  starts your agent; `--platform` acts on the platform. `make up` in the
+  agent folder still works. New: `config sync --agent`, `up --agent`.
+- **Files created:** the stub `platformctl` and a generated network file in
+  new agent folders.
+- **Old agent folders:** keep working as they are; `doctor --agent` prints
+  the one-line `setup_agent.py --upgrade-makefile` migration.
+- **Roll back:** revert the PR; agent folders scaffolded in between keep
+  the stub, which then finds an older tool and says what's missing.
+
 ## Breaking changes
 
 - **C11:** agent folders use platformctl; their `make` targets keep working.
