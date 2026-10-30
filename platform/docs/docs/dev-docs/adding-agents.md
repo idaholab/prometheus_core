@@ -1,6 +1,6 @@
 # Adding agents
 
-This guide covers how to create a new specialist agent, register it with LiteLLM, and wire it into Docker Compose.
+This guide covers how to create a new specialist agent, register it with the backend's agent registry, and wire it into Docker Compose.
 
 ## Creating a new agent
 
@@ -44,7 +44,7 @@ class MyAnalysisAgent(PrometheusAgent):
 The base class handles:
 - HTTP server setup with Bearer token auth
 - Agent card loading and serving at `/.well-known/agent.json`
-- LiteLLM agent registration on startup
+- Agent registration with the registry at `REGISTRY_URL` on startup
 - A2A JSON-RPC message parsing
 - Task lifecycle (working/completed/failed status)
 - Automatic JSON artifact emission for the return value
@@ -122,17 +122,20 @@ AGENT_PORT=8000
 AGENT_HOST=localhost
 AGENT_SECRET=your-shared-secret
 AGENT_SECRET_REQUIRED=true
-REGISTRY_URL=http://localhost:4000
-LITELLM_MASTER_KEY=your-litellm-master-key
+REGISTRY_URL=http://localhost:8600
+# The SDK reads its registry token from this name; set it to AGENT_SECRET.
+LITELLM_MASTER_KEY=your-shared-secret
 LLM_CONFIG_PROFILE=openai
 LLM_CONFIG_FILE=
 LLM_API_KEY=your-openai-key
 REDIS_URL=redis://localhost:6379
 ```
 
-Use `registry`, `inl_hpc`, `inl_litellm`, `amsc`, `anthropic`, `openai`, or
-`anl_asksage` for `LLM_CONFIG_PROFILE`; every profile reads its provider key
-from `LLM_API_KEY`. If `LLM_CONFIG_FILE` is set, its path must exist
+Use `anthropic`, `openai`, `inl_hpc`, `inl_litellm`, `amsc`, `anl_asksage`,
+`genesis`, or `ollama` for `LLM_CONFIG_PROFILE` (it is required; there is no
+default, and the SDK's `registry` profile is not supported on this platform
+because there is no LLM proxy). Every profile reads its provider key from
+`LLM_API_KEY`. If `LLM_CONFIG_FILE` is set, its path must exist
 inside the agent container and it overrides the installed profile. Export the
 provider keys referenced by the selected configuration.
 
@@ -155,7 +158,7 @@ docker build -t my-analysis-agent .
 docker run -p 8000:8000 --env-file .env my-analysis-agent
 ```
 
-The agent starts a uvicorn server and registers with LiteLLM (if `REGISTRY_URL` is set).
+The agent starts a uvicorn server and registers with the backend's agent registry (if `REGISTRY_URL` is set).
 Keep `AGENT_SECRET_REQUIRED=true` for local runs as well.
 
 ### 5. Add to Docker Compose
@@ -177,17 +180,18 @@ my-analysis-agent:
     - AGENT_HOST=my-analysis-agent
     - AGENT_PORT=8000
     - EXTERNAL_AGENT_URL=http://my-analysis-agent:8000
-    - REGISTRY_URL=${REGISTRY_URL:-http://litellm:4000}
-    - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    - REGISTRY_URL=${REGISTRY_URL:-http://backend:8000}
+    # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
+    - LITELLM_MASTER_KEY=${AGENT_SECRET}
     - REDIS_URL=${REDIS_URL}
-    - LLM_CONFIG_PROFILE=${LLM_CONFIG_PROFILE:-registry}
+    - LLM_CONFIG_PROFILE=${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}
     - LLM_CONFIG_FILE=${LLM_CONFIG_FILE:-}
     - LLM_API_KEY=${LLM_API_KEY:-}
     - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
     - AGENT_SECRET=${AGENT_SECRET}
     - AGENT_SECRET_REQUIRED=true
   depends_on:
-    litellm:
+    backend:
       condition: service_healthy
   volumes:
     - ./shared:/app/shared
@@ -200,9 +204,9 @@ my-analysis-agent:
   restart: unless-stopped
 ```
 
-The `healthcheck` is required. `make test-static` fails without it in any per-agent `agents/<name>/docker-compose.yml`, and `make up` waits on it to know that the agent is serving. It probes the base class's unauthenticated health endpoint on the container port with Python, since the image has no `curl`. It does not show that LiteLLM registration succeeded; `make up` then runs `make check`, which does.
+The `healthcheck` is required. `make test-static` fails without it in any per-agent `agents/<name>/docker-compose.yml`, and `make up` waits on it to know that the agent is serving. It probes the base class's unauthenticated health endpoint on the container port with Python, since the image has no `curl`. It does not show that registration with the backend succeeded; `make up` then runs `make check`, which does.
 
-Once the container starts, it registers with LiteLLM. The client-agent discovers it automatically through LiteLLM's agent directory and loads the full agent card from the specialist's well-known endpoint when needed.
+Once the container starts, it registers with the backend (`POST /v1/agents`). The client-agent discovers it automatically through the backend's agent registry, calls it through the backend's A2A gateway (`/a2a/{agent_name}`), and loads the full agent card from the specialist's well-known endpoint when needed.
 The agent selects semantic model flavors such as `medium` in code; its selected
 YAML maps those flavors to provider model IDs.
 

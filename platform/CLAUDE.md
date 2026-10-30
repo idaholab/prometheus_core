@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack at a glance
 
-Multi-agent platform for engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, form-filler, plus the debug agents artifact-debug and code-render-debug) through a **LiteLLM proxy** that doubles as the agent registry/gateway and the LLM proxy. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus and the artifact registry via the Redis-compatible protocol. Postgres backs LiteLLM's persistent agent registrations, and separately the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
+Multi-agent platform for engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, form-filler, plus the debug agents artifact-debug and code-render-debug) through the **backend**, which also hosts the agent registry (`/v1/agents`) and A2A gateway (`/a2a/{agent_name}`). There is no LLM proxy: each agent calls the provider its `LLM_CONFIG_PROFILE` selects directly. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus, the artifact registry and the agent registrations (hash `prometheus:agent-registry`) via the Redis-compatible protocol. Postgres (`admin-db`) backs only the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
 
 The `frontend/` is a Node/TypeScript app (React + Vite). The `backend/` runs Python 3.12+ (also 3.13); the client-agent and infra tests use 3.13.
 
@@ -27,7 +27,7 @@ make up-fg           # same, foreground
 make restart         # restart without rebuild (still re-runs generate)
 make ng-up           # skip the regenerate step (use existing docker-compose.agents.yml)
 make down            # stop services (add down-v to drop volumes)
-make clear-litellm-db # stop services + remove only LiteLLM's Postgres volume
+make clear-agent-registry # stop services + delete only the agent registrations from Valkey
 make logs SERVICE=client-agent
 make generate        # only (re)write docker-compose.agents.yml
 make clean-generated # delete the generated agents compose file
@@ -39,9 +39,9 @@ make test-infra        # both
 make check           # wait until the running platform answers on its host ports and every agent is registered
 ```
 
-`make up` (and `restart`, `ng-up`, `ng-restart`) runs `docker compose up --wait` and then `make check` (`scripts/check_platform.py`), so it returns only once every healthcheck passes, the backend and frontend answer on their host ports, and every agent is registered with LiteLLM. `CHECK=false` skips both. CI's `platform: up` job runs `make up` and then `make test-integration` against that stack (stub LLM/DeepLynx credentials; see `tests/README.md`), so a service that never goes healthy, an agent that never registers, or a failing integration test fails the build.
+`make up` (and `restart`, `ng-up`, `ng-restart`) runs `docker compose up --wait` and then `make check` (`scripts/check_platform.py`), so it returns only once every healthcheck passes, the backend and frontend answer on their host ports, and every agent is registered with the backend (`/v1/agents` on `BACKEND_PORT`). `CHECK=false` skips both. CI's `platform: up` job runs `make up` and then `make test-integration` against that stack (stub LLM/DeepLynx credentials; see `tests/README.md`), so a service that never goes healthy, an agent that never registers, or a failing integration test fails the build.
 
-Launch and restart targets clear LiteLLM's Postgres volume before starting services so stale agent registrations do not survive across platform launches. Valkey state is left intact.
+Every launch and restart target (`up`, `up-fg`, `restart`, `restart-fg`, `ng-*`) runs `make clear-agent-registry` first, so stale registrations from removed agents do not survive across platform launches. The rest of Valkey's state is left intact.
 
 To temporarily exclude an agent, remove (or rename) its `agents/<name>/docker-compose.yml` and re-run `make generate`. Heavy agents that most setups skip live in `agents/optional/<name>/` and are included only with `OPTIONAL_AGENTS=true` (same mechanism as `agents/debug-agents/` + `DEBUG_AGENTS`). `docker-compose.override.yml` is auto-included if present for local-only tweaks. `LOCAL_DEEPLYNX=true` adds a local DeepLynx (`docker-compose.deeplynx.yml`), set up by `make deeplynx-setup`.
 
@@ -78,28 +78,28 @@ User → React frontend (frontend/, Vite dev server or nginx-served build)
         │     → needs_info; requires_approval → plan_ready.
         │     Design: docs/docs/dev-docs/agent-loop-orchestration.md
         ├─ Tool/agent discovery: tool_discovery.py + capability_cache.py
-        │     hits LiteLLM `/v1/agents` and each agent's well-known card
+        │     hits the backend's `/v1/agents` and each agent's well-known card
         ├─ Workflow library: workflow_library/  (YAML templates in workflows/)
         ├─ Conversation state: conversation_store.py → Valkey  (key: conversation:{id})
         └─ Status updates: store_status_update() → Valkey  (key: agent:status:{id})
-     → LiteLLM proxy (litellm-proxy:4000) routes A2A calls via /a2a/{agent_name}
+     → backend A2A gateway (backend:8000/a2a/{agent_name}) forwards to the agent's card URL
      → Specialist agent (built on PrometheusAgent base class from the `prometheus_api`
        package, baked into the prometheus_api base image at PROMETHEUS_API_BASE_IMAGE_HASH)
 ```
 
 The backend consumes the client-agent's A2A `message/stream` and re-emits status and artifact events to the React frontend over SSE (`/api/events`). Do not add `/status/{conversation_id}` polling for new long-running agent calls.
 
-### Why LiteLLM is in the loop
+### Agent registry and A2A gateway (backend)
 
-LiteLLM plays two roles simultaneously:
-1. **Agent gateway / registry**: each specialist registers at startup; the client-agent reads `/v1/agents` and forwards A2A traffic via `/a2a/{agent}`. Registrations persist in `litellm-db` (Postgres) so a LiteLLM restart doesn't lose them.
-2. **Optional LLM proxy**: agents selecting the `registry` LLM profile use LiteLLM for inference. Other installed profiles call their configured providers directly.
+`backend/app/routers/agent_registry.py` serves the registry the agents talk to at `REGISTRY_URL` (default `http://backend:8000`). It is wire-compatible with the subset of LiteLLM's agent API that the SDK's `AgentRegistryClient` uses, so the SDK is unchanged:
+1. **Registry**: each agent `POST`s `/v1/agents` at startup; the client-agent reads `GET /v1/agents`. Registrations live in one Valkey hash (`prometheus:agent-registry`), so they survive a backend restart; a re-registering agent overwrites its own entry.
+2. **Gateway**: the client-agent sends A2A JSON-RPC to `POST /a2a/{agent_name}`; the backend forwards it to the agent's card URL with the agent's registered `static_headers` (Bearer `AGENT_SECRET`) and streams SSE/NDJSON back unchanged.
 
-The client-agent still falls back to each agent's `/.well-known/agent.json` for full per-skill metadata because LiteLLM's listing can be a lossy summary. If you change capability metadata, verify both paths.
+Every registry route requires `Authorization: Bearer <AGENT_SECRET>`. Every agent (client-agent included) `depends_on` a healthy backend; the backend does not depend on the client-agent. The client-agent still fetches each agent's `/.well-known/agent.json` for full per-skill metadata (`inputSchema` etc.). If you change capability metadata, verify both paths.
 
 ### Agents
 
-Every specialist subclasses `PrometheusAgent` (provided by the prebuilt `prometheus_api` base image; see `agents/<name>/Dockerfile`). The base class handles HTTP serving, Bearer auth (`AGENT_SECRET`), agent-card serving, LiteLLM registration on startup, A2A JSON-RPC parsing, task lifecycle, and auto-wrapping the `process_analysis()` return value as a JSON artifact. To add a new agent see `docs/docs/dev-docs/adding-agents.md` — the short version: create `agents/<name>/{agent.py, agent_card.json, Dockerfile, docker-compose.yml, pyproject.toml}` and `make generate` will pick it up.
+Every specialist subclasses `PrometheusAgent` (provided by the prebuilt `prometheus_api` base image; see `agents/<name>/Dockerfile`). The base class handles HTTP serving, Bearer auth (`AGENT_SECRET`), agent-card serving, registry registration on startup, A2A JSON-RPC parsing, task lifecycle, and auto-wrapping the `process_analysis()` return value as a JSON artifact. To add a new agent see `docs/docs/dev-docs/adding-agents.md` — the short version: create `agents/<name>/{agent.py, agent_card.json, Dockerfile, docker-compose.yml, pyproject.toml}` and `make generate` will pick it up.
 
 Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiation-agent`, `thermal-agent`, `data-agent`, `synthesis-agent`, `osti-research-agent`, `form-filler-agent`, `artifact-debug-agent`, `code-render-debug-agent` (debug agents, included with `DEBUG_AGENTS=true`; `osti-research-agent` lives in `agents/optional/` and is only included with `OPTIONAL_AGENTS=true` because its PDF/ML dependencies dominate the build; `code-render-debug-agent` returns fixed sample files per language to exercise the `code` and `table` viewers).
 
@@ -113,14 +113,14 @@ The React viewers live in `frontend/src/viewers/` (`mesh/MeshViewer` for Exodus/
 
 ### Shared protocol types
 
-Two contracts sit back to back. The **React frontend ↔ backend** wire contract (JSON/SSE) is owned by the backend: frozen in `backend/CONTRACT.md`, typed in `backend/app/contract.py`, and mirrored in TypeScript under `frontend/src/lib/` (see `frontend/AGENT-CONTRACT.md`) — deliberately decoupled from the base-image types. The **backend ↔ client-agent** contract (`ConversationRequest`, `ConversationResponse`, `ConversationStatus`) lives in `prometheus_api.contract` (available in every Python container via the base image, and installed from `../sdk` in the backend image); the client-agent re-exports it from `orchestrator/models.py` — change it in `prometheus_api`, not here. The raw A2A wire types (messages, parts, tasks) come from the `a2a-sdk`. There is no longer a `shared/` bind mount: every service runs from its image, so the only runtime host mounts left are `litellm_config.yaml` (config) and `./frontend` on the `dev`-profile Vite container (HMR).
+Two contracts sit back to back. The **React frontend ↔ backend** wire contract (JSON/SSE) is owned by the backend: frozen in `backend/CONTRACT.md`, typed in `backend/app/contract.py`, and mirrored in TypeScript under `frontend/src/lib/` (see `frontend/AGENT-CONTRACT.md`) — deliberately decoupled from the base-image types. The **backend ↔ client-agent** contract (`ConversationRequest`, `ConversationResponse`, `ConversationStatus`) lives in `prometheus_api.contract` (available in every Python container via the base image, and installed from `../sdk` in the backend image); the client-agent re-exports it from `orchestrator/models.py` — change it in `prometheus_api`, not here. The raw A2A wire types (messages, parts, tasks) come from the `a2a-sdk`. There is no longer a `shared/` bind mount: every service runs from its image, so the only runtime host mount left is `./frontend` on the `dev`-profile Vite container (HMR).
 
 ## Configuration & secrets
 
-- `.env` (created from `.env.example` and secrets auto-generated by `scripts/init_env.py`, run by `make init-env` before every start target) holds `LLM_CONFIG_PROFILE`, optional `LLM_CONFIG_FILE`, provider keys, `AGENT_SECRET`, `REDIS_PASSWORD`, `BACKEND_JWT_SECRET`, `LITELLM_MASTER_KEY`, `LITELLM_DB_PASSWORD`, `LITELLM_LOCAL_PORT`, required DeepLynx authentication plus organization/project IDs, optional DeepLynx base URL/data-source ID, and optional proxy vars.
+- `.env` (created from `.env.example` and secrets auto-generated by `scripts/init_env.py`, run by `make init-env` before every start target) holds `LLM_CONFIG_PROFILE` (required; no default, and the SDK's `registry` profile is rejected because there is no LLM proxy), optional `LLM_CONFIG_FILE`, provider keys, `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`, required DeepLynx authentication plus organization/project IDs, optional DeepLynx base URL/data-source ID, and optional proxy vars. Compose sets `LITELLM_MASTER_KEY: ${AGENT_SECRET}` on every agent only because the SDK still reads its registry token from that name; don't put it in `.env`.
 - The backend loads `backend/app/config.yml` (`agent_url`, `agent_secret`, `redis_url`, session/JWT settings). Env vars (`CLIENT_AGENT_URL`, `AGENT_SECRET`, `REDIS_URL`, `BACKEND_JWT_SECRET`, `BACKEND_COOKIE_NAME`, `BACKEND_TOKEN_TTL_SECONDS`) override individual keys; `PROMETHEUS_CONFIG_PATH` overrides the file path. The React app is configured via `frontend/config.ts` + `VITE_*` env (e.g. `VITE_BACKEND_URL`).
 - Multi-user identity is a **separate key** from the session cookie above: `USER_IDENTITY_PRIVATE_KEY` (RS256, backend only) signs the short-lived JWT the backend mints per turn (`backend/app/identity.py`) to prove the caller's identity to agents; every agent verifies with `USER_IDENTITY_PUBLIC_KEY`, never the private key. Generate a keypair with `prometheus-identity-keygen`. `CREDENTIAL_BROKER` selects the per-user credential backend (`env` default, `vault` for production). See `docs/dev-docs/multi-user-setup.md`.
-- Agents hardcode semantic flavors such as `medium`. Their selected installed or custom YAML maps those flavors to provider models. `litellm_config.yaml` supplies the proxy mapping used by the `registry` profile.
+- Agents hardcode semantic flavors such as `medium`. Their selected installed or custom YAML maps those flavors to provider models.
 - The base image `prometheus_api` is pulled from `PROMETHEUS_API_BASE_IMAGE_REPO` (default `containers.github.inl.gov/genesis/prometheus_api`), tag pinned via `PROMETHEUS_API_BASE_IMAGE_HASH` in the root Makefile. Bumping the platform's PrometheusAgent SDK = bumping that hash. `LOCAL_SDK=true` instead builds `prometheus_api:local` from `../sdk` (`make base-image`, run automatically before `up`/`build`) — for collaborators without registry access. The sdk, backend and frontend builds use the registry build cache that `publish-images` writes (needs the containerd image store). `USE_BUILD_CACHE=false` disables it and `BUILD_CACHE=<prefix>` changes where it's read from. Agent images aren't cached.
 
 ## Service map (default ports)
@@ -129,10 +129,9 @@ Two contracts sit back to back. The **React frontend ↔ backend** wire contract
 |---------|-----------|-----------|-------|
 | React frontend (dev) | `frontend-dev` | 5150 (`FRONTEND_DEV_PORT`) | Vite dev server; compose profile `dev` |
 | React frontend (prod) | `frontend-prod` | 8080 (`FRONTEND_PROD_PORT`) | nginx-served build; compose profile `prod` |
-| Backend (FastAPI) | `backend` | 8600 (`BACKEND_PORT`) | JSON/SSE contract; container port 8000 |
+| Backend (FastAPI) | `backend` | 8600 (`BACKEND_PORT`) | JSON/SSE contract + agent registry/A2A gateway; container port 8000 |
 | Client agent | `client-agent` | 8001 (`CLIENT_AGENT_PORT`) | Container port 8000 |
-| LiteLLM proxy | `litellm-proxy` | `LITELLM_LOCAL_PORT` (e.g. 9977) | Gateway + LLM proxy |
-| LiteLLM Postgres | `litellm-db` | (internal) | Persistent agent registrations |
+| Admin Postgres | `admin-db` | (internal) | Backend admin plane (users, OIDC config, signing keys) |
 | Valkey | `redis` | 6379 (`REDIS_LOCAL_PORT`) | Auth via `REDIS_PASSWORD` |
 | Specialist agents | per-agent services | 8002–8009 typically | Each on container port 8000 |
 
@@ -141,7 +140,7 @@ All services share the `agent-network` bridge. No service sets `container_name`,
 ## Conventions worth knowing
 
 - **Don't edit `docker-compose.agents.yml`** — it's regenerated by `make generate` from the per-agent compose files. Edit the per-agent file instead, then re-run.
-- **Every agent's compose service needs a healthcheck** probing the base class's health endpoint on the container port (`/healthz`) (copy the block from any existing agent or `agent-template/`). `tests/infrastructure/test_healthchecks.py` enforces it, and `make up` waits on it. The health endpoint does not reflect LiteLLM registration — that's what `make check` checks.
+- **Every agent's compose service needs a healthcheck** probing the base class's health endpoint on the container port (`/healthz`) (copy the block from any existing agent or `agent-template/`). `tests/infrastructure/test_healthchecks.py` enforces it, and `make up` waits on it. The health endpoint does not reflect registry registration — that's what `make check` checks.
 - **Keep Dockerfiles cache-friendly.** Order layers least to most volatile, install dependencies from the lockfile in their own layer, `COPY` only what the image uses, and keep a `.dockerignore` (with `**/` patterns) in every build context. A new module in an agent needs its own `COPY` line, after the dependency install. See "Container images" in the root `STANDARDS.md`.
 - The React `frontend/` uses **ESLint + TypeScript** (`npm run lint`, `npm run typecheck`). The Python `backend/` and agents use **Ruff** + **mypy** (`uv run ruff check`, `uv run mypy app/`). Match the toolchain of whichever tree you touch.
 - Tests are split: `tests/` (infra/integration of the whole stack), `backend/tests/` (backend units + contract), `frontend/src/**/*.test.ts` (React unit tests), `agents/<name>/tests/` (per-agent unit tests). The infra suite uses the `integration` pytest marker for tests that need running containers.

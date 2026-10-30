@@ -15,20 +15,19 @@ graph TD
   U[User] -->|chat / file upload| FE[React Frontend]
   FE -->|JSON / SSE| BE[FastAPI Backend]
   BE -->|A2A JSON-RPC| CA[Client Agent]
-  CA -->|agent discovery + A2A routing| LLM[LiteLLM Agent Gateway]
+  CA -->|agent discovery + A2A routing| GW[Backend Agent Registry + A2A Gateway]
   CA -->|state + factoids| RED[(Redis)]
-  LLM -->|A2A| SA[Specialist Agents]
+  GW -->|A2A| SA[Specialist Agents]
   FE -->|renders| VIZ[MeshViewer / IFCViewer / MermaidViewer]
 ```
 
-The React frontend communicates with the FastAPI backend over its JSON/SSE contract; the backend relays to the client-agent via the A2A protocol. The client-agent discovers specialist agents from LiteLLM's agent directory, manages multi-turn conversation state in Redis, and dispatches analysis work through LiteLLM's A2A gateway.
+The React frontend communicates with the FastAPI backend over its JSON/SSE contract; the backend relays to the client-agent via the A2A protocol. The client-agent discovers specialist agents from the backend's agent registry (`/v1/agents`), manages multi-turn conversation state in Redis, and dispatches analysis work through the backend's A2A gateway (`/a2a/{agent_name}`).
 
 | Service | Port | Stack |
 |---------|------|-------|
 | React Frontend | 5150 (dev) / 8080 (prod) | React, Vite, VTK.js |
-| Backend | 8600 | FastAPI, A2A client |
+| Backend | 8600 | FastAPI, A2A client, agent registry + A2A gateway |
 | Client Agent | 8001 | LangGraph, Prometheus LLMClient, A2A SDK |
-| LiteLLM Agent Gateway | 9977 | LiteLLM proxy + A2A routing |
 | Redis | 6379 | Factoids, conversation state |
 
 The client-agent also maintains a workflow library for reusable multi-step analyses. Workflow templates can be
@@ -48,7 +47,7 @@ for the schema, ownership model, and authoring rules.
 ```bash
 cd platform
 python3 scripts/init_env.py   # creates .env, generates all secrets
-# Set LLM_API_KEY to the provider key for LLM_CONFIG_PROFILE (default: Anthropic)
+# Set LLM_CONFIG_PROFILE (required, no default) and LLM_API_KEY for that provider
 make up
 ```
 
@@ -106,7 +105,7 @@ providers). See `docs/docs/dev-docs/multi-user-setup.md` and
 
 1. User sends a message in the React UI
 2. The React frontend posts it to the FastAPI backend, which relays an A2A JSON-RPC request to the client-agent
-3. Client-agent classifies the query, discovers relevant agents through LiteLLM, and collects parameters if needed
+3. Client-agent classifies the query, discovers relevant agents through the backend's agent registry, and collects parameters if needed
 4. Specialist agents execute analysis and return results with artifacts
 5. The backend streams the response back over SSE and the frontend renders any visualization elements
 

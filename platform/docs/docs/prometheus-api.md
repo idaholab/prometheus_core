@@ -292,9 +292,9 @@ AGENT_HOST=localhost
 AGENT_SECRET=your-secret          # enables Bearer token auth
 AGENT_SECRET_REQUIRED=true
 
-# LiteLLM agent gateway (optional, used for agent registration/routing)
-REGISTRY_URL=http://litellm:4000
-LITELLM_MASTER_KEY=your-litellm-master-key
+# Agent registry + A2A gateway (optional; on the platform this is the backend)
+REGISTRY_URL=http://backend:8000
+LITELLM_MASTER_KEY=your-secret     # registry token; the SDK reads this name, set it to AGENT_SECRET
 
 # Agent-owned workflow template directory (optional)
 AGENT_WORKFLOWS=workflows
@@ -377,7 +377,7 @@ When `agent.run()` is called:
 3. Creates an executor wrapping `process_analysis()`
 4. Sets up a Starlette HTTP server with the A2A SDK
 5. Adds health endpoint and Bearer token middleware (if `AGENT_SECRET` is set)
-6. Registers with LiteLLM (if `REGISTRY_URL` is set)
+6. Registers with the agent registry at `REGISTRY_URL` (if set)
 7. Starts uvicorn
 
 ## Testing

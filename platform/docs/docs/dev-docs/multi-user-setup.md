@@ -182,7 +182,7 @@ something this section's defaults reach.
 ### Local users
 
 Local accounts are no longer configured in `config.yml` — they live in a
-dedicated Postgres database (`admin-db`, separate from `litellm-db`; see
+dedicated Postgres database (`admin-db`; see
 `docker-compose.yml`'s `admin-db` service and `ADMIN_DATABASE_URL` /
 `ADMIN_DB_ENCRYPTION_KEY` in `.env.example`). Passwords are hashed with bcrypt
 (`backend/app/passwords.py`), never stored or compared in cleartext.
