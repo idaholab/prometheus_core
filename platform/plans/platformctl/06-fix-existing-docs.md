@@ -22,11 +22,6 @@ Fixed separately, before this plan, and not part of it:
   clear LiteLLM's Postgres volume.
 - `troubleshooting.md` lists `[ERROR] .env does not exist.`, which nothing
   prints any more (`config init` creates the file).
-- The hackathon KB (`.claude/skills/how/references/artifacts.md`, "Local
-  DeepLynx", and deck 03 slides 18-20) teaches cloning and building DeepLynx
-  by hand, plus browser steps to create a project and key and copy them into
-  `.env`. `LOCAL_DEEPLYNX=true` with `./platformctl deeplynx setup` does all
-  of that from published images. Replace the manual steps.
 
 `build-plain`'s undefined `$(CONTAINER_RUNTIME)` is fixed in step 3a.
 
@@ -37,8 +32,7 @@ Line numbers are from 2026-10-30; search again before editing.
 
 ## Replaces
 
-- The hackathon's manual DeepLynx clone, build and browser steps:
-  `LOCAL_DEEPLYNX=true` with `deeplynx setup`.
+- Nothing. (The hackathon's manual DeepLynx steps moved to step 3c.)
 
 ## What changes for you
 

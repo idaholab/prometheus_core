@@ -80,6 +80,13 @@ CI job to `./platformctl`.
     your agent so it shows up again. Agent made before <date>? Restart it
     yourself, or add the label it prints." Decks 01, 04 and 05: the same
     command changes.
+  - **Local DeepLynx** (moved here from step 6, so it's taught one way
+    once `config init` recommends it): deck 03 slides 18-20 and the KB's
+    `artifacts.md` "Local DeepLynx" replace the manual clone, build and
+    browser steps with `LOCAL_DEEPLYNX=true` (the `config init` question)
+    and `./platformctl deeplynx setup`. Otherwise a user who pressed Enter
+    on the question would then start a second DeepLynx by hand on the same
+    ports.
   - `make DEBUG_AGENTS=true up` (deck 03) becomes
     `./platformctl up --set DEBUG_AGENTS=true`.
   - The hackathon `CLAUDE.md` rule 3 and `conventions.md` add

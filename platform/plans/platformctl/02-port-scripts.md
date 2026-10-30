@@ -110,8 +110,9 @@ deprecation stub until step 3c deletes them.
   `config init` and `status --wait` through the tool.
 - CI's `sed` blocks after `make init-env`: `config set --from-env`.
 - The manual `echo "LOCAL_SDK=true" >> .env` step (deck 03) and the manual
-  DeepLynx project and key steps: replaced by the `config init` questions
-  (the slides switch in step 3c).
+  DeepLynx clone, build, project and key steps: replaced by the
+  `config init` questions and `deeplynx setup` (the slides and KB switch
+  in step 3c, both together).
 
 ## Docs and slides
 
