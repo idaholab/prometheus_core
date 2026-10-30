@@ -24,8 +24,9 @@ deprecation stub until step 3c deletes them.
     `LOCAL_DEEPLYNX` in `.env`. Without a flag, an interactive run asks for
     each when `.env` doesn't decide it yet (for DeepLynx: neither
     `LOCAL_DEEPLYNX` nor `DEEPLYNX_KEY` set), in plain words with a
-    recommended answer that Enter accepts: "Build the base image on this
-    laptop? (recommended) [Y/n]". The SDK recommendation comes from a test
+    recommended answer that Enter accepts: "Build everything on this laptop
+    (no INL login needed)? (recommended) [Y/n]" and "Run DeepLynx (file
+    storage) on this laptop? (recommended) [Y/n]". The SDK recommendation comes from a test
     pull of the pinned base image with a short timeout (off the VPN it would
     otherwise hang). It reuses the existing menu code, with its numbered
     fallback when `termios` is missing. It never changes a value that's
@@ -90,8 +91,11 @@ deprecation stub until step 3c deletes them.
 
 - `config init`: one line per thing it did ("Created .env", "Generated 5
   secrets", "LLM profile: anthropic, key set", "Local SDK: yes"), the keys
-  missing from `.env`, and a closing "Next: ./platformctl up". The lines
-  deck 03 quotes stay word for word.
+  missing from `.env`, and a closing "Next: ./platformctl up" (with local
+  DeepLynx: "Next: ./platformctl up, then ./platformctl deeplynx setup").
+  The lines deck 03 quotes stay word for word.
+- The user guide's `index.md` says: the first time, just run
+  `./platformctl up`; it runs `config init` and asks what it needs.
 - `config show`: a table of settings, value (secrets as `set`/`blank`), and
   where it came from.
 - `status --wait`: what it's waiting for and how long it has left

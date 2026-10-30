@@ -87,6 +87,14 @@ CI job to `./platformctl`.
     and `./platformctl deeplynx setup`. Otherwise a user who pressed Enter
     on the question would then start a second DeepLynx by hand on the same
     ports.
+  - **Prerequisites:** deck 03's "Before you clone" table
+    (`03-deployment.md`, "GNU make, git, python3" row) says Python 3.10+,
+    found automatically, with one copy-paste install line if there's none
+    (`brew install python@3.12`, or the uv installer); uv and Python 3.12
+    stop being "only for outside Docker". The "What `make init-env` does"
+    slide becomes `config init`.
+  - **Older clones:** next to the first `./platformctl` command, one line:
+    "No `./platformctl`? Run `git pull`, or use `make up`."
   - `make DEBUG_AGENTS=true up` (deck 03) becomes
     `./platformctl up --set DEBUG_AGENTS=true`.
   - The hackathon `CLAUDE.md` rule 3 and `conventions.md` add
