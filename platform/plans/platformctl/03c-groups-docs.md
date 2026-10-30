@@ -26,8 +26,9 @@ CI job to `./platformctl`.
   **`compose --print`** (only `-f` and `--profile`).
 - **`logs --since`** (the `diagnose` skill's turn tracing needs it).
 - The hackathon skills' **`allowed-tools`** lists switch to the new
-  commands (`Bash(cd <platform> && ./platformctl agents refresh)` and so
-  on).
+  commands, by wildcard on the shim's path with no `cd`
+  (`Bash(*/platform/platformctl agents refresh)` and so on; `design.md`,
+  "Documentation and slides"). Never `compose --`, `reset` or `down`.
 
 ## Output
 
@@ -97,6 +98,8 @@ CI job to `./platformctl`.
     "No `./platformctl`? Run `git pull`, or use `make up`."
   - `make DEBUG_AGENTS=true up` (deck 03) becomes
     `./platformctl up --set DEBUG_AGENTS=true`.
+  - The hackathon `CLAUDE.md` rule 4 names the generated files `up` writes
+    in the platform folder, and that `config set` writes `.env`.
   - The hackathon `CLAUDE.md` rule 3 and `conventions.md` add
     `./platformctl compose -- config` and `compose -- exec` to the commands
     never run to read a value, pointing to `config show --json`.

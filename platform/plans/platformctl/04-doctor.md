@@ -76,11 +76,15 @@ reason. The PR updates this table if it finds more.
   called?".
 - `platform/README.md`: its troubleshooting points to the user guide.
 - Hackathon knowledge base: in `checks.md`, every check `doctor` now covers
-  becomes "Run: `./platformctl doctor <id>`" (with `--agent <dir>` for the
-  agent checks). The `diagnose` skill's checklist runs
-  `./platformctl doctor --json` and keeps only the manual checks above, with
-  a fallback to the old one-liners when the clone's `--version` predates
-  `doctor`'s checks. Its `allowed-tools` gain the `doctor` command.
+  becomes "Run: `./platformctl doctor <id> --agent <dir>`", with the old
+  one-liner kept under a "Before platformctl" line in the same entry, for
+  clones whose `--version --json` lacks `doctor.checks.v1`. The `diagnose`
+  skill's checklist runs `./platformctl doctor --json --agent <dir>` and
+  keeps only the manual checks above. Its `allowed-tools` gain the `doctor`
+  command (by wildcard). `agent-logs` is marked "hint + raw logs": the
+  evidence is only the error class, so a traceback still needs
+  `logs --since`, and the "your code can log values: read before you
+  quote" rule stays.
 - Hackathon decks: the homework and troubleshooting slides (deck 01, deck 03
   A18-A21) point to `./platformctl doctor`. Rebuild the decks in a separate
   last commit.

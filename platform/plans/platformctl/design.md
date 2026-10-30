@@ -674,14 +674,33 @@ restart.
 
 ### JSON contract
 
-`--json` is on `status`, `agents list`, `doctor`, `config show` and
-`--version`:
+`--json` is on `status`, `agents list`, `agents refresh`, `doctor`,
+`config show`, `up`, `restart` and `--version`:
 
 - stdout carries only JSON; progress, notices and deprecation warnings go
   to stderr.
+- **Always one object.** With `--json`, every exit path prints one JSON
+  object: success, a failure, a usage error (argparse's exit 2 is caught
+  and reported as `error.code: "usage"`), "platform not running" (exit 3)
+  and "needs a terminal or `--yes`".
 - Every object has `schema_version` (1), `command`, `ok`, and
   `platform{root, project, version}`. On failure, `error{code, message,
-  hint, check}`, with the same exit codes as above.
+  hint, check}`, with the same exit codes as above. `ok` means the command
+  did what it was asked; for `doctor`, `ok` is true when the checks ran,
+  and `counts.fail` says whether any failed, so a skill can tell "a check
+  failed" (exit 1, `ok` true) from "doctor itself broke" (exit 1, `ok`
+  false).
+- **Error codes** are a fixed list, documented in the user guide and
+  pinned by a test: `usage`, `needs_terminal`, `not_running`,
+  `docker_unavailable`, `port_in_use`, `running_elsewhere`, `timeout`,
+  `config_invalid`, `check_failed`, `internal`. New codes are added, never
+  renamed.
+- **`--version --json`** lists `commands` and `features`, strings such as
+  `doctor.checks.v1`, `agents.registered`, `restart.if_idle`,
+  `agents.restart`, so a skill can tell what this clone can do without
+  parsing versions. `doctor --list --json` lists the check ids.
+- `up`, `restart`: `agents.yours[]` with `name`, `labeled`, `restarted`,
+  `registered`; `agents refresh`: `tools` and `yours`.
 - Fields are only added within a version; removing or changing one bumps
   `schema_version`.
 - `doctor` per check: `id`, `area`, `tags`, `status`, `evidence` (safe
@@ -854,12 +873,35 @@ the docs stop teaching them. The user guide above is updated in every step.
   until after Day 2. Steps that touch them wait.
 - **Skills and clones can differ.** Participants run the skills against
   their own `prometheus_core` clone at any commit. Skills check
-  `./platformctl --version --json` (or that `platformctl` exists) and use
-  the old commands when it's missing or too old.
+  `./platformctl --version --json` and branch on its `features` list (see
+  "JSON contract"), using the old commands when the tool is missing or
+  lacks a feature. So the old one-liners can't simply be deleted: each
+  `checks.md` entry keeps its old command under a "Before platformctl"
+  line, and the plan sets a minimum supported clone (the first commit with
+  step 4) after which the fallbacks are removed.
 - **Skills' pre-approved commands.** The `allowed-tools` lists in the
-  hackathon skills' `SKILL.md` files name exact commands. Each step that
-  changes a command they list updates them, and they always `cd <platform>
-  &&` (the working folder resets between calls).
+  hackathon skills' `SKILL.md` files can't name `cd <platform> && ...`: the
+  path differs on every laptop, so a literal entry never matches. The tool
+  finds the platform from its own location, so skills run the shim by
+  absolute path with no `cd`, and pre-approve with wildcards:
+  `Bash(*/platform/platformctl doctor *)`,
+  `Bash(*/platform/platformctl status *)`,
+  `Bash(*/platform/platformctl agents refresh)`. Never `compose --`,
+  `reset`, or `down`. Each step that changes a command they list updates
+  them.
+- **Skills name the agent.** `doctor` guesses the agent from the current
+  directory, which for a skill is the hackathon root, so skills always pass
+  `--agent <dir>`, and the JSON says which agent it checked.
+- **Long commands and the Bash tool's limit.** An assistant's Bash call
+  times out at 600 s, and a first build plus `CHECK_TIMEOUT` (300 s) can
+  run past it. Skills run `up --no-check` in the background, then
+  `status --wait --timeout <n> --json`. `--timeout` on `up` covers the whole
+  command.
+- **Generated files in the platform folder.** Every `up` writes
+  `docker-compose.platform.yml`, `.platform.env` and
+  `docker-compose.labels.yml`, and `config set` writes `.env`. The hackathon
+  `CLAUDE.md` rule 4 (only `.env` and `docker-compose.override.yml` change
+  in the platform folder) is updated in 3c to name them.
 - Hackathon deck HTML is rebuilt in a separate last commit of each PR, so a
   rebase over other slide work only needs `make build` again.
 

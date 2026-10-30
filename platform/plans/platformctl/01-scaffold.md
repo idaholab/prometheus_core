@@ -58,7 +58,9 @@ step that may land before the hackathon freeze (2026-11-03).
     a terminal or with `NO_COLOR`/`TERM=dumb`, `::group::` and verbose in
     CI, and **the secret scrubber** (`design.md`, "Output", "Secrets").
   - `jsonout.py`: the JSON contract (`schema_version`, `command`, `ok`,
-    `platform`, `error`; JSON only on stdout).
+    `platform`, `error` with the fixed code list; JSON only on stdout; one
+    object on every exit path, including usage errors; `--version --json`
+    with `features`).
   - `context.py`.
 - **Settings:** `system/envfile.py` (dotenv parsing; atomic, mode-keeping
   writes; new files 0600; errors name the line number, not its text) and
