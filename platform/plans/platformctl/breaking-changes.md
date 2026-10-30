@@ -38,7 +38,8 @@ unaffected.
 | C10 | 2 | `config init` (`make init-env`) only fills blank secrets | Also reports keys in `.env.example` that `.env` lacks, and asks about the local SDK and local DeepLynx (Enter accepts the recommended answer) |
 | C11 | 7 | Agent folders use their own Makefile logic and `.env` parsing | They use platformctl. Their `make` targets keep working |
 | C12 | 3b | Starting the platform from a second folder with the same project name silently reuses the first folder's containers; any port clash fails with Compose's "port is already allocated" | `up` checks first and says what holds the port: the platform running from another folder (with its version), or another process (e.g. AirPlay on 5000), and the fix |
-| C13 | 3b | Containers carry Compose's labels only | Platform containers also carry `io.prometheus.platform.root`, `.version`, `.source` (not the network). The first `up` after step 3b recreates every container, because their config changed; volumes and data are kept |
+| C13 | 3b | Containers carry Compose's labels only | Platform containers also carry `io.prometheus.platform.root` and `.source` (not the network), from a generated `docker-compose.labels.yml`. The first `up` after step 3b recreates every container, because their config changed; volumes and data are kept. Later commits don't, since neither label changes with the version |
+| C16 | 3b | | One more generated, git-ignored file in `platform/`: `docker-compose.labels.yml` |
 | C14 | 3b | `down -v` (`make down-v`) deletes every volume without asking | `down --volumes` asks you to type `clobber`, like `reset data`. `--yes`/`--confirm clobber` for scripts and CI; `make down-v` passes it, so CI is unaffected |
 | C15 | 3a | `.env` values in quotes: Make reads `LOCAL_SDK="true"` as `"true"` with the quotes, so the setting is off | Quotes are stripped, as Compose does, so a quoted `LOCAL_SDK="true"` turns the setting on |
 

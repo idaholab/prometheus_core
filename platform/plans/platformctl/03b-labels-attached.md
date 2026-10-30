@@ -13,16 +13,17 @@ agents register again after a platform restart without you doing anything.
 ## Work
 
 - **Platform labels** on every platform container (not the network):
-  `io.prometheus.platform.root`, `.version`, `.source`, through an
-  `x-platform-labels` anchor in `docker-compose.yml` and the generated
-  `docker-compose.agents.yml`, from `.platform.env` (`design.md`, "Running
-  elsewhere").
+  `io.prometheus.platform.root` and `.source`, no version (it would
+  recreate every container on every commit), through a generated
+  `docker-compose.labels.yml` that is the last entry in the entry file's
+  `path`, from `.platform.env` (`design.md`, "Running elsewhere"). The base
+  compose files don't change.
 - **Before `up` and `restart` start anything:**
   - the platform already running from another folder (by label, or for
     stacks started before the labels, by
     `com.docker.compose.project.working_dir`; folders compared with
-    `realpath`, case-insensitively on macOS): stop with where it runs, its
-    version, and `./platformctl down` there;
+    `realpath`, case-insensitively on macOS): stop with where it runs, that
+    checkout's version, and `./platformctl down` there;
   - every host port the stack will publish: free (`host.py`), or stop
     naming what holds it (another platform, AirPlay on 5000, a local
     Postgres or Redis, "another process") and the exact fix.
@@ -90,8 +91,8 @@ agents register again after a platform restart without you doing anything.
   "elsewhere" stop.
 - **Live:** a labelled container from a second project is restarted by `up`
   and left running by `down`; an unlabelled one is listed, not touched; the
-  network survives a version change while an agent is attached, and the
-  agent registers again; a second checkout of the minimal project is
+  network and containers survive a new commit (no recreate) while an agent
+  is attached, and the agent registers again; a second checkout of the minimal project is
   stopped with the right message; a port held by a plain socket is named.
 - **Manual (PR checklist):** WSL with Docker Desktop integration and with
   Engine in the distro.

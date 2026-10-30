@@ -77,8 +77,9 @@ separate repository that pins `prometheus_core` as a git submodule. See
   git-ignored and not tracked, and refuses otherwise. It prints the platform
   path it used, and needs `--yes` when that came from the sibling fallback.
 - **Version check:** `doctor --agent` compares the platform version the
-  agent pins (its submodule commit) with the running platform's (its version
-  label), and the agent's `PROMETHEUS_API_BASE_IMAGE_HASH` with the SDK
+  agent pins (its submodule commit) with the running platform's (the
+  checkout its `root` label names), and the agent's
+  `PROMETHEUS_API_BASE_IMAGE_HASH` with the SDK
   version the platform pins, and warns when they differ.
 - **`config init --instance <name>`** (moved here from step 2): set
   `COMPOSE_PROJECT_NAME` and offset every host port, so two stacks run side

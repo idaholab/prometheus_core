@@ -266,7 +266,8 @@ generated, git-ignored files on every run:
 name: prometheus_platform            # COMPOSE_PROJECT_NAME
 include:
   - path: [docker-compose.yml, docker-compose.agents.yml,
-           docker-compose.build-cache.yml, docker-compose.override.yml]
+           docker-compose.build-cache.yml, docker-compose.override.yml,
+           docker-compose.labels.yml]     # labels: from step 3b, always last
     env_file: [.env, .platform.env]
 ```
 
@@ -275,8 +276,9 @@ include:
 - `.platform.env` holds only derived, non-secret values: the base-image repo
   and pin (with `LOCAL_SDK` and the blank-pin fallback applied),
   `BUILD_CACHE`, `BUILD_CACHE_PLATFORM`, `USE_BUILD_CACHE` (turned off when
-  the containerd image store is missing), and the platform label values (see
-  "Running elsewhere"). Its header says "generated; settings go in .env". A
+  the containerd image store is missing), and the platform label values
+  (`root`, `source`; see "Running elsewhere"). Its header says "generated;
+  settings go in .env". A
   unit test checks it never contains a key the registry marks secret.
   `docker-compose.platform.yml` is added to `platform/.gitignore`;
   `.platform.env` is already covered by `*.env`.
@@ -581,8 +583,8 @@ What this needs from the design, from step 1 on:
   platform started with `config init --instance`.
 - **Version mismatch is visible.** `doctor --agent` compares the platform
   version the agent pins (its submodule commit) with the running platform's
-  (the `io.prometheus.platform.version` label; see "Running elsewhere"), and
-  warns when they differ.
+  (the checkout its `io.prometheus.platform.root` label names; see "Running
+  elsewhere"), and warns when they differ.
 
 Step 7 implements these. Step 9 adds running the pinned version from images.
 
@@ -670,7 +672,8 @@ restart.
 - **Target capabilities** (see Targets) keep a new target from breaking the
   commands it can't support.
 - **Generated files** (`docker-compose.agents.yml`,
-  `docker-compose.platform.yml`, `.platform.env`) have fixed names, a
+  `docker-compose.platform.yml`, `.platform.env`, and from step 3b
+  `docker-compose.labels.yml`) have fixed names, a
   "generated" header, and unit tests that pin their content.
 - **Growing groups:** a group module can become a package with no other
   edits (see Actions).
@@ -900,16 +903,26 @@ folder's containers (verified).
 
 - **Labels on containers, not the network.** Every platform container
   carries where it came from: `io.prometheus.platform.root` (the platform
-  folder), `io.prometheus.platform.version` (`platform_version()`) and
-  `io.prometheus.platform.source` (`build`, later `image`). They're not put
-  on the network: its version label would change every commit, and Compose
-  recreates a network whose config changed, which would disconnect your
-  agents. The values come from `.platform.env`, through a small
-  `x-platform-labels` anchor in `docker-compose.yml` and the generated
-  `docker-compose.agents.yml`. (Verified: labels from interpolated values
-  land on containers, and `docker ps --filter label=...` finds them from any
-  folder.) A live test changes the version and checks the network and your
-  agent survive.
+  folder) and `io.prometheus.platform.source` (`build`, later `image`).
+  Both rarely change.
+  - **No version label.** A label is container config, so a value that
+    changes every commit would make Compose recreate every container after
+    each `git pull`, even on a plain `restart`, and `up backend` would also
+    recreate its dependencies (the review verified this in a throwaway
+    project). The version is read when needed from the checkout the `root`
+    label names (`platform_version()` there), and shown as "the checkout's
+    version"; for an `image` source (step 9), from the image tag.
+  - **Not on the network** either: Compose recreates a network whose config
+    changed, which would disconnect your agents.
+  - **How they're applied.** YAML anchors don't cross files, and
+    `docker-compose.agents.yml` only has `include:`, so the tool generates
+    `docker-compose.labels.yml`: one `labels:` block per service (from
+    `config --services --no-interpolate`), with the values from
+    `.platform.env`. It's the last entry in the entry file's `path`, so it
+    merges into every service, including DeepLynx, the system-test services
+    and a user's override (verified: a labels file in `include` `path`
+    merges into the service). The base compose files don't change. (Also
+    verified: `docker ps --filter label=...` finds them from any folder.)
 - **Stacks started before the labels** (by the old Makefile) have none. The
   check falls back to `com.docker.compose.project.working_dir` and treats
   "no label" as an older stack. The first `up` after step 3b recreates every
@@ -921,7 +934,7 @@ folder's containers (verified).
 - **Before starting**, `up` and `restart` check, in this order:
   - Same project, same folder: normal.
   - Same project, another folder: stop, with "Prometheus is already running
-    from `<folder>` (version `<v>`). Stop it there with
+    from `<folder>` (checkout at `<v>`). Stop it there with
     `./platformctl down`." The second-instance option comes last.
   - **Every host port the stack will publish** is free (`host.py`). If not,
     stop before Compose fails, naming what holds it: another platform
@@ -931,8 +944,8 @@ folder's containers (verified).
     `--set DEEPLYNX_SERVER_PORT=5001`).
 - **`status`** prints the folder and version in its summary, and lists other
   running platforms. **`doctor`'s `ports-free`** check is the same code.
-- Step 7 uses the version label for the agent version check; step 9 uses
-  the source label.
+- Step 7 uses the `root` label to find the running platform's checkout for
+  the agent version check; step 9 uses the source label.
 
 ## Breaking changes
 
