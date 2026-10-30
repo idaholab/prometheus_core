@@ -17,8 +17,7 @@ import pytest
 from platformctl.diagnostics import host_checks as hc
 from platformctl.diagnostics.base import FAIL, PASS, WARN
 from platformctl.system import host as hostmod
-
-from .conftest import make_context
+from tests.unit.conftest import make_context
 
 
 def ctx_for(root, runner, *, system="darwin", release="", sets=None, env=None):

@@ -18,8 +18,7 @@ from pathlib import Path
 import pytest
 
 from platformctl.system.compose import Compose, parse_version
-
-from .conftest import FakeRunner
+from tests.unit.conftest import FakeRunner
 
 
 @pytest.mark.parametrize(

@@ -30,8 +30,7 @@ import pytest
 
 from platformctl import cli
 from platformctl.system import host
-
-from .conftest import make_context
+from tests.unit.conftest import make_context
 
 SENTINELS = {
     "plain": "CANARYPLAINVALUE0001",

@@ -18,8 +18,7 @@ import json
 import pytest
 
 from platformctl.actions import doctor
-
-from .conftest import make_context
+from tests.unit.conftest import make_context
 
 GOOD_ENV = (
     "AGENT_SECRET=aaaaaaaaaaaaaaaa\nREDIS_PASSWORD=bbbbbbbbbbbbbbbb\nADMIN_DB_PASSWORD=cccccccccccccccc\n"
