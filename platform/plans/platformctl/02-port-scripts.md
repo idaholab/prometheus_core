@@ -1,0 +1,144 @@
+# 2: Port the scripts and remove them
+
+> **Status: Not started**
+
+Lands after the hackathon (Day 2).
+
+## Goal
+
+Move `scripts/init_env.py`, `scripts/check_platform.py` and
+`scripts/deeplynx_setup.py` into platformctl, and delete them.
+
+## Work
+
+- **Actions:** `config init` (from `init_env.py`) and `config show`
+  (`--json`); `status` with `--wait` (from `check_platform.py`; the
+  service-state half of `status` arrives in step 3a); `deeplynx setup` (from
+  `deeplynx_setup.py`).
+- **New in `config init`:**
+  - Report keys in `.env.example` that `.env` lacks (today a new key never
+    reaches an existing `.env`). The same check goes into `doctor`.
+  - **Local SDK and local DeepLynx.** `--local-sdk`/`--no-local-sdk` and
+    `--local-deeplynx`/`--no-local-deeplynx` set `LOCAL_SDK` and
+    `LOCAL_DEEPLYNX` in `.env`. Without a flag, an interactive run asks for
+    each when `.env` doesn't decide it yet (for DeepLynx: neither
+    `LOCAL_DEEPLYNX` nor `DEEPLYNX_KEY` set), in plain words with a
+    recommended answer that Enter accepts: "Build the base image on this
+    laptop? (recommended) [Y/n]". The SDK recommendation comes from a test
+    pull of the pinned base image with a short timeout (off the VPN it would
+    otherwise hang). It reuses the existing menu code, with its numbered
+    fallback when `termios` is missing. It never changes a value that's
+    already set unless a flag asks. Today the hackathon tells people to
+    `echo "LOCAL_SDK=true" >> .env` by hand (deck 03) and walks them through
+    DeepLynx in the browser.
+  - **`--set KEY=value`** writes a value into `.env` (not for one run, like
+    the global `--set`). CI uses it to replace its three `sed` blocks that
+    put the `DEEPLYNX_*` stubs into `.env`.
+  - **No terminal:** asks nothing, uses flags and the environment as today,
+    and exits 1 listing what it couldn't answer.
+  - `.env` is created 0600 and written atomically; the LLM key is read with
+    `getpass`, which stops rather than echo.
+  - `--instance <name>` is **not** in this step: agent folders hardcode the
+    platform's network name until step 7 (`design.md`, "Replace as you
+    go").
+- **Adapters:** `system/deeplynx.py` (never prints request headers or
+  bodies). `.env` writes go through `system/envfile.py`.
+- **Messages stay word for word.** Deck 03 shows `init-env`'s output
+  ("Created .env from .env.example.", "Generated in .env: ...", the profile
+  menu, "Saved LLM_CONFIG_PROFILE=... in .env."), and CI relies on the
+  others.
+- **Makefile:** `init-env` → `config init`, `check` → `status --wait`,
+  `deeplynx-setup` → `deeplynx setup`, each forwarding `$(MAKEOVERRIDES)` as
+  `--set` and printing the new command. **`test-system`** calls
+  `scripts/check_platform.py` directly (`Makefile:259`); its recipe switches
+  to `./platformctl status --wait`. `test_compose_static.py` parses that
+  recipe; update it with it.
+- **Remove** the three scripts.
+- **Tests:** move `tests/infrastructure/test_check_platform.py`,
+  `test_deeplynx_setup.py` and the `init_env` parts of `test_env_vars.py`
+  into `ctl/tests/unit/` in this PR. Keep the parts of `test_env_vars.py`
+  that test `.env.example` itself; `test_required_secrets_have_generator`
+  points at the new generator code.
+- Search before opening the PR:
+  `git grep -nE 'scripts/(init_env|check_platform|deeplynx_setup)|make (init-env|check|deeplynx-setup)'`.
+
+## Output
+
+- `config init`: one line per thing it did ("Created .env", "Generated 5
+  secrets", "LLM profile: anthropic, key set", "Local SDK: yes"), the keys
+  missing from `.env`, and a closing "Next: ./platformctl up". The lines
+  deck 03 quotes stay word for word.
+- `config show`: a table of settings, value (secrets as `set`/`blank`), and
+  where it came from.
+- `status --wait`: what it's waiting for and how long it has left
+  ("backend ok, frontend ok, agents 2/3: waiting for synthesis-agent, 240 s
+  left"); on a timeout, what's missing and the `doctor` check for it.
+- `deeplynx setup`: the steps (server up, project found or created, key
+  saved) and the DeepLynx UI URL.
+
+## Replaces
+
+- `scripts/init_env.py`, `scripts/check_platform.py`,
+  `scripts/deeplynx_setup.py`: removed.
+- `make init-env`, `make check`, `make deeplynx-setup` and `test-system`'s
+  check forward to the new commands, and the start targets call
+  `config init` and `status --wait` through the tool.
+- CI's `sed` blocks after `make init-env`: `config init --set`.
+- The manual `echo "LOCAL_SDK=true" >> .env` step (deck 03) and the manual
+  DeepLynx project and key steps: replaced by the `config init` questions
+  (the slides switch in step 3c).
+
+## Docs and slides
+
+- **User guide:** `setup.md` (`config init`, its questions, `config show`,
+  `deeplynx setup`), `everyday.md` started with `status --wait`;
+  `from-make.md` rows for `init-env`, `check`, `deeplynx-setup`.
+
+Switch to `./platformctl config init`, `./platformctl status --wait` and
+`./platformctl deeplynx setup` in:
+
+- `platform/README.md` (including `python3 scripts/init_env.py`),
+  `platform/CLAUDE.md`, `platform/tests/README.md`
+- `docs/docs/prometheus-platform.md`, `docs/docs/local-deeplynx.md`,
+  `docs/dev-docs/encryption-and-keys.md`, `docs/dev-docs/multi-user-setup.md`
+- `backend/app/routers/agent_registry.py` docstring
+- Python 3.10+ (found automatically) where docs list prerequisites:
+  `platform/README.md`, `docs/docs/prometheus-platform.md`,
+  `docs/docs/windows-wsl2-setup.md` (per distro)
+
+**Not yet:** the hackathon slides, skills and knowledge base, and the
+agent-template docs. Their setup blocks also use `make up`, so they switch
+together in step 3c, with no mixed `make`/`./platformctl` blocks
+(`design.md`, "Documentation and slides").
+
+## Breaking changes
+
+- **B1:** the three scripts are removed; `make test-system` keeps working
+  through its updated recipe.
+- **B2:** `make init-env`, `make check`, `make deeplynx-setup` and every
+  start target (which run `init-env`) now need Python 3.10+, which the shim
+  finds.
+- **C10:** `config init` asks two more questions on a first run (Enter
+  accepts the recommended answers) and reports missing keys.
+
+## Tests
+
+- **Unit:** the ported behaviour at 100%, with each quoted message pinned;
+  the local SDK and DeepLynx questions (asked, skipped when set, flags, no
+  terminal, the pull timeout); `config init --set`; file mode and atomic
+  writes; the secrets canary for the new commands.
+- **Live:** `config init` on a real file in `tmp_path`, including its menu
+  in a pseudo-terminal; `status --wait` against a stub server.
+
+## CI
+
+- The three `sed` blocks (`platform: up`, `platform: up deeplynx`,
+  `agent-template: platform`) become `make init-env` followed by
+  `./platformctl config init --set DEEPLYNX_KEY=... ...`.
+
+## Done when
+
+- The three scripts are gone and nothing outside the hackathon material and
+  agent-template docs references them.
+- CI's `platform: up` job passes (it runs `make init-env` and `make up`),
+  and so does `make test-system`'s recipe test.
