@@ -43,32 +43,57 @@ separate repository that pins `prometheus_core` as a git submodule. See
   the network name use the platform that's running (found by its
   `io.prometheus.platform.root` label), not necessarily the checkout found
   above. When they differ, print both. When none is running, `up --agent`
-  stops with the command to start it.
+  stops with the command to start it, and `config sync` falls back to the
+  checkout found above, prints its path, and needs `--yes` (as for the
+  sibling fallback), so a teammate who just cloned the repo can sync first.
+  A `root` label is only trusted when that folder is owned by the current
+  user and contains `platformctl`.
 - **A small stub in the template** (`agent_template/platformctl`, stdlib,
   a few lines) does the discovery above and execs the real shim, so the
   agent Makefile calls one command and needs no shell discovery logic.
+  **It acts on its own agent by default:** it passes `--agent <its own
+  folder>` to `up`, `down`, `logs`, `doctor` and `config sync`, since it
+  only ever sits in one agent's folder. `./platformctl up` next to
+  `agent.py` starts that agent; acting on the platform from there needs
+  `--platform`. The stub's docs say it runs code from the checkout it
+  finds (submodule, `PROMETHEUS_CORE` or sibling).
+- **The stub and older tools.** The stub is copied into each agent repo and
+  can find a pinned submodule from before this step, whose tool has no
+  `--agent`. It checks the found tool's `--version --json` `features`; when
+  `agents.folder` is missing it uses the running platform's checkout
+  instead (by label), with a one-line explanation. The stub's own
+  interface is versioned and tested against an older checkout.
 - **`--agent <dir>`** on the lifecycle commands, matching `doctor --agent`:
   `up --agent <dir>` (with `--foreground`), `down --agent <dir>`,
   `logs --agent <dir>`, with the network, base-image and external-mode
-  checks. Lifecycle commands need `--agent` explicitly; only `doctor` infers
-  the folder (in-tree agents also have an `agent_card.json`). Run from
-  inside an agent folder, `up` without `--agent` says "Acting on the
-  platform, not agent `<dir>`; use --agent". No separate `agent` group: it
-  would read too close to `agents`.
+  checks. Called through the platform's own shim, lifecycle commands need
+  `--agent` explicitly; only `doctor` infers the folder (in-tree agents also
+  have an `agent_card.json`). No separate `agent` group: it would read too
+  close to `agents`.
 - **`up --agent` closes the edit loop:** build, start, wait for
   registration, run `agents refresh`, wait for the client-agent to cache its
   skills, then "Start a new chat conversation to test it".
 - **Network and project from settings:** the agent joins
-  `<COMPOSE_PROJECT_NAME>_agent-network` of the running platform. The tool
-  generates the agent's network file instead of the hardcoded
-  `docker-compose.net_internal.yml`.
+  `<COMPOSE_PROJECT_NAME>_agent-network` of the running platform. The
+  template's static `docker-compose.net_internal.yml` stays, with the name
+  as `${PROMETHEUS_PLATFORM_PROJECT:-prometheus_platform}_agent-network`
+  (`external: true`; verified to interpolate), and the tool sets
+  `PROMETHEUS_PLATFORM_PROJECT`. A generated, git-ignored file would be
+  missing from a teammate's fresh clone and from a hand-run
+  `docker compose`. Not `COMPOSE_PROJECT_NAME`: that would also rename the
+  agent's own project.
 - **`config sync --agent <dir>`:** copy the keys an agent shares with the
   platform into its `.env`, without printing them, updating lines in place
   and keeping the agent's own lines. **One explicit list**, shared with
   `setup_agent.py` and the `agent-env-sync` check: `AGENT_SECRET`,
   `REDIS_PASSWORD`, `USER_IDENTITY_PUBLIC_KEY`, `USER_IDENTITY_ISS`,
   `USER_IDENTITY_AUD`, `LLM_CONFIG_PROFILE` (only with `--force` if the
-  agent sets its own), `LLM_API_KEY`, `EMBEDDING_API_KEY`, `LOCAL_SDK`, and
+  agent sets its own), `LLM_API_KEY`, `EMBEDDING_API_KEY`, `LOCAL_SDK`,
+  `USER_IDENTITY_REQUIRED` (only when the agent doesn't set it; otherwise
+  every call can fail with "No 'userToken' found"),
+  `PROMETHEUS_API_BASE_IMAGE_HASH` (the platform's resolved pin, unless
+  `LOCAL_SDK`; without it the template builds FROM `latest`), `ADK_DB_PASSWORD`
+  (once #214 merges), and
   the DeepLynx client keys the template compose reads (`DEEPLYNX_BASE_URL`,
   `_KEY`, `_SECRET`, `_JWT_TOKEN`, `_ORG_ID`, `_PROJECT_ID`,
   `_DATA_SOURCE_ID`). Never `USER_IDENTITY_PRIVATE_KEY` or the local
@@ -84,7 +109,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
   `COMPOSE_PROJECT_NAME` and offset every host port, so two stacks run side
   by side. It's safe now that agent folders find the network by project.
 - **The agent Makefile forwards** to the stub, keeping its target names
-  (`up`, `up-fg`, `down`, `logs`).
+  (`up`, `up-fg`, `down`, `logs` with `SERVICE=`), and adds `doctor` and
+  `sync-env`. `success_message.txt` lists them.
 - **`setup_agent.py`** uses `system/envfile.py`, the shared key list and the
   same precedence. `--submodule` adds `prometheus_core` as a submodule to a
   new agent repo, refuses a commit that isn't on a remote branch, and
@@ -94,13 +120,19 @@ separate repository that pins `prometheus_core` as a git submodule. See
   `prometheus_core/` from ruff and pytest in the template's `pyproject.toml`.
   `doctor --agent` flags an existing agent missing these.
 - **Old agent folders:** `doctor --agent` recognises the old Makefile and
-  prints a one-line migration (`setup_agent.py --upgrade-makefile`).
+  prints a one-line migration (`setup_agent.py --upgrade-makefile`). It
+  refuses a Makefile that differs from every known template version (a
+  customised one), showing the diff instead; otherwise it keeps a `.bak`.
+  It also adds the stub, the `.dockerignore` lines and the agent label.
 - **Agent label:** agents scaffolded before step 3b get the
   `io.prometheus.agent` label through `--upgrade-makefile` too. The docs'
   caveat for unlabelled agents (from 3c) goes away here.
 - **The template's docs and `success_message.txt`** describe the submodule
-  layout as the default for a new repo, and how to upgrade the platform
-  version (bump the submodule, then `doctor --agent`).
+  layout for a new repo (teammates clone with `--recurse-submodules`;
+  `doctor --agent` reports "submodule not initialised" with that command),
+  and how to upgrade the platform version (bump the submodule, then
+  `doctor --agent`). The sibling layout stays the documented default for
+  the hackathon.
 
 ## Output
 
@@ -116,7 +148,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
 
 - The agent template's Makefile logic (`read_dotenv`, `validate-network`,
   `check-base-image`): the Makefile forwards to the stub.
-- `docker-compose.net_internal.yml`'s hardcoded network name: generated.
+- `docker-compose.net_internal.yml`'s hardcoded network name: from
+  `PROMETHEUS_PLATFORM_PROJECT`, which the tool sets.
 - `setup_agent.py --env-only` and the hackathon `.env` copy one-liners:
   `config sync --agent`.
 - The manual "then refresh discovery" step after `make up` in the agent
@@ -142,8 +175,8 @@ separate repository that pins `prometheus_core` as a git submodule. See
 - **Commands:** in a new agent folder, `./platformctl up` (the stub)
   starts your agent; `--platform` acts on the platform. `make up` in the
   agent folder still works. New: `config sync --agent`, `up --agent`.
-- **Files created:** the stub `platformctl` and a generated network file in
-  new agent folders.
+- **Files created:** the stub `platformctl` in new agent folders; the
+  network file names the network through `PROMETHEUS_PLATFORM_PROJECT`.
 - **Old agent folders:** keep working as they are; `doctor --agent` prints
   the one-line `setup_agent.py --upgrade-makefile` migration.
 - **Roll back:** revert the PR; agent folders scaffolded in between keep
@@ -154,8 +187,9 @@ separate repository that pins `prometheus_core` as a git submodule. See
 - **C11:** agent folders use platformctl; their `make` targets keep working.
 - An agent folder with a non-default platform `COMPOSE_PROJECT_NAME` now
   joins the right network (today it fails). Not breaking, but a change.
-- `up` run inside an agent folder acts on the platform, as today, and says
-  so; `--agent` is needed for the agent.
+- In a new agent folder, the stub's `./platformctl up` starts the agent,
+  not the platform (`--platform` for that). The platform's own
+  `./platformctl up`, run from anywhere, still acts on the platform.
 - Existing agent repos keep working with the sibling layout. The submodule
   is opt-in.
 

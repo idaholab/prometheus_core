@@ -572,8 +572,9 @@ What this needs from the design, from step 1 on:
 
 - **The platform root is a value.** The tool knows two paths: the platform
   it belongs to (its own location), and the agent folder it's acting on.
-  Lifecycle commands act on an agent folder only with `--agent <dir>`; only
-  `doctor` infers it from the current directory, because in-tree agents
+  Lifecycle commands act on an agent folder only with `--agent <dir>` (the
+  agent folder's stub passes it for its own folder); only `doctor` infers
+  it from the current directory, because in-tree agents
   (`platform/agents/*`) also have an `agent_card.json`. Nothing assumes the
   agent is under `platform/agents/`.
 - **The tool is stable to call from outside.** Agent repos call the shim,
