@@ -438,10 +438,19 @@ The plan's rule is "never print a secret". This is how it's enforced:
 - **Errors and tracebacks.** A top-level handler sends every error message
   through the scrubber. Tracebacks only with `--debug`, also scrubbed.
   `--dry-run` prints argv only, never the child environment.
-- **`compose --` can't be scrubbed** (Compose has the terminal). It refuses
-  `config` unless `--no-interpolate` is given, and `exec ... env`/`printenv`,
-  with a pointer to `config show`. Its `--help` says the output isn't
-  redacted.
+- **`compose --` can't be scrubbed** (Compose has the terminal), so it
+  doesn't pretend to be safe. It refuses only what prints the settings
+  directly: `config` and its alias `convert`, unless `--no-interpolate` is
+  given without `--environment` (`config --environment` prints every
+  value; the review found it prints none with `--no-interpolate`, but the
+  combination isn't worth allowing). The refusal points to `config show`.
+  Every run prints
+  "compose --: output is not redacted" on stderr first, and its `--help`
+  says the same. Other ways to print a value (`exec <svc> sh -c 'echo $X'`,
+  `run`, `logs`) can't be told apart from normal use, so they're not
+  refused; the hackathon rules and skills list `compose -- config` and
+  `compose -- exec` among the commands an assistant never runs to read a
+  value.
 - **Files.** `.env` and agent `.env` files are created 0600 and written
   atomically. `doctor` warns when one is group- or world-readable, or when
   `.env` isn't git-ignored (or is tracked).

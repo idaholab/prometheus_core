@@ -20,8 +20,9 @@ CI job to `./platformctl`.
   (route key, card URL, skill ids; flags duplicate route keys and skill ids;
   `--json`; never prints `AGENT_SECRET`).
 - **`agents refresh`** (the client-agent's `/discovery/refresh`).
-- **`compose -- <args>`** (refuses `config` without `--no-interpolate`, and
-  `exec ... env`/`printenv`; its help says output isn't scrubbed) and
+- **`compose -- <args>`** (refuses `config`/`convert` unless
+  `--no-interpolate` without `--environment`; prints "output is not
+  redacted" on stderr every run, and its help says so) and
   **`compose --print`** (only `-f` and `--profile`).
 - **`logs --since`** (the `diagnose` skill's turn tracing needs it).
 - The hackathon skills' **`allowed-tools`** lists switch to the new
@@ -75,6 +76,9 @@ CI job to `./platformctl`.
     re-registers your agent. Decks 01, 04 and 05: the same command changes.
   - `make DEBUG_AGENTS=true up` (deck 03) becomes
     `./platformctl up --set DEBUG_AGENTS=true`.
+  - The hackathon `CLAUDE.md` rule 3 and `conventions.md` add
+    `./platformctl compose -- config` and `compose -- exec` to the commands
+    never run to read a value, pointing to `config show --json`.
   - Rebuild the decks in a separate last commit.
 
 ## Breaking changes

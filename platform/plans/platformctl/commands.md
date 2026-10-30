@@ -158,7 +158,7 @@ Exit codes: 0 OK, 1 failure, 2 usage error (including "needs a terminal or
 | `doctor --tag preflight\|diagnose` | Only the checks with that tag |
 | `doctor --agent <dir>` | Also check an agent folder (automatic when run from inside one) |
 | `doctor --list` | List the check ids, their tags and the targets they apply to |
-| `compose -- <args>` | `docker compose` with the platform's project, files, profiles and environment, e.g. `./platformctl compose -- exec redis sh`. Its output isn't scrubbed, so it refuses `config` (without `--no-interpolate`) and `exec ... env` |
+| `compose -- <args>` | `docker compose` with the platform's project, files, profiles and environment, e.g. `./platformctl compose -- exec redis sh`. Its output isn't scrubbed: every run says so on stderr, and it refuses `config`/`convert` unless `--no-interpolate` is given without `--environment` |
 | `compose --print` | Print the `docker compose` command to run it yourself (`-f docker-compose.platform.yml` and the profiles, never values) |
 
 `config init` never changes a value `.env` already sets, unless a flag asks
