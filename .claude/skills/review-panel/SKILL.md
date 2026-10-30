@@ -183,14 +183,19 @@ If no reviewer is selected, stop and say so.
 1. **Verify before reporting.** Read the code for every blocker and major finding, and run the
    command if one is named. Mark each one `confirmed`, `not reproduced` (say why), or
    `unchecked` (say why). Spot-check the minor findings.
-2. **Duplicates.** When two reviewers found the same problem, give the full finding to the
+2. **Outside my focus.** These notes aren't findings, so don't put them in a reviewer's table
+   as they are. Drop a note that another reviewer's findings already cover. When the reviewer
+   who owns that area wasn't on the panel, name the note on the "Not on the panel" line as a
+   reason to rerun with them. When no reviewer covered it, check it as you would a minor
+   finding, and report it under the reviewer who raised it if it holds up.
+3. **Duplicates.** When two reviewers found the same problem, give the full finding to the
    reviewer who showed it best (usually the one that ran something). The other reviewer's
    section gets a one-line "Same as CI-2" row, plus anything that reviewer added. If they rated
    it differently, keep the higher severity and give both ratings.
-3. **Write the report** exactly as `report-template.md` describes. Show it in the terminal
+4. **Write the report** exactly as `report-template.md` describes. Show it in the terminal
    in that same format.
-4. Remove any worktree or export you created, and any throwaway containers left over.
-5. Ask (header `Next`) what to do: "Fix the confirmed findings", "Post the report to the PR",
+5. Remove any worktree or export you created, and any throwaway containers left over.
+6. Ask (header `Next`) what to do: "Fix the confirmed findings", "Post the report to the PR",
    or "Nothing". Offer posting only for a PR target. Posting is outward-facing, so show the
    exact comment first. Then write it to `$TMPDIR/review-<n>.md` and run `gh pr comment <n>
    --repo idaholab/prometheus_core --body-file "$TMPDIR/review-<n>.md"`. When findings are
