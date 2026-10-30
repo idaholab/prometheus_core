@@ -130,7 +130,7 @@ that change needs no other edits.
 ```
 actions/
   up.py  down.py  restart.py  build.py  logs.py  status.py
-  config.py    # init, show
+  config.py    # init, show, set
   agents.py    # list, generate, clean
   deeplynx.py  # setup
   reset.py     # registry, users, data
@@ -902,8 +902,8 @@ From a review of every tracked doc, slide, skill and workflow:
 - CI sets `SKIP_PREREQUISITES=1`, `BUILD_CACHE` and `BUILD_CACHE_PLATFORM` in
   the environment; they must keep working.
 - CI `sed`s the `DEEPLYNX_*` stubs into `.env` after `make init-env` (three
-  jobs), because a blank `.env` line wins. Step 2's `config init --set
-  KEY=value` replaces that.
+  jobs), because a blank `.env` line wins. Step 2's
+  `config set --from-env KEY ...` replaces that.
 - The agent template reads `platform/.env` with its own parser
   (`agent_template/Makefile` `read_dotenv`, `setup_agent.py`), which doesn't
   strip quotes, and hardcodes the network `prometheus_platform_agent-network`.

@@ -130,7 +130,7 @@ today; CI proves it.
 ## CI
 
 - **Compose equivalence** (in the compose-validation job): with a test
-  `.env` of fixed placeholders (`config init --set ...`), compare
+  `.env` of fixed placeholders (`config set ...`), compare
   `docker compose -f docker-compose.platform.yml config --format json` with
   the old `-f` list's output, normalised for `name` and paths, for every
   combination the job covers plus `LOCAL_SDK` and `USE_BUILD_CACHE`. Keep

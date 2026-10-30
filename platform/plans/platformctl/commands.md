@@ -28,9 +28,11 @@ to one of them (see "Make targets" below).
 - `config init`: create or complete `.env`, ask for the LLM profile and
   key, ask whether to build the SDK locally and run DeepLynx locally (Enter
   accepts the recommended answer), and report keys missing from `.env`.
-  `--local-sdk`/`--no-local-sdk`, `--local-deeplynx`/`--no-local-deeplynx`
-  and `--set KEY=value` answer without asking. `--instance <name>` (step 7)
-  sets up a second checkout
+  `--local-sdk`/`--no-local-sdk` and `--local-deeplynx`/`--no-local-deeplynx`
+  answer without asking. `--instance <name>` (step 7) sets up a second
+  checkout
+- `config set KEY=value`: write a setting into `.env`. `--from-env KEY`
+  copies a secret from the environment
 - `config show`: the resolved settings and where each came from, secrets
   shown only as `set`/`blank`
 - `agents list`: the agents that would start, and why (in tree, debug,
@@ -140,7 +142,8 @@ Exit codes: 0 OK, 1 failure, 2 usage error (including "needs a terminal or
 | `config init` | Create `.env` from `.env.example` (mode 0600), generate blank secrets, ask for the LLM profile and key, report keys in `.env.example` that `.env` lacks. Output stays word for word. Without a terminal it asks nothing and exits 1 listing what it couldn't answer |
 | `config init --local-sdk` / `--no-local-sdk` | Set `LOCAL_SDK=true` (build the `prometheus_api` base image on this laptop, no registry login) or `false`, without asking. Without either flag, asks when `.env` doesn't set it: "Build the base image on this laptop? (recommended) [Y/n]". The answer is recommended from a quick test pull with a timeout |
 | `config init --local-deeplynx` / `--no-local-deeplynx` | Set `LOCAL_DEEPLYNX=true` (run DeepLynx next to the platform and fill `DEEPLYNX_*` with `deeplynx setup`) or `false`, without asking. Asked when `.env` sets neither it nor `DEEPLYNX_KEY`, recommended yes |
-| `config init --set KEY=value` | Write a value into `.env` (unlike the global `--set`, which overrides for one run). Replaces CI's `sed` workarounds |
+| `config set KEY=value ...` | Write values into `.env`, in place (unlike the global `--set`, which overrides for one run). Refuses keys marked secret |
+| `config set --from-env KEY ...` | Copy each key's value from the environment into `.env`, so a secret never appears in argv. Replaces CI's `sed` workarounds |
 | `config show` | Each setting, its value (secrets as `set`/`blank`) and where it came from |
 | `agents list` | Each agent, whether it's included, and why |
 | `agents list --registered` | What the registry holds: route key, card URL, skill ids. Flags duplicate route keys and skill ids (two agents replacing each other). Never prints `AGENT_SECRET` |

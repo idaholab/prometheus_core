@@ -11,8 +11,8 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
 
 ## Work
 
-- **Actions:** `config init` (from `init_env.py`) and `config show`
-  (`--json`); `status` with `--wait` (from `check_platform.py`; the
+- **Actions:** `config init` (from `init_env.py`), `config show`
+  (`--json`) and `config set`; `status` with `--wait` (from `check_platform.py`; the
   service-state half of `status` arrives in step 3a); `deeplynx setup` (from
   `deeplynx_setup.py`).
 - **New in `config init`:**
@@ -31,9 +31,6 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
     already set unless a flag asks. Today the hackathon tells people to
     `echo "LOCAL_SDK=true" >> .env` by hand (deck 03) and walks them through
     DeepLynx in the browser.
-  - **`--set KEY=value`** writes a value into `.env` (not for one run, like
-    the global `--set`). CI uses it to replace its three `sed` blocks that
-    put the `DEEPLYNX_*` stubs into `.env`.
   - **No terminal:** asks nothing, uses flags and the environment as today,
     and exits 1 listing what it couldn't answer.
   - `.env` is created 0600 and written atomically; the LLM key is read with
@@ -41,6 +38,17 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
   - `--instance <name>` is **not** in this step: agent folders hardcode the
     platform's network name until step 7 (`design.md`, "Replace as you
     go").
+- **`config set KEY=value ...`** writes values into `.env`, in place
+  (unlike the global `--set`, which overrides for one run; a second
+  `--set` on `config init` can't exist anyway, since argparse rejects a
+  subparser option that clashes with the inherited global one, verified).
+  Like the global `--set`, it refuses keys the registry marks secret.
+  **`config set --from-env KEY ...`** copies each key's value from the
+  environment instead, for secrets: the value never appears in argv, shell
+  history or `ps`. It exits 1 naming any key that isn't set in the
+  environment. CI uses `config set --from-env DEEPLYNX_KEY DEEPLYNX_SECRET
+  DEEPLYNX_ORG_ID DEEPLYNX_PROJECT_ID` to replace its three `sed` blocks
+  (the stubs are already in the job's environment).
 - **Adapters:** `system/deeplynx.py` (never prints request headers or
   bodies). `.env` writes go through `system/envfile.py`.
 - **Messages stay word for word.** Deck 03 shows `init-env`'s output
@@ -90,7 +98,7 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
 - `make init-env`, `make check`, `make deeplynx-setup` and `test-system`'s
   check forward to the new commands, and the start targets call
   `config init` and `status --wait` through the tool.
-- CI's `sed` blocks after `make init-env`: `config init --set`.
+- CI's `sed` blocks after `make init-env`: `config set --from-env`.
 - The manual `echo "LOCAL_SDK=true" >> .env` step (deck 03) and the manual
   DeepLynx project and key steps: replaced by the `config init` questions
   (the slides switch in step 3c).
@@ -141,7 +149,8 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 
 - **Unit:** the ported behaviour at 100%, with each quoted message pinned;
   the local SDK and DeepLynx questions (asked, skipped when set, flags, no
-  terminal, the pull timeout); `config init --set`; file mode and atomic
+  terminal, the pull timeout); `config set` (refusing secrets) and
+  `config set --from-env` (a missing key); file mode and atomic
   writes; the secrets canary for the new commands.
 - **Live:** `config init` on a real file in `tmp_path`, including its menu
   in a pseudo-terminal; `status --wait` against a stub server.
@@ -150,7 +159,7 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 
 - The three `sed` blocks (`platform: up`, `platform: up deeplynx`,
   `agent-template: platform`) become `make init-env` followed by
-  `./platformctl config init --set DEEPLYNX_KEY=... ...`.
+  `./platformctl config set --from-env DEEPLYNX_KEY DEEPLYNX_SECRET ...`.
 
 ## Review
 
