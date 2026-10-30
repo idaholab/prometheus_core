@@ -200,7 +200,7 @@ through `ctx.target`.
 
 | Module | Responsibility |
 |---|---|
-| `runner.py` | The only module that starts subprocesses: `run(argv, *, env, check, capture, interactive)`. Values go to children through the environment, never as `-e KEY=value` argv. In interactive mode the parent ignores SIGINT while it waits (Ctrl-C reaches the child), a negative return code maps to 128+n, and pure passthroughs (`compose --`, `logs` following) use `os.execvp`. Passes `exec -T` when stdin isn't a terminal |
+| `runner.py` | The only module that starts subprocesses: `run(argv, *, env, check, capture, interactive)`. Values go to children through the environment, never as `-e KEY=value` argv. In interactive mode the parent ignores SIGINT while it waits (Ctrl-C reaches the child), but only after `Popen` returns, so the child doesn't inherit `SIG_IGN` (a Python or `sh` child would then ignore Ctrl-C; verified in review), a negative return code maps to 128+n, and pure passthroughs (`compose --`, `logs` following) use `os.execvp`. Passes `exec -T` when stdin isn't a terminal |
 | `docker.py` | `docker info` (context, OS, architecture, image store), `version`, `volume`, `pull`, `image inspect`, `ps` with published ports |
 | `compose.py` | A compose project: `-f` entry file, profiles, `up`/`down`/`exec`/`ps`/`logs`/`config`/`restart` |
 | `envfile.py` | Parse `.env` and `.env.example` (dotenv rules, stripping `\r` and a BOM); update keys in place. Writes are atomic: `mkstemp` in the same folder (0600 from the start), `fchmod` to the target's mode, write, `fsync`, then `os.replace`. New files are 0600. A symlinked `.env` is written through to its target, never replaced by a plain file. Parse errors name the line number, never its text |
@@ -990,7 +990,9 @@ From a review of every tracked doc, slide, skill and workflow:
 - The Docker commands the tool runs are printed with `--verbose` and
   `--dry-run` (scrubbed), and always in CI.
 - `up --foreground`, `logs`, `config init` and `reset data` need the
-  terminal; Ctrl-C reaches Compose, and the exit code is Compose's.
+  terminal; Ctrl-C reaches Compose, and `./platformctl`'s exit code is
+  Compose's. Through `make`, Make catches the SIGINT and exits with its own
+  error (2), as with any recipe today.
 - CI's three "Collect logs" steps build `COMPOSE_FILE` by hand; they switch
   to `./platformctl logs --no-follow`, falling back to the old list if `up`
   failed before writing the entry file.

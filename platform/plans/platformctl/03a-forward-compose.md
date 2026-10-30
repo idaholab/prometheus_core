@@ -127,7 +127,9 @@ today; CI proves it.
   `doctor` against real Compose; no sentinel in the captured output.
 - **Live:** `up`/`down`/`restart <service>`/`status`/`logs` (including
   `--tail` and `--no-follow`) on the minimal compose project; `reset
-  registry` against real Valkey; Ctrl-C in the foreground (pseudo-terminal);
+  registry` against real Valkey; Ctrl-C in the foreground (pseudo-terminal),
+  with Compose and with a Python child, waiting for a ready marker rather
+  than sleeping;
   Make forwarding of `make up X=y`, `X=y make up` and `make -C <dir>`.
 
 ## CI
