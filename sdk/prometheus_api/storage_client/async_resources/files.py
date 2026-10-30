@@ -43,6 +43,35 @@ class AsyncFilesResource(AsyncBaseResource):
 
         return self._parse_file_metadata(response.json())
 
+    async def upload_bytes(
+        self, data: bytes, name: str, description: Optional[str] = None
+    ) -> FileMetadata:
+        """Upload in-memory bytes as one file asynchronously, without a temporary file."""
+        from ..utils.streaming import AsyncChunkedUploader
+
+        uploader = AsyncChunkedUploader(self._client)
+        if len(data) <= uploader.chunk_size:
+            form = {"description": description} if description else {}
+            response = await self._client._request(
+                "POST", f"{self._base_path}/files", files={"file": (name, data)}, data=form
+            )
+            return self._parse_file_metadata(response.json())
+
+        chunks = [
+            data[i : i + uploader.chunk_size] for i in range(0, len(data), uploader.chunk_size)
+        ]
+        upload_id = await uploader._start_upload(name, len(data))
+        try:
+            for chunk_num, chunk_data in enumerate(chunks):
+                await uploader._upload_chunk(upload_id, chunk_num, chunk_data)
+            return await uploader._complete_upload(upload_id, name, description, len(chunks))
+        except Exception:
+            try:
+                await uploader._cancel_upload(upload_id)
+            except Exception:
+                pass
+            raise
+
     async def upload_chunked(
         self,
         file_path: Path,
