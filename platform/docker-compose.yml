@@ -173,6 +173,8 @@ services:
       # backend-only, never forwarded to agents.
       ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+asyncpg://admin:${ADMIN_DB_PASSWORD}@admin-db:5432/admin}
       ADMIN_DB_ENCRYPTION_KEY: ${ADMIN_DB_ENCRYPTION_KEY:-}
+      # Password the langgraph-role migration sets; agents use it for their checkpoint store.
+      LANGGRAPH_DB_PASSWORD: ${LANGGRAPH_DB_PASSWORD}
       # Base URL for the OIDC redirect_uri sent to identity providers -- must
       # be the origin the BROWSER actually uses (e.g. the Vite dev server at
       # http://localhost:5150, which proxies /api here; not this container's

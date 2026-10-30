@@ -61,6 +61,44 @@ class FilesResource(BaseResource):
 
         return self._parse_file_metadata(response.json())
 
+    def upload_bytes(
+        self, data: bytes, name: str, description: Optional[str] = None
+    ) -> FileMetadata:
+        """Upload in-memory bytes to storage as one file, without a temporary file.
+
+        Args:
+            data: File content
+            name: File name
+            description: Optional file description
+
+        Returns:
+            File metadata
+        """
+        from ..utils.streaming import ChunkedUploader
+
+        uploader = ChunkedUploader(self._client)
+        if len(data) <= uploader.chunk_size:
+            form = {"description": description} if description else {}
+            response = self._client._request(
+                "POST", f"{self._base_path}/files", files={"file": (name, data)}, data=form
+            )
+            return self._parse_file_metadata(response.json())
+
+        chunks = [
+            data[i : i + uploader.chunk_size] for i in range(0, len(data), uploader.chunk_size)
+        ]
+        upload_id = uploader._start_upload(name, len(data))
+        try:
+            for chunk_num, chunk_data in enumerate(chunks):
+                uploader._upload_chunk(upload_id, chunk_num, chunk_data)
+            return uploader._complete_upload(upload_id, name, description, len(chunks))
+        except Exception:
+            try:
+                uploader._cancel_upload(upload_id)
+            except Exception:
+                pass
+            raise
+
     def upload_chunked(
         self,
         file_path: Path,
