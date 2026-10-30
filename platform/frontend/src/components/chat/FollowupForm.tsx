@@ -19,6 +19,7 @@
 
 import { useState } from "react";
 import type { FormField } from "@/lib/api/types";
+import { Button } from "@/components/ui/Button";
 
 function initialValues(fields: FormField[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -142,9 +143,7 @@ export function FollowupForm({
           {f.help && <p className="text-xs text-base-content/60">{f.help}</p>}
         </div>
       ))}
-      <button type="submit" className="btn btn-primary btn-sm" disabled={disabled || missingRequired}>
-        Submit
-      </button>
+      <Button variant="primary" size="sm" type="submit" label="Submit" disabled={disabled || missingRequired} />
     </form>
   );
 }
