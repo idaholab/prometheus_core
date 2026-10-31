@@ -175,7 +175,13 @@ const tools = () => bgItems().filter((it) => it.kind === "tool");
 
 async function bootBackgroundConversation(id: string, api: Api): Promise<void> {
   installStorage(id);
-  g.__chatTestApi = { getConfig: async () => ({}), resumeConversation: async () => detail(id), ...api };
+  g.__chatTestApi = {
+    getConfig: async () => ({}),
+    resumeConversation: async () => detail(id),
+    // Turn recovery, when present, reads the stored transcript on every send; nothing is stored here.
+    getConversation: async () => ({ ...detail(id), messages: [] }),
+    ...api,
+  };
   await chatStore.bootstrap("p");
 }
 
