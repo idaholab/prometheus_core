@@ -38,6 +38,7 @@ export type RenderHint =
   | "mesh"
   | "mermaid"
   | "thermal"
+  | "uq"
   | "report"
   | "code"
   | "table"
@@ -86,6 +87,12 @@ export interface Citation {
   page?: string | null;
 }
 
+/** A button a producing agent attached to its artifact (validated by the backend). */
+export interface ArtifactLink {
+  label: string;
+  url: string;
+}
+
 export interface ArtifactMeta {
   artifact_id: string;
   name: string;
@@ -99,6 +106,8 @@ export interface ArtifactMeta {
   citation?: Citation | null;
   producer_agent_id?: string | null;
   created_at?: string | null;
+  /** Buttons the producing agent attached (metadata.links); http(s) only. */
+  links?: ArtifactLink[];
 }
 
 // --- uploads ----------------------------------------------------------------
@@ -319,6 +328,36 @@ export interface ConversationMessage {
   timestamp: string;
   /** Ids of the artifacts this turn produced, resolved in the detail's `artifacts`. */
   artifact_ids: string[];
+}
+
+/** One node of `GET /api/conversations/{id}/tasks` (backend `TaskNodeOut`). */
+export interface TaskNode {
+  task_id: string;
+  parent_task_id: string | null;
+  agent: string | null;
+  skill: string | null;
+  title: string;
+  /** Effective A2A task state after children percolate up. */
+  state: string;
+  own_state: string | null;
+  is_background: boolean;
+  waiting_on: string[];
+  created_at: string | null;
+  started_at: string | null;
+  updated_at: string | null;
+  finished_at: string | null;
+  last_status_message: string | null;
+  progress: number | null;
+  result_ref: string | null;
+  error: string | null;
+  children: TaskNode[];
+}
+
+/** `GET /api/conversations/{id}/tasks`: `available: false` means Valkey is unreachable. */
+export interface ConversationTasksResponse {
+  available: boolean;
+  conversation_id: string;
+  tasks: TaskNode[];
 }
 
 export interface ConversationDetailResponse {

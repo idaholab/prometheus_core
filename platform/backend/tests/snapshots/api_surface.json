@@ -1095,6 +1095,21 @@
         ],
         "type": "object"
       },
+      "ArtifactLink": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "url"
+        ],
+        "type": "object"
+      },
       "ArtifactMeta": {
         "properties": {
           "artifact_id": {
@@ -1142,6 +1157,12 @@
               }
             ]
           },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactLink"
+            },
+            "type": "array"
+          },
           "mime_type": {
             "anyOf": [
               {
@@ -1176,6 +1197,7 @@
               "mesh",
               "mermaid",
               "thermal",
+              "uq",
               "report",
               "code",
               "table",

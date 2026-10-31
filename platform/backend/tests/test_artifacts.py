@@ -174,6 +174,32 @@ def test_to_artifact_meta_citation_absent_when_no_metadata():
     assert meta is not None and meta.citation is None
 
 
+def test_to_artifact_meta_keeps_only_safe_links_from_metadata():
+    """metadata.links become ArtifactMeta.links: http(s) only, labelled, at most 5."""
+    links = [
+        {"label": "Open interactive dashboard", "url": "http://localhost:8042/console/run-7"},
+        {"label": "Pipeline", "url": "https://gitlab.example/group/project/-/pipelines/4242"},
+        {"label": "script", "url": "javascript:alert(1)"},
+        {"label": "relative", "url": "/console/run-7"},
+        {"label": "", "url": "https://example.com/no-label"},
+        "not a dict",
+    ] + [{"label": f"extra {i}", "url": f"https://example.com/{i}"} for i in range(10)]
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "r", "metadata": {"links": links}})
+    assert meta is not None
+    assert [(link.label, link.url) for link in meta.links[:2]] == [
+        ("Open interactive dashboard", "http://localhost:8042/console/run-7"),
+        ("Pipeline", "https://gitlab.example/group/project/-/pipelines/4242"),
+    ]
+    assert len(meta.links) == 5
+    assert all(link.url.startswith(("http://", "https://")) for link in meta.links)
+
+
+def test_to_artifact_meta_links_default_empty():
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "r", "metadata": {"links": "nope"}})
+    assert meta is not None and meta.links == []
+    assert to_artifact_meta({"artifact_id": "a2", "name": "r"}).links == []
+
+
 # --------------------------------------------------------------------------- #
 # artifact_download_payload — inline serialization
 # --------------------------------------------------------------------------- #
@@ -434,3 +460,20 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     # quote + newline stripped from the ascii name (.json appended for the inline body)
     assert 'filename="evilname.json"' in cd
     assert "filename*=UTF-8''" in cd  # RFC 5987 form carries the exact name
+
+
+def test_to_artifact_meta_merges_metadata_tags():
+    """Tags that crossed the A2A hop only in metadata still reach the frontend."""
+    meta = to_artifact_meta(
+        {
+            "artifact_id": "m1",
+            "name": "mesh.bin",
+            "mime_type": "application/octet-stream",
+            "tags": ["draft"],
+            "metadata": {"tags": ["exodus", "draft"]},
+        }
+    )
+    assert meta is not None
+    assert meta.tags == ["draft", "exodus"]
+    # A routing tag that only arrived in metadata still picks the viewer.
+    assert meta.render_hint == "mesh"

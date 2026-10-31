@@ -244,6 +244,7 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 | `mesh` | MeshViewer | Exodus (`application/x-exodus`, `.exo`/`.e`), STL |
 | `mermaid` | MermaidViewer | `text/x-mermaid` |
 | `thermal` | ThermalAnalysisViewer | `json_type == prometheus.thermal_analysis.result.v1` |
+| `uq` | UQDashboard (baked notebook report) | `json_type == prometheus.uq.result.v1` |
 | `report` | markdown (rendered inline) | `text/markdown`, `text/plain`, `.md` |
 | `code` | source text, syntax-highlighted (rendered inline, not Markdown) | YAML (`application/yaml`, `application/x-yaml`, `text/yaml`, `text/x-yaml`, `.yaml`/`.yml`); MOOSE input (`.i` or the vendor `text/x-moose` MIME); and source/config files by MIME or extension: Python, TOML, INI/`.cfg`/`.conf`, XML (`.xml`/`.xsd`/`.xdmf`), C/C++, Fortran, CMake, Makefile, shell, Dockerfile, SQL, JavaScript/TypeScript, diff/patch, `.jsonc`. Whole file names `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `CMakeLists.txt` also route here. A source name or extension wins over `text/plain`/`text/markdown` (which would otherwise be `report`), except the generic `.txt`/`.log` names: those reach `code` only when the MIME type does not decide (no MIME, or a generic or unrecognized one), so default-named text replies (`artifact.txt`) stay `report`. `application/json` / `.json` stay `json`. |
 | `table` | sortable table with a raw-text toggle (first 1000 rows shown; the full file via download) | `text/csv`, `application/csv`, `text/tab-separated-values`, `.csv`/`.tsv` (also wins over `report` when `text/plain` or `text/markdown` is paired with a `.csv`/`.tsv` name; the MIME wins over a `data` tag) |
@@ -268,6 +269,16 @@ For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, pa
   "render_hint": "reference",
   "citation": { "source": "ASME BPVC", "section": "II-D", "page": "42" }
 }
+```
+
+Any artifact may carry `ArtifactMeta.links`: buttons the producing agent attaches
+(raw `metadata.links`), each `{label, url}`, opened in a new tab. Only absolute
+`http`/`https` URLs are kept, at most 5, labels up to 80 characters; anything else
+is dropped. Use it to point at a page the agent serves for that artifact (e.g. an
+interactive dashboard) or at the job that produced it.
+
+```json
+"links": [{ "label": "Open interactive dashboard", "url": "http://localhost:8042/console/run-7" }]
 ```
 
 ---

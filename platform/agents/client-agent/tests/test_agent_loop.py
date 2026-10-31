@@ -912,6 +912,36 @@ def test_ask_user_accepts_a_free_text_answer(harness) -> None:
     assert send(query="Option B").status == "answer"
 
 
+@pytest.mark.parametrize(
+    "follow_up, explicit",
+    [
+        ("If Other, describe how to sample POWER:", None),  # conditional wording
+        ("(only if Other) Describe it", None),
+        ("Any extra notes?", False),  # the model marked it optional
+    ],
+)
+def test_ask_user_follow_up_questions_are_optional(harness, follow_up, explicit) -> None:
+    """A follow-up that applies to only some answers of another question must not
+    block the form: picking a listed option leaves it blank."""
+    second: dict = {"field": "detail", "question": follow_up}
+    if explicit is not None:
+        second["required"] = explicit
+    questions = [{"field": "mode", "question": "How?", "options": ["relative", "Other"]}, second]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")])])
+
+    first = send(query="Run it")
+    assert first.status == "needs_info"
+    by_field = {q["field"]: q for q in first.followup_questions}
+    assert "required" not in by_field["mode"]  # required by default
+    assert by_field["detail"]["required"] is False
+
+
+def test_ask_user_plain_questions_stay_required(harness) -> None:
+    questions = [{"field": "name", "question": "Which case?"}]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")])])
+    assert "required" not in send(query="Run it").followup_questions[0]
+
+
 UPLOADED_REPORT = {
     "artifact_id": "up-1",
     "name": "report.csv",
