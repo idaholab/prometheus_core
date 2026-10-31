@@ -39,6 +39,7 @@ function uqArtifact(over: Partial<ArtifactMeta> = {}): ArtifactMeta {
     citation: null,
     producer_agent_id: null,
     created_at: null,
+    has_report: true,
     ...over,
   } as ArtifactMeta;
 }
@@ -52,7 +53,10 @@ test("a UQ artifact shows its baked report inline, with a notebook download and 
 
   const frame = screen.getByTitle("uq_bank_worth.ipynb");
   expect(frame.tagName).toBe("IFRAME");
-  expect(frame).toHaveAttribute("src", "/notebook/render/uq-7");
+  expect(frame).toHaveAttribute("src", "/api/artifacts/uq-7/report");
+  // Scripts run, but in an opaque origin: no allow-same-origin.
+  expect(frame.getAttribute("sandbox")).toContain("allow-scripts");
+  expect(frame.getAttribute("sandbox")).not.toContain("allow-same-origin");
   expect(frame).toHaveStyle({ height: "760px" });
 
   const download = screen.getByRole("link", { name: "Download uq_bank_worth.ipynb notebook" });
@@ -67,10 +71,10 @@ test("a UQ artifact shows its baked report inline, with a notebook download and 
 
 test("without a filename or download URL the viewer falls back to the element name and hides the download", () => {
   render(
-    <UQNotebookElement element={{ type: "custom", name: "UQDashboard", props: { reportUrl: "/notebook/render/x" } }} />,
+    <UQNotebookElement element={{ type: "custom", name: "UQDashboard", props: { reportUrl: "/api/artifacts/x/report" } }} />,
   );
   const frame = screen.getByTitle("UQDashboard");
-  expect(frame).toHaveAttribute("src", "/notebook/render/x");
+  expect(frame).toHaveAttribute("src", "/api/artifacts/x/report");
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
 
@@ -79,4 +83,13 @@ test("an element with no name and no props falls back to a generic title and ren
   expect(container).toBeEmptyDOMElement();
   render(<UQNotebookElement element={{ type: "custom", props: { reportUrl: "/r" } }} />);
   expect(screen.getByTitle("UQ analysis")).toHaveAttribute("src", "/r");
+});
+
+test("a UQ artifact whose producer attached no report shows only the notebook download", () => {
+  render(<ElementList elements={[artifactToElement(uqArtifact({ has_report: false }))]} />);
+  expect(screen.queryByTitle("uq_bank_worth.ipynb")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Download uq_bank_worth.ipynb notebook" })).toHaveAttribute(
+    "href",
+    "/api/artifacts/uq-7/content",
+  );
 });

@@ -17,10 +17,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 const BACKEND_TARGET = process.env.VITE_BACKEND_URL || "http://localhost:8600";
-// notebook-render service: serves baked UQ notebook reports at
-// same-origin `/notebook/...` (origin-agnostic Starlette app). Port matches the
-// hybrid-dev map (8876).
-const NOTEBOOK_TARGET = process.env.VITE_NOTEBOOK_URL || "http://localhost:8876";
 
 export default defineConfig({
   plugins: [
@@ -110,11 +106,6 @@ export default defineConfig({
         ws: false,
         timeout: 0,
         proxyTimeout: 0,
-      },
-      // notebook-render: baked UQ reports (/notebook/render/{id}), same-origin.
-      "/notebook": {
-        target: NOTEBOOK_TARGET,
-        changeOrigin: true,
       },
     },
   },

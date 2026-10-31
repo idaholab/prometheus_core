@@ -108,6 +108,8 @@ export interface ArtifactMeta {
   created_at?: string | null;
   /** Buttons the producing agent attached (metadata.links); http(s) only. */
   links?: ArtifactLink[];
+  /** The producer attached a baked HTML report, served at `/api/artifacts/{id}/report`. */
+  has_report?: boolean;
 }
 
 // --- uploads ----------------------------------------------------------------

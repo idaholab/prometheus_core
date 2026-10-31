@@ -142,16 +142,16 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
       };
 
     case "uq":
-      // Baked notebook report is served by the notebook-render service (same-origin
-      // via the `/notebook` proxy), NOT the artifact content proxy. `url` (content
-      // proxy) is the .ipynb download. Both are same-origin relative paths.
+      // The baked HTML report (when the producer attached one) comes from the
+      // backend's report route, which resolves it from shared storage; `url`
+      // (content proxy) is the .ipynb download. Both are same-origin relative paths.
       return {
         ...base,
         type: "custom",
         name: "UQDashboard",
         url,
         props: {
-          reportUrl: `/notebook/render/${artifact.artifact_id}`,
+          reportUrl: artifact.has_report ? api.artifactReportUrl(artifact.artifact_id) : "",
           downloadUrl: url,
           filename: artifact.name || "uq_result.ipynb",
           height: "760px",

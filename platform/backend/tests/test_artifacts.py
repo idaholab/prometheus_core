@@ -477,3 +477,87 @@ def test_to_artifact_meta_merges_metadata_tags():
     assert meta.tags == ["draft", "exodus"]
     # A routing tag that only arrived in metadata still picks the viewer.
     assert meta.render_hint == "mesh"
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/artifacts/{id}/report: a producer's baked HTML report, from shared storage
+# --------------------------------------------------------------------------- #
+
+
+def _uq_notebook(report: object) -> dict:
+    return {
+        "artifact_id": "uq-1",
+        "name": "uq_bank_worth.ipynb",
+        "mime_type": "application/x-ipynb+json",
+        "uri": "deeplynx://organizations/1/projects/2/items/10",
+        "metadata": {"json_type": "prometheus.uq.result.v1", "deeplynx_file_id": 10, "report": report},
+    }
+
+
+async def test_report_streams_the_report_not_the_notebook(monkeypatch, session_store, tmp_path):
+    seen = {}
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        seen.update(uri=uri, file_id=artifact["metadata"]["deeplynx_file_id"], artifact_id=artifact_id)
+        out = cache_dir / "r.html"
+        out.write_text("<html>report</html>")
+        return out
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    report = {"uri": "deeplynx://organizations/1/projects/2/items/11", "deeplynx_file_id": 11}
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+
+    resp = client.get("/api/artifacts/uq-1/report")
+    assert resp.status_code == 200
+    assert resp.text == "<html>report</html>"
+    assert resp.headers["content-type"].startswith("text/html")
+    assert resp.headers["content-disposition"].startswith("inline")
+    assert 'filename="uq_bank_worth.html"' in resp.headers["content-disposition"]
+    # The report's own scripts run in an opaque origin, away from the platform cookie.
+    assert resp.headers["content-security-policy"].startswith("sandbox allow-scripts")
+    assert "allow-same-origin" not in resp.headers["content-security-policy"]
+    assert seen == {"uri": report["uri"], "file_id": 11, "artifact_id": "uq-1-report"}
+
+
+@pytest.mark.parametrize(
+    "report",
+    [None, "not-a-dict", {}, {"uri": "file:///app/shared/uq.html"}, {"uri": "/tmp/uq.html"}],
+)
+async def test_report_404_without_a_report_in_shared_storage(monkeypatch, session_store, report):
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 404
+
+
+async def test_report_404_when_not_in_catalog(monkeypatch, session_store):
+    client = await _authed_client(monkeypatch, session_store, artifacts=[])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 404
+
+
+async def test_report_502_when_storage_fails(monkeypatch, session_store):
+    async def _fail(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return None
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _fail)
+    report = {"uri": "deeplynx://organizations/1/projects/2/items/11", "deeplynx_file_id": 11}
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 502
+
+
+def test_report_requires_auth():
+    from app.main import app
+
+    assert TestClient(app).get("/api/artifacts/uq-1/report").status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("report", "expected"),
+    [
+        ({"uri": "deeplynx://organizations/1/projects/2/items/11"}, True),
+        ({"uri": "https://storage.example/uq.html"}, True),
+        ({"uri": "file:///app/shared/uq.html"}, False),
+        (None, False),
+    ],
+)
+def test_to_artifact_meta_has_report_only_for_shared_storage(report, expected):
+    meta = to_artifact_meta(_uq_notebook(report))
+    assert meta is not None and meta.has_report is expected

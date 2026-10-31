@@ -111,6 +111,37 @@ await self.send_artifact_reference(
 )
 ```
 
+### A baked HTML report on an artifact
+
+An artifact can carry a static HTML view of itself in `metadata["report"]`, a
+`{"uri": ..., "deeplynx_file_id": ...}` that points at the HTML in DeepLynx
+(or any `http`/`https` URL). The platform shows it inline in a sandboxed frame
+(`GET /api/artifacts/{artifact_id}/report`), and the artifact itself stays the
+download. A `file://` report is not shown: only shared storage is read, so the
+producer can run on any host and any number of replicas.
+
+```python
+storage = ConnectionConfig.from_env()
+async with AsyncStorageClient(storage) as client:
+    html = await client.files.upload(html_path, name=html_path.name)
+await self.send_deeplynx_artifact(
+    context, event_queue,
+    file_path=notebook_path,
+    name=notebook_path.name,
+    description="UQ notebook",
+    storage_config=storage,
+    mime_type="application/x-ipynb+json",
+    metadata={
+        "json_type": "prometheus.uq.result.v1",
+        "report": {
+            "uri": f"deeplynx://organizations/{storage.organization_id}"
+                   f"/projects/{storage.project_id}/items/{html.id}",
+            "deeplynx_file_id": html.id,
+        },
+    },
+)
+```
+
 ### Retrieving artifacts as files
 
 Downstream agents should consume reusable artifacts through the shared

@@ -31,6 +31,7 @@ function meta(overrides: Partial<ArtifactMeta>): ArtifactMeta {
     citation: null,
     producer_agent_id: null,
     created_at: null,
+    has_report: true,
     ...overrides,
   } as ArtifactMeta;
 }
@@ -48,8 +49,8 @@ test("UQDashboard carries same-origin report/download URLs (no host, no secret)"
   const reportUrl = props.reportUrl as string;
   const downloadUrl = props.downloadUrl as string;
 
-  // Baked report is served by notebook-render at /notebook, not the content proxy.
-  assert.equal(reportUrl, "/notebook/render/uq-abc");
+  // Baked report comes from the backend's report route, not the content proxy.
+  assert.equal(reportUrl, "/api/artifacts/uq-abc/report");
   // Download is the artifact content proxy.
   assert.equal(downloadUrl, "/api/artifacts/uq-abc/content");
 
@@ -75,6 +76,10 @@ test("links the producing agent attached are passed to the viewer", () => {
   const links = [{ label: "Open interactive dashboard", url: "http://localhost:8042/console/run-7" }];
   assert.deepEqual(artifactToElement(meta({ links })).props?.links, links);
   assert.deepEqual(artifactToElement(meta({})).props?.links, []);
+});
+
+test("a UQ artifact without a report gets no report URL", () => {
+  assert.equal(artifactToElement(meta({ has_report: false })).props?.reportUrl, "");
 });
 
 test("a UQ artifact with no name gets a default notebook filename", () => {

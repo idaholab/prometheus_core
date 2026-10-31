@@ -56,11 +56,10 @@ function PerSampleList({ artifacts }: { artifacts: ArtifactMeta[] }) {
   );
 }
 
-/** A `uq` artifact is a UQ notebook: open its baked HTML report (notebook-render,
- * same-origin `/notebook`, same URL the inline UQ viewer uses) rather than
- * downloading the raw `.ipynb` bytes from the content proxy. */
+/** An artifact with a baked HTML report (a UQ notebook) opens the report, the same
+ * URL the inline UQ viewer uses, rather than downloading the raw `.ipynb` bytes. */
 function artifactHref(artifact: ArtifactMeta): string {
-  if (artifact.render_hint === "uq") return `/notebook/render/${artifact.artifact_id}`;
+  if (artifact.has_report) return api.artifactReportUrl(artifact.artifact_id);
   return api.artifactContentUrl(artifact.artifact_id);
 }
 

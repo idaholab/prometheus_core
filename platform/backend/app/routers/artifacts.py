@@ -161,6 +161,70 @@ async def get_artifact_content(
     )
 
 
+# The report runs its own scripts (Plotly figures), so it is served as an opaque
+# origin: no access to the platform's cookies, storage or DOM, even when opened
+# directly in a tab rather than through the viewer's sandboxed iframe.
+_REPORT_CSP = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox"
+_REPORT_SCHEMES = ("deeplynx://", "https://", "http://")
+
+
+@router.get("/artifacts/{artifact_id}/report")
+async def get_artifact_report(
+    artifact_id: str,
+    request: Request,
+    claims: TokenClaims = Depends(current_claims),
+) -> Response:
+    """The baked HTML report a producer attached to an artifact (``metadata.report``).
+
+    A UQ notebook artifact carries ``metadata.report = {"uri": ..., "deeplynx_file_id": ...}``
+    pointing at the static HTML export of the notebook, stored where the producer
+    stored the notebook itself (DeepLynx). The report is resolved like any artifact URI
+    and streamed inline, so no service shares a disk with the agent.
+    """
+    store = get_store(request)
+    session = await store.get_or_create(claims.sid)
+
+    artifact = _find_artifact(session, artifact_id)
+    if artifact is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_id!r} is not in this session's catalog.",
+        )
+
+    raw_report = (artifact.get("metadata") or {}).get("report")
+    report: dict[str, Any] = raw_report if isinstance(raw_report, dict) else {}
+    uri = str(report.get("uri") or "")
+    # Shared storage only: a file:// report would tie this route to the producer's disk.
+    if not uri.startswith(_REPORT_SCHEMES):
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_id!r} has no report.",
+        )
+
+    name = f"{Path(str(artifact.get('name') or 'report')).stem}.html"
+    # Resolve as its own artifact: the report's file id, not the notebook's.
+    report_artifact = {"name": name, "metadata": {"deeplynx_file_id": report.get("deeplynx_file_id")}}
+    cache_dir = Path(tempfile.mkdtemp(prefix="chat-report-"))
+    local_path = await uri_resolver.resolve_to_local_path(
+        uri,
+        cache_dir=cache_dir,
+        artifact=report_artifact,
+        artifact_id=f"{artifact_id}-report",
+    )
+    if local_path is None or not local_path.exists():
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        raise HTTPException(
+            status_code=http_status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not resolve the report of artifact {artifact_id!r} from {uri!r}.",
+        )
+    return FileResponse(
+        path=str(local_path),
+        media_type="text/html",
+        headers={**_content_disposition(name, "inline"), "Content-Security-Policy": _REPORT_CSP},
+        background=BackgroundTask(shutil.rmtree, str(cache_dir), ignore_errors=True),
+    )
+
+
 def _reject_unsafe_segment(value: str) -> None:
     """Reject any path segment that isn't a single safe name (path-traversal guard)."""
     if not _MESH_SEGMENT_RE.match(value) or ".." in value:

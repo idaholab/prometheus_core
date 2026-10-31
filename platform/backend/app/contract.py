@@ -259,6 +259,9 @@ class ArtifactMeta(BaseModel):
     producer_agent_id: Optional[str] = None
     created_at: Optional[str] = None
     links: list[ArtifactLink] = Field(default_factory=list)  # from metadata.links
+    # True when the producer attached a baked HTML report (metadata.report), served by
+    # GET /api/artifacts/{artifact_id}/report.
+    has_report: bool = False
 
 
 # --------------------------------------------------------------------------- #

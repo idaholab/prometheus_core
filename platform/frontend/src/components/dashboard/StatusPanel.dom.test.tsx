@@ -30,6 +30,7 @@ vi.mock("@/lib/api/client", () => ({
   api: {
     getConversationTasks: async () => ({ available: true, conversation_id: "c", tasks: [] }),
     artifactContentUrl: (id: string) => `/api/artifacts/${id}/content`,
+    artifactReportUrl: (id: string) => `/api/artifacts/${id}/report`,
   },
 }));
 
@@ -62,6 +63,7 @@ const REPORT = artifact({
   artifact_id: "uq-7",
   name: "uq_bank_worth.ipynb",
   render_hint: "uq",
+  has_report: true,
   description: "Forward UQ on control bank worth",
   tags: ["uq", "notebook"],
 });
@@ -114,7 +116,7 @@ test("the Artifacts tab counts and lists results, opens a UQ notebook as its rep
   await user.click(screen.getByRole("tab", { name: "Artifacts (2)" }));
 
   const report = screen.getByRole("link", { name: /uq_bank_worth\.ipynb/ });
-  expect(report).toHaveAttribute("href", "/notebook/render/uq-7");
+  expect(report).toHaveAttribute("href", "/api/artifacts/uq-7/report");
   expect(report).toHaveAttribute("target", "_blank");
   expect(within(report).getByText("Forward UQ on control bank worth")).toBeInTheDocument();
   expect(within(report).getByText("uq")).toBeInTheDocument();

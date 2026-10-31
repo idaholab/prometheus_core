@@ -20,10 +20,10 @@
  *
  * URL resolution (all same-origin relative paths — no host / Bearer / secret)
  * ──────────────────────────────────────────────────────────────────────────
- *   - reportUrl   → `/notebook/render/{artifact_id}` — the baked static HTML
- *     report (figures pre-baked; no live kernel, never blank). Served by the
- *     notebook-render service through the `/notebook` frontend proxy, NOT the
- *     artifact content proxy.
+ *   - reportUrl   → `/api/artifacts/{artifact_id}/report` — the baked static HTML
+ *     report (figures pre-baked; no live kernel, never blank). The backend
+ *     resolves it from shared storage (DeepLynx), so the producer can run on any
+ *     host. Empty when the producer attached no report: only the download shows.
  *   - downloadUrl → the artifact content proxy (`GET /api/artifacts/{id}/content`),
  *     which streams the `.ipynb` bytes for download.
  *
@@ -54,7 +54,7 @@ export function UQNotebookElement({ element }: ViewerProps) {
 
   const name = filename || element.name || "UQ analysis";
 
-  if (!reportUrl) return null;
+  if (!reportUrl && !downloadUrl) return null;
 
   return (
     <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">
@@ -78,12 +78,17 @@ export function UQNotebookElement({ element }: ViewerProps) {
           )}
         </div>
       </div>
-      <iframe
-        src={reportUrl}
-        title={name}
-        style={{ height }}
-        className="w-full bg-base-100"
-      />
+      {reportUrl && (
+        // The report runs its own scripts (Plotly); a sandbox without
+        // allow-same-origin keeps them away from the platform's cookies and DOM.
+        <iframe
+          src={reportUrl}
+          title={name}
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          style={{ height }}
+          className="w-full bg-base-100"
+        />
+      )}
     </div>
   );
 }

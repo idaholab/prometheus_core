@@ -498,6 +498,18 @@ def _artifact_links(metadata: dict[str, Any]) -> list[ArtifactLink]:
     return out
 
 
+def _has_report(metadata: dict[str, Any]) -> bool:
+    """True when ``metadata.report`` names a report in shared storage.
+
+    Mirrors the report route's check (``routers.artifacts``): a ``deeplynx://`` or
+    ``http(s)://`` URI. A ``file://`` path is not offered, since only the producer's
+    own disk could serve it.
+    """
+    report = metadata.get("report")
+    uri = str(report.get("uri") or "") if isinstance(report, dict) else ""
+    return uri.startswith(("deeplynx://", "https://", "http://"))
+
+
 def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
     """Map one raw catalog dict to :class:`ArtifactMeta`, or ``None`` to skip it.
 
@@ -524,6 +536,7 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),
         links=_artifact_links(metadata),
+        has_report=_has_report(metadata),
     )
 
 

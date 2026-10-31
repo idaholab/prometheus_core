@@ -340,6 +340,14 @@ correct `Content-Type` (task 07). Replaces the frontend's old
 `_render_pdf_artifact` / `_render_remote_file_artifact` / `_render_download_artifact`
 download paths.
 
+## `GET /api/artifacts/{artifact_id}/report`
+
+Streams the baked HTML report a producer attached in `metadata.report`
+(`ArtifactMeta.has_report`), resolved from DeepLynx or `http(s)` like `/content`.
+Served inline with `Content-Security-Policy: sandbox allow-scripts ...`, so the
+report's scripts run in an opaque origin. `404` when the artifact has no report in
+shared storage, `502` when storage cannot be reached.
+
 ## Chat history
 
 Redis-backed (task 08; chat-history feature). Every conversation lives in the
