@@ -186,6 +186,7 @@ RenderHint = Literal[
     "mesh",  # Exodus/STL → MeshViewer (shared VTK viewer)
     "mermaid",  # Mermaid diagram → MermaidViewer
     "thermal",  # prometheus.thermal_analysis.result.v1 → ThermalAnalysisViewer
+    "uq",  # prometheus.uq.result.v1 → UQDashboard (baked notebook report)
     "report",  # markdown / plain-text report → markdown renderer (rendered inline, not downloaded)
     "code",  # source / config text (YAML, MOOSE .i, Python, ...) → CodeViewer (syntax-highlighted inline, not Markdown)
     "table",  # CSV / TSV → TableViewer (sortable table, raw-text toggle)
@@ -219,6 +220,20 @@ class Citation(BaseModel):
     page: Optional[str] = None
 
 
+class ArtifactLink(BaseModel):
+    """A link a producing agent attaches to its artifact (``metadata.links``).
+
+    Viewers show these as buttons that open in a new tab, e.g. an interactive
+    dashboard the agent serves for that artifact, or the job that produced it.
+    Only ``http``/``https`` URLs are kept (see ``services.artifacts``).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    label: str
+    url: str
+
+
 class ArtifactMeta(BaseModel):
     """Conversation-scoped artifact reference on our wire.
 
@@ -243,6 +258,10 @@ class ArtifactMeta(BaseModel):
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None
     created_at: Optional[str] = None
+    links: list[ArtifactLink] = Field(default_factory=list)  # from metadata.links
+    # True when the producer attached a baked HTML report (metadata.report), served by
+    # GET /api/artifacts/{artifact_id}/report.
+    has_report: bool = False
 
 
 # --------------------------------------------------------------------------- #

@@ -38,6 +38,7 @@ export type RenderHint =
   | "mesh"
   | "mermaid"
   | "thermal"
+  | "uq"
   | "report"
   | "code"
   | "table"
@@ -86,6 +87,12 @@ export interface Citation {
   page?: string | null;
 }
 
+/** A button a producing agent attached to its artifact (validated by the backend). */
+export interface ArtifactLink {
+  label: string;
+  url: string;
+}
+
 export interface ArtifactMeta {
   artifact_id: string;
   name: string;
@@ -99,6 +106,10 @@ export interface ArtifactMeta {
   citation?: Citation | null;
   producer_agent_id?: string | null;
   created_at?: string | null;
+  /** Buttons the producing agent attached (metadata.links); absolute http(s) only. */
+  links?: ArtifactLink[];
+  /** The producer attached a baked HTML report in DeepLynx, served at `/api/artifacts/{id}/report`. */
+  has_report?: boolean;
 }
 
 // --- uploads ----------------------------------------------------------------

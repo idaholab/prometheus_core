@@ -33,10 +33,17 @@ function useConversationArtifacts(): ArtifactMeta[] {
   return [...byId.values()];
 }
 
+/** An artifact with a baked HTML report (a UQ notebook) opens the report, the same
+ * URL the inline UQ viewer uses, rather than downloading the raw `.ipynb` bytes. */
+function artifactHref(artifact: ArtifactMeta): string {
+  if (artifact.has_report) return api.artifactReportUrl(artifact.artifact_id);
+  return api.artifactContentUrl(artifact.artifact_id);
+}
+
 function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
   return (
     <a
-      href={api.artifactContentUrl(artifact.artifact_id)}
+      href={artifactHref(artifact)}
       target="_blank"
       rel="noreferrer"
       className="card border border-base-300 bg-base-200 transition-colors hover:border-primary/40 hover:bg-base-300"

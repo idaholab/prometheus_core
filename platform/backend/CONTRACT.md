@@ -195,7 +195,9 @@ One model covers every `status`; only the status-relevant fields are populated.
       "json_body": null,
       "render_hint": "mesh",
       "producer_agent_id": "thermal-agent",
-      "created_at": "2026-08-10T12:00:00Z"
+      "created_at": "2026-08-10T12:00:00Z",
+      "links": [],
+      "has_report": false
     }
   ],
   "recommended_materials": ["SS316", "SS347"],
@@ -244,6 +246,7 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 | `mesh` | MeshViewer | Exodus (`application/x-exodus`, `.exo`/`.e`), STL |
 | `mermaid` | MermaidViewer | `text/x-mermaid` |
 | `thermal` | ThermalAnalysisViewer | `json_type == prometheus.thermal_analysis.result.v1` |
+| `uq` | UQNotebookElement (baked notebook report, `.ipynb` download) | `json_type == prometheus.uq.result.v1` |
 | `report` | markdown (rendered inline) | `text/markdown`, `text/plain`, `.md` |
 | `code` | source text, syntax-highlighted (rendered inline, not Markdown) | YAML (`application/yaml`, `application/x-yaml`, `text/yaml`, `text/x-yaml`, `.yaml`/`.yml`); MOOSE input (`.i` or the vendor `text/x-moose` MIME); and source/config files by MIME or extension: Python, TOML, INI/`.cfg`/`.conf`, XML (`.xml`/`.xsd`/`.xdmf`), C/C++, Fortran, CMake, Makefile, shell, Dockerfile, SQL, JavaScript/TypeScript, diff/patch, `.jsonc`. Whole file names `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `CMakeLists.txt` also route here. A source name or extension wins over `text/plain`/`text/markdown` (which would otherwise be `report`), except the generic `.txt`/`.log` names: those reach `code` only when the MIME type does not decide (no MIME, or a generic or unrecognized one), so default-named text replies (`artifact.txt`) stay `report`. `application/json` / `.json` stay `json`. |
 | `table` | sortable table with a raw-text toggle (first 1000 rows shown; the full file via download) | `text/csv`, `application/csv`, `text/tab-separated-values`, `.csv`/`.tsv` (also wins over `report` when `text/plain` or `text/markdown` is paired with a `.csv`/`.tsv` name; the MIME wins over a `data` tag) |
@@ -268,6 +271,23 @@ For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, pa
   "render_hint": "reference",
   "citation": { "source": "ASME BPVC", "section": "II-D", "page": "42" }
 }
+```
+
+Two more `ArtifactMeta` fields are always present:
+
+- `links`: buttons the producing agent attaches (raw `metadata.links`), each
+  `{label, url}`, opened in a new tab. Only absolute `http`/`https` URLs with a host
+  are kept, at most 5, labels up to 80 characters; anything else (including a URL
+  that does not parse) is dropped. Use it to point at a page the agent serves for
+  that artifact (e.g. an interactive dashboard) or at the job that produced it.
+  Default `[]`.
+- `has_report`: `true` when the producer attached a baked HTML report in DeepLynx
+  (`metadata.report.uri` is `deeplynx://…/items/{item_id}`), served by
+  `GET /api/artifacts/{artifact_id}/report`. Default `false`.
+
+```json
+"links": [{ "label": "Open interactive dashboard", "url": "http://localhost:8042/console/run-7" }],
+"has_report": true
 ```
 
 ---
@@ -328,6 +348,18 @@ Resolves `deeplynx://` / remote URIs and streams the artifact bytes with the
 correct `Content-Type` (task 07). Replaces the frontend's old
 `_render_pdf_artifact` / `_render_remote_file_artifact` / `_render_download_artifact`
 download paths.
+
+## `GET /api/artifacts/{artifact_id}/report`
+
+Streams the baked HTML report a producer attached in `metadata.report`
+(`ArtifactMeta.has_report`). Only a `deeplynx://organizations/{org}/projects/{proj}/items/{item_id}`
+URI is served, and the DeepLynx file is the URI's item id; `http(s)`/`file://`
+URIs and any producer-supplied `deeplynx_file_id` are ignored. Served inline as
+`text/html` with `Content-Security-Policy: sandbox allow-scripts allow-popups; connect-src 'none'`
+(the report's scripts run in an opaque origin), `X-Content-Type-Options: nosniff`
+and `Cache-Control: private, max-age=300`. `404` when the artifact is not in the
+session's catalog or has no DeepLynx report; `502` (fixed message, no URI echoed)
+when storage cannot serve it or the report exceeds 64 MiB.
 
 ## Chat history
 

@@ -43,7 +43,12 @@ from app import uri_resolver
 from app.api_responses import AUTH_RESPONSES
 from app.openapi import TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
-from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
+from app.services.artifacts import (
+    artifact_download_payload,
+    artifact_identity,
+    classify_render_hint,
+    report_file_id,
+)
 from app.services.mesh.service import mesh_cache_root
 from app.sessions import SessionState, get_store
 
@@ -158,6 +163,83 @@ async def get_artifact_content(
     raise HTTPException(
         status_code=http_status.HTTP_404_NOT_FOUND,
         detail=f"Artifact {artifact_id!r} has no downloadable content.",
+    )
+
+
+# The report runs its own scripts (Plotly figures), so it is served as an opaque
+# origin: no access to the platform's cookies, storage or DOM, even when opened
+# directly in a tab rather than through the viewer's sandboxed iframe. Popups it
+# opens stay sandboxed too, and it may not make network requests of its own.
+_REPORT_CSP = "sandbox allow-scripts allow-popups; connect-src 'none'"
+# A baked notebook with inline Plotly is a few MB; refuse anything far larger.
+_MAX_REPORT_BYTES = 64 * 1024 * 1024
+_REPORT_UNAVAILABLE = "The report could not be loaded from storage."
+
+
+@router.get("/artifacts/{artifact_id}/report")
+async def get_artifact_report(
+    artifact_id: str,
+    request: Request,
+    claims: TokenClaims = Depends(current_claims),
+) -> Response:
+    """The baked HTML report a producer attached to an artifact (``metadata.report``).
+
+    A UQ notebook artifact carries ``metadata.report = {"uri": "deeplynx://.../items/{id}"}``
+    pointing at the static HTML export of the notebook, stored in DeepLynx next to the
+    notebook itself. Only ``deeplynx://`` is served, and the file id comes from the
+    URI's item id (``services.artifacts.report_file_id``), so no service shares a disk
+    with the agent and the producer cannot point the backend at another address.
+    """
+    store = get_store(request)
+    session = await store.get_or_create(claims.sid)
+
+    artifact = _find_artifact(session, artifact_id)
+    if artifact is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_id!r} is not in this session's catalog.",
+        )
+
+    file_id = report_file_id(artifact)
+    if file_id is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_id!r} has no report.",
+        )
+    uri = str(artifact["metadata"]["report"]["uri"])
+
+    name = f"{Path(str(artifact.get('name') or 'report')).stem}.html"
+    # Resolve as its own artifact: the report's file id (from its URI), not the notebook's.
+    report_artifact = {"name": name, "metadata": {"deeplynx_file_id": file_id}}
+    cache_dir = Path(tempfile.mkdtemp(prefix="chat-report-"))
+    try:
+        local_path = await uri_resolver.resolve_to_local_path(
+            uri,
+            cache_dir=cache_dir,
+            artifact=report_artifact,
+            artifact_id=f"{artifact_id}-report",
+        )
+        if local_path is None or not local_path.is_file():
+            logger.warning("Report of artifact %r (DeepLynx file %d) could not be resolved", artifact_id, file_id)
+            raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=_REPORT_UNAVAILABLE)
+        if local_path.stat().st_size > _MAX_REPORT_BYTES:
+            logger.warning("Report of artifact %r (DeepLynx file %d) exceeds the size cap", artifact_id, file_id)
+            raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=_REPORT_UNAVAILABLE)
+    except BaseException:
+        # Clean up on every failure, including a resolver that raises.
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        raise
+    return FileResponse(
+        path=str(local_path),
+        media_type="text/html",
+        headers={
+            **_content_disposition(name, "inline"),
+            "Content-Security-Policy": _REPORT_CSP,
+            "X-Content-Type-Options": "nosniff",
+            # Per-user (the session's catalog), so never in a shared cache.
+            "Cache-Control": "private, max-age=300",
+        },
+        background=BackgroundTask(shutil.rmtree, str(cache_dir), ignore_errors=True),
     )
 
 

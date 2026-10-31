@@ -42,6 +42,7 @@ export type ElementKind =
   | "mesh"           // MeshViewer custom element — shared by Exodus and STL
   | "mermaid"        // Mermaid custom element
   | "thermal"        // ThermalAnalysisViewer custom element
+  | "uq_notebook"    // UQDashboard custom element (render_hint === "uq"): baked notebook report
   | "report"         // markdown report rendered inline (render_hint === "report")
   | "code"           // plain source text, e.g. YAML (render_hint === "code")
   | "table"          // CSV / TSV sortable table (render_hint === "table")
@@ -115,6 +116,7 @@ export function classifyElement(el: AnyElement): ElementKind {
       // Backend COMPONENT_NAME is "ThermalAnalysisViewer", not "ThermalAnalysis"
       // (see prometheus.thermal_analysis.result.v1 plugin __init__.py).
       case "ThermalAnalysisViewer": return "thermal";
+      case "UQDashboard":         return "uq_notebook";
       case "ReportViewer":        return "report";
       case "CodeViewer":          return "code";
       case "TableViewer":         return "table";
@@ -181,6 +183,7 @@ import { ThermalAnalysisElement }          from "../../viewers/ThermalAnalysisEl
 import { ReportElement }                   from "../../viewers/ReportElement";
 import { TableElement }                    from "../../viewers/TableElement";
 import { ReferenceElement }                from "../../viewers/ReferenceElement";
+import { UQNotebookElement }               from "../../viewers/UQNotebookElement";
 
 export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null>> = {
   ifc:          IFCViewerElement,
@@ -193,6 +196,7 @@ export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null
   plan_viewer:  PlanViewerElement,
   mermaid:      MermaidElement,
   thermal:      ThermalAnalysisElement,
+  uq_notebook:  UQNotebookElement,
   report:       ReportElement,
   code:         CodeElement,
   table:        TableElement,
