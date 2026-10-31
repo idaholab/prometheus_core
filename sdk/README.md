@@ -108,6 +108,7 @@ class AnalysisAgent(PrometheusAgent):
 | `AGENT_SECRET` | Shared secret for auth | - |
 | `REGISTRY_URL` | LiteLLM registry/proxy URL used for agent registration | `http://litellm:4000` |
 | `REGISTRY_MAX_RETRIES` | Registration retries after the first attempt, used for both explicit `REGISTRY_URL` and the built-in fallback URL. | `10` |
+| `REGISTRY_CHECK_INTERVAL_SECONDS` | After startup, how often the agent checks the registry still lists it, re-registering if not (a registry restarted or cleared under a running agent). `0` disables. | `60` |
 
 ### LLMClient
 
@@ -156,7 +157,7 @@ and configure `MLFLOW_TRACKING_URI` and optionally `MLFLOW_EXPERIMENT_NAME`.
 ### PrometheusAgent
 - Automatic agent card loading
 - Built-in Bearer token authentication
-- Background registry registration during app startup
+- Background registry registration during app startup, re-registered if the registry later forgets the agent
 - HTTP server setup with A2A protocol
 - Optional `message/stream` support (`agent_card.capabilities.streaming=true`)
 - Final response emission from the returned `_execute(...)` dict

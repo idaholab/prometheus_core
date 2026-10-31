@@ -1461,6 +1461,35 @@ class PrometheusAgent:
             backoff_factor=backoff_factor,
         )
 
+    @staticmethod
+    def registry_check_interval() -> float:
+        """Seconds between registry checks after startup; 0 disables them.
+
+        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 60). See
+        ``keep_registered_async``.
+        """
+        raw = (os.getenv("REGISTRY_CHECK_INTERVAL_SECONDS") or "").strip()
+        if not raw:  # unset or empty (compose forwards empty for "use the default")
+            return 60.0
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning("Invalid REGISTRY_CHECK_INTERVAL_SECONDS=%r; using 60", raw)
+            return 60.0
+        return max(value, 0.0)
+
+    async def keep_registered_async(self, agent_card: AgentCard) -> None:
+        """Register at startup, then re-register whenever the registry forgets
+        this agent (a registry restart or clear while the agent keeps running)."""
+        await self.register_with_registry_async(agent_card)
+        interval = self.registry_check_interval()
+        registry_client = self._registry_client()
+        if registry_client is None or interval <= 0:
+            return
+        await registry_client.keep_registered_async(
+            agent_card, raw_agent_card=self.agent_card_dict, interval=interval
+        )
+
     @property
     def execution_record_id(self) -> Optional[int]:
         """DeepLynx execution item ID for the active request, if any."""
@@ -2143,7 +2172,7 @@ class PrometheusAgent:
         async with self.lifespan(app):
             if register_on_startup:
                 registration_task = asyncio.create_task(
-                    self.register_with_registry_async(agent_card),
+                    self.keep_registered_async(agent_card),
                     name=f"{self.agent_name}-registry-registration",
                 )
                 registration_task.add_done_callback(self._log_background_registration_result)
