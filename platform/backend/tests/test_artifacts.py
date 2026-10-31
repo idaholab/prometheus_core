@@ -174,6 +174,29 @@ def test_to_artifact_meta_citation_absent_when_no_metadata():
     assert meta is not None and meta.citation is None
 
 
+def test_to_artifact_meta_merges_metadata_tags():
+    """Tags that crossed the A2A hop only in metadata still reach the frontend."""
+    meta = to_artifact_meta(
+        {
+            "artifact_id": "m1",
+            "name": "mesh.bin",
+            "mime_type": "application/octet-stream",
+            "tags": ["draft"],
+            "metadata": {"tags": ["exodus", "draft"]},
+        }
+    )
+    assert meta is not None
+    assert meta.tags == ["draft", "exodus"]
+    # A routing tag that only arrived in metadata still picks the viewer.
+    assert meta.render_hint == "mesh"
+
+
+def test_to_artifact_meta_tags_ignore_non_list_metadata_tags():
+    meta = to_artifact_meta({"artifact_id": "m2", "name": "x", "tags": ["a", None], "metadata": {"tags": "exodus"}})
+    assert meta is not None and meta.tags == ["a"]
+    assert to_artifact_meta({"artifact_id": "m3", "name": "x"}).tags == []
+
+
 # --------------------------------------------------------------------------- #
 # artifact_download_payload — inline serialization
 # --------------------------------------------------------------------------- #

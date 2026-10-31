@@ -366,12 +366,11 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
             return hint if hint in ("code", "table") else "report"
 
     # 3. tags — explicit routing hints (only when a specific MIME didn't decide).
-    tags = artifact.get("tags")
-    if isinstance(tags, list):
-        for tag in tags:
-            hint = _TAG_HINTS.get(str(tag).strip().lower())
-            if hint is not None:
-                return hint
+    #    Includes tags that crossed the A2A hop only in metadata.
+    for tag in _artifact_tags(artifact, metadata):
+        hint = _TAG_HINTS.get(str(tag).strip().lower())
+        if hint is not None:
+            return hint
 
     # 4. extension — of the URI first, then the name.
     hint = _extension_hint(artifact)
@@ -448,6 +447,23 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
     )
 
 
+def _artifact_tags(artifact: dict[str, Any], metadata: dict[str, Any]) -> list[str]:
+    """Top-level ``tags`` plus any ``metadata.tags``, deduped in order.
+
+    A URI artifact sent by a PrometheusAgent crosses the A2A hop with its tags
+    only on the file part's metadata, which the client-agent's catalog merges
+    into ``metadata`` while leaving top-level ``tags`` empty. Reading both keeps
+    producer routing tags (e.g. a viewer-selecting tag such as ``exodus``) intact.
+    """
+    out: list[str] = []
+    for source in (artifact.get("tags"), metadata.get("tags")):
+        if isinstance(source, list):
+            for tag in source:
+                if tag is not None and str(tag) not in out:
+                    out.append(str(tag))
+    return out
+
+
 def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
     """Map one raw catalog dict to :class:`ArtifactMeta`, or ``None`` to skip it.
 
@@ -460,7 +476,6 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         return None
 
     metadata = artifact.get("metadata") or {}
-    tags = artifact.get("tags")
     return ArtifactMeta(
         artifact_id=artifact_identity(artifact),
         name=str(artifact.get("name") or ""),
@@ -468,7 +483,7 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         json_type=artifact.get("json_type") or metadata.get("json_type"),
         description=str(artifact.get("description") or ""),
         uri=artifact.get("uri"),
-        tags=list(tags) if isinstance(tags, list) else [],
+        tags=_artifact_tags(artifact, metadata),
         json_body=artifact.get("json_body"),
         render_hint=classify_render_hint(artifact),
         citation=_citation_from(metadata),
