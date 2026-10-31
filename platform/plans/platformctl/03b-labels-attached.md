@@ -122,6 +122,34 @@ agents register again after a platform restart without you doing anything.
   Engine in the distro, including a Windows process holding a platform port
   (reported busy, with the `Get-NetTCPConnection` hint).
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **"Ours" means this checkout** (reported). Step 1's `ports-free` counts any container with the
+  same Compose project name as ours, and the default name comes from the folder, so two checkouts
+  both named `platform` look like one stack. Compare the label (`io.prometheus.platform.root`, or
+  `working_dir` before the labels) with this checkout's root as well.
+- **`SO_REUSEADDR` on Linux** (reported; reproduced only on macOS). `port_free` binds without it
+  because it hides holders on macOS. On Linux, a bind without it also fails with `EADDRINUSE`
+  while `TIME_WAIT` sockets linger after `down`, so `doctor` could report a free port as held. Set
+  it on Linux only, keep the connect probe, and add a live test: `down`, then at once the ports
+  check.
+- **A port held on the Windows side of WSL2** (reported): a Windows process on 5150 or 8600 is
+  invisible to a bind inside the distro, so `doctor` passes and `up` fails. On WSL, rely more on
+  `docker ps --filter publish=` and a compose dry run; add a manual WSL checklist item (hold a port
+  from PowerShell, run `doctor`). `is_wsl` reads only `/proc/sys/kernel/osrelease`: also check
+  `/proc/version` and `WSL_DISTRO_NAME`.
+- **Text from other containers** (reported). The port message prints another container's name,
+  project and root label as they are, in a `./platformctl down` hint. Strip control characters in
+  `Output.write` and in the JSON `evidence`.
+- **Holder names** (reported): `lsof` names keep `\x20` escapes
+  (`Control\x20Center`); decode them. `ss -ltnp` shows no process for another user's socket: say
+  `sudo ss -ltnp`. Rootless Docker shows `rootlesskit`, not a container.
+- **Git-ignore `docker-compose.labels.yml`** (checked: it is not ignored), with the other
+  generated files from step 3a.
+
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.

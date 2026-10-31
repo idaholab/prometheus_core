@@ -49,6 +49,14 @@ change platformctl, and a final sweep.
 
 None.
 
+## From the step 1 review
+
+- `ctl/README.md` has a "Reading `--json` output" section (`ok` means doctor ran; read
+  `counts.fail` for health). Keep it, and check it matches `design.md` ("Output") and the user
+  guide.
+- `docs/docs/windows-wsl2-setup.md`: add `./platformctl doctor`, the `bash` or `dos2unix` recovery
+  for a CRLF shim, and the Windows-side port caveat from step 3b's section above.
+
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: user, technical, AI skills.

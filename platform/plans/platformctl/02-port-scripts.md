@@ -199,6 +199,55 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
   `agent-template: platform`) become `make init-env` followed by
   `./platformctl config set --from-env DEEPLYNX_KEY DEEPLYNX_SECRET ...`.
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **Make's command-line variables** (checked). Step 1's `make_overrides` reads the words after
+  ` -- ` in `MAKEFLAGS`, which Make 3.81 omits for a plain `make X=y`, and its tests only use the
+  ` -- ` form. Have the Makefile export `PLATFORMCTL_MAKE_VARS` (see `design.md`, "Settings and
+  precedence"), read that instead, and test it by running a real `make` and feeding its
+  environment to `make_overrides`, on both Make 3.81 and 4.x. Unknown names get the one-line
+  warning `design.md` promises (a reviewer reports they are ignored silently today; check).
+- **`--json` on every exit path** (checked). `SUDO_USER=x ./platformctl doctor --json` and a bad
+  `PLATFORMCTL_PYTHON` print plain text and exit 1, with no object. This step makes `make` call the
+  tool, so decide: print a minimal `{"schema_version":1,"ok":false,"error":{...}}` from
+  `__main__.py` and the shim when `--json` is in argv (`json` is stdlib and importable on 3.9), or
+  document the two exceptions in `design.md` and the user guide.
+- **`envfile.update_text`** (checked). It rewrites only the first line of a quoted multi-line
+  value (`K="a\nb"` becomes `K=x\nb"`), and for a duplicate key it edits the first line while
+  `parse` takes the last. `config set` and `config init` write `.env` through it: update by parsed
+  span, replace the last occurrence, and test both.
+- **Argparse abbreviations** (checked: `doctor --li` runs `--list`). Set `allow_abbrev=False` on the
+  parser and every subparser, so abbreviations aren't part of the interface.
+- **The scrubber's forms** (reported). URL-encoded and base64 forms of a secret, and a password in
+  a URL-shaped value such as `DOCKER_HOST=tcp://u:pw@h` or `HTTPS_PROXY`, are not scrubbed, and
+  the canary reuses one sentinel for `DOCKER_HOST` so it cannot see the gap. Register the password
+  of URL-shaped environment values, add the encoded forms, and give the canary distinct sentinels.
+  Also: a short secret under `MIN_SECRET_LENGTH`, and `LLM_CONFIG_PROFILE` (not a secret) masked in
+  output because unregistered keys count as secret. Register it as safe.
+- **The canary's reach** (reported). It runs only `doctor` and `--version`; it never sets `CI=1`
+  (the `::group::` path), never uses the real `Runner._streamed`, never writes `.env` through
+  `envfile.update`, and has no duplicate-key or comment-secret case. Add them with the new
+  commands.
+- **CI for the jobs becoming required** (reported):
+  - the macOS Python 3.9 leg probably runs Homebrew's Python, because the shim tries
+    `/opt/homebrew/bin/python3` by path, and the tests that would notice skip. Assert which
+    interpreter ran (or add an override that empties the Homebrew list) and fail instead of
+    skipping under `PLATFORMCTL_REQUIRE_PY39`;
+  - `merge_group` ignores `paths:`, so every merge-queue run starts all legs: gate them on a
+    changed-files job once the checks are required;
+  - `pytest --live` collects only `tests/unit`, because `testpaths` is `tests/unit`: make `--live`
+    select `tests/live`, or fail when it collects none; and `tests/shim` is outside the default run;
+  - add a live test that copies the platform tree to a temp folder, runs `config init` and
+    `doctor --json --tag preflight`, and asserts no FAIL; holding a port with `socket` should fail
+    naming the holder;
+  - `test_port_free_without_ipv6` failed 2 of about 40 runs (another process takes the closed
+    port): patch `_bind` and `_connects` in that test.
+- **WSL and arm64 legs** (reported): a `windows-latest` WSL leg and an `ubuntu-24.04-arm` leg for
+  the shim and unit tests; the manual WSL checklist from step 1.
+
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.

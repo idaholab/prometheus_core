@@ -367,12 +367,20 @@ today.
   its variables: `--set '$(v)'` over `$(MAKEOVERRIDES)` splits a value at
   its spaces and is a shell syntax error on a `'` (verified with GNU Make
   3.81). Instead the forwarding recipes set `PLATFORMCTL_VIA_MAKE=1`, and
-  the tool reads the names of Make's command-line variables from the
-  `MAKEFLAGS` environment variable (the words after ` -- `, with `\ `
-  unescaped) and their values from its own environment, where Make exports
-  them (verified: `make t "X=a b 'q'"` gives `MAKEFLAGS=... -- X=a\ b\ 'q'`
-  and `X=a b 'q'` in the recipe). `X=env make t` isn't in `MAKEFLAGS`, so a
-  shell variable (`X=y make up`) still loses to `.env`, as today. The
+  the tool reads the names of Make's command-line variables from
+  `PLATFORMCTL_MAKE_VARS`, which the Makefile exports as
+  `$(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $v)),$v))`,
+  and their values from its own environment, where Make exports them.
+  Not from `MAKEFLAGS`: on Make 3.81 (macOS), `make X=y` gives
+  `MAKEFLAGS=X=y` with no ` -- `, `make -k X=y` gives `k -- X=y` and
+  `make -j2 X=y Z=1` gives ` --jobserver-fds=3,4 -j -- Z=1 X=y`, so a parser
+  that wants the words after ` -- ` misses the plain case. Tried on 3.81
+  only, not yet on 4.x: the `$(origin)` form gave `X` for `make X=y`,
+  `X Z` for `make "X=a b 'q'" Z=1`, `X` for `make -k -j2 X=y`, and nothing
+  for `X=env make t`. Values with spaces and quotes reach the recipe's
+  environment as before (the earlier check with `X=a b 'q'`); step 2 tests
+  them again with a real `make`. A shell variable (`X=y make up`) still
+  loses to `.env`, as today. The
   registry alone decides what each name is: a setting (it beats `.env`, like
   `--set`), a Make variable mapped to an option (`SERVICE`, `TAIL`,
   `FOLLOW`, `AGENT`), or unknown (ignored, with a one-line warning naming

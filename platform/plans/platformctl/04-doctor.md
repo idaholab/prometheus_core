@@ -112,6 +112,28 @@ command does. The `--json` schema is versioned (`schema_version` 1).
 - **Docs test:** every check id the skills cite exists in `doctor --list`
   or is listed as manual.
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **Five step 1 checks are not in `checks.md`** (checked: 0 matches for each): `build-cache-store`,
+  `env-hides-environment`, `env-derived-keys`, `env-file` and `checkout-path`. Add them to the
+  table above, and to `checks.md` when the hackathon freeze lifts. Step 1 promised a test that
+  checks the ids the skills cite against `doctor --list`; the docs test below is that test, so it
+  must pass over these five too. Also compare each check's tags and fix kind with `checks.md`
+  (`ports-free` is `preflight,diagnose` in the tool; the reviewer read `checks.md` as `diagnose`
+  only).
+- **Fix text that says how, and for whom** (reported). The `platform-env` fix says `make init-env`
+  (a raw Make target that prompts in a terminal): tell an assistant to ask the user first. The
+  rootless branch of the daemon-down check tests `info.rootless`, which is always false when
+  `docker info` failed, so "rootless" is never named.
+- **`doctor --json` should say what it checked** (reported): add the selected check ids and the
+  target to the object, since a skill otherwise has to call `--version --json` first.
+- **Timeouts** (reported): the port probe and the Docker calls have timeouts of 0.3 s, 10 s and 30
+  s and no overall limit; a hung daemon can take up to a minute per call. Add `--timeout`, or
+  document the worst case for assistants.
+
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
