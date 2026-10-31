@@ -30,6 +30,7 @@ import type {
   ConversationHistoryResponse,
   ConversationResumeRequest,
   ConversationSummary,
+  ConversationTasksResponse,
   CreateSessionRequest,
   OidcProvider,
   OidcProviderCreate,
@@ -157,6 +158,12 @@ export const api = {
   // --- history ---
   getRecentConversations(limit = 20): Promise<ConversationHistoryResponse> {
     return request<ConversationHistoryResponse>(`/conversations/recent?limit=${limit}`);
+  },
+
+  /** GET /api/conversations/{id}/tasks — the conversation's background-task tree
+   * (one root per chat turn, its specialist dispatches as children), newest first. */
+  getConversationTasks(conversationId: string): Promise<ConversationTasksResponse> {
+    return request<ConversationTasksResponse>(`/conversations/${encodeURIComponent(conversationId)}/tasks`);
   },
 
   /** Rebind the session to a past conversation; the next chat turn continues it. */
