@@ -169,11 +169,11 @@ test("a reload shows the resume marker during getConfig() and drops it when getC
 });
 
 /* backgrounded: the detached task continues the turn's progress step (FE-10). */
-type Item = { kind: string; history?: string[]; taskId?: string; turnId?: string; name?: string; done?: boolean };
-const items = () => readState().items as Item[];
-const tools = () => items().filter((it) => it.kind === "tool");
+type BgItem = { kind: string; history?: string[]; taskId?: string; turnId?: string; name?: string; done?: boolean };
+const bgItems = () => readState().items as BgItem[];
+const tools = () => bgItems().filter((it) => it.kind === "tool");
 
-async function bootToConversation(id: string, api: Api): Promise<void> {
+async function bootBackgroundConversation(id: string, api: Api): Promise<void> {
   installStorage(id);
   g.__chatTestApi = { getConfig: async () => ({}), resumeConversation: async () => detail(id), ...api };
   await chatStore.bootstrap("p");
@@ -181,7 +181,7 @@ async function bootToConversation(id: string, api: Api): Promise<void> {
 
 test("a backgrounded turn reuses its progress step instead of adding a second row", async () => {
   const reply = deferred<unknown>();
-  await bootToConversation("conv-B1", {
+  await bootBackgroundConversation("conv-B1", {
     sendMessage: () => reply.promise,
     getRecentConversations: async () => ({ conversations: [] }),
   });
@@ -217,7 +217,7 @@ test("a backgrounded turn reuses its progress step instead of adding a second ro
 });
 
 test("a backgrounded turn with no status yet starts an empty progress step", async () => {
-  await bootToConversation("conv-B2", {
+  await bootBackgroundConversation("conv-B2", {
     sendMessage: async () => ({ status: "backgrounded", turn_id: "t2", task_id: null, message: null }),
     getRecentConversations: async () => ({ conversations: [] }),
   });
