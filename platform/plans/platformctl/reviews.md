@@ -22,8 +22,6 @@ briefs and says which reviewers each step needs.
 - **Verify before acting.** The person running the review checks each
   blocker and major finding against the code before changing anything, and
   says which ones were checked.
-- **Record the result** in the PR: the reviewers that ran, and each finding
-  as fixed, deferred (to which step) or rejected (why).
 
 ## Shared context
 
@@ -232,6 +230,6 @@ Read: the step's diff; the hackathon `CLAUDE.md`; the `diagnose`, `how` and
 | 8 k3d target | technical, CI, security, rollout, Linux/WSL |
 | 9 Platform images | technical, CI, security, rollout, agent developer |
 
-A step can add reviewers, or drop one with a sentence in the PR on why.
+A step can add reviewers, or drop one.
 Update a brief here when it stops fitting (for example, the rollout
 reviewer's timing questions once there's no event coming up).

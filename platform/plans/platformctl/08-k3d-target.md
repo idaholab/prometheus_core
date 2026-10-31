@@ -60,4 +60,3 @@ and `cluster-up` keeps its "already running" message.
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, Linux/WSL.
-Record each finding in the PR as fixed, deferred or rejected.

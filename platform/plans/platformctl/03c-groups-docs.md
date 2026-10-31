@@ -142,7 +142,6 @@ None beyond 3a and 3b.
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
 
 ## Done when
 

@@ -125,7 +125,6 @@ agents register again after a platform restart without you doing anything.
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
 
 ## Done when
 

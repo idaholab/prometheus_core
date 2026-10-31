@@ -109,8 +109,7 @@ When a step is done, set its status here and in its file to `Done (<date>,
   (`design.md`, "Output"). Each step lists the output it adds.
 - **Every step is reviewed before merging** by the reviewer agents listed for
   it in `reviews.md` (user, agent developer, technical, CI, security,
-  rollout, Linux/WSL, AI skills), each with fresh context; the PR records
-  what was fixed, deferred or rejected. The CI reviewer looks above all for
+  rollout, Linux/WSL, AI skills), each with fresh context. The CI reviewer looks above all for
   what would break for a user that no test catches, and the simplest test
   that would.
 - Every PR lists its **breaking changes** (`breaking-changes.md`) and has a

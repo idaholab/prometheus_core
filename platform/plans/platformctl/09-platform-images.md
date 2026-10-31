@@ -97,4 +97,3 @@ None: `PLATFORM_SOURCE` defaults to `build`.
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, agent developer.
-Record each finding in the PR as fixed, deferred or rejected.

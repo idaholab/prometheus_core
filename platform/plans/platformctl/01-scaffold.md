@@ -221,7 +221,6 @@ step that may land before the hackathon freeze (2026-11-03).
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, Linux/WSL, AI skills.
-Record each finding in the PR as fixed, deferred or rejected.
 
 ## Done when
 

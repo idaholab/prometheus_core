@@ -46,4 +46,3 @@ None.
 ## Review
 
 Before merging, run the reviewers in `reviews.md` for this step: user, agent developer, AI skills.
-Record each finding in the PR as fixed, deferred or rejected.
