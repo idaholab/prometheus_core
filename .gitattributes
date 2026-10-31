@@ -1,5 +1,20 @@
-# Files that run on a Unix shell must keep LF line endings, even in a checkout made by
-# Windows git with core.autocrlf=true (for WSL, on /mnt/c): `#!/bin/sh\r` fails with
-# "bad interpreter", before any Python can run and say what is wrong.
+# Files that run on a Unix shell, or that a Unix tool parses, must keep LF line endings, even in a
+# checkout made by Windows git with core.autocrlf=true (for WSL, on /mnt/c): `#!/bin/sh\r` fails
+# with "bad interpreter", before any Python can run and say what is wrong, and `.env.example` or a
+# Makefile with CRLF breaks Make and the dotenv parsers.
 platform/platformctl text eol=lf
 *.sh text eol=lf
+*.py text eol=lf
+Makefile text eol=lf
+*/Makefile text eol=lf
+Dockerfile text eol=lf
+*/Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.Dockerfile text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+.env.example text eol=lf
+*/.env.example text eol=lf
+
+# NOTICE.txt is committed with CRLF and a byte-order mark; leave it exactly as it is.
+NOTICE.txt -text

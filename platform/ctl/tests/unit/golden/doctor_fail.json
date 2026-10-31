@@ -28,7 +28,7 @@
     {
       "area": "platform",
       "evidence": ".env does not exist",
-      "fix": "Run `make init-env`: it creates .env, fills blank secrets and asks for the LLM profile and key.",
+      "fix": "Run `./platformctl config init`: it creates .env, fills blank secrets and asks for the LLM profile and key.",
       "fix_kind": "yes",
       "id": "platform-env",
       "skipped_because": "",

@@ -109,6 +109,29 @@ COMMANDS = [
     ["--json", "doctor", "--set", f"AGENT_SECRET={SENTINELS['argv']}"],
     ["doctor", "--set", f"BACKEND_PORT={SENTINELS['argv']}"],
     ["doctor", "--target", SENTINELS["argv"]],
+    # The commands of step 2.
+    ["config", "show"],
+    ["config", "show", "--json"],
+    ["--verbose", "--debug", "config", "show"],
+    ["config", "init"],
+    ["config", "init", "--json"],
+    ["--verbose", "--dry-run", "config", "init"],
+    ["config", "init", "--yes", "--local-sdk", "--local-deeplynx"],
+    ["config", "set", "BACKEND_PORT=9100"],
+    ["config", "set", "--from-env", "SOME_API_TOKEN", "PASTED_BY_MISTAKE"],
+    ["--json", "config", "set", "--from-env", "SOME_API_TOKEN"],
+    ["config", "set", "--from-env", "NOT_IN_THE_ENVIRONMENT"],
+    ["config", "set", f"LLM_API_KEY={SENTINELS['argv']}"],
+    ["--json", "config", "set", f"AGENT_SECRET={SENTINELS['argv']}"],
+    ["config", "set", f"--no-such-option={SENTINELS['argv']}"],
+    ["config", "set", "--from-env", f"KEY={SENTINELS['argv']}"],
+    ["status"],
+    ["status", "--json"],
+    ["--verbose", "--debug", "status", "--wait", "--timeout", "0"],
+    ["--json", "status", "--wait", "--timeout", "0"],
+    ["deeplynx", "setup", "--no-start", "--timeout", "0"],
+    ["--json", "--verbose", "deeplynx", "setup", "--no-start", "--timeout", "0"],
+    ["--dry-run", "deeplynx", "setup"],
 ]
 """Every command line to run, including forced failures that echo the user's argv."""
 
@@ -121,7 +144,15 @@ def canary_env(tmp_path, monkeypatch):
     (platform / ".env").write_text(DOTENV)
     (platform / ".env").chmod(0o600)
     (platform / "docker-compose.yml").write_text("services: {}\n")
+    # What `config init` reads: the example (with a generator that prints a sentinel) and the profiles.
+    (platform / ".env.example").write_text(
+        'LLM_CONFIG_PROFILE=\nLLM_API_KEY=\nLLM_CONFIG_FILE=\n# gen\n#   python3 -c "print(1)"\nGENERATED_SECRET=\nNEW_KEY=\n'
+    )
+    profiles = tmp_path / "sdk" / "prometheus_api" / "llm_configs"
+    profiles.mkdir(parents=True)
+    (profiles / "anthropic.yaml").write_text("# Anthropic. x\nk: os.environ/LLM_API_KEY\n")
     (platform / "agents" / "client-agent").mkdir(parents=True)
+    (platform / "agents" / "client-agent" / "agent_card.json").write_text('{"name": "Client Agent"}')
     (platform / "agents" / "client-agent" / "docker-compose.yml").write_text("services: {}\n")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

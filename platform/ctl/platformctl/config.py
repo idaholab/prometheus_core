@@ -66,6 +66,7 @@ def _s(name: str, default: str, description: str, **kw) -> Setting:
 
 SETTINGS: tuple[Setting, ...] = (
     _s("COMPOSE_PROJECT_NAME", "prometheus_platform", "Compose project name"),
+    _s("LLM_CONFIG_PROFILE", "", "LLM provider profile the agents use (no default)"),
     _s("LOCAL_SDK", "false", "Build the prometheus_api base image from ../sdk", kind="bool"),
     _s(
         "PROMETHEUS_API_BASE_IMAGE_REPO",
@@ -135,45 +136,49 @@ _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 """What a setting name looks like. Anything else a user typed might be a secret, so it isn't echoed."""
 
 
-def parse_set(items: list[str]) -> dict[str, str]:
-    """`--set KEY=VALUE` pairs. Refuses secret keys: they'd land in history and `ps`.
+def parse_set(items: list[str], what: str = "--set", instead: str = "set {key} in .env instead") -> dict[str, str]:
+    """`KEY=VALUE` pairs from `--set` (or `config set`, named by `what`). Refuses secret keys.
 
-    An error echoes the text only if it looks like a setting name: `--set $LLM_API_KEY` (no `=`)
-    is a likely mistake, and the scrubber doesn't know a value that isn't in `.env`.
+    A secret on the command line would land in shell history and `ps`. An error echoes the text
+    only if it looks like a setting name: `--set $LLM_API_KEY` (no `=`) is a likely mistake, and the
+    scrubber doesn't know a value that isn't in `.env`. `instead` says where a secret goes.
     """
     result: dict[str, str] = {}
     for item in items:
         key, sep, value = item.partition("=")
         if not sep or not key:
             shown = f", got {item!r}" if _NAME.fullmatch(item) else ""
-            raise ConfigError(f"--set expects KEY=VALUE{shown}")
+            raise ConfigError(f"{what} expects KEY=VALUE{shown}")
         if not is_safe(key):
             if not _NAME.fullmatch(key):
-                raise ConfigError("--set expects a setting name before the =")
-            raise ConfigError(f"{key} can't be set with --set (it may be a secret): set {key} in .env instead")
+                raise ConfigError(f"{what} expects a setting name before the =")
+            raise ConfigError(f"{key} can't be set with {what} (it may be a secret): {instead.format(key=key)}")
         result[key] = value
     return result
+
+
+PLATFORMCTL_MAKE_PLUMBING = ("PLATFORMCTL_VIA_MAKE", "PLATFORMCTL_MAKE_VARS")
+"""The variables the Makefile sets for the tool, which never reach a child process."""
+MAKE_OPTION_VARIABLES = ("SERVICE", "TAIL", "FOLLOW", "AGENT")
+"""Make variables that map to a command's options rather than to a setting (used from step 3a)."""
 
 
 def make_overrides(env: Mapping[str, str]) -> dict[str, str]:
     """Values of command-line variables given to `make` (`make X=y up`).
 
-    Names come from the words after ` -- ` in MAKEFLAGS (`\\ ` unescaped), values from
-    the environment, where Make exports them. Only when run through Make.
+    Names come from `PLATFORMCTL_MAKE_VARS`, which the Makefile exports as
+    `$(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $v)),$v))`; values come from
+    the environment, where Make exports them. Not from `MAKEFLAGS`, which Make 3.81 (macOS) leaves
+    without a ` -- ` for a plain `make X=y`. Only when run through Make.
     """
     if env.get("PLATFORMCTL_VIA_MAKE") != "1":
         return {}
-    flags = env.get("MAKEFLAGS", "")
-    _, sep, tail = flags.partition(" -- ")
-    if not sep:
-        return {}
-    words = re.split(r"(?<!\\) ", tail)
-    result: dict[str, str] = {}
-    for word in words:
-        name = word.replace("\\ ", " ").partition("=")[0]
-        if name and name in env:
-            result[name] = env[name]
-    return result
+    return {name: env[name] for name in env.get("PLATFORMCTL_MAKE_VARS", "").split() if name in env}
+
+
+def unknown_make_variables(make: Mapping[str, str]) -> list[str]:
+    """The Make command-line variables that are neither a setting nor a command option, sorted."""
+    return sorted(name for name in make if name not in REGISTRY and name not in MAKE_OPTION_VARIABLES)
 
 
 def platform_version(root: Path, runner: Runner) -> str:
@@ -325,7 +330,7 @@ class PlatformConfig:
         values are added. Every other `.env` key is left for Compose to read itself. Make's own
         variables are dropped.
         """
-        child = {k: v for k, v in self.env.items() if k not in MAKE_VARIABLES and k != "PLATFORMCTL_VIA_MAKE"}
+        child = {k: v for k, v in self.env.items() if k not in MAKE_VARIABLES and k not in PLATFORMCTL_MAKE_PLUMBING}
         for key in self.dotenv:
             if key in child:
                 child[key] = self.dotenv[key]

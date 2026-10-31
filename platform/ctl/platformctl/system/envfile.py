@@ -50,14 +50,15 @@ def _unquote(raw: str, lineno: int) -> str:
     return re.split(r"\s+#", raw, maxsplit=1)[0].strip()
 
 
-def parse(text: str) -> dict[str, str]:
-    """Parse dotenv text. Multi-line quoted values are supported."""
-    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
-    values: dict[str, str] = {}
-    lines = text.split("\n")
+def _scan(lines: list[str]) -> list[tuple[str, int, int, str]]:
+    """Each assignment as (key, first line index, index after its last line, raw value), in file order.
+
+    A quoted value may continue on the following lines, so an assignment can span several.
+    """
+    found: list[tuple[str, int, int, str]] = []
     i = 0
     while i < len(lines):
-        lineno = i + 1
+        start = i
         line = lines[i].strip()
         i += 1
         if not line or line.startswith("#"):
@@ -67,15 +68,52 @@ def parse(text: str) -> dict[str, str]:
         key, sep, rest = line.partition("=")
         key = key.strip()
         if not sep or not _KEY.fullmatch(key):
-            raise EnvFileError(f"line {lineno}: expected KEY=value")
+            raise EnvFileError(f"line {start + 1}: expected KEY=value")
         rest = rest.lstrip()
-        # A quoted value may continue on the following lines.
         if rest[:1] in ("'", '"') and rest.find(rest[0], 1) < 0:
             while i < len(lines) and rest.find(rest[0], 1) < 0:
                 rest += "\n" + lines[i]
                 i += 1
-        values[key] = _unquote(rest, lineno)
-    return values
+        found.append((key, start, i, rest))
+    return found
+
+
+def parse(text: str) -> dict[str, str]:
+    """Parse dotenv text. Multi-line quoted values are supported; for a repeated key the last one wins."""
+    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    return {key: _unquote(rest, start + 1) for key, start, _, rest in _scan(text.split("\n"))}
+
+
+_ONE_LINER = re.compile(r'^#\s*python3 -c "(.+)"\s*$')
+"""A comment line holding the `python3 -c "..."` that generates a secret."""
+_ASSIGNMENT = re.compile(r"^([A-Z][A-Z0-9_]*)=")
+"""A `KEY=` line in `.env.example`."""
+
+
+def generators(example: str) -> dict[str, str]:
+    """Map each variable to the one-liner in the comment block directly above it."""
+    found: dict[str, str] = {}
+    pending: str | None = None
+    for line in example.splitlines():
+        if match := _ONE_LINER.match(line):
+            pending = match.group(1)
+        elif match := _ASSIGNMENT.match(line):
+            if pending:
+                found[match.group(1)] = pending
+            pending = None
+        elif not line.startswith("#"):
+            pending = None
+    return found
+
+
+def example_keys(example: str) -> list[str]:
+    """The keys `.env.example` sets with an active line (not a commented-out default), in file order."""
+    return [match.group(1) for line in example.splitlines() if (match := _ASSIGNMENT.match(line))]
+
+
+def missing_keys(example: str, current: dict[str, str]) -> list[str]:
+    """The keys `.env.example` sets that `.env` lacks, so a new key reaches an existing `.env`."""
+    return [key for key in example_keys(example) if key not in current]
 
 
 def read(path: Path) -> dict[str, str]:
@@ -104,16 +142,21 @@ def _format(value: str) -> str:
 
 
 def update_text(text: str, updates: dict[str, str]) -> str:
-    """Return `text` with each key set in place; keys not present are appended."""
-    lines = text.replace("\r\n", "\n").split("\n")
+    """Return `text` with each key set in place; keys not present are appended.
+
+    A key is replaced where `parse` reads it: its last assignment, over every line of a multi-line
+    value. Earlier duplicates are left alone. A malformed file raises `EnvFileError` rather than
+    being written over.
+    """
+    text = text.lstrip("﻿").replace("\r\n", "\n")
+    parse(text)
+    lines = text.split("\n")
     pending = dict(updates)
-    for idx, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("export "):
-            stripped = stripped[len("export ") :].lstrip()
-        key = stripped.partition("=")[0].strip()
-        if key in pending and not stripped.startswith("#"):
-            lines[idx] = f"{key}={_format(pending.pop(key))}"
+    last = {key: (start, end) for key, start, end, _ in _scan(lines)}
+    # Bottom up, so replacing a multi-line value doesn't shift the lines still to edit.
+    for key, (start, end) in sorted(last.items(), key=lambda item: -item[1][0]):
+        if key in pending:
+            lines[start:end] = [f"{key}={_format(pending.pop(key))}"]
     if pending:
         if lines and lines[-1] == "":
             lines.pop()

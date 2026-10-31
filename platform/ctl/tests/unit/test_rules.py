@@ -50,6 +50,37 @@ def test_git_keeps_the_shim_lf_even_on_a_windows_checkout():
     assert done.stdout.strip() == "platform/platformctl: eol: lf"
 
 
+@pytest.mark.parametrize(
+    "path",
+    ["platform/Makefile", "platform/.env.example", "platform/ctl/platformctl/cli.py", ".github/workflows/test.yml"]
+    + ["platform/README.md", "platform/backend/Dockerfile", "platform/scripts/init_env.py"],
+)
+def test_git_keeps_the_files_a_unix_tool_parses_lf(path):
+    """Make, the dotenv parsers and Docker read these as LF; a Windows checkout must not turn them into CRLF."""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not installed")
+    repo = PACKAGE.parents[2]
+    done = subprocess.run([git, "check-attr", "eol", "--", path], capture_output=True, text=True, cwd=repo, check=False)
+    if done.returncode != 0:
+        pytest.skip("not a git checkout")
+    assert done.stdout.strip() == f"{path}: eol: lf"
+
+
+def test_git_leaves_notice_txt_exactly_as_committed():
+    """`NOTICE.txt` is committed with CRLF and a byte-order mark: `-text` keeps git from touching either."""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not installed")
+    repo = PACKAGE.parents[2]
+    done = subprocess.run(
+        [git, "check-attr", "text", "--", "NOTICE.txt"], capture_output=True, text=True, cwd=repo, check=False
+    )
+    if done.returncode != 0:
+        pytest.skip("not a git checkout")
+    assert done.stdout.strip() == "NOTICE.txt: text: unset"
+
+
 def test_only_the_runner_starts_subprocesses():
     """Design: only system/runner.py starts subprocesses."""
     offenders = [

@@ -135,6 +135,17 @@ class Docker:
         )  # fmt: skip
         return done.stdout.split() if done.ok else []
 
+    def registry_reachable(self, ref: str, timeout: float = 15.0) -> bool:
+        """Whether this machine can read the image's manifest from its registry within `timeout` seconds.
+
+        This stands in for a test pull: it needs the same network path and login but downloads
+        nothing. Off the VPN the call would hang, hence the timeout (a timeout counts as unreachable).
+        """
+        try:
+            return self._run("manifest", "inspect", ref, timeout=timeout).ok
+        except RunnerError:
+            return False
+
     def image_exists(self, ref: str) -> bool:
         """Whether the image is in the local store."""
         return self._run("image", "inspect", "--format", "{{.Id}}", ref).ok

@@ -43,9 +43,11 @@ def test_platform_env_pass(platform_root, runner):
 
 
 def test_platform_env_missing_file(platform_root, runner):
-    """A missing `.env` is a FAIL that points to `make init-env`."""
+    """A missing `.env` is a FAIL that points to `./platformctl config init`."""
     result = run(ec.PLATFORM_ENV, platform_root, runner)
-    assert result.status == FAIL and result.evidence == ".env does not exist" and "make init-env" in result.fix
+    assert (
+        result.status == FAIL and result.evidence == ".env does not exist" and "./platformctl config init" in result.fix
+    )
 
 
 @pytest.mark.parametrize("placeholder", ["", "sk-ant-...", "sk-change-me", "change-me-please", "your-key-here"])

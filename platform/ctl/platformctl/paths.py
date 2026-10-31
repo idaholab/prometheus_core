@@ -86,3 +86,8 @@ class Paths:
     def sdk(self) -> Path:
         """The repository's `sdk/` folder, next to `platform/`."""
         return self.root.parent / "sdk"
+
+    @property
+    def llm_configs(self) -> Path:
+        """The SDK's LLM profiles, one YAML each."""
+        return self.sdk / "prometheus_api" / "llm_configs"

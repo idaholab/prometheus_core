@@ -190,6 +190,25 @@ def test_parser_errors_raise_usage_error_instead_of_exiting():
         cli.build_parser(MODULES).parse_args(["up", "--nope"])
 
 
+def test_abbreviations_are_not_accepted_by_the_parser_or_a_subcommand():
+    """`--ver` is not `--version`, and `doctor --li` is not `--list`: abbreviations aren't the interface."""
+    from platformctl.actions import doctor
+
+    parser = cli.build_parser([doctor])
+    with pytest.raises(cli.UsageError, match="unrecognized arguments"):
+        parser.parse_args(["--ver"])
+    with pytest.raises(cli.UsageError, match="unrecognized arguments"):
+        parser.parse_args(["doctor", "--li"])
+    assert parser.parse_args(["doctor", "--list"]).list is True
+
+
+def test_a_parser_can_still_be_asked_for_abbreviations():
+    """The default is only a default."""
+    parser = cli.Parser(allow_abbrev=True)
+    parser.add_argument("--list", action="store_true")
+    assert parser.parse_args(["--li"]).list is True
+
+
 # -- main --------------------------------------------------------------------------------------
 
 
@@ -207,6 +226,24 @@ def call(*argv, env=None, modules=None):
     return code, out.getvalue(), err.getvalue()
 
 
+@pytest.mark.parametrize(
+    ("names", "expected"),
+    [("WHATEVER", "ignoring unknown make variable: WHATEVER"), ("B A", "ignoring unknown make variables: A, B")],
+)
+def test_unknown_make_variables_get_a_one_line_warning(env, names, expected):
+    """A command-line `make` variable that is no setting is ignored with a warning naming it."""
+    make_env = {**env, "PLATFORMCTL_VIA_MAKE": "1", "PLATFORMCTL_MAKE_VARS": names, "A": "1", "B": "2", "WHATEVER": "3"}
+    code, _, err = call("--version", env=make_env)
+    assert code == 0
+    assert expected in err and err.count("\n") == 1
+
+
+def test_known_make_variables_get_no_warning(env):
+    """A setting, or a variable that maps to a command option, is not reported."""
+    make_env = {**env, "PLATFORMCTL_VIA_MAKE": "1", "PLATFORMCTL_MAKE_VARS": "BACKEND_PORT SERVICE", "SERVICE": "x"}
+    assert call("--version", env={**make_env, "BACKEND_PORT": "9"})[2] == ""
+
+
 def test_version_text_and_json(env):
     """`--version` prints text, or one JSON object with the commands and features."""
     code, out, _ = call("--version", env=env)
@@ -214,7 +251,9 @@ def test_version_text_and_json(env):
     code, out, _ = call("--version", "--json", env=env)
     body = json.loads(out)
     assert code == 0 and body["ok"] and body["schema_version"] == 1 and body["command"] == "version"
-    assert body["commands"] == ["doctor"] and body["features"] == ["doctor.checks.v1"]
+    assert set(body["commands"]) >= {"status", "config", "deeplynx", "doctor"} and body["features"] == [
+        "doctor.checks.v1"
+    ]
     assert set(body["platform"]) == {"root", "project", "version"}
 
 

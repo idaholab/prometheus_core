@@ -47,6 +47,29 @@ def config_for(root: Path, **settings: str) -> PlatformConfig:
     return PlatformConfig(root, {}, settings)
 
 
+def test_generated_agent_dirs_are_the_client_agent_and_what_the_agents_file_includes(tmp_path):
+    """The agents a start brought up: read from the generated file, with the client agent always first."""
+    root = tmp_path / "platform"
+    (root / "docker-compose.agents.yml").parent.mkdir()
+    (root / "docker-compose.agents.yml").write_text(
+        "# Generated\ninclude:\n"
+        "  - agents/client-agent/docker-compose.yml\n"
+        "  - agents/corrosion-agent/docker-compose.yml\n"
+        "  - agents/debug-agents/artifact-debug-agent/docker-compose.yml\n"
+        "  - not-an-agent.yml\n"
+    )
+    assert cf.generated_agent_dirs(root) == [
+        root / "agents" / "client-agent",
+        root / "agents" / "corrosion-agent",
+        root / "agents" / "debug-agents" / "artifact-debug-agent",
+    ]
+
+
+def test_generated_agent_dirs_without_a_generated_file_is_the_client_agent(tmp_path):
+    """Before anything has been generated, only the client agent is expected."""
+    assert cf.generated_agent_dirs(tmp_path) == [tmp_path / "agents" / "client-agent"]
+
+
 def test_discover_in_tree_only_by_default(tmp_path):
     """Discover in tree only by default."""
     root = make_root(tmp_path)

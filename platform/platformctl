@@ -35,12 +35,57 @@ usable() {
     "$1" -I -c "$probe" >/dev/null 2>&1
 }
 
+# With --json (before any `--`), a refusal is the one JSON object every other failure is, written
+# here in sh because there may be no Python to write it. Only fixed text and the shim's own folder
+# go in it, so no user-controlled value needs escaping beyond the folder's backslashes and quotes.
+wants_json() {
+    for arg in "$@"; do
+        case "$arg" in
+            --) return 1 ;;
+            --json) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# Backslashes and double quotes escaped with shell parameter expansion alone: no other tool is
+# needed, and this runs when the machine is least likely to have a full toolset.
+json_escape() {
+    _rest=$1
+    _out=
+    while [ -n "$_rest" ]; do
+        _tail=${_rest#?}
+        _char=${_rest%"$_tail"}
+        # shellcheck disable=SC1003 # a backslash pattern and its doubled replacement, not an escaped quote
+        case "$_char" in
+            \\) _char='\\' ;;
+            '"') _char='\"' ;;
+        esac
+        _out=$_out$_char
+        _rest=$_tail
+    done
+    printf '%s' "$_out"
+}
+
+refuse_json() {
+    root=$(json_escape "$here")
+    printf '{\n  "command": "",\n  "error": {\n    "check": "",\n    "code": "config_invalid",\n'
+    printf '    "hint": "%s",\n    "message": "%s"\n  },\n  "ok": false,\n' "$2" "$1"
+    printf '  "platform": {\n    "project": "prometheus_platform",\n    "root": "%s",\n' "$root"
+    printf '    "version": "unknown"\n  },\n  "schema_version": 1\n}\n'
+}
+
 python=
 if [ -n "${PLATFORMCTL_PYTHON:-}" ]; then
     if usable "$PLATFORMCTL_PYTHON"; then
         python=$PLATFORMCTL_PYTHON
     else
-        echo "platformctl: PLATFORMCTL_PYTHON ($PLATFORMCTL_PYTHON) is not a Python 3.10 or newer." >&2
+        if wants_json "$@"; then
+            refuse_json "platformctl: PLATFORMCTL_PYTHON is not a Python 3.10 or newer." \
+                "Unset PLATFORMCTL_PYTHON, or point it at a Python 3.10 or newer."
+        else
+            echo "platformctl: PLATFORMCTL_PYTHON ($PLATFORMCTL_PYTHON) is not a Python 3.10 or newer." >&2
+        fi
         exit 1
     fi
 fi
@@ -49,7 +94,9 @@ if [ -z "$python" ]; then
     # On macOS, Homebrew's Python before /usr/bin/python3: without the Command Line
     # Tools the latter opens an install dialog.
     homebrew=
-    if [ "$(uname -s)" = Darwin ]; then
+    # PLATFORMCTL_NO_HOMEBREW=1 skips those two paths: the tests set it to make "no usable Python"
+    # on a Mac that has Homebrew's, and a user can set it to ignore a Homebrew Python they don't want.
+    if [ "$(uname -s)" = Darwin ] && [ -z "${PLATFORMCTL_NO_HOMEBREW:-}" ]; then
         homebrew="/opt/homebrew/bin/python3 /usr/local/bin/python3"
     fi
     # shellcheck disable=SC2086 # $homebrew is a list of paths without spaces
@@ -63,6 +110,12 @@ fi
 
 if [ -z "$python" ] && command -v uv >/dev/null 2>&1; then
     exec uv run --no-project --python '>=3.10' python -I "$here/ctl/run.py" "$@"
+fi
+
+if [ -z "$python" ] && wants_json "$@"; then
+    refuse_json "platformctl needs Python 3.10 or newer, and none was found." \
+        "Install uv (curl -LsSf https://astral.sh/uv/install.sh | sh), which finds or downloads a Python, then run this again."
+    exit 1
 fi
 
 if [ -z "$python" ]; then

@@ -12,6 +12,11 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -157,11 +162,12 @@ def test_parse_set_refuses_secrets_and_unknown_keys(key):
 # -- make -------------------------------------------------------------------------------------
 
 
-def test_make_overrides_reads_names_from_makeflags_and_values_from_env():
-    """Make overrides reads names from makeflags and values from env."""
+def test_make_overrides_reads_names_from_the_makefile_list_and_values_from_env():
+    """The names come from `PLATFORMCTL_MAKE_VARS` (not `MAKEFLAGS`), the values from the environment."""
     env = {
         "PLATFORMCTL_VIA_MAKE": "1",
-        "MAKEFLAGS": r" -- BACKEND_PORT=9 UP_ARGS=a\ b\ 'q'",
+        "PLATFORMCTL_MAKE_VARS": "BACKEND_PORT UP_ARGS",
+        "MAKEFLAGS": "k",  # Make 3.81 gives a plain `make X=y` no ` -- `: it is not read
         "BACKEND_PORT": "9",
         "UP_ARGS": "a b 'q'",
     }
@@ -170,15 +176,60 @@ def test_make_overrides_reads_names_from_makeflags_and_values_from_env():
 
 def test_make_overrides_only_via_make_and_with_arguments():
     """Make overrides only via make and with arguments."""
-    assert make_overrides({"MAKEFLAGS": " -- A=1", "A": "1"}) == {}
+    assert make_overrides({"PLATFORMCTL_MAKE_VARS": "A", "A": "1"}) == {}
     assert make_overrides({"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": "w"}) == {}
-    # A name in MAKEFLAGS with no value in the environment is ignored.
-    assert make_overrides({"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": " -- GONE=1"}) == {}
+    # A name with no value in the environment is ignored.
+    assert make_overrides({"PLATFORMCTL_VIA_MAKE": "1", "PLATFORMCTL_MAKE_VARS": "GONE"}) == {}
+
+
+MAKEFILE = Path(__file__).resolve().parents[3] / "Makefile"
+"""The platform's real Makefile."""
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+@pytest.mark.parametrize(
+    ("flags", "given", "expected"),
+    [
+        ([], ["X=y"], {"X": "y"}),
+        (["-k", "-j2"], ["UP_ARGS=a b 'q'", "BACKEND_PORT=9"], {"BACKEND_PORT": "9", "UP_ARGS": "a b 'q'"}),
+        ([], [], {}),
+    ],
+    ids=["plain", "flags-and-quoting", "none"],
+)
+def test_a_real_make_gives_the_tool_its_command_line_variables(tmp_path, flags, given, expected):
+    """Run the Makefile's own `PLATFORMCTL_MAKE_VARS` line under the installed Make (3.81 on a Mac, 4.x elsewhere).
+
+    A plain `make X=y` leaves no ` -- ` in MAKEFLAGS on 3.81, which is why the names come from this
+    list. The environment Make gives a recipe is fed to `make_overrides`.
+    """
+    line = next(row for row in MAKEFILE.read_text().splitlines() if row.startswith("PLATFORMCTL_MAKE_VARS :="))
+    dump = tmp_path / "dump.py"
+    dump.write_text("import json, os\nprint(json.dumps(dict(os.environ)))\n")
+    (tmp_path / "Makefile").write_text(
+        f"{line}\nexport PLATFORMCTL_MAKE_VARS\nexport PLATFORMCTL_VIA_MAKE := 1\nt:\n\t@{sys.executable} {dump}\n"
+    )
+    done = subprocess.run(
+        # --no-print-directory: GNU Make 4.x prints "Leaving directory" after -C, which 3.81 does not
+        ["make", "-C", str(tmp_path), "--no-print-directory", *flags, "t", *given],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={k: v for k, v in os.environ.items() if k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL")},
+    )
+    env = json.loads(done.stdout.strip().splitlines()[-1])
+    # Exactly the variables given, with their exact values; Make adds none of its own to the list.
+    assert make_overrides(env) == expected
+
+
+def test_unknown_make_variables_are_neither_settings_nor_command_options():
+    """Only a name the registry doesn't know and no command option maps to is unknown."""
+    make_vars = {"BACKEND_PORT": "1", "SERVICE": "redis", "WHATEVER": "1", "ANOTHER": "2"}
+    assert cfg.unknown_make_variables(make_vars) == ["ANOTHER", "WHATEVER"]
 
 
 def test_make_beats_dotenv_but_not_set(tmp_path):
     """Make beats dotenv but not set."""
-    env = {"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": " -- BACKEND_PORT=7", "BACKEND_PORT": "7"}
+    env = {"PLATFORMCTL_VIA_MAKE": "1", "PLATFORMCTL_MAKE_VARS": "BACKEND_PORT", "BACKEND_PORT": "7"}
     config = make(tmp_path, "BACKEND_PORT=2\n", env)
     assert config.resolve("BACKEND_PORT") == cfg.Value("7", "make")
     config = make(tmp_path, "BACKEND_PORT=2\n", env, {"BACKEND_PORT": "3"})
@@ -192,18 +243,19 @@ def test_child_env(tmp_path):
     """The child environment drops Make's variables, prefers `.env` over the environment and adds the derived values."""
     env = {
         "PATH": "/bin",
-        "MAKEFLAGS": " -- BACKEND_PORT=7",
+        "MAKEFLAGS": "k",
         "MFLAGS": "x",
         "MAKELEVEL": "1",
         "MAKEOVERRIDES": "y",
         "PLATFORMCTL_VIA_MAKE": "1",
+        "PLATFORMCTL_MAKE_VARS": "BACKEND_PORT",
         "BACKEND_PORT": "7",
         "REDIS_PASSWORD": "from-environment",
         "UNRELATED": "u",
     }
     config = make(tmp_path, "REDIS_PASSWORD=from-dotenv\nOTHER=left-for-compose\n", env, {"PROFILE": "prod"})
     child = config.child_env({"EXTRA": "1"})
-    for name in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES", "PLATFORMCTL_VIA_MAKE"):
+    for name in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES", "PLATFORMCTL_VIA_MAKE", "PLATFORMCTL_MAKE_VARS"):
         assert name not in child
     assert child["REDIS_PASSWORD"] == "from-dotenv"  # .env wins over the environment, as in Make
     assert "OTHER" not in child  # other .env keys are left for Compose to read
@@ -217,7 +269,7 @@ def test_child_env(tmp_path):
 
 def test_child_env_ignores_unknown_make_variables(tmp_path):
     """Child env ignores unknown make variables."""
-    env = {"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": " -- WHATEVER=1", "WHATEVER": "1"}
+    env = {"PLATFORMCTL_VIA_MAKE": "1", "PLATFORMCTL_MAKE_VARS": "WHATEVER", "WHATEVER": "1"}
     config = make(tmp_path, None, env)
     assert config.make == {"WHATEVER": "1"}
     # Not a registered setting: it isn't copied over as a setting (it stays in the environment as given).

@@ -60,7 +60,7 @@ def check_platform_env(ctx: Context) -> Result:
         return Result(
             FAIL,
             ".env does not exist",
-            "Run `make init-env`: it creates .env, fills blank secrets and asks for the LLM profile and key.",
+            "Run `./platformctl config init`: it creates .env, fills blank secrets and asks for the LLM profile and key.",
         )
     if ctx.config.dotenv_error is not None:
         return Result(FAIL, f".env has a bad line ({ctx.config.dotenv_error})", "Fix that line in .env.")
@@ -70,7 +70,7 @@ def check_platform_env(ctx: Context) -> Result:
         return Result(
             FAIL,
             "not set: " + ", ".join(missing),
-            "Run `make init-env`: it fills blank secrets and asks for the LLM profile and key.",
+            "Run `./platformctl config init`: it fills blank secrets and asks for the LLM profile and key.",
         )
     return Result(PASS, f"{len(REQUIRED)} required values are set")
 

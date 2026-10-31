@@ -1,0 +1,504 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+from __future__ import annotations
+
+import argparse
+import json
+import stat
+import sys
+
+import pytest
+
+from platformctl.actions import config as config_action
+from platformctl.system import envfile, terminal
+from tests.unit.conftest import assert_golden, make_context
+
+DOTENV = "BACKEND_PORT=9000\nLLM_API_KEY=value-held-in-the-env-1\nCUSTOM_FLAG=on\nEMPTY_SECRET=\n"
+"""A `.env` with a registered setting, a secret, an unregistered key and a blank secret."""
+
+
+def sub(name: str):
+    """The `config` subcommand with this name."""
+    return next(s for s in config_action.SUBCOMMANDS if s.NAME == name)
+
+
+def parse(name: str, *argv: str) -> argparse.Namespace:
+    """Parse a subcommand's own arguments."""
+    parser = argparse.ArgumentParser()
+    sub(name).add_arguments(parser)
+    return parser.parse_args(list(argv))
+
+
+@pytest.fixture
+def ctx_env(platform_root, runner):
+    """A context over a platform folder with a `.env` (mode 0600) and an environment holding some values."""
+    (platform_root / ".env").write_text(DOTENV)
+    (platform_root / ".env").chmod(0o600)
+
+    def factory(env=None, **kw):
+        """Build the context with this environment."""
+        return make_context(platform_root, runner, {"PATH": "/usr/bin", **(env or {})}, **kw)
+
+    return factory
+
+
+def test_the_group_lists_its_subcommands():
+    """`config` offers `init`, `set` and `show`."""
+    assert {s.NAME for s in config_action.SUBCOMMANDS} >= {"set", "show"}
+
+
+def test_set_writes_in_place_and_keeps_the_rest(ctx_env, platform_root):
+    """A registered setting is rewritten where it is; every other line is kept; the mode is kept."""
+    ctx, out, _ = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=9100", "PROFILE=prod")) == 0
+    assert envfile.read(platform_root / ".env") == {
+        "BACKEND_PORT": "9100",
+        "LLM_API_KEY": "value-held-in-the-env-1",
+        "CUSTOM_FLAG": "on",
+        "EMPTY_SECRET": "",
+        "PROFILE": "prod",
+    }
+    assert stat.S_IMODE((platform_root / ".env").stat().st_mode) == 0o600
+    assert out.getvalue() == "Set BACKEND_PORT, PROFILE in .env.\n"
+
+
+def test_set_refuses_a_secret_key_and_writes_nothing(ctx_env, platform_root):
+    """A secret on the command line would reach history and `ps`: refused, with the way to do it."""
+    ctx, _, err = ctx_env()
+    code = config_action.set_values(
+        ctx, parse("set", "BACKEND_PORT=9100", "LLM_API_KEY=value-given-on-the-command-line-22")
+    )
+    assert code == 1
+    assert "LLM_API_KEY can't be set with config set" in err.getvalue()
+    assert "config set --from-env LLM_API_KEY" in err.getvalue()
+    assert "value-given-on-the-command-line-22" not in err.getvalue()
+    assert (platform_root / ".env").read_text() == DOTENV
+
+
+def test_set_rejects_a_pair_without_an_equals_sign(ctx_env):
+    """`config set BACKEND_PORT` is a mistake, named as such."""
+    ctx, _, err = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT")) == 1
+    assert "config set expects KEY=VALUE" in err.getvalue()
+
+
+def test_set_without_an_env_file_says_to_run_init(platform_root, runner):
+    """There is nothing to edit before `config init`."""
+    ctx, _, err = make_context(platform_root, runner)
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=1")) == 1
+    assert ".env does not exist; run ./platformctl config init first" in err.getvalue()
+    assert not (platform_root / ".env").exists()
+
+
+def test_set_dry_run_writes_nothing(ctx_env, platform_root):
+    """`--dry-run` says what it would do."""
+    ctx, out, _ = ctx_env(dry_run=True)
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=9100")) == 0
+    assert out.getvalue() == "Would set BACKEND_PORT in .env.\n"
+    assert (platform_root / ".env").read_text() == DOTENV
+
+
+def test_from_env_copies_values_without_them_appearing_in_argv_or_output(ctx_env, platform_root):
+    """A secret is read from the environment: it is in `.env`, and in no output."""
+    secret = "value-from-the-environment-33"
+    ctx, out, err = ctx_env({"LLM_API_KEY": secret, "NEW_SECRET": "another-secret-44"})
+    assert config_action.set_values(ctx, parse("set", "--from-env", "LLM_API_KEY", "NEW_SECRET")) == 0
+    values = envfile.read(platform_root / ".env")
+    assert values["LLM_API_KEY"] == secret and values["NEW_SECRET"] == "another-secret-44"
+    assert secret not in out.getvalue() + err.getvalue()
+    assert out.getvalue() == "Set LLM_API_KEY, NEW_SECRET in .env.\n"
+
+
+def test_from_env_names_every_key_that_is_not_set(ctx_env, platform_root):
+    """Exit 1 naming each missing key, writing nothing; a blank value counts as not set."""
+    ctx, _, err = ctx_env({"HAVE": "x" * 12, "BLANK": ""})
+    assert config_action.set_values(ctx, parse("set", "--from-env", "HAVE", "BLANK", "ABSENT")) == 1
+    assert "not set in the environment: BLANK, ABSENT" in err.getvalue()
+    assert (platform_root / ".env").read_text() == DOTENV
+
+
+@pytest.mark.parametrize(
+    ("item", "value"), [("KEY=sentinelvalue77", "sentinelvalue77"), ("bad-name", None), ("has space", None)]
+)
+def test_from_env_takes_names_not_pairs(ctx_env, item, value):
+    """`--from-env KEY=value` would put a value in argv, so it is refused without echoing it."""
+    ctx, _, err = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "--from-env", item)) == 1
+    assert "expects key names" in err.getvalue()
+    assert value is None or value not in err.getvalue()
+
+
+def test_set_does_not_write_over_a_malformed_env_file(platform_root, runner):
+    """A `.env` that doesn't parse raises (`cli.main` reports it as `config_invalid`) and is left as it is."""
+    (platform_root / ".env").write_text("not a pair\n")
+    ctx, _, _ = make_context(platform_root, runner)
+    with pytest.raises(envfile.EnvFileError, match="line 1"):
+        config_action.set_values(ctx, parse("set", "BACKEND_PORT=1"))
+    assert (platform_root / ".env").read_text() == "not a pair\n"
+
+
+def test_set_failure_is_one_json_object(ctx_env):
+    """With `--json`, a refusal is the usual error object."""
+    ctx, out, _ = ctx_env(json_mode=True)
+    assert config_action.set_values(ctx, parse("set", "LLM_API_KEY=value-given-on-the-command-line-22")) == 1
+    body = json.loads(out.getvalue())
+    assert body["ok"] is False and body["error"]["code"] == "config_invalid" and body["command"] == "config"
+
+
+def test_show_prints_secrets_as_set_or_blank_with_their_source(ctx_env):
+    """A table of settings: safe values as they are, secrets as `set`/`blank`, and where each came from."""
+    ctx, out, _ = ctx_env({"CLIENT_AGENT_PORT": "8100"})
+    assert config_action.show(ctx, parse("show")) == 0
+    lines = {line.split()[0]: line for line in out.getvalue().splitlines()}
+    assert lines["BACKEND_PORT"].split() == ["BACKEND_PORT", "9000", ".env"]
+    assert lines["CLIENT_AGENT_PORT"].split() == ["CLIENT_AGENT_PORT", "8100", "environment"]
+    assert lines["COMPOSE_PROJECT_NAME"].split() == ["COMPOSE_PROJECT_NAME", "prometheus_platform", "default"]
+    assert lines["LLM_API_KEY"].split() == ["LLM_API_KEY", "set", ".env"]
+    assert lines["EMPTY_SECRET"].split() == ["EMPTY_SECRET", "blank", ".env"]
+    # A key the registry doesn't know is secret by default, so even a harmless-looking value is hidden.
+    assert lines["CUSTOM_FLAG"].split() == ["CUSTOM_FLAG", "set", ".env"]
+    assert "value-held-in-the-env-1" not in out.getvalue()
+
+
+def test_show_json_is_pinned(ctx_env, platform_root):
+    """The golden file pins the object a skill reads."""
+    ctx, out, _ = ctx_env(json_mode=True)
+    assert config_action.show(ctx, parse("show")) == 0
+    body = json.loads(out.getvalue())
+    assert "value-held-in-the-env-1" not in out.getvalue()
+    assert_golden("config_show", body, platform_root)
+
+
+# -- config init --------------------------------------------------------------------------------
+
+EXAMPLE = (
+    "LLM_CONFIG_PROFILE=\nLLM_API_KEY=\nLLM_CONFIG_FILE=\n"
+    '# one\n#   python3 -c "print(1)"\nAGENT_SECRET=\n'
+    '# two\n#   python3 -c "print(2)"\nREDIS_PASSWORD=\n'
+    "NEW_KEY=default\n"
+)
+"""A `.env.example` with the LLM keys, two generated secrets and a plain key."""
+
+
+@pytest.fixture
+def init_root(platform_root):
+    """A platform folder with a `.env.example` and the SDK's profiles (one keyed, one keyless) beside it."""
+    (platform_root / ".env.example").write_text(EXAMPLE)
+    profiles = platform_root.parent / "sdk" / "prometheus_api" / "llm_configs"
+    profiles.mkdir(parents=True)
+    (profiles / "anthropic.yaml").write_text("# Anthropic. x\nk: os.environ/LLM_API_KEY\n")
+    (profiles / "ollama.yaml").write_text("# Local models. x\napi_key: none\n")
+    (profiles / "registry.yaml").write_text("# Proxy. x\nk: os.environ/LLM_API_KEY\n")
+    return platform_root
+
+
+@pytest.fixture
+def init_ctx(init_root, runner, monkeypatch):
+    """A context factory for `config init`: generators answer, no terminal, the registry unreachable."""
+    runner.reply(sys.executable, "-c", "print(1)", stdout="generated-secret-one\n")
+    runner.reply(sys.executable, "-c", "print(2)", stdout="generated-secret-two\n")
+    runner.reply("docker", "manifest", "inspect", code=1)
+    monkeypatch.setattr(terminal, "interactive", lambda: False)
+
+    def factory(env=None, **kw):
+        """Build the context with this environment."""
+        return make_context(init_root, runner, {"PATH": "/usr/bin", **(env or {})}, **kw)
+
+    return factory
+
+
+def init_args(local_sdk=None, local_deeplynx=None) -> argparse.Namespace:
+    """The parsed arguments of `config init`."""
+    return argparse.Namespace(local_sdk=local_sdk, local_deeplynx=local_deeplynx)
+
+
+def test_init_creates_env_from_the_example_and_reports_each_step_word_for_word(init_ctx, init_root):
+    """A fresh clone with the profile and key in the environment, as in CI: the lines the slides quote."""
+    ctx, out, err = init_ctx({"LLM_CONFIG_PROFILE": "anthropic", "LLM_API_KEY": "value-from-the-environment-1"})
+    assert config_action.init(ctx, init_args()) == 0
+    lines = out.getvalue().splitlines()
+    assert lines[:6] == [
+        "Created .env from .env.example.",
+        "Generated in .env: AGENT_SECRET, REDIS_PASSWORD",
+        "Saved LLM_CONFIG_PROFILE from the environment in .env.",
+        "Saved LLM_API_KEY from the environment in .env.",
+        "Local SDK: no (not asked without a terminal; use --local-sdk to turn it on)",
+        "Local DeepLynx: no (not asked without a terminal; use --local-deeplynx to turn it on)",
+    ]
+    assert lines[6] == "LLM profile: anthropic, key set"
+    assert lines[-1] == "Next: make up"
+    values = envfile.read(init_root / ".env")
+    assert values["AGENT_SECRET"] == "generated-secret-one" and values["LLM_API_KEY"] == "value-from-the-environment-1"
+    assert stat.S_IMODE((init_root / ".env").stat().st_mode) == 0o600
+    assert err.getvalue() == ""
+    for secret in ("generated-secret-one", "generated-secret-two", "value-from-the-environment-1"):
+        assert secret not in out.getvalue()
+
+
+def test_init_without_a_terminal_and_without_a_profile_fails_as_the_script_did(init_ctx, init_root):
+    """Exit 1 only for what `init_env.py` required: here, the profile. The new questions never fail it."""
+    ctx, out, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert "[ERROR] LLM_CONFIG_PROFILE is empty in " in err.getvalue()
+    assert "Available profiles: anthropic, ollama." in err.getvalue()
+    assert "Local SDK: no (not asked without a terminal" in out.getvalue()
+
+
+def test_init_names_a_missing_key_a_profile_needs(init_ctx, init_root):
+    """The profile is chosen but its key is blank."""
+    (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=anthropic"))
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert "[ERROR] LLM_API_KEY is empty in " in err.getvalue()
+    assert "LLM_CONFIG_PROFILE=anthropic needs it" in err.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("profile", "reason"),
+    [("genisis", "is not an installed profile"), ("registry", "needs an LLM proxy at REGISTRY_URL")],
+)
+def test_init_rejects_a_profile_that_is_unknown_or_unsupported(init_ctx, init_root, profile, reason):
+    """A typo, and the SDK's `registry` profile that has no proxy here."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("LLM_CONFIG_PROFILE=", f"LLM_CONFIG_PROFILE={profile}").replace("LLM_API_KEY=", "LLM_API_KEY=k")
+    )
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert f"LLM_CONFIG_PROFILE={profile} in " in err.getvalue() and reason in err.getvalue()
+
+
+def test_init_accepts_a_custom_llm_file_in_place_of_a_profile(init_ctx, init_root):
+    """`LLM_CONFIG_FILE` replaces the profile and its key."""
+    (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_FILE=", "LLM_CONFIG_FILE=/custom.yaml"))
+    ctx, out, _ = init_ctx()
+    assert config_action.init(ctx, init_args()) == 0
+    assert "LLM profile: custom file, key set" in out.getvalue()
+
+
+def test_init_never_overwrites_a_value_that_is_set(init_ctx, init_root):
+    """Existing values stay, including a profile and key the environment disagrees with."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("AGENT_SECRET=", "AGENT_SECRET=mine")
+        .replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=anthropic")
+        .replace("LLM_API_KEY=", "LLM_API_KEY=my-own-key")
+    )
+    ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama", "LLM_API_KEY": "other"})
+    assert config_action.init(ctx, init_args()) == 0
+    values = envfile.read(init_root / ".env")
+    assert (values["AGENT_SECRET"], values["LLM_CONFIG_PROFILE"], values["LLM_API_KEY"]) == (
+        "mine",
+        "anthropic",
+        "my-own-key",
+    )
+    assert "Created" not in out.getvalue() and "from the environment" not in out.getvalue()
+
+
+def test_init_reports_the_keys_the_example_has_and_the_env_lacks(init_ctx, init_root):
+    """A key added to `.env.example` after `.env` was made is listed."""
+    (init_root / ".env").write_text(
+        "LLM_CONFIG_PROFILE=ollama\nLLM_API_KEY=\nLLM_CONFIG_FILE=\nAGENT_SECRET=a\nREDIS_PASSWORD=b\n"
+    )
+    ctx, out, _ = init_ctx()
+    assert config_action.init(ctx, init_args()) == 0
+    assert "Keys in .env.example that .env lacks: NEW_KEY" in out.getvalue()
+
+
+def test_init_asks_for_the_profile_and_key_on_a_terminal(init_ctx, init_root, monkeypatch):
+    """The menu and the hidden key prompt, with the lines the slides quote."""
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "choose", lambda options, labels, default: "anthropic")
+    monkeypatch.setattr(terminal, "read_secret", lambda prompt: "value-typed-by-the-user-9")
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: default)
+    ctx, out, _ = init_ctx()
+    assert config_action.init(ctx, init_args()) == 0
+    assert "\nChoose an LLM profile (up/down, Enter):\n" in "\n" + out.getvalue()
+    assert "Saved LLM_CONFIG_PROFILE=anthropic in .env." in out.getvalue()
+    assert envfile.read(init_root / ".env")["LLM_API_KEY"] == "value-typed-by-the-user-9"
+    assert "value-typed-by-the-user-9" not in out.getvalue()
+
+
+def test_init_menu_marks_profiles_without_a_key_and_starts_on_the_current_one(init_ctx, init_root, monkeypatch):
+    """The labels carry `[no key]`, and a profile already in `.env` is the menu's default."""
+    seen = {}
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: default)
+    monkeypatch.setattr(
+        terminal, "choose", lambda options, labels, default: seen.update(labels=labels, default=default) or "ollama"
+    )
+    # A profile that is installed but whose key is blank brings the menu up, starting on that profile.
+    (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=anthropic"))
+    ctx, _, _ = init_ctx()
+    config_action.init(ctx, init_args())
+    assert seen["labels"] == ["Anthropic", "Local models  [no key]"] and seen["default"] == 0
+
+
+def test_init_leaves_the_key_blank_when_the_user_presses_enter(init_ctx, init_root, monkeypatch):
+    """An empty answer saves the profile only, and the run then fails naming the missing key."""
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "choose", lambda options, labels, default: "anthropic")
+    monkeypatch.setattr(terminal, "read_secret", lambda prompt: "")
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: default)
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert envfile.read(init_root / ".env")["LLM_API_KEY"] == ""
+    assert "[ERROR] LLM_API_KEY is empty in " in err.getvalue()
+
+
+def test_init_stops_rather_than_echo_a_key(init_ctx, monkeypatch):
+    """A terminal that can't hide input is `needs_terminal`, and nothing is saved from it."""
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "choose", lambda options, labels, default: "anthropic")
+
+    def echoing(prompt):
+        """A terminal that would echo."""
+        raise terminal.TerminalError("this terminal would echo the value as you type it, so it was not asked")
+
+    monkeypatch.setattr(terminal, "read_secret", echoing)
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert "would echo" in err.getvalue()
+
+
+def test_init_does_not_ask_while_printing_json(init_ctx, monkeypatch):
+    """`--json` never prompts, even on a terminal."""
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "choose", lambda *a: pytest.fail("asked"))
+    ctx, out, err = init_ctx(json_mode=True)
+    assert config_action.init(ctx, init_args()) == 1
+    assert "LLM_CONFIG_PROFILE is empty" in err.getvalue()
+    assert out.getvalue() == "", "stdout is reserved for the one JSON object, and progress goes to stderr"
+
+
+def test_init_asks_the_two_local_questions_with_a_recommended_answer(init_ctx, init_root, monkeypatch):
+    """Plain words, recommended answers that Enter accepts; the SDK one follows the registry test."""
+    asked = []
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: asked.append((question, default)) or default)
+    ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    assert config_action.init(ctx, init_args()) == 0
+    assert asked == [
+        ("Build everything on this laptop (no INL login needed)? (recommended)", True),
+        ("Run DeepLynx (file storage) on this laptop? (recommended)", True),
+    ]
+    values = envfile.read(init_root / ".env")
+    assert (values["LOCAL_SDK"], values["LOCAL_DEEPLYNX"]) == ("true", "true")
+    assert "Local SDK: yes" in out.getvalue() and "Local DeepLynx: yes" in out.getvalue()
+    assert out.getvalue().rstrip().endswith("Next: make up, then ./platformctl deeplynx setup")
+
+
+def test_init_does_not_recommend_building_locally_when_the_registry_works(init_ctx, runner, monkeypatch):
+    """With a working INL login the recommended answer is no, and the question says so."""
+    runner.reply("docker", "manifest", "inspect", code=0)
+    asked = []
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: asked.append((question, default)) or default)
+    ctx, _, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    config_action.init(ctx, init_args())
+    assert asked[0] == ("Build everything on this laptop (no INL login needed)?", False)
+
+
+def test_init_skips_a_question_that_env_already_decides(init_ctx, init_root, monkeypatch):
+    """`LOCAL_SDK` set, and `DEEPLYNX_KEY` set (so DeepLynx is elsewhere): nothing is asked or changed."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=ollama") + "LOCAL_SDK=false\nDEEPLYNX_KEY=abc\n"
+    )
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda *a: pytest.fail("asked"))
+    ctx, out, _ = init_ctx()
+    assert config_action.init(ctx, init_args()) == 0
+    values = envfile.read(init_root / ".env")
+    assert values["LOCAL_SDK"] == "false" and "LOCAL_DEEPLYNX" not in values
+    assert "Local SDK" not in out.getvalue()
+
+
+def test_init_flags_set_the_values_even_over_what_env_has(init_ctx, init_root, monkeypatch):
+    """A flag is an explicit request: it wins, without asking."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=ollama") + "LOCAL_SDK=true\nLOCAL_DEEPLYNX=true\n"
+    )
+    monkeypatch.setattr(terminal, "confirm", lambda *a: pytest.fail("asked"))
+    ctx, out, _ = init_ctx()
+    assert config_action.init(ctx, init_args(local_sdk=False, local_deeplynx=False)) == 0
+    values = envfile.read(init_root / ".env")
+    assert (values["LOCAL_SDK"], values["LOCAL_DEEPLYNX"]) == ("false", "false")
+    assert "Local SDK: no\n" in out.getvalue() and "Local DeepLynx: no\n" in out.getvalue()
+
+
+def test_init_yes_takes_the_recommended_answers_without_a_terminal(init_ctx, init_root, monkeypatch):
+    """`--yes`: SDK follows the registry test (unreachable here, so yes), DeepLynx yes."""
+    monkeypatch.setattr(terminal, "confirm", lambda *a: pytest.fail("asked"))
+    ctx, _, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"}, yes=True)
+    assert config_action.init(ctx, init_args()) == 0
+    values = envfile.read(init_root / ".env")
+    assert (values["LOCAL_SDK"], values["LOCAL_DEEPLYNX"]) == ("true", "true")
+
+
+def test_init_yes_does_not_build_locally_when_the_registry_works(init_ctx, init_root, runner):
+    """`--yes` with a working login keeps the registry image."""
+    runner.reply("docker", "manifest", "inspect", code=0)
+    ctx, _, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"}, yes=True)
+    config_action.init(ctx, init_args())
+    assert envfile.read(init_root / ".env")["LOCAL_SDK"] == "false"
+
+
+def test_init_under_make_warns_that_a_changed_answer_needs_another_run(init_ctx, init_root):
+    """Make reads `.env` before this runs, so a new LOCAL_SDK only applies next time: a warning, not a failure."""
+    via_make = {"PLATFORMCTL_VIA_MAKE": "1", "LLM_CONFIG_PROFILE": "ollama"}
+    ctx, out, err = init_ctx(via_make, yes=True)
+    assert config_action.init(ctx, init_args()) == 0
+    assert "LOCAL_SDK, LOCAL_DEEPLYNX changed in .env, but make read .env before this run" in err.getvalue()
+    assert out.getvalue().rstrip().endswith("Next: make up, then ./platformctl deeplynx setup")
+
+
+def test_init_under_make_is_quiet_when_nothing_changed(init_ctx, init_root):
+    """An answer that matches what make already saw (or no answer at all) says nothing extra."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=ollama") + "LOCAL_SDK=true\nLOCAL_DEEPLYNX=false\n"
+    )
+    ctx, _, err = init_ctx({"PLATFORMCTL_VIA_MAKE": "1", "LOCAL_SDK": "true"})
+    assert config_action.init(ctx, init_args()) == 0
+    assert "make read" not in err.getvalue()
+
+
+def test_init_without_make_never_warns_about_make(init_ctx):
+    """Run by hand, a changed answer needs no second run."""
+    ctx, _, err = init_ctx({"LLM_CONFIG_PROFILE": "ollama"}, yes=True)
+    assert config_action.init(ctx, init_args()) == 0
+    assert "make read" not in err.getvalue()
+
+
+def test_init_dry_run_writes_nothing(init_ctx, init_root):
+    """`--dry-run` creates no file."""
+    ctx, out, _ = init_ctx(dry_run=True)
+    assert config_action.init(ctx, init_args()) == 0
+    assert not (init_root / ".env").exists()
+    assert out.getvalue() == "Would create or complete .env from .env.example.\n"
+
+
+def test_init_reports_a_missing_profile_folder(init_ctx, init_root):
+    """No SDK next to the platform is a `config_invalid` error."""
+    profiles = init_root.parent / "sdk" / "prometheus_api" / "llm_configs"
+    for child in profiles.iterdir():
+        child.unlink()
+    profiles.rmdir()
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert "LLM config profiles not found" in err.getvalue()
+
+
+def test_init_reports_a_failing_generator(init_ctx, runner):
+    """A broken one-liner in `.env.example` names the key."""
+    runner.reply(sys.executable, "-c", "print(1)", code=1)
+    ctx, _, err = init_ctx()
+    assert config_action.init(ctx, init_args()) == 1
+    assert "generator for AGENT_SECRET" in err.getvalue()

@@ -35,6 +35,34 @@ def test_sudo_is_refused(monkeypatch, capsys):
     assert "don't run it with sudo" in capsys.readouterr().err
 
 
+def test_refusals_are_one_json_object_with_json(monkeypatch, capsys):
+    """With `--json`, the sudo and old-Python refusals print the usual error object on stdout and nothing on stderr."""
+    import json
+
+    monkeypatch.setenv("SUDO_USER", "someone")
+    assert entry.main(["doctor", "--json"]) == 1
+    captured = capsys.readouterr()
+    body = json.loads(captured.out)
+    assert captured.err == ""
+    assert (body["schema_version"], body["ok"], body["error"]["code"]) == (1, False, "config_invalid")
+    assert "sudo" in body["error"]["message"] and body["platform"]["version"] == "unknown"
+
+    monkeypatch.delenv("SUDO_USER")
+    monkeypatch.setattr(entry.sys, "version_info", (3, 9, 6, "final", 0))
+    assert entry.main(["--json", "doctor"]) == 1
+    body = json.loads(capsys.readouterr().out)
+    assert "needs Python 3.10 or newer, but this is Python 3.9" in body["error"]["message"]
+    assert "PLATFORMCTL_PYTHON" in body["error"]["hint"]
+
+
+def test_json_after_a_double_dash_belongs_to_the_command_not_the_tool(monkeypatch, capsys):
+    """`compose -- --json` passes `--json` on to Compose, so a refusal stays plain text."""
+    monkeypatch.setenv("SUDO_USER", "someone")
+    assert entry.main(["compose", "--", "--json"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == "" and "don't run it with sudo" in captured.err
+
+
 def test_main_hands_over_to_the_cli(monkeypatch):
     """Main hands over to the cli."""
     monkeypatch.delenv("SUDO_USER", raising=False)
