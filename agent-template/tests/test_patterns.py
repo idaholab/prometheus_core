@@ -298,6 +298,38 @@ def test_declining_the_suggestion_lets_the_user_pick(monkeypatch):
     assert (plan.architecture, plan.source, plan.framework) == ("debate", "user", "native")
 
 
+def test_unknown_slug_is_asked_again(monkeypatch, capsys):
+    answers = iter(["no", "not_a_pattern", "debate", "native"])
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers))
+    plan = setup_agent.choose_pattern("Draft and revise an essay")
+    assert plan.architecture == "debate"
+    assert "Unknown pattern 'not_a_pattern'" in capsys.readouterr().out
+
+
+def test_repairs_are_reported_to_the_user(capsys):
+    plan = setup_agent.choose_pattern("anything", pattern="not_a_pattern", framework="not_a_framework")
+    assert (plan.architecture, plan.framework) == (patterns.DEFAULT_ARCHITECTURE, patterns.NATIVE_FRAMEWORK)
+    out = capsys.readouterr().out
+    assert "Note: unknown architecture 'not_a_pattern'" in out
+    assert "Note: unknown framework 'not_a_framework'" in out
+
+
+def test_format_python_skips_without_ruff(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(setup_agent.shutil, "which", lambda _: None)
+    module = tmp_path / "graph.py"
+    module.write_text("x=1\n", encoding="utf-8")
+    setup_agent.format_python(module)
+    assert "ruff not found" in capsys.readouterr().out
+    assert module.read_text(encoding="utf-8") == "x=1\n"
+
+
+def test_add_dependency_needs_a_dependencies_list(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="no dependencies list"):
+        setup_agent.add_dependency(pyproject, "langgraph")
+
+
 def test_scaffold_records_the_pattern_on_the_agent_card(tmp_path, monkeypatch):
     monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", tmp_path / "missing.env")
     out = tmp_path / "agent"
