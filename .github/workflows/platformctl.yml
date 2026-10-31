@@ -1,9 +1,12 @@
 name: platformctl
 
-# The platformctl tool (platform/ctl) and its shim (platform/platformctl). Runs only when
-# those paths change, and none of these jobs is a required check until step 2 of the plan
-# (platform/plans/platformctl/). They are a separate workflow, not part of test.yml, so a
-# change elsewhere doesn't pay for them and test.yml's jobs stay as they are
+# The platformctl tool (platform/ctl) and its shim (platform/platformctl). Runs only when those
+# paths, or what the tool reads or the Makefile forwards to it, change. From step 2 of the plan
+# (platform/plans/platformctl/) these jobs are required checks: make them required in the
+# repository's branch protection (a settings change, not a file in this repository). A required
+# check that is skipped by a `paths:` filter stays pending, so the rule must be on the "platformctl:
+# ..." jobs of PRs that touch these paths only, or this workflow needs a path-independent gate job.
+# It is a separate workflow, not part of test.yml, so a change elsewhere doesn't pay for it
 
 on:
   push:
@@ -11,12 +14,27 @@ on:
     paths:
       - "platform/ctl/**"
       - "platform/platformctl"
+      # What the tool reads, or the Makefile forwards to it (step 2)
+      - "platform/Makefile"
+      - "platform/scripts/**"
+      - "platform/.env.example"
+      - "platform/docker-compose*.yml"
+      - "platform/agents/**/docker-compose.yml"
+      - "sdk/prometheus_api/llm_configs/**"
+      - ".gitattributes"
       - ".github/workflows/platformctl.yml"
   pull_request:
     branches: [main, devel]
     paths:
       - "platform/ctl/**"
       - "platform/platformctl"
+      - "platform/Makefile"
+      - "platform/scripts/**"
+      - "platform/.env.example"
+      - "platform/docker-compose*.yml"
+      - "platform/agents/**/docker-compose.yml"
+      - "sdk/prometheus_api/llm_configs/**"
+      - ".gitattributes"
       - ".github/workflows/platformctl.yml"
   merge_group:
     types: [checks_requested]
