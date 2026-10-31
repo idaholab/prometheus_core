@@ -151,6 +151,7 @@ DeepLynx file storage.
 | `AGENT_SECRET_REQUIRED` | Set `false` to disable auth — local development only. |
 | `AGENT_WORKFLOWS` | Optional workflow directory override. Defaults to `workflows` next to `agent_card.json`. |
 | `REGISTRY_URL` | Platform backend URL where the agent registers on startup (`http://backend:8000` in Docker). |
+| `REGISTRY_CHECK_INTERVAL_SECONDS` | How often the running agent checks it is still registered, and registers again if not, for example after a platform `make up` (default `5`; `0` disables). |
 | `REDIS_URL` / `REDIS_PASSWORD` | Conversation state and artifact registry. |
 | `PROMETHEUS_API_BASE_IMAGE_HASH` | Base image tag the Dockerfile builds from. |
 | `LOCAL_SDK` | `true` builds FROM the locally built `prometheus_api:local` instead of the registry. |

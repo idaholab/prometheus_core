@@ -904,6 +904,8 @@ When your container starts, `PrometheusAgent.run()` calls `register_with_registr
 
 Registration retries with exponential backoff (default: 10 attempts, up to 30 seconds between tries), so the order in which containers start does not matter — your agent will wait for the backend to become available.
 
+After that, the agent checks every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5) that the registry still lists it, and registers again if not. So after a platform `make up` or `make restart` (which empties the registry), or when the startup retries ran out, your agent comes back by itself within a few seconds, without a restart. An agent built on an older base image registers only at startup: restart it with `docker compose -p <agent-folder> restart`.
+
 ### External repository deployment
 
 1. Make sure the platform is running (`make up` from `platform/`).

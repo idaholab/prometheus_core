@@ -96,7 +96,7 @@ make down                      # stop
 :::
 
 ::: callout bad
-**Every `make up` or `make restart` empties the agent registry** (`clear-agent-registry`). The platform's own agents re-register by themselves. **Your agent doesn't**: restart it afterwards with `docker compose -p <agent-folder> restart`.
+**Every `make up` or `make restart` empties the agent registry** (`clear-agent-registry`). The platform's own agents re-register by themselves. **Yours does only on a base image with the SDK keep-alive** (within about 5 s). On the pinned image, restart it afterwards with `docker compose -p <agent-folder> restart`.
 :::
 ::::
 
@@ -713,7 +713,7 @@ make ps ; make logs SERVICE=client-agent
 |||
 
 ::: callout bad
-**`make up` and `make restart` wipe all agent registrations.** Every run does a full `down` and deletes the registrations from Valkey. In-tree agents re-register because they restart too. An **external agent** (your template agent) must be restarted afterwards.
+**`make up` and `make restart` wipe all agent registrations.** Every run does a full `down` and deletes the registrations from Valkey. In-tree agents re-register because they restart too. An **external agent** (your template agent) must be restarted afterwards, unless its base image has the SDK keep-alive: then it is back within about 5 s.
 :::
 
 {.small}
@@ -1169,7 +1169,7 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 | "userToken has expired" | A long turn exceeded `USER_IDENTITY_TTL` (7200 s). Raise it. |
 | `LLMAliasError`: alias 'small' not available | The active profile has no model for that flavor. Switch `LLM_CONFIG_PROFILE`, or use a custom `LLM_CONFIG_FILE` (next session). |
 | `LLMProviderError` (401/403) from an LLM call | `LLM_API_KEY` is missing or wrong in the agent's `.env`, or it belongs to another profile. |
-| The agent is running but not in `/agents` | The registration was wiped by `make up`/`restart`. `docker compose -p <agent-folder> restart` re-registers it; it is routable within about 60 s. |
+| The agent is running but not in `/agents` | The registration was wiped by `make up`/`restart`. With the SDK keep-alive it is back within about 5 s; otherwise `docker compose -p <agent-folder> restart` re-registers it. Either way the orchestrator sees it within about 60 s more. |
 
 ---
 

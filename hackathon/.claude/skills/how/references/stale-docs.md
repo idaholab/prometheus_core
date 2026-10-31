@@ -1,6 +1,6 @@
 # Stale docs: what older docs say, and what the code does now
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 
@@ -19,6 +19,7 @@ Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 | `docker exec agent-valkey` / `docker restart <agent>` (fixed container names) | `docker compose -p prometheus_platform exec -T redis` / `docker compose -p <project> restart <service>` (no `container_name` since #310; `conventions.md`) |
 | `setup_agent.py --help` shows arguments | `main()` ignores them; it is interactive only (`setup_agent.py:389-400`) |
 | Host run with `AGENT_SECRET_REQUIRED=false` only | Also `USER_IDENTITY_REQUIRED=false`, else "No 'userToken' found" |
+| "Your agent registers only at startup: restart it after a platform `make up`" | True on the pinned base image (`platform/Makefile`). With the SDK keep-alive (#322) a running agent registers again within about 5 s (`REGISTRY_CHECK_INTERVAL_SECONDS`); restart only if it does not |
 
 Old text remains in the platform `docs/docs/` pages, the template `TUTORIAL.md` and `README.md`, and
 `prometheus_api/docs/agent/MULTI_USER.md`. "Planner tool" means "orchestrator tool".

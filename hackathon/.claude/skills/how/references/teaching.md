@@ -1,6 +1,6 @@
 # Teaching: the pattern and the check questions
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## The teaching pattern
 
@@ -55,8 +55,10 @@ same `contextId` and the original arguments plus the answers in `params`; local 
 
 `Registry`. You ran `make restart` in the platform. `/agents` no longer lists your agent. What now? A "make
 down-v". B "Restart your agent": `docker compose -p <project> restart <service>`. C "Wait a minute". D "Rename the card". **B.** A
-platform `make up` or `restart` deletes the registrations (`clear-agent-registry`); your agent registers only at
-startup. `make down-v` also deletes your users and keys. Deck 03, "Once, then four commands"; `platform/Makefile`.
+platform `make up` or `restart` deletes the registrations (`clear-agent-registry`). On the pinned base image your
+agent registers only at startup, so restart it. Once the pin includes the SDK keep-alive, C also works: the agent
+registers again within about 5 s; restart if it hasn't. `make down-v` also deletes your users and keys. Deck 03,
+"Once, then four commands"; `platform/Makefile`.
 
 ### chat-turn
 

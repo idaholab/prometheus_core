@@ -108,7 +108,7 @@ class AnalysisAgent(PrometheusAgent):
 | `AGENT_SECRET` | Shared secret for auth | - |
 | `REGISTRY_URL` | LiteLLM registry/proxy URL used for agent registration | `http://litellm:4000` |
 | `REGISTRY_MAX_RETRIES` | Registration retries after the first attempt, used for both explicit `REGISTRY_URL` and the built-in fallback URL. | `10` |
-| `REGISTRY_CHECK_INTERVAL_SECONDS` | After startup, how often the agent checks the registry still lists it, re-registering if not (a registry restarted or cleared under a running agent). `0` disables. | `5` |
+| `REGISTRY_CHECK_INTERVAL_SECONDS` | After startup, how often the agent checks the registry still lists it, re-registering if not (the registry was cleared, or startup registration gave up). `0` disables; minimum `0.1`. Skipped for an agent that overrides `register_with_registry_async`. | `5` |
 
 ### LLMClient
 

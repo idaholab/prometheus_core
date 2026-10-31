@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The deck symptom tables (deck 03, slides 11, 17, A18-A21; deck 04, slide 19; deck 05). Run the
 named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`down`, run
@@ -30,7 +30,7 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 | Listed, but never called | A weak `description` or `usage_notes`, a duplicate skill id, an unreachable or old card. Try other phrasings in fresh conversations, then `/diagnose trace my last chat` and `/create-agent improve my card`. | [registry-details](checks.md#registry-details), [card-in-image](checks.md#card-in-image), [client-agent-reaches-agent](checks.md#client-agent-reaches-agent), [discovery-refresh](checks.md#discovery-refresh) |
 | `make up` fails: "The Prometheus Platform must be launched first…" | The platform network is missing. Start the platform. | [stack-ps](checks.md#stack-ps) |
 | Called with the wrong arguments | Weak parameter descriptions, or the previous result lacks a value. Trace the turn, then improve the card. | [card-in-image](checks.md#card-in-image) |
-| "Registry registration attempt … failed" or "Continuing without registration" | A 401: the agent's `AGENT_SECRET` differs (its compose must set `LITELLM_MASTER_KEY: ${AGENT_SECRET}`). A connection error: the backend is down, `REGISTRY_URL` still points at `litellm`, or the network mode is wrong. | [agent-registered-log](checks.md#agent-registered-log), [agent-env-sync](checks.md#agent-env-sync), [platform-check](checks.md#platform-check) |
+| "Registry registration attempt … failed" or "Continuing without registration" | With the SDK keep-alive the agent keeps trying every few seconds after this, so fixing the cause is enough; without it, restart after the fix. A 401: the agent's `AGENT_SECRET` differs (its compose must set `LITELLM_MASTER_KEY: ${AGENT_SECRET}`). A connection error: the backend is down, `REGISTRY_URL` still points at `litellm`, or the network mode is wrong. | [agent-registered-log](checks.md#agent-registered-log), [agent-env-sync](checks.md#agent-env-sync), [platform-check](checks.md#platform-check) |
 | The agent container exits or restarts | Read the traceback: often `ModuleNotFoundError`, or "AGENT_SECRET_REQUIRED=true but AGENT_SECRET is not set". | [agent-running](checks.md#agent-running), [agent-logs](checks.md#agent-logs) |
 | The chat still uses the old card or code | A restart keeps the old image. `make up`, then a discovery refresh. | [card-in-image](checks.md#card-in-image), [discovery-refresh](checks.md#discovery-refresh) |
 | Two agents replace each other in `/agents` | Same card name, same route key (deck 05, slide 1). Use your own names. | [registry-details](checks.md#registry-details) |

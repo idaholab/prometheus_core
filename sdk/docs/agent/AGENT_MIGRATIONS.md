@@ -5,6 +5,43 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## Unreleased
+
+### Agents Re-register When the Registry Forgets Them
+
+A running agent now checks every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5) that the
+registry still lists it, and registers again when it does not: after `clear-agent-registry`, a
+Valkey flush, or when its startup retries ran out before the registry came up. Before, an agent
+registered only at startup and stayed out of discovery until it restarted.
+
+Platform agents get this only once the platform's base-image pin
+(`PROMETHEUS_API_BASE_IMAGE_HASH` in `platform/Makefile`) includes this release. Until then they
+behave as before.
+
+Migration steps:
+
+1. Nothing, for an agent that uses the default registration. Set
+   `REGISTRY_CHECK_INTERVAL_SECONDS=0` to keep the old behavior.
+2. An agent that overrides `register_with_registry_async` (a custom name or payload, or no
+   registration) is not re-registered by the SDK; it owns its registration. To keep such an
+   agent listed, run the checks yourself:
+
+```python
+from prometheus_api.agent.registry import AgentRegistryClient
+
+class MyAgent(PrometheusAgent):
+    async def register_with_registry_async(self, agent_card, **kwargs):
+        client = AgentRegistryClient.from_env(self.registry_url())
+        await client.register_once_async(agent_card, raw_agent_card=my_payload_card)
+        await client.keep_registered_async(
+            agent_card, raw_agent_card=my_payload_card, interval=self.registry_check_interval()
+        )
+```
+
+3. Registration no longer deletes the existing entry before posting; the registry replaces an
+   entry with the same name. Same-name replicas share one entry, so give them one service
+   address (`EXTERNAL_AGENT_URL`).
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

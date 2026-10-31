@@ -1,6 +1,6 @@
 # Glossary
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 - **A2A.** Agent-to-Agent protocol 1.0: JSON-RPC `SendMessage`, `SendStreamingMessage` on `POST /`. Old `message/send` fails with `-32601`.
 - **Agent.** A `PrometheusAgent` subclass that does skills. You write `_execute(params, context, event_queue)` (`agent-code.md`).
@@ -21,7 +21,7 @@ Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0
 - **Secrets.** `AGENT_SECRET`: the token for the registry, the gateway, and each agent (the SDK reads it as `LITELLM_MASTER_KEY`, which compose sets to `${AGENT_SECRET}`); `LLM_API_KEY` for the provider.
 - **Orchestrator.** The `client-agent`: an LLM loop that calls skills and chains the results.
 - **Pin / profile.** The `prometheus_api` commit the platform builds from (`environment.md`); `LLM_CONFIG_PROFILE` maps flavors to models (required, no default).
-- **Registry.** The backend's `/v1/agents` (in Valkey). Agents register at startup; a platform `make up` or `make restart` empties it.
+- **Registry.** The backend's `/v1/agents` (in Valkey). Agents register at startup; a platform `make up` or `make restart` empties it. An agent on a base image with the SDK keep-alive registers again within about 5 s (`REGISTRY_CHECK_INTERVAL_SECONDS`); an older one needs a restart (`run-and-register.md`).
 - **`requires_approval`.** A skill field: the user approves first; the turn ends `plan_ready`.
 - **Route key.** The card name, lowercase, spaces to hyphens. A second agent with the same key replaces the first.
 - **Signing key.** The RS256 key for each turn's `userToken`. The backend creates and activates it; Admin › Signing Keys rotates it.

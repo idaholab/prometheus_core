@@ -429,7 +429,7 @@ docker compose -p neutron-agent restart
 {.sm}
 - At startup the agent **registers itself** with the platform **backend** (`REGISTRY_URL=http://backend:8000`). Nothing to configure beyond the `.env`.
 - The orchestrator notices new or changed agents within about a minute.
-- Every platform `make up`/`make restart` empties the registry: restart your agent afterwards.
+- Every platform `make up`/`make restart` empties the registry: restart your agent afterwards (with the SDK keep-alive it re-registers by itself within about 5 s).
 
 ::: callout
 Start a **fresh conversation** for each test. Old uploads and results stay visible to the orchestrator and can confuse it.
@@ -907,7 +907,7 @@ How your agent announces itself, how the client-agent finds it, and the exact pa
 ```
 
 {.small}
-Retries: `REGISTRY_MAX_RETRIES` (default 10), backoff 2 s → ×2 → capped at 30 s. On final failure it logs "Continuing without registration" and **keeps serving, unregistered**.
+Retries: `REGISTRY_MAX_RETRIES` (default 10), backoff 2 s → ×2 → capped at 30 s. On final failure it logs "Continuing without registration" and **keeps serving, unregistered**. With the SDK keep-alive it keeps checking every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5) and registers once the backend answers.
 
 |||
 
@@ -988,7 +988,7 @@ Restart the agent (re-registers), then refresh discovery or restart the client-a
 
 :::: grid 2
 ::: callout warn
-After every platform `make up`/`make restart` the registry is empty: `docker compose -p <agent-folder> restart` to re-register (an unchanged container is left alone by a second `make up`). Stop your agent before `make down` in the platform, or the network cannot be removed.
+After every platform `make up`/`make restart` the registry is empty: `docker compose -p <agent-folder> restart` to re-register (an unchanged container is left alone by a second `make up`). With the SDK keep-alive the agent re-registers by itself within about 5 s. Stop your agent before `make down` in the platform, or the network cannot be removed.
 :::
 
 ::: callout

@@ -1,6 +1,6 @@
 # Run and register your agent
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## Start it
 
@@ -26,6 +26,10 @@ says `Registered '<route key>' with LiteLLM at http://backend:8000` (old wording
   entry (`registry.py:123-130`).
 - **Retries**: 2 s, doubled, at most 30 s, 11 attempts, then "Continuing without registration"
   (`registry.py:200-233`). Verify with `agent-registered-log` and `registry-agents` (`checks.md`).
+- **Keep-alive** (SDK, newer than the pinned base image `1914b55`): after startup the agent checks every
+  `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5, `0` off) that `/v1/agents` still lists it, and registers again
+  if not. This also covers startup retries that ran out. An agent that overrides `register_with_registry_async`
+  is not re-registered.
 
 ## Discovery: how the orchestrator finds you
 
@@ -41,7 +45,7 @@ and once on an unknown skill (`orchestrator/runtime.py:209-217`). `discovery-ref
 | what changed | run |
 |---|---|
 | code, card, `pyproject.toml`, `Dockerfile`, compose, or the agent `.env` | `make up` in the agent folder, then `discovery-refresh` |
-| the platform restarted (it empties the registry: `clear-agent-registry`) | `docker compose -p <project> restart <service>`, or `make up` after a `make down` |
+| the platform restarted (it empties the registry: `clear-agent-registry`) | With the keep-alive, wait about 5 s and check `registry-agents`. Otherwise, or if it's still missing: `docker compose -p <project> restart <service>`, or `make up` after a `make down` |
 | The restart fails: "network … not found" | `make down`, then `make up` |
 | any of these, before a chat test | a fresh chat conversation (deck 04, slide 18) |
 

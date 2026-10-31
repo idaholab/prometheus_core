@@ -42,8 +42,9 @@ Find why something does not work, explain the cause, and fix it. The argument: `
    After a card or code change, run `discovery-refresh`.
 2. **Yes**: show the exact change (key names only for an `.env`; a diff and "Before a write" for
    an agent file), then ask (header `Fix`): "Apply the fix" (recommended, say why), "Show me the
-   steps", "Skip". A platform `make up` or `make restart` empties the registry: `make down` in the
-   agent folder, the target (timeout 10 minutes), then `make up` there. Before `make down-v`,
+   steps", "Skip". A platform `make up` or `make restart` empties the registry. An agent with the
+   SDK keep-alive registers again within about 5 s (`checks.md`, `agent-registered-log`); for one
+   without it: `make down` in the agent folder, the target (timeout 10 minutes), then `make up` there. Before `make down-v`,
    state the loss (`conventions.md`).
 3. **You**: give the steps, then ask (header `Done?`): "Done, check again", "Skip".
 

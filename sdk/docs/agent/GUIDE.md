@@ -868,6 +868,7 @@ behavior changes, see [Prometheus Agent Migration Guide](AGENT_MIGRATIONS.md).
 | `AGENT_SECRET_REQUIRED` | `true` | Reject requests without a valid `Authorization: Bearer` header. If true and `AGENT_SECRET` is unset, app startup fails fast. |
 | `REGISTRY_URL` | `http://litellm:4000` | LiteLLM gateway URL for registry registration |
 | `REGISTRY_MAX_RETRIES` | `10` | Registration retries after the first attempt, used for both explicit `REGISTRY_URL` and the built-in fallback URL. |
+| `REGISTRY_CHECK_INTERVAL_SECONDS` | `5` | After startup, how often the agent checks the registry still lists it and re-registers if not (also after startup retries ran out). `0` disables; minimum `0.1`. Skipped for an agent that overrides `register_with_registry_async`. |
 | `LITELLM_MASTER_KEY` | — | LiteLLM admin key |
 | `LLM_API_KEY` | — | If the agent calls Claude directly |
 | `REDIS_URL` | `redis://localhost:6379` | Redis for artifact catalog and context state |
