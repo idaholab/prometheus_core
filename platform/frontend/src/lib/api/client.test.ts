@@ -47,3 +47,12 @@ test("getConversation surfaces a missing conversation as ApiError 404", async ()
   assert.equal(err.status, 404);
   assert.equal(err.message, "Conversation not found");
 });
+
+test("getConversationTasks reads the conversation's Task Graph", async () => {
+  const body = { available: true, conversation_id: "c 1", tasks: [] };
+  const calls = stubFetch(200, body);
+
+  assert.deepEqual(await api.getConversationTasks("c 1"), body);
+  assert.equal(calls[0].url, "/api/conversations/c%201/tasks");
+  assert.equal(calls[0].init.method ?? "GET", "GET");
+});

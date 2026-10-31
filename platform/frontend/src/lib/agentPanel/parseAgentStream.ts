@@ -159,7 +159,7 @@ export function parseAgentStream(history: string[]): PanelState {
   };
   const runnerLoop = (): LoopState => (loops[RUNNER] ??= { at: RUNNER, n: 0, completed: 0, done: false });
 
-  const lines = (history ?? []).filter((l) => typeof l === "string" && l.trim().length > 0);
+  const lines = history.filter((l) => typeof l === "string" && l.trim().length > 0);
   if (lines.length > 0) reveal(PLANNER);
 
   for (const raw0 of lines) {
@@ -202,7 +202,7 @@ export function parseAgentStream(history: string[]): PanelState {
       } else if ((p = text.match(RE_PIPELINE_TALLY))) {
         reveal(RUNNER);
         const loop = runnerLoop();
-        loop.n = Math.max(loop.n, Number(p[2]) || 0);
+        loop.n = Math.max(loop.n, Number(p[2]));
         const finished = [...p[3].matchAll(/(\d+)\s+(success|failed|canceled|skipped)/gi)]
           .reduce((n, x) => n + Number(x[1]), 0);
         loop.completed = Math.max(loop.completed, finished);
@@ -213,8 +213,8 @@ export function parseAgentStream(history: string[]): PanelState {
       } else if ((p = text.match(RE_OKFLOW_PROGRESS))) {
         reveal(RUNNER);
         const loop = runnerLoop();
-        loop.completed = Number(p[1]) || 0;
-        loop.n = Math.max(loop.n, Number(p[2]) || 0);
+        loop.completed = Number(p[1]);
+        loop.n = Math.max(loop.n, Number(p[2]));
         loop.done = loop.n > 0 && loop.completed >= loop.n;
         if (loop.done) {
           status[RUNNER] = { outcome: "done" };
@@ -228,7 +228,7 @@ export function parseAgentStream(history: string[]): PanelState {
         reveal(RUNNER);
         status[RUNNER] = { outcome: "working" };
         const loop = runnerLoop();
-        loop.n = Math.max(loop.n, Number(p[1]) || 0);
+        loop.n = Math.max(loop.n, Number(p[1]));
         active = RUNNER;
         edge = { from: skill, to: RUNNER, dir: "down", label: "pipelines" };
       } else if ((p = text.match(RE_PEER_NAME)) && peerId(p[1]) !== skill) {
@@ -303,7 +303,6 @@ export function parseAgentStream(history: string[]): PanelState {
       }
     }
   }
-  if (edge && (!revealed.includes(edge.from) || !revealed.includes(edge.to))) edge = null;
 
   return {
     revealed,

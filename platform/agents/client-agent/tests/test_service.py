@@ -587,3 +587,32 @@ def test_invoke_skill_reports_error_result_as_failed_status(monkeypatch) -> None
     assert statuses[-1].startswith("'forward_sampling_uq' failed: ")
     assert "8042" in statuses[-1]
     assert "'forward_sampling_uq' completed." not in statuses
+
+
+def test_invoke_skill_error_result_is_silent_without_status(monkeypatch) -> None:
+    """With emit_status=False (a sub-step of a larger workflow), an error result is
+    still returned but no status line is written for it."""
+
+    class _UnreachableTool:
+        async def ainvoke(self, params):
+            return json.dumps({"error": "All connection attempts failed"})
+
+    async def fake_find_tool_for_skill(*args, **kwargs):
+        return _UnreachableTool()
+
+    async def fake_get_capability_by_skill_id(skill_id):
+        return SimpleNamespace(input_schema={"type": "object", "properties": {}})
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", fake_find_tool_for_skill)
+    monkeypatch.setattr(
+        skills,
+        "get_capability_cache",
+        lambda: SimpleNamespace(get_capability_by_skill_id=fake_get_capability_by_skill_id),
+    )
+    statuses: list[str] = []
+    monkeypatch.setattr(runtime, "store_status_update", lambda conv, msg, **kw: statuses.append(msg))
+
+    result = asyncio.run(skills.invoke_skill("forward_sampling_uq", {}, "conv-1", emit_status=False))
+
+    assert result["error"] == "All connection attempts failed"
+    assert statuses == []

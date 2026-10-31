@@ -25,6 +25,5 @@ export const PER_SAMPLE_TAGS = ["uq-sample", "zdo", "diagnostics"] as const;
 export function isPerSampleArtifact(
   artifact: Pick<ArtifactMeta, "tags">,
 ): boolean {
-  const tags = artifact.tags ?? [];
-  return PER_SAMPLE_TAGS.some((tag) => tags.includes(tag));
+  return PER_SAMPLE_TAGS.some((tag) => artifact.tags.includes(tag));
 }

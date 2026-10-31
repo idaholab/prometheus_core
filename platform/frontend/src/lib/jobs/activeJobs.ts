@@ -97,7 +97,7 @@ export function toJobRows(
 ): JobRow[] {
   const rows: JobRow[] = [];
   const visit = (node: TaskNode, turnTitle: string, depth: number) => {
-    const children = node.children ?? [];
+    const children = node.children;
     if (depth > 0 || children.length === 0) {
       const seen = [
         ...(history.get(node.task_id) ?? []),
@@ -146,7 +146,7 @@ export function recordStatusHistory(
       if (seen[seen.length - 1] !== msg)
         history.set(node.task_id, [...seen, msg].slice(-500));
     }
-    for (const child of node.children ?? []) walk(child);
+    for (const child of node.children) walk(child);
   };
   for (const root of tasks) walk(root);
   return history;

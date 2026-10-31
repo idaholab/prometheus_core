@@ -24,7 +24,12 @@ vi.mock("react", () => ({
     return get();
   },
 }));
-vi.mock("@/lib/api/events", () => ({ openEventStream: () => () => {} }));
+vi.mock("@/lib/api/events", () => ({
+  openEventStream: (handlers: unknown) => {
+    (globalThis as Record<string, unknown>).__chatTestStream = handlers;
+    return () => {};
+  },
+}));
 vi.mock("@/lib/api/client", () => {
   class StubApiError extends Error {
     constructor(
@@ -46,6 +51,10 @@ type Api = Record<string, (...a: unknown[]) => Promise<unknown>>;
 const g = globalThis as unknown as {
   __chatTestApi: Api;
   __chatTestTap: () => Record<string, unknown>;
+  __chatTestStream: {
+    onStatus: (e: { type: "status"; turn_id: string; message: string; history?: string[] }) => void;
+    onTaskProgress: (e: { type: "task_progress"; task_id: string; message: string }) => void;
+  };
   sessionStorage: unknown;
 };
 
@@ -268,6 +277,213 @@ test("switching conversation stops the recovery poll", async () => {
     const before = polls;
     await vi.advanceTimersByTimeAsync(120_000);
     assert.equal(polls, before, "no poll for a conversation no longer on screen");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+type Item = { kind: string; text?: string; history?: string[]; taskId?: string; name?: string; done?: boolean };
+const items = () => readState().items as Item[];
+const tools = () => items().filter((it) => it.kind === "tool");
+
+test("a backgrounded turn carries the turn's status log into its progress step", async () => {
+  const reply = deferred<unknown>();
+  await bootToConversation("conv-B1", {
+    getConversation: async () => ({ ...detail("conv-B1"), messages: msgs(0) }),
+    sendMessage: () => reply.promise,
+    getRecentConversations: async () => ({ conversations: [] }),
+  });
+  const sent = chatStore.sendTurn("run the UQ study");
+  g.__chatTestStream.onStatus({
+    type: "status",
+    turn_id: "t1",
+    message: "Invoking 'forward_sampling_uq'.",
+    history: ["Next step: 'forward_sampling_uq'.", "Invoking 'forward_sampling_uq'."],
+  });
+  reply.resolve({ status: "backgrounded", turn_id: "t1", task_id: "bg-1", message: "Running in the background." });
+  await sent;
+
+  const step = tools().at(-1)!;
+  assert.equal(step.taskId, "bg-1");
+  assert.equal(step.name, "Running in the background.");
+  assert.equal(step.done, false);
+  assert.deepEqual(step.history, ["Next step: 'forward_sampling_uq'.", "Invoking 'forward_sampling_uq'."]);
+
+  g.__chatTestStream.onTaskProgress({
+    type: "task_progress",
+    task_id: "bg-1",
+    message: "waiting on forward_sampling_uq - Pipeline 7: running",
+  });
+  assert.deepEqual(tools().at(-1)!.history, [
+    "Next step: 'forward_sampling_uq'.",
+    "Invoking 'forward_sampling_uq'.",
+    "waiting on forward_sampling_uq - Pipeline 7: running",
+  ]);
+});
+
+test("a backgrounded turn with no status yet starts an empty progress step", async () => {
+  await bootToConversation("conv-B2", {
+    getConversation: async () => ({ ...detail("conv-B2"), messages: msgs(0) }),
+    sendMessage: async () => ({ status: "backgrounded", turn_id: "t2", task_id: null, message: null }),
+    getRecentConversations: async () => ({ conversations: [] }),
+  });
+  await chatStore.sendTurn("go");
+
+  const step = tools().at(-1)!;
+  assert.equal(step.taskId, undefined);
+  assert.equal(step.name, "Running in the background…");
+  assert.deepEqual(step.history, []);
+});
+
+test("a failed send shows the API error in the transcript", async () => {
+  await bootToConversation("conv-E", {
+    getConversation: async () => ({ ...detail("conv-E"), messages: msgs(0) }),
+    sendMessage: async () => {
+      throw new ApiError(502, "Bad gateway");
+    },
+    getRecentConversations: async () => ({ conversations: [] }),
+  });
+  await chatStore.sendTurn("hello");
+
+  assert.equal(readState().awaiting, false);
+  const last = items().at(-1);
+  assert.equal(last?.kind, "error");
+  assert.equal(last?.text, "Error communicating with agent: Bad gateway");
+});
+
+test("a send with no conversation yet renders the reply without watching the transcript", async () => {
+  let reads = 0;
+  g.__chatTestApi = {
+    getConversation: async () => {
+      reads += 1;
+      return detail("x");
+    },
+    sendMessage: async () => ({ status: "answer", turn_id: "t3", response_text: "42", artifacts: [] }),
+    getRecentConversations: async () => ({ conversations: [] }),
+  };
+  await chatStore.sendTurn("question");
+
+  assert.equal(reads, 0);
+  assert.equal(items().at(-1)?.kind, "assistant");
+  assert.equal(items().at(-1)?.text, "42");
+});
+
+test("a POST reply that arrives after recovery settled the turn is ignored", async () => {
+  vi.useFakeTimers();
+  try {
+    let stored = msgs(0);
+    const post = deferred<unknown>();
+    await bootToConversation("conv-L", {
+      getConversation: async () => ({ ...detail("conv-L"), messages: stored }),
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    const sent = chatStore.sendTurn("long run");
+    await vi.advanceTimersByTimeAsync(0);
+    stored = msgs(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    assert.equal(readState().awaiting, false);
+    const before = items().length;
+
+    post.resolve({ status: "answer", turn_id: "t4", response_text: "late copy", artifacts: [] });
+    await sent;
+    assert.equal(items().length, before, "the late reply adds no second answer");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a POST failure that arrives after recovery settled the turn adds no error", async () => {
+  vi.useFakeTimers();
+  try {
+    let stored = msgs(0);
+    const post = deferred<unknown>();
+    await bootToConversation("conv-L2", {
+      getConversation: async () => ({ ...detail("conv-L2"), messages: stored }),
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    const sent = chatStore.sendTurn("long run");
+    await vi.advanceTimersByTimeAsync(0);
+    stored = msgs(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    post.reject(new ApiError(504, "Gateway timeout"));
+    await sent;
+    assert.ok(!items().some((it) => it.kind === "error"));
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("an unreadable baseline (not a 404) turns recovery off", async () => {
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    const post = deferred<unknown>();
+    await bootToConversation("conv-U", {
+      getConversation: async () => {
+        reads += 1;
+        throw new ApiError(500, "Internal error");
+      },
+      sendMessage: () => post.promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    void chatStore.sendTurn("run");
+    await vi.advanceTimersByTimeAsync(180_000);
+    assert.equal(reads, 1, "only the baseline read, no polls");
+    assert.equal(readState().awaiting, true);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("pressing stop while a recovery read is in flight discards its result", async () => {
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    const inFlight = deferred<unknown>();
+    await bootToConversation("conv-P", {
+      getConversation: () => {
+        reads += 1;
+        return reads === 1 ? Promise.resolve({ ...detail("conv-P"), messages: msgs(0) }) : inFlight.promise;
+      },
+      sendMessage: () => deferred<unknown>().promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    void chatStore.sendTurn("run");
+    await vi.advanceTimersByTimeAsync(60_000); // the first poll is now waiting on inFlight
+    chatStore.stop();
+    inFlight.resolve({ ...detail("conv-P"), messages: msgs(1) });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    assert.ok(!items().some((it) => it.kind === "assistant"), "the stopped turn is not filled in");
+    assert.equal(reads, 2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("pressing stop while a failing recovery read is in flight stops the retries", async () => {
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    const inFlight = deferred<unknown>();
+    await bootToConversation("conv-P2", {
+      getConversation: () => {
+        reads += 1;
+        return reads === 1 ? Promise.resolve({ ...detail("conv-P2"), messages: msgs(0) }) : inFlight.promise;
+      },
+      sendMessage: () => deferred<unknown>().promise,
+      getRecentConversations: async () => ({ conversations: [] }),
+    });
+    void chatStore.sendTurn("run");
+    await vi.advanceTimersByTimeAsync(60_000);
+    chatStore.stop();
+    inFlight.reject(new Error("backend restarting"));
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    assert.equal(reads, 2, "no retry after stop");
   } finally {
     vi.useRealTimers();
   }

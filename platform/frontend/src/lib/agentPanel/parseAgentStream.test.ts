@@ -240,3 +240,78 @@ test("the pipeline tally completes the runner loop when every pipeline is finish
   assert.equal(s.loops[RUNNER].done, true);
   assert.equal(s.status[RUNNER].outcome, "done");
 });
+
+test("a peer that hands its result back is done, and results flow up to the caller", () => {
+  const s = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] Requesting baseline pipeline config from okflow-config-agent ...",
+    "[forward_sampling_uq] okflow-config-agent returned the baseline config.",
+  ]);
+  assert.equal(s.status["okflow-config-agent"].outcome, "done");
+  assert.equal(s.active, "forward_sampling_uq");
+  assert.deepEqual(s.edge, { from: "okflow-config-agent", to: "forward_sampling_uq", dir: "up", label: "result" });
+});
+
+test("a progress line with no prior dispatch line still draws the planner edge", () => {
+  const s = parseAgentStream(["[search_literature] Searching OSTI for 'bank worth'"]);
+  assert.deepEqual(s.revealed, ["planner", "search_literature"]);
+  assert.equal(s.active, "search_literature");
+  assert.deepEqual(s.edge, { from: "planner", to: "search_literature", dir: "down", label: "A2A" });
+});
+
+test("a skill's progress after another skill's result re-points the edge at it", () => {
+  const s = parseAgentStream([
+    "Invoking 'search_literature'.",
+    "'search_literature' completed.",
+    "[forward_sampling_uq] Processing your request",
+  ]);
+  assert.equal(s.active, "forward_sampling_uq");
+  assert.deepEqual(s.edge, { from: "planner", to: "forward_sampling_uq", dir: "down", label: "A2A" });
+});
+
+test("a backgrounded 'waiting on <skill>' line with no message keeps that skill working", () => {
+  const s = parseAgentStream(["Next step: 'forward_sampling_uq'.", "waiting on forward_sampling_uq"]);
+  assert.equal(s.active, "forward_sampling_uq");
+  assert.equal(s.status.forward_sampling_uq.outcome, "working");
+});
+
+test("a skill that completes twice docks one report, and a skill with no runner leaves no loop", () => {
+  const s = parseAgentStream([
+    "Invoking 'search_literature'.",
+    "'search_literature' completed.",
+    "Invoking 'search_literature'.",
+    "'search_literature' completed.",
+  ]);
+  assert.deepEqual(s.files, [{ id: "report:search_literature", at: "search_literature", label: "report", click: true }]);
+  assert.deepEqual(s.loops, {});
+  assert.equal(s.status.search_literature.outcome, "done");
+});
+
+test("completing after a failed pipeline keeps the runner failed", () => {
+  const s = parseAgentStream([
+    "Invoking 'forward_sampling_uq'.",
+    "[forward_sampling_uq] Pipelines (2/2): 1 success, 1 failed",
+    "[forward_sampling_uq] Pipeline 9: failed",
+    "'forward_sampling_uq' completed.",
+  ]);
+  assert.equal(s.loops[RUNNER].done, true);
+  assert.equal(s.status[RUNNER].outcome, "failed");
+});
+
+test("the okflow case total reveals the runner before any case finishes", () => {
+  const s = parseAgentStream(["Invoking 'forward_sampling_uq'.", "[forward_sampling_uq] Running okflow neutronics (4 cases)"]);
+  assert.equal(s.loops[RUNNER].n, 4);
+  assert.equal(s.loops[RUNNER].completed, 0);
+  assert.equal(s.active, RUNNER);
+});
+
+test("a stray line after the turn completed does not light the planner again", () => {
+  const s = parseAgentStream([...UQ_DOWN, "Deciding the next step."]);
+  assert.equal(s.complete, true);
+  assert.equal(s.active, null);
+});
+
+test("a skill id that is not an '-agent' name is shown as-is", () => {
+  assert.equal(agentDef("search_literature").name, "search_literature");
+  assert.equal(agentDef("search_literature").role, "search_literature");
+});

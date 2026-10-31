@@ -115,3 +115,14 @@ test("toJobRows tags pipeline links with their state, failed first", () => {
     ],
   );
 });
+
+test("a childless turn with no skill or title is listed as 'task', and silent tasks add no history", () => {
+  const tree = [node({ task_id: "root", state: "submitted" })];
+  const history = recordStatusHistory(tree, new Map());
+  assert.equal(history.size, 0);
+  const [row] = toJobRows(tree, history);
+  assert.equal(row.name, "task");
+  assert.equal(row.running, true);
+  assert.equal(row.message, "");
+  assert.deepEqual(row.links, []);
+});

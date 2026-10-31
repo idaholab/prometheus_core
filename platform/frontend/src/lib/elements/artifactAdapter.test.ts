@@ -76,3 +76,7 @@ test("links the producing agent attached are passed to the viewer", () => {
   assert.deepEqual(artifactToElement(meta({ links })).props?.links, links);
   assert.deepEqual(artifactToElement(meta({})).props?.links, []);
 });
+
+test("a UQ artifact with no name gets a default notebook filename", () => {
+  assert.equal(artifactToElement(meta({ name: "" })).props?.filename, "uq_result.ipynb");
+});

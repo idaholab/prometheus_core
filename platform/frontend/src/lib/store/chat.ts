@@ -580,10 +580,10 @@ function watchForStoredReply(
   settle: () => void,
 ): () => void {
   let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const stop = () => {
     stopped = true;
-    if (timer) clearTimeout(timer);
+    clearTimeout(timer);
   };
   const live = () =>
     !stopped && !isSettled() && state.awaiting && state.conversationId === conversationId;

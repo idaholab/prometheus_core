@@ -150,3 +150,87 @@ def test_render_neutralizes_traversal(client, monkeypatch, tmp_path):
     resp = client.get("/render/..%2F..%2Fetc%2Fpasswd")
     assert resp.status_code in (400, 404)
     assert "root:" not in resp.text
+
+
+def _use_registry(monkeypatch, hashes):
+    import redis as redis_mod
+
+    monkeypatch.setattr(redis_mod.Redis, "from_url", staticmethod(lambda *a, **k: _FakeRedis(hashes)))
+
+
+def test_registry_skips_conversations_without_the_id(monkeypatch):
+    """Only the conversation hash holding the id answers; the others are skipped."""
+    _use_registry(
+        monkeypatch,
+        {
+            "artifacts:conv:other:by_id": {"someone-else": json.dumps({"name": "x.ipynb"})},
+            "artifacts:conv:mine:by_id": {"aid-1": json.dumps({"name": "uq_mine.ipynb"})},
+        },
+    )
+    assert proxy._registry_basename("aid-1") == "uq_mine.ipynb"
+
+
+def test_registry_record_without_name_uses_uri_basename(monkeypatch):
+    """A record with no ``name`` falls back to the basename of its ``uri``."""
+    _use_registry(
+        monkeypatch,
+        {"artifacts:conv:c:by_id": {"aid-2": json.dumps({"uri": "file:///shared/uq-notebooks/uq_from_uri.ipynb"})}},
+    )
+    assert proxy._registry_basename("aid-2") == "uq_from_uri.ipynb"
+
+
+def test_registry_record_without_name_or_uri_is_a_miss(monkeypatch):
+    _use_registry(monkeypatch, {"artifacts:conv:c:by_id": {"aid-3": json.dumps({"artifact_id": "aid-3"})}})
+    assert proxy._registry_basename("aid-3") is None
+
+
+def test_registry_record_that_is_not_json_is_a_miss(client, monkeypatch, tmp_path):
+    """A corrupt record is ignored and the id-named file is served instead."""
+    (tmp_path / "aid-4.html").write_text("<html>BY ID</html>")
+    monkeypatch.setattr(proxy, "NOTEBOOK_DIR", tmp_path)
+    _use_registry(monkeypatch, {"artifacts:conv:c:by_id": {"aid-4": "{not json"}})
+    assert proxy._registry_basename("aid-4") is None
+    resp = client.get("/render/aid-4")
+    assert resp.status_code == 200
+    assert resp.text == "<html>BY ID</html>"
+
+
+def test_registry_name_without_known_suffix_keeps_its_stem(monkeypatch, tmp_path):
+    """A registered name with no .ipynb/.html suffix is used as the stem as-is."""
+    monkeypatch.setattr(proxy, "NOTEBOOK_DIR", tmp_path)
+    _use_registry(monkeypatch, {"artifacts:conv:c:by_id": {"aid-5": json.dumps({"name": "uq_plain"})}})
+    assert proxy._html_path("aid-5") == (tmp_path / "uq_plain.html").resolve()
+
+
+def test_render_rejects_a_symlink_out_of_the_notebook_dir(client, monkeypatch, tmp_path):
+    """A file inside NOTEBOOK_DIR that links outside it is refused with 400, not served."""
+    notebooks = tmp_path / "notebooks"
+    notebooks.mkdir()
+    private = tmp_path / "private.html"
+    private.write_text("<html>PRIVATE</html>")
+    (notebooks / "leak.html").symlink_to(private)
+    monkeypatch.setattr(proxy, "NOTEBOOK_DIR", notebooks)
+    monkeypatch.setattr(proxy, "_registry_basename", lambda aid: None)
+
+    with pytest.raises(ValueError):
+        proxy._html_path("leak")
+    resp = client.get("/render/leak")
+    assert resp.status_code == 400
+    assert resp.json() == {"ok": False, "error": "bad artifact id"}
+    assert "PRIVATE" not in resp.text
+
+
+def test_render_404_when_only_the_notebook_path_escapes(client, monkeypatch, tmp_path):
+    """HTML missing and the notebook path links outside NOTEBOOK_DIR: a plain 404,
+    never a hint that the outside file exists."""
+    notebooks = tmp_path / "notebooks"
+    notebooks.mkdir()
+    outside = tmp_path / "outside.ipynb"
+    outside.write_text("{}")
+    (notebooks / "half.ipynb").symlink_to(outside)
+    monkeypatch.setattr(proxy, "NOTEBOOK_DIR", notebooks)
+    monkeypatch.setattr(proxy, "_registry_basename", lambda aid: None)
+
+    resp = client.get("/render/half")
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "report not found"
