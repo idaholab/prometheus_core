@@ -1465,28 +1465,46 @@ class PrometheusAgent:
     def registry_check_interval() -> float:
         """Seconds between registry checks after startup; 0 disables them.
 
-        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 5). Each check is one GET of the
-        registry's agent list. See
-        ``keep_registered_async``.
+        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 5); see
+        ``AgentRegistryClient.resolve_check_interval``. Each check is one GET of
+        the registry's agent list.
         """
-        raw = (os.getenv("REGISTRY_CHECK_INTERVAL_SECONDS") or "").strip()
-        if not raw:  # unset or empty (compose forwards empty for "use the default")
-            return 5.0
-        try:
-            value = float(raw)
-        except ValueError:
-            logger.warning("Invalid REGISTRY_CHECK_INTERVAL_SECONDS=%r; using 5", raw)
-            return 5.0
-        return max(value, 0.0)
+        return AgentRegistryClient.resolve_check_interval()
+
+    def _overrides_registration(self) -> bool:
+        """Whether this agent replaces ``register_with_registry_async``.
+
+        Such an agent owns its registration (a different name or payload, or no
+        registration at all), so the SDK does not re-register it with the default
+        payload. It can still run ``AgentRegistryClient.keep_registered_async``
+        itself.
+        """
+        own = type(self).register_with_registry_async
+        return own is not PrometheusAgent.register_with_registry_async
 
     async def keep_registered_async(self, agent_card: AgentCard) -> None:
         """Register at startup, then re-register whenever the registry forgets
-        this agent (a registry restart or clear while the agent keeps running)."""
+        this agent (a registry restart or clear while the agent keeps running).
+
+        The checks also run when startup registration gave up (the registry was
+        not up yet), so the agent joins once the registry appears. They are
+        skipped when the interval is 0, when ``REGISTRY_URL`` is unset, and when
+        the agent overrides ``register_with_registry_async``.
+        """
         await self.register_with_registry_async(agent_card)
         interval = self.registry_check_interval()
-        registry_client = self._registry_client()
-        if registry_client is None or interval <= 0:
+        if interval <= 0:
             return
+        if self._overrides_registration():
+            logger.info(
+                "%s overrides register_with_registry_async; not re-registering it after startup",
+                type(self).__name__,
+            )
+            return
+        registry_client = self._registry_client()
+        if registry_client is None:
+            return
+        logger.info("Checking the registry still lists this agent every %gs", interval)
         await registry_client.keep_registered_async(
             agent_card, raw_agent_card=self.agent_card_dict, interval=interval
         )

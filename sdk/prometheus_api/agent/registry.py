@@ -14,6 +14,7 @@
 
 import asyncio
 import logging
+import math
 import os
 import time
 from typing import Any, Dict, Optional
@@ -29,6 +30,11 @@ class AgentRegistryClient:
     """Client for registering A2A agent cards with LiteLLM's agent registry."""
 
     DEFAULT_MAX_RETRIES = 10
+    # Seconds between registry checks after startup (REGISTRY_CHECK_INTERVAL_SECONDS).
+    DEFAULT_CHECK_INTERVAL = 5.0
+    # Shortest accepted interval: every running agent makes the check, so a typo
+    # such as 1e-9 must not turn it into a hot loop against the registry.
+    MIN_CHECK_INTERVAL = 0.1
 
     def __init__(
         self,
@@ -87,6 +93,57 @@ class AgentRegistryClient:
             return 0
         return resolved
 
+    @classmethod
+    def resolve_check_interval(cls, raw_value: Optional[str] = None) -> float:
+        """Seconds between registry checks after startup; 0 disables them.
+
+        Reads ``REGISTRY_CHECK_INTERVAL_SECONDS`` when ``raw_value`` is None. Unset or
+        empty means the default. A value that is not a finite number, or is negative,
+        logs a warning and uses the default; a positive value below
+        ``MIN_CHECK_INTERVAL`` is raised to it. Bad config never blocks startup.
+        """
+        source = "REGISTRY_CHECK_INTERVAL_SECONDS"
+        raw = (os.getenv(source) if raw_value is None else raw_value) or ""
+        raw = raw.strip()
+        default = cls.DEFAULT_CHECK_INTERVAL
+        if not raw:  # unset or empty (compose forwards empty for "use the default")
+            return default
+        try:
+            value = float(raw)
+        except ValueError:
+            value = math.nan
+        if not math.isfinite(value) or value < 0:
+            logger.warning("Invalid %s=%r; using %g", source, raw, default)
+            return default
+        if 0 < value < cls.MIN_CHECK_INTERVAL:
+            logger.warning(
+                "%s=%r is below %g; using %g",
+                source,
+                raw,
+                cls.MIN_CHECK_INTERVAL,
+                cls.MIN_CHECK_INTERVAL,
+            )
+            return cls.MIN_CHECK_INTERVAL
+        return value
+
+    @staticmethod
+    def _registry_entries(body: Any) -> list:
+        """The entry list of a ``GET /v1/agents`` body.
+
+        Accepts a bare list or one wrapped in ``data`` / ``agents``, as the
+        client-agent's discovery does. Raises ``ValueError`` on anything else, so an
+        unexpected body is reported as a failed check rather than read as "no
+        agents" (which would re-register on every check).
+        """
+        if isinstance(body, list):
+            return body
+        if isinstance(body, dict):
+            for key in ("data", "agents"):
+                wrapped = body.get(key)
+                if isinstance(wrapped, list):
+                    return wrapped
+        raise ValueError(f"unexpected registry listing: {type(body).__name__}")
+
     def build_payload(
         self,
         agent_card: AgentCard,
@@ -132,15 +189,10 @@ class AgentRegistryClient:
         )
 
         with httpx.Client(timeout=self.timeout, headers=self.headers) as client:
-            existing = client.get(f"{self.registry_url}/v1/agents")
-            if existing.status_code == 200:
-                entries = existing.json()
-                for entry in entries if isinstance(entries, list) else []:
-                    if entry.get("agent_name") == agent_name:
-                        client.delete(f"{self.registry_url}/v1/agents/{entry['agent_id']}")
-                        logger.debug(f"Removed stale registration for '{agent_name}'")
-                        break
-
+            # A POST replaces any entry of the same name (the registry keys entries by
+            # agent_name), so there is no delete first: a delete would leave a window
+            # in which the agent is not listed, and same-name replicas would delete
+            # each other's entry.
             logger.info("Registering '%s' with LiteLLM at %s", agent_name, self.registry_url)
             response = client.post(f"{self.registry_url}/v1/agents", json=registration_payload)
             response.raise_for_status()
@@ -159,15 +211,10 @@ class AgentRegistryClient:
         )
 
         async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
-            existing = await client.get(f"{self.registry_url}/v1/agents")
-            if existing.status_code == 200:
-                entries = existing.json()
-                for entry in entries if isinstance(entries, list) else []:
-                    if entry.get("agent_name") == agent_name:
-                        await client.delete(f"{self.registry_url}/v1/agents/{entry['agent_id']}")
-                        logger.debug(f"Removed stale registration for '{agent_name}'")
-                        break
-
+            # A POST replaces any entry of the same name (the registry keys entries by
+            # agent_name), so there is no delete first: a delete would leave a window
+            # in which the agent is not listed, and same-name replicas would delete
+            # each other's entry.
             logger.info("Registering '%s' with LiteLLM at %s", agent_name, self.registry_url)
             response = await client.post(
                 f"{self.registry_url}/v1/agents",
@@ -186,10 +233,9 @@ class AgentRegistryClient:
         async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
             response = await client.get(f"{self.registry_url}/v1/agents")
             response.raise_for_status()
-            entries = response.json()
+            entries = self._registry_entries(response.json())
         return any(
-            isinstance(entry, dict) and entry.get("agent_name") == agent_name
-            for entry in (entries if isinstance(entries, list) else [])
+            isinstance(entry, dict) and entry.get("agent_name") == agent_name for entry in entries
         )
 
     async def keep_registered_async(
@@ -197,7 +243,7 @@ class AgentRegistryClient:
         agent_card: AgentCard,
         *,
         raw_agent_card: Optional[Dict[str, Any]] = None,
-        interval: float = 5.0,
+        interval: float = DEFAULT_CHECK_INTERVAL,
     ) -> None:
         """Re-register whenever the registry no longer lists this agent.
 
@@ -206,8 +252,15 @@ class AgentRegistryClient:
         launch) silently drops the agent from discovery until the agent itself
         restarts. This loop checks every ``interval`` seconds and re-registers
         when the entry is gone. A check that fails (registry down) is logged and
-        retried on the next tick. Runs until cancelled.
+        retried on the next tick, and so is a registry that was not up when
+        startup registration gave up. Runs until cancelled.
+
+        Matching is by agent name only: same-name replicas share one entry, which
+        should carry their shared service address (``EXTERNAL_AGENT_URL``).
         """
+        if not math.isfinite(interval) or interval <= 0:
+            raise ValueError(f"interval must be a positive number of seconds, got {interval!r}")
+        interval = max(interval, self.MIN_CHECK_INTERVAL)
         while True:
             await asyncio.sleep(interval)
             try:
@@ -222,7 +275,8 @@ class AgentRegistryClient:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.warning("Registry check failed (%s); will retry in %gs", e, interval)
+                # repr: some httpx errors (ReadTimeout) have an empty str()
+                logger.warning("Registry check failed (%r); will retry in %gs", e, interval)
 
     def register_with_retries(
         self,

@@ -1006,11 +1006,9 @@ jobs:
             curl -fsS -H "Authorization: Bearer $secret" "$registry" \
               | python3 -c 'import json, sys; sys.exit(0 if any(e.get("agent_name") == "ci-check-agent" for e in json.load(sys.stdin)) else 1)'
           }
+          # curl -f fails on a 404, so a passing DELETE proves the entry existed. No
+          # "still listed?" check follows: the agent may already be back by then.
           curl -fsS -X DELETE -H "Authorization: Bearer $secret" "$registry/ci-check-agent"
-          if listed; then
-            echo "::error::ci-check-agent is still listed right after the delete"
-            exit 1
-          fi
           start_ms=$(($(date +%s%N) / 1000000))
           deadline=$((SECONDS + 30))
           while [ "$SECONDS" -lt "$deadline" ]; do
