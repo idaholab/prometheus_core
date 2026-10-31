@@ -117,6 +117,27 @@ def test_keep_registered_survives_a_registry_outage(registry):
     assert registry.posts == 1
 
 
+def test_keep_registered_stops_when_cancelled_during_a_check(monkeypatch):
+    """Cancellation during a registry call ends the loop instead of being retried."""
+    client = AgentRegistryClient("http://registry")
+    in_check = asyncio.Event()
+
+    async def hanging_check(card):
+        in_check.set()
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(client, "is_registered_async", hanging_check)
+
+    async def scenario():
+        loop = asyncio.create_task(client.keep_registered_async(_card(), interval=0))
+        await in_check.wait()
+        loop.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await loop
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=5))
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [(None, 60.0), ("", 60.0), ("15", 15.0), ("0", 0.0), ("x", 60.0), ("-5", 0.0)],
