@@ -900,9 +900,9 @@ jobs:
       DEBUG_AGENTS: "false"
       OPTIONAL_AGENTS: "false"
       PROFILE: ""
-      # The scaffolded agent re-checks its registration this often, so the
-      # registry-reset step finishes in seconds rather than a minute
-      REGISTRY_CHECK_INTERVAL_SECONDS: "5"
+      # The scaffolded agent re-checks its registration every second, so the
+      # registry-reset step finishes as soon as the agent is back
+      REGISTRY_CHECK_INTERVAL_SECONDS: "1"
       # CI only: stub credentials, as in platform: up
       LLM_CONFIG_PROFILE: anthropic
       LLM_API_KEY: sk-ant-test-not-real
@@ -996,8 +996,8 @@ jobs:
         # The platform resets the registry on every make up and make restart.
         # An agent that keeps running must register again by itself (SDK
         # keep_registered_async), not drop out of discovery until it restarts.
-        # Delete the scaffolded agent's entry as a reset would, then require it
-        # back within a few check intervals
+        # Delete the scaffolded agent's entry as a reset would, then poll until
+        # it is back (the agent re-checks every second, see the job env)
         run: |
           secret=$(sed -n 's/^AGENT_SECRET=//p' .env)
           echo "::add-mask::$secret"
@@ -1011,14 +1011,16 @@ jobs:
             echo "::error::ci-check-agent is still listed right after the delete"
             exit 1
           fi
-          for i in $(seq 1 18); do
-            sleep 5
+          start_ms=$(($(date +%s%N) / 1000000))
+          deadline=$((SECONDS + 30))
+          while [ "$SECONDS" -lt "$deadline" ]; do
             if listed; then
-              echo "ci-check-agent re-registered by itself after about $((i * 5)) s"
+              echo "ci-check-agent re-registered by itself after $(($(date +%s%N) / 1000000 - start_ms)) ms"
               exit 0
             fi
+            sleep 0.01
           done
-          echo "::error::ci-check-agent did not re-register within 90 s of a registry reset"
+          echo "::error::ci-check-agent did not re-register within 30 s of a registry reset"
           exit 1
       - name: Show status
         if: ${{ failure() }}

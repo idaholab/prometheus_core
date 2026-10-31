@@ -22,7 +22,7 @@ Let specialist agents become hosted A2A services with minimal boilerplate while 
 - REQ-008-12: Registry registration MUST delete a stale registration with the same agent name before posting a replacement.
 - REQ-008-13: Registry retry counts MUST resolve from explicit args or `REGISTRY_MAX_RETRIES`, ignore invalid values without blocking startup, clamp negative values to zero, and use exponential backoff up to `max_delay`.
 - REQ-008-14: App lifespan MUST run subclass `lifespan(app)` and start registry registration as a background task when `register_on_startup=True`.
-- REQ-008-16: After startup registration, the background task MUST check the registry every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 60; empty means default; 0 disables) and re-register when the agent's entry is missing. A failed check (registry unreachable) MUST be logged and retried on the next tick, never stop the agent, and never be treated as a missing entry.
+- REQ-008-16: After startup registration, the background task MUST check the registry every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5; empty means default; 0 disables) and re-register when the agent's entry is missing. A failed check (registry unreachable) MUST be logged and retried on the next tick, never stop the agent, and never be treated as a missing entry.
 - REQ-008-15: `/api/chat` MUST accept `{"params": {...}}`, `{"message": {...}}`, or string `message`, execute the standard executor with local task/context IDs, and optionally return serialized events and artifact catalog entries.
 
 ## Behavior

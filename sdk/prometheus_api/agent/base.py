@@ -1465,17 +1465,18 @@ class PrometheusAgent:
     def registry_check_interval() -> float:
         """Seconds between registry checks after startup; 0 disables them.
 
-        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 60). See
+        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 5). Each check is one GET of the
+        registry's agent list. See
         ``keep_registered_async``.
         """
         raw = (os.getenv("REGISTRY_CHECK_INTERVAL_SECONDS") or "").strip()
         if not raw:  # unset or empty (compose forwards empty for "use the default")
-            return 60.0
+            return 5.0
         try:
             value = float(raw)
         except ValueError:
-            logger.warning("Invalid REGISTRY_CHECK_INTERVAL_SECONDS=%r; using 60", raw)
-            return 60.0
+            logger.warning("Invalid REGISTRY_CHECK_INTERVAL_SECONDS=%r; using 5", raw)
+            return 5.0
         return max(value, 0.0)
 
     async def keep_registered_async(self, agent_card: AgentCard) -> None:

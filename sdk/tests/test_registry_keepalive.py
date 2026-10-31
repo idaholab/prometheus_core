@@ -140,7 +140,7 @@ def test_keep_registered_stops_when_cancelled_during_a_check(monkeypatch):
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [(None, 60.0), ("", 60.0), ("15", 15.0), ("0", 0.0), ("x", 60.0), ("-5", 0.0)],
+    [(None, 5.0), ("", 5.0), ("15", 15.0), ("0.5", 0.5), ("0", 0.0), ("x", 5.0), ("-5", 0.0)],
 )
 def test_registry_check_interval_env(monkeypatch, raw, expected):
     if raw is None:

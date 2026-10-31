@@ -197,7 +197,7 @@ class AgentRegistryClient:
         agent_card: AgentCard,
         *,
         raw_agent_card: Optional[Dict[str, Any]] = None,
-        interval: float = 60.0,
+        interval: float = 5.0,
     ) -> None:
         """Re-register whenever the registry no longer lists this agent.
 
@@ -222,7 +222,7 @@ class AgentRegistryClient:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                logger.warning("Registry check failed (%s); will retry in %.0fs", e, interval)
+                logger.warning("Registry check failed (%s); will retry in %gs", e, interval)
 
     def register_with_retries(
         self,
