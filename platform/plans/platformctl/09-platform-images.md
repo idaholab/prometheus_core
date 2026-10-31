@@ -97,3 +97,14 @@ None: `PLATFORM_SOURCE` defaults to `build`.
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, agent developer.
+
+Ask them to look at:
+
+- **Technical:** the generated images file leaving the base compose files alone; the version to
+  image tag mapping and its overrides; mixed mode; the base image following the version.
+- **CI and tests:** the live test (CI only, with registry access); what `publish.yml` now pushes.
+- **Security:** what `PLATFORM_IMAGE_REGISTRY` makes the tool pull and run; the host path label
+  never baked into an image.
+- **Rollout:** a commit with no published images failing with the `PLATFORM_SOURCE=build` hint;
+  `PLATFORM_SOURCE=build` as the rollback.
+- **Agent developer:** a submodule pin getting exactly the platform the agent was written for.

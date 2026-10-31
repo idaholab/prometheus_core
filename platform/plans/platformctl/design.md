@@ -90,8 +90,8 @@ Why `platform/ctl/`:
   path doesn't matter.
 - **The version probe** also imports `json` and `urllib.request`, since
   some minimal distro Pythons lack modules the tool needs.
-- **Line endings:** `.gitattributes` (new in step 2) forces LF for
-  `platform/platformctl`, `*.sh` and `*.py`, so a Windows-side checkout
+- **Line endings:** `.gitattributes` (new in step 1 for `platform/platformctl`
+  and `*.sh`; step 2 adds `*.py` and the rest) forces LF, so a Windows-side checkout
   can't give the shim CRLF line endings (`/bin/sh^M: bad interpreter`).
 - **Not under `sudo`:** the tool refuses to run as root via `sudo`
   (`SUDO_USER` set), since `.env` and the generated files would end up owned

@@ -147,7 +147,8 @@ before the hackathon freeze (2026-11-03).
   - `checkout-path`: CRLF in the shim, a checkout on `/mnt/<drive>` (WSL)
 - **Actions:** `doctor` (with `--json`, `--list`, `--tag`).
 - **Not in this step** (moved to step 2, after the freeze): `make doctor`,
-  `.gitattributes`, the user guide and `platform/README.md`.
+  a `.gitattributes` for `*.py`, `Makefile` and the rest, the user guide and
+  `platform/README.md`.
 
 ## Tests
 
@@ -238,6 +239,21 @@ before the hackathon freeze (2026-11-03).
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, Linux/WSL, AI skills.
+
+Ask them to look at:
+
+- **Technical:** the precedence table and the compose entry file on a real Compose (`.env` beats
+  `.platform.env`, a shell variable beats both); that the shim runs every Python, probe included,
+  with `-I`; that no action calls Docker directly.
+- **CI and tests:** that golden files pin the `--json` output; that a drift test ties the registry
+  to `.env.example`, the compose files and the Makefile; that the macOS 3.9 leg really runs 3.9
+  and not Homebrew's Python; what the `doctor` steps in `platform: up` do to a required job.
+- **Security:** that the canary covers every path, including a `.env` that can't be read; modes of
+  `.env` and the generated files; that no error echoes an argument.
+- **Linux/WSL:** the shim under `dash` and busybox; LF endings on a Windows checkout; a port
+  check that bind-tests without `SO_REUSEADDR`; a port held on the Windows side.
+- **AI skills:** that `--json` is one object on every exit path (the shim's own failures too), and
+  how `ok`, `counts.fail` and the exit code relate.
 
 ## Done when
 

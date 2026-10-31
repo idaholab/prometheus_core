@@ -53,6 +53,16 @@ None.
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: user, technical, AI skills.
 
+Ask them to look at:
+
+- **User:** the user guide read start to finish as a new user, each page a task with its commands;
+  `from-make.md` covering every Make target in one line.
+- **Technical:** whether `ctl/README.md` alone is enough to add an action and a check (try it);
+  that it matches the code and the places that name the commands; the final sweep's `git grep`.
+- **AI skills:** the `platform/CLAUDE.md` section on running long and interactive commands
+  (`up --no-check` in the background, `status --wait --timeout 600 --json`); the commands never to
+  run (`compose -- config`, `exec ... env`).
+
 ## Done when
 
 - A new contributor can add an action and a check from `ctl/README.md` alone.

@@ -60,3 +60,14 @@ and `cluster-up` keeps its "already running" message.
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, Linux/WSL.
+
+Ask them to look at:
+
+- **Technical:** that no action changes, only the target and its adapters; `cluster up|down|reset`
+  replacing the `cluster-*` targets and `cluster-up.sh`.
+- **CI and tests:** `cluster-up`'s "already running" output that `test.yml:272` checks; the cost
+  of a cluster in CI.
+- **Security:** acting on the wrong kubectl context; the registry on `localhost:5001`; secrets in
+  manifests or Helm values.
+- **Rollout:** people using `make cluster-*` and the `--cluster` mode of `check-local-prereqs.sh`.
+- **Linux/WSL:** k3d on Docker Desktop and on Engine; the local registry.

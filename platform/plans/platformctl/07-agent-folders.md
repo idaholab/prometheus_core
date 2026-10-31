@@ -221,3 +221,19 @@ the agent being inside the platform folder.
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Agent developer:** the loop from a separate repository with a submodule, a sibling and a
+  teammate's fresh clone; `up --agent` ending with "Start a new chat conversation to test it".
+- **Technical:** the order in which a `prometheus_core` is found; the running platform (by label)
+  against the checkout found; the stub against an older tool, by `features`; the network name from
+  `PROMETHEUS_PLATFORM_PROJECT`.
+- **Security:** `config sync` copying one explicit list without printing it; a `root` label
+  trusted only when the folder is the user's and holds `platformctl`; the stub running code from
+  the checkout it finds.
+- **CI and tests:** the stub tested against an older checkout; the one list shared by
+  `setup_agent.py`, `config sync` and the `agent-env-sync` check.
+- **Rollout:** agents scaffolded before this step; a submodule pinned to an older platform.
+- **Linux/WSL:** agent folders on `/mnt/c`; submodule paths; the stub's Python.
+- **User and AI skills:** the stub acting on its own agent by default; no terminal needed.

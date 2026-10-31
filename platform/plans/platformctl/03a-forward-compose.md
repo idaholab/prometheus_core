@@ -177,6 +177,24 @@ today; CI proves it.
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
 
+Ask them to look at:
+
+- **Technical:** "same behaviour" against the `make -n` fixtures step 2 recorded; that the Compose
+  argv is pinned only in the compose target; that `runner.py` strips `MAKEFLAGS` so nothing leaks
+  in from an outer `make`; `clear_registry()` through `exec`; `name:` in `docker-compose.yml`.
+- **CI and tests:** that every current Make target keeps its name and `##@` help; the one CI job
+  kept on `make`; `test_compose_static.py:96`; a test that fails first if a forwarded target stops
+  starting the platform.
+- **Security:** `down-v` passing `--yes --confirm clobber`; `logs` and the printed commands
+  scrubbed; the canary covering every new command, including ones that stream child output.
+- **Linux/WSL:** `sh $(CURDIR)/platformctl` and `make -C`; Ctrl-C and the terminal for `up
+  --foreground`; the `preflight` checks on Engine and Compose versions.
+- **User:** the `make up -> ./platformctl up` line, and no new prompts for Make users.
+- **Rollout:** a stack started by the old Makefile (project name, containers it doesn't know);
+  the generated file in `.gitignore`; `breaking-changes.md`.
+- **AI skills:** `logs` not following without a terminal; `status --json` and exit 3.
+- **Agent developer:** agents still included by `agents/*/docker-compose.yml`, unchanged.
+
 ## Done when
 
 - Every Make target behaves as before (the `make -n` fixtures, compose

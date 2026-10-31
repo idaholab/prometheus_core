@@ -22,10 +22,13 @@ any code was written.
 
 The hackathon runs on 2026-11-06 (Day 2 follows). Its slides, skills and
 knowledge base are frozen from 2026-11-03 until after Day 2, and so are
-`platform/Makefile`, the docs and repo-wide files such as `.gitattributes`.
-Only step 1 may land before the freeze, and it touches nothing outside
-`platform/ctl/` and the `platform/platformctl` shim: no Makefile, docs,
-slides, skills or required CI jobs. Steps 2 onward land after Day 2.
+`platform/Makefile` and the docs. Only step 1 may land before the freeze. Its
+code stays in `platform/ctl/` and the `platform/platformctl` shim, and it
+changes no Makefile, docs, slides or skills. It does add CI plumbing (its own
+workflow, and `doctor` steps in two existing `test.yml` jobs), a
+`.gitattributes` for the shim and `*.sh`, a drift test, and `.env` created
+0600 by `init_env.py`; `01-scaffold.md` lists them. Steps 2 onward land after
+Day 2.
 
 **Before the freeze, separately from this plan:** the hackathon skills and
 knowledge base still use container names that #310 removed
@@ -45,7 +48,7 @@ LiteLLM text that step 6 fixes). Check them again before each step.
 | # | File | Summary | Depends on | Status |
 |---|------|---------|------------|--------|
 | 1 | [`01-scaffold.md`](01-scaffold.md) | Shim, package, settings, runner, compose target, output, `doctor` framework, test setup, path-filtered CI | - | Not started |
-| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts; `make doctor`, `.gitattributes`, the user guide, required CI | 1 | Not started |
+| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts; `make doctor`, a wider `.gitattributes`, the user guide, required CI | 1 | Not started |
 | 3a | [`03a-forward-compose.md`](03a-forward-compose.md) | The compose entry file; the Makefile forwards every compose target with the same behaviour | 2 | Not started |
 | 3b | [`03b-labels-attached.md`](03b-labels-attached.md) | Platform labels, "already running elsewhere", port checks, restarting your agent | 3a | Not started |
 | 3c | [`03c-groups-docs.md`](03c-groups-docs.md) | `agents`, `reset`, `compose`, per-service `up`; switch docs, slides and CI to `./platformctl` | 3b | Not started |

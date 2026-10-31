@@ -116,6 +116,22 @@ command does. The `--json` schema is versioned (`schema_version` 1).
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
 
+Ask them to look at:
+
+- **Technical:** that every `checks.md` id is a `doctor` check or manual with a reason, as the
+  table says; the agent checks in their own modules, independent of the platform folder (step 7
+  reuses them); the hints printed when `up` fails.
+- **CI and tests:** a test that the ids the skills cite exist in `doctor --list` (step 1 promised
+  it and only some ids matched); each check passing, failing and skipped against recorded output.
+- **Security:** evidence from logs as the matched error class, never the line; a private key found
+  in an agent's `.env` named but not printed; `.env` sync reported as `same` or `differs` only.
+- **AI skills:** `--json` per check with `fix_kind` and `skipped_because`; the `/diagnose` skill
+  using them; how `ok`, `counts.fail` and the exit code relate.
+- **Linux/WSL:** `prometheus.host.internal` from a container (rootless Docker, ufw); the `tools`
+  and `registry-login` checks on a distro.
+- **User and agent developer:** the "Why isn't it called?" group, in words they would act on.
+- **Rollout:** a stale `.platform.env`; keys missing from an existing `.env`.
+
 ## Done when
 
 - Every id in `checks.md` is a `doctor` check or in the "Manual" column with

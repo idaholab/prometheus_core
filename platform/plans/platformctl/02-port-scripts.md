@@ -75,10 +75,10 @@ deprecation stub until step 3c deletes them.
   the hackathon material can't change until 3c. Step 3c deletes the stubs.
 - **Moved from step 1** (it had to stay out of the hackathon freeze):
   - `make doctor`: `doctor: ##@ ...` forwarding to the shim.
-  - **`.gitattributes`** (repo root, new): `platform/platformctl text
-    eol=lf`, `*.sh`, `*.py`, `Makefile`, `Dockerfile`, `*.yml`, `.env.example`
-    and `*.md` as `text eol=lf`. `NOTICE.txt` is already committed with CRLF
-    and a BOM; give it `-text` so nothing changes for it.
+  - **`.gitattributes`** (repo root): step 1 added it with `platform/platformctl`
+    and `*.sh` as `text eol=lf`. Widen it to `*.py`, `Makefile`, `Dockerfile`,
+    `*.yml`, `.env.example` and `*.md` as `text eol=lf`. `NOTICE.txt` is already
+    committed with CRLF and a BOM; give it `-text` so nothing changes for it.
   - The step 1 CI jobs become required, and their path filter widens to
     `platform/Makefile`, `platform/scripts/` and the compose files.
 - **Tests:** move `tests/infrastructure/test_check_platform.py`,
@@ -202,6 +202,29 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Technical:** that messages stay word for word (deck 03, CI); Make's command-line variables
+  with `PLATFORMCTL_VIA_MAKE=1`, tried on the Make on a Mac (3.81), where `make X=y` puts no
+  ` -- ` in `MAKEFLAGS`; that `config set` refuses secret keys and `--from-env` keeps values out
+  of argv; that each stub execs the new command.
+- **CI and tests:** that the moved tests lose no coverage; the CI jobs that switch from `sed` to
+  `config set --from-env`; the `test-system` recipe that `test_compose_static.py` parses; the step
+  1 jobs becoming required with the wider path filter.
+- **Security:** `.env` created 0600 and written atomically; the LLM key read with `getpass`;
+  `config show` and `--json` printing no secret; the DeepLynx adapter printing no headers or
+  bodies; the canary extended to every new command.
+- **Linux/WSL:** the numbered menu when `termios` is missing; `.gitattributes`, which step 1
+  already created for the shim and `*.sh` and this step widens (`NOTICE.txt` must not change); the
+  base-image test pull off the VPN.
+- **User:** the new questions ("Build everything on this laptop?") in plain words, with an answer
+  Enter accepts; first run on a fresh clone.
+- **Rollout:** an existing `.env` that lacks new keys; the hackathon freeze; stubs for scripts the
+  decks still name; `breaking-changes.md`.
+- **AI skills:** no-terminal behaviour of `config init`, with a note instead of a failure; `--json`
+  of `config show` and `status`.
+- **Agent developer:** agents scaffolded earlier still working through the stubs.
 
 ## Done when
 

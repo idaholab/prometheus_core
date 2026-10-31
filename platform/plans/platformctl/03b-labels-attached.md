@@ -126,6 +126,24 @@ agents register again after a platform restart without you doing anything.
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
 
+Ask them to look at:
+
+- **Technical:** the labels file last in the entry file's `path`; folders compared with `realpath`
+  (case-insensitive on macOS); stacks started before the labels, found by `working_dir`; that
+  "ours" means this checkout, not a project with the same name from another one.
+- **CI and tests:** a port clash and a second checkout (with the same folder name) in a live test;
+  the restart of your agents against a fake target; open chats asked about only on a terminal.
+- **Security:** what `io.prometheus.platform.root` reveals; which containers the tool restarts or
+  stops (only labelled ones; `down --agents` after confirming); text from other containers'
+  labels printed with control characters.
+- **Linux/WSL:** the port check with IPv4 and IPv6 and with `TIME_WAIT` sockets; a port held on
+  the Windows side; rootless Docker showing `rootlesskit`; AirPlay on 5000 on macOS only.
+- **User:** the "something is in the way" messages: what holds the port and the lasting fix.
+- **Agent developer:** the whole edit loop with the agent label; agents without it, with the
+  snippet to add; an agent in another repository.
+- **Rollout:** `down --volumes` now asking for `clobber`; stacks that have no labels.
+- **AI skills:** `restart --if-idle` and `open_turns`; prompts without a terminal.
+
 ## Done when
 
 - A second `up` from another folder stops with where the first one runs.
