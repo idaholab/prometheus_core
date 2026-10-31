@@ -18,13 +18,27 @@ Platform agents get this only once the platform's base-image pin
 (`PROMETHEUS_API_BASE_IMAGE_HASH` in `platform/Makefile`) includes this release. Until then they
 behave as before.
 
+To tell whether an agent has it, look for this INFO line in its log shortly after startup:
+`Checking the registry still lists this agent every 5s`.
+
 Migration steps:
 
-1. Nothing, for an agent that uses the default registration. Set
-   `REGISTRY_CHECK_INTERVAL_SECONDS=0` to keep the old behavior.
+1. Nothing, for an agent that uses the default registration. To keep the old behavior, set
+   `REGISTRY_CHECK_INTERVAL_SECONDS=0`. An agent scaffolded before this release has a compose
+   file that forwards environment variables one by one (no `env_file`), so the setting does not
+   reach it until you add this line to its service's `environment`:
+
+   ```yaml
+   REGISTRY_CHECK_INTERVAL_SECONDS: ${REGISTRY_CHECK_INTERVAL_SECONDS:-}
+   ```
+
 2. An agent that overrides `register_with_registry_async` (a custom name or payload, or no
-   registration) is not re-registered by the SDK; it owns its registration. To keep such an
-   agent listed, run the checks yourself:
+   registration) is not checked by the SDK; it owns its registration, and the SDK logs a WARNING
+   saying so. Calling `super().register_with_registry_async(...)` from the override registers
+   once but does not bring the checks back. To keep such an agent listed, call
+   `register_and_keep_registered_async` from the override. It registers with the normal retry
+   policy (a registry that is down at startup does not raise; the checks join it later), returns
+   at once when the interval is 0, and otherwise checks until the agent stops:
 
 ```python
 from prometheus_api.agent.registry import AgentRegistryClient
@@ -32,15 +46,24 @@ from prometheus_api.agent.registry import AgentRegistryClient
 class MyAgent(PrometheusAgent):
     async def register_with_registry_async(self, agent_card, **kwargs):
         client = AgentRegistryClient.from_env(self.registry_url())
-        await client.register_once_async(agent_card, raw_agent_card=my_payload_card)
-        await client.keep_registered_async(
-            agent_card, raw_agent_card=my_payload_card, interval=self.registry_check_interval()
+        await client.register_and_keep_registered_async(
+            agent_card,
+            raw_agent_card=self.agent_card_dict,  # or your own payload card
+            interval=self.registry_check_interval(),
         )
 ```
 
-3. Registration no longer deletes the existing entry before posting; the registry replaces an
-   entry with the same name. Same-name replicas share one entry, so give them one service
-   address (`EXTERNAL_AGENT_URL`).
+3. Registration posts first and no longer deletes the existing entry beforehand. The platform
+   backend replaces an entry of the same name on a POST, so there is no window in which the agent
+   is unlisted. A LiteLLM registry (an agent registering with its own LiteLLM proxy) refuses a
+   name it already has with 400 "already exists"; only then does the SDK look up that entry,
+   delete it by its `agent_id`, and post again, as 0.15.0 did on every registration. Same-name
+   replicas share one entry, so give them one service address (`EXTERNAL_AGENT_URL`).
+
+4. Registry log lines no longer include exception text or credentials: a failure is logged as
+   the exception type plus the HTTP status, and any `user:password@` in `REGISTRY_URL` is
+   removed. A check that keeps failing (no registry, a rejected token) logs one WARNING, then
+   DEBUG until a check succeeds.
 
 ## 0.15.0
 
@@ -51,7 +74,9 @@ agent registry and A2A gateway on the same paths LiteLLM served (`/v1/agents` an
 `/a2a/{agent_name}`), so the SDK's registry client is unchanged. Only agent deployment
 configuration has to move. Registrations are stored in Valkey under `prometheus:agent-registry`
 rather than in `litellm-db`. This applies to agents deployed on the Prometheus platform; agents
-registering with their own LiteLLM proxy are unaffected.
+registering with their own LiteLLM proxy need none of these steps (for how re-registration
+works with LiteLLM since then, see "Agents Re-register When the Registry Forgets Them"
+above).
 
 Migration steps:
 

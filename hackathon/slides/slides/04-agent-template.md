@@ -622,7 +622,7 @@ If `../platform/.env` exists (the platform in the same clone), it offers to writ
 :::
 
 ::: callout bad
-**Choose a unique name and skill ID.** The registry keys agents by card name; re-registering *deletes* any agent with the same name. Your skill id becomes the orchestrator's tool name (`[a-zA-Z0-9_-]`, ≤ 64 chars). Prefix both with your team name: type "Team Neutron Mesh QA" (the scaffolder appends " Agent"), skill `neutron_mesh_quality_report`.
+**Choose a unique name and skill ID.** The registry keys agents by card name; registering *replaces* any agent with the same name. Your skill id becomes the orchestrator's tool name (`[a-zA-Z0-9_-]`, ≤ 64 chars). Prefix both with your team name: type "Team Neutron Mesh QA" (the scaffolder appends " Agent"), skill `neutron_mesh_quality_report`.
 :::
 
 ```text {.xs}
@@ -892,9 +892,7 @@ How your agent announces itself, how the client-agent finds it, and the exact pa
 
 ::: grid 2 gap=30px
 {.sm}
-1. `GET {REGISTRY_URL}/v1/agents`, looking for an entry with the same `agent_name`
-2. If one exists: `DELETE {REGISTRY_URL}/v1/agents/{agent_id}`
-3. `POST {REGISTRY_URL}/v1/agents`:
+`POST {REGISTRY_URL}/v1/agents`. It replaces the entry of the same `agent_name`, so a second agent with the same route key replaces the first:
 
 ```json {.xs}
 { "agent_name": "hello-world-agent",

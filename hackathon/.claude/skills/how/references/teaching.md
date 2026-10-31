@@ -53,11 +53,11 @@ same `contextId` and the original arguments plus the answers in `params`; local 
 
 ### registry-wipe
 
-`Registry`. You ran `make restart` in the platform. `/agents` no longer lists your agent. What now? A "make
-down-v". B "Restart your agent": `docker compose -p <project> restart <service>`. C "Wait a minute". D "Rename the card". **B.** A
-platform `make up` or `restart` deletes the registrations (`clear-agent-registry`). On the pinned base image your
-agent registers only at startup, so restart it. Once the pin includes the SDK keep-alive, C also works: the agent
-registers again within about 5 s; restart if it hasn't. `make down-v` also deletes your users and keys. Deck 03,
+`Registry`. You ran `make restart` in the platform. `/agents` no longer lists your agent, and its log has no
+line "Checking the registry still lists this agent every". What now? A "make down-v". B "Restart your agent":
+`docker compose -p <project> restart <service>`. C "Wait a minute". D "Rename the card". **B.** A platform
+`make up` or `restart` deletes the registrations (`clear-agent-registry`). Without that log line your agent
+registers only at startup, so restart it. With it, the agent registers again within about 5 s by itself. `make down-v` also deletes your users and keys. Deck 03,
 "Once, then four commands"; `platform/Makefile`.
 
 ### chat-turn

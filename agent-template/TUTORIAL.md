@@ -900,11 +900,15 @@ Once your agent works locally, deploying it means connecting it to a running Pro
 
 ### What happens at startup
 
-When your container starts, `PrometheusAgent.run()` calls `register_with_registry_async()`. This sends a POST request to `REGISTRY_URL` (the platform backend's agent registry) advertising your agent's name, URL, and skills. The orchestrator polls the backend's agent list and starts routing requests to you.
+When your container starts, `PrometheusAgent.run()` starts `keep_registered_async()` in the background: it registers (`register_with_registry_async()`), then runs the registry checks described below. Registration sends a POST request to `REGISTRY_URL` (the platform backend's agent registry) advertising your agent's name, URL, and skills. The orchestrator polls the backend's agent list and starts routing requests to you.
 
 Registration retries with exponential backoff (default: 10 attempts, up to 30 seconds between tries), so the order in which containers start does not matter — your agent will wait for the backend to become available.
 
 After that, the agent checks every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5) that the registry still lists it, and registers again if not. So after a platform `make up` or `make restart` (which empties the registry), or when the startup retries ran out, your agent comes back by itself within a few seconds, without a restart. An agent built on an older base image registers only at startup: restart it with `docker compose -p <agent-folder> restart`.
+
+Which one you have depends on the image your agent builds from: `PROMETHEUS_API_BASE_IMAGE_HASH` (the template defaults to `latest`; the platform pins its own in `platform/Makefile`), or the local SDK with `LOCAL_SDK=true`. To tell, look for this INFO line in `docker compose -p <agent-folder> logs` shortly after startup: `Checking the registry still lists this agent every 5s`. No such line means the agent registers only at startup.
+
+If your agent overrides `register_with_registry_async()`, the SDK does not run the checks for it (it logs a WARNING), even if the override calls `super()`. Call `AgentRegistryClient.register_and_keep_registered_async()` from the override instead; see `sdk/docs/agent/AGENT_MIGRATIONS.md`.
 
 ### External repository deployment
 

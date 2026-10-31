@@ -782,7 +782,7 @@ Next: the end-to-end dry run (3:30 pm). The appendix of this deck has every deta
 </div>
 
 <div class="callout bad">
-<strong>Choose a unique name and skill ID.</strong> The registry keys agents by card name; re-registering <em>deletes</em> any agent with the same name. Your skill id becomes the orchestrator's tool name (<code>[a-zA-Z0-9_-]</code>, ≤ 64 chars). Prefix both with your team name: type &quot;Team Neutron Mesh QA&quot; (the scaffolder appends &quot; Agent&quot;), skill <code>neutron_mesh_quality_report</code>.</div>
+<strong>Choose a unique name and skill ID.</strong> The registry keys agents by card name; registering <em>replaces</em> any agent with the same name. Your skill id becomes the orchestrator's tool name (<code>[a-zA-Z0-9_-]</code>, ≤ 64 chars). Prefix both with your team name: type &quot;Team Neutron Mesh QA&quot; (the scaffolder appends &quot; Agent&quot;), skill <code>neutron_mesh_quality_report</code>.</div>
 
 <pre class="xs"># non-interactive: every default, incl. copying
 # ../platform/.env; fails if the folder exists
@@ -1134,11 +1134,7 @@ parameters:
   <div class="content">
 <div class="grid g2" style="gap:30px;">
 <div class="col">
-<ol class="b sm">
-<li><code>GET {REGISTRY_URL}/v1/agents</code>, looking for an entry with the same <code>agent_name</code></li>
-<li>If one exists: <code>DELETE {REGISTRY_URL}/v1/agents/{agent_id}</code></li>
-<li><code>POST {REGISTRY_URL}/v1/agents</code>:</li>
-</ol>
+<p class="sm"><code>POST {REGISTRY_URL}/v1/agents</code>. It replaces the entry of the same <code>agent_name</code>, so a second agent with the same route key replaces the first:</p>
 <pre class="xs">{ &quot;agent_name&quot;: <span class="s">&quot;hello-world-agent&quot;</span>,
   &quot;agent_card_params&quot;: { …raw card…,
       &quot;url&quot;: <span class="s">&quot;http://hello-world-agent:8000&quot;</span>,
