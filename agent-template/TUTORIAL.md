@@ -298,6 +298,49 @@ platform's task accounting.
 
 This is where you replace the `TODO` placeholder with real work.
 
+### Your design pattern: `_run_pattern` and `_step_*`
+
+`setup_agent.py` scaffolded `_execute` to the design pattern you chose (see
+the "Design pattern" section of your agent's `README.md` for its steps and
+diagram). `_execute` calls `_run_pattern`, which walks the pattern's steps in
+its topology and collects their results in a `state` dict:
+
+```python
+async def _run_pattern(self, input_data, context, event_queue):
+    state = {"input_data": input_data}
+    for _ in range(MAX_ITERATIONS):          # a "loop" pattern, e.g. Reflection
+        state["draft"] = await self._step_draft(state, context, event_queue)
+        state["critique"] = await self._step_critique(state, context, event_queue)
+        state["revise"] = await self._step_revise(state, context, event_queue)
+        if state.get("revise") is None:       # TODO(author): your stop condition
+            break
+    return state
+```
+
+Each `_step_<name>` returns `None` until you implement it. Fill them in one at
+a time; an LLM step usually looks like:
+
+```python
+async def _step_critique(self, state, context, event_queue):
+    async with self.llm_client(context) as llm:
+        reply = await llm.medium(f"Critique this draft:\n{state['draft']}")
+    return reply.text
+```
+
+- **Loops and cycles** are bounded by `MAX_ITERATIONS` (top of `agent.py`);
+  replace the stop condition with your real "good enough" check.
+- **Parallel patterns** (self-consistency, ensembles, forward-sampling UQ) run
+  one step `NUM_SAMPLES` times with `asyncio.gather`, then aggregate.
+- **Tree patterns** (supervisor, debate, blackboard) mark where to fan out
+  per sub-task; add the `asyncio.gather` once you know the sub-tasks.
+- Rename, add or drop steps freely: the structure is a starting point, not a
+  contract. Keep `_execute`'s returned dict in line with `output_format`.
+
+With `--framework <slug>` the steps live in `pattern_<slug>.py` instead, built
+with that framework (a LangGraph `StateGraph`, a CrewAI `Crew`, ...), and
+`_run_pattern` calls its `run_framework(task)` in a worker thread. Implement
+the steps there; `agent.py` and the A2A surface stay the same.
+
 ### Example A: Calling Claude
 
 **Prefer the built-in `LLMClient`.** It is async (`await`), uses the provider and models of your `LLM_CONFIG_PROFILE`, and never blocks the event loop:
