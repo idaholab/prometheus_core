@@ -5,7 +5,7 @@ description = "Standalone FastAPI backend (replaces Chainlit's server role)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.161.1",
+    "fastapi>=0.162.0",
     "python-multipart>=0.0.9",  # required for form-encoded POST /api/auth/login
     "uvicorn[standard]>=0.54.0",
     "pydantic-settings>=2.16.1",
@@ -35,7 +35,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=4.0.0",
-    "ruff>=0.11",
+    "ruff>=0.17.2",
     "types-pyyaml>=6.0.12.20260906",
     # Local dev/tests import prometheus_api.contract; in Docker the package is
     # installed from the repo's sdk/ by the Dockerfile (--no-dev skips this entry
