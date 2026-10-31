@@ -44,6 +44,15 @@ import type {
 } from "@/lib/api/types";
 import { artifactsPerTurn } from "./transcriptArtifacts";
 import { readOpenConversationId, saveOpenConversationId } from "./openConversation";
+import {
+  INPUT_NOT_RECOVERED,
+  RECOVERY_GRACE_MS,
+  RECOVERY_POLL_MS,
+  expectedUserMessage,
+  isPendingInputStatus,
+  storedReplyIndex,
+  turnStart,
+} from "./turnRecovery";
 
 // --- item model -------------------------------------------------------------
 
@@ -520,8 +529,20 @@ async function post(body: ChatMessageRequest): Promise<void> {
   const isCurrent = () => state.conversationId === conversationId;
 
   set({ awaiting: true });
+  // Settles the turn exactly once: by the POST reply, or by the transcript
+  // poll if that reply was dropped on the way (see turnRecovery.ts).
+  let settled = false;
+  const userText = expectedUserMessage(body);
+  const stopRecovery =
+    conversationId && userText !== null
+      ? watchForStoredReply(conversationId, userText, () => settled, () => {
+          settled = true;
+        })
+      : () => {};
   try {
     const res = await api.sendMessage(body);
+    if (settled) return;
+    settled = true;
     if (isCurrent()) {
       applyResponse(res);
     } else {
@@ -532,6 +553,8 @@ async function post(body: ChatMessageRequest): Promise<void> {
       bumpHistory();
     }
   } catch (err) {
+    if (settled) return;
+    settled = true;
     if (isCurrent()) {
       const text =
         err instanceof ApiError
@@ -540,9 +563,90 @@ async function post(body: ChatMessageRequest): Promise<void> {
       appendError(text);
     }
   } finally {
+    stopRecovery();
     if (isCurrent()) {
       set({ awaiting: false });
     }
+  }
+}
+
+/**
+ * While a turn on `conversationId` is awaited, poll its stored transcript and,
+ * once it holds the reply to this turn (`userText` followed by an assistant
+ * message, see turnRecovery.ts), append that reply and stop waiting -- for when
+ * the POST reply itself was dropped and would otherwise never arrive.
+ *
+ * The baseline transcript is read at send time (a 404 means a brand-new chat).
+ * Recovery only adds: the items already on screen (the progress trace, earlier
+ * forms and plan cards) and the awaited background tasks are kept. A reply that
+ * was a form or a plan card can't be rebuilt from the transcript, so it renders
+ * as text with a note saying so.
+ *
+ * Stops on its own once settled, when the user switches conversation or presses
+ * stop, or if the baseline can't be read. Returns a stop function.
+ */
+function watchForStoredReply(
+  conversationId: string,
+  userText: string,
+  isSettled: () => boolean,
+  settle: () => void,
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+  const live = () =>
+    !stopped && !isSettled() && state.awaiting && state.conversationId === conversationId;
+
+  const start = api.getConversation(conversationId).then(
+    (detail) => turnStart(detail.messages, userText),
+    (err) => (err instanceof ApiError && err.status === 404 ? 0 : null),
+  );
+
+  const poll = async () => {
+    const from = await start;
+    if (from === null || !live()) return;
+    try {
+      const detail = await api.getConversation(conversationId);
+      if (!live()) return;
+      const idx = storedReplyIndex(detail.messages, from, userText);
+      if (idx !== null) {
+        settle();
+        stop();
+        const reply = detail.messages[idx];
+        const artifacts = artifactsPerTurn(detail.messages, detail.artifacts)[idx];
+        const pending = idx === detail.messages.length - 1 && (await pendingInput(conversationId));
+        // Pressed stop, or switched away, during that read: the turn stays unfilled.
+        if (!state.awaiting || state.conversationId !== conversationId) return;
+        const text = pending ? `${reply.content}\n\n_${INPUT_NOT_RECOVERED}_` : reply.content;
+        setItems((items) => [
+          ...items.map((it) => (it.kind === "tool" && it.turnId && !it.done ? { ...it, done: true } : it)),
+          assistantItem(text, artifacts),
+        ]);
+        set({ awaiting: false });
+        bumpHistory();
+        return;
+      }
+    } catch {
+      // Transient (404 before the first turn is stored, a restarting backend): retry.
+    }
+    if (live()) timer = setTimeout(() => void poll(), RECOVERY_POLL_MS);
+  };
+  timer = setTimeout(() => void poll(), RECOVERY_GRACE_MS);
+  return stop;
+}
+
+/** Whether the conversation is waiting on a form answer or a plan decision, read
+ * from the history list's inferred status. Best effort: `false` if unreadable. */
+async function pendingInput(conversationId: string): Promise<boolean> {
+  try {
+    const recent = await api.getRecentConversations(100);
+    const row = recent.conversations.find((c) => c.conversation_id === conversationId);
+    return isPendingInputStatus(row?.status);
+  } catch {
+    return false;
   }
 }
 
