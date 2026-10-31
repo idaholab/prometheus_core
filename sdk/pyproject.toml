@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prometheus-api"
-version = "0.15.0"
+version = "0.16.0"
 description = "Storage client and agent utilities for building A2A multi-agent systems"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,9 +24,13 @@ dependencies = [
     "a2a-sdk[http-server]>=1.0.0,<2",
     "fsspec>=2026.2.0",
     "httpx>=0.26.0",
+    "langchain>=1.4,<1.5",
+    "langgraph>=1.2,<1.3",
+    "langgraph-checkpoint-postgres>=3,<4",
     "litellm[mcp]>=1.80,<2",
     "pydantic>=2.0.0",
     "protobuf>=5.29.5,<7",
+    "psycopg[binary]>=3.2,<4",
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
     "PyJWT[crypto]>=2.8.0",
@@ -69,6 +73,7 @@ packages = [
     "prometheus_api.storage_client.async_resources",
     "prometheus_api.storage_client.utils",
     "prometheus_api.agent",
+    "prometheus_api.langgraph",
     "prometheus_api.credentials",
 ]
 

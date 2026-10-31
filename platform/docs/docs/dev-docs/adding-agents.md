@@ -114,6 +114,88 @@ service name; on Kubernetes the hostname is the pod name, which other pods can't
 resolve and which changes on every restart. `make test-static` fails if an agent
 doesn't set it.
 
+### LangGraph agents (prototype)
+
+`LangGraphPrometheusAgent` from `prometheus_api.langgraph` is an opt-in subclass of
+`PrometheusAgent`. It runs each card skill as a LangGraph graph (`langchain.agents.create_agent`).
+The base image already contains `langchain`, `langgraph` and the Postgres checkpointer. Agents
+that subclass `PrometheusAgent` need no change. The reference port is
+`agents/debug-agents/artifact-debug-agent/agent.py`.
+
+To write a LangGraph agent:
+
+1. Subclass `LangGraphPrometheusAgent` instead of `PrometheusAgent`.
+2. Override `skill_tools()` to map each card skill `id` to the tools of its graph.
+3. Set `model_alias` to a semantic LLM alias, for example `"small"`. The default is `"default"`.
+4. Optionally override `system_prompt(skill_id)` to give each graph its system prompt.
+5. Optionally set `approval_tools` to the names of more tools that need user approval.
+6. In each tool, add the parameter `runtime: ToolRuntime[PrometheusContext]`.
+7. Call `save_artifact(runtime, filename, data, mime_type)` to save output to DeepLynx.
+8. Call `load_artifact(runtime, item_id)` to read a DeepLynx item back.
+
+```python
+from langchain.tools import ToolRuntime, tool
+from langchain_core.tools import BaseTool
+from prometheus_api.langgraph import LangGraphPrometheusAgent, PrometheusContext, save_artifact
+
+
+@tool
+async def create_report(title: str, runtime: ToolRuntime[PrometheusContext]) -> dict:
+    """Save a text report as a DeepLynx artifact."""
+    saved = await save_artifact(runtime, "report.txt", title.encode(), "text/plain")
+    return {"status": "success", "uri": saved.uri, "version": saved.version}
+
+
+class ReportAgent(LangGraphPrometheusAgent):
+    model_alias = "small"
+
+    def skill_tools(self) -> dict[str, list[BaseTool]]:
+        return {"create_report": [create_report]}
+```
+
+The agent behaves as follows:
+
+- **Skill check**: The agent does not start when a card skill has no tools, or when a tool list
+  has no card skill. `load_agent_card()` raises `ValueError`.
+- **Threads**: The A2A task ID is the checkpoint `thread_id`. A later request of the same task
+  continues the same graph.
+- **Approval**: A tool of a skill with `"requires_approval": true`, or a tool in `approval_tools`,
+  pauses before it runs. The task goes to `INPUT_REQUIRED` and asks for the boolean `approved`.
+  The tool runs only when `approved` is `true`.
+- **Artifacts**: Each `save_artifact` call makes one new DeepLynx item and sends its
+  `deeplynx://` reference. A repeated save in the same tool call uses the key
+  `thread_id:tool_call_id:filename` and returns the first item. It does not make a second item.
+- **Provenance**: `ProvenanceMiddleware` adds `generated` and `input_to` relations to the execution
+  record of the task, and closes the record when the graph ends.
+- **Model**: `PrometheusChatModel` sends the semantic alias through `AsyncLLMClient`. It is async
+  only.
+- **Summaries**: Long conversations are summarized with the `small` alias.
+
+Set these variables in the agent's `docker-compose.yml`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LANGGRAPH_CHECKPOINT_DB_URL` | empty | psycopg Postgres URL of the checkpoint store. When it is empty, checkpoints stay in memory, a task cannot resume after a restart, and the agent logs one warning. |
+| `LANGGRAPH_SUMMARY_TRIGGER_TOKENS` | `24000` | Token count that starts a summary. |
+| `LANGGRAPH_SUMMARY_KEEP_MESSAGES` | `20` | Number of recent messages that a summary keeps. |
+
+The checkpoint store is the `langgraph` schema in `admin-db`. Set `LANGGRAPH_DB_PASSWORD` in the
+platform `.env`. A backend migration uses it to create the `langgraph` role and schema.
+
+In the agent's `docker-compose.yml`, point `LANGGRAPH_CHECKPOINT_DB_URL` at that schema.
+
+Then add `admin-db` to the agent's `depends_on`:
+
+```yaml
+environment:
+  LANGGRAPH_CHECKPOINT_DB_URL: ${LANGGRAPH_CHECKPOINT_DB_URL:-postgresql://langgraph:${LANGGRAPH_DB_PASSWORD}@admin-db:5432/admin?options=-csearch_path%3Dlanggraph}
+depends_on:
+  admin-db:
+    condition: service_healthy
+```
+
+Use a plain `postgresql://` URL. Do not use `postgresql+asyncpg://`.
+
 ### 3. Create environment and dependencies
 
 **.env.example:**
