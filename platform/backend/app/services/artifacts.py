@@ -38,9 +38,10 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any, Optional
 
-from app.contract import ArtifactMeta, Citation, RenderHint
+from app.contract import ArtifactLink, ArtifactMeta, Citation, RenderHint
 
 # --------------------------------------------------------------------------- #
 # Classifier trigger tables — copied verbatim from frontend/plugins/<name>/__init__.py
@@ -48,6 +49,9 @@ from app.contract import ArtifactMeta, Citation, RenderHint
 
 # json_type (highest-priority signal; mirrors _json_type_registry dispatch).
 _THERMAL_JSON_TYPE = "prometheus.thermal_analysis.result.v1"
+# UQ agent baked-notebook result: MIME application/x-ipynb+json.
+# Routed to the inline notebook-report viewer.
+_UQ_JSON_TYPE = "prometheus.uq.result.v1"
 
 # Tag → hint (docs/docs/dev-docs/artifacts.md:161-167). Checked before MIME.
 _TAG_HINTS: dict[str, RenderHint] = {
@@ -337,6 +341,8 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
     json_type = artifact.get("json_type") or metadata.get("json_type")
     if json_type == _THERMAL_JSON_TYPE:
         return "thermal"
+    if json_type == _UQ_JSON_TYPE:
+        return "uq"
 
     # 2. specific mime_type — outranks tags.
     mime = _normalize_mime(artifact.get("mime_type"))
@@ -366,12 +372,11 @@ def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
             return hint if hint in ("code", "table") else "report"
 
     # 3. tags — explicit routing hints (only when a specific MIME didn't decide).
-    tags = artifact.get("tags")
-    if isinstance(tags, list):
-        for tag in tags:
-            hint = _TAG_HINTS.get(str(tag).strip().lower())
-            if hint is not None:
-                return hint
+    #    Includes tags that crossed the A2A hop only in metadata.
+    for tag in _artifact_tags(artifact, metadata):
+        hint = _TAG_HINTS.get(str(tag).strip().lower())
+        if hint is not None:
+            return hint
 
     # 4. extension — of the URI first, then the name.
     hint = _extension_hint(artifact)
@@ -448,6 +453,51 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
     )
 
 
+def _artifact_tags(artifact: dict[str, Any], metadata: dict[str, Any]) -> list[str]:
+    """Top-level ``tags`` plus any ``metadata.tags``, deduped in order.
+
+    A URI artifact sent by a PrometheusAgent crosses the A2A hop with its tags
+    only on the file part's metadata, which the client-agent's catalog merges
+    into ``metadata`` while leaving top-level ``tags`` empty. Reading both keeps
+    producer routing tags (e.g. a viewer-selecting tag such as ``exodus``) intact.
+    """
+    out: list[str] = []
+    for source in (artifact.get("tags"), metadata.get("tags")):
+        if isinstance(source, list):
+            for tag in source:
+                if tag is not None and str(tag) not in out:
+                    out.append(str(tag))
+    return out
+
+
+# Producer-supplied links (``metadata.links``): kept short and few, and only
+# absolute http(s) URLs, since the viewer renders them as clickable buttons.
+_MAX_LINKS = 5
+_MAX_LINK_LABEL = 80
+_MAX_LINK_URL = 2048
+
+
+def _artifact_links(metadata: dict[str, Any]) -> list[ArtifactLink]:
+    """``metadata.links`` as validated :class:`ArtifactLink` s.
+
+    Each entry must be ``{"label": str, "url": str}`` with an ``http``/``https``
+    URL; anything else (``javascript:``, relative paths, wrong types) is dropped.
+    """
+    out: list[ArtifactLink] = []
+    raw = metadata.get("links")
+    for entry in raw if isinstance(raw, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label") or "").strip()[:_MAX_LINK_LABEL]
+        url = str(entry.get("url") or "").strip()
+        if not label or len(url) > _MAX_LINK_URL or urlsplit(url).scheme not in ("http", "https"):
+            continue
+        out.append(ArtifactLink(label=label, url=url))
+        if len(out) == _MAX_LINKS:
+            break
+    return out
+
+
 def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
     """Map one raw catalog dict to :class:`ArtifactMeta`, or ``None`` to skip it.
 
@@ -460,7 +510,6 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         return None
 
     metadata = artifact.get("metadata") or {}
-    tags = artifact.get("tags")
     return ArtifactMeta(
         artifact_id=artifact_identity(artifact),
         name=str(artifact.get("name") or ""),
@@ -468,12 +517,13 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         json_type=artifact.get("json_type") or metadata.get("json_type"),
         description=str(artifact.get("description") or ""),
         uri=artifact.get("uri"),
-        tags=list(tags) if isinstance(tags, list) else [],
+        tags=_artifact_tags(artifact, metadata),
         json_body=artifact.get("json_body"),
         render_hint=classify_render_hint(artifact),
         citation=_citation_from(metadata),
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),
+        links=_artifact_links(metadata),
     )
 
 

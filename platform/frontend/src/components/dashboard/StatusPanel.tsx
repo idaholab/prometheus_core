@@ -11,13 +11,16 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { Bot, Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
+import { isPerSampleArtifact } from "@/lib/artifacts/perSample";
+import { LiveAgentPanel } from "../LiveAgentPanel";
+import { ActiveJobsPanel } from "./ActiveJobsPanel";
 
-type StatusTab = "jobs" | "artifacts";
+type StatusTab = "agents" | "jobs" | "artifacts";
 
 /** Every artifact in the open conversation's transcript, newest last, deduped
  * by id. A resumed conversation gives each assistant turn the artifacts it
@@ -33,10 +36,38 @@ function useConversationArtifacts(): ArtifactMeta[] {
   return [...byId.values()];
 }
 
+function PerSampleList({ artifacts }: { artifacts: ArtifactMeta[] }) {
+  if (artifacts.length === 0) return null;
+  return (
+    <details className="rounded-lg border border-base-300 bg-base-200 px-3 py-2 text-xs">
+      <summary className="cursor-pointer font-semibold text-base-content/70">
+        {artifacts.length} per-sample files (configs, ZDOs, logs)
+      </summary>
+      <ul className="m-0 mt-2 max-h-64 list-none space-y-1 overflow-y-auto p-0">
+        {artifacts.map((a) => (
+          <li key={a.artifact_id}>
+            <a href={artifactHref(a)} target="_blank" rel="noreferrer" className="link link-hover">
+              {a.name}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** A `uq` artifact is a UQ notebook: open its baked HTML report (notebook-render,
+ * same-origin `/notebook`, same URL the inline UQ viewer uses) rather than
+ * downloading the raw `.ipynb` bytes from the content proxy. */
+function artifactHref(artifact: ArtifactMeta): string {
+  if (artifact.render_hint === "uq") return `/notebook/render/${artifact.artifact_id}`;
+  return api.artifactContentUrl(artifact.artifact_id);
+}
+
 function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
   return (
     <a
-      href={api.artifactContentUrl(artifact.artifact_id)}
+      href={artifactHref(artifact)}
       target="_blank"
       rel="noreferrer"
       className="card border border-base-300 bg-base-200 transition-colors hover:border-primary/40 hover:bg-base-300"
@@ -103,9 +134,9 @@ interface StatusPanelProps {
 }
 
 /**
- * Right-hand status rail for Home: a DaisyUI tab bar switching between Active
- * Jobs and Artifacts. Artifacts are live off the conversation transcript; job
- * cards get wired in as that data source lands.
+ * Right-hand status rail for Home: a DaisyUI tab bar switching between the Live
+ * Agents Arena (default), Active Jobs and Artifacts. Agents and Artifacts are live
+ * off the conversation transcript; Active Jobs polls the backend's Task Graph.
  *
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
@@ -113,8 +144,10 @@ interface StatusPanelProps {
  * on Home's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
-  const [tab, setTab] = useState<StatusTab>("jobs");
+  const [tab, setTab] = useState<StatusTab>("agents");
   const artifacts = useConversationArtifacts();
+  // The tab count shows what a person opens, not every per-sample file.
+  const mainCount = artifacts.filter((a) => !isPerSampleArtifact(a)).length;
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -127,12 +160,15 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           <PanelRight size={16} />
         </RailButton>
         <div className="h-2" aria-hidden />
+        <RailButton active={tab === "agents"} label="Live Agents Arena" onClick={() => openTo("agents")}>
+          <Bot size={20} />
+        </RailButton>
         <RailButton active={tab === "jobs"} label="Active Jobs" onClick={() => openTo("jobs")}>
           <Cpu size={20} />
         </RailButton>
         <RailButton
           active={tab === "artifacts"}
-          label={artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts"}
+          label={mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts"}
           onClick={() => openTo("artifacts")}
         >
           <FolderOpen size={20} />
@@ -147,6 +183,13 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         <div role="tablist" className="tabs tabs-border">
           <button
             role="tab"
+            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "agents" ? "tab-active" : ""}`}
+            onClick={() => setTab("agents")}
+          >
+            Live Agents Arena
+          </button>
+          <button
+            role="tab"
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "jobs" ? "tab-active" : ""}`}
             onClick={() => setTab("jobs")}
           >
@@ -157,7 +200,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "artifacts" ? "tab-active" : ""}`}
             onClick={() => setTab("artifacts")}
           >
-            Artifacts{artifacts.length > 0 && ` (${artifacts.length})`}
+            Artifacts{mainCount > 0 && ` (${mainCount})`}
           </button>
         </div>
         <RailButton size={32} label="Collapse status panel" onClick={onCollapse}>
@@ -165,12 +208,10 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         </RailButton>
       </div>
 
-      {tab === "jobs" ? (
-        <EmptyState
-          icon={<Cpu size={32} />}
-          title="No Active Jobs"
-          hint="Assigned solver pipelines will display here"
-        />
+      {tab === "agents" ? (
+        <LiveAgentPanel />
+      ) : tab === "jobs" ? (
+        <ActiveJobsPanel />
       ) : artifacts.length === 0 ? (
         <EmptyState
           icon={<FolderOpen size={32} />}
@@ -179,9 +220,12 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
-          {artifacts.map((artifact) => (
-            <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
-          ))}
+          {artifacts
+            .filter((artifact) => !isPerSampleArtifact(artifact))
+            .map((artifact) => (
+              <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
+            ))}
+          <PerSampleList artifacts={artifacts.filter(isPerSampleArtifact)} />
         </div>
       )}
     </div>

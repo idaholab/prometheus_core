@@ -147,6 +147,11 @@ async def _invoke_skill_impl(
                 payload = {"error": str(result_data.get("error"))}
                 if missing:
                     payload["missing_required_params"] = missing
+                if emit_status:
+                    # Same line as the exception path below: an unreachable agent
+                    # comes back as an error *result* (call_agent catches it), and
+                    # without this the status stream goes silent after "Invoking".
+                    runtime.store_status_update(conversation_id, f"'{skill_id}' failed: {payload['error']}")
                 return payload
             if emit_status:
                 runtime.store_status_update(conversation_id, f"'{skill_id}' completed.")

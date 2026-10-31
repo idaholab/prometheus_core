@@ -92,6 +92,25 @@ async def process_analysis(self, params, context, event_queue):
     return {"status": "model_generated", "path": output_path}
 ```
 
+### Links on an artifact
+
+An agent can attach buttons to any artifact through `metadata["links"]`, a list
+of `{"label": ..., "url": ...}`. The platform shows them on the artifact's viewer
+and opens them in a new tab. Only absolute `http`/`https` URLs are kept (at most
+5). Typical use: a page the agent itself serves for that artifact, such as an
+interactive dashboard, or the job that produced it.
+
+```python
+await self.send_artifact_reference(
+    context, event_queue,
+    name="Run report",
+    description="Baked results report",
+    uri=f"file://{report_path}",
+    mime_type="text/html",
+    metadata={"links": [{"label": "Open interactive dashboard", "url": dashboard_url}]},
+)
+```
+
 ### Retrieving artifacts as files
 
 Downstream agents should consume reusable artifacts through the shared

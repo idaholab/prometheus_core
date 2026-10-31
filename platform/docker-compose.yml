@@ -65,6 +65,10 @@ volumes:
   # convenience: without a volume it lands in the container's /tmp and every
   # backend restart silently re-converts every mesh a user reopens.
   mesh-cache:
+  # The UQ agent's generated notebooks (.ipynb + baked .html), served read-only by
+  # notebook-render. A UQ agent on the platform network mounts this same volume
+  # (external name: <project>_uq-notebooks) as its artifact directory.
+  uq-notebooks:
 
 services:
 
@@ -218,6 +222,39 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # notebook-render: serves agents' baked UQ notebook reports (/notebook/render/{id})
+  # at same-origin /notebook/*.
+  # Not a PrometheusAgent (runs no agent code, not on the base image), so it lives here
+  # in the root compose rather than being auto-discovered under agents/. It reads the
+  # baked .html/.ipynb the UQ agent writes into the shared NOTEBOOK_DIR. Comes up with
+  # `make up` regardless of PROFILE (no profiles gate), like backend.
+  notebook-render:
+    build:
+      context: .
+      dockerfile: notebook-render/Dockerfile
+      args:
+        <<: *prometheus-api-build-args
+      additional_contexts:
+        certs: ../common/certs
+    container_name: notebook-render
+    ports:
+      - "${NOTEBOOK_RENDER_PORT:-8876}:8000"
+    networks:
+      - agent-network
+    environment:
+      <<: *common-env
+      # NOTEBOOK_DIR points at the shared uq-notebooks volume (below), where
+      # the agent writes uq_{model}_{timestamp}.{ipynb,html}. proxy.py resolves an
+      # artifact_id to the real filename via the Valkey registry (REDIS_URL/
+      # REDIS_PASSWORD come from *common-env), then serves that file from here.
+      NOTEBOOK_DIR: /app/uq-artifacts
+    volumes:
+      # The UQ agent writes its generated notebooks + baked HTML into this named
+      # volume; this service only reads them. Named, not a host path, so the
+      # stack deploys without provisioning a directory outside the repository.
+      - uq-notebooks:/app/uq-artifacts:ro
+    restart: unless-stopped
+
   frontend-dev:
     profiles: ["dev"]
     build:
@@ -237,6 +274,9 @@ services:
       # service name + internal port (8000), NOT the host-mapped 8600 — inside this
       # container localhost:8600 is its own loopback and refuses the connection.
       VITE_BACKEND_URL: http://backend:8000
+      # notebook-render is a sibling container; reach it by service name + internal
+      # port (8000), not the host-mapped 8876, for the same loopback reason as above.
+      VITE_NOTEBOOK_URL: http://notebook-render:8000
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./frontend:/app
