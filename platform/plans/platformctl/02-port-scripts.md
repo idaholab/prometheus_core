@@ -201,7 +201,7 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
 
 ## Done when
 

@@ -51,7 +51,7 @@ None.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: user, technical, AI skills.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: user, technical, AI skills.
 
 ## Done when
 

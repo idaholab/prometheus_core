@@ -59,4 +59,4 @@ and `cluster-up` keeps its "already running" message.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, Linux/WSL.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, Linux/WSL.

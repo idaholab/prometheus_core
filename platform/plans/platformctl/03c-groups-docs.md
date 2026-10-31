@@ -141,7 +141,7 @@ None beyond 3a and 3b.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
 
 ## Done when
 

@@ -96,4 +96,4 @@ None: `PLATFORM_SOURCE` defaults to `build`.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, agent developer.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, agent developer.

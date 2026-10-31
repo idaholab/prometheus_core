@@ -237,7 +237,7 @@ before the hackathon freeze (2026-11-03).
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, Linux/WSL, AI skills.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, Linux/WSL, AI skills.
 
 ## Done when
 
