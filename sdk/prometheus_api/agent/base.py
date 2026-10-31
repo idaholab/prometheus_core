@@ -1486,25 +1486,30 @@ class PrometheusAgent:
         """Register at startup, then re-register whenever the registry forgets
         this agent (a registry restart or clear while the agent keeps running).
 
-        The checks also run when startup registration gave up (the registry was
-        not up yet), so the agent joins once the registry appears. They are
-        skipped when the interval is 0, when ``REGISTRY_URL`` is unset, and when
-        the agent overrides ``register_with_registry_async``.
+        This is what the Starlette lifespan runs at startup. The checks also run
+        when startup registration gave up (the registry was not up yet), so the
+        agent joins once the registry appears. They are skipped when the interval
+        is 0 and when the agent overrides ``register_with_registry_async``. There is
+        always a registry URL (``registry_url`` falls back to the LiteLLM default),
+        so a standalone agent runs the checks too; its failures are logged at
+        WARNING once, then at DEBUG until a check succeeds.
         """
         await self.register_with_registry_async(agent_card)
         interval = self.registry_check_interval()
         if interval <= 0:
             return
         if self._overrides_registration():
-            logger.info(
-                "%s overrides register_with_registry_async; not re-registering it after startup",
+            logger.warning(
+                "%s overrides register_with_registry_async, so the SDK does not check that "
+                "the registry still lists it (calling super() does not bring the checks "
+                "back); call AgentRegistryClient.register_and_keep_registered_async from "
+                "the override to keep it listed",
                 type(self).__name__,
             )
             return
         registry_client = self._registry_client()
         if registry_client is None:
             return
-        logger.info("Checking the registry still lists this agent every %gs", interval)
         await registry_client.keep_registered_async(
             agent_card, raw_agent_card=self.agent_card_dict, interval=interval
         )

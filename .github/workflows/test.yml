@@ -1002,8 +1002,15 @@ jobs:
           secret=$(sed -n 's/^AGENT_SECRET=//p' .env)
           echo "::add-mask::$secret"
           registry=http://localhost:8600/v1/agents
+          # Exit 0 when listed, 1 when not. A failed request ends the step instead of
+          # reading as "not listed" (a pipe would hide curl's exit status).
           listed() {
-            curl -fsS -H "Authorization: Bearer $secret" "$registry" \
+            local body
+            if ! body=$(curl -fsS -H "Authorization: Bearer $secret" "$registry"); then
+              echo "::error::GET $registry failed"
+              exit 1
+            fi
+            printf '%s' "$body" \
               | python3 -c 'import json, sys; sys.exit(0 if any(e.get("agent_name") == "ci-check-agent" for e in json.load(sys.stdin)) else 1)'
           }
           # curl -f fails on a 404, so a passing DELETE proves the entry existed. No

@@ -31,44 +31,66 @@ class FakeRegistry:
 
     Tests can clear it, take it down, or wrap its listing. ``calls`` records every
     request by method, including those answered while the registry is down;
-    ``posts`` counts only the registrations it accepted.
+    ``posts`` counts only the registrations it accepted. With ``litellm`` set it
+    behaves like a LiteLLM proxy: a POST for a name it has is refused with 400, and
+    entries have their own ``agent_id``.
     """
 
     def __init__(self):
         self.entries = {}
         self.down = False
+        self.status = 503
         self.wrap = None
+        self.litellm = False
         self.calls = []
         self.posts = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request.method)
         if self.down:
-            return httpx.Response(503)
+            return httpx.Response(self.status)
         if request.method == "GET":
-            listing = [{"agent_id": n, "agent_name": n} for n in sorted(self.entries)]
+            listing = [{"agent_id": self._id(n), "agent_name": n} for n in sorted(self.entries)]
             return httpx.Response(200, json={self.wrap: listing} if self.wrap else listing)
         if request.method == "POST":
             body = json.loads(request.content)
-            self.entries[body["agent_name"]] = body
+            name = body["agent_name"]
+            if self.litellm and name in self.entries:
+                return httpx.Response(
+                    400, json={"detail": f"Agent with name {name} already exists"}
+                )
+            self.entries[name] = body
             self.posts += 1
             return httpx.Response(200, json={})
         if request.method == "DELETE":
-            self.entries.pop(request.url.path.rsplit("/", 1)[-1], None)
+            agent_id = request.url.path.rsplit("/", 1)[-1]
+            name = next((n for n in self.entries if self._id(n) == agent_id), None)
+            if name is None:
+                return httpx.Response(404)
+            del self.entries[name]
             return httpx.Response(200, json={})
         return httpx.Response(405)
+
+    def _id(self, name):
+        return f"id-{name}" if self.litellm else name
 
 
 @pytest.fixture
 def registry(monkeypatch):
     fake = FakeRegistry()
-    real_client = httpx.AsyncClient
+    real_async_client = httpx.AsyncClient
+    real_client = httpx.Client
+
+    def async_client(*args, **kwargs):
+        kwargs.pop("transport", None)
+        return real_async_client(*args, transport=httpx.MockTransport(fake.handler), **kwargs)
 
     def client(*args, **kwargs):
         kwargs.pop("transport", None)
         return real_client(*args, transport=httpx.MockTransport(fake.handler), **kwargs)
 
-    monkeypatch.setattr("prometheus_api.agent.registry.httpx.AsyncClient", client)
+    monkeypatch.setattr("prometheus_api.agent.registry.httpx.AsyncClient", async_client)
+    monkeypatch.setattr("prometheus_api.agent.registry.httpx.Client", client)
     monkeypatch.setattr(AgentRegistryClient, "MIN_CHECK_INTERVAL", 0.001)
     return fake
 
@@ -122,13 +144,43 @@ def test_is_registered_raises_when_the_registry_is_down(registry):
         asyncio.run(AgentRegistryClient("http://registry").is_registered_async(_card()))
 
 
-def test_register_once_posts_without_deleting_first(registry):
-    """The registry overwrites by name; a delete first would open a gap in the listing."""
+def _register_once(client, mode):
+    if mode == "sync":
+        client.register_once(_card())
+    else:
+        asyncio.run(client.register_once_async(_card()))
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+def test_register_once_overwrites_without_deleting(registry, mode):
+    """The backend overwrites by name; a delete first would open a gap in the listing."""
     client = AgentRegistryClient("http://registry")
-    asyncio.run(client.register_once_async(_card()))
-    asyncio.run(client.register_once_async(_card()))
-    assert "DELETE" not in registry.calls
+    _register_once(client, mode)
+    _register_once(client, mode)
+    assert registry.calls == ["POST", "POST"]
     assert list(registry.entries) == [client.agent_name(_card())]
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+def test_register_once_replaces_an_entry_litellm_refuses(registry, mode):
+    """LiteLLM answers 400 "already exists": delete that entry by agent_id, post again."""
+    registry.litellm = True
+    client = AgentRegistryClient("http://registry")
+    _register_once(client, mode)
+    assert registry.calls == ["POST"]
+    _register_once(client, mode)
+    assert registry.calls == ["POST", "POST", "GET", "DELETE", "POST"]
+    assert registry.posts == 2
+    assert list(registry.entries) == [client.agent_name(_card())]
+
+
+@pytest.mark.parametrize("mode", ["sync", "async"])
+def test_register_once_raises_on_another_400(registry, mode):
+    """Only "already exists" leads to a delete; any other refusal is an error."""
+    registry.down, registry.status = True, 400
+    with pytest.raises(httpx.HTTPStatusError):
+        _register_once(AgentRegistryClient("http://registry"), mode)
+    assert registry.calls == ["POST"]
 
 
 def test_keep_registered_re_registers_after_the_registry_is_cleared(registry):
@@ -167,7 +219,86 @@ def test_keep_registered_treats_an_outage_as_a_failed_check_not_missing(registry
         asyncio.run(scenario())
     assert registry.posts == 1  # only the startup registration
     assert registry.calls.count("POST") == 1  # no POST was even attempted during the outage
-    assert "HTTPStatusError(" in caplog.text  # repr, never an empty message
+    assert "HTTPStatusError 503" in caplog.text  # type and status, never an empty message
+
+
+def test_keep_registered_warns_once_per_outage(registry, caplog):
+    """A registry that stays down (or a rejected token) warns once, not every check;
+    repeats go to DEBUG, and the recovery is logged at INFO."""
+    client = AgentRegistryClient("http://registry")
+    registry.down, registry.status = True, 401
+
+    async def scenario():
+        loop = asyncio.create_task(client.keep_registered_async(_card(), interval=0.001))
+        await _until(lambda: registry.calls.count("GET") >= 5)
+        registry.down = False
+        await _until(lambda: registry.posts == 1)
+        await _until(lambda: "succeeded again" in caplog.text)
+        await _stop(loop)
+
+    with caplog.at_level(logging.DEBUG, logger="prometheus_api.agent.registry"):
+        asyncio.run(scenario())
+    failed = [r for r in caplog.records if "check failed" in r.getMessage()]
+    assert len(failed) >= 4
+    assert failed[0].levelno == logging.WARNING
+    assert all(r.levelno == logging.DEBUG for r in failed[1:])
+    assert "HTTPStatusError 401" in failed[0].getMessage()
+    recovered = [r for r in caplog.records if "succeeded again" in r.getMessage()]
+    assert [r.levelno for r in recovered] == [logging.INFO]
+
+
+def test_registry_logs_never_contain_credentials(registry, caplog):
+    """Credentials in REGISTRY_URL userinfo, the agent secret and the master key never
+    reach the log, on the startup retries, the checks or a registration."""
+    userinfo = "SENTINEL-user" + ":" + "SENTINEL-pass"
+    client = AgentRegistryClient(
+        f"http://{userinfo}@registry", master_key="SENTINEL-master", agent_secret="SENTINEL-secret"
+    )
+    registry.down = True
+
+    async def scenario():
+        await client.register_with_retries_async(_card(), max_retries=1, initial_delay=0.001)
+        loop = asyncio.create_task(client.keep_registered_async(_card(), interval=0.001))
+        await _until(lambda: registry.calls.count("GET") >= 3)
+        registry.down = False
+        await _until(lambda: registry.posts == 1)
+        await _stop(loop)
+
+    with caplog.at_level(logging.DEBUG):
+        asyncio.run(scenario())
+        client.register_once(_card())
+    assert "http://registry" in caplog.text
+    assert "HTTPStatusError 503" in caplog.text
+    assert "SENTINEL" not in caplog.text
+
+
+def test_httpx_request_lines_are_quiet_only_for_registry_requests(registry, caplog):
+    """The periodic GET does not log httpx's INFO request line; other httpx use still does."""
+    client = AgentRegistryClient("http://registry")
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        asyncio.run(client.is_registered_async(_card()))
+        assert not [r for r in caplog.records if r.name == "httpx"]
+        transport = httpx.MockTransport(lambda request: httpx.Response(200))
+        with httpx.Client(transport=transport) as other:
+            other.get("http://elsewhere/")
+    assert [r for r in caplog.records if r.name == "httpx"]
+
+
+def test_keep_registered_applies_the_real_minimum_interval(monkeypatch):
+    """With the real MIN_CHECK_INTERVAL (the fixture lowers it), a tiny interval
+    sleeps for the floor."""
+    slept = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr("prometheus_api.agent.registry.asyncio.sleep", fake_sleep)
+    assert AgentRegistryClient.MIN_CHECK_INTERVAL == 0.1
+    client = AgentRegistryClient("http://registry")
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(client.keep_registered_async(_card(), interval=1e-9))
+    assert slept == [0.1]
 
 
 def test_keep_registered_stops_when_cancelled_during_a_check(monkeypatch):
@@ -210,7 +341,7 @@ def test_keep_registered_rejects_an_interval_that_is_not_positive_and_finite(int
         ("-5", 5.0),
         ("nan", 5.0),
         ("inf", 5.0),
-        ("1e-9", 0.1),
+        ("1e-9", 1e-9),  # warns; keep_registered_async applies the 0.1 s floor
     ],
 )
 def test_registry_check_interval_env(monkeypatch, caplog, raw, expected):
@@ -266,7 +397,63 @@ def test_agent_that_overrides_registration_is_not_re_registered(monkeypatch, reg
         asyncio.run(asyncio.wait_for(agent.keep_registered_async(_card()), timeout=5))
     assert calls == ["Test Agent"]
     assert registry.calls == []
-    assert "overrides register_with_registry_async" in caplog.text
+    warned = [r for r in caplog.records if "overrides register_with_registry_async" in r.message]
+    assert [r.levelno for r in warned] == [logging.WARNING]
+    assert "super()" in warned[0].message
+
+
+def test_agent_whose_override_calls_super_is_not_re_registered(monkeypatch, registry):
+    """super() registers once, but the override still owns registration: no checks."""
+    monkeypatch.setenv("REGISTRY_URL", "http://registry")
+    monkeypatch.setenv("REGISTRY_CHECK_INTERVAL_SECONDS", "0.001")
+
+    class SuperAgent(PrometheusAgent):
+        async def register_with_registry_async(self, agent_card, **kwargs):
+            await super().register_with_registry_async(agent_card, **kwargs)
+
+    agent = SuperAgent(agent_name="MyAgent")
+    asyncio.run(asyncio.wait_for(agent.keep_registered_async(_card()), timeout=5))
+    assert registry.calls == ["POST"]
+
+
+class RecipeAgent(PrometheusAgent):
+    """The override recipe in sdk/docs/agent/AGENT_MIGRATIONS.md, as written there."""
+
+    async def register_with_registry_async(self, agent_card, **kwargs):
+        client = AgentRegistryClient.from_env(self.registry_url())
+        await client.register_and_keep_registered_async(
+            agent_card,
+            raw_agent_card=self.agent_card_dict,
+            interval=self.registry_check_interval(),
+        )
+
+
+def test_override_recipe_with_checks_disabled_registers_once(monkeypatch, registry):
+    monkeypatch.setenv("REGISTRY_URL", "http://registry")
+    monkeypatch.setenv("REGISTRY_CHECK_INTERVAL_SECONDS", "0")
+    agent = RecipeAgent(agent_name="MyAgent")
+    asyncio.run(asyncio.wait_for(agent.keep_registered_async(_card()), timeout=5))
+    assert registry.calls == ["POST"]
+
+
+def test_override_recipe_joins_a_registry_that_was_down_at_startup(monkeypatch, registry):
+    monkeypatch.setenv("REGISTRY_URL", "http://registry")
+    monkeypatch.setenv("REGISTRY_MAX_RETRIES", "0")
+    monkeypatch.setenv("REGISTRY_CHECK_INTERVAL_SECONDS", "0.001")
+    agent = RecipeAgent(agent_name="MyAgent")
+    registry.down = True
+
+    async def scenario():
+        task = asyncio.create_task(agent.keep_registered_async(_card()))
+        await _until(lambda: registry.calls.count("GET") >= 2)
+        assert not task.done()  # startup gave up without raising; checks go on
+        registry.down = False
+        await _until(lambda: registry.posts == 1)
+        registry.entries.clear()
+        await _until(lambda: registry.posts == 2)
+        await _stop(task)
+
+    asyncio.run(scenario())
 
 
 def test_application_lifespan_runs_the_keep_alive_loop(monkeypatch, registry):
