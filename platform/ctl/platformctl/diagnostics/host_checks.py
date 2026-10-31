@@ -33,8 +33,10 @@ if TYPE_CHECKING:
     from platformctl.context import Context
 
 # Setting -> what the port is for. DeepLynx ports only count with LOCAL_DEEPLYNX.
+FRONTEND_PORTS = {"dev": "FRONTEND_DEV_PORT", "prod": "FRONTEND_PROD_PORT"}
+"""The setting of the frontend's port, by `PROFILE`. With no profile there is no frontend."""
+
 PLATFORM_PORTS = (
-    ("FRONTEND_DEV_PORT", "the chat UI"),
     ("BACKEND_PORT", "the backend"),
     ("REDIS_LOCAL_PORT", "Valkey"),
 )
@@ -43,7 +45,11 @@ PLATFORM_PORTS = (
 
 def _ports(ctx: Context) -> list[tuple[str, int, str]]:
     """The (setting, port, purpose) of every port the configured stack publishes."""
-    ports = [(name, ctx.config.int(name), what) for name, what in PLATFORM_PORTS]
+    ports = []
+    frontend = FRONTEND_PORTS.get(ctx.config.frontend_profile())
+    if frontend:
+        ports.append((frontend, ctx.config.int(frontend), "the chat UI"))
+    ports += [(name, ctx.config.int(name), what) for name, what in PLATFORM_PORTS]
     if ctx.config.flag("PROMETHEUS_SYSTEM_TESTING"):
         ports.append(("CLIENT_AGENT_PORT", ctx.config.int("CLIENT_AGENT_PORT"), "the client agent"))
     if ctx.config.flag("LOCAL_DEEPLYNX"):

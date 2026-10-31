@@ -60,6 +60,34 @@ def test_ports_follow_the_settings(platform_root, runner, taken):
     ]
 
 
+@pytest.mark.parametrize(
+    ("profile", "frontend"),
+    [("dev", ("FRONTEND_DEV_PORT", 5150)), ("prod", ("FRONTEND_PROD_PORT", 8080)), ("", None), ("other", None)],
+)
+def test_the_frontend_port_follows_the_profile(platform_root, runner, taken, profile, frontend):
+    """`PROFILE=prod` publishes 8080, and a blank `PROFILE` (no frontend) publishes nothing to check."""
+    ctx = ctx_for(platform_root, runner, sets={"PROFILE": profile})
+    checked = [(n, p) for n, p, _ in hc._ports(ctx)]
+    assert checked[:1] == ([frontend] if frontend else [("BACKEND_PORT", 8600)])
+    assert len(checked) == (3 if frontend else 2)
+
+
+def test_a_busy_dev_port_is_not_a_problem_without_a_frontend(platform_root, runner, taken):
+    """The `up deeplynx` job runs with `PROFILE=` and 5150 may be in use: no false FAIL."""
+    taken[5150] = hostmod.Holder("process", "node")
+    result = hc.PORTS_FREE.run(ctx_for(platform_root, runner, sets={"PROFILE": ""}))
+    assert (result.status, result.evidence) == (PASS, "2 ports are free")
+    prod = hc.PORTS_FREE.run(ctx_for(platform_root, runner, sets={"PROFILE": "prod"}))
+    assert prod.status == PASS  # 8080, not 5150
+
+
+def test_a_busy_prod_port_is_a_problem_with_the_prod_profile(platform_root, runner, taken):
+    """With `PROFILE=prod`, 8080 is checked and its fix names `FRONTEND_PROD_PORT`."""
+    taken[8080] = hostmod.Holder("process", "node")
+    result = hc.PORTS_FREE.run(ctx_for(platform_root, runner, sets={"PROFILE": "prod"}))
+    assert result.status == FAIL and "FRONTEND_PROD_PORT" in result.fix
+
+
 def test_a_process_holding_a_port(platform_root, runner, taken):
     """A process holding a port."""
     taken[6379] = hostmod.Holder("process", "redis-server")
