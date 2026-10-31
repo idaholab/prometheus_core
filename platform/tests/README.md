@@ -42,7 +42,7 @@ logs (one file per service plus a combined one) are uploaded as the
 The `platform: up deeplynx` job does the same with `LOCAL_DEEPLYNX=true`
 (see `../docs/docs/local-deeplynx.md`), with only the default agents and no
 frontend: DeepLynx runs next to the platform from its published images, and
-`make deeplynx-setup` gives the services a real project and API key for it.
+`make deeplynx-setup` (`./platformctl deeplynx setup`) gives the services a real project and API key for it.
 `test_integration_deeplynx.py` stores an item and a file through the backend's
 storage client and reads them back; without the local DeepLynx those tests are
 skipped. Across the start targets, the DeepLynx settings in `.env` have to be
