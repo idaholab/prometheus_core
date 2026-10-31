@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import io
+import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -107,6 +109,38 @@ def make_context(
     output = Output(scrubber, out=out, err=err, env=env)
     ctx = build(Paths(root), config, output, runner, **kw)  # type: ignore[arg-type]
     return ctx, out, err
+
+
+GOLDEN = Path(__file__).resolve().parent / "golden"
+"""Where the golden JSON files live."""
+
+
+def _normalized(value, root: Path):
+    """`value` with the temporary platform folder and the git-derived platform version replaced by placeholders."""
+    if isinstance(value, dict):
+        return {
+            k: "<version>" if k in ("version", "platform_version") and isinstance(v, str) else _normalized(v, root)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_normalized(item, root) for item in value]
+    if isinstance(value, str):
+        return value.replace(str(root), "<root>")
+    return value
+
+
+def assert_golden(name: str, body: dict, root: Path) -> None:
+    """Compare a `--json` object with `golden/<name>.json`, so a changed field name or shape fails a test.
+
+    Run with `UPDATE_GOLDEN=1` to rewrite the file, then review the diff: the contract only
+    grows within a `schema_version`.
+    """
+    text = json.dumps(_normalized(body, root), indent=2, sort_keys=True) + "\n"
+    path = GOLDEN / f"{name}.json"
+    if os.environ.get("UPDATE_GOLDEN") == "1":
+        GOLDEN.mkdir(exist_ok=True)
+        path.write_text(text)
+    assert path.read_text() == text, f"{path.name} differs; if the change is intended, run with UPDATE_GOLDEN=1"
 
 
 @pytest.fixture

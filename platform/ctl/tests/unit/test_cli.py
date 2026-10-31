@@ -22,6 +22,7 @@ from platformctl import cli, jsonout
 from platformctl.system import envfile
 from platformctl.system.runner import RunnerError
 from platformctl.targets.base import UnsupportedError
+from tests.unit.conftest import assert_golden
 
 
 def module(name, section="run", order=10, aliases=(), subcommands=None, run=None, help_text="help"):
@@ -215,6 +216,18 @@ def test_version_text_and_json(env):
     assert code == 0 and body["ok"] and body["schema_version"] == 1 and body["command"] == "version"
     assert body["commands"] == ["doctor"] and body["features"] == ["doctor.checks.v1"]
     assert set(body["platform"]) == {"root", "project", "version"}
+
+
+def test_golden_version_json(env, tmp_path):
+    """`--version --json`, with the commands and features a script branches on."""
+    _, out, _ = call("--version", "--json", env=env)
+    assert_golden("version", json.loads(out), tmp_path)
+
+
+def test_golden_usage_error_json(env, tmp_path):
+    """A usage error is one object with `error.code` `usage`."""
+    _, out, _ = call("--json", "doctor", "--nope", env=env)
+    assert_golden("usage_error", json.loads(out), tmp_path)
 
 
 def test_no_command_prints_help(env):

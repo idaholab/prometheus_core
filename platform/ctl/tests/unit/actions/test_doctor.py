@@ -18,7 +18,7 @@ import json
 import pytest
 
 from platformctl.actions import doctor
-from tests.unit.conftest import make_context
+from tests.unit.conftest import assert_golden, make_context
 
 GOOD_ENV = (
     "AGENT_SECRET=aaaaaaaaaaaaaaaa\nREDIS_PASSWORD=bbbbbbbbbbbbbbbb\nADMIN_DB_PASSWORD=cccccccccccccccc\n"
@@ -176,3 +176,34 @@ def test_the_json_never_has_a_secret(platform_root, runner):
     doctor.run(ctx, args())
     for secret in ("fake-secret-fake-secret", "fake-env-secret-fake-env", "aaaaaaaaaaaaaaaa", "eeeeeeeeeeeeeeee"):
         assert secret not in out.getvalue() + err.getvalue()
+
+
+# -- golden files: the --json contract, field by field ------------------------------------------
+
+
+def test_golden_doctor_all_pass(platform_root, runner):
+    """The whole object of a healthy `doctor --json`."""
+    ctx, out, _ = ctx_with_env(platform_root, runner, json_mode=True)
+    assert doctor.run(ctx, args()) == 0
+    assert_golden("doctor_pass", json.loads(out.getvalue()), platform_root)
+
+
+def test_golden_doctor_with_a_failed_check(platform_root, runner):
+    """Exit 1 and `ok` true: the failure is in `counts` and the check's `status` (README: "Reading --json")."""
+    ctx, out, _ = make_context(platform_root, runner, json_mode=True)  # no .env
+    assert doctor.run(ctx, args()) == 1
+    assert_golden("doctor_fail", json.loads(out.getvalue()), platform_root)
+
+
+def test_golden_doctor_list(platform_root, runner):
+    """`doctor --list --json`: every check's id, area, tags and targets."""
+    ctx, out, _ = make_context(platform_root, runner, json_mode=True)
+    assert doctor.run(ctx, args(list_=True)) == 0
+    assert_golden("doctor_list", json.loads(out.getvalue()), platform_root)
+
+
+def test_golden_doctor_unknown_check(platform_root, runner):
+    """An unknown check id is a `usage` error object."""
+    ctx, out, _ = make_context(platform_root, runner, json_mode=True)
+    assert doctor.run(ctx, args("nope")) == 2
+    assert_golden("doctor_unknown_check", json.loads(out.getvalue()), platform_root)
