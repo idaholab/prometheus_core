@@ -20,9 +20,9 @@ still works, but differently.
 
 
 `make <target> KEY=value` keeps beating `.env`, as today, including secret
-keys and values with spaces: the tool reads Make's command-line variables
-from `MAKEFLAGS` and the environment (`design.md`, "Settings and
-precedence"). `make logs SERVICE=...`, which deck 03 uses throughout, is
+keys and values with spaces: the tool reads the names of Make's command-line
+variables from `PLATFORMCTL_MAKE_VARS`, which the Makefile exports, and their
+values from the environment (`design.md`, "Settings and precedence"). `make logs SERVICE=...`, which deck 03 uses throughout, is
 unaffected.
 
 ## Behaviour changes

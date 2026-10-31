@@ -30,6 +30,8 @@ graph TD
     [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) for enabling WSL2
     integration in Docker Desktop before continuing below.
 - Either a [PAT](https://github.inl.gov/settings/tokens/new) for `containers.github.inl.gov` (to pull the `prometheus_api` base image) — 90 days is the recommended expiration — or `LOCAL_SDK=true` to build that image from `../sdk` instead (see step 2)
+- Python **3.10+** to run `./platformctl` (it finds one itself: `python3.14` down to `python3.10`, then `python3`, then
+  `uv`; a Mac whose `python3` is 3.9 works if `uv` is installed). Set `PLATFORMCTL_PYTHON` to choose one
 - [uv](https://docs.astral.sh/uv/) and Python — only required to run the Python components outside Docker:
   - Backend: **3.12+**
   - Client-agent: **3.12+**
@@ -37,6 +39,13 @@ graph TD
 - Node.js + npm — only required to run the React `frontend/` dev server outside Docker
 - `make` and `openssl` — on a minimal distro/WSL image these may not be preinstalled
   (RHEL-based: `sudo dnf groupinstall "Development Tools"` and `sudo dnf install openssl`)
+
+## platformctl
+
+`./platformctl` sets up, checks and diagnoses the platform: `config init` creates and fills `.env`,
+`status --wait` waits until the platform answers, `deeplynx setup` prepares the local DeepLynx, and `doctor` says what
+is wrong with a setup and how to fix it. Every `make` target keeps working. See the
+[platformctl guide](docs/docs/platformctl/index.md).
 
 ## Quickstart
 
@@ -49,7 +58,7 @@ set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
 `make up` asks for them in a terminal, or stops and tells you what is missing. To prepare `.env` without starting anything:
 
 ```bash
-python3 scripts/init_env.py   # or: make init-env
+./platformctl config init     # or: make init-env
 # then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
 ```
 
@@ -66,7 +75,7 @@ without identity.
 
 `LLM_CONFIG_PROFILE` tells the agents which LLM provider to use, and `LLM_API_KEY` holds that provider's key -- the same variable for every profile. Set it in `.env`; there is no default.
 
-If the profile or its API key is blank, `make up` (via `scripts/init_env.py`) shows a menu of the profiles in `../sdk/prometheus_api/llm_configs/` (use the up/down arrows, then Enter), asks for the matching key, and writes both to `.env`. If they are set in the environment instead (as in CI), it writes them to `.env` without asking; otherwise it fails. You can also set them by hand:
+If the profile or its API key is blank, `make up` (via `./platformctl config init`) shows a menu of the profiles in `../sdk/prometheus_api/llm_configs/` (use the up/down arrows, then Enter), asks for the matching key, and writes both to `.env`. If they are set in the environment instead (as in CI), it writes them to `.env` without asking; otherwise it fails. You can also set them by hand:
 
 | Value | What it uses | Key to put in `LLM_API_KEY` |
 |---|---|---|
@@ -84,7 +93,7 @@ LLM_CONFIG_PROFILE=openai
 LLM_API_KEY=<your-openai-api-key>
 ```
 
-The SDK's `registry` profile is not supported here: it sends model requests to an LLM proxy at `REGISTRY_URL`, and on this platform that is the backend's agent registry, which does not proxy LLM calls. `scripts/init_env.py` rejects it.
+The SDK's `registry` profile is not supported here: it sends model requests to an LLM proxy at `REGISTRY_URL`, and on this platform that is the backend's agent registry, which does not proxy LLM calls. `./platformctl config init` rejects it.
 
 Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file. It overrides `LLM_CONFIG_PROFILE`, must be available inside every agent container, and requires any environment variables referenced by that file.
 

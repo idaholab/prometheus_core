@@ -72,10 +72,10 @@ alternative** for a deployment that sets it before the first start.
 
 Encrypting that private key (and any OIDC client secret, see below) at rest
 needs `ADMIN_DB_ENCRYPTION_KEY` set — `make up`/`make restart` generate one
-into `.env` automatically if it's blank (`scripts/init_env.py`, via the
+into `.env` automatically if it's blank (`./platformctl config init`, via the
 `init-env` Makefile target), so this is normally nothing to think about.
 Starting the stack any other way (e.g. `docker compose up` directly, or CI)
-needs `python3 scripts/init_env.py` run first, or the key set by hand.
+needs `./platformctl config init` run first, or the key set by hand.
 Leaving it unset doesn't block local-password login — only signing-key
 generation and OIDC provider configuration need it. At startup, the backend
 logs a warning that names `ADMIN_DB_ENCRYPTION_KEY`, creates no key, and
@@ -457,7 +457,7 @@ still work (scoped to the `"local"` user_id).
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Agent returns `"Identity verification failed: userToken has expired"` | Turn lasted longer than `USER_IDENTITY_TTL` | Increase `USER_IDENTITY_TTL` (default 7200) |
-| Agent returns `"No 'userToken' found in message metadata"` | `USER_IDENTITY_REQUIRED=true` but the backend has no active signing key and no `USER_IDENTITY_PRIVATE_KEY` (usually the startup warning about `ADMIN_DB_ENCRYPTION_KEY`) | Set `ADMIN_DB_ENCRYPTION_KEY` (`python3 scripts/init_env.py`) and restart the backend, or activate a key under **Admin > Signing Keys** |
+| Agent returns `"No 'userToken' found in message metadata"` | `USER_IDENTITY_REQUIRED=true` but the backend has no active signing key and no `USER_IDENTITY_PRIVATE_KEY` (usually the startup warning about `ADMIN_DB_ENCRYPTION_KEY`) | Set `ADMIN_DB_ENCRYPTION_KEY` (`./platformctl config init`) and restart the backend, or activate a key under **Admin > Signing Keys** |
 | Agent fails to verify with "USER_IDENTITY_PUBLIC_KEY ... is required" | Agent has no public key or `JWKS_URL` configured | Set `USER_IDENTITY_PUBLIC_KEY` (never the private key) on the agent |
 | `CredentialError: VAULT_ADDR is required` | `CREDENTIAL_BROKER=vault` but Vault env not set | Set `VAULT_ADDR` and `VAULT_JWT_ROLE`, or switch to `CREDENTIAL_BROKER=env` |
 | `/history` shows no conversations | User has not yet created any conversations in this deployment | Expected — history is now per-user |

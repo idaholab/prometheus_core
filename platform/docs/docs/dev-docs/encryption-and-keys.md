@@ -142,7 +142,7 @@ agent-side picture (this page is the platform-side companion to it).
 optional the moment you use signing keys or OIDC providers, but is easy to
 forget because local-password login works fine without it. `make up`/`make
 restart` generate one into `.env` automatically if it's blank (see
-`scripts/init_env.py`) — see it once, in `.env`, and
+`./platformctl config init`) — see it once, in `.env`, and
 back that file up; there's no recovery path for encrypted rows without it.
 
 ## Cross-references

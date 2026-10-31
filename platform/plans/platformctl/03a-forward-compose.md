@@ -53,9 +53,10 @@ today; CI proves it.
     as in the "Make targets" table of `commands.md`.
   - Calls the shim as `sh $(CURDIR)/platformctl`, so `make -C` works and a
     lost executable bit doesn't matter.
-  - Sets `PLATFORMCTL_VIA_MAKE=1` in each forwarding recipe. The tool reads
-    Make's command-line variables from `MAKEFLAGS` and the environment
-    (`design.md`, "Settings and precedence"), so `make up LOCAL_SDK=true`
+  - Sets `PLATFORMCTL_VIA_MAKE=1` in each forwarding recipe (step 2 added the
+    `PLATFORMCTL` variable that does it, and the `PLATFORMCTL_MAKE_VARS` export). The tool reads
+    the names of Make's command-line variables from `PLATFORMCTL_MAKE_VARS` and their values from
+    the environment (`design.md`, "Settings and precedence"), so `make up LOCAL_SDK=true`
     still beats `.env` and values with spaces or quotes arrive intact. The
     Makefile builds no `--set` arguments.
   - The tool maps `SERVICE=` to `logs` arguments, `TAIL=`/`FOLLOW=` to the

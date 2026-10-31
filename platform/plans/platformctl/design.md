@@ -379,7 +379,9 @@ today.
   `X Z` for `make "X=a b 'q'" Z=1`, `X` for `make -k -j2 X=y`, and nothing
   for `X=env make t`. Values with spaces and quotes reach the recipe's
   environment as before (the earlier check with `X=a b 'q'`); step 2 tests
-  them again with a real `make`. A shell variable (`X=y make up`) still
+  them again with a real `make`. Step 2 did: `tests/unit/test_config.py` runs the Makefile's own
+  `PLATFORMCTL_MAKE_VARS` line under the installed Make (3.81 here) and feeds the recipe's
+  environment to `make_overrides`; CI repeats it on Make 4.x (Ubuntu). A shell variable (`X=y make up`) still
   loses to `.env`, as today. The
   registry alone decides what each name is: a setting (it beats `.env`, like
   `--set`), a Make variable mapped to an option (`SERVICE`, `TAIL`,

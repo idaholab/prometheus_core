@@ -46,7 +46,9 @@ section, WSL integration isn't enabled for this distro yet — recheck step 1.
 
 ## 4. Install the remaining prerequisites inside WSL
 
-These aren't WSL-specific, but a fresh distro is usually missing all three:
+These aren't WSL-specific, but a fresh distro is usually missing all of them. `./platformctl` needs Python 3.10 or
+newer in the distro and finds one itself; if `python3 --version` is older, installing `uv` (next) is enough, because
+`./platformctl` then runs through it:
 
 ```bash
 # uv

@@ -1,8 +1,28 @@
 # 2: Port the scripts and remove them
 
-> **Status: Not started**
+> **Status: In progress** (branch `platformctl-step2`, on top of #316; not yet reviewed or opened as a PR)
 
 Lands after the hackathon (Day 2).
+
+**Done so far:** `config init`/`set`/`show`, `status [--wait]`, `deeplynx setup`; the three scripts as stubs; the
+Makefile forwards `init-env`, `check`, `deeplynx-setup` and has `make doctor`; `PLATFORMCTL_MAKE_VARS` (tested
+with a real Make 3.81); `--json` on the shim and `__main__` refusals; `allow_abbrev=False`; `envfile.update_text`
+by parsed span; the moved tests; CI's `sed` blocks; the wider `.gitattributes` and path filter; the user guide,
+docs and `platform/README.md`; `--live` selects `tests/live`; the flaky port test; the canary for the new commands.
+
+**Differs from the plan:**
+
+- `config init` prints `Next: make up` (not `./platformctl up`, which does not exist until step 3a).
+- The base-image "test pull" is `docker manifest inspect` with a 15 s timeout: same registry path and login,
+  nothing downloaded.
+- Under `make`, an answer that changes `LOCAL_SDK` or `LOCAL_DEEPLYNX` warns that make read `.env` before this
+  run, so the new value applies on the next one.
+- `check-prerequisites` is not forwarded to `doctor` (that is step 3a's C9), so `from-make.md` has no such row.
+
+**Not done yet:** the scrubber's URL-encoded/base64 forms and URL passwords (and distinct canary sentinels);
+the canary's `CI=1`/real `_streamed`/`.env`-write cases; making the step 1 jobs *required* (branch protection, a
+repository setting) and gating `merge_group`; the macOS Python 3.9 leg asserting which interpreter ran; the
+WSL and arm64 legs; the `make -n` fixtures for step 3a; the hackathon-freeze check; `/review-panel`.
 
 ## Goal
 

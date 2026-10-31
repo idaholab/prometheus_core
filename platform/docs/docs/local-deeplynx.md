@@ -18,7 +18,7 @@ make up
 ```
 
 Before the rest of the platform starts, every start target (`make up`,
-`make restart`, ...) runs `make deeplynx-setup`, which
+`make restart`, ...) runs `make deeplynx-setup` (`./platformctl deeplynx setup`), which
 
 - starts DeepLynx's database, server and web UI and waits until they're up,
 - creates a project named "Prometheus" in the default organization and an API
