@@ -22,6 +22,7 @@ updates:
       - /platform/agents/optional/osti-research-agent
       - /platform/agents/synthesis-agent
       - /platform/backend
+      - /platform/ctl
       - /platform/docs
       - /platform/tests
     schedule:

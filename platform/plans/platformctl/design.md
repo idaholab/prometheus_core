@@ -66,8 +66,9 @@ Why `platform/ctl/`:
   `--default`). Debian 11 and RHEL 9 also ship 3.9. The shim tries, in order:
   `$PLATFORMCTL_PYTHON`, `python3.14` down to `python3.10`, `python3`, then
   `uv run --no-project --python '>=3.10' python`. Each candidate is checked
-  with a one-line version test. If none works, it prints one install command
-  for the OS. On macOS it tries Homebrew's Python before `/usr/bin/python3`,
+  with a one-line version test. If none works, its only suggestion is to
+  install uv, with uv's one-line installer (no `brew`, `apt` or other package
+  manager, whatever the OS). On macOS it tries Homebrew's Python before `/usr/bin/python3`,
   which opens an install dialog without the Command Line Tools.
 - **`__main__.py` parses on 3.9**: no 3.10+ syntax, and `cli` is imported
   only after the version check, so even a wrong interpreter gets a clear
@@ -83,14 +84,14 @@ Why `platform/ctl/`:
   coverage covers it. The tool finds the platform folder from its own
   location, never from the current directory, so `make -C <platform> ...`
   works. The shim finds its folder with
-  `CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
+  `CDPATH='' cd -P -- "$(dirname -- "$0")" && pwd -P`, so a set `CDPATH` or a
   symlinked shim can't send it elsewhere. The Makefile calls it as
   `sh "$(CURDIR)/platformctl"`, so a lost executable bit or a space in the
   path doesn't matter.
 - **The version probe** also imports `json` and `urllib.request`, since
   some minimal distro Pythons lack modules the tool needs.
-- **Line endings:** `.gitattributes` (new in step 2) forces LF for
-  `platform/platformctl`, `*.sh` and `*.py`, so a Windows-side checkout
+- **Line endings:** `.gitattributes` (new in step 1 for `platform/platformctl`
+  and `*.sh`; step 2 adds `*.py` and the rest) forces LF, so a Windows-side checkout
   can't give the shim CRLF line endings (`/bin/sh^M: bad interpreter`).
 - **Not under `sudo`:** the tool refuses to run as root via `sudo`
   (`SUDO_USER` set), since `.env` and the generated files would end up owned
@@ -366,12 +367,20 @@ today.
   its variables: `--set '$(v)'` over `$(MAKEOVERRIDES)` splits a value at
   its spaces and is a shell syntax error on a `'` (verified with GNU Make
   3.81). Instead the forwarding recipes set `PLATFORMCTL_VIA_MAKE=1`, and
-  the tool reads the names of Make's command-line variables from the
-  `MAKEFLAGS` environment variable (the words after ` -- `, with `\ `
-  unescaped) and their values from its own environment, where Make exports
-  them (verified: `make t "X=a b 'q'"` gives `MAKEFLAGS=... -- X=a\ b\ 'q'`
-  and `X=a b 'q'` in the recipe). `X=env make t` isn't in `MAKEFLAGS`, so a
-  shell variable (`X=y make up`) still loses to `.env`, as today. The
+  the tool reads the names of Make's command-line variables from
+  `PLATFORMCTL_MAKE_VARS`, which the Makefile exports as
+  `$(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $v)),$v))`,
+  and their values from its own environment, where Make exports them.
+  Not from `MAKEFLAGS`: on Make 3.81 (macOS), `make X=y` gives
+  `MAKEFLAGS=X=y` with no ` -- `, `make -k X=y` gives `k -- X=y` and
+  `make -j2 X=y Z=1` gives ` --jobserver-fds=3,4 -j -- Z=1 X=y`, so a parser
+  that wants the words after ` -- ` misses the plain case. Tried on 3.81
+  only, not yet on 4.x: the `$(origin)` form gave `X` for `make X=y`,
+  `X Z` for `make "X=a b 'q'" Z=1`, `X` for `make -k -j2 X=y`, and nothing
+  for `X=env make t`. Values with spaces and quotes reach the recipe's
+  environment as before (the earlier check with `X=a b 'q'`); step 2 tests
+  them again with a real `make`. A shell variable (`X=y make up`) still
+  loses to `.env`, as today. The
   registry alone decides what each name is: a setting (it beats `.env`, like
   `--set`), a Make variable mapped to an option (`SERVICE`, `TAIL`,
   `FOLLOW`, `AGENT`), or unknown (ignored, with a one-line warning naming
@@ -734,6 +743,31 @@ restart.
 
 ### Unit (`tests/unit/`)
 
+- **Every function, global and class variable has a brief docstring**, in the code and in the
+  tests. A variable's docstring is a `"""foo"""` string literal on the line after the assignment,
+  for module globals and for dataclass fields alike:
+
+  ```python
+  MASK = "***"
+  """What a secret is replaced with."""
+
+  @dataclass
+  class Result:
+      """What one check found."""
+
+      status: str
+      """PASS, WARN, FAIL or SKIP."""
+  ```
+
+  `tests/unit/test_docstrings.py` reads every file with `ast` and lists what lacks one. Lambdas
+  and names inside a function body are exempt. A docstring says what the thing does or is for.
+- **The tests mirror the package:** `platformctl/system/compose.py` is tested in
+  `tests/unit/system/test_compose.py`, `actions/doctor.py` in
+  `tests/unit/actions/test_doctor.py`, and so on (`__init__.py` is `test_init.py`,
+  `__main__.py` is `test_main.py`). `tests/unit/test_rules.py` fails when a module that
+  defines code has no test file at its mirrored path, and when a test file matches no module.
+  The only exceptions are tests of the whole tool: the rules, the secrets canary and the
+  `--live` option. A new module starts with its test file.
 - `pytest --cov=platformctl --cov-branch`. 100% line and branch coverage of
   the **combined** report across the Python versions in CI (each version
   uploads its data, one job combines and enforces `fail_under = 100`), so a

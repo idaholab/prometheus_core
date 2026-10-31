@@ -1,0 +1,25 @@
+name: platformctl doctor
+description: Run platformctl doctor in platform/ and fail unless every check reports PASS
+
+# doctor exits 1 only on a FAIL, so a WARN or a SKIP would pass on the exit code alone. These
+# jobs set the platform up the way a user does, so anything but PASS is a problem to look at.
+# One run, as JSON, printed for the log and then checked, so the log and the verdict agree
+
+runs:
+  using: composite
+  steps:
+    - name: Doctor
+      shell: bash
+      working-directory: platform
+      run: |
+        report="$RUNNER_TEMP/doctor.json"
+        ./platformctl doctor --json > "$report" || true
+        jq -r '.checks[] | "\(.status)  \(.id)  \(.evidence)" + (if .fix != "" then "\n      fix: \(.fix)" else "" end)' "$report"
+        # The whole report as JSON, pass or fail: it is what a script or a skill would read
+        echo "::group::doctor --json"
+        cat "$report"
+        echo "::endgroup::"
+        if ! jq -e '.ok and ([.checks[] | select(.status != "PASS")] | length == 0)' "$report" > /dev/null; then
+          echo "::error::platformctl doctor did not report every check as PASS"
+          exit 1
+        fi

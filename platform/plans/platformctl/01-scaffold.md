@@ -1,15 +1,64 @@
 # 1: Scaffold
 
-> **Status: Not started**
+> **Status: Code complete, not yet merged** (branch `worktree-patformctl-1`; set to
+> `Done (<date>, #<PR>)` when the PR merges)
+
+**Differs from the plan, or not done yet:**
+
+- **CI is its own workflow**, `.github/workflows/platformctl.yml` (path-filtered, not
+  required), not new jobs in `test.yml`: a `paths:` filter applies to a whole workflow. The
+  `ruff` project list in `test.yml` gains `platform/ctl`. **Codecov:** the coverage job uploads with a
+  `platformctl` flag, defined in `codecov.yml` with `carryforward`, but the upload is not counted
+  in `after_n_builds` (still 16): the workflow runs only when `platform/ctl` changes, so counting
+  it would stall every other PR's status. Step 2 raises the count when the jobs become
+  unconditional.
+- **Not done:** the measurement of the oldest Compose that supports `include` with `env_file`
+  (and the live leg on it), and the manual WSL checklist. `MIN_VERSION` in
+  `system/compose.py` is still 2.20, from deck 03, and unverified for `env_file`.
+- **Python 3.9 is tested for real**, not only with stubs: `tests/shim/test_python39.py` runs the
+  entry point and the shim on a real 3.9, and CI installs one with `uv python install 3.9` and
+  sets `PLATFORMCTL_REQUIRE_PY39=1` so a missing 3.9 fails instead of skipping. Locally it ran
+  against the Mac's `/usr/bin/python3` (3.9.6).
+- **The shim's uv fallback has a live test** (`tests/live/shim/test_uv_fallback.py`): a PATH
+  with only `uv` and the system tools, `UV_PYTHON_PREFERENCE=only-managed`, and an assertion on
+  the exact `uv run` command. The shim already used uv only when no Python 3.10+ is found.
+- **Not run locally:** the workflow itself (no actionlint/zizmor here), and the busybox leg. The
+  shim tests pass under `sh`, `dash`, `bash` and `ksh` on macOS.
+- **`doctor` runs in the existing `platform: up` and `platform: up deeplynx` jobs** of
+  `test.yml` (the `platformctl-doctor` action: before the start, with the platform running, and
+  after `down-v`). They are not path-filtered and they fail on anything but PASS, so a `doctor`
+  false positive fails those jobs. The plan did not list this: it checks the "the platform's own
+  containers don't count" rule against a live stack, which no other test does.
+- **`make init-env` creates `.env` with mode 0600** (`platform/scripts/init_env.py`, tested in
+  `platform/tests/infrastructure/test_env_vars.py`), so `doctor`'s `env-file` check passes on a
+  fresh `.env`. An existing `.env` is left as it is.
+- **A drift test** (`platform/tests/infrastructure/test_platformctl_registry.py`) checks the
+  tool's required keys, port settings and defaults against `.env.example`, the compose files and
+  the Makefile on every PR, since the platformctl workflow does not run for those edits.
+- **A `.gitattributes`** keeps the shim and `*.sh` LF on a Windows checkout (WSL on `/mnt/c`).
+- **The shim's install message** is the `uv` installer only, not one command per OS.
+- **Added to the shim:** it follows symlinks to find `ctl/` (found by the live test), and its
+  Python probe runs with `-I` like the final run.
+- **Added to `config`:** a malformed `.env` is recorded, not raised, so `doctor` can report it
+  while every other command stops on it.
+- **Flaky test, cause not established:** `platform/tests/infrastructure/test_deeplynx_setup.py::
+  test_find_or_create_project_raises_on_errors[POST]` failed in about 3 of 8 isolated runs and 1
+  of 3 full static runs with this step's changes applied (`ConnectionResetError` from its stub
+  server). On the baseline it passed the one time I ran it, which is too few runs to say it is
+  flaky there too. Nothing in that test or in `platform/tests/infrastructure/` references
+  platformctl, so a link is unlikely, but I did not rule it out. Check it on a clean `devel` a
+  few times before merging.
 
 ## Goal
 
 Add the shim, the package and its test setup, with the core pieces every
-later step builds on, and a first `doctor`. No existing behaviour changes:
-the change stays inside `platform/ctl/` and the `platform/platformctl` shim.
-No Makefile, docs, slides, skills or repo-wide files change, and the new CI
-jobs run only when those paths change and aren't required. This is the one
-step that may land before the hackathon freeze (2026-11-03).
+later step builds on, and a first `doctor`. The tool changes no `make`
+behaviour: the code stays inside `platform/ctl/` and the `platform/platformctl`
+shim. No Makefile, docs, slides or skills change. The outside changes are CI
+plumbing (`platformctl.yml`, `doctor` steps in two `test.yml` jobs, the `ruff`
+list, Dependabot, Codecov), a `.gitattributes`, one drift test, and
+`init_env.py` creating `.env` as 0600. This is the one step that may land
+before the hackathon freeze (2026-11-03).
 
 ## Work
 
@@ -17,7 +66,7 @@ step that may land before the hackathon freeze (2026-11-03).
   marking). Finds a usable Python 3.10+: `$PLATFORMCTL_PYTHON`, `python3.14`
   down to `python3.10`, `python3` (Homebrew's before `/usr/bin` on macOS),
   then `uv run --no-project --python '>=3.10' python`. If none works, prints
-  one install command for the OS. Then
+  the `uv` install command. Then
   `exec "$python" -I "<platform>/ctl/run.py" "$@"`, so a `.py` file in the
   current folder can't shadow the stdlib (`design.md`, "Runtime").
 - **Project** `platform/ctl/`: `pyproject.toml` (`requires-python >=3.10`,
@@ -98,7 +147,8 @@ step that may land before the hackathon freeze (2026-11-03).
   - `checkout-path`: CRLF in the shim, a checkout on `/mnt/<drive>` (WSL)
 - **Actions:** `doctor` (with `--json`, `--list`, `--tag`).
 - **Not in this step** (moved to step 2, after the freeze): `make doctor`,
-  `.gitattributes`, the user guide and `platform/README.md`.
+  a `.gitattributes` for `*.py`, `Makefile` and the rest, the user guide and
+  `platform/README.md`.
 
 ## Tests
 
@@ -174,21 +224,36 @@ step that may land before the hackathon freeze (2026-11-03).
 
 - **Commands:** none change. `./platformctl doctor` and `--help` are new
   and optional.
-- **Files created:** none outside `platform/ctl/` and the shim.
+- **Files created:** none outside `platform/ctl/` and the shim. A `.env` that `make init-env`
+  creates from now on is mode 0600 (an existing one is not touched).
 - **First run:** nothing; `make` doesn't call the tool yet.
 - **Roll back:** revert the PR.
 
 ## Breaking changes
 
 - None (B4, refusing `sudo`, applies once `make` calls the tool in step
-  2): nothing outside `platform/ctl/` and the shim changes, and `make`
-  doesn't call the tool until step 2. `./platformctl doctor` needs Python
+  2): `make` doesn't call the tool until step 2, and a new `.env` being 0600
+  breaks nothing. `./platformctl doctor` needs Python
   3.10+, found by the shim.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, Linux/WSL, AI skills.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, Linux/WSL, AI skills.
+
+Ask them to look at:
+
+- **Technical:** the precedence table and the compose entry file on a real Compose (`.env` beats
+  `.platform.env`, a shell variable beats both); that the shim runs every Python, probe included,
+  with `-I`; that no action calls Docker directly.
+- **CI and tests:** that golden files pin the `--json` output; that a drift test ties the registry
+  to `.env.example`, the compose files and the Makefile; that the macOS 3.9 leg really runs 3.9
+  and not Homebrew's Python; what the `doctor` steps in `platform: up` do to a required job.
+- **Security:** that the canary covers every path, including a `.env` that can't be read; modes of
+  `.env` and the generated files; that no error echoes an argument.
+- **Linux/WSL:** the shim under `dash` and busybox; LF endings on a Windows checkout; a port
+  check that bind-tests without `SO_REUSEADDR`; a port held on the Windows side.
+- **AI skills:** that `--json` is one object on every exit path (the shim's own failures too), and
+  how `ok`, `counts.fail` and the exit code relate.
 
 ## Done when
 
