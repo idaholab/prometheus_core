@@ -30,6 +30,7 @@ import type {
   ConversationHistoryResponse,
   ConversationResumeRequest,
   ConversationSummary,
+  ConversationTasksResponse,
   CreateSessionRequest,
   OidcProvider,
   OidcProviderCreate,
@@ -170,6 +171,12 @@ export const api = {
         body: JSON.stringify(body),
       },
     );
+  },
+
+  /** GET /api/conversations/{id}/tasks — the conversation's background-task tree
+   * (one root per chat turn, its specialist dispatches as children), newest first. */
+  getConversationTasks(conversationId: string): Promise<ConversationTasksResponse> {
+    return request<ConversationTasksResponse>(`/conversations/${encodeURIComponent(conversationId)}/tasks`);
   },
 
   renameConversation(conversationId: string, title: string): Promise<ConversationSummary> {

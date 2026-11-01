@@ -1,0 +1,118 @@
+{
+  "_about": [
+    "The status-line contract between the agents that emit status updates and the frontend parsers that read them",
+    "(src/lib/agentPanel/parseAgentStream.ts for the Agents tab, src/lib/jobs/activeJobs.ts for Active Jobs).",
+    "Each entry is one line format: `template` is a Python str.format string, `example` fills it.",
+    "Both sides test against this file: parseAgentStream.test.ts reads every rendered example, and",
+    "platform/agents/client-agent/tests/test_status_lines.py asserts the in-repo producers emit exactly",
+    "the rendered example. Rewording a line means changing it here, which fails whichever side is not updated.",
+    "Entries whose producer starts with 'external:' come from agents outside this repository (the forward UQ",
+    "agent); only the frontend side is tested for those."
+  ],
+  "lines": [
+    {
+      "id": "next_step",
+      "producer": "platform/agents/client-agent/orchestrator/agent_loop.py",
+      "template": "Next step: '{skill}'.",
+      "example": { "skill": "forward_sampling_uq" }
+    },
+    {
+      "id": "invoking",
+      "producer": "platform/agents/client-agent/orchestrator/skills.py",
+      "template": "Invoking '{skill}'.",
+      "example": { "skill": "forward_sampling_uq" }
+    },
+    {
+      "id": "unavailable",
+      "producer": "platform/agents/client-agent/orchestrator/skills.py",
+      "template": "Capability '{skill}' is currently unavailable.",
+      "example": { "skill": "forward_sampling_uq" }
+    },
+    {
+      "id": "progress",
+      "producer": "platform/agents/client-agent/orchestrator/skills.py",
+      "template": "[{skill}] {message}",
+      "example": { "skill": "forward_sampling_uq", "message": "Requesting baseline pipeline config from okflow-config-agent" }
+    },
+    {
+      "id": "completed",
+      "producer": "platform/agents/client-agent/orchestrator/skills.py",
+      "template": "'{skill}' completed.",
+      "example": { "skill": "forward_sampling_uq" }
+    },
+    {
+      "id": "failed",
+      "producer": "platform/agents/client-agent/orchestrator/skills.py",
+      "template": "'{skill}' failed: {error}",
+      "example": {
+        "skill": "forward_sampling_uq",
+        "error": "Network communication error: All connection attempts failed (host.docker.internal:8042)"
+      }
+    },
+    {
+      "id": "waiting_on",
+      "producer": "platform/agents/client-agent/task_graph.py",
+      "template": "waiting on {skill} — {message}",
+      "example": { "skill": "forward_sampling_uq", "message": "Pipeline 7: running" }
+    },
+    {
+      "id": "response_ready",
+      "producer": "platform/agents/client-agent/orchestrator/chat_flow.py",
+      "template": "Response ready.",
+      "example": {}
+    },
+    {
+      "id": "awaiting_info",
+      "producer": "platform/agents/client-agent/orchestrator/chat_flow.py",
+      "template": "Awaiting additional information.",
+      "example": {}
+    },
+    {
+      "id": "plan_ready",
+      "producer": "platform/agents/client-agent/orchestrator/chat_flow.py",
+      "template": "Plan ready for approval.",
+      "example": {}
+    },
+    {
+      "id": "plan_rejected",
+      "producer": "platform/agents/client-agent/orchestrator/chat_flow.py",
+      "template": "Plan rejected by user.",
+      "example": {}
+    },
+    {
+      "id": "background_complete",
+      "producer": "platform/agents/client-agent/orchestrator/task_tracking.py",
+      "template": "Background task complete.",
+      "example": {}
+    },
+    {
+      "id": "pipeline_state",
+      "producer": "external: forward UQ agent, via the progress line",
+      "template": "[{skill}] Pipeline {id}: {state}",
+      "example": { "skill": "forward_sampling_uq", "id": "1001", "state": "running" }
+    },
+    {
+      "id": "pipeline_started",
+      "producer": "external: forward UQ agent, via the progress line",
+      "template": "[{skill}] Sample {n}: Pipeline {id} started: {url}",
+      "example": {
+        "skill": "forward_sampling_uq",
+        "n": "1",
+        "id": "1001",
+        "url": "https://gitlab.example/group/okflow/-/pipelines/1001"
+      }
+    },
+    {
+      "id": "pipeline_tally",
+      "producer": "external: forward UQ agent, via the progress line",
+      "template": "[{skill}] Pipelines ({k}/{n}): {tally}",
+      "example": { "skill": "forward_sampling_uq", "k": "3", "n": "3", "tally": "2 success, 1 running" }
+    },
+    {
+      "id": "okflow_cases",
+      "producer": "external: forward UQ agent, via the progress line",
+      "template": "[{skill}] Running okflow {model}: {i}/{n} cases complete (3 max concurrent)",
+      "example": { "skill": "forward_sampling_uq", "model": "neutronics", "i": "1", "n": "3" }
+    }
+  ]
+}
