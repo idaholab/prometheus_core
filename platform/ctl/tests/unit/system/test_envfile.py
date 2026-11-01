@@ -263,6 +263,39 @@ def test_update_creates_then_edits(tmp_path: Path):
     assert envfile.read(path) == {"A": "2", "B": "3"}
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "it's a\\b",  # an apostrophe forces double quotes, and the backslash is doubled
+        "back\\\\slash 'q'",
+        'say "hi"\\',
+        "a\\nb",  # a backslash and an n, not a newline
+        "line1\nline2 'x'",
+        "a#b c",
+        "$HOME and ${X}",
+        "tab\there",
+        "",
+        "plain",
+    ],
+)
+def test_a_written_value_reads_back_the_same(value):
+    """`config init`, `config set` and `deeplynx setup` write LLM keys and URLs through this: nothing may change."""
+    assert envfile.parse(envfile.update_text("", {"K": value}))["K"] == value
+
+
+def test_a_written_value_reads_back_the_same_after_a_second_write():
+    """Writing over an existing awkward value keeps the other lines and round-trips the new one."""
+    text = envfile.update_text("A=1\n", {"K": "it's a\\b"})
+    text = envfile.update_text(text, {"K": 'say "hi"\\', "B": "2"})
+    assert envfile.parse(text) == {"A": "1", "K": 'say "hi"\\', "B": "2"}
+
+
+def test_a_double_quoted_value_ends_at_the_first_unescaped_quote():
+    """`\\\\` is an escaped backslash, so the quote after it closes the value (a hand-written `.env`, as Compose reads it)."""
+    assert envfile.parse('K="a\\\\"\nL=1\n') == {"K": "a\\", "L": "1"}
+    assert envfile.parse('K="a\\"b"\n') == {"K": 'a"b'}
+
+
 @pytest.mark.parametrize("key", ["1ABC", "has space", "A=B", ""])
 def test_update_text_refuses_a_key_parse_would_reject(key):
     """Writing `1ABC=x` would leave a file no command can read, so the key is refused before anything is written."""

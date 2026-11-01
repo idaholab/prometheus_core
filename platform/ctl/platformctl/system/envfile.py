@@ -34,18 +34,39 @@ class EnvFileError(ValueError):
     """A malformed line. The message has the line number, not the line."""
 
 
+_ESCAPES = {'"': '"', "\\": "\\", "n": "\n"}
+"""What a backslash means inside double quotes: `\\"`, `\\\\` and `\\n`."""
+
+
+def _closing_quote(raw: str, quote: str) -> int:
+    """The index of the quote that closes the one at `raw[0]`, or -1. Inside double quotes a backslash escapes
+    the next character, so `\\"` doesn't close and `\\\\"` (an escaped backslash, then a quote) does."""
+    i = 1
+    while i < len(raw):
+        if quote == '"' and raw[i] == "\\":
+            i += 2
+            continue
+        if raw[i] == quote:
+            return i
+        i += 1
+    return -1
+
+
 def _unquote(raw: str, lineno: int) -> str:
     """Strip the quotes from a value, or a trailing comment from an unquoted one."""
     raw = raw.strip()
     if raw[:1] in ("'", '"'):
         quote = raw[0]
-        end = raw.find(quote, 1)
-        while quote == '"' and end > 0 and raw[end - 1] == "\\":
-            end = raw.find(quote, end + 1)
+        end = _closing_quote(raw, quote)
         if end < 0:
             raise EnvFileError(f"line {lineno}: unterminated quote")
         value = raw[1:end]
-        return value.replace('\\"', '"').replace("\\n", "\n") if quote == '"' else value
+        # One pass, so `\\n` is a backslash and an `n`, not a backslash and a newline.
+        return (
+            re.sub(r"\\(.)", lambda m: _ESCAPES.get(m.group(1), m.group(0)), value, flags=re.S)
+            if quote == '"'
+            else value
+        )
     # Unquoted: a ` #` starts a comment.
     return re.split(r"\s+#", raw, maxsplit=1)[0].strip()
 
@@ -70,8 +91,8 @@ def _scan(lines: list[str]) -> list[tuple[str, int, int, str]]:
         if not sep or not _KEY.fullmatch(key):
             raise EnvFileError(f"line {start + 1}: expected KEY=value")
         rest = rest.lstrip()
-        if rest[:1] in ("'", '"') and rest.find(rest[0], 1) < 0:
-            while i < len(lines) and rest.find(rest[0], 1) < 0:
+        if rest[:1] in ("'", '"') and _closing_quote(rest, rest[0]) < 0:
+            while i < len(lines) and _closing_quote(rest, rest[0]) < 0:
                 rest += "\n" + lines[i]
                 i += 1
         found.append((key, start, i, rest))
