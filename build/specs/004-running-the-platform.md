@@ -14,7 +14,24 @@ another folder or a port is taken.
 
 ## Requirements
 
+Status and readiness
+
+- REQ-004-01: `status --wait` MUST repeat the platform check until the
+  backend and frontend answer on their host ports and every agent is
+  registered, or until `--timeout` (default `CHECK_TIMEOUT`) passes, and
+  exit 1 on a timeout. (planned: step 2)
+- REQ-004-02: While it waits, `status --wait` MUST say what it's waiting for
+  and how long is left; on a timeout it MUST name what is missing and the
+  `doctor` check for it. (planned: step 2)
+- REQ-004-03: The check MUST reach loopback URLs directly, ignoring
+  `HTTP_PROXY` without `NO_PROXY`. (planned: step 2)
+
 ## Behavior
+
+- BEH-004-01: GIVEN two of three agents registered and 240 s left WHEN
+  `status --wait` prints its progress THEN it reads like "backend ok,
+  frontend ok, agents 2/3: waiting for synthesis-agent, 240 s left".
+  (planned: step 2)
 
 ## Interfaces
 - `./platformctl up [service...]` (`--no-build`, `--foreground`, `--no-check`,

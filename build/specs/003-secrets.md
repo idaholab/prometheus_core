@@ -60,6 +60,14 @@ Passing secrets on
   `REDISCLI_AUTH`, never as `valkey-cli -a`. (planned: step 3a)
 - REQ-003-14: `config init` MUST read keys without echoing them, and stop if
   the prompt would echo. (planned: step 2)
+- REQ-003-15: The scrubber MUST also hide a secret's URL-encoded and base64
+  forms, and the password inside a URL-shaped environment value such as
+  `DOCKER_HOST=tcp://u:pw@h` or `HTTPS_PROXY`. (planned: step 2)
+- REQ-003-16: The DeepLynx client MUST NOT print request headers or bodies,
+  in any output mode. (planned: step 2)
+- REQ-003-17: `LLM_CONFIG_PROFILE` and the other non-secret keys
+  `.env.example` documents MUST be marked safe, so they print as
+  themselves. (planned: step 2)
 
 ## Behavior
 
@@ -71,6 +79,10 @@ Passing secrets on
   THEN the sentinels do show, so the canary can fail.
 - BEH-003-03: GIVEN `--set LLM_API_KEY=...` WHEN it is parsed THEN it is
   refused and the value isn't printed.
+- BEH-003-04: GIVEN distinct sentinels in `.env`, and `CI=1` WHEN `config
+  init`, `config set`, `config show`, `status --wait` and `deeplynx setup`
+  run with `--verbose`, `--json` and forced failures THEN no sentinel appears
+  in stdout, stderr or `.env`'s other lines. (planned: step 2)
 
 ## Interfaces
 - The settings registry's "safe to print" marking

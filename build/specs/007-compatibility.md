@@ -13,6 +13,32 @@ and the output other material quotes.
 
 ## Requirements
 
+The old scripts
+
+- REQ-007-01: `scripts/init_env.py`, `scripts/check_platform.py` and
+  `scripts/deeplynx_setup.py` MUST keep working, each printing one line
+  naming the new command (such as "moved: run `./platformctl config init`")
+  and then running it with the same arguments. (planned: step 2)
+
+Make
+
+- REQ-007-02: `make init-env`, `make check` and `make deeplynx-setup` MUST
+  forward to `config init`, `status --wait` and `deeplynx setup`, keeping
+  their names and help text. (planned: step 2)
+- REQ-007-03: Each forwarded `make` target MUST print one line on stderr
+  naming the command it runs, such as `make up -> ./platformctl up`.
+  (planned: step 2)
+- REQ-007-04: `make doctor` MUST run `doctor`, with `AGENT=<dir>` passed as
+  `--agent`. (planned: step 2)
+- REQ-007-05: `make test-system` MUST keep working, waiting for the platform
+  with `status --wait`. (planned: step 2)
+
+CI
+
+- REQ-007-06: CI MUST set its stub DeepLynx credentials with
+  `config set --from-env`, not by editing `.env` with `sed`.
+  (planned: step 2)
+
 ## Behavior
 
 ## Interfaces

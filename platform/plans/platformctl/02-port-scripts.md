@@ -10,6 +10,29 @@ Move `scripts/init_env.py`, `scripts/check_platform.py` and
 `scripts/deeplynx_setup.py` into platformctl, leaving each as a short
 deprecation stub until step 3c deletes them.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 2)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it.
+
+- [001 Using the CLI](../../../build/specs/001-using-the-cli.md): REQ-001-28
+  (the docs-parse test), REQ-001-29 (`--json` from the early refusals),
+  REQ-001-30 (no abbreviations), REQ-001-31 (the wider `.gitattributes`)
+- [002 Settings and setup](../../../build/specs/002-settings-and-setup.md):
+  REQ-002-15 to REQ-002-27, BEH-002-04, BEH-002-05 (`config init`, `set`,
+  `show`, `deeplynx setup`, the Make variable fixes, `update_text`)
+- [003 Secrets](../../../build/specs/003-secrets.md): REQ-003-14 to
+  REQ-003-17, BEH-003-04 (secret prompts, encoded forms, the DeepLynx
+  client, safe keys, the canary for the new commands)
+- [004 Running the platform](../../../build/specs/004-running-the-platform.md):
+  REQ-004-01 to REQ-004-03, BEH-004-01 (`status --wait`)
+- [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-01
+  to REQ-007-06 (the script stubs, the Make forwards, `make doctor`,
+  `test-system`, CI's `config set --from-env`)
+
 ## Work
 
 - **Actions:** `config init` (from `init_env.py`), `config show`

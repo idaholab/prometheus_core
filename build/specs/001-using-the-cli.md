@@ -106,6 +106,19 @@ Documentation
   guide, the hackathon slides and skills, and the agent-template docs MUST
   parse with the real parser. (planned: step 2)
 
+Exit paths and parsing
+
+- REQ-001-29: With `--json` in the arguments, the refusals before the CLI
+  starts (Python too old, `sudo`, a bad `PLATFORMCTL_PYTHON`) MUST also
+  print one JSON object with `ok` false. (planned: step 2)
+- REQ-001-30: An abbreviated option (`doctor --li` for `--list`) MUST be a
+  usage error, so abbreviations never become part of the interface.
+  (planned: step 2)
+- REQ-001-31: A checkout made by Windows git with `core.autocrlf=true` MUST
+  keep LF line endings in the files that run on Linux: `*.py`, `Makefile`,
+  `Dockerfile`, `*.yml`, `.env.example` and `*.md`, as it already does for
+  the shim and `*.sh`. (planned: step 2)
+
 ## Behavior
 
 - BEH-001-01: GIVEN a Mac whose `python3` is 3.9 and `python3.12` is
@@ -143,3 +156,7 @@ Documentation
 - No test proves REQ-001-21. The golden files catch any change
   to the JSON, but can't tell an added field from a removed one; comparing
   against the previous schema version's goldens would.
+- Draft: for REQ-001-29, step 2 decides between printing the object from
+  the shim and `__main__.py`, or documenting the three refusals as the
+  exceptions to REQ-001-18 (`02-port-scripts.md`, "From the step 1
+  review").

@@ -83,6 +83,22 @@ The `config` commands
   `set` or `blank`) and where it came from. (planned: step 2)
 - REQ-002-21: `deeplynx setup` MUST start the local DeepLynx and save a
   project and API key for it in `.env`. (planned: step 2)
+- REQ-002-22: A variable on the `make` command line that the registry
+  doesn't know MUST be ignored with a one-line warning naming it.
+  (planned: step 2)
+- REQ-002-23: Updating a key MUST replace the whole of a quoted multi-line
+  value, and for a key that appears twice MUST change the last occurrence,
+  the one that is read. (planned: step 2)
+- REQ-002-24: `config set --from-env` MUST exit 1 naming each key that isn't
+  set in the environment, and write nothing. (planned: step 2)
+- REQ-002-25: The local SDK question's recommendation MUST come from a test
+  pull of the pinned base image with a short timeout, so it never hangs off
+  the VPN. (planned: step 2)
+- REQ-002-26: `config init`'s menus MUST work without `termios`, falling
+  back to numbered choices. (planned: step 2)
+- REQ-002-27: `config init` MUST end with "Next: ./platformctl up", or with
+  local DeepLynx "Next: ./platformctl up, then ./platformctl deeplynx
+  setup". (planned: step 2)
 
 ## Behavior
 
@@ -95,6 +111,12 @@ The `config` commands
 - BEH-002-03: GIVEN a `.env` with an unterminated quote WHEN any command
   reads it THEN the error names the line number and doesn't print the
   value.
+- BEH-002-04: GIVEN macOS's Make 3.81, where a plain `make up
+  BACKEND_PORT=7` puts no ` -- ` in `MAKEFLAGS`, WHEN the tool runs through
+  `make` THEN the port is still 7. (planned: step 2)
+- BEH-002-05: GIVEN no terminal and no `LOCAL_SDK` in `.env` WHEN `config
+  init` runs THEN it asks nothing, leaves the setting off, and prints one
+  line naming `--local-sdk`. (planned: step 2)
 
 ## Interfaces
 - `./platformctl config init` (`--local-sdk`, `--no-local-sdk`,
