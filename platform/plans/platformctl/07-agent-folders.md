@@ -10,6 +10,23 @@ from `agent-template/` anywhere: in this repo, next to it, or in a completely
 separate repository that pins `prometheus_core` as a git submodule. See
 `design.md`, "Agents in other repositories".
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 7)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it.
+
+- [005 Your agents](../../../build/specs/005-your-agents.md): REQ-005-14 to
+  REQ-005-31, BEH-005-03 to BEH-005-05 (finding the checkout, acting on the
+  running platform, `--agent`, the network from the project name, the stub
+  and older tools, the agent Makefile, `config sync` and its key list, the
+  version check, `config init --instance`, `--upgrade-makefile`,
+  `--submodule`)
+- [006 Doctor](../../../build/specs/006-doctor.md): REQ-006-37 (what
+  `doctor --agent` reports about the agent folder)
+
 ## Today
 
 - `agent-template/agent_template/Makefile` reads `LOCAL_SDK` and the

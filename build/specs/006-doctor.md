@@ -123,6 +123,11 @@ Later
 - REQ-006-36: A fix that needs the user (`fix_kind` `you` or `yes`) MUST say
   so in words an assistant can act on, such as asking the user before
   running an interactive command. (planned: step 4)
+- REQ-006-37: `doctor --agent` MUST say where it found the platform
+  (submodule, `PROMETHEUS_CORE` or sibling) and which platform is running,
+  recognise an old agent Makefile and print the one-line
+  `--upgrade-makefile` migration, and flag an agent folder whose
+  `.dockerignore` lacks `prometheus_core/` or `**/.env`. (planned: step 7)
 
 ## Behavior
 
