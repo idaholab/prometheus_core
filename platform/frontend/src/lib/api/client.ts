@@ -160,12 +160,6 @@ export const api = {
     return request<ConversationHistoryResponse>(`/conversations/recent?limit=${limit}`);
   },
 
-  /** GET /api/conversations/{id}/tasks — the conversation's background-task tree
-   * (one root per chat turn, its specialist dispatches as children), newest first. */
-  getConversationTasks(conversationId: string): Promise<ConversationTasksResponse> {
-    return request<ConversationTasksResponse>(`/conversations/${encodeURIComponent(conversationId)}/tasks`);
-  },
-
   /** Rebind the session to a past conversation; the next chat turn continues it. */
   resumeConversation(conversationId: string, bindSeq?: number): Promise<ConversationDetailResponse> {
     const body: ConversationResumeRequest = { bind_seq: bindSeq };
@@ -177,6 +171,12 @@ export const api = {
         body: JSON.stringify(body),
       },
     );
+  },
+
+  /** GET /api/conversations/{id}/tasks — the conversation's background-task tree
+   * (one root per chat turn, its specialist dispatches as children), newest first. */
+  getConversationTasks(conversationId: string): Promise<ConversationTasksResponse> {
+    return request<ConversationTasksResponse>(`/conversations/${encodeURIComponent(conversationId)}/tasks`);
   },
 
   renameConversation(conversationId: string, title: string): Promise<ConversationSummary> {

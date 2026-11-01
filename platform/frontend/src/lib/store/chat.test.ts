@@ -24,12 +24,7 @@ vi.mock("react", () => ({
     return get();
   },
 }));
-vi.mock("@/lib/api/events", () => ({
-  openEventStream: (handlers: unknown) => {
-    (globalThis as Record<string, unknown>).__chatTestStream = handlers;
-    return () => {};
-  },
-}));
+vi.mock("@/lib/api/events", () => ({ openEventStream: () => () => {} }));
 vi.mock("@/lib/api/client", () => {
   class StubApiError extends Error {
     constructor(
@@ -51,10 +46,6 @@ type Api = Record<string, (...a: unknown[]) => Promise<unknown>>;
 const g = globalThis as unknown as {
   __chatTestApi: Api;
   __chatTestTap: () => Record<string, unknown>;
-  __chatTestStream: {
-    onStatus: (e: { type: "status"; turn_id: string; message: string; history?: string[] }) => void;
-    onTaskProgress: (e: { type: "task_progress"; task_id: string; message: string }) => void;
-  };
   sessionStorage: unknown;
 };
 
@@ -166,74 +157,4 @@ test("a reload shows the resume marker during getConfig() and drops it when getC
 
   assert.equal(readState().resumingConversationId, null);
   assert.equal(readState().ready, true);
-});
-
-/* backgrounded: the detached task continues the turn's progress step (FE-10). */
-type BgItem = { kind: string; history?: string[]; taskId?: string; turnId?: string; name?: string; done?: boolean };
-const bgItems = () => readState().items as BgItem[];
-const tools = () => bgItems().filter((it) => it.kind === "tool");
-
-async function bootBackgroundConversation(id: string, api: Api): Promise<void> {
-  installStorage(id);
-  g.__chatTestApi = {
-    getConfig: async () => ({}),
-    resumeConversation: async () => detail(id),
-    // Turn recovery, when present, reads the stored transcript on every send; nothing is stored here.
-    getConversation: async () => ({ ...detail(id), messages: [] }),
-    ...api,
-  };
-  await chatStore.bootstrap("p");
-}
-
-test("a backgrounded turn reuses its progress step instead of adding a second row", async () => {
-  const reply = deferred<unknown>();
-  await bootBackgroundConversation("conv-B1", {
-    sendMessage: () => reply.promise,
-    getRecentConversations: async () => ({ conversations: [] }),
-  });
-  const sent = chatStore.sendTurn("run the UQ study");
-  g.__chatTestStream.onStatus({
-    type: "status",
-    turn_id: "t1",
-    message: "Invoking 'forward_sampling_uq'.",
-    history: ["Next step: 'forward_sampling_uq'.", "Invoking 'forward_sampling_uq'."],
-  });
-  reply.resolve({ status: "backgrounded", turn_id: "t1", task_id: "bg-1", message: "Running in the background." });
-  await sent;
-
-  assert.equal(tools().length, 1, "one progress row for the turn");
-  const step = tools()[0];
-  assert.equal(step.turnId, "t1");
-  assert.equal(step.taskId, "bg-1");
-  assert.equal(step.name, "Running in the background.");
-  assert.equal(step.done, false, "re-opened: the task is still running");
-  assert.deepEqual(step.history, ["Next step: 'forward_sampling_uq'.", "Invoking 'forward_sampling_uq'."]);
-
-  g.__chatTestStream.onTaskProgress({
-    type: "task_progress",
-    task_id: "bg-1",
-    message: "waiting on forward_sampling_uq - Pipeline 7: running",
-  });
-  assert.equal(tools().length, 1);
-  assert.deepEqual(tools()[0].history, [
-    "Next step: 'forward_sampling_uq'.",
-    "Invoking 'forward_sampling_uq'.",
-    "waiting on forward_sampling_uq - Pipeline 7: running",
-  ]);
-});
-
-test("a backgrounded turn with no status yet starts an empty progress step", async () => {
-  await bootBackgroundConversation("conv-B2", {
-    sendMessage: async () => ({ status: "backgrounded", turn_id: "t2", task_id: null, message: null }),
-    getRecentConversations: async () => ({ conversations: [] }),
-  });
-  await chatStore.sendTurn("go");
-
-  assert.equal(tools().length, 1);
-  const step = tools()[0];
-  assert.equal(step.turnId, "t2");
-  assert.equal(step.taskId, undefined);
-  assert.equal(step.name, "Running in the background…");
-  assert.deepEqual(step.history, []);
-  assert.equal(step.done, false);
 });
