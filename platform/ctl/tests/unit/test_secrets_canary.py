@@ -20,10 +20,14 @@ output is caught. Extended in every later step (design.md, "Secrets").
 
 from __future__ import annotations
 
+import contextlib
 import io
+import json
 import os
 import stat
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -41,8 +45,13 @@ SENTINELS = {
     "pem2": "CANARYPEMLINETWO0006ghijkl",
     "env_only": "CANARYENVIRONMENT0007",
     "argv": "CANARYARGVVALUE0008",
+    "issued_one": "CANARYISSUEDIDENTIFIER0009",
+    "issued_two": "CANARYISSUEDCREDENTIAL0010",
+    "body": "CANARYRESPONSEBODY0011",
+    "auth": "CANARYAGENTSECRETFORAUTH0012",
 }
-"""A unique value for each shape of secret: plain, with `$`, quoted, in a URL, multi-line, from the environment, from argv."""
+"""A unique value for each shape of secret: plain, with `$`, quoted, in a URL, multi-line, from the environment, from argv,
+and the ones a server sends back (a new API key and secret, an error body) or is sent (the bearer token)."""
 
 DOTENV = f"""LLM_CONFIG_PROFILE=anthropic
 LLM_API_KEY={SENTINELS["plain"]}
@@ -138,6 +147,60 @@ COMMANDS = [
 """Every command line to run, including forced failures that echo the user's argv."""
 
 
+class Responder(BaseHTTPRequestHandler):
+    """A loopback server for DeepLynx and the platform that answers with sentinels, so a path that prints a response shows it.
+
+    It sends a new API key and secret, puts a sentinel in every error body, and echoes the `Authorization`
+    header it receives into an error body, so printing a response or a request header is caught.
+    """
+
+    def _send(self, code: int, body: object) -> None:
+        """Answer with this status and JSON body."""
+        raw = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def _route(self, method: str) -> None:
+        """Answer the routes `deeplynx setup` and `status` call."""
+        length = int(self.headers.get("Content-Length") or 0)
+        self.rfile.read(length)
+        path = self.path
+        if path.endswith("/health") or path == "/healthz":
+            return self._send(200, {"status": "healthy", "note": SENTINELS["body"]})
+        if path.endswith("/projects") and method == "GET":
+            return self._send(200, [{"id": 7, "name": "Prometheus", "isArchived": False, "note": SENTINELS["body"]}])
+        if path.endswith("/oauth/keys"):
+            return self._send(200, {"apiKey": SENTINELS["issued_one"], "apiSecret": SENTINELS["issued_two"]})
+        if path == "/v1/agents":
+            # A 500 whose body echoes the credentials it was sent: nothing may print it.
+            return self._send(500, {"error": SENTINELS["body"], "authorization": self.headers.get("Authorization", "")})
+        return self._send(500, {"error": SENTINELS["body"], "authorization": self.headers.get("Authorization", "")})
+
+    def do_GET(self):  # noqa: N802
+        """Handle a GET."""
+        self._route("GET")
+
+    def do_POST(self):  # noqa: N802
+        """Handle a POST."""
+        self._route("POST")
+
+    def log_message(self, *args):
+        """Keep request logs out of the test output."""
+
+
+@pytest.fixture
+def responder():
+    """A running `Responder`; yields its port."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Responder)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    thread.start()
+    yield server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
 @pytest.fixture
 def canary_env(tmp_path, monkeypatch):
     """A platform folder with the canary `.env`, a fake `docker` on PATH, and an environment holding more secrets."""
@@ -175,8 +238,11 @@ def canary_env(tmp_path, monkeypatch):
 def run(argv, env, **extra):
     """Run `cli.main` and return the exit code, stdout and stderr."""
     out, err = io.StringIO(), io.StringIO()
-    code = cli.main(argv, env={**env, **extra}, out=out, err=err)
-    return code, out.getvalue(), err.getvalue()
+    # A bare `print()` skips `Output` and its scrubber, so the real streams are captured too and added to the result.
+    stray_out, stray_err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stray_out), contextlib.redirect_stderr(stray_err):
+        code = cli.main(argv, env={**env, **extra}, out=out, err=err)
+    return code, out.getvalue() + stray_out.getvalue(), err.getvalue() + stray_err.getvalue()
 
 
 def assert_clean(text: str, where: str) -> None:
@@ -197,6 +263,54 @@ def test_no_sentinel_in_stdout_or_stderr(canary_env, argv, fail):
     _, out, err = run(argv, env, **({"CANARY_FAIL": "1"} if fail else {}))
     assert_clean(out, f"stdout of {argv}")
     assert_clean(err, f"stderr of {argv}")
+
+
+RESPONDING = [
+    ["status"],
+    ["--json", "status"],
+    ["--verbose", "--debug", "status", "--wait", "--timeout", "0"],
+    ["--json", "--verbose", "--debug", "status", "--wait", "--timeout", "0"],
+    ["deeplynx", "setup", "--no-start", "--timeout", "2"],
+    ["--json", "--verbose", "--debug", "deeplynx", "setup", "--no-start", "--timeout", "2"],
+]
+"""Commands that talk to a server, run against a `Responder` that answers with sentinels."""
+
+
+@pytest.mark.parametrize("argv", RESPONDING, ids=lambda a: " ".join(a)[:60])
+def test_no_sentinel_a_server_sends_or_is_sent_reaches_the_output_or_env(canary_env, responder, argv):
+    """A new DeepLynx key and secret, an error body and the bearer token a request carries stay out of the output.
+
+    The earlier canary only reached "connection refused", so a change that printed a response body or a header
+    would have passed. The generated key and secret are saved in `.env` (that is their job) but never printed.
+    """
+    platform, env = canary_env
+    (platform / ".env").write_text(
+        (platform / ".env").read_text().replace("AGENT_SECRET=", "OLD_AGENT_SECRET=")
+        + f"AGENT_SECRET={SENTINELS['auth']}\nLOCAL_DEEPLYNX=true\n"
+    )
+    ports = {
+        "BACKEND_PORT": str(responder),
+        "DEEPLYNX_SERVER_PORT": str(responder),
+        "PROFILE": "",
+    }
+    _, out, err = run(argv, env, **ports)
+    for name in ("issued_one", "issued_two", "body", "auth"):
+        assert SENTINELS[name] not in out + err, f"sentinel {name} leaked in {argv}"
+    assert_clean(out, f"stdout of {argv}")
+    assert_clean(err, f"stderr of {argv}")
+
+
+def test_a_new_deeplynx_key_is_saved_in_env_but_not_printed(canary_env, responder):
+    """`deeplynx setup` writes the key it was given to `.env` (mode kept) and says nothing of its value."""
+    platform, env = canary_env
+    (platform / ".env").write_text((platform / ".env").read_text() + "LOCAL_DEEPLYNX=true\n")
+    code, out, err = run(
+        ["deeplynx", "setup", "--no-start", "--timeout", "2"], env, DEEPLYNX_SERVER_PORT=str(responder), PROFILE=""
+    )
+    saved = (platform / ".env").read_text()
+    assert code == 0 and SENTINELS["issued_one"] in saved and SENTINELS["issued_two"] in saved
+    assert SENTINELS["issued_one"] not in out + err and SENTINELS["issued_two"] not in out + err
+    assert stat.S_IMODE(os.stat(platform / ".env").st_mode) == 0o600
 
 
 def test_the_canary_would_notice_a_leak(canary_env):
