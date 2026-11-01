@@ -25,19 +25,26 @@ SHIM = Path(__file__).resolve().parent.parent / "platformctl"
 COMMAND = ["deeplynx", "setup", "--no-start"]
 
 
-def timeout(argv):
-    """The value of --timeout in the old arguments, in either form, or None."""
+def split(argv):
+    """The value of --timeout (either form, or None) and the other old arguments, which are not forwarded."""
+    seconds, rest, skip = None, [], False
     for i, arg in enumerate(argv):
-        if arg == "--timeout" and i + 1 < len(argv):
-            return argv[i + 1]
-        if arg.startswith("--timeout="):
-            return arg.partition("=")[2]
-    return None
+        if skip:
+            skip = False
+        elif arg == "--timeout" and i + 1 < len(argv):
+            seconds, skip = argv[i + 1], True
+        elif arg.startswith("--timeout="):
+            seconds = arg.partition("=")[2]
+        else:
+            rest.append(arg)
+    return seconds, rest
 
 
 if __name__ == "__main__":
-    seconds = timeout(sys.argv[1:])
+    seconds, rest = split(sys.argv[1:])
     command = COMMAND + (["--timeout", seconds] if seconds else [])
     print(f"moved: run `./platformctl {' '.join(command[:2])}`", file=sys.stderr)
+    if rest:
+        print(f"ignored: {' '.join(rest)} (the port now comes from the DEEPLYNX_SERVER_PORT setting)", file=sys.stderr)
     sys.stderr.flush()
     os.execv("/bin/sh", ["sh", str(SHIM), *command])

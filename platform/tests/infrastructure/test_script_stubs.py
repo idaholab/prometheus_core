@@ -83,8 +83,41 @@ def test_each_stub_says_it_moved_and_runs_the_new_command(stub_dir, script, args
     """One line on stderr, then the new command runs with the old `--timeout` carried over."""
     code, out, err = run_stub(stub_dir, script, *args)
     assert code == 0
-    assert err.strip() == notice
+    assert err.splitlines()[0] == notice
     assert out.strip() == f"platformctl: {forwarded}"
+
+
+@pytest.mark.parametrize(
+    ("script", "args", "ignored"),
+    [
+        (
+            "check_platform.py",
+            ["--timeout", "42", "--backend-port", "8600", "agents/client-agent"],
+            "--backend-port 8600 agents/client-agent",
+        ),
+        ("check_platform.py", ["--timeout=7", "--frontend-port=1", "../my-agent"], "--frontend-port=1 ../my-agent"),
+        ("deeplynx_setup.py", ["--port", "5000", "--timeout", "9"], "--port 5000"),
+    ],
+)
+def test_a_stub_says_which_old_arguments_it_no_longer_honours(stub_dir, script, args, ignored):
+    """A developer who passed a port or their own agent folder is told it is ignored, not left to wonder."""
+    _, _, err = run_stub(stub_dir, script, *args)
+    assert err.splitlines()[1].startswith(f"ignored: {ignored} (")
+
+
+@pytest.mark.parametrize(
+    ("script", "args"),
+    [
+        ("check_platform.py", []),
+        ("check_platform.py", ["--timeout", "5"]),
+        ("deeplynx_setup.py", ["--timeout=9"]),
+        ("init_env.py", []),
+    ],
+)
+def test_a_stub_that_ignores_nothing_prints_only_the_moved_line(stub_dir, script, args):
+    """`--timeout` is forwarded, so it is not reported as ignored."""
+    _, _, err = run_stub(stub_dir, script, *args)
+    assert len(err.splitlines()) == 1
 
 
 def test_the_stubs_are_short():
