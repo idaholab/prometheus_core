@@ -18,8 +18,8 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ConversationTasksResponse, TaskNode } from "@/lib/api/types";
-import { resetHistories } from "@/lib/jobs/activeJobs";
-import { ActiveJobsPanel } from "./ActiveJobsPanel.tsx";
+import { type JobRow, resetHistories } from "@/lib/jobs/activeJobs";
+import { ActiveJobsPanel, PipelinePicker } from "./ActiveJobsPanel.tsx";
 
 const mocks = vi.hoisted(() => ({
   conversationId: "conv-1" as string | null,
@@ -154,16 +154,94 @@ test("a job with one pipeline opens it from anywhere on the card", async () => {
   expect(within(card).queryAllByRole("link")).toHaveLength(0); // no nested links
 });
 
-test("a UQ run lists each sample's pipeline with the failed one first and its state", async () => {
+test("a UQ run offers each sample's pipeline in a picker, failed first, and opens the failed one by default", async () => {
   mocks.getConversationTasks.mockResolvedValue(tasks(TREE));
   render(<ActiveJobsPanel />);
 
   const uq = await waitFor(() => cardOf("forward_sampling_uq"));
-  const links = within(uq).getAllByRole("link");
-  expect(links.map((a) => a.textContent)).toEqual(["GitLab pipeline 52", "GitLab pipeline 51"]);
-  expect(links[0]).toHaveAttribute("href", `${GL}/52`);
-  expect(within(uq).getByText("failed")).toHaveClass("badge-error");
-  expect(within(uq).getByText("success")).toHaveClass("badge-ghost");
+  const picker = within(uq).getByLabelText("2 pipelines, 1 failed");
+  const options = within(picker).getAllByRole("option");
+  expect(options.map((o) => o.textContent)).toEqual([
+    "GitLab pipeline 52 (failed)",
+    "GitLab pipeline 51 (success)",
+  ]);
+  expect(picker).toHaveValue(`${GL}/52`);
+
+  const open = within(uq).getByRole("link", { name: /Open in GitLab/ });
+  expect(open).toHaveAttribute("href", `${GL}/52`);
+  expect(open).toHaveAttribute("target", "_blank");
+  expect(open).toHaveClass("btn-error"); // the selected pipeline failed
+});
+
+test("choosing another pipeline points the GitLab button at it", async () => {
+  const user = userEvent.setup();
+  mocks.getConversationTasks.mockResolvedValue(tasks(TREE));
+  render(<ActiveJobsPanel />);
+
+  const uq = await waitFor(() => cardOf("forward_sampling_uq"));
+  await user.selectOptions(within(uq).getByLabelText("2 pipelines, 1 failed"), `${GL}/51`);
+
+  const open = within(uq).getByRole("link", { name: /Open in GitLab/ });
+  expect(open).toHaveAttribute("href", `${GL}/51`);
+  expect(open).toHaveAttribute("title", "Open GitLab pipeline 51 in GitLab");
+  expect(open).toHaveClass("btn-primary");
+});
+
+test("a newly reported pipeline keeps the one already chosen", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  const uqWith = (msg: string) =>
+    tasks([
+      node({
+        task_id: "turn-9",
+        title: "Run forward UQ",
+        state: "working",
+        children: [
+          node({ task_id: "uq-9", skill: "forward_sampling_uq", state: "working", last_status_message: msg }),
+        ],
+      }),
+    ]);
+  mocks.getConversationTasks.mockResolvedValue(
+    uqWith(`Pipeline 61 started: ${GL}/61\nPipeline 62 started: ${GL}/62`),
+  );
+  render(<ActiveJobsPanel />);
+
+  const uq = await waitFor(() => cardOf("forward_sampling_uq"));
+  await user.selectOptions(within(uq).getByLabelText("2 pipelines"), `${GL}/62`);
+
+  // A third sample's pipeline starts; the list grows, and the choice stays on 62.
+  mocks.getConversationTasks.mockResolvedValue(uqWith(`Pipeline 63 started: ${GL}/63`));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  await waitFor(() => expect(within(cardOf("forward_sampling_uq")).getByLabelText("3 pipelines")).toBeInTheDocument());
+  expect(within(cardOf("forward_sampling_uq")).getByRole("link", { name: /Open in GitLab/ })).toHaveAttribute(
+    "href",
+    `${GL}/62`,
+  );
+});
+
+test("when the chosen pipeline leaves the list, the picker falls back to the first one", async () => {
+  const user = userEvent.setup();
+  const job = (ids: number[]): JobRow => ({
+    taskId: "uq-8",
+    name: "forward_sampling_uq",
+    turnTitle: "Run forward UQ",
+    state: "working",
+    running: true,
+    message: "",
+    error: null,
+    updatedAt: null,
+    depth: 1,
+    links: ids.map((id) => ({ label: `GitLab pipeline ${id}`, url: `${GL}/${id}`, pipelineId: String(id) })),
+  });
+  const { rerender } = render(<PipelinePicker job={job([71, 72])} />);
+  await user.selectOptions(screen.getByLabelText("2 pipelines"), `${GL}/72`);
+  expect(screen.getByRole("link", { name: /Open in GitLab/ })).toHaveAttribute("href", `${GL}/72`);
+
+  // The job is re-dispatched with a fresh set of pipelines: 72 is gone, so 81 is offered.
+  rerender(<PipelinePicker job={job([81, 82])} />);
+  expect(screen.getByRole("link", { name: /Open in GitLab/ })).toHaveAttribute("href", `${GL}/81`);
 });
 
 test("a failed job shows its error instead of its last message, and a job with no links is a plain card", async () => {
