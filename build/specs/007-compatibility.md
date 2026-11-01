@@ -34,6 +34,14 @@ Docs, slides and skills
 - REQ-007-27: The skills' pre-approved commands MUST run the shim by path
   with a wildcard and no `cd`, and MUST NOT include `compose --`, `reset` or
   `down`. (planned: step 3c)
+- REQ-007-28: Outside the Makefile itself, the agent template's own Makefile
+  and the one CI job kept on `make`, nothing in the repository MUST tell a
+  user to run a platform `make` target. (planned: step 5)
+- REQ-007-29: The docs and skills MUST tell an assistant how to run long and
+  interactive commands: `up --no-check` in the background, then
+  `status --wait --timeout <n> --json`; `--yes` and `--confirm` for
+  confirmations; `logs --tail`; and never `compose -- config` or
+  `compose -- exec ... env`. (planned: step 5)
 
 Make
 
