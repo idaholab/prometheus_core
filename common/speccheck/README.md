@@ -97,7 +97,10 @@ def test_specs():
     repo = Path(__file__).resolve().parents[N]
     done = subprocess.run(
         [sys.executable, "-I", str(repo / "common/speccheck/speccheck.py"), "--specs", "build/specs"],
-        cwd=repo, capture_output=True, text=True, check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert done.returncode == 0, done.stderr
 ```
