@@ -20,7 +20,7 @@ services:
     # The image DeepLynx's Dockerfiles/database/Dockerfile.local builds FROM,
     # unmodified. When the server and UI images move to a new DeepLynx release,
     # update this to the one that release uses
-    image: pgvector/pgvector:0.8.3-pg18@sha256:c8a919765f2ef63681329fa21021b830cd4d79d1165bdca730dd016014e4da84
+    image: pgvector/pgvector:0.8.6-pg18@sha256:2ba9ca5f2e7daa0f0e7723cba1ee9167bab54efd3640516a44ac1a928dd67e7a
     environment:
       # Not "deeplynx": the server's migrations create a deeplynx schema, which
       # a role of that name finds first on its search path ("$user", public),
