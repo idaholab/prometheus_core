@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-ARG PROMETHEUS_API_BASE_IMAGE_REPO=containers.github.inl.gov/genesis/prometheus_api
+# Both are passed in by the platform's compose files, from platform/Makefile
+# or platformctl. No default here: build with make, not a bare docker build
+ARG PROMETHEUS_API_BASE_IMAGE_REPO
 ARG PROMETHEUS_API_BASE_IMAGE_HASH
 FROM ${PROMETHEUS_API_BASE_IMAGE_REPO}:${PROMETHEUS_API_BASE_IMAGE_HASH}
 
