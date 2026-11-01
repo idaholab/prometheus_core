@@ -3,7 +3,8 @@ services:
     build:
       context: .
       args:
-        - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
+        # Both set by platform/Makefile or platformctl. No default here
+        - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO}
         - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
         - HTTP_PROXY=${HTTP_PROXY:-}
         - HTTPS_PROXY=${HTTPS_PROXY:-}
