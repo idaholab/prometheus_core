@@ -30,9 +30,9 @@ from pathlib import Path
 from platformctl.system import envfile
 from platformctl.system.runner import MAKE_VARIABLES, Runner, RunnerError
 
-DEFAULT_BASE_IMAGE_REPO = "containers.github.inl.gov/genesis/prometheus_api"
+DEFAULT_BASE_IMAGE_REPO = "ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel"
 """The registry repository of the `prometheus_api` base image."""
-DEFAULT_BASE_IMAGE_HASH = "1914b55"
+DEFAULT_BASE_IMAGE_HASH = "20261031-b999096"
 """The tag of the `prometheus_api` base image the platform is pinned to."""
 DEFAULT_BUILD_CACHE = "ghcr.io/idaholab/prometheus_core/buildcache-prometheus"
 """The prefix of the registry build cache that the publish workflow writes."""

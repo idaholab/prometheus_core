@@ -92,7 +92,7 @@ make down                      # stop
 |||
 
 ::: callout info
-**`LOCAL_SDK=true`**: every Python service is built `FROM` the `prometheus_api` base image. With this line, `make up` first builds that image from `../sdk` on your laptop (`prometheus_api:local`): no registry, no token. Without it, `make up` tries to pull from `containers.github.inl.gov` and fails with `unauthorized`. Put it in `.env` after `make init-env`, so every later `make up` sees it.
+**`LOCAL_SDK=true`**: every Python service is built `FROM` the `prometheus_api` base image. With this line, `make up` first builds that image from `../sdk` on your laptop (`prometheus_api:local`), so you run exactly the SDK you have checked out. Without it, `make up` pulls the published image from `ghcr.io` (public, no token). Put it in `.env` after `make init-env`, so every later `make up` sees it.
 :::
 
 ::: callout bad

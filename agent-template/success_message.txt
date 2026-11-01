@@ -24,7 +24,7 @@ Run the tests (extend tests/test_agent.py as you implement your logic):
 
 Run with Docker (integration testing / deployment):
   # Set PROMETHEUS_API_BASE_IMAGE_HASH in .env first (defaults to `latest`)
-  # No registry access? Build the base image locally first:
+  # To build against your local ../sdk instead, build the base image first:
   #   make -C <monorepo>/platform base-image
   # then set LOCAL_SDK=true in .env (setup does this when the platform uses it)
   make up-fg

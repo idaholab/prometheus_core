@@ -5,7 +5,7 @@ services:
       args:
         # Default to using the latest prometheus_api base image. Override using an env var
         # only for resolving transient incompatibilities.
-        PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
+        PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel}
         PROMETHEUS_API_BASE_IMAGE_HASH: ${PROMETHEUS_API_BASE_IMAGE_HASH:-latest}
         # Corporate proxy settings (optional — leave empty if not behind a proxy).
         HTTP_PROXY: ${HTTP_PROXY:-}
