@@ -912,6 +912,68 @@ def test_ask_user_accepts_a_free_text_answer(harness) -> None:
     assert send(query="Option B").status == "answer"
 
 
+def test_ask_user_follow_up_marked_optional_is_optional(harness) -> None:
+    """A follow-up the model marks required=false (it applies to only some answers of
+    another question) must not block the form."""
+    questions = [
+        {"field": "mode", "question": "How?", "options": ["relative", "Other"]},
+        {"field": "detail", "question": "If Other, describe how to sample POWER:", "required": False},
+    ]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")])])
+
+    first = send(query="Run it")
+    assert first.status == "needs_info"
+    by_field = {q["field"]: q for q in first.followup_questions}
+    assert "required" not in by_field["mode"]  # required by default
+    assert by_field["detail"]["required"] is False
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Which case?",
+        "When should the run start?",
+        "If the run fails, should it retry?",
+        "Unless you object, which solver?",
+        "If Other, describe how to sample POWER:",  # wording alone never makes it optional
+    ],
+)
+def test_ask_user_questions_stay_required_without_explicit_flag(harness, question) -> None:
+    questions = [{"field": "q", "question": question}]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")])])
+    assert "required" not in send(query="Run it").followup_questions[0]
+
+
+@pytest.mark.parametrize("flag", [True, "false", 0, None])
+def test_ask_user_only_literal_false_makes_a_question_optional(harness, flag) -> None:
+    questions = [{"field": "q", "question": "Any extra notes?", "required": flag}]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")])])
+    assert "required" not in send(query="Run it").followup_questions[0]
+
+
+def test_ask_user_blank_optional_answer_reaches_the_model(harness) -> None:
+    """A form submitted with the optional follow-up left blank still answers ask_user;
+    the model sees the blank as an empty string next to the chosen option."""
+
+    def sees_answers(request):
+        assert json.loads(request["messages"][-1]["content"]) == {
+            "status": "answered",
+            "answers": {"mode": "relative", "detail": ""},
+        }
+        return reply("Sampling POWER relatively.")
+
+    questions = [
+        {"field": "mode", "question": "How?", "options": ["relative", "Other"]},
+        {"field": "detail", "question": "If Other, describe it:", "required": False},
+    ]
+    harness.script([reply(calls=[tool_call("ask_user", {"questions": questions}, "c1")]), sees_answers])
+
+    assert send(query="Run it").status == "needs_info"
+    second = send(followup_answers={"mode": "relative", "detail": ""})
+    assert second.status == "answer"
+    assert_transcript_valid(harness.store[CONV]["llm_messages"])
+
+
 UPLOADED_REPORT = {
     "artifact_id": "up-1",
     "name": "report.csv",
