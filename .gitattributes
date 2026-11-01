@@ -16,5 +16,18 @@ Dockerfile.* text eol=lf
 .env.example text eol=lf
 */.env.example text eol=lf
 
+# Files a tool parses and a stray carriage return breaks: `.python-version` becomes "3.12\r" for uv, a CRLF
+# `.dockerignore` stops matching its patterns, and a CRLF LLM profile YAML leaves a "\r" in the menu labels
+# `config init` shows.
+*.yaml text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.json text eol=lf
+*.sample text eol=lf
+*.example text eol=lf
+.python-version text eol=lf
+.dockerignore text eol=lf
+.gitignore text eol=lf
+
 # NOTICE.txt is committed with CRLF and a byte-order mark; leave it exactly as it is.
 NOTICE.txt -text

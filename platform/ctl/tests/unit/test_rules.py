@@ -67,6 +67,50 @@ def test_git_keeps_the_files_a_unix_tool_parses_lf(path):
     assert done.stdout.strip() == f"{path}: eol: lf"
 
 
+CHECKED_OUT_AS_THEY_ARE = {"NOTICE.txt", "common/certs/INL.pem"}
+"""Files committed with CRLF or mixed endings on purpose, which git must leave alone (`-text`, or binary-like)."""
+
+PARSED_EXTENSIONS = {".py", ".sh", ".md", ".yml", ".yaml", ".toml", ".lock", ".json", ".sample", ".example"}
+"""Extensions of files a tool parses, so a checkout with CRLF would break them."""
+
+PARSED_NAMES = {"Makefile", "Dockerfile", ".python-version", ".dockerignore", ".gitignore"}
+"""Names (no useful extension) of files a tool parses."""
+
+
+def test_no_parsed_file_would_be_checked_out_with_crlf():
+    """With `core.autocrlf=true` (Windows git, or a WSL checkout on `/mnt/c`), a file with no `eol` rule becomes CRLF.
+
+    This lists every tracked file a tool parses and asks git which line ending it would check out, instead of
+    naming a few paths: `.python-version` as "3.12\\r" breaks uv, and a CRLF `.dockerignore` stops matching.
+    """
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not installed")
+    repo = PACKAGE.parents[2]
+    listed = subprocess.run([git, "ls-files", "-z"], capture_output=True, cwd=repo, check=False)
+    if listed.returncode != 0:
+        pytest.skip("not a git checkout")
+    files = [name for name in listed.stdout.decode().split("\0") if name and name not in CHECKED_OUT_AS_THEY_ARE]
+    parsed = [
+        name
+        for name in files
+        if Path(name).suffix in PARSED_EXTENSIONS
+        or Path(name).name in PARSED_NAMES
+        or Path(name).name.startswith(("Dockerfile.", ".env."))
+    ]
+    attrs = subprocess.run(
+        [git, "check-attr", "-z", "--stdin", "eol"],
+        input="\0".join(parsed).encode(),
+        capture_output=True,
+        cwd=repo,
+        check=True,
+    )
+    fields = attrs.stdout.decode().split("\0")
+    eol = {fields[i]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}
+    assert parsed, "found no files to check"
+    assert [name for name in parsed if eol.get(name) != "lf"] == []
+
+
 def test_git_leaves_notice_txt_exactly_as_committed():
     """`NOTICE.txt` is committed with CRLF and a byte-order mark: `-text` keeps git from touching either."""
     git = shutil.which("git")
