@@ -137,3 +137,26 @@ test("a network error on the report check also falls back", async () => {
 
   expect(await screen.findByRole("status")).toHaveTextContent("The report could not be loaded.");
 });
+
+test("a report check aborted by unmounting is ignored", async () => {
+  let signal: AbortSignal | undefined;
+  let rejectFetch!: (e: unknown) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise((_res, rej) => {
+        rejectFetch = rej;
+      });
+    }),
+  );
+  const { unmount } = render(<UQNotebookElement element={{ type: "custom", props: { reportUrl: "/r" } }} />);
+  fireEvent.load(screen.getByTitle("UQ analysis"));
+  unmount();
+  expect(signal?.aborted).toBe(true);
+  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+  rejectFetch(new DOMException("aborted", "AbortError"));
+  await new Promise((r) => setTimeout(r, 0));
+  expect(errors).not.toHaveBeenCalled(); // no state update after unmount
+  errors.mockRestore();
+});
