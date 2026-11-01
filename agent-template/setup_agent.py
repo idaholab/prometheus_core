@@ -286,8 +286,8 @@ def select_platform_env_values(env_path: Path) -> dict[str, str]:
     assignments = read_env_assignments(env_path)
     selected = {key: assignments[key] for key in PLATFORM_SECRET_KEYS + PLATFORM_DEEPLYNX_KEYS if key in assignments}
 
-    # A platform built with LOCAL_SDK=true has no registry access; the agent
-    # Makefile then builds FROM the base image the platform built locally.
+    # A platform built with LOCAL_SDK=true runs the SDK from its checkout; the
+    # agent Makefile then builds FROM the base image the platform built locally.
     if platform_uses_local_sdk(assignments):
         selected["LOCAL_SDK"] = "true"
 

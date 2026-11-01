@@ -40,7 +40,6 @@ Every agent starts from a small project template:
 - **uv** — the package manager used across the platform. Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - **Docker Desktop** (or Podman) — only needed for Steps 6–9
 - **Git** — for cloning and version control
-- Access to the `prometheus_api` base image registry (`containers.github.inl.gov/genesis/prometheus_api`) — or the platform's `.env` file, which has the `PROMETHEUS_API_BASE_IMAGE_HASH` value (defaults to `latest`)
 
 ---
 
@@ -590,10 +589,11 @@ Docker packages your code and all its dependencies into a **container image** �
 ### Your Dockerfile
 
 ```dockerfile
+ARG PROMETHEUS_API_BASE_IMAGE_REPO=ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel
 ARG PROMETHEUS_API_BASE_IMAGE_HASH
-FROM containers.github.inl.gov/genesis/prometheus_api:${PROMETHEUS_API_BASE_IMAGE_HASH}
+FROM ${PROMETHEUS_API_BASE_IMAGE_REPO}:${PROMETHEUS_API_BASE_IMAGE_HASH}
 ```
-Starts from the pre-built base image, pinned to a specific hash for reproducibility. The hash is passed in as a build argument — you never change this line directly; you change the value in `.env` or the platform's `Makefile`.
+Starts from the pre-built base image, pinned to a specific tag for reproducibility. The repo and tag are passed in as build arguments — you never change this line directly; you change the value in `.env` or the platform's `Makefile`. (The real Dockerfile uses the same `FROM` twice: once for a small stage that checks `uv.lock` exists, then for the image itself.)
 
 ```dockerfile
 WORKDIR /app

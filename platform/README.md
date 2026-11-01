@@ -29,7 +29,6 @@ graph TD
   - **Windows:** run the stack from a WSL2 distro, not from Windows directly. See
     [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) for enabling WSL2
     integration in Docker Desktop before continuing below.
-- Either a [PAT](https://github.inl.gov/settings/tokens/new) for `containers.github.inl.gov` (to pull the `prometheus_api` base image) — 90 days is the recommended expiration — or `LOCAL_SDK=true` to build that image from `../sdk` instead (see step 2)
 - [uv](https://docs.astral.sh/uv/) and Python — only required to run the Python components outside Docker:
   - Backend: **3.12+**
   - Client-agent: **3.12+**
@@ -92,7 +91,13 @@ Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file
 
 Every Python service is built `FROM` the `prometheus_api` base image. Pick one of the two options below.
 
-#### Option A: build it locally (no registry access needed)
+#### Option A: pull the published image (default)
+
+Nothing to do. `make up` pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
+
+#### Option B: build it locally from `../sdk`
+
+Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out:
 
 ```bash
 echo "LOCAL_SDK=true" >> .env
@@ -101,19 +106,6 @@ echo "LOCAL_SDK=true" >> .env
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
 
 The SDK base image, the backend and the frontend import the registry build cache that CI publishes (`amd64` or `arm64`, from your machine), so a first build reuses layers instead of rebuilding them. The agent images aren't published, so they still build locally. Importing a registry cache needs Docker's containerd image store (the default in recent Docker Desktop); if your builds ignore it, enable it under Settings → General. To build without the cache, for example when offline, set `USE_BUILD_CACHE=false` in `.env` or on the command line. A fork can point `BUILD_CACHE` at its own cache prefix.
-
-#### Option B: pull it from the container registry
-
-The `prometheus_api` base image is pulled from INL's Github with a [PAT](https://github.inl.gov/settings/tokens/new):
-
-The PAT (Personal Access Token) requires `read:packages` permissions. 90 days is the recommended expiration.
-
-```bash
-export GITHUB_PAT=<your-token>
-echo $GITHUB_PAT | docker login containers.github.inl.gov \
-  --username <your-github-username> \
-  --password-stdin
-```
 
 ### 3. Start the stack
 

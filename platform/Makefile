@@ -18,8 +18,8 @@ COMPOSE_AGENTS := docker-compose.agents.yml
 
 # Set LOCAL_SDK=true (in .env or on the command line) to build the
 # prometheus_api base image from ../sdk into the local Docker store and build
-# all services FROM it, instead of pulling from the registry. For anyone
-# without access to containers.github.inl.gov. Default: false.
+# all services FROM it, instead of pulling the published image. Use it to run
+# against the SDK checked out in ../sdk. Default: false.
 LOCAL_SDK ?= false
 
 ifeq ($(LOCAL_SDK),true)
@@ -27,9 +27,12 @@ PROMETHEUS_API_BASE_IMAGE_REPO := prometheus_api
 PROMETHEUS_API_BASE_IMAGE_HASH := local
 BASE_IMAGE_DEP := base-image
 else
-# Override these to pin a specific prometheus_api base image.
-PROMETHEUS_API_BASE_IMAGE_REPO ?= containers.github.inl.gov/genesis/prometheus_api
-PROMETHEUS_API_BASE_IMAGE_HASH ?= 1914b55
+# Override these to pin a specific prometheus_api base image. The default is
+# the SDK image that publish-images pushes to ghcr.io; its tags are
+# <commit date>-<7 char sha>. Keep in step with platformctl's
+# DEFAULT_BASE_IMAGE_* in ctl/platformctl/config.py.
+PROMETHEUS_API_BASE_IMAGE_REPO ?= ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel
+PROMETHEUS_API_BASE_IMAGE_HASH ?= 20261031-b999096
 BASE_IMAGE_DEP :=
 endif
 export PROMETHEUS_API_BASE_IMAGE_REPO

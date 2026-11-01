@@ -29,8 +29,6 @@ dependencies — builds are small and fast.
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Docker Desktop (or Podman) — for containerized runs
-- Access to the `prometheus_api` base image registry
-  (`containers.github.inl.gov/genesis/prometheus_api`)
 
 ### Scaffold a new agent
 

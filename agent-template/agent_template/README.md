@@ -83,8 +83,8 @@ uv run ruff check .           # lint
 ## Run with Docker
 
 Optionally set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` (find the current value in
-`platform/Makefile`), or let it default to `latest`. Without registry access, set
-`LOCAL_SDK=true` instead to build FROM the `prometheus_api:local` image the platform
+`platform/Makefile`), or let it default to `latest`. To build against the SDK in your
+checkout, set `LOCAL_SDK=true` instead to build FROM the `prometheus_api:local` image the platform
 builds (`make base-image` in `platform/`). Then:
 
 ```bash

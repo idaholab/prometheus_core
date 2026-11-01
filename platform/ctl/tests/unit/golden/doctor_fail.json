@@ -40,7 +40,7 @@
     },
     {
       "area": "laptop",
-      "evidence": "the base image is containers.github.inl.gov/genesis/prometheus_api:1914b55",
+      "evidence": "the base image is ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel:20261031-b999096",
       "fix": "",
       "fix_kind": "yes",
       "id": "base-image-pin",

@@ -18,9 +18,9 @@ See `design.md`, "Where the platform's code comes from".
   and `prometheus_frontend-devel` to `ghcr.io/idaholab/prometheus_core`
   after each green run on `devel`, tagged `<commit date>-<7 char sha>`.
 - The client-agent and the platform's own agents aren't published.
-- The base-image pin (`PROMETHEUS_API_BASE_IMAGE_HASH`) is a separate value
-  from the platform version, and points at a different registry
-  (`containers.github.inl.gov`).
+- The base-image pin (`PROMETHEUS_API_BASE_IMAGE_HASH`) points at the same
+  `prometheus_sdk-devel` image, but is still a separate value from the
+  platform version: a commit runs whichever SDK tag it pins, not its own.
 
 ## Work
 
