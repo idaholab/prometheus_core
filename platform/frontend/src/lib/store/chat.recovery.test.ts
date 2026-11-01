@@ -420,3 +420,42 @@ test("pressing stop while a failing recovery read is in flight stops the retries
     await vi.advanceTimersByTimeAsync(120_000);
     assert.equal(reads, 2, "no retry after stop");
   }));
+
+test("pressing stop while the input-status read is in flight leaves the turn unfilled", () =>
+  withFakeTimers(async () => {
+    let stored: Msg[] = [];
+    const recent = deferred<unknown>();
+    await bootToConversation("conv-I", {
+      getConversation: async () => ({ ...detail("conv-I"), messages: stored }),
+      sendMessage: () => deferred<unknown>().promise,
+    });
+    void chatStore.sendTurn("set up a run");
+    await vi.advanceTimersByTimeAsync(0);
+    // Only the recovery's input-status read waits; the boot read already returned.
+    g.__chatTestApi.getRecentConversations = () => recent.promise;
+    stored = [user("set up a run"), reply("Which solver?")];
+    await vi.advanceTimersByTimeAsync(60_000); // the poll found the reply, now reading the status
+    chatStore.stop();
+    recent.resolve({ available: true, conversations: [{ conversation_id: "conv-I", status: "needs_info" }] });
+    await vi.advanceTimersByTimeAsync(0);
+    assert.ok(!items().some((it) => it.kind === "assistant"), "the stopped turn is not filled in");
+    assert.equal(readState().awaiting, false);
+  }));
+
+test("an unreadable history list recovers the reply with no input notice", () =>
+  withFakeTimers(async () => {
+    let stored: Msg[] = [];
+    await bootToConversation("conv-H", {
+      getConversation: async () => ({ ...detail("conv-H"), messages: stored }),
+      sendMessage: () => deferred<unknown>().promise,
+    });
+    void chatStore.sendTurn("go");
+    await vi.advanceTimersByTimeAsync(0);
+    g.__chatTestApi.getRecentConversations = async () => {
+      throw new ApiError(503, "unavailable");
+    };
+    stored = [user("go"), reply("Which solver?")];
+    await vi.advanceTimersByTimeAsync(60_000);
+    assert.equal(items().at(-1)?.text, "Which solver?", "best effort: treated as not waiting on input");
+    assert.equal(readState().awaiting, false);
+  }));
