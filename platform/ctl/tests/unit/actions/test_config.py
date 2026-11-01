@@ -363,6 +363,7 @@ def test_init_names_a_missing_key_a_profile_needs(init_ctx, init_root):
     assert config_action.init(ctx, init_args()) == 1
     assert "[ERROR] LLM_API_KEY is empty in " in err.getvalue()
     assert "LLM_CONFIG_PROFILE=anthropic needs it" in err.getvalue()
+    assert "In a script, export LLM_API_KEY first and it is saved for you." in err.getvalue()
 
 
 @pytest.mark.parametrize(

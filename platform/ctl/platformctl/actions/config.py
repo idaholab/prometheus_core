@@ -131,7 +131,8 @@ def _llm_problem(ctx: Context, current: dict[str, str], known: dict) -> int | No
             [
                 f"{key} is empty in {path}.",
                 f"LLM_CONFIG_PROFILE={current['LLM_CONFIG_PROFILE']} needs it; set it (or pick another profile)",
-                "and run ./platformctl config init again. See README.md, 'Choose an LLM profile'.",
+                f"and run ./platformctl config init again. In a script, export {key} first and it is saved for you.",
+                "See README.md, 'Choose an LLM profile'.",
             ],
         )
     return None
