@@ -233,12 +233,24 @@ class AgentRegistryClient:
         """The registry URL without credentials, for logs."""
         return _redact_url(self.registry_url)
 
+    @classmethod
+    def _entry_named(cls, body: Any, agent_name: str) -> Optional[Dict[str, Any]]:
+        """The entry of a ``GET /v1/agents`` body whose ``agent_name`` is ``agent_name``.
+
+        The one place an entry is matched, by name only, for the checks and for the
+        LiteLLM replace path. Raises like ``_registry_entries`` on an unexpected body.
+        """
+        for entry in cls._registry_entries(body):
+            if isinstance(entry, dict) and entry.get("agent_name") == agent_name:
+                return entry
+        return None
+
     def _existing_entry_id(self, body: Any, agent_name: str) -> str:
         """The ``agent_id`` of the listed entry named ``agent_name``."""
-        for entry in self._registry_entries(body):
-            if isinstance(entry, dict) and entry.get("agent_name") == agent_name:
-                return str(entry["agent_id"])
-        raise LookupError(f"the registry says '{agent_name}' exists but does not list it")
+        entry = self._entry_named(body, agent_name)
+        if entry is None:
+            raise LookupError(f"the registry says '{agent_name}' exists but does not list it")
+        return str(entry["agent_id"])
 
     def register_once(
         self,
@@ -325,12 +337,10 @@ class AgentRegistryClient:
             async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
                 response = await client.get(f"{self.registry_url}/v1/agents")
                 response.raise_for_status()
-                entries = self._registry_entries(response.json())
+                body = response.json()
         finally:
             _registry_request.reset(token)
-        return any(
-            isinstance(entry, dict) and entry.get("agent_name") == agent_name for entry in entries
-        )
+        return self._entry_named(body, agent_name) is not None
 
     async def keep_registered_async(
         self,

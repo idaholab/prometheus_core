@@ -183,6 +183,42 @@ def test_register_once_raises_on_another_400(registry, mode):
     assert registry.calls == ["POST"]
 
 
+@pytest.mark.parametrize("mode", ["sync", "async"])
+def test_register_once_raises_when_litellm_refuses_a_name_it_does_not_list(registry, mode):
+    """A 400 "already exists" for a name missing from the listing is an error: no DELETE
+    of a guessed id, and no second POST."""
+    registry.litellm = True
+    client = AgentRegistryClient("http://registry")
+    registry.entries[client.agent_name(_card())] = {}
+    real_handler = registry.handler
+
+    def hide_the_entry(request):
+        if request.method == "GET":
+            registry.calls.append("GET")
+            return httpx.Response(200, json=[])
+        return real_handler(request)
+
+    registry.handler = hide_the_entry
+    with pytest.raises(LookupError, match="does not list it"):
+        _register_once(client, mode)
+    assert registry.calls == ["POST", "GET"]
+
+
+def test_unparseable_registry_url_is_not_logged():
+    """A REGISTRY_URL urlsplit rejects is logged as a placeholder, never as written."""
+    client = AgentRegistryClient("http://SENTINEL-user:SENTINEL-pass@[::1")
+    assert client.safe_registry_url == "<unparseable registry URL>"
+
+
+def test_agent_with_a_blank_registry_url_registers_and_checks_nothing(monkeypatch, registry):
+    """A REGISTRY_URL of only spaces turns registration off, and the checks with it."""
+    monkeypatch.setenv("REGISTRY_URL", "   ")
+    monkeypatch.setenv("REGISTRY_CHECK_INTERVAL_SECONDS", "0.001")
+    agent = PrometheusAgent(agent_name="MyAgent")
+    asyncio.run(asyncio.wait_for(agent.keep_registered_async(_card()), timeout=5))
+    assert registry.calls == []
+
+
 def test_keep_registered_re_registers_after_the_registry_is_cleared(registry):
     client = AgentRegistryClient("http://registry")
 
