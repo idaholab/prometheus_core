@@ -344,6 +344,18 @@ def test_init_without_a_terminal_and_without_a_profile_fails_as_the_script_did(i
     assert "Local SDK: no (not asked without a terminal" in out.getvalue()
 
 
+def test_init_without_a_terminal_names_the_flags_only_on_the_run_that_creates_env(init_ctx, init_root):
+    """Every `make up` runs `config init`: after the first run the "not asked" note would only be noise."""
+    first, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "anthropic", "LLM_API_KEY": "value-from-the-environment-1"})
+    assert config_action.init(first, init_args()) == 0
+    assert "not asked without a terminal" in out.getvalue()
+    for key in ("LOCAL_SDK", "LOCAL_DEEPLYNX"):  # the person never answered, so .env still doesn't decide them
+        assert key not in envfile.read(init_root / ".env")
+    again, out, _ = init_ctx({})
+    assert config_action.init(again, init_args()) == 0
+    assert "not asked" not in out.getvalue() and "Local SDK" not in out.getvalue()
+
+
 def test_init_names_a_missing_key_a_profile_needs(init_ctx, init_root):
     """The profile is chosen but its key is blank."""
     (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=anthropic"))

@@ -143,13 +143,15 @@ def _asks(ctx: Context) -> bool:
 
 
 def _decide(
-    ctx: Context, current: dict[str, str], *, key: str, flag: bool | None, decided: bool, label: str, ask
+    ctx: Context, *, key: str, flag: bool | None, decided: bool, label: str, ask, first_run: bool
 ) -> str | None:
     """Settle one yes/no setting (`LOCAL_SDK`, `LOCAL_DEEPLYNX`) and say what it is; return the line to print.
 
     A flag always wins. Otherwise a value `.env` already decides is never changed. Otherwise the
     question is asked on a terminal (`--yes` takes the recommended answer), and with no terminal
-    nothing is asked and today's default (off) stays, with a note naming the flag.
+    nothing is asked and today's default (off) stays. The note naming the flag is for the run that creates
+    `.env`, when the person is learning the flags; every later run without a terminal (CI, an assistant, each
+    `make up`) stays quiet about it.
     """
     if flag is not None:
         _save(ctx, {key: "true" if flag else "false"})
@@ -163,6 +165,8 @@ def _decide(
             raise ConfigError(str(exc)) from None
         _save(ctx, {key: "true" if answer else "false"})
         return f"{label}: {'yes' if answer else 'no'}"
+    if not first_run:
+        return None
     name = "--" + label.lower().replace(" ", "-")
     return f"{label}: no (not asked without a terminal; use {name} to turn it on)"
 
@@ -252,21 +256,21 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
         notes = [
             _decide(
                 ctx,
-                current,
                 key="LOCAL_SDK",
                 flag=args.local_sdk,
                 decided=_decided(ctx, "LOCAL_SDK"),
                 label="Local SDK",
                 ask=lambda: _ask_local_sdk(ctx),
+                first_run=created,
             ),
             _decide(
                 ctx,
-                current,
                 key="LOCAL_DEEPLYNX",
                 flag=args.local_deeplynx,
                 decided=_decided(ctx, "LOCAL_DEEPLYNX") or bool(current.get("DEEPLYNX_KEY")),
                 label="Local DeepLynx",
                 ask=lambda: _ask_local_deeplynx(ctx),
+                first_run=created,
             ),
         ]
     except ConfigError as exc:  # the terminal closed under a question
