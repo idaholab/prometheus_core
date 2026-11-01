@@ -135,16 +135,23 @@ class Docker:
         )  # fmt: skip
         return done.stdout.split() if done.ok else []
 
-    def registry_reachable(self, ref: str, timeout: float = 15.0) -> bool:
+    def registry_reachable(self, ref: str, timeout: float = 15.0, arch: str | None = None) -> bool:
         """Whether this machine can read the image's manifest from its registry within `timeout` seconds.
 
         This stands in for a test pull: it needs the same network path and login but downloads
         nothing. Off the VPN the call would hang, hence the timeout (a timeout counts as unreachable).
+
+        With `arch` (`arm64` or `amd64`), a manifest list that has no entry for it counts as unreachable
+        too: the pull would fail or run under emulation on this machine, so building here is the better
+        answer. A manifest whose architectures can't be read is taken as reachable.
         """
         try:
-            return self._run("manifest", "inspect", ref, timeout=timeout).ok
+            done = self._run("manifest", "inspect", ref, timeout=timeout)
         except RunnerError:
             return False
+        if not done.ok:
+            return False
+        return arch is None or _has_architecture(done.stdout, arch)
 
     def image_exists(self, ref: str) -> bool:
         """Whether the image is in the local store."""
@@ -174,3 +181,24 @@ class Docker:
                 }
             )
         return found
+
+
+def _has_architecture(manifest: str, arch: str) -> bool:
+    """Whether a `docker manifest inspect` result offers `arch`; True when it names no architectures at all.
+
+    A manifest list has one entry per platform (`{"platform": {"architecture": "arm64"}}`). A single-image
+    manifest has none, and then it is not for us to say it is missing.
+    """
+    try:
+        data = json.loads(manifest)
+    except ValueError:
+        return True
+    entries = data if isinstance(data, list) else [data]
+    found = [
+        str(entry["platform"].get("architecture", ""))
+        for item in entries
+        if isinstance(item, dict)
+        for entry in (item.get("manifests") or [item])
+        if isinstance(entry, dict) and isinstance(entry.get("platform"), dict)
+    ]
+    return not found or arch in found

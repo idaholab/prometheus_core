@@ -18,7 +18,7 @@ import argparse
 
 from platformctl import env_init, jsonout, llm_profiles
 from platformctl.actions import Subcommand
-from platformctl.config import REGISTRY, SETTINGS, ConfigError, check_value, is_name, is_safe, parse_set
+from platformctl.config import REGISTRY, SETTINGS, ConfigError, check_value, host_arch, is_name, is_safe, parse_set
 from platformctl.context import Context
 from platformctl.system import envfile, terminal
 
@@ -178,7 +178,8 @@ def _ask_local_sdk(ctx: Context) -> bool:
     if not ctx.yes:
         # Off the VPN this waits up to the timeout; say so, or it looks like a hang.
         ctx.output.info("Checking whether you can pull from the INL registry (up to 15 s) ...")
-    recommended = not ctx.docker.registry_reachable(f"{repo}:{tag}")
+    arch = host_arch(ctx.docker.info().architecture)
+    recommended = not ctx.docker.registry_reachable(f"{repo}:{tag}", arch=arch)
     if ctx.yes:
         return recommended
     question = f"Build everything on this laptop (no INL login needed)? (recommended: {'yes' if recommended else 'no'})"

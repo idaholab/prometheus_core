@@ -581,6 +581,18 @@ def test_init_reports_needs_terminal_when_the_input_closes_under_a_question(init
     assert "the input was closed before the question was answered" in err.getvalue()
 
 
+def test_init_recommends_building_locally_when_the_pin_has_no_image_for_this_machine(init_ctx, runner, monkeypatch):
+    """A login that works is not enough: an amd64-only pin on an arm64 Mac would fail or run emulated."""
+    amd64_only = '{"manifests": [{"platform": {"architecture": "amd64", "os": "linux"}}]}'
+    runner.reply("docker", "manifest", "inspect", code=0, stdout=amd64_only)  # the fake daemon reports aarch64
+    asked = []
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: asked.append((question, default)) or default)
+    ctx, _, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    config_action.init(ctx, init_args())
+    assert asked[0] == ("Build everything on this laptop (no INL login needed)? (recommended: yes)", True)
+
+
 def test_init_skips_a_question_that_env_already_decides(init_ctx, init_root, monkeypatch):
     """`LOCAL_SDK` set, and `DEEPLYNX_KEY` set (so DeepLynx is elsewhere): nothing is asked or changed."""
     (init_root / ".env").write_text(
