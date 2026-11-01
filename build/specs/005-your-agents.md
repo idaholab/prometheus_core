@@ -53,6 +53,14 @@ Discovery
 - REQ-005-10: `agents refresh` MUST make the client agent rediscover the
   agents at once, and report how many tools it now has and which are yours.
   (planned: step 3b)
+- REQ-005-11: `agents list` MUST show each agent that would start, whether
+  it is included, and why (in tree, debug, optional). (planned: step 3c)
+- REQ-005-12: `agents list --registered` MUST show what the registry holds
+  (route key, card URL, skill ids), mark which agents are yours, and flag
+  duplicate route keys and skill ids, which make two agents replace each
+  other; it MUST never print `AGENT_SECRET`. (planned: step 3c)
+- REQ-005-13: `agents generate` MUST write the generated compose files, and
+  `agents clean` MUST delete them. (planned: step 3a)
 
 ## Behavior
 

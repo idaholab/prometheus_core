@@ -51,6 +51,8 @@ Starting and stopping
 - REQ-004-11: `restart` with no service MUST restart the platform without
   rebuilding; `restart <service...>` MUST restart only those and say they
   were not rebuilt. (planned: step 3a)
+- REQ-004-31: `up <service...>` MUST build and recreate only the named
+  services, then wait for them. (planned: step 3c)
 - REQ-004-12: `build` MUST build the platform's images (the base image first
   when `LOCAL_SDK` is on); `--plain` gives plain progress output, and
   `--base-only` builds only `prometheus_api:local`. (planned: step 3a)
@@ -144,6 +146,8 @@ Preflight
   THEN it stops, naming the process. (planned: step 3b)
 - BEH-004-07: GIVEN `down` has just run WHEN `up` checks the ports at once on
   Linux THEN sockets in `TIME_WAIT` don't count as busy. (planned: step 3b)
+- BEH-004-08: GIVEN the platform is running WHEN the user runs `up backend`
+  THEN only the backend is rebuilt and recreated. (planned: step 3c)
 
 ## Interfaces
 - `./platformctl up [service...]` (`--no-build`, `--foreground`, `--no-check`,

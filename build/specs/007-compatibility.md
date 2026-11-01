@@ -19,6 +19,21 @@ The old scripts
   `scripts/deeplynx_setup.py` MUST keep working, each printing one line
   naming the new command (such as "moved: run `./platformctl config init`")
   and then running it with the same arguments. (planned: step 2)
+- REQ-007-24: Once the hackathon material stops naming them, the three
+  script stubs MUST be removed, and nothing in the repository may refer to
+  them. (planned: step 3c)
+
+Docs, slides and skills
+
+- REQ-007-25: The docs, the hackathon slides and skills, the agent-template
+  docs and CI MUST use `./platformctl` for the platform, with no copy-paste
+  block that mixes `make` and `./platformctl`. (planned: step 3c)
+- REQ-007-26: The hackathon skills MUST check `./platformctl --version
+  --json` and use the old commands when the tool or a feature they need is
+  missing, since a participant's clone may be older. (planned: step 3c)
+- REQ-007-27: The skills' pre-approved commands MUST run the shim by path
+  with a wildcard and no `cd`, and MUST NOT include `compose --`, `reset` or
+  `down`. (planned: step 3c)
 
 Make
 
@@ -80,6 +95,12 @@ Running Compose yourself
   one-line note naming the key and saying a hand-run Compose will use it.
   (planned: step 3a)
 
+- REQ-007-22: `compose -- <args>` MUST run `docker compose` with the
+  platform's project, files, profiles and environment, passing the
+  arguments unchanged. (planned: step 3c)
+- REQ-007-23: `compose --print` MUST print the `docker compose` command to
+  run it by hand: only `-f` and `--profile`, never a `KEY=value`.
+  (planned: step 3c)
 - REQ-007-20: `docker-compose.labels.yml` MUST be generated with the same
   header, be the last file the entry file includes, and be git-ignored.
   (planned: step 3b)

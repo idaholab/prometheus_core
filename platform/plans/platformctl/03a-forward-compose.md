@@ -31,6 +31,8 @@ compose-equivalence job, with a `# Covers` comment in it.
 - [004 Running the platform](../../../build/specs/004-running-the-platform.md):
   REQ-004-04 to REQ-004-21, BEH-004-02 to BEH-004-04 (`status`, `up`,
   `down`, `restart`, `build`, `logs`, the reset ladder, preflight)
+- [005 Your agents](../../../build/specs/005-your-agents.md): REQ-005-13
+  (`agents generate`, `agents clean`)
 - [006 Doctor](../../../build/specs/006-doctor.md): REQ-006-27 (a stale
   `.platform.env`)
 - [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-07
