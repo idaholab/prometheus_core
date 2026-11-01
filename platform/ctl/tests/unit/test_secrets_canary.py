@@ -125,6 +125,8 @@ COMMANDS = [
     ["--json", "config", "set", f"AGENT_SECRET={SENTINELS['argv']}"],
     ["config", "set", f"--no-such-option={SENTINELS['argv']}"],
     ["config", "set", "--from-env", f"KEY={SENTINELS['argv']}"],
+    ["config", "set", "--from-env", SENTINELS["argv"]],
+    ["--json", "config", "set", "--from-env", SENTINELS["argv"]],
     ["status"],
     ["status", "--json"],
     ["--verbose", "--debug", "status", "--wait", "--timeout", "0"],

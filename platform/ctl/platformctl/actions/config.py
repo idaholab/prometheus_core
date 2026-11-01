@@ -18,7 +18,7 @@ import argparse
 
 from platformctl import env_init, jsonout, llm_profiles
 from platformctl.actions import Subcommand
-from platformctl.config import SETTINGS, ConfigError, is_safe, parse_set
+from platformctl.config import REGISTRY, SETTINGS, ConfigError, is_safe, parse_set
 from platformctl.context import Context
 from platformctl.system import envfile, terminal
 
@@ -294,7 +294,12 @@ def _from_environment(ctx: Context, keys: list[str]) -> dict[str, str]:
     env = ctx.config.env
     unset = [key for key in keys if not env.get(key)]
     if unset:
-        raise ConfigError("not set in the environment: " + ", ".join(unset))
+        # A bare token pasted by mistake (`--from-env "$SECRET"`) looks like a name, and the scrubber
+        # doesn't know a value that is in neither `.env` nor a secret-named variable: name only keys we know.
+        known = [key for key in unset if key in REGISTRY or key in ctx.config.dotenv]
+        others = len(unset) - len(known)
+        parts = ([", ".join(known)] if known else []) + ([f"{others} other name(s)"] if others else [])
+        raise ConfigError("not set in the environment: " + "; ".join(parts))
     return {key: env[key] for key in keys}
 
 

@@ -120,11 +120,29 @@ def test_from_env_copies_values_without_them_appearing_in_argv_or_output(ctx_env
 
 
 def test_from_env_names_every_key_that_is_not_set(ctx_env, platform_root):
-    """Exit 1 naming each missing key, writing nothing; a blank value counts as not set."""
-    ctx, _, err = ctx_env({"HAVE": "x" * 12, "BLANK": ""})
-    assert config_action.set_values(ctx, parse("set", "--from-env", "HAVE", "BLANK", "ABSENT")) == 1
-    assert "not set in the environment: BLANK, ABSENT" in err.getvalue()
+    """Exit 1 naming each missing key we know, writing nothing; a blank value counts as not set."""
+    ctx, _, err = ctx_env({"HAVE": "x" * 12, "EMPTY_SECRET": ""})
+    assert config_action.set_values(ctx, parse("set", "--from-env", "HAVE", "EMPTY_SECRET", "BACKEND_PORT")) == 1
+    assert "not set in the environment: EMPTY_SECRET, BACKEND_PORT" in err.getvalue()
     assert (platform_root / ".env").read_text() == DOTENV
+
+
+def test_from_env_does_not_echo_a_name_it_does_not_know(ctx_env, platform_root):
+    """A secret pasted as `--from-env "$SECRET"` looks like a name: it is counted, never printed."""
+    pasted = "sk0123456789abcdefPASTEDSECRET"
+    ctx, _, err = ctx_env({"HAVE": "x" * 12})
+    assert config_action.set_values(ctx, parse("set", "--from-env", "BACKEND_PORT", pasted)) == 1
+    assert pasted not in err.getvalue()
+    assert "not set in the environment: BACKEND_PORT; 1 other name(s)" in err.getvalue()
+
+
+def test_from_env_does_not_echo_a_name_in_json_either(ctx_env, capsys):
+    """The JSON error object carries the same message, so the same rule holds."""
+    pasted = "sk0123456789abcdefPASTEDSECRET"
+    ctx, out, _ = ctx_env(json_mode=True)
+    assert config_action.set_values(ctx, parse("set", "--from-env", pasted)) == 1
+    assert pasted not in out.getvalue()
+    assert "1 other name(s)" in out.getvalue()
 
 
 @pytest.mark.parametrize(
