@@ -23,7 +23,15 @@ Run it as often as you like: it never changes a value that is already set.
       quick check of whether your machine can reach the INL registry: if it can, it is *no*.
     - *Run DeepLynx (file storage) on this laptop?* Sets `LOCAL_DEEPLYNX`.
 5. **Lists keys that `.env.example` has and your `.env` lacks.** A key added after you made your `.env` never
-   reaches it by itself; this tells you.
+   reaches it by itself; this tells you. It lists them and does not add them: copy the lines you want.
+
+### If you already have a `.env`
+
+Nothing in it is changed or overwritten. The two questions in step 4 are asked once, on the first run after you
+update, because an older `.env` does not say what you want (`LOCAL_SDK` and `LOCAL_DEEPLYNX` are commented out in
+`.env.example`). Your answer is saved, so you are not asked again. To skip the questions, give the flags
+(`--local-sdk` / `--no-local-sdk`, `--local-deeplynx` / `--no-local-deeplynx`), use `--yes`, or run without a
+terminal. A `.env` that other users can read is made owner-only (0600), and `config init` says so.
 
 It ends with what to do next, for example `Next: make up`.
 
