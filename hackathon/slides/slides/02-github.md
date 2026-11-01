@@ -681,7 +681,6 @@ For the hackathon you need only `prometheus_core` and a github.com account. Your
 <h4 class="acc" style="margin-top:6px">Tooling</h4>
 
 <table class="t xs">
-<tr><td><b>agent-sandbox-mcp</b></td><td>notebook MCP sandbox</td></tr>
 <tr><td>mcps</td><td>FastMCP server template</td></tr>
 <tr><td>a2a-tester</td><td>debug UI (still A2A v0.3)</td></tr>
 <tr><td>reactor-dt-modules</td><td>digital-twin library</td></tr>

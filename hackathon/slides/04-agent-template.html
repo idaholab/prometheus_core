@@ -2068,7 +2068,7 @@ ui: {category: Meshing, display_name: STEP → checked mesh,
 <div class="row" style="gap:0; align-items:stretch">
 <div class="box orange" style="flex:1"><b>meshing agent</b><span class="small">skill <code>agentic_hex_meshing</code>, <code>streaming: true</code>, 1800 s</span></div>
 <div class="arrow-h" style="width:70px"><span>MCP</span></div>
-<div class="box teal" style="flex:1"><b>meshing-sandbox</b><span class="small">agent-sandbox-mcp + gmsh, pyvista…</span><span class="mono">internal: true network</span></div>
+<div class="box teal" style="flex:1"><b>meshing-sandbox</b><span class="small">Jupyter kernel + gmsh, pyvista…</span><span class="mono">internal: true network</span></div>
 </div>
 <div class="arrow-v"><span>vision flavor</span></div>
 <div class="box violet"><b>LLM tool loop</b><span class="small">tools: <code>run_python(code, summary)</code> and <code>submit_final_mesh(basename, summary)</code></span></div>
@@ -2092,73 +2092,6 @@ ui: {category: Meshing, display_name: STEP → checked mesh,
 <li>The sandbox on an <strong>egress-free</strong> network; the agent is on both networks</li>
 </ul>
 <p class="small">Branch <code>agentic-hex-meshing</code> of <code>genesis/gmsh_agent</code> on github.inl.gov (PR #1): <code>meshing_loop.py</code>, <code>sandbox_client.py</code>, <code>DESIGN.md</code>.</p>
-</div>
-</div>
-
-  </div>
-</section>
-
-<section class="slide appendix">
-  <div class="head"><div class="eyebrow">Building block · INL network only</div><h2><code>agent-sandbox-mcp</code>: safe execution of LLM-written code</h2></div>
-  <div class="content">
-<div class="grid g2" style="gap:26px;">
-<div class="col">
-<p class="small">A notebook MCP server with one persistent, isolated Jupyter kernel per session, each under its own unprivileged uid. Streamable HTTP at <code>http://&lt;svc&gt;:8080/mcp/mcp</code>; health at <code>/healthz</code>.</p>
-<table class="t xs">
-<thead>
-<tr>
-<th>MCP tool</th>
-<th>Returns</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>start_session(idle_ttl_s)</code></td>
-<td><code>session_id</code> (a capability token)</td>
-</tr>
-<tr>
-<td><code>run_cell(session_id, code)</code></td>
-<td><code>done</code> within 10 s (stdout, stderr, MIME results such as <code>image/png</code>, error), else <code>running</code> + <code>task_id</code></td>
-</tr>
-<tr>
-<td><code>get_task_status(session_id, task_id)</code></td>
-<td>poll a long cell</td>
-</tr>
-<tr>
-<td><code>upload_file</code> / <code>download_file</code> / <code>list_files</code></td>
-<td>base64; downloads capped at 25 MiB</td>
-</tr>
-<tr>
-<td><code>end_session(session_id)</code></td>
-<td>kills the kernel and everything its uid owns</td>
-</tr>
-</tbody>
-</table>
-<p class="tiny">Every cell is appended to <code>notebook.ipynb</code> in the session's scratch dir.</p>
-</div>
-<div class="col">
-<pre class="xs"><span class="c"># your sandbox image (INL network only)</span>
-<span class="k">FROM</span> <span class="s">containers.github.inl.gov/genesis/agent-sandbox-mcp:latest</span>
-<span class="k">RUN</span> pip install numpy pandas matplotlib</pre>
-<pre class="xs"><span class="c"># compose: sandbox reachable only by your agent</span>
-services:
-  my-sandbox:
-    build: ./sandbox
-    read_only: true
-    tmpfs: [/tmp, /scratch]
-    cap_drop: [ALL]
-    cap_add: [SETUID, SETGID, CHOWN, SETPCAP, KILL]
-    security_opt: [no-new-privileges:true]
-    networks: [my-sandbox-net]
-  my-agent:
-    environment:
-      SANDBOX_MCP_URL: http://my-sandbox:8080/mcp/mcp
-    networks: [agent-network, my-sandbox-net]
-networks:
-  my-sandbox-net: {internal: true}</pre>
-<div class="callout warn">
-<strong>No authentication</strong>: the network placement is the security. Connecting by service name returns <strong>421 Misdirected Request</strong> (FastMCP DNS-rebinding protection), so send <code>Host: localhost:8080</code> as <code>sandbox_client.py</code> does. No numpy or pandas preinstalled.</div>
-
 </div>
 </div>
 
