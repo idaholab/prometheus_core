@@ -356,6 +356,21 @@ def test_init_without_a_terminal_names_the_flags_only_on_the_run_that_creates_en
     assert "not asked" not in out.getvalue() and "Local SDK" not in out.getvalue()
 
 
+def test_init_keeps_the_key_it_saved_when_run_again_with_another_one_in_the_environment(init_ctx, init_root):
+    """A re-run (every `make up`) must not replace a saved key with whatever is exported now."""
+    first = {"LLM_CONFIG_PROFILE": "anthropic", "LLM_API_KEY": "first-key-from-the-environment-1"}
+    ctx, _, _ = init_ctx(first)
+    assert config_action.init(ctx, init_args()) == 0
+    other = {"LLM_CONFIG_PROFILE": "ollama", "LLM_API_KEY": "another-key-in-the-environment-2"}
+    ctx, out, _ = init_ctx(other)
+    assert config_action.init(ctx, init_args()) == 0
+    values = envfile.read(init_root / ".env")
+    assert values["LLM_API_KEY"] == "first-key-from-the-environment-1"
+    assert values["LLM_CONFIG_PROFILE"] == "anthropic"
+    assert "Saved LLM" not in out.getvalue()
+    assert "another-key-in-the-environment-2" not in out.getvalue()
+
+
 def test_init_names_a_missing_key_a_profile_needs(init_ctx, init_root):
     """The profile is chosen but its key is blank."""
     (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=anthropic"))
