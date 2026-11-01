@@ -473,7 +473,7 @@ def test_init_json_success_is_one_object_saying_what_it_did(init_ctx, init_root)
     assert body["created"] is True and body["generated"] == ["AGENT_SECRET", "REDIS_PASSWORD"]
     assert body["llm_profile"] == "anthropic"
     assert (body["local_sdk"], body["local_deeplynx"]) == (True, False)
-    assert body["missing_keys"] == [] and body["stale_for_make"] == []
+    assert body["missing_keys"] == []
     assert "value-from-the-environment-1" not in out.getvalue()
 
 
@@ -558,13 +558,34 @@ def test_init_yes_does_not_build_locally_when_the_registry_works(init_ctx, init_
     assert envfile.read(init_root / ".env")["LOCAL_SDK"] == "false"
 
 
-def test_init_under_make_warns_that_a_changed_answer_needs_another_run(init_ctx, init_root):
-    """Make reads `.env` before this runs, so a new LOCAL_SDK only applies next time: a warning, not a failure."""
+def test_init_under_make_stops_when_a_changed_answer_needs_another_run(init_ctx, init_root):
+    """Make read `.env` before this ran, so going on would build the old way: the answers are saved, and it stops."""
     via_make = {"PLATFORMCTL_VIA_MAKE": "1", "LLM_CONFIG_PROFILE": "ollama"}
     ctx, out, err = init_ctx(via_make, yes=True)
+    assert config_action.init(ctx, init_args()) == 1
+    assert "Saved your answers (LOCAL_SDK, LOCAL_DEEPLYNX) in .env. make read .env before" in err.getvalue()
+    assert "Run the same make command again." in err.getvalue()
+    values = envfile.read(init_root / ".env")
+    assert (values["LOCAL_SDK"], values["LOCAL_DEEPLYNX"]) == ("true", "true")
+    assert "Next:" not in out.getvalue()
+
+
+def test_init_under_make_stop_is_one_json_object(init_ctx):
+    """With `--json` the stop is the usual error object."""
+    ctx, out, _ = init_ctx({"PLATFORMCTL_VIA_MAKE": "1", "LLM_CONFIG_PROFILE": "ollama"}, yes=True, json_mode=True)
+    assert config_action.init(ctx, init_args()) == 1
+    body = json.loads(out.getvalue())
+    assert body["error"]["code"] == "config_invalid" and body["error"]["hint"] == "Run the same make command again."
+
+
+def test_init_under_make_prints_no_next_line(init_ctx, init_root):
+    """`make up` is already the next step, so "Next: make up" would only mislead."""
+    (init_root / ".env").write_text(
+        EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=ollama") + "LOCAL_SDK=true\nLOCAL_DEEPLYNX=true\n"
+    )
+    ctx, out, _ = init_ctx({"PLATFORMCTL_VIA_MAKE": "1"})
     assert config_action.init(ctx, init_args()) == 0
-    assert "LOCAL_SDK, LOCAL_DEEPLYNX changed in .env, but make read .env before this run" in err.getvalue()
-    assert out.getvalue().rstrip().endswith("Next: make up, then ./platformctl deeplynx setup")
+    assert "Next:" not in out.getvalue()
 
 
 def test_init_under_make_is_quiet_when_nothing_changed(init_ctx, init_root):
@@ -575,6 +596,24 @@ def test_init_under_make_is_quiet_when_nothing_changed(init_ctx, init_root):
     ctx, _, err = init_ctx({"PLATFORMCTL_VIA_MAKE": "1", "LOCAL_SDK": "true"})
     assert config_action.init(ctx, init_args()) == 0
     assert "make read" not in err.getvalue()
+
+
+def test_init_under_make_does_not_stop_for_a_setting_that_comes_from_the_environment(init_ctx, init_root):
+    """CI exports `LOCAL_SDK=true` and `.env` never holds it: make already read it, so nothing changed.
+
+    A first version compared the exported value with the missing `.env` key and stopped every `make up` in CI.
+    """
+    ctx, out, err = init_ctx(
+        {
+            "PLATFORMCTL_VIA_MAKE": "1",
+            "LOCAL_SDK": "true",
+            "LLM_CONFIG_PROFILE": "anthropic",
+            "LLM_API_KEY": "value-from-the-environment-1",
+        }
+    )
+    assert config_action.init(ctx, init_args()) == 0
+    assert "make read" not in err.getvalue()
+    assert "LOCAL_SDK" not in envfile.read(init_root / ".env"), "an exported value is left out of .env"
 
 
 def test_init_without_make_never_warns_about_make(init_ctx):

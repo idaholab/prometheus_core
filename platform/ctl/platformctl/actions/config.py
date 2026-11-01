@@ -194,7 +194,9 @@ def _stale_for_make(ctx: Context, current: dict[str, str], before: dict[str, boo
     """
     if ctx.config.env.get("PLATFORMCTL_VIA_MAKE") != "1":
         return []
-    return [key for key, was in before.items() if _is_true(current.get(key)) != was]
+    # A key `.env` still lacks keeps the value it had (from the environment, which make also read, or the
+    # default): comparing that with an absent `.env` key would call every exported LOCAL_SDK=true a change.
+    return [key for key, was in before.items() if key in current and _is_true(current[key]) != was]
 
 
 def _is_true(value: str | None) -> bool:
@@ -266,17 +268,25 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
             out.info(note)
     if (problem := _llm_problem(ctx, current, known)) is not None:
         return problem
-    if stale := _stale_for_make(ctx, current, before):
-        out.warn(
-            f"{', '.join(stale)} changed in {paths.env.name}, but make read {paths.env.name} before this run: "
-            "run the same make command again for it to take effect."
-        )
     out.info(f"LLM profile: {current.get('LLM_CONFIG_PROFILE') or 'custom file'}, key set")
+    if stale := _stale_for_make(ctx, current, before):
+        # Make chose the base image and the DeepLynx targets from the old `.env` before this ran, so going
+        # on would build the wrong way (a registry pull the person just said they can't do). Stop; it's saved.
+        return _fail(
+            ctx,
+            "config init",
+            "config_invalid",
+            f"Saved your answers ({', '.join(stale)}) in {paths.env.name}. make read {paths.env.name} before "
+            "they were set, so it can't use them in this run.",
+            "Run the same make command again.",
+        )
     if missing := envfile.missing_keys(example, current):
         out.info(f"Keys in {paths.env_example.name} that {paths.env.name} lacks: {', '.join(missing)}")
         out.info(f"  Add them to {paths.env.name} (copy the lines from {paths.env_example.name}).")
     local_deeplynx = _is_true(current.get("LOCAL_DEEPLYNX"))
-    out.info("\nNext: make up" + (", then ./platformctl deeplynx setup" if local_deeplynx else ""))
+    if ctx.config.env.get("PLATFORMCTL_VIA_MAKE") != "1":
+        # Under make the next step is already running (`make up` sets DeepLynx up itself).
+        out.info("\nNext: make up" + (", then ./platformctl deeplynx setup" if local_deeplynx else ""))
     return _done(
         ctx,
         "config init",
@@ -286,7 +296,6 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
         local_sdk=_is_true(current.get("LOCAL_SDK")),
         local_deeplynx=local_deeplynx,
         missing_keys=missing,
-        stale_for_make=stale,
     )
 
 
