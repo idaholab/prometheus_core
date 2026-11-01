@@ -158,11 +158,6 @@ def test_to_artifact_meta_tags_ignore_non_list_metadata_tags():
     assert to_artifact_meta({"artifact_id": "m3", "name": "x"}).tags == []
 
 
-# --------------------------------------------------------------------------- #
-# artifact_download_payload — inline serialization
-# --------------------------------------------------------------------------- #
-
-
 def test_json_type_beats_mime():
     # A thermal result mislabeled with a generic MIME still routes to the viewer.
     artifact = {"json_type": "prometheus.thermal_analysis.result.v1", "mime_type": "application/json"}
@@ -200,6 +195,11 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
 def test_to_artifact_meta_citation_absent_when_no_metadata():
     meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"})
     assert meta is not None and meta.citation is None
+
+
+# --------------------------------------------------------------------------- #
+# artifact_download_payload — inline serialization
+# --------------------------------------------------------------------------- #
 
 
 def test_download_payload_json_body():
