@@ -72,6 +72,15 @@ def _fail(ctx: Context, code: str, message: str, hint: str = "") -> int:
     return jsonout.EXIT_FAIL
 
 
+def _done(ctx: Context, ui: str, **fields) -> int:
+    """With `--json`, print the one result object for a setup that succeeded (no key or secret); return 0."""
+    if ctx.json_mode:
+        out = ctx.output
+        body = jsonout.result("deeplynx setup", ctx.platform_info(), ui=ui, **fields)
+        jsonout.emit(body, out.out, out.scrubber.scrub)
+    return jsonout.EXIT_OK
+
+
 def start_services(ctx: Context) -> bool:
     """Start only the DeepLynx services, from just the files they need, with `up -d --wait`.
 
@@ -113,7 +122,7 @@ def run_setup(ctx: Context, args: argparse.Namespace) -> int:
         return _fail(ctx, "config_invalid", f"{paths.env} does not exist.", "Run ./platformctl config init")
     if ctx.dry_run:
         out.info("Would start " + ", ".join(SERVICES) + f", then save a project and API key in {paths.env.name}.")
-        return jsonout.EXIT_OK
+        return _done(ctx, "", dry_run=True)
     if not args.no_start and not start_services(ctx):
         return _fail(ctx, "docker_unavailable", "Starting DeepLynx failed.", "Run ./platformctl doctor")
 
@@ -133,7 +142,7 @@ def run_setup(ctx: Context, args: argparse.Namespace) -> int:
     if client.configured(current):
         out.info(f"DeepLynx is already set up in {paths.env.name}.")
         out.info(f"\nDeepLynx UI: {ui}")
-        return jsonout.EXIT_OK
+        return _done(ctx, ui, already_configured=True, project_id=int(current["DEEPLYNX_PROJECT_ID"]))
 
     try:
         out.info(f"[2/3] Finding the project {PROJECT_NAME!r} ...")
@@ -160,7 +169,7 @@ def run_setup(ctx: Context, args: argparse.Namespace) -> int:
     )
     out.info(f"Saved a new DeepLynx API key for project {project_id} in {paths.env.name}.")
     out.info(f"\nDeepLynx UI: {ui}")
-    return jsonout.EXIT_OK
+    return _done(ctx, ui, already_configured=False, project_id=project_id, project_created=created)
 
 
 SUBCOMMANDS = [

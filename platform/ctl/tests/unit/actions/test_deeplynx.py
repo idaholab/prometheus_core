@@ -96,6 +96,34 @@ def test_setup_creates_a_project_and_key_and_writes_every_setting(ctx_for, stub,
     assert "secret1" not in out.getvalue() + err.getvalue()
 
 
+def test_setup_json_success_is_one_object_without_the_key(ctx_for, stub):
+    """`--json`: the project and the UI, and never the new key or secret."""
+    ctx, out, _ = ctx_for(json_mode=True)
+    assert deeplynx.run_setup(ctx, ns()) == 0
+    body = json.loads(out.getvalue())
+    assert body["command"] == "deeplynx setup" and body["ok"] is True
+    assert (body["project_id"], body["project_created"], body["already_configured"]) == (1, True, False)
+    assert body["ui"] == "http://localhost:3456"
+    assert "key1" not in out.getvalue() and "secret1" not in out.getvalue()
+
+
+def test_setup_json_when_already_set_up_says_so(ctx_for, stub):
+    """A second `--json` run reports that nothing was created."""
+    ctx, _, _ = ctx_for()
+    assert deeplynx.run_setup(ctx, ns()) == 0
+    ctx, out, _ = ctx_for(json_mode=True)
+    assert deeplynx.run_setup(ctx, ns()) == 0
+    body = json.loads(out.getvalue())
+    assert body["already_configured"] is True and body["project_id"] == 1
+
+
+def test_setup_json_dry_run_says_so(ctx_for):
+    """A dry run is reported as one, with no server contacted."""
+    ctx, out, _ = ctx_for(json_mode=True, dry_run=True)
+    assert deeplynx.run_setup(ctx, ns(no_start=False)) == 0
+    assert json.loads(out.getvalue())["dry_run"] is True
+
+
 def test_setup_keeps_a_working_setup(ctx_for, stub, platform_root):
     """A second run changes nothing, creates no key or project, and still says where the UI is."""
     ctx, _, _ = ctx_for()
