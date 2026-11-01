@@ -17,7 +17,7 @@ Each area has a block of numbers, so it can grow without renumbering.
 
 | Range | Area | What it covers | Status |
 | --- | --- | --- | --- |
-| 001–099 | Running the platform | `./platformctl` and the `make` targets that forward to it: setup, settings, secrets, lifecycle, your agents, `doctor`, compatibility, targets | 001–003, 006 and 008 have requirements for step 1 |
+| 001–099 | Running the platform | `./platformctl` and the `make` targets that forward to it: setup, settings, secrets, lifecycle, your agents, `doctor`, compatibility, targets | Requirements for step 1, drafts for steps 2 to 9 |
 | 100–199 | Images | How each Dockerfile builds; the `prometheus_api` base image and the agents built FROM it; CA certificates; the build cache; amd64 and arm64 | Not started |
 | 200–299 | Versions and pins | The base-image hash pin; pinned images in compose files and Dockerfiles; how the platform version is formed; what Dependabot updates | Not started |
 | 300–399 | Release and publishing | What `publish.yml` publishes, its tag format and when it runs; release images | Not started |
@@ -64,17 +64,25 @@ The platformctl plan is in
 A requirement that a later step delivers carries `(planned: step N)`. That
 step's PR removes the marker and cites the ID from its tests.
 
+Each step's plan file has a Requirements section listing its IDs.
+`python3 common/speccheck/speccheck.py --specs build/specs --report` shows
+each ID's state.
+
 | Step | Specs it delivers requirements for |
 | --- | --- |
 | 1 (done, #316) | 001, 002, 003, 006, 008 |
-| 2 | 001, 002, 003, 004 (`status`), 006, 007 |
-| 3a | 002, 003, 004, 006, 007 |
-| 3b | 004, 005 |
-| 3c | 004, 005, 007 |
-| 4 | 006 |
-| 5, 6 | none (documentation) |
-| 7 | 002, 005, 006 |
+| 2 | 001, 002, 003, 004 (`status --wait`), 007 |
+| 3a | 001, 002, 003, 004, 005 (`agents generate`, `clean`), 006, 007 |
+| 3b | 004, 005, 006, 007 |
+| 3c | 003, 004, 005, 007 |
+| 4 | 001, 006 |
+| 5, 6 | 007 (docs) |
+| 7 | 005, 006 |
 | 8, 9 | 008 |
+
+The requirements for steps 2 to 9 are drafts, written from the plan before
+the work. A step's PR may change them, and should add what it finds
+missing.
 
 ## Evidence
 
