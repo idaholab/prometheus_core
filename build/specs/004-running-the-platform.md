@@ -84,6 +84,38 @@ The reset ladder
 - REQ-004-20: Each `reset` MUST say what it is about to delete before it
   deletes it, and what it deleted after. (planned: step 3a)
 
+Running elsewhere and ports
+
+- REQ-004-22: Every platform container MUST carry
+  `io.prometheus.platform.root` (the platform folder) and
+  `io.prometheus.platform.source`, and no label whose value changes with each
+  commit; the network carries none. (planned: step 3b)
+- REQ-004-23: When the platform is already running from another folder,
+  `up` and `restart` MUST stop before starting anything, with "Prometheus is
+  already running from `<folder>` (checkout at `<version>`). Stop it there
+  with `./platformctl down`."; a stack started before the labels is found by
+  its Compose working folder. (planned: step 3b)
+- REQ-004-24: Folders MUST be compared by their real path, and
+  case-insensitively on macOS, so a symlink or a different case isn't
+  another folder. (planned: step 3b)
+- REQ-004-25: Before starting, `up` and `restart` MUST check every host port
+  the stack will publish, on IPv4 and IPv6, and stop on a busy one naming
+  what holds it and the lasting fix, instead of Compose's "port is already
+  allocated"; ports this checkout's own platform holds count as free.
+  (planned: step 3b)
+- REQ-004-26: For port 5000 held by AirPlay on macOS, the fix MUST be to
+  turn off AirPlay Receiver, never a port change; for any other port it MUST
+  be `./platformctl config set <X>_PORT=<free port>`. (planned: step 3b)
+- REQ-004-27: The first `up` after the labels are added MUST say it is
+  recreating the containers and that the data is kept. (planned: step 3b)
+- REQ-004-28: `status` MUST show the platform's folder and version, and list
+  other platforms running on this Docker context. (planned: step 3b)
+- REQ-004-29: `down --volumes` MUST ask the user to type `clobber`, like
+  `reset data`. (planned: step 3b)
+- REQ-004-30: Names, projects and labels read from other containers MUST
+  have their control characters removed before they are printed.
+  (planned: step 3b)
+
 Preflight
 
 - REQ-004-21: Every command that needs Docker MUST run the `preflight`
@@ -105,6 +137,13 @@ Preflight
 - BEH-004-04: GIVEN the platform isn't running WHEN `status --json` runs
   THEN it prints one object with `error.code` `not_running` and exits 3.
   (planned: step 3a)
+- BEH-004-05: GIVEN the platform running from this folder WHEN the user runs
+  `restart` THEN neither the "running elsewhere" check nor the port check
+  stops it. (planned: step 3b)
+- BEH-004-06: GIVEN a process holding port 8600 on `::1` only WHEN `up` runs
+  THEN it stops, naming the process. (planned: step 3b)
+- BEH-004-07: GIVEN `down` has just run WHEN `up` checks the ports at once on
+  Linux THEN sockets in `TIME_WAIT` don't count as busy. (planned: step 3b)
 
 ## Interfaces
 - `./platformctl up [service...]` (`--no-build`, `--foreground`, `--no-check`,

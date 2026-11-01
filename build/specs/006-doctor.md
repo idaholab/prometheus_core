@@ -87,6 +87,9 @@ Later
 
 - REQ-006-27: `doctor` MUST warn when `.platform.env` is older than the
   settings it was derived from. (planned: step 3a)
+- REQ-006-28: `ports-free` MUST share the port and holder code `up` uses,
+  count as "ours" only containers whose platform root is this checkout, and
+  report a port held on the Windows side of WSL 2. (planned: step 3b)
 
 - REQ-006-24: `doctor` MUST cover every `checks.md` id the step 4 plan lists
   as a check, grouping text output by area with a one-line summary per

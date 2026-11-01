@@ -80,6 +80,12 @@ Running Compose yourself
   one-line note naming the key and saying a hand-run Compose will use it.
   (planned: step 3a)
 
+- REQ-007-20: `docker-compose.labels.yml` MUST be generated with the same
+  header, be the last file the entry file includes, and be git-ignored.
+  (planned: step 3b)
+- REQ-007-21: `make down-v` MUST NOT prompt, passing `--yes --confirm
+  clobber`. (planned: step 3b)
+
 Old behaviour that changes
 
 - REQ-007-19: The Makefile-internal variables (`COMPOSE`, `COMPOSE_FILES`,

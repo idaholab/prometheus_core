@@ -10,6 +10,27 @@ be reverted without touching 3a's forwarding or 3c's docs.
 `up` and `restart` say clearly when something is in the way, and your own
 agents register again after a platform restart without you doing anything.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 3b)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it.
+
+- [004 Running the platform](../../../build/specs/004-running-the-platform.md):
+  REQ-004-22 to REQ-004-30, BEH-004-05 to BEH-004-07 (the platform labels,
+  running elsewhere, ports, `status`'s folder and other platforms,
+  `down --volumes` asking first)
+- [005 Your agents](../../../build/specs/005-your-agents.md): REQ-005-01 to
+  REQ-005-10, BEH-005-01, BEH-005-02 (which containers count, restarting
+  them, unlabelled agents, open chats, `--if-idle`, `down --agents`,
+  `agents refresh`)
+- [006 Doctor](../../../build/specs/006-doctor.md): REQ-006-28
+  (`ports-free` shares the code)
+- [007 Compatibility](../../../build/specs/007-compatibility.md):
+  REQ-007-20, REQ-007-21 (the labels file, `make down-v`)
+
 ## Work
 
 - **Platform labels** on every platform container (not the network):
