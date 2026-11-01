@@ -12,17 +12,17 @@ still works, but differently.
 
 | # | Step | What breaks | Who is affected | Migration |
 |---|---|---|---|---|
-| B1 | 2, 3c | `python3 scripts/init_env.py`, `scripts/check_platform.py` and `scripts/deeplynx_setup.py` become stubs that forward to the new commands in step 2, and are removed in step 3c | Anyone running them directly (`platform/README.md:53` and `docs/docs/prometheus-platform.md:50` say to); tests that import them; `make test-system`, whose recipe calls `scripts/check_platform.py` (`Makefile:259`) | `./platformctl config init`, `status --wait`, `deeplynx setup`. The `test-system` recipe, docs and tests are updated in the same PR |
+| B1 | 2, 3c | `python3 scripts/init_env.py`, `scripts/check_platform.py` and `scripts/deeplynx_setup.py` become stubs that forward to the new commands in step 2, and are removed in step 3c | Anyone running them directly (`platform/README.md:53` and `docs/docs/prometheus-platform.md:50` say to); tests that import them. The stubs ignore the old `check_platform.py` agent folders and `--backend-port`/`--frontend-port` (the tool reads the agents from the generated compose file and the ports from `.env`), and say so | `./platformctl config init`, `status --wait`, `deeplynx setup`. The docs and tests are updated in the same PR. `make test-system` never called `check_platform.py`, so it is unchanged |
 | B2 | 2 | Running the platform needs Python 3.10 or newer. Today `make up` runs `init_env.py` with any `python3`, including 3.9 | Only machines with no Python 3.10+ at all. The shim finds `python3.1x` and uv-managed Pythons, so a Mac with the built-in 3.9 `python3` plus uv's 3.12 works | Install Python 3.10+ (or uv). The shim prints the one command to run |
 | B3 | 3a | Make variables that were only internal plumbing are no longer read: `COMPOSE`, `COMPOSE_BASE`, `COMPOSE_AGENTS`, `COMPOSE_FILES`, `COMPOSE_FILES_NG`, `CLEAR_COMPOSE_FILES`, `UP_WAIT`, `RUN_CHECK`, `BASE_IMAGE_DEP`, `DEEPLYNX_DEP`, `AGENT_COMPOSE_FILES`, `PROFILE_FLAGS`, `INFRA_SCRIPTS` | Anyone overriding them on the command line (none found in docs or CI) | The documented settings and `--set` |
-| B4 | 2 | `sudo make up` works (the files it writes end up owned by root) | Linux machines where policy forbids the `docker` group | The tool refuses under `sudo` (`SUDO_USER` set). Its message gives both fixes: `sudo usermod -aG docker $USER` then `newgrp docker`, or rootless Docker |
+| B4 | 2 | `sudo make up` works (the files it writes end up owned by root). The same refusal covers every `make` target that now runs the tool: `init-env`, `check`, `deeplynx-setup`, `doctor` and every start target (they run `init-env`) | Linux machines where policy forbids the `docker` group | The tool refuses under `sudo` (`SUDO_USER` set). Its message gives both fixes: `sudo usermod -aG docker $USER` then `newgrp docker`, or rootless Docker |
 | B5 | 3a | `make logs \| grep ...` follows the logs | Anyone piping `make logs` or `./platformctl logs` | Without a terminal on stdout, `logs` prints and exits instead of following, so a script or assistant can't hang. `--follow` follows anyway |
 
 
 `make <target> KEY=value` keeps beating `.env`, as today, including secret
-keys and values with spaces: the tool reads Make's command-line variables
-from `MAKEFLAGS` and the environment (`design.md`, "Settings and
-precedence"). `make logs SERVICE=...`, which deck 03 uses throughout, is
+keys and values with spaces: the tool reads the names of Make's command-line
+variables from `PLATFORMCTL_MAKE_VARS`, which the Makefile exports, and their
+values from the environment (`design.md`, "Settings and precedence"). `make logs SERVICE=...`, which deck 03 uses throughout, is
 unaffected.
 
 ## Behaviour changes
@@ -46,6 +46,11 @@ unaffected.
 | C15 | 3a | `.env` values in quotes: Make reads `LOCAL_SDK="true"` as `"true"` with the quotes, so the setting is off | Quotes are stripped, as Compose does, so a quoted `LOCAL_SDK="true"` turns the setting on |
 | C16 | 3b | | One more generated, git-ignored file in `platform/`: `docker-compose.labels.yml` |
 | C17 | 3a | `make ps` exits 0 when nothing runs | `make ps` forwards to `status`, which exits 3 when the platform isn't running. The Make forward maps 3 to 0, so `make ps` still exits 0; `./platformctl status` exits 3 |
+| C18 | 2 | `./platformctl` runs `--li` as `--list` (any unambiguous prefix of an option works) | Abbreviations are off on every command: `doctor --li` is a usage error. Spell the option out |
+| C19 | 2 | `--json` with a failure before the tool starts (`sudo`, a bad `PLATFORMCTL_PYTHON`) prints plain text and exits 1 | The shim and `__main__.py` print one JSON object (`ok: false`, `error{code, message, hint, check}`) when `--json` is in the arguments |
+| C20 | 2 | `make up` reads `.env` before `init-env` runs: a first run that answers *yes* to "Build everything on this laptop?" or to local DeepLynx carries on with the base image and targets chosen from the old `.env` | `config init` saves the answers and stops (exit 1): "Run the same make command again". The second run builds the right way. Run by hand (`./platformctl config init`), nothing is repeated. Under make it also prints no "Next:" line |
+| C21 | 2 | `config set` and the commands that add secrets leave an existing `.env` at the mode it had | An `.env` readable by group or others is made owner-only (0600) before a secret is added, with a warning |
+| C22 | 2 | A prompt takes an unrecognised answer as the default or asks again without a word; Ctrl-D ends as an internal error | The prompt says what to type; a closed input is reported as `needs_terminal` |
 
 ## Not breaking
 

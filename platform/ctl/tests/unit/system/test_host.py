@@ -113,9 +113,17 @@ def test_a_holder_on_loopback_only_is_found_by_connecting(monkeypatch):
 
 
 def test_port_free_without_ipv6(monkeypatch):
-    """On a host without IPv6, a free port is still free."""
+    """On a host without IPv6, a free port is still free, and IPv6 is never tried.
+
+    `_bind` and `_connects` are patched: a port found free a moment earlier can be taken by any other
+    process before it is probed again, which made this test fail about 1 run in 20.
+    """
+    tried = []
     monkeypatch.setattr(hostmod, "_ipv6_usable", lambda: False)
-    assert hostmod.port_free(free_port())
+    monkeypatch.setattr(hostmod, "_bind", lambda family, address, port: tried.append(("bind", address)) or True)
+    monkeypatch.setattr(hostmod, "_connects", lambda family, address, port: tried.append(("connect", address)) or False)
+    assert hostmod.port_free(1234)
+    assert tried == [("bind", "0.0.0.0"), ("connect", "127.0.0.1")]
 
 
 def test_ipv6_usable_false_when_bind_fails(monkeypatch):

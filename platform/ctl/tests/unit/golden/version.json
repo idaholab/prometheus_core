@@ -1,6 +1,9 @@
 {
   "command": "version",
   "commands": [
+    "status",
+    "config",
+    "deeplynx",
     "doctor"
   ],
   "features": [

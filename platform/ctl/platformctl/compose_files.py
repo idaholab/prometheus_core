@@ -71,6 +71,24 @@ def discover_agents(root: Path, config: PlatformConfig) -> list[Agent]:
     return agents
 
 
+def generated_agent_dirs(root: Path) -> list[Path]:
+    """The agent folders the generated `docker-compose.agents.yml` includes, plus `agents/client-agent`.
+
+    This is what `make check` read with `sed` from the same file: the agents a start actually
+    brought up, so the `ng-*` targets check what they started. The client agent is always checked.
+    """
+    folders = [root / "agents" / "client-agent"]
+    generated = root / "docker-compose.agents.yml"
+    if generated.exists():
+        for line in generated.read_text(encoding="utf-8").splitlines():
+            entry = line.strip()
+            if entry.startswith("- ") and entry.endswith("/docker-compose.yml"):
+                folder = root / entry[2 : -len("/docker-compose.yml")].strip()
+                if folder not in folders:
+                    folders.append(folder)
+    return folders
+
+
 def compose_file_list(
     root: Path, config: PlatformConfig, agents: list[Agent], *, generated_agents: bool = True
 ) -> list[str]:

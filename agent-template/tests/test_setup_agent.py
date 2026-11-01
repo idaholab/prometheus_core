@@ -291,6 +291,18 @@ def test_env_only_rejects_a_directory_without_agent_card(tmp_path, monkeypatch):
     assert not (tmp_path / ".env").exists()
 
 
+def test_env_only_without_a_platform_env_says_to_run_config_init(tmp_path, monkeypatch, capsys):
+    """The platform's .env is made by `./platformctl config init`; the message names that command."""
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", tmp_path / "missing-platform.env")
+    agent_dir = _agent_dir(tmp_path)
+
+    with pytest.raises(SystemExit):
+        setup_agent.main(["--env-only", str(agent_dir)])
+
+    assert "Run `./platformctl config init` in platform/ first." in capsys.readouterr().out
+    assert not (agent_dir / ".env").exists()
+
+
 def test_env_only_takes_no_positional_arguments():
     with pytest.raises(SystemExit):
         setup_agent.parse_args(["--env-only", "x", "Plant Analysis"])

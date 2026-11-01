@@ -28,7 +28,7 @@ from types import ModuleType
 from typing import NoReturn
 
 from platformctl import __version__, actions, jsonout
-from platformctl.config import ConfigError, PlatformConfig, parse_set, platform_version
+from platformctl.config import ConfigError, PlatformConfig, parse_set, platform_version, unknown_make_variables
 from platformctl.context import build
 from platformctl.output import Output, Scrubber
 from platformctl.paths import Paths
@@ -47,7 +47,15 @@ class UsageError(Exception):
 
 
 class Parser(argparse.ArgumentParser):
-    """An argument parser that raises `UsageError` instead of printing and exiting, so `--json` can report it."""
+    """An argument parser that raises `UsageError` instead of printing and exiting, so `--json` can report it.
+
+    It takes no abbreviations (`doctor --li` is not `--list`), so they are not part of the interface.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Build the parser with `allow_abbrev` off, unless the caller says otherwise."""
+        kwargs.setdefault("allow_abbrev", False)
+        super().__init__(*args, **kwargs)
 
     def error(self, message: str) -> NoReturn:
         """Raise `UsageError` with the message and the usage line."""
@@ -235,6 +243,9 @@ def main(argv: Sequence[str] | None = None, *, env: dict[str, str] | None = None
         config = PlatformConfig(paths.root, env, parse_set(args.set))
         scrubber.add_all(config.secret_values())
         runner = Runner(scrub=scrubber.scrub, echo=output.command)
+        if unknown := unknown_make_variables(config.make):
+            noun = "variable" if len(unknown) == 1 else "variables"
+            output.warn(f"ignoring unknown make {noun}: {', '.join(unknown)} (see ./platformctl config show)")
 
         if args.version:
             info = _version_info(paths, config, runner, modules)

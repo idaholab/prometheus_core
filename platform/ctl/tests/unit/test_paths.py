@@ -49,4 +49,5 @@ def test_every_path_is_under_the_root():
     ):
         assert getattr(paths, name).parent == root
     assert paths.sdk == Path("/p/sdk")
+    assert paths.llm_configs == Path("/p/sdk/prometheus_api/llm_configs")
     assert paths.entry_file.name == "docker-compose.platform.yml"

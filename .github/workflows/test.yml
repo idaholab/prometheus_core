@@ -924,14 +924,11 @@ jobs:
         run: |
           make init-env
           # CI only: once .env exists, make loads it over the environment, and
-          # its blank DEEPLYNX_* lines would hide the stubs from every container
-          sed -i.bak \
-            -e "s|^DEEPLYNX_KEY=.*|DEEPLYNX_KEY=$DEEPLYNX_KEY|" \
-            -e "s|^DEEPLYNX_SECRET=.*|DEEPLYNX_SECRET=$DEEPLYNX_SECRET|" \
-            -e "s|^DEEPLYNX_ORG_ID=.*|DEEPLYNX_ORG_ID=$DEEPLYNX_ORG_ID|" \
-            -e "s|^DEEPLYNX_PROJECT_ID=.*|DEEPLYNX_PROJECT_ID=$DEEPLYNX_PROJECT_ID|" \
-            .env
-          rm .env.bak
+          # its blank DEEPLYNX_* lines would hide the stubs from every container.
+          # --from-env reads the values from this job's environment, so none is
+          # on a command line
+          ./platformctl config set --from-env \
+            DEEPLYNX_KEY DEEPLYNX_SECRET DEEPLYNX_ORG_ID DEEPLYNX_PROJECT_ID
       - name: Scaffold
         # TUTORIAL.md Step 1. The agent registers as ci-check-agent, from the
         # card name "CI Check Agent"
@@ -1064,13 +1061,8 @@ jobs:
         # DEEPLYNX_* lines would hide the stubs from every later start
         run: |
           make init-env
-          sed -i.bak \
-            -e "s|^DEEPLYNX_KEY=.*|DEEPLYNX_KEY=$DEEPLYNX_KEY|" \
-            -e "s|^DEEPLYNX_SECRET=.*|DEEPLYNX_SECRET=$DEEPLYNX_SECRET|" \
-            -e "s|^DEEPLYNX_ORG_ID=.*|DEEPLYNX_ORG_ID=$DEEPLYNX_ORG_ID|" \
-            -e "s|^DEEPLYNX_PROJECT_ID=.*|DEEPLYNX_PROJECT_ID=$DEEPLYNX_PROJECT_ID|" \
-            .env
-          rm .env.bak
+          ./platformctl config set --from-env \
+            DEEPLYNX_KEY DEEPLYNX_SECRET DEEPLYNX_ORG_ID DEEPLYNX_PROJECT_ID
       - name: Doctor before the start
         # Nothing is running yet, so every port must be free, and the .env just
         # created must pass the checks

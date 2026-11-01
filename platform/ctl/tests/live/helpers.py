@@ -23,6 +23,10 @@ SHIM = PLATFORM / "platformctl"
 """The real `platformctl` shim."""
 
 
-def shim(*args: str, cwd: Path, env: dict | None = None) -> subprocess.CompletedProcess:
-    """Run the real shim with `sh` from `cwd` and capture its output."""
-    return subprocess.run(["sh", str(SHIM), *args], cwd=cwd, capture_output=True, text=True, env=env, timeout=120)
+def shim(*args: str, cwd: Path, env: dict | None = None, script: Path = SHIM) -> subprocess.CompletedProcess:
+    """Run a shim with `sh` from `cwd` and capture its output: the real one, or a copy given as `script`.
+
+    A test that writes files (`config init`) must pass its own copy: the shim finds the platform
+    folder from its own location, so the real one would write into the real checkout.
+    """
+    return subprocess.run(["sh", str(script), *args], cwd=cwd, capture_output=True, text=True, env=env, timeout=120)

@@ -134,3 +134,64 @@ def test_holders():
     assert "publish=8600" in runner.calls[0]
     runner.reply("docker", "ps", code=1)
     assert Docker(runner).holders(8600) == []
+
+
+def test_registry_reachable_reads_the_manifest_with_a_timeout():
+    """A test "pull" that downloads nothing: it succeeds when the manifest can be read."""
+    docker, runner = docker_with()
+    runner.reply("docker", "manifest", "inspect", code=0)
+    assert docker.registry_reachable("registry.example/img:tag", timeout=7) is True
+    assert runner.calls == [["docker", "manifest", "inspect", "registry.example/img:tag"]]
+
+
+MANIFEST_LIST = (
+    '{"schemaVersion": 2, "manifests": ['
+    '{"platform": {"architecture": "amd64", "os": "linux"}}, '
+    '{"platform": {"architecture": "unknown", "os": "unknown"}}]}'
+)
+"""A manifest list that publishes amd64 only (plus the attestation entry BuildKit adds)."""
+
+
+@pytest.mark.parametrize(
+    ("manifest", "arch", "expected"),
+    [
+        (MANIFEST_LIST, "amd64", True),
+        (MANIFEST_LIST, "arm64", False),
+        (
+            '{"manifests": [{"platform": {"architecture": "arm64"}}, {"platform": {"architecture": "amd64"}}]}',
+            "arm64",
+            True,
+        ),
+        ('[{"Descriptor": {"platform": {"architecture": "arm64"}}}]', "amd64", True),  # no list: not ours to judge
+        ('{"schemaVersion": 2, "config": {}}', "arm64", True),  # a single-image manifest names no architecture
+        ("not json", "arm64", True),
+        ("", "arm64", True),
+    ],
+)
+def test_registry_reachable_checks_the_architecture_when_asked(manifest, arch, expected):
+    """A pin that publishes only amd64 is not "reachable" on an arm64 machine: it would fail or run emulated."""
+    docker, runner = docker_with()
+    runner.reply("docker", "manifest", "inspect", code=0, stdout=manifest)
+    assert docker.registry_reachable("registry.example/img:tag", arch=arch) is expected
+
+
+def test_registry_reachable_ignores_the_architecture_when_not_asked():
+    """Without `arch` any readable manifest counts, as before."""
+    docker, runner = docker_with()
+    runner.reply("docker", "manifest", "inspect", code=0, stdout=MANIFEST_LIST)
+    assert docker.registry_reachable("registry.example/img:tag") is True
+
+
+def test_registry_reachable_is_false_when_the_manifest_is_refused_or_slow():
+    """A login or network failure, or the timeout (exit 124), means unreachable."""
+    for code in (1, 124):
+        docker, runner = docker_with()
+        runner.reply("docker", "manifest", "inspect", code=code)
+        assert docker.registry_reachable("registry.example/img:tag") is False
+
+
+def test_registry_reachable_is_false_without_docker():
+    """No `docker` command is unreachable, not an error."""
+    docker, runner = docker_with()
+    runner.raises["docker"] = RunnerError("can't run docker")
+    assert docker.registry_reachable("registry.example/img:tag") is False

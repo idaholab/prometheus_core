@@ -11,6 +11,18 @@
 COMPOSE_PROJECT_NAME ?= prometheus_platform
 export COMPOSE_PROJECT_NAME
 
+# The targets that forward to ./platformctl. The tool does not rebuild argv from Make's variables
+# (a value with spaces or quotes would break it); instead it reads which variables were given on
+# the command line (`make X=y`) from PLATFORMCTL_MAKE_VARS, and their values from its environment,
+# where Make exports them. Not from MAKEFLAGS: Make 3.81 (macOS) leaves a plain `make X=y` without
+# a ` -- ` in it. Variables set in the shell or in .env are not listed, so .env keeps winning over
+# them, as before.
+PLATFORMCTL_MAKE_VARS := $(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $v)),$v))
+export PLATFORMCTL_MAKE_VARS
+# Run through `sh`, as the stubs do, so a lost exec bit (a zip download, core.fileMode=false, a noexec mount)
+# reaches the tool's own message and not a bare "Permission denied". The shim is POSIX sh.
+PLATFORMCTL := PLATFORMCTL_VIA_MAKE=1 sh ./platformctl
+
 COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
 COMPOSE_BASE   := docker-compose.yml
@@ -256,10 +268,12 @@ test-system: ##@ Test the user experience on an already-running platform (start 
 # targets check the agents they actually started.
 .PHONY: check
 check: ##@ Wait until the running platform answers on its host ports and every agent is registered with the backend
-	python3 -u scripts/check_platform.py --timeout $(CHECK_TIMEOUT) \
-		--backend-port $(BACKEND_PORT) \
-		$(if $(FRONTEND_PORT),--frontend-port $(FRONTEND_PORT),) \
-		agents/client-agent $$(sed -n 's#^  - \(.*\)/docker-compose.yml$$#\1#p' $(COMPOSE_AGENTS) 2>/dev/null)
+	@echo "Running: ./platformctl status --wait --timeout $(CHECK_TIMEOUT)"
+	@$(PLATFORMCTL) status --wait --timeout $(CHECK_TIMEOUT)
+
+.PHONY: doctor
+doctor: ##@ Diagnose common setup problems and say how to fix them (./platformctl doctor)
+	@$(PLATFORMCTL) doctor
 
 ##@
 ##@ Compose
@@ -306,7 +320,8 @@ ng-restart-fg: init-env clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up
 
 init-env: ##@ Create .env from .env.example if missing, generate blank secrets, check the LLM API key
-	@python3 scripts/init_env.py
+	@echo "Running: ./platformctl config init"
+	@$(PLATFORMCTL) config init
 
 # Agents register with the backend at startup and the registry lives in Valkey,
 # which persists across restarts. Clearing it on every launch keeps an agent that
@@ -326,12 +341,8 @@ clear-agent-registry: ##@ Stop services and delete only the agent registrations 
 # regenerate the agents compose file; the start target that follows reuses them.
 deeplynx-setup: init-env
 deeplynx-setup: ##@ Start the local DeepLynx (LOCAL_DEEPLYNX=true) and save a project and API key for it in .env
-	@if [ "$(LOCAL_DEEPLYNX)" != true ]; then \
-		printf "LOCAL_DEEPLYNX is not true; set it (in .env or on the command line) to run DeepLynx locally.\n"; \
-		exit 1; \
-	fi
-	$(COMPOSE) -f $(COMPOSE_BASE) -f docker-compose.deeplynx.yml up -d --wait --wait-timeout $(WAIT_TIMEOUT) deeplynx-postgres deeplynx-server deeplynx-ui
-	@python3 scripts/deeplynx_setup.py --port $(DEEPLYNX_SERVER_PORT)
+	@echo "Running: ./platformctl deeplynx setup"
+	@$(PLATFORMCTL) deeplynx setup
 
 clear-admin-users: ##@ Delete all rows from admin-db's users table (re-triggers the first-run setup wizard)
 	@if ! $(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) ps --status running --services 2>/dev/null | grep -qx admin-db; then \

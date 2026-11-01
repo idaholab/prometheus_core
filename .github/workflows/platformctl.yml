@@ -1,9 +1,13 @@
 name: platformctl
 
-# The platformctl tool (platform/ctl) and its shim (platform/platformctl). Runs only when
-# those paths change, and none of these jobs is a required check until step 2 of the plan
-# (platform/plans/platformctl/). They are a separate workflow, not part of test.yml, so a
-# change elsewhere doesn't pay for them and test.yml's jobs stay as they are
+# The platformctl tool (platform/ctl) and its shim (platform/platformctl), and what the tool reads or the
+# Makefile forwards to it. It is a separate workflow, not part of test.yml, so a change elsewhere doesn't pay for it.
+#
+# Required check: make "platformctl: gate" required in the repository's branch protection and merge queue (a
+# settings change, not a file in this repository). The workflow starts on every pull request and merge group, so
+# the gate always reports; the `changes` job decides whether the paths below were touched, and the heavy jobs are
+# skipped when they were not. (A `paths:` filter on the triggers would keep the workflow from starting at all, and
+# a required check that never reports stays pending forever.) Pushes to devel still use the filter.
 
 on:
   push:
@@ -11,13 +15,17 @@ on:
     paths:
       - "platform/ctl/**"
       - "platform/platformctl"
+      # What the tool reads, or the Makefile forwards to it (step 2)
+      - "platform/Makefile"
+      - "platform/scripts/**"
+      - "platform/.env.example"
+      - "platform/docker-compose*.yml"
+      - "platform/agents/**/docker-compose.yml"
+      - "sdk/prometheus_api/llm_configs/**"
+      - ".gitattributes"
       - ".github/workflows/platformctl.yml"
   pull_request:
     branches: [main, devel]
-    paths:
-      - "platform/ctl/**"
-      - "platform/platformctl"
-      - ".github/workflows/platformctl.yml"
   merge_group:
     types: [checks_requested]
 
@@ -29,8 +37,43 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: "platformctl: changes"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.diff.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Were the platformctl paths touched?
+        id: diff
+        env:
+          # The base of the change: the PR's base, the merge group's base, or the push's previous head
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          # Keep in step with `on.push.paths` above
+          paths='^platform/ctl/|^platform/platformctl$|^platform/Makefile$|^platform/scripts/|^platform/\.env\.example$'
+          paths="$paths|^platform/docker-compose[^/]*\.yml$|^platform/agents/.*/docker-compose\.yml$"
+          paths="$paths|^sdk/prometheus_api/llm_configs/|^\.gitattributes$|^\.github/workflows/platformctl\.yml$"
+          relevant=true
+          if [ -z "$BASE" ] || [ "${BASE#0000000}" != "$BASE" ]; then
+            echo "No base to compare with: run everything"
+          else
+            files=$(git diff --name-only "$BASE" "$HEAD")
+            printf 'Changed files:\n%s\n' "$files"
+            if printf '%s\n' "$files" | grep -Eq "$paths"; then echo "platformctl paths changed"; else relevant=false; fi
+          fi
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+
   unit:
     name: "platformctl: unit ${{ matrix.os }} python ${{ matrix.python }}"
+    needs: changes
+    if: ${{ needs.changes.outputs.relevant == 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -121,6 +164,8 @@ jobs:
 
   shim:
     name: "platformctl: shim ${{ matrix.name }}"
+    needs: changes
+    if: ${{ needs.changes.outputs.relevant == 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -179,6 +224,8 @@ jobs:
 
   live:
     name: "platformctl: live (${{ matrix.store }} image store)"
+    needs: changes
+    if: ${{ needs.changes.outputs.relevant == 'true' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
@@ -216,3 +263,25 @@ jobs:
         with:
           name: platformctl-doctor-${{ matrix.store }}
           path: ${{ runner.temp }}/doctor.json
+
+  gate:
+    # The one job to require. It always reports: success when every job above passed, or was skipped because the
+    # platformctl paths were not touched; failure when any failed or was cancelled.
+    name: "platformctl: gate"
+    if: ${{ always() }}
+    needs: [changes, unit, coverage, shim, live]
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Every platformctl job passed or was not needed
+        env:
+          # needs.<job>.result is success, failure, cancelled or skipped
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "::error::A platformctl job finished as '$result'"; exit 1 ;;
+            esac
+          done
