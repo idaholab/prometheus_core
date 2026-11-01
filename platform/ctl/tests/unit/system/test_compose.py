@@ -102,6 +102,33 @@ def test_up_variants():
     assert tail(runner.calls[1]) == ["up"]
 
 
+def test_up_with_explicit_files_replaces_the_entry_file_and_profiles():
+    """`files=` runs from just those files, under the project name, with no entry file and no profiles.
+
+    This is the argv `deeplynx setup` uses to start only its three services.
+    """
+    runner = FakeRunner()
+    compose = Compose(runner, Path("/p/docker-compose.platform.yml"), Path("/p"), ["dev"], {"A": "1"}, "proj")
+    compose.up(
+        ["deeplynx-postgres", "deeplynx-server"],
+        build=False,
+        wait=123,
+        files=("docker-compose.yml", "docker-compose.deeplynx.yml"),
+    )
+    assert runner.calls[0] == [
+        "docker", "compose", "-p", "proj", "-f", "docker-compose.yml", "-f", "docker-compose.deeplynx.yml",
+        "up", "-d", "--wait", "--wait-timeout", "123",
+        "deeplynx-postgres", "deeplynx-server",
+    ]  # fmt: skip
+    assert runner.envs[0] == {"A": "1"}
+
+
+def test_argv_with_files_and_no_project_leaves_out_dash_p():
+    """A `Compose` built without a project name doesn't invent `-p`."""
+    compose, _ = make()
+    assert compose.argv("ps", files=("a.yml",)) == ["docker", "compose", "-f", "a.yml", "ps"]
+
+
 def test_down_variants():
     """`down` adds `--remove-orphans` and `-v` only when asked."""
     compose, runner = make()

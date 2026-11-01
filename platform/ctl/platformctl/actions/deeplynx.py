@@ -87,24 +87,9 @@ def start_services(ctx: Context) -> bool:
     Only these start, so the platform's agents compose file isn't regenerated; the start target that
     follows reuses them. Returns whether Compose succeeded.
     """
-    wait = ctx.config.int("WAIT_TIMEOUT")
-    argv = [
-        "docker",
-        "compose",
-        "-p",
-        ctx.config.project,
-        "-f",
-        "docker-compose.yml",
-        "-f",
-        COMPOSE_FILE,
-        "up",
-        "-d",
-        "--wait",
-        "--wait-timeout",
-        str(wait),
-        *SERVICES,
-    ]
-    done = ctx.runner.run(argv, env=ctx.config.child_env(), cwd=ctx.paths.root, capture=False)
+    done = ctx.compose.up(
+        SERVICES, build=False, wait=ctx.config.int("WAIT_TIMEOUT"), files=("docker-compose.yml", COMPOSE_FILE)
+    )
     return done.ok
 
 

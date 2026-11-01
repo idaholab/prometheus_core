@@ -197,16 +197,23 @@ def test_setup_on_api_errors_leaves_env_alone_and_names_the_status(ctx_for, stub
     assert (platform_root / ".env").read_text() == ENV
 
 
-def test_setup_starts_only_the_deeplynx_services_first(ctx_for, runner, stub):
-    """Unless `--no-start`, Compose starts just the three services from the two files they need."""
+def test_setup_starts_only_the_deeplynx_services_first(ctx_for, runner, stub, monkeypatch):
+    """Unless `--no-start`, it asks Compose for just the three services from the two files they need.
+
+    The argv itself is pinned once, in `tests/unit/system/test_compose.py`, not here.
+    """
     ctx, _, _ = ctx_for({"WAIT_TIMEOUT": "123", "COMPOSE_PROJECT_NAME": "proj"})
+    seen = []
+    real = ctx.compose.up
+    monkeypatch.setattr(ctx.compose, "up", lambda *a, **kw: seen.append((a, kw)) or real(*a, **kw))
     assert deeplynx.run_setup(ctx, ns(no_start=False)) == 0
-    up = next(call for call in runner.calls if call[:2] == ["docker", "compose"])
-    assert up == [
-        "docker", "compose", "-p", "proj", "-f", "docker-compose.yml", "-f", "docker-compose.deeplynx.yml",
-        "up", "-d", "--wait", "--wait-timeout", "123",
-        "deeplynx-postgres", "deeplynx-server", "deeplynx-ui",
-    ]  # fmt: skip
+    assert seen == [
+        (
+            (("deeplynx-postgres", "deeplynx-server", "deeplynx-ui"),),
+            {"build": False, "wait": 123, "files": ("docker-compose.yml", "docker-compose.deeplynx.yml")},
+        )
+    ]
+    assert any(call[:2] == ["docker", "compose"] for call in runner.calls)
 
 
 def test_setup_stops_when_the_containers_fail_to_start(ctx_for, runner, stub, platform_root):
