@@ -8,7 +8,22 @@ dependencies = [
     "requests>=2.28.0",
     "marker-pdf>=0.2.0",
     "pymupdf>=1.23.0",
+    # marker-pdf needs torch and torchvision. They are listed here only so that
+    # [tool.uv.sources] can take them from the CPU-only index below
+    "torch",
+    "torchvision",
 ]
+
+# The agent runs marker on the CPU (CUDA_VISIBLE_DEVICES=""), so the CUDA
+# builds of torch from PyPI and their nvidia-* packages are dead weight
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.coverage.run]
 source = ["."]

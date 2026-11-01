@@ -1295,8 +1295,6 @@ jobs:
           - agent: osti-research-agent
             path: platform/agents/optional/osti-research-agent
             flag: osti-research-agent
-            # marker-pdf pulls in PyTorch with CUDA and the tests don't use it
-            overrides: "marker-pdf; sys_platform == 'never'"
           - agent: code-render-debug-agent
             path: platform/agents/debug-agents/code-render-debug-agent
             flag: code-render-debug-agent
@@ -1342,19 +1340,11 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         # Like the agent images: prometheus_api first, then the agent's locked
-        # dependencies on top. An agent with overrides resolves fresh instead,
-        # since its uv.lock doesn't have them
-        env:
-          OVERRIDES: ${{ matrix.overrides }}
+        # dependencies on top
         run: |
           uv venv
           uv pip install pytest pytest-asyncio pytest-cov "$GITHUB_WORKSPACE/sdk"
-          if [ -n "$OVERRIDES" ]; then
-            printf '%s\n' "$OVERRIDES" > "$RUNNER_TEMP/overrides.txt"
-            uv pip install -r pyproject.toml --overrides "$RUNNER_TEMP/overrides.txt"
-          else
-            uv sync --locked --no-dev --no-install-project --inexact
-          fi
+          uv sync --locked --no-dev --no-install-project --inexact
       - name: Test
         # Agents with a flag fail below fail_under in their pyproject.toml
         run: .venv/bin/python -m pytest --color=yes ${{ matrix.flag && '--cov --cov-report=xml' || '' }}
