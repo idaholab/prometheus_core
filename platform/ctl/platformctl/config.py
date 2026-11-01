@@ -136,6 +136,21 @@ _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 """What a setting name looks like. Anything else a user typed might be a secret, so it isn't echoed."""
 
 
+def check_value(name: str, value: str) -> None:
+    """Raise `ConfigError` if `value` isn't valid for the registered setting `name`; other keys pass.
+
+    A `bool` is `true` or `false` (make and the tool both read anything else as off), and an `int` is
+    digits. Only a registered, safe setting is echoed, so a pasted secret is never printed.
+    """
+    setting = REGISTRY.get(name)
+    if setting is None or not setting.safe:
+        return
+    if setting.kind == "bool" and value not in ("true", "false"):
+        raise ConfigError(f"{name} must be true or false, got {value!r}")
+    if setting.kind == "int" and not (value.isascii() and value.isdigit()):
+        raise ConfigError(f"{name} must be a number, got {value!r}")
+
+
 def is_name(text: str) -> bool:
     """Whether `text` is shaped like a setting name (ASCII letters, digits and `_`, not starting with a digit)."""
     return bool(_NAME.fullmatch(text))

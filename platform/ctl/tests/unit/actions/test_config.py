@@ -85,6 +85,38 @@ def test_set_refuses_a_secret_key_and_writes_nothing(ctx_env, platform_root):
     assert (platform_root / ".env").read_text() == DOTENV
 
 
+@pytest.mark.parametrize(
+    ("pair", "message"),
+    [
+        ("BACKEND_PORT=abc", "BACKEND_PORT must be a number, got 'abc'"),
+        ("BACKEND_PORT=", "BACKEND_PORT must be a number"),
+        ("LOCAL_SDK=yes", "LOCAL_SDK must be true or false, got 'yes'"),
+        ("LOCAL_SDK=True", "LOCAL_SDK must be true or false"),
+    ],
+)
+def test_set_refuses_a_value_the_setting_cannot_hold(ctx_env, platform_root, pair, message):
+    """`BACKEND_PORT=abc` would only fail on the next command, and `LOCAL_SDK=yes` reads as off: refuse, write nothing."""
+    ctx, _, err = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "PROFILE=prod", pair)) == 1
+    assert message in err.getvalue()
+    assert (platform_root / ".env").read_text() == DOTENV
+
+
+def test_set_checks_values_given_through_from_env_too(ctx_env, platform_root):
+    """A registered setting copied from the environment is checked like one given as KEY=value."""
+    ctx, _, err = ctx_env({"BACKEND_PORT": "not-a-port"})
+    assert config_action.set_values(ctx, parse("set", "--from-env", "BACKEND_PORT")) == 1
+    assert "BACKEND_PORT must be a number" in err.getvalue()
+    assert (platform_root / ".env").read_text() == DOTENV
+
+
+def test_set_accepts_any_value_for_a_text_setting(ctx_env, platform_root):
+    """A `str` setting has no type to check, so any value is written."""
+    ctx, _, _ = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "UP_ARGS=--build --quiet-pull")) == 0
+    assert envfile.read(platform_root / ".env")["UP_ARGS"] == "--build --quiet-pull"
+
+
 def test_set_rejects_a_pair_without_an_equals_sign(ctx_env):
     """`config set BACKEND_PORT` is a mistake, named as such."""
     ctx, _, err = ctx_env()

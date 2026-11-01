@@ -18,7 +18,7 @@ import argparse
 
 from platformctl import env_init, jsonout, llm_profiles
 from platformctl.actions import Subcommand
-from platformctl.config import REGISTRY, SETTINGS, ConfigError, is_name, is_safe, parse_set
+from platformctl.config import REGISTRY, SETTINGS, ConfigError, check_value, is_name, is_safe, parse_set
 from platformctl.context import Context
 from platformctl.system import envfile, terminal
 
@@ -314,6 +314,8 @@ def set_values(ctx: Context, args: argparse.Namespace) -> int:
                 what="config set",
                 instead="use `config set --from-env {key}` with the value in the environment",
             )
+        for key, value in values.items():
+            check_value(key, value)
         if not ctx.paths.env.exists():
             raise ConfigError(".env does not exist; run ./platformctl config init first")
     except ConfigError as exc:
