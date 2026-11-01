@@ -254,6 +254,8 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 The classifier lives in `classify_render_hint` / `to_artifact_meta`
 (`app/services/artifacts.py`); the frontend may override using the raw
 `mime_type` / `json_type` / `tags` fields.
+`ArtifactMeta.tags` is the ordered, deduplicated union of the artifact's top-level
+`tags` and its `metadata.tags`, and the classifier routes on that union.
 
 For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, page}`
 (lifted from the raw artifact `metadata`) so the frontend can render a citation card:

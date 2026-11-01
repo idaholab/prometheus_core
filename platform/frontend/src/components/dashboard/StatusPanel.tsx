@@ -13,6 +13,8 @@
 import { useState } from "react";
 import { Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PerSampleList } from "../PerSampleList";
+import { splitPerSample } from "@/lib/artifacts/perSample";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
@@ -115,6 +117,9 @@ interface StatusPanelProps {
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");
   const artifacts = useConversationArtifacts();
+  const { main, perSample } = splitPerSample(artifacts);
+  // The tab count shows what a person opens, not every per-sample file.
+  const mainCount = main.length;
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -132,7 +137,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         </RailButton>
         <RailButton
           active={tab === "artifacts"}
-          label={artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts"}
+          label={mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts"}
           onClick={() => openTo("artifacts")}
         >
           <FolderOpen size={20} />
@@ -157,7 +162,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "artifacts" ? "tab-active" : ""}`}
             onClick={() => setTab("artifacts")}
           >
-            Artifacts{artifacts.length > 0 && ` (${artifacts.length})`}
+            Artifacts{mainCount > 0 && ` (${mainCount})`}
           </button>
         </div>
         <RailButton size={32} label="Collapse status panel" onClick={onCollapse}>
@@ -179,9 +184,10 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
-          {artifacts.map((artifact) => (
+          {main.map((artifact) => (
             <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
           ))}
+          <PerSampleList artifacts={perSample} />
         </div>
       )}
     </div>
