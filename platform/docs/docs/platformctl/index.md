@@ -15,11 +15,15 @@ cd platform
 
 ## The first time
 
-1. Create and fill in `.env`: `./platformctl config init`. It creates `.env` from `.env.example`, generates the
-   secrets, asks which LLM provider you use and for its key, and asks two questions about doing the heavy parts on
-   this laptop. Press Enter to take the recommended answer. [Setup](setup.md) has the details.
-2. Start the platform: `make up`.
-3. Wait until it answers: `./platformctl status --wait`. `make up` already does this at the end.
+Just run `make up`. It runs `./platformctl config init` first, which creates `.env` from `.env.example`, generates
+the secrets, asks which LLM provider you use and for its key, and asks two questions about doing the heavy parts on
+this laptop. Press Enter to take the recommended answer. [Setup](setup.md) has the details. When it is done it waits
+until the platform answers (`./platformctl status --wait`).
+
+If you answer *yes* to building on this laptop, `make up` saves the answer and stops with "Run the same make command
+again", because `make` had already chosen where to get the base image. Run `make up` again.
+
+To prepare `.env` without starting anything, run `./platformctl config init` yourself.
 
 If something does not work, run `./platformctl doctor`. It says what is wrong and how to fix it.
 See [Troubleshooting](troubleshooting.md).

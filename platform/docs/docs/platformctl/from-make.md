@@ -5,7 +5,7 @@ description: The old make targets and the platformctl commands they now run
 
 # From make
 
-Every `make` target keeps working. These now run `platformctl`, and print the command they run:
+The `make` targets keep working, and `make up` is still the way to start the platform (it runs `config init` for you). These targets now run `platformctl`, and print the command they run:
 
 | make | platformctl | What it now does for you |
 |------|-------------|--------------------------|
@@ -13,6 +13,8 @@ Every `make` target keeps working. These now run `platformctl`, and print the co
 | `make check` | `./platformctl status --wait` | Says what it is waiting for, and which `doctor` check explains a timeout |
 | `make deeplynx-setup` | `./platformctl deeplynx setup` | Prints the steps and the DeepLynx web address |
 | `make doctor` (new) | `./platformctl doctor` | Diagnoses common problems and says how to fix them |
+
+`make check-prerequisites` and the other targets are not forwarded yet; they run as before.
 
 The scripts these replace, `scripts/init_env.py`, `scripts/check_platform.py` and `scripts/deeplynx_setup.py`, are
 now short stubs: they print `moved: run ./platformctl ...` and run the new command. They are removed in a later
