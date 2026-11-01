@@ -42,6 +42,9 @@ Docs, slides and skills
   `status --wait --timeout <n> --json`; `--yes` and `--confirm` for
   confirmations; `logs --tail`; and never `compose -- config` or
   `compose -- exec ... env`. (planned: step 5)
+- REQ-007-30: The docs MUST NOT name a `make` target, script or message that
+  no longer exists (`clear-litellm-db`, `generate-agents-compose.sh`, the
+  LiteLLM proxy, podman). (planned: step 6)
 
 Make
 

@@ -11,6 +11,15 @@ Fixed separately, before this plan, and not part of it:
 - `agent-template/setup_agent.py` copying the local DeepLynx server's own
   secrets into agent `.env` files: fixed in #311.
 
+## Requirements
+
+This step satisfies the requirement tagged `(planned: step 6)` in
+[`build/specs/`](../../../build/specs/000-index.md), a draft. A grep test
+over the docs proves it.
+
+- [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-30
+  (no doc names a target, script or message that no longer exists)
+
 ## Work
 
 - (If #197 hasn't merged by then; drop these two items if it has.)
