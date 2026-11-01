@@ -159,6 +159,11 @@ export const api = {
     return request<ConversationHistoryResponse>(`/conversations/recent?limit=${limit}`);
   },
 
+  /** Read a conversation's transcript without rebinding the session. */
+  getConversation(conversationId: string): Promise<ConversationDetailResponse> {
+    return request<ConversationDetailResponse>(`/conversations/${encodeURIComponent(conversationId)}`);
+  },
+
   /** Rebind the session to a past conversation; the next chat turn continues it. */
   resumeConversation(conversationId: string, bindSeq?: number): Promise<ConversationDetailResponse> {
     const body: ConversationResumeRequest = { bind_seq: bindSeq };

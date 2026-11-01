@@ -87,7 +87,7 @@ User → React frontend (frontend/, Vite dev server or nginx-served build)
        package, baked into the prometheus_api base image at PROMETHEUS_API_BASE_IMAGE_HASH)
 ```
 
-The backend consumes the client-agent's A2A `message/stream` and re-emits status and artifact events to the React frontend over SSE (`/api/events`). Do not add `/status/{conversation_id}` polling for new long-running agent calls.
+The backend consumes the client-agent's A2A `message/stream` and re-emits status and artifact events to the React frontend over SSE (`/api/events`). Do not add `/status/{conversation_id}` polling for new long-running agent calls. The one exception is the frontend's bounded fallback in `frontend/src/lib/store/turnRecovery.ts`: after a turn has been awaited for 60 s it reads the stored transcript (`GET /api/conversations/{id}`) every 15 s, only until that turn settles, so a long turn whose POST reply was dropped still shows its reply.
 
 ### Agent registry and A2A gateway (backend)
 
