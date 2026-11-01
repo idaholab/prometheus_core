@@ -217,7 +217,23 @@ def test_set_failure_is_one_json_object(ctx_env):
     ctx, out, _ = ctx_env(json_mode=True)
     assert config_action.set_values(ctx, parse("set", "LLM_API_KEY=value-given-on-the-command-line-22")) == 1
     body = json.loads(out.getvalue())
-    assert body["ok"] is False and body["error"]["code"] == "config_invalid" and body["command"] == "config"
+    assert body["ok"] is False and body["error"]["code"] == "config_invalid" and body["command"] == "config set"
+
+
+def test_set_json_success_is_one_object_naming_the_keys(ctx_env):
+    """With `--json`, a successful write is one object: the keys written, never their values."""
+    ctx, out, _ = ctx_env(json_mode=True)
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=9100", "PROFILE=prod")) == 0
+    body = json.loads(out.getvalue())
+    assert body["command"] == "config set" and body["ok"] is True and body["keys"] == ["BACKEND_PORT", "PROFILE"]
+    assert "9100" not in out.getvalue()
+
+
+def test_set_json_dry_run_says_so(ctx_env):
+    """A dry run is reported as one, so a script can tell nothing was written."""
+    ctx, out, _ = ctx_env(json_mode=True, dry_run=True)
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=9100")) == 0
+    assert json.loads(out.getvalue())["dry_run"] is True
 
 
 def test_show_prints_secrets_as_set_or_blank_with_their_source(ctx_env):
@@ -440,8 +456,34 @@ def test_init_does_not_ask_while_printing_json(init_ctx, monkeypatch):
     monkeypatch.setattr(terminal, "choose", lambda *a: pytest.fail("asked"))
     ctx, out, err = init_ctx(json_mode=True)
     assert config_action.init(ctx, init_args()) == 1
-    assert "LLM_CONFIG_PROFILE is empty" in err.getvalue()
-    assert out.getvalue() == "", "stdout is reserved for the one JSON object, and progress goes to stderr"
+    body = json.loads(out.getvalue())
+    assert body["command"] == "config init" and body["ok"] is False
+    assert body["error"]["code"] == "config_invalid" and "LLM_CONFIG_PROFILE is empty" in body["error"]["message"]
+    assert "[ERROR]" not in err.getvalue(), "the failure is the one JSON object, not an error block"
+
+
+def test_init_json_success_is_one_object_saying_what_it_did(init_ctx, init_root):
+    """`--json config init` prints what an assistant needs: what was created, generated and chosen."""
+    ctx, out, _ = init_ctx(
+        {"LLM_CONFIG_PROFILE": "anthropic", "LLM_API_KEY": "value-from-the-environment-1"}, json_mode=True
+    )
+    assert config_action.init(ctx, init_args(local_sdk=True)) == 0
+    body = json.loads(out.getvalue())
+    assert body["command"] == "config init" and body["ok"] is True
+    assert body["created"] is True and body["generated"] == ["AGENT_SECRET", "REDIS_PASSWORD"]
+    assert body["llm_profile"] == "anthropic"
+    assert (body["local_sdk"], body["local_deeplynx"]) == (True, False)
+    assert body["missing_keys"] == [] and body["stale_for_make"] == []
+    assert "value-from-the-environment-1" not in out.getvalue()
+
+
+def test_init_json_failure_for_a_missing_key_has_the_usual_error_object(init_ctx):
+    """A profile that needs a key we don't have is `config_invalid`, as one object."""
+    ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "anthropic"}, json_mode=True)
+    assert config_action.init(ctx, init_args()) == 1
+    body = json.loads(out.getvalue())
+    assert body["command"] == "config init" and body["error"]["code"] == "config_invalid"
+    assert "LLM_API_KEY is empty" in body["error"]["message"]
 
 
 def test_init_asks_the_two_local_questions_with_a_recommended_answer(init_ctx, init_root, monkeypatch):

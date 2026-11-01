@@ -55,8 +55,11 @@ def _save(ctx: Context, values: dict[str, str]) -> None:
     ctx.output.scrubber.add_all(value for key, value in values.items() if not is_safe(key))
 
 
-def _error(ctx: Context, lines: list[str]) -> int:
-    """Print an error block on stderr, as `init_env.py` did, and return 1."""
+def _error(ctx: Context, code: str, lines: list[str]) -> int:
+    """Report an LLM-settings problem and return 1: the error block `init_env.py` printed on stderr, or with
+    `--json` one error object whose message is the lines joined and whose `code` says which problem."""
+    if ctx.json_mode:
+        return _fail(ctx, "config init", code, " ".join(lines))
     ctx.output.write("\n[ERROR] " + "\n        ".join(lines) + "\n", err=True)
     return jsonout.EXIT_FAIL
 
@@ -99,6 +102,7 @@ def _llm_problem(ctx: Context, current: dict[str, str], known: dict) -> int | No
     if llm_profiles.missing_profile(current):
         return _error(
             ctx,
+            "config_invalid",
             [
                 f"LLM_CONFIG_PROFILE is empty in {path}.",
                 f"Available profiles: {', '.join(known)}.",
@@ -113,6 +117,7 @@ def _llm_problem(ctx: Context, current: dict[str, str], known: dict) -> int | No
         )
         return _error(
             ctx,
+            "config_invalid",
             [
                 f"LLM_CONFIG_PROFILE={profile} in {path} {reason}.",
                 f"Available profiles: {', '.join(known)}.",
@@ -122,6 +127,7 @@ def _llm_problem(ctx: Context, current: dict[str, str], known: dict) -> int | No
     if key := llm_profiles.missing_llm_key(current, known):
         return _error(
             ctx,
+            "config_invalid",
             [
                 f"{key} is empty in {path}.",
                 f"LLM_CONFIG_PROFILE={current['LLM_CONFIG_PROFILE']} needs it; set it (or pick another profile)",
@@ -205,16 +211,17 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
     paths, out = ctx.paths, ctx.output
     if ctx.dry_run:
         out.info(f"Would create or complete {paths.env.name} from {paths.env_example.name}.")
-        return jsonout.EXIT_OK
+        return _done(ctx, "config init", dry_run=True)
+    created = False
     try:
         known = llm_profiles.profiles(paths.llm_configs)
         example = paths.env_example.read_text(encoding="utf-8")
-        if env_init.create(paths.env_example, paths.env):
+        if created := env_init.create(paths.env_example, paths.env):
             out.info(f"Created {paths.env.name} from {paths.env_example.name}.")
         current = envfile.read(paths.env)
         filled = env_init.fill_secrets(ctx.runner, example, current)
     except (llm_profiles.ProfilesError, env_init.GenerateError) as exc:
-        return _fail(ctx, "config_invalid", str(exc))
+        return _fail(ctx, "config init", "config_invalid", str(exc))
     if filled:
         _save(ctx, filled)
         out.info(f"Generated in {paths.env.name}: {', '.join(filled)}")
@@ -229,7 +236,7 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
         try:
             _prompt_llm(ctx, current, known)
         except terminal.TerminalError as exc:
-            return _fail(ctx, "needs_terminal", str(exc))
+            return _fail(ctx, "config init", "needs_terminal", str(exc))
         current = envfile.read(paths.env)
 
     before = {key: ctx.config.flag(key) for key in ("LOCAL_SDK", "LOCAL_DEEPLYNX")}
@@ -270,7 +277,17 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
         out.info(f"  Add them to {paths.env.name} (copy the lines from {paths.env_example.name}).")
     local_deeplynx = _is_true(current.get("LOCAL_DEEPLYNX"))
     out.info("\nNext: make up" + (", then ./platformctl deeplynx setup" if local_deeplynx else ""))
-    return jsonout.EXIT_OK
+    return _done(
+        ctx,
+        "config init",
+        created=created,
+        generated=list(filled),
+        llm_profile=current.get("LLM_CONFIG_PROFILE", ""),
+        local_sdk=_is_true(current.get("LOCAL_SDK")),
+        local_deeplynx=local_deeplynx,
+        missing_keys=missing,
+        stale_for_make=stale,
+    )
 
 
 # -- config set ---------------------------------------------------------------------------------
@@ -319,13 +336,13 @@ def set_values(ctx: Context, args: argparse.Namespace) -> int:
         if not ctx.paths.env.exists():
             raise ConfigError(".env does not exist; run ./platformctl config init first")
     except ConfigError as exc:
-        return _fail(ctx, "config_invalid", str(exc))
+        return _fail(ctx, "config set", "config_invalid", str(exc))
     if ctx.dry_run:
         ctx.output.info("Would set " + ", ".join(values) + f" in {ctx.paths.env.name}.")
-        return jsonout.EXIT_OK
+        return _done(ctx, "config set", dry_run=True, keys=list(values))
     envfile.update(ctx.paths.env, values)
     ctx.output.info(f"Set {', '.join(values)} in {ctx.paths.env.name}.")
-    return jsonout.EXIT_OK
+    return _done(ctx, "config set", keys=list(values))
 
 
 # -- config show --------------------------------------------------------------------------------
@@ -388,16 +405,24 @@ def show(ctx: Context, args: argparse.Namespace) -> int:
 # -- shared -------------------------------------------------------------------------------------
 
 
-def _fail(ctx: Context, code: str, message: str, hint: str = "") -> int:
-    """Report a failure as JSON or as an error line; the exit code is 1."""
+def _fail(ctx: Context, command: str, code: str, message: str, hint: str = "") -> int:
+    """Report a failure as JSON (naming `command`, such as `config set`) or as an error line; the exit code is 1."""
     out = ctx.output
     if ctx.json_mode:
         jsonout.emit(
-            jsonout.error_object("config", ctx.platform_info(), code, message, hint), out.out, out.scrubber.scrub
+            jsonout.error_object(command, ctx.platform_info(), code, message, hint), out.out, out.scrubber.scrub
         )
     else:
         out.error(message, hint or None)
     return jsonout.EXIT_FAIL
+
+
+def _done(ctx: Context, command: str, **fields) -> int:
+    """With `--json`, print the one result object for a command that succeeded; return 0."""
+    if ctx.json_mode:
+        out = ctx.output
+        jsonout.emit(jsonout.result(command, ctx.platform_info(), **fields), out.out, out.scrubber.scrub)
+    return jsonout.EXIT_OK
 
 
 SUBCOMMANDS = [
