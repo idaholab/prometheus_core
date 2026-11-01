@@ -63,7 +63,13 @@ def test_only_the_runner_starts_subprocesses():
 UNIT = Path(__file__).resolve().parent
 """The unit tests folder."""
 
-CROSS_CUTTING = {"test_rules.py", "test_docstrings.py", "test_secrets_canary.py", "test_live_option.py"}
+CROSS_CUTTING = {
+    "test_rules.py",
+    "test_docstrings.py",
+    "test_secrets_canary.py",
+    "test_live_option.py",
+    "test_specs.py",
+}
 """Tests that cover the whole tool rather than one module."""
 
 
