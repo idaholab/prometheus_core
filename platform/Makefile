@@ -19,7 +19,9 @@ export COMPOSE_PROJECT_NAME
 # them, as before.
 PLATFORMCTL_MAKE_VARS := $(foreach v,$(.VARIABLES),$(if $(filter command line,$(origin $v)),$v))
 export PLATFORMCTL_MAKE_VARS
-PLATFORMCTL := PLATFORMCTL_VIA_MAKE=1 ./platformctl
+# Run through `sh`, as the stubs do, so a lost exec bit (a zip download, core.fileMode=false, a noexec mount)
+# reaches the tool's own message and not a bare "Permission denied". The shim is POSIX sh.
+PLATFORMCTL := PLATFORMCTL_VIA_MAKE=1 sh ./platformctl
 
 COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
