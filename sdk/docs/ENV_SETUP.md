@@ -80,9 +80,12 @@ Set `AGENT_SECRET_REQUIRED=false` only for local unauthenticated development.
 |----------|-------------|---------|----------|
 | `REGISTRY_URL` | LiteLLM registry/proxy URL for auto-registration | `http://litellm:4000` | No |
 | `REGISTRY_MAX_RETRIES` | Registration retries after the first attempt, used for both explicit `REGISTRY_URL` and the built-in fallback URL. | `10` | No |
+| `REGISTRY_CHECK_INTERVAL_SECONDS` | After startup, how often the agent checks the registry still lists it, re-registering if not (the registry was cleared, or startup registration gave up). `0` disables; a negative or non-finite value uses the default; the minimum is `0.1`. Skipped for an agent that overrides `register_with_registry_async`. | `5` | No |
 
 Registry registration is started as a background async task during the agent app lifespan so
-the HTTP server can start while the LiteLLM registry is still becoming ready.
+the HTTP server can start while the LiteLLM registry is still becoming ready. After it, the same
+task checks every `REGISTRY_CHECK_INTERVAL_SECONDS` that the registry still lists the agent and
+registers it again if not, including when the startup retries ran out.
 
 ### Example Agent .env
 
@@ -98,6 +101,7 @@ AGENT_SECRET_REQUIRED=true
 # Registry (optional)
 REGISTRY_URL=http://litellm:4000
 # REGISTRY_MAX_RETRIES=10
+# REGISTRY_CHECK_INTERVAL_SECONDS=5
 ```
 
 ### Agent Usage

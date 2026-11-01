@@ -901,6 +901,9 @@ jobs:
       DEBUG_AGENTS: "false"
       OPTIONAL_AGENTS: "false"
       PROFILE: ""
+      # The scaffolded agent re-checks its registration every second, so the
+      # registry-reset step finishes as soon as the agent is back
+      REGISTRY_CHECK_INTERVAL_SECONDS: "1"
       # CI only: stub credentials, as in platform: up
       LLM_CONFIG_PROFILE: anthropic
       LLM_API_KEY: sk-ant-test-not-real
@@ -990,6 +993,41 @@ jobs:
           assert skills == ["ci_check_analysis"], skills
           print(f"{card['name']}: {skills}")
           EOF
+      - name: Survive a registry reset
+        # The platform resets the registry on every make up and make restart.
+        # An agent that keeps running must register again by itself (SDK
+        # keep_registered_async), not drop out of discovery until it restarts.
+        # Delete the scaffolded agent's entry as a reset would, then poll until
+        # it is back (the agent re-checks every second, see the job env)
+        run: |
+          secret=$(sed -n 's/^AGENT_SECRET=//p' .env)
+          echo "::add-mask::$secret"
+          registry=http://localhost:8600/v1/agents
+          # Exit 0 when listed, 1 when not. A failed request ends the step instead of
+          # reading as "not listed" (a pipe would hide curl's exit status).
+          listed() {
+            local body
+            if ! body=$(curl -fsS -H "Authorization: Bearer $secret" "$registry"); then
+              echo "::error::GET $registry failed"
+              exit 1
+            fi
+            printf '%s' "$body" \
+              | python3 -c 'import json, sys; sys.exit(0 if any(e.get("agent_name") == "ci-check-agent" for e in json.load(sys.stdin)) else 1)'
+          }
+          # curl -f fails on a 404, so a passing DELETE proves the entry existed. No
+          # "still listed?" check follows: the agent may already be back by then.
+          curl -fsS -X DELETE -H "Authorization: Bearer $secret" "$registry/ci-check-agent"
+          start_ms=$(($(date +%s%N) / 1000000))
+          deadline=$((SECONDS + 30))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if listed; then
+              echo "ci-check-agent re-registered by itself after $(($(date +%s%N) / 1000000 - start_ms)) ms"
+              exit 0
+            fi
+            sleep 0.01
+          done
+          echo "::error::ci-check-agent did not re-register within 30 s of a registry reset"
+          exit 1
       - name: Show status
         if: ${{ failure() }}
         run: docker ps --all

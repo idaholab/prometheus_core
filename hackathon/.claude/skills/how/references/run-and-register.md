@@ -1,6 +1,6 @@
 # Run and register your agent
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 ## Start it
 
@@ -14,18 +14,26 @@ startup with "Invalid required DeepLynx configuration: …" without the `DEEPLYN
 
 ## Registration and the route key
 
-At startup the agent deletes an entry with its `agent_name` from `{REGISTRY_URL}/v1/agents`, then
-registers its card, URL, and `static_headers` (`Bearer <AGENT_SECRET>`) with the backend, using
+At startup the agent POSTs its card, URL, and `static_headers` (`Bearer <AGENT_SECRET>`) with the backend, using
 `LITELLM_MASTER_KEY` as the token (the SDK's legacy name; compose sets it to `${AGENT_SECRET}`)
-(`sdk/prometheus_api/agent/registry.py`; deck 04, appendix). `REGISTRY_URL` is `http://backend:8000` in
+to `{REGISTRY_URL}/v1/agents` (`sdk/prometheus_api/agent/registry.py`, `AgentRegistryClient.register_once_async`;
+deck 04, appendix). The POST replaces the entry of the same name, so there is no delete first. `REGISTRY_URL` is `http://backend:8000` in
 Docker, `http://prometheus.host.internal:8600` in external mode, `http://localhost:8600` on the host. The log
 says `Registered '<route key>' with LiteLLM at http://backend:8000` (old wording, same backend).
 
 - **The route key** is the card `name` in lowercase, spaces changed to hyphens
-  (`registry.py:50-53`): "Hello Max Agent" → `hello-max-agent`. The same key deletes the other
-  entry (`registry.py:123-130`).
+  (`AgentRegistryClient.agent_name`): "Hello Max Agent" → `hello-max-agent`. A second agent with
+  the same route key replaces the first one's entry.
 - **Retries**: 2 s, doubled, at most 30 s, 11 attempts, then "Continuing without registration"
-  (`registry.py:200-233`). Verify with `agent-registered-log` and `registry-agents` (`checks.md`).
+  (`AgentRegistryClient.register_with_retries_async`). Verify with `agent-registered-log` and `registry-agents` (`checks.md`).
+- **Re-registration checks** (SDK, `AgentRegistryClient.keep_registered_async`): after startup the agent
+  checks every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5, `0` off) that `/v1/agents` still lists it, and
+  registers again if not. This also covers startup retries that ran out. An agent that overrides
+  `register_with_registry_async` is not re-registered (it logs a WARNING). Whether an agent has the checks
+  depends on its base image: the platform's agents use the pin in `platform/Makefile`
+  (`PROMETHEUS_API_BASE_IMAGE_HASH`), a template agent defaults to `latest`, and `LOCAL_SDK=true` uses the
+  local SDK. To tell, look for the INFO line "Checking the registry still lists this agent every 5s" in its log (`agent-registered-log`);
+  without it, the agent registers only at startup.
 
 ## Discovery: how the orchestrator finds you
 
@@ -41,7 +49,7 @@ and once on an unknown skill (`orchestrator/runtime.py:209-217`). `discovery-ref
 | what changed | run |
 |---|---|
 | code, card, `pyproject.toml`, `Dockerfile`, compose, or the agent `.env` | `make up` in the agent folder, then `discovery-refresh` |
-| the platform restarted (it empties the registry: `clear-agent-registry`) | `docker compose -p <project> restart <service>`, or `make up` after a `make down` |
+| the platform restarted (it empties the registry: `clear-agent-registry`) | If the agent logs "Checking the registry still lists this agent every", wait about 5 s, check `registry-agents`, then `discovery-refresh` (the client-agent's card cache can lag up to 60 s). Otherwise, or if it's still missing: `docker compose -p <project> restart <service>`, or `make up` after a `make down` |
 | The restart fails: "network … not found" | `make down`, then `make up` |
 | any of these, before a chat test | a fresh chat conversation (deck 04, slide 18) |
 

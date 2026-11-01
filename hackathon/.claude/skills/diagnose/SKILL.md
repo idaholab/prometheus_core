@@ -42,9 +42,11 @@ Find why something does not work, explain the cause, and fix it. The argument: `
    After a card or code change, run `discovery-refresh`.
 2. **Yes**: show the exact change (key names only for an `.env`; a diff and "Before a write" for
    an agent file), then ask (header `Fix`): "Apply the fix" (recommended, say why), "Show me the
-   steps", "Skip". A platform `make up` or `make restart` empties the registry: `make down` in the
-   agent folder, the target (timeout 10 minutes), then `make up` there. Before `make down-v`,
-   state the loss (`conventions.md`).
+   steps", "Skip". A platform `make up` or `make restart` empties the registry. If the agent's log
+   has the INFO line "Checking the registry still lists this agent every", it registers again within about
+   5 s: wait, then `discovery-refresh` (`checks.md`, `agent-registered-log`). If not (it registers
+   only at startup): `make down` in the agent folder, the target (timeout 10 minutes), then
+   `make up` there. Before `make down-v`, state the loss (`conventions.md`).
 3. **You**: give the steps, then ask (header `Done?`): "Done, check again", "Skip".
 
 ## Newer failures (not yet in `troubleshooting.md`)

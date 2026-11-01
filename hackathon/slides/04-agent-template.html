@@ -495,7 +495,7 @@ docker compose -p neutron-agent restart</pre>
 <ul class="b sm">
 <li>At startup the agent <strong>registers itself</strong> with the platform <strong>backend</strong> (<code>REGISTRY_URL=http://backend:8000</code>). Nothing to configure beyond the <code>.env</code>.</li>
 <li>The orchestrator notices new or changed agents within about a minute.</li>
-<li>Every platform <code>make up</code>/<code>make restart</code> empties the registry: restart your agent afterwards.</li>
+<li>Every platform <code>make up</code>/<code>make restart</code> empties the registry: restart your agent afterwards (with the SDK keep-alive it re-registers by itself within about 5 s).</li>
 </ul>
 <div class="callout">
 Start a <strong>fresh conversation</strong> for each test. Old uploads and results stay visible to the orchestrator and can confuse it.</div>
@@ -782,7 +782,7 @@ Next: the end-to-end dry run (3:30 pm). The appendix of this deck has every deta
 </div>
 
 <div class="callout bad">
-<strong>Choose a unique name and skill ID.</strong> The registry keys agents by card name; re-registering <em>deletes</em> any agent with the same name. Your skill id becomes the orchestrator's tool name (<code>[a-zA-Z0-9_-]</code>, ≤ 64 chars). Prefix both with your team name: type &quot;Team Neutron Mesh QA&quot; (the scaffolder appends &quot; Agent&quot;), skill <code>neutron_mesh_quality_report</code>.</div>
+<strong>Choose a unique name and skill ID.</strong> The registry keys agents by card name; registering <em>replaces</em> any agent with the same name. Your skill id becomes the orchestrator's tool name (<code>[a-zA-Z0-9_-]</code>, ≤ 64 chars). Prefix both with your team name: type &quot;Team Neutron Mesh QA&quot; (the scaffolder appends &quot; Agent&quot;), skill <code>neutron_mesh_quality_report</code>.</div>
 
 <pre class="xs"># non-interactive: every default, incl. copying
 # ../platform/.env; fails if the folder exists
@@ -1134,11 +1134,7 @@ parameters:
   <div class="content">
 <div class="grid g2" style="gap:30px;">
 <div class="col">
-<ol class="b sm">
-<li><code>GET {REGISTRY_URL}/v1/agents</code>, looking for an entry with the same <code>agent_name</code></li>
-<li>If one exists: <code>DELETE {REGISTRY_URL}/v1/agents/{agent_id}</code></li>
-<li><code>POST {REGISTRY_URL}/v1/agents</code>:</li>
-</ol>
+<p class="sm"><code>POST {REGISTRY_URL}/v1/agents</code>. It replaces the entry of the same <code>agent_name</code>, so a second agent with the same route key replaces the first:</p>
 <pre class="xs">{ &quot;agent_name&quot;: <span class="s">&quot;hello-world-agent&quot;</span>,
   &quot;agent_card_params&quot;: { …raw card…,
       &quot;url&quot;: <span class="s">&quot;http://hello-world-agent:8000&quot;</span>,
@@ -1146,7 +1142,7 @@ parameters:
   &quot;static_headers&quot;: {
       &quot;Authorization&quot;: <span class="s">&quot;Bearer <span class="p">&lt;AGENT_SECRET&gt;</span>&quot;</span> } }
 # reques<span class="k">t</span> header: Au<span class="k">t</span>horiza<span class="k">t</span>io<span class="k">n</span>: Bearer $AGENT_SECRET</pre>
-<p class="small">Retries: <code>REGISTRY_MAX_RETRIES</code> (default 10), backoff 2 s → ×2 → capped at 30 s. On final failure it logs &quot;Continuing without registration&quot; and <strong>keeps serving, unregistered</strong>.</p>
+<p class="small">Retries: <code>REGISTRY_MAX_RETRIES</code> (default 10), backoff 2 s → ×2 → capped at 30 s. On final failure it logs &quot;Continuing without registration&quot; and <strong>keeps serving, unregistered</strong>. With the SDK keep-alive it keeps checking every <code>REGISTRY_CHECK_INTERVAL_SECONDS</code> (default 5) and registers once the backend answers.</p>
 </div>
 <div class="col">
 <table class="t sm">
@@ -1264,7 +1260,7 @@ docker compose -p hello-world logs <span class="n">2</span>&gt;&amp;<span class=
 </table>
 <div class="grid g2">
 <div class="callout warn">
-After every platform <code>make up</code>/<code>make restart</code> the registry is empty: <code>docker compose -p &lt;agent-folder&gt; restart</code> to re-register (an unchanged container is left alone by a second <code>make up</code>). Stop your agent before <code>make down</code> in the platform, or the network cannot be removed.</div>
+After every platform <code>make up</code>/<code>make restart</code> the registry is empty: <code>docker compose -p &lt;agent-folder&gt; restart</code> to re-register (an unchanged container is left alone by a second <code>make up</code>). With the SDK keep-alive the agent re-registers by itself within about 5 s. Stop your agent before <code>make down</code> in the platform, or the network cannot be removed.</div>
 
 <div class="callout">
 Standalone curl testing without any platform: <code>EXTERNAL_AGENT_HOST=localhost EXTERNAL_AGENT_PORT=8000 make up-fg</code>, with <code>USER_IDENTITY_REQUIRED=false</code> in <code>.env</code>.</div>
