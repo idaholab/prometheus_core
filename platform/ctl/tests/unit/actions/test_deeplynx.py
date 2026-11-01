@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import stat
 import threading
 
 import pytest
@@ -94,6 +95,15 @@ def test_setup_creates_a_project_and_key_and_writes_every_setting(ctx_for, stub,
     assert "Saved a new DeepLynx API key for project 1 in .env." in out.getvalue()
     assert out.getvalue().rstrip().endswith("DeepLynx UI: http://localhost:3456")
     assert "secret1" not in out.getvalue() + err.getvalue()
+
+
+def test_setup_tightens_a_world_readable_env_before_saving_the_key(ctx_for, stub, platform_root):
+    """The new API key and secret are not written into a file other users can read."""
+    (platform_root / ".env").chmod(0o644)
+    ctx, _, err = ctx_for()
+    assert deeplynx.run_setup(ctx, ns()) == 0
+    assert stat.S_IMODE((platform_root / ".env").stat().st_mode) == 0o600
+    assert "readable by other users (mode 0644)" in err.getvalue()
 
 
 def test_setup_json_success_is_one_object_without_the_key(ctx_for, stub):

@@ -209,6 +209,23 @@ def write_atomic(path: Path, text: str) -> None:
         raise
 
 
+def make_private(path: Path) -> int | None:
+    """Make an existing file readable by its owner only; return the old mode if that changed it, else None.
+
+    `write_atomic` keeps a file's mode, so a `.env` that was made 0644 would stay readable by every
+    user on the machine while a command adds secrets to it. A missing file, or one that is already
+    private, is left alone.
+    """
+    target = Path(os.path.realpath(path))
+    if not target.exists():
+        return None
+    mode = stat.S_IMODE(target.stat().st_mode)
+    if mode & 0o077 == 0:
+        return None
+    target.chmod(mode & 0o700)
+    return mode
+
+
 def update(path: Path, updates: dict[str, str]) -> None:
     """Set keys in the file at `path`, creating it (0600) if needed."""
     current = path.read_text(encoding="utf-8") if path.exists() else ""

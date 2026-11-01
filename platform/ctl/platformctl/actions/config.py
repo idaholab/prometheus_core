@@ -51,7 +51,7 @@ def add_init_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _save(ctx: Context, values: dict[str, str]) -> None:
     """Write values into `.env`, and have the scrubber hide the ones that are secret from now on."""
-    envfile.update(ctx.paths.env, values)
+    env_init.write_env(ctx.paths.env, ctx.output, values)
     ctx.output.scrubber.add_all(value for key, value in values.items() if not is_safe(key))
 
 
@@ -358,7 +358,7 @@ def set_values(ctx: Context, args: argparse.Namespace) -> int:
     if ctx.dry_run:
         ctx.output.info("Would set " + ", ".join(values) + f" in {ctx.paths.env.name}.")
         return _done(ctx, "config set", dry_run=True, keys=list(values))
-    envfile.update(ctx.paths.env, values)
+    env_init.write_env(ctx.paths.env, ctx.output, values)
     ctx.output.info(f"Set {', '.join(values)} in {ctx.paths.env.name}.")
     return _done(ctx, "config set", keys=list(values))
 

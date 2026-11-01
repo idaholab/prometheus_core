@@ -21,12 +21,24 @@ import shutil
 import sys
 from pathlib import Path
 
+from platformctl.output import Output
 from platformctl.system import envfile
 from platformctl.system.runner import Runner
 
 
 class GenerateError(RuntimeError):
     """A secret's generator one-liner failed. The message names the key, never the output."""
+
+
+def write_env(env: Path, output: Output, values: dict[str, str]) -> None:
+    """Write values into `.env`, first making it owner-only if it was readable by others (and saying so).
+
+    A `.env` is created 0600, but one made by hand or by an old checkout may be 0644, and a rewrite keeps
+    the mode. These commands add secrets, so the file is tightened before they do, not left for `doctor` to flag.
+    """
+    if (old := envfile.make_private(env)) is not None:
+        output.warn(f"{env.name} was readable by other users (mode {old:04o}); it is now owner-only (0600).")
+    envfile.update(env, values)
 
 
 def create(example: Path, env: Path) -> bool:

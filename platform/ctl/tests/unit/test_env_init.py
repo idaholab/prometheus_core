@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import stat
 import sys
@@ -20,6 +21,8 @@ from pathlib import Path
 import pytest
 
 from platformctl import env_init
+from platformctl.output import Output, Scrubber
+from platformctl.system import envfile
 from platformctl.system.runner import Runner
 from tests.unit.conftest import FakeRunner
 
@@ -52,6 +55,29 @@ def test_create_leaves_an_existing_env_and_its_mode_alone(tmp_path):
     env.chmod(0o640)
     assert env_init.create(example, env) is False
     assert env.read_text() == "MINE=1\n" and stat.S_IMODE(env.stat().st_mode) == 0o640
+
+
+def test_write_env_tightens_a_loose_env_before_adding_secrets_and_says_so(tmp_path):
+    """A 0644 `.env` would keep that mode through a rewrite: it becomes 0600 first, with a warning."""
+    env = tmp_path / ".env"
+    env.write_text("MINE=1\n")
+    env.chmod(0o644)
+    err = io.StringIO()
+    output = Output(Scrubber(), out=io.StringIO(), err=err, env={})
+    env_init.write_env(env, output, {"AGENT_SECRET": "s"})
+    assert stat.S_IMODE(env.stat().st_mode) == 0o600
+    assert "was readable by other users (mode 0644); it is now owner-only (0600)." in err.getvalue()
+    assert envfile.read(env) == {"MINE": "1", "AGENT_SECRET": "s"}
+
+
+def test_write_env_says_nothing_for_a_private_env(tmp_path):
+    """A `.env` that is already owner-only (0600, or 0400) is written without a warning."""
+    env = tmp_path / ".env"
+    env.write_text("MINE=1\n")
+    env.chmod(0o600)
+    err = io.StringIO()
+    env_init.write_env(env, Output(Scrubber(), out=io.StringIO(), err=err, env={}), {"K": "v"})
+    assert err.getvalue() == "" and stat.S_IMODE(env.stat().st_mode) == 0o600
 
 
 def test_generate_secret_runs_the_one_liner_with_this_python():

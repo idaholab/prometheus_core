@@ -72,6 +72,15 @@ def test_set_writes_in_place_and_keeps_the_rest(ctx_env, platform_root):
     assert out.getvalue() == "Set BACKEND_PORT, PROFILE in .env.\n"
 
 
+def test_set_tightens_a_world_readable_env_and_says_so(ctx_env, platform_root):
+    """Commands that add secrets don't leave them in a 0644 file."""
+    (platform_root / ".env").chmod(0o644)
+    ctx, _, err = ctx_env()
+    assert config_action.set_values(ctx, parse("set", "BACKEND_PORT=9100")) == 0
+    assert stat.S_IMODE((platform_root / ".env").stat().st_mode) == 0o600
+    assert ".env was readable by other users (mode 0644); it is now owner-only (0600)." in err.getvalue()
+
+
 def test_set_refuses_a_secret_key_and_writes_nothing(ctx_env, platform_root):
     """A secret on the command line would reach history and `ps`: refused, with the way to do it."""
     ctx, _, err = ctx_env()
@@ -651,6 +660,16 @@ def test_init_without_make_never_warns_about_make(init_ctx):
     ctx, _, err = init_ctx({"LLM_CONFIG_PROFILE": "ollama"}, yes=True)
     assert config_action.init(ctx, init_args()) == 0
     assert "make read" not in err.getvalue()
+
+
+def test_init_tightens_a_world_readable_env_before_generating_secrets(init_ctx, init_root):
+    """An `.env` made 0644 by hand keeps that mode through a rewrite: `config init` makes it 0600 first."""
+    (init_root / ".env").write_text(EXAMPLE.replace("LLM_CONFIG_PROFILE=", "LLM_CONFIG_PROFILE=ollama"))
+    (init_root / ".env").chmod(0o644)
+    ctx, _, err = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    assert config_action.init(ctx, init_args()) == 0
+    assert stat.S_IMODE((init_root / ".env").stat().st_mode) == 0o600
+    assert err.getvalue().count("readable by other users") == 1, "said once, not for every write"
 
 
 def test_init_dry_run_writes_nothing(init_ctx, init_root):

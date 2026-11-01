@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import argparse
 
-from platformctl import jsonout
+from platformctl import env_init, jsonout
 from platformctl.actions import Subcommand
 from platformctl.context import Context
 from platformctl.system import envfile
@@ -140,8 +140,9 @@ def run_setup(ctx: Context, args: argparse.Namespace) -> int:
         return _fail(ctx, "config_invalid", f"Setting up DeepLynx at {api}: {exc}")
 
     out.scrubber.add_all([key, secret])
-    envfile.update(
+    env_init.write_env(
         paths.env,
+        out,
         {
             "DEEPLYNX_BASE_URL": INTERNAL_URL,
             "DEEPLYNX_KEY": key,
