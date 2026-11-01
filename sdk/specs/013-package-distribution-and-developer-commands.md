@@ -19,7 +19,7 @@ Keep the package installable, versioned, testable, and container-buildable throu
 - REQ-013-09: `make fix` MUST run ruff auto-fix and formatting; `make check` MUST run lint, format, and typecheck.
 - REQ-013-10: `make test-install` MUST build a wheel, install it in a clean temporary venv, smoke-test imports of `__version__`, storage clients/config, and `PrometheusAgent`, then clean build artifacts.
 - REQ-013-11: Version targets MUST use `uv version --short` and `uv version --bump {patch,minor,major}`.
-- REQ-013-12: Container build targets MUST support local amd64/arm64 image builds and multi-arch buildx push with configurable `IMAGE_REPO`, `IMAGE_TAG`, and optional latest tag, and MUST pass `../common/certs` as the `certs` build context.
+- REQ-013-12: Container build targets MUST support local amd64/arm64 image builds with a configurable `IMAGE_TAG` and a host-architecture build into the local Docker store with a configurable `LOCAL_IMAGE`, and MUST pass `../common/certs` as the `certs` build context.
 - REQ-013-13: The Dockerfile MUST use a Python 3.12 `uv` base image, install runtime dependencies from `uv.lock` without dev dependencies, install CA certificates by running `setup.sh` from the named `certs` build context (`../common/certs`), which validates each `*.pem`/`*.crt` file, fails the build on malformed input, installs every certificate into the system trust store, and copies the system bundle to `/etc/ssl/certs/ca-bundle.pem`, install the package without dependencies, and default to `python`.
 - REQ-013-14: Pytest configuration MUST discover `tests/test_*.py`, enable `asyncio_mode=auto`, and define `unit`, `integration`, and `slow` markers.
 - REQ-013-15: The wheel MUST contain every YAML file in `prometheus_api.llm_configs`, and `make test-install` MUST verify that the installed default profile is readable.
@@ -50,7 +50,6 @@ Keep the package installable, versioned, testable, and container-buildable throu
 - `make bump-major`
 - `make build-image IMAGE_TAG=<tag>`
 - `make build-local LOCAL_IMAGE=<name:tag>`
-- `make build-push IMAGE_REPO=<repo> IMAGE_TAG=<tag> PUSH_LATEST=<true|false>`
 
 ## Constraints
 - Developer and CI commands SHOULD run through `uv` so tool versions match `uv.lock`.

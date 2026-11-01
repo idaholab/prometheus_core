@@ -103,20 +103,13 @@ bump-major: ##@ Bump major version (0.2.0 → 1.0.0)
 ##@ Container
 ##@
 
-.PHONY: build-image build-local build-push
+.PHONY: build-image build-local
 
 # The Dockerfile installs CA certificates from the named "certs" build context,
 # which lives outside this directory so the platform images can share it
 CERTS_CONTEXT := --build-context certs=../common/certs
 
-IMAGE_REPO ?= containers.github.inl.gov/genesis/prometheus_api
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
-PUSH_LATEST ?= false
-
-BUILD_PUSH_TAGS := -t "$(IMAGE_REPO):$(IMAGE_TAG)"
-ifeq ($(PUSH_LATEST),true)
-  BUILD_PUSH_TAGS += -t "$(IMAGE_REPO):latest"
-endif
 
 build-image: ##@ Build container images for amd64 and arm64 (IMAGE_TAG=<tag>, default: git short hash)
 	docker build $(CERTS_CONTEXT) --platform linux/amd64 -t "prometheus-api:$(IMAGE_TAG)-amd64" .
@@ -134,15 +127,3 @@ endif
 
 build-local: ##@ Build a host-arch image into the local Docker store for the platform (LOCAL_IMAGE=<name:tag>, default: prometheus_api:local; CACHE_FROM=<image:tag> to import a registry cache)
 	docker build $(CERTS_CONTEXT) $(CACHE_FROM_FLAG) -t "$(LOCAL_IMAGE)" .
-
-build-push: ##@ Build and push multi-arch image (IMAGE_REPO=<repo> [IMAGE_TAG=<tag>])
-ifndef IMAGE_REPO
-	$(error IMAGE_REPO is required. Example: make build-push IMAGE_REPO=containers.github.inl.gov/genesis PUSH_LATEST=true)
-endif
-	docker buildx build \
-		$(CERTS_CONTEXT) \
-		--platform linux/amd64,linux/arm64 \
-		--push \
-		$(BUILD_PUSH_TAGS) \
-		.
-	@echo "Done$(if $(filter true,$(PUSH_LATEST)), — also tagged as latest)"
