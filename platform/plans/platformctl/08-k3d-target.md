@@ -7,6 +7,19 @@
 `./platformctl --target k3d up` (or `PLATFORM_TARGET=k3d`) runs the platform
 on the local k3d cluster, with no changes to the actions.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 8)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are early drafts:
+this step's PR will refine them once the k3d target's design is known. It
+removes each tag and cites the ID from the test that proves it. When it
+lands, REQ-008-02's refusal of `k3d` is retired.
+
+- [008 Where and how the platform runs](../../../build/specs/008-where-and-how-the-platform-runs.md):
+  REQ-008-04, REQ-008-05, REQ-008-10 to REQ-008-12 (`--target k3d up` and
+  its summary, `cluster up|down|reset` keeping "already running", the k3d
+  checks in `doctor`, every command working or refusing cleanly)
+
 ## Work
 
 - `targets/k3d.py`, implementing `targets/base.py`, on new adapters

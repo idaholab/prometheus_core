@@ -28,6 +28,14 @@ Targets
 - REQ-008-05: `cluster up`, `cluster down` and `cluster reset` MUST replace
   the `cluster-*` Make targets, and `cluster up` MUST keep its "already
   running" output word for word. (planned: step 8)
+- REQ-008-10: `cluster up` MUST print its steps (tools, CA, cluster,
+  registry) and the cluster's registry address. (planned: step 8)
+- REQ-008-11: With `--target k3d`, `doctor` MUST check that the cluster is
+  running, the registry answers on `localhost:5001`, and the kubectl context
+  is the cluster's; the compose-only checks are skipped. (planned: step 8)
+- REQ-008-12: Every command MUST work on the k3d target or refuse as
+  REQ-008-03 says; none may fail in another way because the target is k3d.
+  (planned: step 8)
 
 Where the code comes from
 
