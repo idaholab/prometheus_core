@@ -39,7 +39,10 @@ HOMEBREW_PYTHONS = ("/opt/homebrew/bin/python3", "/usr/local/bin/python3")
 
 
 def test_the_shim_falls_back_to_uv_run_when_no_python_is_found(tmp_path):
-    """With only `uv` available, the shim runs the real tool through `uv run`, and says which command it ran."""
+    """With only `uv` available, the shim runs the real tool through `uv run`, and says which command it ran.
+
+    Covers BEH-001-02.
+    """
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is not installed")

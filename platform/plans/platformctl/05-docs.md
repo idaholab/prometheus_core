@@ -6,6 +6,19 @@ Each earlier step already switched the user-facing docs and slides to its
 commands. This step covers what's left: the documentation for people who
 change platformctl, and a final sweep.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 5)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong. Most of this step is
+contributor documentation, which has no user-facing requirement; the two
+below are what a user or assistant relies on. The docs test (REQ-001-28)
+and a grep test over the repository prove them.
+
+- [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-28
+  (no doc left that teaches a platform `make` target), REQ-007-29 (how an
+  assistant runs long and interactive commands)
+
 ## Work
 
 - **User guide review:** read `platform/docs/docs/platformctl/` start to

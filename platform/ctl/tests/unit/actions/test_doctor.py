@@ -56,7 +56,10 @@ def test_add_arguments_parses_the_options():
 
 
 def test_text_output_for_a_clean_run(platform_root, runner):
-    """Text output for a clean run."""
+    """Text output for a clean run.
+
+    Covers REQ-006-05.
+    """
     ctx, out, _ = ctx_with_env(platform_root, runner)
     assert doctor.run(ctx, args("docker", "platform-env")) == 0
     lines = out.getvalue().splitlines()
@@ -66,7 +69,10 @@ def test_text_output_for_a_clean_run(platform_root, runner):
 
 
 def test_text_output_lists_the_fix_under_each_failure_and_counts_problems(platform_root, runner):
-    """Text output lists the fix under each failure and counts problems."""
+    """Text output lists the fix under each failure and counts problems.
+
+    Covers REQ-006-01.
+    """
     ctx, out, _ = make_context(platform_root, runner)  # no .env
     code = doctor.run(ctx, args("platform-env", "env-derived-keys"))
     text = out.getvalue()
@@ -76,7 +82,10 @@ def test_text_output_lists_the_fix_under_each_failure_and_counts_problems(platfo
 
 
 def test_only_warnings_exit_zero_and_are_counted_as_problems(platform_root, runner):
-    """Only warnings exit zero and are counted as problems."""
+    """Only warnings exit zero and are counted as problems.
+
+    Covers REQ-006-02.
+    """
     (platform_root / ".env").write_text(GOOD_ENV + "BUILD_CACHE=x\nBACKEND_PORT=1\n")
     ctx, out, _ = make_context(platform_root, runner)
     code = doctor.run(ctx, args("env-derived-keys"))
@@ -84,7 +93,10 @@ def test_only_warnings_exit_zero_and_are_counted_as_problems(platform_root, runn
 
 
 def test_several_problems_are_plural(platform_root, runner):
-    """Two problems are counted as "2 problems"."""
+    """Two problems are counted as "2 problems".
+
+    Covers REQ-006-05.
+    """
     runner.reply("docker", "info", code=1, stderr="Cannot connect to the Docker daemon")
     ctx, out, _ = make_context(platform_root, runner)
     assert doctor.run(ctx, args("docker", "platform-env")) == 1
@@ -92,7 +104,10 @@ def test_several_problems_are_plural(platform_root, runner):
 
 
 def test_a_skipped_check_shows_why(platform_root, runner):
-    """A skipped check shows why."""
+    """A skipped check shows why.
+
+    Covers REQ-006-03.
+    """
     runner.reply("docker", "info", code=1, stderr="Cannot connect to the Docker daemon")
     ctx, out, _ = make_context(platform_root, runner)
     doctor.run(ctx, args("docker", "build-cache-store"))
@@ -100,7 +115,10 @@ def test_a_skipped_check_shows_why(platform_root, runner):
 
 
 def test_the_tag_filter(platform_root, runner):
-    """`--tag preflight` runs only the preflight checks."""
+    """`--tag preflight` runs only the preflight checks.
+
+    Covers REQ-006-09.
+    """
     ctx, out, _ = ctx_with_env(platform_root, runner)
     doctor.run(ctx, args(tag="preflight"))
     text = out.getvalue()
@@ -108,14 +126,20 @@ def test_the_tag_filter(platform_root, runner):
 
 
 def test_all_checks_run_by_default(platform_root, runner):
-    """All checks run by default."""
+    """All checks run by default.
+
+    Covers REQ-006-09.
+    """
     ctx, out, _ = ctx_with_env(platform_root, runner)
     doctor.run(ctx, args())
     assert len([line for line in out.getvalue().splitlines() if line[:4] in ("PASS", "WARN", "FAIL", "SKIP")]) == 9
 
 
 def test_list(platform_root, runner):
-    """`--list` prints each check's id, tags and targets, and exits 0."""
+    """`--list` prints each check's id, tags and targets, and exits 0.
+
+    Covers REQ-006-11.
+    """
     ctx, out, _ = make_context(platform_root, runner)
     assert doctor.run(ctx, args(list_=True)) == 0
     rows = [line.split() for line in out.getvalue().splitlines()]
@@ -124,7 +148,10 @@ def test_list(platform_root, runner):
 
 
 def test_list_json(platform_root, runner):
-    """`--list --json` prints the same listing as one JSON object."""
+    """`--list --json` prints the same listing as one JSON object.
+
+    Covers REQ-006-11.
+    """
     ctx, out, _ = make_context(platform_root, runner, json_mode=True)
     assert doctor.run(ctx, args(list_=True)) == 0
     body = json.loads(out.getvalue())
@@ -138,14 +165,20 @@ def test_list_json(platform_root, runner):
 
 
 def test_unknown_check_id(platform_root, runner):
-    """An unknown check id exits 2 and points to `--list`."""
+    """An unknown check id exits 2 and points to `--list`.
+
+    Covers REQ-006-10.
+    """
     ctx, _, err = make_context(platform_root, runner)
     assert doctor.run(ctx, args("nope", "docker")) == 2
     assert "unknown check id: nope" in err.getvalue() and "doctor --list" in err.getvalue()
 
 
 def test_unknown_check_id_json(platform_root, runner):
-    """An unknown check id is a `usage` error in JSON, with nothing on stderr."""
+    """An unknown check id is a `usage` error in JSON, with nothing on stderr.
+
+    Covers REQ-006-10.
+    """
     ctx, out, err = make_context(platform_root, runner, json_mode=True)
     assert doctor.run(ctx, args("nope")) == 2
     body = json.loads(out.getvalue())
@@ -153,7 +186,10 @@ def test_unknown_check_id_json(platform_root, runner):
 
 
 def test_json_per_check_fields_and_counts(platform_root, runner):
-    """Json per check fields and counts."""
+    """Json per check fields and counts.
+
+    Covers REQ-006-14.
+    """
     ctx, out, _ = make_context(platform_root, runner, json_mode=True)  # no .env: platform-env fails
     code = doctor.run(ctx, args("docker", "platform-env", "env-file"))
     body = json.loads(out.getvalue())
@@ -168,7 +204,10 @@ def test_json_per_check_fields_and_counts(platform_root, runner):
 
 
 def test_the_json_never_has_a_secret(platform_root, runner):
-    """The json never has a secret."""
+    """The json never has a secret.
+
+    Covers REQ-006-07.
+    """
     (platform_root / ".env").write_text(GOOD_ENV + "LLM_API_KEY=fake-secret-fake-secret\n")
     ctx, out, err = make_context(
         platform_root, runner, json_mode=True, env={"PATH": "/usr/bin", "LLM_API_KEY": "fake-env-secret-fake-env"}
@@ -182,28 +221,40 @@ def test_the_json_never_has_a_secret(platform_root, runner):
 
 
 def test_golden_doctor_all_pass(platform_root, runner):
-    """The whole object of a healthy `doctor --json`."""
+    """The whole object of a healthy `doctor --json`.
+
+    Covers REQ-006-14.
+    """
     ctx, out, _ = ctx_with_env(platform_root, runner, json_mode=True)
     assert doctor.run(ctx, args()) == 0
     assert_golden("doctor_pass", json.loads(out.getvalue()), platform_root)
 
 
 def test_golden_doctor_with_a_failed_check(platform_root, runner):
-    """Exit 1 and `ok` true: the failure is in `counts` and the check's `status` (README: "Reading --json")."""
+    """Exit 1 and `ok` true: the failure is in `counts` and the check's `status` (README: "Reading --json").
+
+    Covers REQ-006-15.
+    """
     ctx, out, _ = make_context(platform_root, runner, json_mode=True)  # no .env
     assert doctor.run(ctx, args()) == 1
     assert_golden("doctor_fail", json.loads(out.getvalue()), platform_root)
 
 
 def test_golden_doctor_list(platform_root, runner):
-    """`doctor --list --json`: every check's id, area, tags and targets."""
+    """`doctor --list --json`: every check's id, area, tags and targets.
+
+    Covers REQ-006-11.
+    """
     ctx, out, _ = make_context(platform_root, runner, json_mode=True)
     assert doctor.run(ctx, args(list_=True)) == 0
     assert_golden("doctor_list", json.loads(out.getvalue()), platform_root)
 
 
 def test_golden_doctor_unknown_check(platform_root, runner):
-    """An unknown check id is a `usage` error object."""
+    """An unknown check id is a `usage` error object.
+
+    Covers REQ-006-10.
+    """
     ctx, out, _ = make_context(platform_root, runner, json_mode=True)
     assert doctor.run(ctx, args("nope")) == 2
     assert_golden("doctor_unknown_check", json.loads(out.getvalue()), platform_root)

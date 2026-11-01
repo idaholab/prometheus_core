@@ -1,0 +1,59 @@
+name: speccheck
+
+# The spec checker (common/speccheck): its own tests on the oldest and newest
+# supported Python, with full line and branch coverage. Projects that use it
+# run it from their own tests, so a change here also reruns theirs (see
+# common/speccheck/README.md)
+
+on:
+  push:
+    branches: [devel]
+    paths:
+      - "common/speccheck/**"
+      - ".github/workflows/speccheck.yml"
+  pull_request:
+    branches: [main, devel]
+    paths:
+      - "common/speccheck/**"
+      - ".github/workflows/speccheck.yml"
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: "speccheck: python ${{ matrix.python }}"
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.14"]
+    defaults:
+      run:
+        working-directory: common/speccheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+      - name: Ruff
+        if: ${{ matrix.python == '3.14' }}
+        run: |
+          uvx ruff@0.17.3 check --output-format=github .
+          uvx ruff@0.17.3 format --check --diff .
+      - name: Test, with 100% line and branch coverage
+        # The checker itself is standard library only; coverage is only used here
+        run: |
+          uv run --no-project --with coverage==7.13.1 python -I -m coverage run -m unittest -v
+          uv run --no-project --with coverage==7.13.1 python -I -m coverage report

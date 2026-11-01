@@ -30,14 +30,20 @@ pytestmark = pytest.mark.live
 
 
 def test_help_from_another_directory(tmp_path):
-    """`--help` works when run from a folder that is not the platform's."""
+    """`--help` works when run from a folder that is not the platform's.
+
+    Covers REQ-001-05.
+    """
     done = shim("--help", cwd=tmp_path)
     assert done.returncode == 0, done.stderr
     assert "Troubleshoot:" in done.stdout
 
 
 def test_a_folder_that_shadows_the_standard_library_changes_nothing(tmp_path):
-    """Agent folders are full of .py files; a json.py or argparse.py there must not replace the stdlib."""
+    """Agent folders are full of .py files; a json.py or argparse.py there must not replace the stdlib.
+
+    Covers REQ-001-06.
+    """
     (tmp_path / "json.py").write_text("raise SystemExit('shadowed json')\n")
     (tmp_path / "argparse.py").write_text("raise SystemExit('shadowed argparse')\n")
     done = shim("--version", "--json", cwd=tmp_path)
@@ -46,7 +52,10 @@ def test_a_folder_that_shadows_the_standard_library_changes_nothing(tmp_path):
 
 
 def test_the_shim_works_through_a_symlink_and_with_cdpath_set(tmp_path):
-    """A symlinked shim finds `ctl/`, and a set CDPATH can't send it elsewhere."""
+    """A symlinked shim finds `ctl/`, and a set CDPATH can't send it elsewhere.
+
+    Covers REQ-001-05.
+    """
     link = tmp_path / "pc"
     link.symlink_to(SHIM)
     python_dir = str(Path(sys.executable).parent)
@@ -56,6 +65,9 @@ def test_the_shim_works_through_a_symlink_and_with_cdpath_set(tmp_path):
 
 
 def test_make_style_run_from_the_platform_folder():
-    """Run from the platform folder itself, the way a Makefile recipe would."""
+    """Run from the platform folder itself, the way a Makefile recipe would.
+
+    Covers REQ-001-05.
+    """
     done = subprocess.run(["sh", str(SHIM), "--version"], cwd=PLATFORM, capture_output=True, text=True, timeout=60)
     assert done.returncode == 0 and done.stdout.startswith("platformctl ")

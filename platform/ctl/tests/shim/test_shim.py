@@ -101,7 +101,10 @@ def bin_dir(tmp_path) -> Path:
 
 
 def test_prefers_the_newest_python_3_1x(tmp_path, bin_dir):
-    """Prefers the newest python 3 1x."""
+    """Prefers the newest python 3 1x.
+
+    Covers REQ-001-01, BEH-001-01.
+    """
     python_stub(bin_dir, "python3.12", (3, 12))
     python_stub(bin_dir, "python3.14", (3, 14))
     python_stub(bin_dir, "python3", (3, 9))
@@ -111,28 +114,40 @@ def test_prefers_the_newest_python_3_1x(tmp_path, bin_dir):
 
 
 def test_a_mac_whose_python3_is_3_9_finds_python3_12(tmp_path, bin_dir):
-    """A mac whose python3 is 3 9 finds python3 12."""
+    """A mac whose python3 is 3 9 finds python3 12.
+
+    Covers REQ-001-01, BEH-001-01.
+    """
     python_stub(bin_dir, "python3", (3, 9))
     python_stub(bin_dir, "python3.12", (3, 12))
     assert run(tmp_path, [bin_dir]).stdout.startswith("ran python3.12")
 
 
 def test_python3_is_used_when_it_is_new_enough(tmp_path, bin_dir):
-    """Python3 is used when it is new enough."""
+    """Python3 is used when it is new enough.
+
+    Covers REQ-001-01.
+    """
     skip_if_homebrew_python()
     python_stub(bin_dir, "python3", (3, 11))
     assert run(tmp_path, [bin_dir]).stdout.startswith("ran python3:")
 
 
 def test_an_old_python_3_1x_is_skipped(tmp_path, bin_dir):
-    """An old python 3 1x is skipped."""
+    """An old python 3 1x is skipped.
+
+    Covers REQ-001-01.
+    """
     python_stub(bin_dir, "python3.10", (3, 9))  # a stub that fails the probe
     python_stub(bin_dir, "python3.11", (3, 11))
     assert run(tmp_path, [bin_dir]).stdout.startswith("ran python3.11")
 
 
 def test_platformctl_python_wins_when_it_works(tmp_path, bin_dir):
-    """Platformctl python wins when it works."""
+    """Platformctl python wins when it works.
+
+    Covers REQ-001-01.
+    """
     python_stub(bin_dir, "python3.14", (3, 14))
     mine = python_stub(tmp_path, "mine", (3, 10), marker="mine")
     done = run(tmp_path, [bin_dir], env_extra={"PLATFORMCTL_PYTHON": str(mine)})
@@ -140,7 +155,10 @@ def test_platformctl_python_wins_when_it_works(tmp_path, bin_dir):
 
 
 def test_platformctl_python_that_is_too_old_is_an_error_not_a_fallback(tmp_path, bin_dir):
-    """Platformctl python that is too old is an error not a fallback."""
+    """Platformctl python that is too old is an error not a fallback.
+
+    Covers REQ-001-02.
+    """
     python_stub(bin_dir, "python3.14", (3, 14))
     old = python_stub(tmp_path, "old", (3, 9))
     done = run(tmp_path, [bin_dir], env_extra={"PLATFORMCTL_PYTHON": str(old)})
@@ -148,7 +166,10 @@ def test_platformctl_python_that_is_too_old_is_an_error_not_a_fallback(tmp_path,
 
 
 def test_uv_is_the_fallback(tmp_path, bin_dir):
-    """With no Python 3.10+, the shim runs the tool through `uv run --no-project --python >=3.10`."""
+    """With no Python 3.10+, the shim runs the tool through `uv run --no-project --python >=3.10`.
+
+    Covers REQ-001-01, BEH-001-02.
+    """
     skip_if_homebrew_python()
     stub(bin_dir, "uv", 'echo "uv $*"\n')
     done = run(tmp_path, [bin_dir], "doctor")
@@ -158,7 +179,10 @@ def test_uv_is_the_fallback(tmp_path, bin_dir):
 
 
 def test_nothing_found_prints_one_install_command(tmp_path, bin_dir):
-    """With no Python 3.10+ and no uv, the shim's only suggestion is to install uv, with one command."""
+    """With no Python 3.10+ and no uv, the shim's only suggestion is to install uv, with one command.
+
+    Covers REQ-001-03.
+    """
     skip_if_homebrew_python()
     done = run(tmp_path, [bin_dir])
     assert done.returncode == 1
@@ -168,14 +192,20 @@ def test_nothing_found_prints_one_install_command(tmp_path, bin_dir):
 
 
 def test_the_arguments_are_passed_through_untouched(tmp_path, bin_dir):
-    """The arguments are passed through untouched."""
+    """The arguments are passed through untouched.
+
+    Covers REQ-001-08.
+    """
     python_stub(bin_dir, "python3.12", (3, 12))
     done = run(tmp_path, [bin_dir], "logs", "--tail", "5", "a b", "--", "x'y")
     assert done.stdout.strip().endswith("ctl/run.py logs --tail 5 a b -- x'y")
 
 
 def test_cdpath_and_a_symlinked_shim_do_not_send_it_elsewhere(tmp_path, bin_dir):
-    """Cdpath and a symlinked shim do not send it elsewhere."""
+    """Cdpath and a symlinked shim do not send it elsewhere.
+
+    Covers REQ-001-05.
+    """
     python_stub(bin_dir, "python3.12", (3, 12))
     decoy = tmp_path / "decoy"
     (decoy / "elsewhere").mkdir(parents=True)
@@ -192,7 +222,10 @@ def test_cdpath_and_a_symlinked_shim_do_not_send_it_elsewhere(tmp_path, bin_dir)
 
 
 def test_a_crlf_shim_fails_before_python_starts(tmp_path):
-    """The `checkout-path` check can't report this (nothing runs), so the Make forwards check for \\r first."""
+    """The `checkout-path` check can't report this (nothing runs), so the Make forwards check for \\r first.
+
+    Covers BEH-001-03.
+    """
     crlf = tmp_path / "platformctl"
     crlf.write_bytes(SHIM.read_bytes().replace(b"\n", b"\r\n"))
     done = run(tmp_path, [], shim=crlf)
@@ -200,7 +233,10 @@ def test_a_crlf_shim_fails_before_python_starts(tmp_path):
 
 
 def test_the_shim_is_posix_sh_and_executable():
-    """The shim is posix sh and executable."""
+    """The shim is posix sh and executable.
+
+    Covers REQ-001-08.
+    """
     text = SHIM.read_text()
     assert text.startswith("#!/bin/sh\n")
     for bashism in ("[[", "local ", "function ", "<(", "${BASH", "source "):
@@ -209,7 +245,10 @@ def test_the_shim_is_posix_sh_and_executable():
 
 
 def test_a_json_py_in_the_current_folder_is_not_run_by_the_probe(tmp_path):
-    """The probe imports json, so it runs isolated (-I) like the tool: a `json.py` here must not run."""
+    """The probe imports json, so it runs isolated (-I) like the tool: a `json.py` here must not run.
+
+    Covers REQ-001-06.
+    """
     marker = tmp_path / "marker"
     (tmp_path / "json.py").write_text(f"open({str(marker)!r}, 'w').write('ran')\n")
     env = {"PATH": f"{Path(sys.executable).parent}:{SYSTEM_PATH}", "PLATFORMCTL_PYTHON": sys.executable}

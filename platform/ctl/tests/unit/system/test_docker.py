@@ -72,7 +72,10 @@ def test_info_detects_podman(name):
     ],
 )
 def test_info_failures_are_told_apart_and_never_echo_output(stderr, state):
-    """Info failures are told apart and never echo output."""
+    """Info failures are told apart and never echo output.
+
+    Covers REQ-006-08.
+    """
     info = docker_with(info_code=1, info_stderr=stderr, env={"DOCKER_HOST": "tcp://h:1"})[0].info()
     assert info.state == state
     assert info.docker_host == "tcp://h:1"

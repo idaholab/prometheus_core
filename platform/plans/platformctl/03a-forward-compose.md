@@ -13,6 +13,32 @@ Every Docker Compose target in `platform/Makefile` forwards to platformctl,
 which runs the generated compose entry file. What runs is the same as
 today; CI proves it.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 3a)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it. REQ-007-12 (the same merged Compose config) is proven by the CI
+compose-equivalence job, with a `# Covers` comment in it.
+
+- [001 Using the CLI](../../../build/specs/001-using-the-cli.md): REQ-001-25
+  (the summary at the end), REQ-001-27 (`needs_terminal`)
+- [002 Settings and setup](../../../build/specs/002-settings-and-setup.md):
+  REQ-002-28 (the child environment matches Make's)
+- [003 Secrets](../../../build/specs/003-secrets.md): REQ-003-13
+  (`REDISCLI_AUTH`), BEH-003-05 (the live canary)
+- [004 Running the platform](../../../build/specs/004-running-the-platform.md):
+  REQ-004-04 to REQ-004-21, BEH-004-02 to BEH-004-04 (`status`, `up`,
+  `down`, `restart`, `build`, `logs`, the reset ladder, preflight)
+- [005 Your agents](../../../build/specs/005-your-agents.md): REQ-005-13
+  (`agents generate`, `agents clean`)
+- [006 Doctor](../../../build/specs/006-doctor.md): REQ-006-27 (a stale
+  `.platform.env`)
+- [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-07
+  to REQ-007-19, BEH-007-01, BEH-007-02 (every compose target, the Make
+  variables, the entry file, `name:`, generated files)
+
 ## Work
 
 - **The compose entry file:** every compose command runs

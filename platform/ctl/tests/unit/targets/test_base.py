@@ -18,7 +18,10 @@ from platformctl.targets.base import PASSTHROUGH, Target, UnsupportedError
 
 
 def test_capabilities_are_enforced():
-    """A target without a capability refuses the command that needs it."""
+    """A target without a capability refuses the command that needs it.
+
+    Covers REQ-008-03.
+    """
 
     class Minimal(Target):
         name = "minimal"

@@ -33,7 +33,10 @@ def test_exit_code_maps_signals_to_128_plus_n():
 
 
 def test_capture_returns_scrubbed_output():
-    """Captured stdout and stderr are scrubbed, and the exit code is kept."""
+    """Captured stdout and stderr are scrubbed, and the exit code is kept.
+
+    Covers REQ-003-06.
+    """
     runner = Runner(scrub=lambda text: text.replace("secretvalue", "***"))
     done = runner.run(
         [PY, "-c", "import sys; print('a secretvalue'); print('b secretvalue', file=sys.stderr); sys.exit(4)"]
@@ -50,7 +53,10 @@ def test_echo_gets_the_argv():
 
 
 def test_make_variables_are_dropped_and_values_pass_through_env():
-    """Make variables are dropped and values pass through env."""
+    """Make variables are dropped and values pass through env.
+
+    Covers REQ-003-12.
+    """
     env = {**os.environ, "MAKEFLAGS": "x", "MFLAGS": "x", "MAKELEVEL": "1", "MAKEOVERRIDES": "x", "WANTED": "yes"}
     code = "import os; print(sorted(k for k in os.environ if k.startswith(('MAKE', 'MFLAGS'))), os.environ['WANTED'])"
     done = Runner().run([PY, "-c", code], env=env)
@@ -86,7 +92,10 @@ def test_a_missing_command_is_a_runner_error():
 
 
 def test_streamed_output_is_scrubbed_and_printed(capsys):
-    """Streamed output is scrubbed and printed."""
+    """Streamed output is scrubbed and printed.
+
+    Covers REQ-003-06.
+    """
     runner = Runner(scrub=lambda text: text.replace("secretvalue", "***"))
     done = runner.run([PY, "-c", "print('line secretvalue'); print('two')"], capture=False)
     assert capsys.readouterr().out == "line ***\ntwo\n"

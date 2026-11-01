@@ -11,6 +11,27 @@ mixed `make`/`./platformctl` blocks.
 Add the remaining everyday commands, and switch every doc, slide, skill and
 CI job to `./platformctl`.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 3c)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it. REQ-007-25 to REQ-007-27 are about the docs and skills: the docs test
+(REQ-001-28, from step 2) and a test over the skills' `allowed-tools` prove
+them.
+
+- [003 Secrets](../../../build/specs/003-secrets.md): REQ-003-11
+  (`compose --` warns and refuses `config`)
+- [004 Running the platform](../../../build/specs/004-running-the-platform.md):
+  REQ-004-31, BEH-004-08 (`up <service...>`)
+- [005 Your agents](../../../build/specs/005-your-agents.md): REQ-005-11,
+  REQ-005-12 (`agents list`, `--registered`)
+- [007 Compatibility](../../../build/specs/007-compatibility.md): REQ-007-22
+  to REQ-007-27 (`compose --`, `compose --print`, removing the script stubs,
+  the docs and skills switching, the skills' fallback and pre-approved
+  commands)
+
 ## Work
 
 - **`up <service...>`**: build and recreate only those services, then wait

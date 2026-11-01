@@ -112,7 +112,10 @@ def test_down_variants():
 
 
 def test_exec_adds_T_without_a_terminal_and_forwards_env_names_only():
-    """Exec adds T without a terminal and forwards env names only."""
+    """Exec adds T without a terminal and forwards env names only.
+
+    Covers REQ-003-12.
+    """
     compose, runner = make()
     compose.exec("redis", ["valkey-cli", "ping"], tty=False, env_names=["REDISCLI_AUTH"])
     compose.exec("redis", ["sh"], tty=True)

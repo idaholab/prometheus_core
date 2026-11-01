@@ -38,13 +38,19 @@ def taken(monkeypatch):
 
 
 def test_all_ports_free(platform_root, runner, taken):
-    """With nothing on the ports, the check passes and counts three."""
+    """With nothing on the ports, the check passes and counts three.
+
+    Covers REQ-006-22.
+    """
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert (result.status, result.evidence) == (PASS, "3 ports are free")
 
 
 def test_ports_follow_the_settings(platform_root, runner, taken):
-    """The ports checked follow the port settings and the features turned on."""
+    """The ports checked follow the port settings and the features turned on.
+
+    Covers REQ-006-22.
+    """
     ctx = ctx_for(
         platform_root,
         runner,
@@ -65,7 +71,10 @@ def test_ports_follow_the_settings(platform_root, runner, taken):
     [("dev", ("FRONTEND_DEV_PORT", 5150)), ("prod", ("FRONTEND_PROD_PORT", 8080)), ("", None), ("other", None)],
 )
 def test_the_frontend_port_follows_the_profile(platform_root, runner, taken, profile, frontend):
-    """`PROFILE=prod` publishes 8080, and a blank `PROFILE` (no frontend) publishes nothing to check."""
+    """`PROFILE=prod` publishes 8080, and a blank `PROFILE` (no frontend) publishes nothing to check.
+
+    Covers REQ-006-22.
+    """
     ctx = ctx_for(platform_root, runner, sets={"PROFILE": profile})
     checked = [(n, p) for n, p, _ in hc._ports(ctx)]
     assert checked[:1] == ([frontend] if frontend else [("BACKEND_PORT", 8600)])
@@ -89,7 +98,10 @@ def test_a_busy_prod_port_is_a_problem_with_the_prod_profile(platform_root, runn
 
 
 def test_a_process_holding_a_port(platform_root, runner, taken):
-    """A process holding a port."""
+    """A process holding a port.
+
+    Covers REQ-006-22.
+    """
     taken[6379] = hostmod.Holder("process", "redis-server")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert result.status == FAIL
@@ -98,7 +110,10 @@ def test_a_process_holding_a_port(platform_root, runner, taken):
 
 
 def test_airplay_on_macos_gets_its_own_fix(platform_root, runner, taken):
-    """Airplay on macos gets its own fix."""
+    """Airplay on macos gets its own fix.
+
+    Covers REQ-006-22.
+    """
     taken[5000] = hostmod.Holder("process", "ControlCe")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner, sets={"LOCAL_DEEPLYNX": "true"}))
     assert "AirPlay Receiver" in result.fix and "Turn off" in result.fix
@@ -114,7 +129,10 @@ def test_port_5000_on_linux_is_just_a_busy_port(platform_root, runner, taken):
 
 
 def test_another_platform_is_named_with_the_fix_to_stop_it(platform_root, runner, taken):
-    """Another platform is named with the fix to stop it."""
+    """Another platform is named with the fix to stop it.
+
+    Covers REQ-006-22.
+    """
     taken[8600] = hostmod.Holder("container", "other-backend-1", "other_project", "/x/platform")
     result = hc.PORTS_FREE.run(ctx_for(platform_root, runner))
     assert "container other-backend-1 (project other_project, from /x/platform)" in result.evidence
@@ -130,7 +148,10 @@ def test_a_container_without_a_project(platform_root, runner, taken):
 
 
 def test_the_platforms_own_containers_do_not_count(platform_root, runner, taken):
-    """The platforms own containers do not count."""
+    """The platforms own containers do not count.
+
+    Covers REQ-006-22.
+    """
     taken[8600] = hostmod.Holder("container", "prometheus_platform-backend-1", "prometheus_platform", "/here")
     assert hc.PORTS_FREE.run(ctx_for(platform_root, runner)).status == PASS
 
@@ -160,7 +181,10 @@ def test_checkout_path_without_a_shim_is_fine(platform_root, runner):
 
 
 def test_crlf_in_the_shim(platform_root, runner):
-    """A shim with CRLF line endings warns, with the fix for an existing checkout."""
+    """A shim with CRLF line endings warns, with the fix for an existing checkout.
+
+    Covers REQ-006-23.
+    """
     (platform_root / "platformctl").write_bytes(b"#!/bin/sh\r\nexit 0\r\n")
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner))
     assert result.status == WARN and "CRLF" in result.evidence
@@ -168,13 +192,19 @@ def test_crlf_in_the_shim(platform_root, runner):
 
 
 def test_wsl1(platform_root, runner):
-    """WSL 1 warns, because it can't run Docker."""
+    """WSL 1 warns, because it can't run Docker.
+
+    Covers REQ-006-23.
+    """
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner, system="linux", release="4.4.0-19041-Microsoft"))
     assert result.status == WARN and "WSL 1" in result.evidence and "set-version" in result.fix
 
 
 def test_checkout_on_a_windows_drive(platform_root, runner, monkeypatch):
-    """Checkout on a windows drive."""
+    """Checkout on a windows drive.
+
+    Covers REQ-006-23.
+    """
     monkeypatch.setattr(hostmod.Host, "on_windows_drive", staticmethod(lambda path: True))
     result = hc.CHECKOUT_PATH.run(
         ctx_for(platform_root, runner, system="linux", release="5.15-microsoft-standard-WSL2")

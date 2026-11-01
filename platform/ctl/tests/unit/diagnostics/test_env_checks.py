@@ -37,20 +37,29 @@ def run(check, root, runner, dotenv=None, env=None, sets=None):
 
 
 def test_platform_env_pass(platform_root, runner):
-    """A `.env` that sets all six required keys passes."""
+    """A `.env` that sets all six required keys passes.
+
+    Covers REQ-006-18.
+    """
     result = run(ec.PLATFORM_ENV, platform_root, runner, GOOD)
     assert (result.status, result.evidence) == (PASS, "6 required values are set")
 
 
 def test_platform_env_missing_file(platform_root, runner):
-    """A missing `.env` is a FAIL that points to `make init-env`."""
+    """A missing `.env` is a FAIL that points to `make init-env`.
+
+    Covers REQ-006-18.
+    """
     result = run(ec.PLATFORM_ENV, platform_root, runner)
     assert result.status == FAIL and result.evidence == ".env does not exist" and "make init-env" in result.fix
 
 
 @pytest.mark.parametrize("placeholder", ["", "sk-ant-...", "sk-change-me", "change-me-please", "your-key-here"])
 def test_platform_env_names_what_is_unset_but_never_a_value(platform_root, runner, placeholder):
-    """Platform env names what is unset but never a value."""
+    """Platform env names what is unset but never a value.
+
+    Covers REQ-006-07.
+    """
     dotenv = GOOD.replace("LLM_CONFIG_PROFILE=anthropic", f"LLM_CONFIG_PROFILE={placeholder}").replace(
         "aaaaaaaaaaaaaaaa", ""
     )
@@ -61,13 +70,19 @@ def test_platform_env_names_what_is_unset_but_never_a_value(platform_root, runne
 
 
 def test_platform_env_missing_key_entirely(platform_root, runner):
-    """Platform env missing key entirely."""
+    """Platform env missing key entirely.
+
+    Covers REQ-006-18.
+    """
     result = run(ec.PLATFORM_ENV, platform_root, runner, "AGENT_SECRET=aaaaaaaaaaaaaaaa\n")
     assert result.evidence.startswith("not set: REDIS_PASSWORD")
 
 
 def test_platform_env_bad_line_names_the_line_not_its_text(platform_root, runner):
-    """Platform env bad line names the line not its text."""
+    """Platform env bad line names the line not its text.
+
+    Covers REQ-006-07.
+    """
     result = run(ec.PLATFORM_ENV, platform_root, runner, "AGENT_SECRET=ok\nsk-live-supersecretvalue\n")
     assert result.status == FAIL
     assert "line 2" in result.evidence and "supersecret" not in result.evidence
@@ -77,20 +92,29 @@ def test_platform_env_bad_line_names_the_line_not_its_text(platform_root, runner
 
 
 def test_base_image_pin_local_sdk(platform_root, runner):
-    """Base image pin local sdk."""
+    """Base image pin local sdk.
+
+    Covers REQ-006-19.
+    """
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner, "LOCAL_SDK=true\n")
     assert result.status == PASS and "built from ../sdk" in result.evidence
 
 
 def test_base_image_pin_default(platform_root, runner):
-    """Without `LOCAL_SDK` or a blank pin, the default base image passes."""
+    """Without `LOCAL_SDK` or a blank pin, the default base image passes.
+
+    Covers REQ-006-19.
+    """
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner)
     assert result.status == PASS and "prometheus_api:1914b55" in result.evidence
 
 
 @pytest.mark.parametrize("key", ["PROMETHEUS_API_BASE_IMAGE_HASH", "PROMETHEUS_API_BASE_IMAGE_REPO"])
 def test_base_image_pin_blank_line_warns(platform_root, runner, key):
-    """Base image pin blank line warns."""
+    """Base image pin blank line warns.
+
+    Covers REQ-006-19.
+    """
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner, f"{key}=\n")
     assert result.status == WARN and key in result.evidence and f"Remove the empty {key}= line" in result.fix
 
@@ -99,7 +123,10 @@ def test_base_image_pin_blank_line_warns(platform_root, runner, key):
 
 
 def test_env_hides_environment(platform_root, runner):
-    """A `.env` value that differs from the environment's warns, by key name only."""
+    """A `.env` value that differs from the environment's warns, by key name only.
+
+    Covers REQ-006-20.
+    """
     assert run(ec.ENV_HIDES_ENVIRONMENT, platform_root, runner).status == PASS
     result = run(
         ec.ENV_HIDES_ENVIRONMENT,
@@ -113,7 +140,10 @@ def test_env_hides_environment(platform_root, runner):
 
 
 def test_env_derived_keys(platform_root, runner):
-    """A `.env` that sets a derived key warns that a hand-run Compose will use it."""
+    """A `.env` that sets a derived key warns that a hand-run Compose will use it.
+
+    Covers REQ-006-20.
+    """
     assert run(ec.ENV_DERIVED_KEYS, platform_root, runner, "BACKEND_PORT=1\n").status == PASS
     result = run(ec.ENV_DERIVED_KEYS, platform_root, runner, "PROMETHEUS_API_BASE_IMAGE_HASH=abc\nBUILD_CACHE=x\n")
     assert result.status == WARN
@@ -141,7 +171,10 @@ def test_env_file_skipped_without_a_file(platform_root, runner):
 
 
 def test_env_file_ok(platform_root, runner):
-    """A mode-0600, git-ignored `.env` passes."""
+    """A mode-0600, git-ignored `.env` passes.
+
+    Covers REQ-006-21.
+    """
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o600)
     set_git(runner, platform_root)
@@ -151,7 +184,10 @@ def test_env_file_ok(platform_root, runner):
 
 
 def test_env_file_group_readable_and_tracked(platform_root, runner):
-    """Env file group readable and tracked."""
+    """Env file group readable and tracked.
+
+    Covers REQ-006-21.
+    """
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o644)
     set_git(runner, platform_root, tracked=True)
@@ -162,7 +198,10 @@ def test_env_file_group_readable_and_tracked(platform_root, runner):
 
 
 def test_env_file_not_ignored(platform_root, runner):
-    """A `.env` that git doesn't ignore warns."""
+    """A `.env` that git doesn't ignore warns.
+
+    Covers REQ-006-21.
+    """
     (platform_root / ".env").write_text("A=1\n")
     (platform_root / ".env").chmod(0o600)
     set_git(runner, platform_root, ignored=False)
@@ -180,7 +219,10 @@ def test_env_file_outside_a_git_checkout_is_not_a_problem(platform_root, runner)
 
 
 def test_env_file_mode_is_skipped_on_a_windows_drive(platform_root, runner, monkeypatch):
-    """Env file mode is skipped on a windows drive."""
+    """Env file mode is skipped on a windows drive.
+
+    Covers REQ-006-21.
+    """
     (platform_root / ".env").write_text("A=1\n")
     ctx, _, _ = make_context(platform_root, runner)
     monkeypatch.setattr(type(ctx.host), "on_windows_drive", staticmethod(lambda path: True))

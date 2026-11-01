@@ -1,0 +1,155 @@
+# 007 - Compatibility
+
+status: draft
+sources: platform/Makefile, platform/docker-compose.yml, platform/ctl/platformctl/compose_files.py, platform/plans/platformctl/commands.md, platform/plans/platformctl/breaking-changes.md
+tests: platform/ctl/tests, .github/workflows/platformctl.yml, .github/workflows/test.yml
+depends-on: 002, 004
+
+## Purpose
+People and tools that use the platform the old way keep working: every
+`make` target and variable, the old scripts until they are removed, CI, and
+running `docker compose` by hand. Also covers the files the tool generates
+and the output other material quotes.
+
+## Requirements
+
+The old scripts
+
+- REQ-007-01: `scripts/init_env.py`, `scripts/check_platform.py` and
+  `scripts/deeplynx_setup.py` MUST keep working, each printing one line
+  naming the new command (such as "moved: run `./platformctl config init`")
+  and then running it with the same arguments. (planned: step 2)
+- REQ-007-24: Once the hackathon material stops naming them, the three
+  script stubs MUST be removed, and nothing in the repository may refer to
+  them. (planned: step 3c)
+
+Docs, slides and skills
+
+- REQ-007-25: The docs, the hackathon slides and skills, the agent-template
+  docs and CI MUST use `./platformctl` for the platform, with no copy-paste
+  block that mixes `make` and `./platformctl`. (planned: step 3c)
+- REQ-007-26: The hackathon skills MUST check `./platformctl --version
+  --json` and use the old commands when the tool or a feature they need is
+  missing, since a participant's clone may be older. (planned: step 3c)
+- REQ-007-27: The skills' pre-approved commands MUST run the shim by path
+  with a wildcard and no `cd`, and MUST NOT include `compose --`, `reset` or
+  `down`. (planned: step 3c)
+- REQ-007-28: Outside the Makefile itself, the agent template's own Makefile
+  and the one CI job kept on `make`, nothing in the repository MUST tell a
+  user to run a platform `make` target. (planned: step 5)
+- REQ-007-29: The docs and skills MUST tell an assistant how to run long and
+  interactive commands: `up --no-check` in the background, then
+  `status --wait --timeout <n> --json`; `--yes` and `--confirm` for
+  confirmations; `logs --tail`; and never `compose -- config` or
+  `compose -- exec ... env`. (planned: step 5)
+- REQ-007-30: The docs MUST NOT name a `make` target, script or message that
+  no longer exists (`clear-litellm-db`, `generate-agents-compose.sh`, the
+  LiteLLM proxy, podman). (planned: step 6)
+
+Make
+
+- REQ-007-02: `make init-env`, `make check` and `make deeplynx-setup` MUST
+  forward to `config init`, `status --wait` and `deeplynx setup`, keeping
+  their names and help text. (planned: step 2)
+- REQ-007-03: Each forwarded `make` target MUST print one line on stderr
+  naming the command it runs, such as `make up -> ./platformctl up`.
+  (planned: step 2)
+- REQ-007-04: `make doctor` MUST run `doctor`, with `AGENT=<dir>` passed as
+  `--agent`. (planned: step 2)
+- REQ-007-05: `make test-system` MUST keep working, waiting for the platform
+  with `status --wait`. (planned: step 2)
+
+CI
+
+- REQ-007-06: CI MUST set its stub DeepLynx credentials with
+  `config set --from-env`, not by editing `.env` with `sed`.
+  (planned: step 2)
+
+Every compose target
+
+- REQ-007-07: Every compose target in `platform/Makefile` MUST keep its name
+  and help text and forward as the "Make targets" table in `commands.md`
+  says. (planned: step 3a)
+- REQ-007-08: `SERVICE`, `PROFILE`, `CHECK`, `UP_ARGS`, `WAIT_TIMEOUT`,
+  `CHECK_TIMEOUT` and the documented settings MUST keep working as `make`
+  variables, and the new `TAIL`, `FOLLOW`, `RESTART_AGENTS` and `AGENT` map
+  to the matching options. (planned: step 3a)
+- REQ-007-09: `make down-v`, `make clear-agent-registry` and
+  `make clear-admin-users` MUST NOT prompt, as before. (planned: step 3a)
+- REQ-007-10: `make ps` MUST exit 0 when the platform isn't running, though
+  `./platformctl status` exits 3. (planned: step 3a)
+- REQ-007-11: `make -C <platform> <target>` MUST work, and so MUST a shim
+  that lost its executable bit or a checkout path with a space.
+  (planned: step 3a)
+- REQ-007-12: The containers, volumes, networks and images MUST be the same
+  as the old Makefile's: the merged Compose config of the entry file equals
+  that of the old `-f` list for every combination CI covers.
+  (planned: step 3a)
+- REQ-007-13: `make build-plain` MUST work. (planned: step 3a)
+
+Running Compose yourself
+
+- REQ-007-14: The tool MUST run `docker compose -f
+  docker-compose.platform.yml`, and that same file MUST start the same
+  platform when run by hand with `--profile dev`. (planned: step 3a)
+- REQ-007-15: `docker-compose.yml` MUST set
+  `name: ${COMPOSE_PROJECT_NAME:-prometheus_platform}`, so a hand-run
+  `docker compose` in `platform/` can't create a second project.
+  (planned: step 3a)
+- REQ-007-16: `docker-compose.platform.yml` and `.platform.env` MUST be
+  generated with a "generated; do not edit" header, have fixed names, and be
+  git-ignored. (planned: step 3a)
+- REQ-007-17: The tool MUST pin `COMPOSE_FILE` and `COMPOSE_PROFILES` in its
+  child environment, so values in `.env` can't change what it runs.
+  (planned: step 3a)
+- REQ-007-18: When `.env` sets a key the tool derives, `up` MUST print a
+  one-line note naming the key and saying a hand-run Compose will use it.
+  (planned: step 3a)
+
+- REQ-007-22: `compose -- <args>` MUST run `docker compose` with the
+  platform's project, files, profiles and environment, passing the
+  arguments unchanged. (planned: step 3c)
+- REQ-007-23: `compose --print` MUST print the `docker compose` command to
+  run it by hand: only `-f` and `--profile`, never a `KEY=value`.
+  (planned: step 3c)
+- REQ-007-20: `docker-compose.labels.yml` MUST be generated with the same
+  header, be the last file the entry file includes, and be git-ignored.
+  (planned: step 3b)
+- REQ-007-21: `make down-v` MUST NOT prompt, passing `--yes --confirm
+  clobber`. (planned: step 3b)
+
+Old behaviour that changes
+
+- REQ-007-19: The Makefile-internal variables (`COMPOSE`, `COMPOSE_FILES`,
+  `PROFILE_FLAGS`, ...) MUST no longer be read; each behaviour and breaking
+  change is listed in `breaking-changes.md` (B3, B5, C1–C4, C6–C9, C15,
+  C17). (planned: step 3a)
+
+## Behavior
+
+- BEH-007-01: GIVEN `make up LOCAL_SDK=true` WHEN it runs THEN it prints
+  `make up -> ./platformctl up` and the local SDK is built. (planned: step 3a)
+- BEH-007-02: GIVEN a stack started earlier with a plain `docker compose` in
+  `platform/` WHEN the user runs `./platformctl up` THEN the old stack (project
+  `platform`) is left as it is, and `docker compose -p platform down`
+  removes it. (planned: step 3a)
+
+## Interfaces
+- Every current `platform/Makefile` target and documented variable
+  (`SERVICE`, `PROFILE`, `CHECK`, `UP_ARGS`, `SKIP_PREREQUISITES`, ...)
+- `platform/scripts/init_env.py`, `check_platform.py`, `deeplynx_setup.py`
+  (forwarding stubs until step 3c)
+- `./platformctl compose --print`, `./platformctl compose -- <args>`
+- Generated files: `docker-compose.platform.yml`, `.platform.env`,
+  `docker-compose.agents.yml`, `docker-compose.labels.yml`
+
+## Constraints
+- Each breaking change and behaviour change is listed, with its migration,
+  in `platform/plans/platformctl/breaking-changes.md` (B1–B5, C1–C17).
+
+## Out of scope / Non-goals
+- What each command does once Make has forwarded to it (004).
+- The Makefile targets that stay in Make (`test-*`, `react-*`,
+  `check-markings`).
+
+## Open questions

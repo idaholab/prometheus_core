@@ -20,7 +20,10 @@ from platformctl import __main__ as entry
 
 
 def test_old_python_gets_a_clear_message(monkeypatch, capsys):
-    """Old python gets a clear message."""
+    """Old python gets a clear message.
+
+    Covers REQ-001-04.
+    """
     monkeypatch.setattr(entry.sys, "version_info", (3, 9, 6, "final", 0))
     assert entry.main([]) == 1
     err = capsys.readouterr().err
@@ -29,7 +32,10 @@ def test_old_python_gets_a_clear_message(monkeypatch, capsys):
 
 
 def test_sudo_is_refused(monkeypatch, capsys):
-    """Running under `sudo` exits 1 and says why."""
+    """Running under `sudo` exits 1 and says why.
+
+    Covers REQ-001-07.
+    """
     monkeypatch.setenv("SUDO_USER", "someone")
     assert entry.main(["doctor"]) == 1
     assert "don't run it with sudo" in capsys.readouterr().err
@@ -49,7 +55,10 @@ def test_main_hands_over_to_the_cli(monkeypatch):
 
 
 def test_the_entry_modules_parse_without_3_10_syntax():
-    """__main__.py and run.py must parse on 3.9: no match statements, no `X | Y` annotations, no parenthesised with."""
+    """__main__.py and run.py must parse on 3.9: no match statements, no `X | Y` annotations, no parenthesised with.
+
+    Covers REQ-001-04.
+    """
     import ast
 
     root = Path(entry.__file__).resolve().parents[1]
@@ -58,7 +67,10 @@ def test_the_entry_modules_parse_without_3_10_syntax():
 
 
 def test_run_py_runs_from_any_directory_without_picking_up_local_modules(tmp_path):
-    """Run py runs from any directory without picking up local modules."""
+    """Run py runs from any directory without picking up local modules.
+
+    Covers REQ-001-06.
+    """
     (tmp_path / "json.py").write_text("raise SystemExit('shadowed!')\n")
     (tmp_path / "argparse.py").write_text("raise SystemExit('shadowed!')\n")
     run_py = Path(entry.__file__).resolve().parents[1] / "run.py"

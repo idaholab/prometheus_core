@@ -24,13 +24,19 @@ PLATFORM = {"root": "/p", "project": "x", "version": "v"}
 
 
 def test_result_shape():
-    """Every object has the schema version, command, ok and platform, plus the extra fields."""
+    """Every object has the schema version, command, ok and platform, plus the extra fields.
+
+    Covers REQ-001-19.
+    """
     body = jsonout.result("status", PLATFORM, services=[1])
     assert body == {"schema_version": 1, "command": "status", "ok": True, "platform": PLATFORM, "services": [1]}
 
 
 def test_error_object_has_every_field():
-    """Error object has every field."""
+    """Error object has every field.
+
+    Covers REQ-001-19.
+    """
     body = jsonout.error_object("up", PLATFORM, "port_in_use", "8600 is taken", "run down", "ports-free")
     assert body["ok"] is False
     assert body["error"] == {
@@ -43,7 +49,10 @@ def test_error_object_has_every_field():
 
 
 def test_error_codes_are_the_fixed_list():
-    """Error codes are the fixed list."""
+    """Error codes are the fixed list.
+
+    Covers REQ-001-20.
+    """
     assert jsonout.ERROR_CODES == (
         "usage",
         "needs_terminal",
@@ -61,7 +70,10 @@ def test_error_codes_are_the_fixed_list():
 
 
 def test_exit_codes():
-    """The exit codes are 0, 1, 2, 3 and 130."""
+    """The exit codes are 0, 1, 2, 3 and 130.
+
+    Covers REQ-001-14.
+    """
     assert (
         jsonout.EXIT_OK,
         jsonout.EXIT_FAIL,

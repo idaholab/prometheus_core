@@ -29,7 +29,10 @@ pytestmark = [pytest.mark.live, pytest.mark.skipif(shutil.which("docker") is Non
 
 
 def test_doctor_against_the_real_daemon(tmp_path):
-    """`doctor --json` reports the real daemon, and its exit code follows the failed count."""
+    """`doctor --json` reports the real daemon, and its exit code follows the failed count.
+
+    Covers REQ-006-02.
+    """
     done = shim("doctor", "--json", "--tag", "preflight", cwd=tmp_path)
     assert done.returncode in (0, 1), done.stderr
     body = json.loads(done.stdout)
@@ -42,7 +45,10 @@ def test_doctor_against_the_real_daemon(tmp_path):
 
 
 def test_doctor_never_prints_the_secrets_of_a_real_looking_env(tmp_path):
-    """A `.env` full of secrets never reaches `doctor --verbose --json` output."""
+    """A `.env` full of secrets never reaches `doctor --verbose --json` output.
+
+    Covers REQ-003-04.
+    """
     secret = "fake-canary-fake-canary"
     platform = tmp_path / "platform"
     shutil.copytree(

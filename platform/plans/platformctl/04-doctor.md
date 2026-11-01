@@ -10,6 +10,23 @@ for the platform and for a developer's own agent folder, and the start
 commands use it to explain failures. Take the checks from those docs, not
 their commands: containers are found by service and label.
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 4)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are drafts: change
+them in this step's PR if the work shows they're wrong, and add any that are
+missing. The PR removes each tag and cites the ID from the test that proves
+it. The individual checks stay in the table below, not in the spec, so a
+new check needs no spec change; REQ-006-29 ties the two together.
+
+- [001 Using the CLI](../../../build/specs/001-using-the-cli.md): REQ-001-26
+  (every failure ends with the fix and the check to run)
+- [006 Doctor](../../../build/specs/006-doctor.md): REQ-006-24 to
+  REQ-006-26, REQ-006-29 to REQ-006-36, BEH-006-01, BEH-006-02 (every
+  `checks.md` id covered or manual, grouped output, `--agent`, the "why
+  isn't it called?" checks, evidence from logs, hints after a failed start,
+  what `--json` says it checked, fixes an assistant can act on)
+
 ## Every `checks.md` id
 
 Each id is either a `doctor` check (same id) or stays manual, with the

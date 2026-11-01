@@ -74,19 +74,28 @@ def parse(*argv):
 
 
 def test_global_options_before_and_after_the_command():
-    """Global options before and after the command."""
+    """Global options before and after the command.
+
+    Covers REQ-001-09.
+    """
     args = parse("--verbose", "up", "--dry-run")
     assert args.verbose and args.dry_run and not args.quiet
 
 
 def test_mixed_set_keeps_both():
-    """`--set` before and after the command are both kept."""
+    """`--set` before and after the command are both kept.
+
+    Covers REQ-001-09, BEH-001-04.
+    """
     args = parse("--set", "A=1", "up", "--set", "B=2")
     assert args.set == ["A=1", "B=2"]
 
 
 def test_set_only_after_or_only_before():
-    """Set only after or only before."""
+    """Set only after or only before.
+
+    Covers REQ-001-09.
+    """
     assert parse("up", "--set", "B=2").set == ["B=2"]
     assert parse("--set", "A=1", "up").set == ["A=1"]
 
@@ -100,19 +109,28 @@ def test_target_from_either_position_after_wins():
 
 
 def test_all_flags_or_together():
-    """A flag given in either position is on."""
+    """A flag given in either position is on.
+
+    Covers REQ-001-09.
+    """
     args = parse("--json", "--yes", "up", "--quiet", "--debug")
     assert (args.json, args.yes, args.quiet, args.debug) == (True, True, True, True)
 
 
 def test_subcommands_get_the_global_options_too():
-    """Subcommands get the global options too."""
+    """Subcommands get the global options too.
+
+    Covers REQ-001-09.
+    """
     args = parse("--set", "A=1", "config", "init", "--set", "B=2", "--json")
     assert args.set == ["A=1", "B=2"] and args.json and args.subcommand == "init"
 
 
 def test_split_double_dash():
-    """Arguments after the first `--` are split off for the action."""
+    """Arguments after the first `--` are split off for the action.
+
+    Covers REQ-001-10.
+    """
     assert cli.split_double_dash(["restart", "backend", "--", "--force-recreate", "--", "x"]) == (
         ["restart", "backend"],
         ["--force-recreate", "--", "x"],
@@ -121,7 +139,10 @@ def test_split_double_dash():
 
 
 def test_services_are_not_swallowed_by_the_double_dash():
-    """Services are not swallowed by the double dash."""
+    """Services are not swallowed by the double dash.
+
+    Covers REQ-001-10.
+    """
     own, extra = cli.split_double_dash(["restart", "backend", "--", "--force-recreate"])
     assert parse(*own).services == ["backend"] and extra == ["--force-recreate"]
 
@@ -130,7 +151,10 @@ def test_services_are_not_swallowed_by_the_double_dash():
 
 
 def test_sections_epilog_lists_commands_by_section_most_used_first():
-    """Sections epilog lists commands by section most used first."""
+    """Sections epilog lists commands by section most used first.
+
+    Covers REQ-001-11.
+    """
     epilog = cli.sections_epilog(MODULES)
     lines = epilog.splitlines()
     assert lines[0] == "Run the platform:"
@@ -141,13 +165,19 @@ def test_sections_epilog_lists_commands_by_section_most_used_first():
 
 
 def test_empty_sections_are_left_out():
-    """Empty sections are left out."""
+    """Empty sections are left out.
+
+    Covers REQ-001-11.
+    """
     epilog = cli.sections_epilog([module("up")])
     assert "Set up:" not in epilog and "Run the platform:" in epilog
 
 
 def test_top_level_help_is_pinned(monkeypatch):
-    """Top level help is pinned."""
+    """Top level help is pinned.
+
+    Covers REQ-001-11.
+    """
     monkeypatch.setenv("COLUMNS", "100")
     help_text = cli.build_parser(MODULES).format_help()
     assert help_text.endswith(
@@ -180,7 +210,10 @@ def test_every_command_subcommand_and_alias_parses_help(argv, capsys):
 
 
 def test_aliases_map_to_the_real_name():
-    """Aliases map to the real name."""
+    """Aliases map to the real name.
+
+    Covers REQ-001-13.
+    """
     assert cli.aliases_of(MODULES) == {"bounce": "restart"}
 
 
@@ -208,7 +241,10 @@ def call(*argv, env=None, modules=None):
 
 
 def test_version_text_and_json(env):
-    """`--version` prints text, or one JSON object with the commands and features."""
+    """`--version` prints text, or one JSON object with the commands and features.
+
+    Covers REQ-001-17.
+    """
     code, out, _ = call("--version", env=env)
     assert code == 0 and out.startswith("platformctl 0.1.0 (platform ")
     code, out, _ = call("--version", "--json", env=env)
@@ -219,25 +255,37 @@ def test_version_text_and_json(env):
 
 
 def test_golden_version_json(env, tmp_path):
-    """`--version --json`, with the commands and features a script branches on."""
+    """`--version --json`, with the commands and features a script branches on.
+
+    Covers REQ-001-17.
+    """
     _, out, _ = call("--version", "--json", env=env)
     assert_golden("version", json.loads(out), tmp_path)
 
 
 def test_golden_usage_error_json(env, tmp_path):
-    """A usage error is one object with `error.code` `usage`."""
+    """A usage error is one object with `error.code` `usage`.
+
+    Covers REQ-001-19, BEH-001-05.
+    """
     _, out, _ = call("--json", "doctor", "--nope", env=env)
     assert_golden("usage_error", json.loads(out), tmp_path)
 
 
 def test_no_command_prints_help(env):
-    """With no command, the help is printed and the exit code is 0."""
+    """With no command, the help is printed and the exit code is 0.
+
+    Covers REQ-001-12.
+    """
     code, out, _ = call(env=env)
     assert code == 0 and "Troubleshoot:" in out
 
 
 def test_usage_error_text_and_json(env):
-    """Usage error text and json."""
+    """Usage error text and json.
+
+    Covers REQ-001-18, BEH-001-05.
+    """
     code, out, err = call("nope", env=env)
     assert code == 2 and out == "" and "invalid choice" in err
     code, out, err = call("--json", "doctor", "--nope", env=env)
@@ -246,7 +294,10 @@ def test_usage_error_text_and_json(env):
 
 
 def test_json_stdout_is_only_the_object_even_for_errors(env):
-    """Json stdout is only the object even for errors."""
+    """Json stdout is only the object even for errors.
+
+    Covers REQ-001-18.
+    """
     code, out, err = call("--json", "doctor", "--set", "LLM_API_KEY=x", env=env)
     assert code == 1
     assert json.loads(out)["error"]["code"] == "config_invalid"
@@ -254,7 +305,10 @@ def test_json_stdout_is_only_the_object_even_for_errors(env):
 
 
 def test_an_env_file_that_is_not_text_is_still_one_json_object(env, tmp_path):
-    """A `.env` that isn't UTF-8 gives JSON and no traceback: `--version` ignores it, `doctor` reports it."""
+    """A `.env` that isn't UTF-8 gives JSON and no traceback: `--version` ignores it, `doctor` reports it.
+
+    Covers REQ-001-16.
+    """
     (tmp_path / ".env").write_bytes(b"A=\xff\xfe\n")
     code, out, err = call("--version", "--json", env=env)
     assert code == 0 and json.loads(out)["ok"] is True and err == ""
@@ -265,19 +319,28 @@ def test_an_env_file_that_is_not_text_is_still_one_json_object(env, tmp_path):
 
 
 def test_set_refusing_a_secret_in_text_mode(env):
-    """Set refusing a secret in text mode."""
+    """Set refusing a secret in text mode.
+
+    Covers REQ-003-10.
+    """
     code, out, err = call("doctor", "--set", "AGENT_SECRET=hunter2hunter2", env=env)
     assert code == 1 and "set AGENT_SECRET in .env instead" in err and "hunter2" not in err + out
 
 
 def test_k3d_target_is_refused(env):
-    """`--target k3d` exits 1 with "not supported yet"."""
+    """`--target k3d` exits 1 with "not supported yet".
+
+    Covers REQ-008-02.
+    """
     code, _, err = call("doctor", "--target", "k3d", env=env)
     assert code == 1 and "k3d` is not supported yet" in err
 
 
 def test_a_malformed_env_stops_every_command_but_doctor(env, tmp_path):
-    """A malformed env stops every command but doctor."""
+    """A malformed env stops every command but doctor.
+
+    Covers REQ-001-16.
+    """
     (tmp_path / ".env").write_text("AGENT_SECRET=ok\nsk-live-supersecretvalue\n")
     code, _, err = call("doctor", "--list", env=env)
     assert code == 0
@@ -328,7 +391,10 @@ def test_dispatch_runs_the_action_with_the_merged_args_and_extra(env, monkeypatc
 
 
 def test_a_deprecated_alias_still_works_and_says_so(env, monkeypatch):
-    """A deprecated alias still works and says so."""
+    """A deprecated alias still works and says so.
+
+    Covers REQ-001-13.
+    """
     monkeypatch.setattr(cli.actions, "discover", lambda: [module("restart", aliases=["bounce"])])
     code, _, err = call("bounce", env=env)
     assert code == 0 and "`bounce` is deprecated; use `restart`." in err
@@ -355,7 +421,10 @@ def test_group_dispatch(env, monkeypatch):
 
 
 def test_secrets_in_the_environment_are_scrubbed_from_every_message(env, monkeypatch):
-    """Secrets in the environment are scrubbed from every message."""
+    """Secrets in the environment are scrubbed from every message.
+
+    Covers REQ-003-04.
+    """
 
     def run(ctx, args):
         """Print an error that contains a secret."""
@@ -377,7 +446,10 @@ def test_secrets_in_the_environment_are_scrubbed_from_every_message(env, monkeyp
     ],
 )
 def test_errors_become_json_with_a_fixed_code_and_text_with_a_hint(env, monkeypatch, exc, code_name):
-    """Errors become json with a fixed code and text with a hint."""
+    """Errors become json with a fixed code and text with a hint.
+
+    Covers REQ-001-20.
+    """
 
     def run(ctx, args):
         """Raise the error under test."""
@@ -393,7 +465,10 @@ def test_errors_become_json_with_a_fixed_code_and_text_with_a_hint(env, monkeypa
 
 
 def test_unexpected_errors_show_a_traceback_only_with_debug(env, monkeypatch):
-    """Unexpected errors show a traceback only with debug."""
+    """Unexpected errors show a traceback only with debug.
+
+    Covers REQ-001-15.
+    """
 
     def run(ctx, args):
         """Raise an unexpected error."""
@@ -407,7 +482,10 @@ def test_unexpected_errors_show_a_traceback_only_with_debug(env, monkeypatch):
 
 
 def test_a_traceback_is_scrubbed(env, monkeypatch):
-    """A secret in a traceback printed with `--debug` is scrubbed."""
+    """A secret in a traceback printed with `--debug` is scrubbed.
+
+    Covers REQ-003-04.
+    """
 
     def run(ctx, args):
         """Raise an error whose message and source line hold a secret."""
@@ -420,7 +498,10 @@ def test_a_traceback_is_scrubbed(env, monkeypatch):
 
 
 def test_ctrl_c_exits_130(env, monkeypatch):
-    """Ctrl-C exits with 130."""
+    """Ctrl-C exits with 130.
+
+    Covers REQ-001-14.
+    """
 
     def run(ctx, args):
         """Act like Ctrl-C."""
@@ -445,6 +526,9 @@ def test_command_label_for_errors_skips_option_values():
 
 
 def test_the_error_json_names_the_command(env):
-    """The error json names the command."""
+    """The error json names the command.
+
+    Covers REQ-001-19.
+    """
     _, out, _ = call("--json", "--set", "AGENT_SECRET=x", "doctor", env=env)
     assert json.loads(out)["command"] == "doctor"

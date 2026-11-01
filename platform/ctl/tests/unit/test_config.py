@@ -44,27 +44,39 @@ def make(tmp_path: Path, dotenv: str | None = None, env: dict | None = None, set
     ],
 )
 def test_precedence(tmp_path, env, dotenv, sets, expected, source):
-    """Defaults lose to the environment, which loses to `.env`, which loses to `--set`."""
+    """Defaults lose to the environment, which loses to `.env`, which loses to `--set`.
+
+    Covers REQ-002-01.
+    """
     value = make(tmp_path, dotenv, env, sets).resolve("BACKEND_PORT")
     assert (value.value, value.source) == (expected, source)
 
 
 def test_a_blank_env_line_wins_over_the_environment(tmp_path):
-    """A blank env line wins over the environment."""
+    """A blank env line wins over the environment.
+
+    Covers REQ-002-02.
+    """
     config = make(tmp_path, "PROFILE=\n", {"PROFILE": "prod"})
     assert config.get("PROFILE") == ""
     assert config.frontend_profile() == ""
 
 
 def test_blank_base_image_falls_back_to_the_default(tmp_path):
-    """Blank base image falls back to the default."""
+    """Blank base image falls back to the default.
+
+    Covers REQ-002-02.
+    """
     config = make(tmp_path, "PROMETHEUS_API_BASE_IMAGE_HASH=\nPROMETHEUS_API_BASE_IMAGE_REPO=\n")
     assert config.base_image() == (cfg.DEFAULT_BASE_IMAGE_REPO, cfg.DEFAULT_BASE_IMAGE_HASH)
     assert config.resolve("PROMETHEUS_API_BASE_IMAGE_HASH").source == "default"
 
 
 def test_local_sdk_overrides_the_pin(tmp_path):
-    """Local sdk overrides the pin."""
+    """Local sdk overrides the pin.
+
+    Covers REQ-002-03, BEH-002-01.
+    """
     config = make(tmp_path, 'LOCAL_SDK="true"\nPROMETHEUS_API_BASE_IMAGE_HASH=abc\n')
     assert config.local_sdk  # dotenv rules: the quotes are stripped
     assert config.base_image() == ("prometheus_api", "local")
@@ -82,7 +94,10 @@ def test_resolve_is_cached(tmp_path):
 
 
 def test_int_and_flag(tmp_path):
-    """Numeric and boolean settings convert, and a blank or bad number raises."""
+    """Numeric and boolean settings convert, and a blank or bad number raises.
+
+    Covers REQ-002-07.
+    """
     config = make(tmp_path, "BACKEND_PORT=9000\nDEBUG_AGENTS=TRUE\nCLIENT_AGENT_PORT=abc\nREDIS_LOCAL_PORT=\n")
     assert config.int("BACKEND_PORT") == 9000
     assert config.flag("DEBUG_AGENTS")
@@ -94,14 +109,20 @@ def test_int_and_flag(tmp_path):
 
 
 def test_project_falls_back_when_blank(tmp_path):
-    """Project falls back when blank."""
+    """Project falls back when blank.
+
+    Covers REQ-002-06.
+    """
     assert make(tmp_path, "COMPOSE_PROJECT_NAME=\n").project == "prometheus_platform"
     assert make(tmp_path, "COMPOSE_PROJECT_NAME=second\n").project == "second"
 
 
 @pytest.mark.parametrize(("profile", "expected"), [("dev", "dev"), ("prod", "prod"), ("", ""), ("other", "")])
 def test_frontend_profile(tmp_path, profile, expected):
-    """Only `dev` and `prod` are frontends; anything else is none."""
+    """Only `dev` and `prod` are frontends; anything else is none.
+
+    Covers REQ-002-08.
+    """
     assert make(tmp_path, f"PROFILE={profile}\n").frontend_profile() == expected
 
 
@@ -138,7 +159,10 @@ def test_parse_set_needs_key_value(item):
     ],
 )
 def test_parse_set_errors_do_not_echo_what_might_be_a_secret(item, shown):
-    """Only text shaped like a setting name is echoed; the scrubber doesn't know a value outside `.env`."""
+    """Only text shaped like a setting name is echoed; the scrubber doesn't know a value outside `.env`.
+
+    Covers REQ-003-08.
+    """
     with pytest.raises(ConfigError) as info:
         parse_set([item])
     assert ("NOEQUALS" in str(info.value)) is shown
@@ -147,7 +171,10 @@ def test_parse_set_errors_do_not_echo_what_might_be_a_secret(item, shown):
 
 @pytest.mark.parametrize("key", ["LLM_API_KEY", "AGENT_SECRET", "SOMETHING_UNKNOWN"])
 def test_parse_set_refuses_secrets_and_unknown_keys(key):
-    """Parse set refuses secrets and unknown keys."""
+    """Parse set refuses secrets and unknown keys.
+
+    Covers REQ-003-10, BEH-003-03.
+    """
     with pytest.raises(ConfigError) as info:
         parse_set([f"{key}=hunter2hunter2"])
     assert f"set {key} in .env instead" in str(info.value)
@@ -158,7 +185,10 @@ def test_parse_set_refuses_secrets_and_unknown_keys(key):
 
 
 def test_make_overrides_reads_names_from_makeflags_and_values_from_env():
-    """Make overrides reads names from makeflags and values from env."""
+    """Make overrides reads names from makeflags and values from env.
+
+    Covers REQ-002-04.
+    """
     env = {
         "PLATFORMCTL_VIA_MAKE": "1",
         "MAKEFLAGS": r" -- BACKEND_PORT=9 UP_ARGS=a\ b\ 'q'",
@@ -169,7 +199,10 @@ def test_make_overrides_reads_names_from_makeflags_and_values_from_env():
 
 
 def test_make_overrides_only_via_make_and_with_arguments():
-    """Make overrides only via make and with arguments."""
+    """Make overrides only via make and with arguments.
+
+    Covers REQ-002-04.
+    """
     assert make_overrides({"MAKEFLAGS": " -- A=1", "A": "1"}) == {}
     assert make_overrides({"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": "w"}) == {}
     # A name in MAKEFLAGS with no value in the environment is ignored.
@@ -177,7 +210,10 @@ def test_make_overrides_only_via_make_and_with_arguments():
 
 
 def test_make_beats_dotenv_but_not_set(tmp_path):
-    """Make beats dotenv but not set."""
+    """Make beats dotenv but not set.
+
+    Covers REQ-002-04, BEH-002-02.
+    """
     env = {"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": " -- BACKEND_PORT=7", "BACKEND_PORT": "7"}
     config = make(tmp_path, "BACKEND_PORT=2\n", env)
     assert config.resolve("BACKEND_PORT") == cfg.Value("7", "make")
@@ -216,7 +252,10 @@ def test_child_env(tmp_path):
 
 
 def test_child_env_ignores_unknown_make_variables(tmp_path):
-    """Child env ignores unknown make variables."""
+    """Child env ignores unknown make variables.
+
+    Covers REQ-002-05.
+    """
     env = {"PLATFORMCTL_VIA_MAKE": "1", "MAKEFLAGS": " -- WHATEVER=1", "WHATEVER": "1"}
     config = make(tmp_path, None, env)
     assert config.make == {"WHATEVER": "1"}
@@ -239,7 +278,10 @@ def test_hidden_by_dotenv_and_env_hiding_value(tmp_path):
 
 
 def test_secret_values_and_keys(tmp_path):
-    """Secret values come from `.env`, `--set` and secret-looking environment names, never from safe keys."""
+    """Secret values come from `.env`, `--set` and secret-looking environment names, never from safe keys.
+
+    Covers REQ-003-01, REQ-003-02.
+    """
     config = make(
         tmp_path,
         "LLM_API_KEY=fake-dotenv-secret\nBACKEND_PORT=9999\nBLANK=\n",
@@ -261,7 +303,10 @@ def test_secret_values_and_keys(tmp_path):
 
 
 def test_is_safe_denies_by_default():
-    """Is safe denies by default."""
+    """Is safe denies by default.
+
+    Covers REQ-003-01.
+    """
     assert cfg.is_safe("BACKEND_PORT")
     assert not cfg.is_safe("LLM_API_KEY")
     assert not cfg.is_safe("ANYTHING_ELSE")
