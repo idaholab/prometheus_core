@@ -148,7 +148,7 @@ def test_registered_raises_auth_error_on_a_rejected_key(server, status):
     assert "the-secret-key-123" not in str(info.value)
 
 
-@pytest.mark.parametrize(("status", "text"), [(500, "HTTP 500"), (None, "did not answer")])
+@pytest.mark.parametrize(("status", "text"), [(500, "HTTP 500"), (None, "backend is not answering yet")])
 def test_registered_raises_value_error_on_other_failures(server, status, text):
     """Another status, or no answer at all, raises `ValueError` so it is retried."""
     url = server.url + "/v1/agents" if status else "http://127.0.0.1:1/v1/agents"

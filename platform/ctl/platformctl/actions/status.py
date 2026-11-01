@@ -108,6 +108,7 @@ def _report(
     checks = sorted({by_name[name].doctor_check for name in failures if by_name[name].doctor_check})
     if checks:
         out.write("Run: ./platformctl doctor " + " ".join(checks), err=True)
+    out.write("Is it running? `make ps` lists the services; `make logs` shows what they say.", err=True)
     return jsonout.EXIT_FAIL
 
 

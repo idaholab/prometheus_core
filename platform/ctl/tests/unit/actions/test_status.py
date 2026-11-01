@@ -167,6 +167,14 @@ def test_timeout_names_what_is_missing_and_the_doctor_check_for_it(ctx_for, serv
     assert clock.sleeps == [5, 5]
 
 
+def test_a_failure_says_how_to_see_whether_it_is_running(ctx_for, server):
+    """A person who sees "Not ready" is told where to look, in words that don't need to know what a registry is."""
+    server.routes["/v1/agents"] = agents()
+    ctx, _, err = ctx_for()
+    assert status.run(ctx, ns()) == 1
+    assert "Is it running? `make ps` lists the services; `make logs` shows what they say." in err.getvalue()
+
+
 def test_a_failure_without_a_doctor_check_prints_no_run_line(ctx_for, server, monkeypatch):
     """When no failing item has a `doctor` check to suggest, the hint line is left out."""
     server.routes["/v1/agents"] = agents("client-agent")

@@ -95,7 +95,11 @@ def registered(url: str, agent_secret: str) -> set[str]:
     if code in (401, 403):
         raise AuthError("The agent registry rejected AGENT_SECRET")
     if code != 200:
-        raise ValueError("the registry did not answer" if code is None else f"the registry answered HTTP {code}")
+        raise ValueError(
+            "the backend is not answering yet"
+            if code is None
+            else f"the backend answered HTTP {code} for the agent list"
+        )
     if not isinstance(entries, list):
         raise ValueError(f"unexpected /v1/agents response: {type(entries).__name__}")
     return {
