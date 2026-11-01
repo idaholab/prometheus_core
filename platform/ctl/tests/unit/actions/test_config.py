@@ -110,6 +110,20 @@ def test_set_checks_values_given_through_from_env_too(ctx_env, platform_root):
     assert (platform_root / ".env").read_text() == DOTENV
 
 
+def test_set_accepts_a_path_and_a_url_setting(ctx_env, platform_root):
+    """`LLM_CONFIG_FILE` and `DEEPLYNX_BASE_URL` hold a path and a URL, not secrets, so `config set` takes them."""
+    ctx, _, _ = ctx_env()
+    assert (
+        config_action.set_values(
+            ctx, parse("set", "LLM_CONFIG_FILE=/etc/llm.yaml", "DEEPLYNX_BASE_URL=https://deeplynx.example/api/v1")
+        )
+        == 0
+    )
+    values = envfile.read(platform_root / ".env")
+    assert values["LLM_CONFIG_FILE"] == "/etc/llm.yaml"
+    assert values["DEEPLYNX_BASE_URL"] == "https://deeplynx.example/api/v1"
+
+
 def test_set_accepts_any_value_for_a_text_setting(ctx_env, platform_root):
     """A `str` setting has no type to check, so any value is written."""
     ctx, _, _ = ctx_env()

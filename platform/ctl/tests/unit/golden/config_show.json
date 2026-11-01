@@ -21,6 +21,12 @@
       "value": ""
     },
     {
+      "description": "Custom LLM config YAML (a path) that wins over LLM_CONFIG_PROFILE",
+      "name": "LLM_CONFIG_FILE",
+      "source": "default",
+      "value": ""
+    },
+    {
       "description": "Build the prometheus_api base image from ../sdk",
       "name": "LOCAL_SDK",
       "source": "default",
@@ -55,6 +61,12 @@
       "name": "LOCAL_DEEPLYNX",
       "source": "default",
       "value": "false"
+    },
+    {
+      "description": "DeepLynx API URL the agents use (set by `deeplynx setup` for a local DeepLynx)",
+      "name": "DEEPLYNX_BASE_URL",
+      "source": "default",
+      "value": ""
     },
     {
       "description": "Host port of the local DeepLynx API",

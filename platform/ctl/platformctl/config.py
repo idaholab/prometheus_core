@@ -67,6 +67,7 @@ def _s(name: str, default: str, description: str, **kw) -> Setting:
 SETTINGS: tuple[Setting, ...] = (
     _s("COMPOSE_PROJECT_NAME", "prometheus_platform", "Compose project name"),
     _s("LLM_CONFIG_PROFILE", "", "LLM provider profile the agents use (no default)"),
+    _s("LLM_CONFIG_FILE", "", "Custom LLM config YAML (a path) that wins over LLM_CONFIG_PROFILE"),
     _s("LOCAL_SDK", "false", "Build the prometheus_api base image from ../sdk", kind="bool"),
     _s(
         "PROMETHEUS_API_BASE_IMAGE_REPO",
@@ -83,6 +84,7 @@ SETTINGS: tuple[Setting, ...] = (
     _s("DEBUG_AGENTS", "false", "Also include agents/debug-agents/*", kind="bool"),
     _s("OPTIONAL_AGENTS", "false", "Also include agents/optional/*", kind="bool"),
     _s("LOCAL_DEEPLYNX", "false", "Run DeepLynx next to the platform", kind="bool"),
+    _s("DEEPLYNX_BASE_URL", "", "DeepLynx API URL the agents use (set by `deeplynx setup` for a local DeepLynx)"),
     _s("DEEPLYNX_SERVER_PORT", "5000", "Host port of the local DeepLynx API", kind="int"),
     _s("DEEPLYNX_UI_PORT", "3000", "Host port of the local DeepLynx UI", kind="int"),
     _s("PROMETHEUS_SYSTEM_TESTING", "false", "Publish the client-agent port for system tests", kind="bool"),
