@@ -189,6 +189,20 @@ def test_timeout_as_json_is_one_object_with_a_timeout_error(ctx_for, server):
     assert_golden("status_timeout", body, ctx.paths.root)
 
 
+def test_one_check_that_fails_is_not_a_timeout(ctx_for, server):
+    """Without `--wait` nothing waited, so the error is `check_failed` and the text doesn't say "after 0s"."""
+    server.routes["/v1/agents"] = agents()
+    ctx, out, _ = ctx_for(json_mode=True)
+    assert status.run(ctx, ns()) == 1
+    body = json.loads(out.getvalue())
+    assert body["error"]["code"] == "check_failed"
+    assert body["error"]["message"].startswith("Not ready: ")
+    assert "after 0s" not in out.getvalue()
+    ctx, _, err = ctx_for()
+    assert status.run(ctx, ns()) == 1
+    assert "[ERROR] Not ready:" in err.getvalue() and "after 0s" not in err.getvalue()
+
+
 def test_ready_as_json(ctx_for, server):
     """A ready platform is `ready: true` with the checks that passed."""
     healthy(server, "client-agent")

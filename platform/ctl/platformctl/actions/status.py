@@ -79,24 +79,30 @@ def build_items(ctx: Context) -> list[readiness.Readiness]:
     return items
 
 
-def _report(ctx: Context, failures: dict[str, str], items: list[readiness.Readiness], timeout: float) -> int:
-    """Print what never passed, with the `doctor` check that explains each, as JSON or text; return 1."""
+def _report(
+    ctx: Context, failures: dict[str, str], items: list[readiness.Readiness], timeout: float, *, waited: bool
+) -> int:
+    """Print what never passed, with the `doctor` check that explains each, as JSON or text; return 1.
+
+    After `--wait` that is a `timeout`. A single check (no `--wait`) did not time out, so it is `check_failed`.
+    """
     out = ctx.output
     by_name = {item.name: item for item in items}
+    heading = f"Not ready after {timeout:.0f}s" if waited else "Not ready"
     if ctx.json_mode:
         problems = [
             {"name": name, "reason": reason, "doctor_check": by_name[name].doctor_check}
             for name, reason in failures.items()
         ]
         error = {
-            "code": "timeout",
-            "message": f"Not ready after {timeout:.0f}s: " + "; ".join(f"{p['name']}: {p['reason']}" for p in problems),
+            "code": "timeout" if waited else "check_failed",
+            "message": f"{heading}: " + "; ".join(f"{p['name']}: {p['reason']}" for p in problems),
             "hint": "./platformctl doctor",
         }
         body = jsonout.result("status", ctx.platform_info(), ok=False, error=error, waiting_for=problems)
         jsonout.emit(body, out.out, out.scrubber.scrub)
         return jsonout.EXIT_FAIL
-    out.write(f"\n[ERROR] Not ready after {timeout:.0f}s:", err=True)
+    out.write(f"\n[ERROR] {heading}:", err=True)
     for name, reason in failures.items():
         out.write(f"  {name}: {reason}", err=True)
     checks = sorted({by_name[name].doctor_check for name in failures if by_name[name].doctor_check})
@@ -146,7 +152,7 @@ def run(
     except readiness.AuthError as exc:
         return _fail(ctx, "check_failed", f"{exc}: it is not the AGENT_SECRET the platform was started with")
     if failures:
-        return _report(ctx, failures, items, timeout)
+        return _report(ctx, failures, items, timeout, waited=args.wait)
     if ctx.json_mode:
         return _json_ok(ctx, items)
     out.info("The platform is up.")
