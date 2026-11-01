@@ -83,6 +83,10 @@ Passing secrets on
   init`, `config set`, `config show`, `status --wait` and `deeplynx setup`
   run with `--verbose`, `--json` and forced failures THEN no sentinel appears
   in stdout, stderr or `.env`'s other lines. (planned: step 2)
+- BEH-003-05: GIVEN sentinels in a port, an image and a label of a minimal
+  project WHEN `up --dry-run`, `build`, `status` and `doctor` run against
+  real Compose THEN no sentinel appears in the captured output.
+  (planned: step 3a)
 
 ## Interfaces
 - The settings registry's "safe to print" marking

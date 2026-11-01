@@ -99,6 +99,10 @@ The `config` commands
 - REQ-002-27: `config init` MUST end with "Next: ./platformctl up", or with
   local DeepLynx "Next: ./platformctl up, then ./platformctl deeplynx
   setup". (planned: step 2)
+- REQ-002-28: A child process MUST get the same environment Make gave it:
+  for a key in both the environment and `.env`, the `.env` value; the
+  derived values added; every other `.env` key left for Compose to read
+  itself. (planned: step 3a)
 
 ## Behavior
 

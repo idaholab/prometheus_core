@@ -85,6 +85,9 @@ The step 1 checks
 
 Later
 
+- REQ-006-27: `doctor` MUST warn when `.platform.env` is older than the
+  settings it was derived from. (planned: step 3a)
+
 - REQ-006-24: `doctor` MUST cover every `checks.md` id the step 4 plan lists
   as a check, grouping text output by area with a one-line summary per
   group. (planned: step 4)
