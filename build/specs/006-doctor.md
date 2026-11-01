@@ -90,7 +90,6 @@ Later
 - REQ-006-28: `ports-free` MUST share the port and holder code `up` uses,
   count as "ours" only containers whose platform root is this checkout, and
   report a port held on the Windows side of WSL 2. (planned: step 3b)
-
 - REQ-006-24: `doctor` MUST cover every `checks.md` id the step 4 plan lists
   as a check, grouping text output by area with a one-line summary per
   group. (planned: step 4)
@@ -100,8 +99,39 @@ Later
 - REQ-006-26: When `up`, `restart` or `status --wait` fails, the last lines
   MUST name the likely cause and fix from the diagnose checks for that step.
   (planned: step 4)
+- REQ-006-29: Every id in the hackathon `checks.md` MUST be either a
+  `doctor` check with the same id, or listed in the step 4 plan as manual
+  with the reason. (planned: step 4)
+- REQ-006-30: Every check id the docs and skills cite MUST exist in
+  `doctor --list`. (planned: step 4)
+- REQ-006-31: The agent-folder checks MUST answer "why isn't it called?":
+  a stale image, the client agent not reaching the agent or not having
+  cached its skills, duplicate route keys or skill ids, and an agent without
+  the agent label. (planned: step 4)
+- REQ-006-32: The agent-folder checks MUST compare the agent's `.env` with
+  the platform's for the shared keys as `same` or `differs` only, and name,
+  without printing, a private key found in the agent's `.env`.
+  (planned: step 4)
+- REQ-006-33: Evidence taken from logs MUST be the matched error class and
+  line number, never the line, since agent code can log values.
+  (planned: step 4)
+- REQ-006-34: `doctor` MUST warn about keys `.env.example` has and `.env`
+  lacks, and check that `prometheus.host.internal` is reachable from a
+  container. (planned: step 4)
+- REQ-006-35: `doctor --json` MUST also say which checks were selected and
+  for which target, and which agent folder it checked. (planned: step 4)
+- REQ-006-36: A fix that needs the user (`fix_kind` `you` or `yes`) MUST say
+  so in words an assistant can act on, such as asking the user before
+  running an interactive command. (planned: step 4)
 
 ## Behavior
+
+- BEH-006-01: GIVEN `up` fails because an agent never registers WHEN it
+  exits THEN its last lines name the likely cause from the registry checks
+  and the `doctor` command to run. (planned: step 4)
+- BEH-006-02: GIVEN a skill runs `doctor --json --agent <dir>` from the
+  hackathon root WHEN a check fails THEN the object names the agent folder
+  checked, and the failing check's `fix_kind` and `fix`. (planned: step 4)
 
 ## Interfaces
 - `./platformctl doctor [check-id...]` (`--tag preflight|diagnose`, `--list`,
