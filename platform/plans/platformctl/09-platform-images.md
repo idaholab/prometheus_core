@@ -12,6 +12,24 @@ was written for, without building it.
 
 See `design.md`, "Where the platform's code comes from".
 
+## Requirements
+
+This step satisfies the requirements tagged `(planned: step 9)` in
+[`build/specs/`](../../../build/specs/000-index.md). They are early drafts:
+this step's PR will refine them once the images are published. It removes
+each tag and cites the ID from the test that proves it. When it lands,
+REQ-008-06's refusal of `image` is retired.
+
+- [008 Where and how the platform runs](../../../build/specs/008-where-and-how-the-platform-runs.md):
+  REQ-008-07 to REQ-008-09, REQ-008-13 to REQ-008-15, BEH-008-02,
+  BEH-008-03 (running from images with mixed mode, the tag and registry
+  overrides, stopping before a missing image, the base image following the
+  version, labels set at run time, what `up` says it pulls)
+
+Publishing the client-agent and agent images is the build side of this
+step. It belongs to the Release and publishing area (300s), which has no
+spec yet; write that spec in this step if it hasn't been written.
+
 ## Today
 
 - `publish.yml` pushes `prometheus_sdk-devel`, `prometheus_backend-devel`

@@ -49,11 +49,26 @@ Where the code comes from
 - REQ-008-09: When no images exist for the version, `up` MUST stop before
   pulling with "no images for `<version>`; use `PLATFORM_SOURCE=build`".
   (planned: step 9)
+- REQ-008-13: In image mode, the agents' base image MUST come from the
+  published `prometheus_sdk` image of the same version, not the separate
+  base-image pin. (planned: step 9)
+- REQ-008-14: The platform root label MUST be set on containers at run time
+  and never baked into a published image. (planned: step 9)
+- REQ-008-15: `up` in image mode MUST say which images and tag it pulls and
+  which services still build, and its summary MUST show the source and
+  version. (planned: step 9)
 
 ## Behavior
 
 - BEH-008-01: GIVEN `PLATFORM_TARGET=k3d` in `.env` WHEN the user runs
   `--target compose doctor` THEN the compose target is used.
+- BEH-008-02: GIVEN an agent repository pinning `prometheus_core` as a
+  submodule at a published commit WHEN the developer runs
+  `--set PLATFORM_SOURCE=image up` THEN the platform starts from that
+  commit's images without building them. (planned: step 9)
+- BEH-008-03: GIVEN a local commit with no published images WHEN `up` runs in
+  image mode THEN it stops before pulling, suggesting
+  `PLATFORM_SOURCE=build`. (planned: step 9)
 
 ## Interfaces
 - `--target compose|k3d`, `PLATFORM_TARGET`
