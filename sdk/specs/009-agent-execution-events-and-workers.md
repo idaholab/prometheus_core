@@ -1,7 +1,7 @@
 # 009 — Agent execution, events, and workers
 
 status: implemented
-sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/worker.py, tests/test_agent.py, tests/test_a2a_payloads.py
+sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/worker.py, prometheus_api/prompts.py, tests/test_agent.py, tests/test_prompts.py, tests/test_a2a_payloads.py
 depends-on: none
 
 ## Purpose
@@ -30,6 +30,9 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - REQ-009-20: If credential acquisition, storage configuration, or execution-item creation fails, the executor MUST emit its normal terminal failure and MUST NOT invoke `_execute(...)`.
 - REQ-009-21: `PrometheusAgent.execution_record_id` MUST expose the created item ID only during the active execution, isolate concurrent executions, and reset after success or failure.
 - REQ-009-22: Execution-item names MUST identify the invoked skill using its agent-card name when available, fall back to its nonblank skill ID when unresolved, use a natural agent-level execution name when no skill is supplied, remain within 499 characters, and MUST NOT contain the task ID. Task IDs remain in the description, properties, and `original_id` for correlation.
+- REQ-009-23: `PrometheusAgent.load_prompt(...)` MUST read prompts from `prompts/` next to the source file of the class it is called on (the subclass, not the SDK), independent of `__main__`, and MUST pass `encoding` and `strip` through to `prometheus_api.load_prompt(...)`.
+- REQ-009-24: A subclass MAY set `prompts_dir`. A relative value MUST resolve from the directory of the class's source file and an absolute value MUST be used as is. `PrometheusAgent.load_prompt(...)` MUST keep the path rules of `prometheus_api.load_prompt(...)`: relative names only, no escape from the prompt directory, `FileNotFoundError` for a missing file.
+- REQ-009-25: For a class with no source file and no absolute `prompts_dir`, `resolve_prompts_dir()` MUST return `None` and `load_prompt(...)` MUST fall back to `prompts/` next to the running entrypoint.
 
 ## Behavior
 - BEH-009-01: GIVEN a slow `_execute(...)` and a short heartbeat interval WHEN execution runs THEN at least one silent non-final heartbeat is emitted before the final completed event.
@@ -50,6 +53,9 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - `PrometheusAgentExecutor._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
 - `DelegatingPrometheusAgentExecutor(agent_name: str, execute_fn: Callable[..., Awaitable[dict[str, Any]]], execution_scope: Callable[..., AsyncContextManager[None]] | None = None)`
 - `PrometheusAgent.execution_record_id -> int | None`
+- `PrometheusAgent.prompts_dir: str | os.PathLike[str] | None = None` (class attribute)
+- `PrometheusAgent.resolve_prompts_dir() -> Path | None` (classmethod)
+- `PrometheusAgent.load_prompt(name: str | os.PathLike[str], *, encoding: str = "utf-8", strip: bool = True) -> str` (classmethod)
 - `PrometheusAgent._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
 - `PrometheusAgent.send_status_update(context, event_queue, state: TaskState = TaskState.working, final: bool = False, message: str | None = None, metadata: dict | None = None) -> None`
 - `PrometheusAgent.declare_long_running(context, event_queue, *, estimate_seconds: float | None = None, message: str | None = None, metadata: dict | None = None) -> None`
