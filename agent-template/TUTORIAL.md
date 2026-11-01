@@ -40,7 +40,6 @@ Every agent starts from a small project template:
 - **uv** — the package manager used across the platform. Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - **Docker Desktop** (or Podman) — only needed for Steps 6–9
 - **Git** — for cloning and version control
-- Nothing to log in to: the `prometheus_api` base image (`ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel`) is public. Its tag comes from `PROMETHEUS_API_BASE_IMAGE_HASH` in your `.env` (defaults to `latest`)
 
 ---
 
