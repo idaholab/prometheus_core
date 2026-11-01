@@ -221,6 +221,83 @@ def test_a_real_make_gives_the_tool_its_command_line_variables(tmp_path, flags, 
     assert make_overrides(env) == expected
 
 
+FORWARDING_SHIM = """#!/bin/sh
+echo "shim:$PLATFORMCTL_VIA_MAKE:$PLATFORMCTL_MAKE_VARS:$*"
+"""
+"""A stand-in for `platformctl` that prints how the Makefile called it."""
+
+
+@pytest.fixture
+def forwarding_makefile(tmp_path):
+    """The real Makefile's forwarding recipes (`check`, `init-env`, `deeplynx-setup`, `doctor`) in a folder with a fake shim.
+
+    The shim is *not* executable: the Makefile must run it through `sh`, so a lost exec bit
+    (a zip download, `core.fileMode=false`) reaches the tool's own message instead of "Permission denied".
+    Only the lines that define `PLATFORMCTL`, the variable list and the four recipes are taken, so
+    nothing here starts Docker.
+    """
+    lines = MAKEFILE.read_text().splitlines()
+    keep = [row for row in lines if row.startswith(("PLATFORMCTL :=", "PLATFORMCTL_MAKE_VARS :=", "CHECK_TIMEOUT"))]
+    recipes = []
+    for target in ("check", "doctor", "init-env", "deeplynx-setup"):
+        start = next(i for i, row in enumerate(lines) if row.startswith(f"{target}:") and "##@" in row)
+        end = next(i for i in range(start + 1, len(lines)) if lines[i] and not lines[i].startswith("\t"))
+        recipes += [lines[start].split("##@")[0].rstrip()] + lines[start + 1 : end]
+    (tmp_path / "platformctl").write_text(FORWARDING_SHIM)
+    (tmp_path / "Makefile").write_text(
+        "\n".join(["CHECK_TIMEOUT ?= 300", *keep, "export PLATFORMCTL_MAKE_VARS", "", *recipes, ""])
+    )
+    return tmp_path
+
+
+def run_make(folder: Path, *args: str) -> str:
+    """Run `make` in `folder` and return its stdout, with Make's own variables kept out of the environment."""
+    done = subprocess.run(
+        ["make", "-C", str(folder), "--no-print-directory", *args],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={k: v for k, v in os.environ.items() if k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL")},
+    )
+    return done.stdout
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+@pytest.mark.parametrize(
+    ("target", "given", "echoed", "argv"),
+    [
+        ("init-env", [], "Running: ./platformctl config init", "config init"),
+        ("check", ["CHECK_TIMEOUT=7"], "Running: ./platformctl status --wait --timeout 7", "status --wait --timeout 7"),
+        ("check", [], "Running: ./platformctl status --wait --timeout 300", "status --wait --timeout 300"),
+        ("doctor", [], None, "doctor"),
+    ],
+)
+def test_the_real_makefile_recipes_forward_to_the_tool(forwarding_makefile, target, given, echoed, argv):
+    """`make <target>` echoes the new command, runs the shim through `sh` with `PLATFORMCTL_VIA_MAKE=1`, and
+    hands it Make's command-line variables, under whatever Make is installed (3.81 on a Mac, 4.x elsewhere)."""
+    lines = run_make(forwarding_makefile, target, *given).splitlines()
+    if echoed:
+        assert lines[0] == echoed
+    _, via_make, names, forwarded = lines[-1].split(":")
+    assert (via_make, forwarded) == ("1", argv)
+    assert names.split() == [g.split("=")[0] for g in given]
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+def test_the_real_makefile_names_a_command_line_variable_for_the_tool(forwarding_makefile):
+    """`make init-env LLM_CONFIG_PROFILE=x` lists the variable for the tool, whose environment holds its value."""
+    shim = run_make(forwarding_makefile, "init-env", "LLM_CONFIG_PROFILE=anthropic").splitlines()[-1]
+    _, via_make, names, argv = shim.split(":")
+    assert (via_make, names.split(), argv) == ("1", ["LLM_CONFIG_PROFILE"], "config init")
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+def test_the_real_makefile_runs_the_shim_without_the_exec_bit(forwarding_makefile):
+    """The fake shim has no exec bit (`write_text` leaves it 0644) and still runs, because the recipe uses `sh`."""
+    assert not os.access(forwarding_makefile / "platformctl", os.X_OK)
+    assert run_make(forwarding_makefile, "doctor").splitlines()[-1].endswith(":doctor")
+
+
 def test_unknown_make_variables_are_neither_settings_nor_command_options():
     """Only a name the registry doesn't know and no command option maps to is unknown."""
     make_vars = {"BACKEND_PORT": "1", "SERVICE": "redis", "WHATEVER": "1", "ANOTHER": "2"}
