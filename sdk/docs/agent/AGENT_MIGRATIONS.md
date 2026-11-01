@@ -5,6 +5,33 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.16.0
+
+### Optional: Load Prompts Through the Agent Class
+
+`PrometheusAgent` has a `prompts_dir` class attribute and a `load_prompt` classmethod
+(refs #67). No agent has to change. Agents with their own `PROMPTS_DIR` constant and
+loader can drop both:
+
+```python
+# Before
+PROMPTS_DIR = Path(__file__).with_name("prompts")
+
+
+def _load_prompt(name: str) -> str:
+    return (PROMPTS_DIR / name).read_text(encoding="utf-8").strip()
+
+
+ANALYSIS_PROMPT = _load_prompt("analysis.txt")
+
+# After, below the class definition
+ANALYSIS_PROMPT = MyAgent.load_prompt("analysis.txt")
+```
+
+Unlike the module-level `prometheus_api.load_prompt`, which looks next to `__main__`, the
+classmethod looks next to the agent's own file, so prompts also load when tests import
+the agent module.
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

@@ -219,6 +219,20 @@ default. It resolves relative prompt names inside the prompt directory and
 rejects absolute paths or `../` escapes. Pass `prompts_dir=...` for custom
 layouts or unit tests.
 
+Agents can also use the classmethod `load_prompt` on `PrometheusAgent`. It reads
+from `prompts/` next to the file that defines the agent class, so it finds the same
+files whether the agent runs as `__main__`, is imported by a test, or is started by
+another script. Set the `prompts_dir` class attribute for another layout; a relative
+path is resolved from the agent's file:
+
+```python
+class MyAgent(PrometheusAgent):
+    prompts_dir = "templates"  # optional, default "prompts"
+
+
+SYSTEM_PROMPT = MyAgent.load_prompt("system_prompt.txt")
+```
+
 ---
 
 ## Status Updates

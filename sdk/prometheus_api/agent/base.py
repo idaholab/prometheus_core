@@ -18,6 +18,7 @@ A2A-enabled agents, allowing you to focus on your agent's core logic.
 """
 
 import os
+import inspect
 import json
 import logging
 import uuid
@@ -99,6 +100,7 @@ from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
 from ..storage_client.models.item import ItemCreate, ItemUpdate
 from ..llm_client.security import redact_secrets
+from ..prompts import Pathish, load_prompt
 import uvicorn
 
 logger = logging.getLogger(__name__)
@@ -671,6 +673,40 @@ class PrometheusAgent:
     #: OS-process-level isolation.  Controlled by ``USER_WORKER_IDLE_TTL`` and
     #: ``USER_WORKER_MAX`` env vars (see :mod:`prometheus_api.agent.worker_pool`).
     requires_user_isolation: bool = False
+
+    #: Directory :meth:`load_prompt` reads from. ``None`` means ``prompts/`` next to
+    #: the file that defines the agent class; a relative path is resolved from that
+    #: file's directory. Anchoring on the class, not ``__main__``, keeps the lookup
+    #: the same in tests and when the agent module is imported rather than run.
+    prompts_dir: Optional[Pathish] = None
+
+    @classmethod
+    def resolve_prompts_dir(cls) -> Optional[Path]:
+        """Return the directory :meth:`load_prompt` reads from.
+
+        Returns ``None`` only for a class with no source file (defined interactively
+        and without an absolute ``prompts_dir``); :meth:`load_prompt` then falls back
+        to ``prompts/`` next to the running entrypoint.
+        """
+        configured = Path(cls.prompts_dir).expanduser() if cls.prompts_dir is not None else None
+        if configured is not None and configured.is_absolute():
+            return configured
+        try:
+            class_dir = Path(inspect.getfile(cls)).resolve().parent
+        except (TypeError, OSError):
+            return None
+        return class_dir / (configured if configured is not None else "prompts")
+
+    @classmethod
+    def load_prompt(cls, name: Pathish, *, encoding: str = "utf-8", strip: bool = True) -> str:
+        """Load a prompt template from :meth:`resolve_prompts_dir`.
+
+        A classmethod, so module-level prompt constants can be loaded once the class
+        is defined. Path rules are those of :func:`prometheus_api.load_prompt`.
+        """
+        return load_prompt(
+            name, prompts_dir=cls.resolve_prompts_dir(), encoding=encoding, strip=strip
+        )
 
     @staticmethod
     def registry_url() -> str:
