@@ -17,7 +17,7 @@ Each area has a block of numbers, so it can grow without renumbering.
 
 | Range | Area | What it covers | Status |
 | --- | --- | --- | --- |
-| 001–099 | Running the platform | `./platformctl` and the `make` targets that forward to it: setup, settings, secrets, lifecycle, your agents, `doctor`, compatibility, targets | Skeletons |
+| 001–099 | Running the platform | `./platformctl` and the `make` targets that forward to it: setup, settings, secrets, lifecycle, your agents, `doctor`, compatibility, targets | 001–003, 006 and 008 have requirements for step 1 |
 | 100–199 | Images | How each Dockerfile builds; the `prometheus_api` base image and the agents built FROM it; CA certificates; the build cache; amd64 and arm64 | Not started |
 | 200–299 | Versions and pins | The base-image hash pin; pinned images in compose files and Dockerfiles; how the platform version is formed; what Dependabot updates | Not started |
 | 300–399 | Release and publishing | What `publish.yml` publishes, its tag format and when it runs; release images | Not started |

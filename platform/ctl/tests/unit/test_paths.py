@@ -18,7 +18,10 @@ from platformctl.paths import PLATFORM_ROOT, Paths
 
 
 def test_platform_root_comes_from_the_tools_location_not_the_cwd(tmp_path, monkeypatch):
-    """Platform root comes from the tools location not the cwd."""
+    """Platform root comes from the tools location not the cwd.
+
+    Covers REQ-001-05.
+    """
     monkeypatch.chdir(tmp_path)
     assert Paths.default().root == PLATFORM_ROOT
     assert (PLATFORM_ROOT / "platformctl").is_file()

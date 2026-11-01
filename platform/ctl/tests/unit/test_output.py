@@ -24,7 +24,10 @@ PEM = "-----BEGIN KEY-----\nabcdefghij\nklmnopqrst\n-----END KEY-----"
 
 
 def test_scrubber_masks_value_and_encoded_forms():
-    """Scrubber masks value and encoded forms."""
+    """Scrubber masks value and encoded forms.
+
+    Covers REQ-003-05.
+    """
     scrubber = Scrubber()
     scrubber.add(PEM)
     assert scrubber.scrub(f"x {PEM} y") == f"x {MASK} y"
@@ -34,7 +37,10 @@ def test_scrubber_masks_value_and_encoded_forms():
 
 
 def test_scrubber_masks_inside_a_url():
-    """Scrubber masks inside a url."""
+    """Scrubber masks inside a url.
+
+    Covers REQ-003-05.
+    """
     scrubber = Scrubber()
     scrubber.add("hunter2hunter2")
     assert scrubber.scrub("https://u:hunter2hunter2@host/x") == f"https://u:{MASK}@host/x"
@@ -42,14 +48,20 @@ def test_scrubber_masks_inside_a_url():
 
 @pytest.mark.parametrize("value", ["short", "true", "False", "12345678901", "        ", "", None])
 def test_scrubber_ignores_trivial_values(value):
-    """Short values, booleans and plain numbers are not scrubbed."""
+    """Short values, booleans and plain numbers are not scrubbed.
+
+    Covers REQ-003-03.
+    """
     scrubber = Scrubber()
     scrubber.add(value)
     assert scrubber.scrub("short true False 12345678901") == "short true False 12345678901"
 
 
 def test_scrubber_longest_form_first():
-    """When one secret contains another, the longer is masked whole."""
+    """When one secret contains another, the longer is masked whole.
+
+    Covers REQ-003-05.
+    """
     scrubber = Scrubber()
     scrubber.add_all(["abcdefgh", "abcdefghijkl"])
     assert scrubber.scrub("abcdefghijkl") == MASK
@@ -64,7 +76,10 @@ class Tty(io.StringIO):
 
 
 def test_plain_mode():
-    """No colours without a terminal, with `NO_COLOR` or with `TERM=dumb`."""
+    """No colours without a terminal, with `NO_COLOR` or with `TERM=dumb`.
+
+    Covers REQ-001-22.
+    """
     assert plain_mode(io.StringIO(), {})
     assert not plain_mode(Tty(), {})
     assert plain_mode(Tty(), {"NO_COLOR": "1"})
@@ -72,7 +87,10 @@ def test_plain_mode():
 
 
 def test_plain_mode_and_ci_read_the_process_environment_by_default(monkeypatch):
-    """Plain mode and ci read the process environment by default."""
+    """Plain mode and ci read the process environment by default.
+
+    Covers REQ-001-22.
+    """
     monkeypatch.setenv("NO_COLOR", "1")
     assert plain_mode(Tty())
     monkeypatch.delenv("CI", raising=False)
@@ -98,7 +116,10 @@ def make(**kw) -> tuple[Output, io.StringIO, io.StringIO]:
 
 
 def test_info_warn_error_are_scrubbed():
-    """Info warn error are scrubbed."""
+    """Info warn error are scrubbed.
+
+    Covers REQ-003-04.
+    """
     scrubber = Scrubber()
     scrubber.add("supersecretvalue")
     output, out, err = make(scrubber=scrubber)
@@ -111,7 +132,10 @@ def test_info_warn_error_are_scrubbed():
 
 
 def test_quiet_keeps_only_errors():
-    """`--quiet` hides everything but errors."""
+    """`--quiet` hides everything but errors.
+
+    Covers REQ-001-23.
+    """
     output, out, err = make(quiet=True)
     output.info("x")
     output.warn("y")
@@ -123,7 +147,10 @@ def test_quiet_keeps_only_errors():
 
 
 def test_json_mode_moves_info_to_stderr():
-    """Json mode moves info to stderr."""
+    """Json mode moves info to stderr.
+
+    Covers REQ-001-18.
+    """
     output, out, err = make(json_mode=True)
     output.info("progress")
     assert out.getvalue() == ""
@@ -152,7 +179,10 @@ def test_command_echo_quotes_arguments():
 
 
 def test_steps_and_colour():
-    """Steps print `[n/N] title ... result`, and colour is used on a terminal."""
+    """Steps print `[n/N] title ... result`, and colour is used on a terminal.
+
+    Covers REQ-001-24.
+    """
     out = Tty()
     output = Output(out=out, err=io.StringIO(), env={})
     output.begin(2)
@@ -166,7 +196,10 @@ def test_steps_and_colour():
 
 
 def test_failed_step_is_marked():
-    """A step that exits with an exception is marked failed."""
+    """A step that exits with an exception is marked failed.
+
+    Covers REQ-001-24.
+    """
     output, out, _ = make()
     output.begin(1)
     with pytest.raises(RuntimeError), output.step("Boom"):
@@ -175,7 +208,10 @@ def test_failed_step_is_marked():
 
 
 def test_steps_in_ci_are_grouped():
-    """Steps in ci are grouped."""
+    """Steps in ci are grouped.
+
+    Covers REQ-001-24.
+    """
     output, _, err = make(env={"CI": "1"})
     output.begin(1)
     output.step("One").done()

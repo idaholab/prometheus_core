@@ -126,6 +126,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   shim:
+    # Covers REQ-001-08: the shim runs under each of these shells
     name: "platformctl: shim ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     strategy:

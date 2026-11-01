@@ -98,7 +98,10 @@ def run_shim(shim_shell: list[str], path: Path, cwd: Path, *args: str, env_extra
 
 
 def test_the_entry_point_explains_itself_instead_of_crashing(python39, tmp_path):
-    """On 3.9, `run.py` parses and says what to do, with no SyntaxError or traceback."""
+    """On 3.9, `run.py` parses and says what to do, with no SyntaxError or traceback.
+
+    Covers REQ-001-04.
+    """
     done = subprocess.run(
         [python39, "-I", str(RUN_PY), "--version"], capture_output=True, text=True, cwd=tmp_path, timeout=60
     )
@@ -110,7 +113,10 @@ def test_the_entry_point_explains_itself_instead_of_crashing(python39, tmp_path)
 
 
 def test_a_python3_that_is_3_9_is_skipped_for_a_newer_python(python39, shim_shell, tool_dir, tmp_path):
-    """The Mac case: `python3` is 3.9 and a 3.12 is installed, so the shim runs the tool with the 3.12."""
+    """The Mac case: `python3` is 3.9 and a 3.12 is installed, so the shim runs the tool with the 3.12.
+
+    Covers REQ-001-01, BEH-001-01.
+    """
     (tool_dir / "python3").symlink_to(python39)
     (tool_dir / "python3.12").symlink_to(sys.executable)  # any 3.10+; the shim only looks at the name
     done = run_shim(shim_shell, tool_dir, tmp_path, "--version")
@@ -119,7 +125,10 @@ def test_a_python3_that_is_3_9_is_skipped_for_a_newer_python(python39, shim_shel
 
 
 def test_a_lone_python_3_9_gets_the_install_message(python39, shim_shell, tool_dir, tmp_path):
-    """With only a 3.9 (and no uv), the shim suggests installing uv, not a traceback."""
+    """With only a 3.9 (and no uv), the shim suggests installing uv, not a traceback.
+
+    Covers REQ-001-03.
+    """
     if sys.platform == "darwin" and any(Path(p).exists() for p in HOMEBREW_PYTHONS):
         pytest.skip("this Mac has a Homebrew Python, which the shim would use")
     (tool_dir / "python3").symlink_to(python39)
@@ -132,7 +141,10 @@ def test_a_lone_python_3_9_gets_the_install_message(python39, shim_shell, tool_d
 
 
 def test_platformctl_python_set_to_a_3_9_is_refused(python39, shim_shell, tool_dir, tmp_path):
-    """A `PLATFORMCTL_PYTHON` that is 3.9 is an error naming the variable, not a silent fallback."""
+    """A `PLATFORMCTL_PYTHON` that is 3.9 is an error naming the variable, not a silent fallback.
+
+    Covers REQ-001-02.
+    """
     (tool_dir / "python3.12").symlink_to(sys.executable)
     done = run_shim(shim_shell, tool_dir, tmp_path, "--version", env_extra={"PLATFORMCTL_PYTHON": python39})
     assert done.returncode == 1

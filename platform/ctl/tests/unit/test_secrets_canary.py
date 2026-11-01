@@ -159,7 +159,10 @@ def assert_clean(text: str, where: str) -> None:
 @pytest.mark.parametrize("argv", COMMANDS, ids=lambda a: " ".join(a)[:60])
 @pytest.mark.parametrize("fail", [False, True], ids=["docker-ok", "docker-fails"])
 def test_no_sentinel_in_stdout_or_stderr(canary_env, argv, fail):
-    """No sentinel in stdout or stderr."""
+    """No sentinel in stdout or stderr.
+
+    Covers REQ-003-04, BEH-003-01.
+    """
     _, env = canary_env
     _, out, err = run(argv, env, **({"CANARY_FAIL": "1"} if fail else {}))
     assert_clean(out, f"stdout of {argv}")
@@ -167,7 +170,10 @@ def test_no_sentinel_in_stdout_or_stderr(canary_env, argv, fail):
 
 
 def test_the_canary_would_notice_a_leak(canary_env):
-    """A canary that can't fail proves nothing: without the scrubber, the sentinels do show."""
+    """A canary that can't fail proves nothing: without the scrubber, the sentinels do show.
+
+    Covers BEH-003-02.
+    """
     platform, env = canary_env
     out, err = io.StringIO(), io.StringIO()
     from platformctl.config import PlatformConfig
@@ -185,7 +191,10 @@ def test_the_canary_would_notice_a_leak(canary_env):
 
 
 def test_child_output_is_scrubbed_before_anyone_sees_it(canary_env):
-    """Child output is scrubbed before anyone sees it."""
+    """Child output is scrubbed before anyone sees it.
+
+    Covers REQ-003-06.
+    """
     platform, env = canary_env
     from platformctl.config import PlatformConfig
     from platformctl.output import Scrubber
@@ -200,7 +209,10 @@ def test_child_output_is_scrubbed_before_anyone_sees_it(canary_env):
 
 
 def test_doctor_json_is_valid_and_clean(canary_env):
-    """Doctor json is valid and clean."""
+    """Doctor json is valid and clean.
+
+    Covers REQ-003-04.
+    """
     import json
 
     _, env = canary_env
@@ -211,7 +223,10 @@ def test_doctor_json_is_valid_and_clean(canary_env):
 
 
 def test_generated_files_have_no_sentinel(canary_env):
-    """Generated files have no sentinel."""
+    """Generated files have no sentinel.
+
+    Covers REQ-003-07.
+    """
     platform, env = canary_env
     ctx, _, _ = make_context(platform, __import__("platformctl.system.runner", fromlist=["Runner"]).Runner(), env)
     ctx.target.generate()
@@ -226,7 +241,10 @@ def test_generated_files_have_no_sentinel(canary_env):
 
 
 def test_platform_env_has_only_registered_safe_keys(canary_env):
-    """Platform env has only registered safe keys."""
+    """Platform env has only registered safe keys.
+
+    Covers REQ-003-07.
+    """
     from platformctl import config as cfg
     from platformctl.system import envfile
 
@@ -238,7 +256,10 @@ def test_platform_env_has_only_registered_safe_keys(canary_env):
 
 
 def test_the_env_file_itself_is_untouched_by_doctor(canary_env):
-    """The env file itself is untouched by doctor."""
+    """The env file itself is untouched by doctor.
+
+    Covers REQ-003-09, REQ-006-06.
+    """
     platform, env = canary_env
     before = (platform / ".env").read_text()
     run(["doctor"], env)

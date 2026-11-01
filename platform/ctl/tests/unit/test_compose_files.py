@@ -150,14 +150,20 @@ def test_platform_env_content_is_pinned_and_parses_back():
 
 
 def test_platform_env_refuses_a_key_that_is_not_marked_safe():
-    """Platform env refuses a key that is not marked safe."""
+    """Platform env refuses a key that is not marked safe.
+
+    Covers REQ-003-07.
+    """
     for key in ("LLM_API_KEY", "UNREGISTERED"):
         with pytest.raises(ValueError, match="not marked safe"):
             cf.render_platform_env({key: "x"})
 
 
 def test_platform_env_never_has_a_secret_key():
-    """Every key the tool can derive is safe to print."""
+    """Every key the tool can derive is safe to print.
+
+    Covers REQ-003-07.
+    """
     for key in (
         "PROMETHEUS_API_BASE_IMAGE_REPO",
         "PROMETHEUS_API_BASE_IMAGE_HASH",

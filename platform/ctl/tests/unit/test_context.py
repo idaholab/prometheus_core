@@ -50,7 +50,10 @@ def test_platform_info(ctx_factory, platform_root):
 
 
 def test_k3d_and_unknown_targets_are_refused(ctx_factory):
-    """K3d and unknown targets are refused."""
+    """K3d and unknown targets are refused.
+
+    Covers REQ-008-02.
+    """
     with pytest.raises(UnsupportedError, match="k3d` is not supported yet"):
         ctx_factory(target="k3d")
     with pytest.raises(UnsupportedError, match="k3d"):
@@ -58,12 +61,18 @@ def test_k3d_and_unknown_targets_are_refused(ctx_factory):
 
 
 def test_image_source_is_refused(ctx_factory):
-    """`PLATFORM_SOURCE=image` is not supported yet."""
+    """`PLATFORM_SOURCE=image` is not supported yet.
+
+    Covers REQ-008-06.
+    """
     with pytest.raises(UnsupportedError, match="PLATFORM_SOURCE `image` is not supported yet"):
         ctx_factory(sets={"PLATFORM_SOURCE": "image"})
 
 
 def test_the_target_flag_beats_the_setting(ctx_factory):
-    """The target flag beats the setting."""
+    """The target flag beats the setting.
+
+    Covers REQ-008-01, BEH-008-01.
+    """
     ctx, _, _ = ctx_factory(target="compose", sets={"PLATFORM_TARGET": "k3d"})
     assert ctx.target.name == "compose"
