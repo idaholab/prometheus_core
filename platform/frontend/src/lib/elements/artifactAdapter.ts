@@ -141,6 +141,25 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
         },
       };
 
+    case "uq":
+      // The baked HTML report (when the producer attached one) comes from the
+      // backend's report route, which resolves it from shared storage; `url`
+      // (content proxy) is the .ipynb download. Both are same-origin relative paths.
+      return {
+        ...base,
+        type: "custom",
+        name: "UQDashboard",
+        url,
+        props: {
+          reportUrl: artifact.has_report ? api.artifactReportUrl(artifact.artifact_id) : "",
+          downloadUrl: url,
+          filename: artifact.name || "uq_result.ipynb",
+          height: "760px",
+          // Buttons the producing agent attached (metadata.links), e.g. a page it serves.
+          links: artifact.links ?? [],
+        },
+      };
+
     case "report":
       return {
         ...base,

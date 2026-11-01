@@ -27,6 +27,7 @@ from app.services.artifacts import (
     artifact_download_payload,
     artifact_identity,
     classify_render_hint,
+    report_file_id,
     to_artifact_meta,
 )
 
@@ -40,6 +41,8 @@ from app.services.artifacts import (
     "artifact,expected",
     [
         ({"json_type": "prometheus.thermal_analysis.result.v1"}, "thermal"),
+        ({"json_type": "prometheus.uq.result.v1", "mime_type": "application/x-ipynb+json"}, "uq"),
+        ({"metadata": {"json_type": "prometheus.uq.result.v1"}}, "uq"),
         ({"tags": ["ifc"]}, "ifc"),
         ({"tags": ["exodus"]}, "mesh"),
         ({"tags": ["stl"]}, "mesh"),
@@ -172,6 +175,45 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
 def test_to_artifact_meta_citation_absent_when_no_metadata():
     meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"})
     assert meta is not None and meta.citation is None
+
+
+def test_to_artifact_meta_keeps_only_safe_links_from_metadata():
+    """metadata.links become ArtifactMeta.links: absolute http(s) only, labelled, at most 5."""
+    links = [
+        {"label": "Open interactive dashboard", "url": "http://localhost:8042/console/run-7"},
+        {"label": "Pipeline", "url": "https://gitlab.example/group/project/-/pipelines/4242"},
+        {"label": "script", "url": "javascript:alert(1)"},
+        {"label": "relative", "url": "/console/run-7"},
+        {"label": "no host", "url": "https:///path-only"},
+        {"label": "", "url": "https://example.com/no-label"},
+        "not a dict",
+    ] + [{"label": f"extra {i}", "url": f"https://example.com/{i}"} for i in range(10)]
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "r", "metadata": {"links": links}})
+    assert meta is not None
+    assert [(link.label, link.url) for link in meta.links[:2]] == [
+        ("Open interactive dashboard", "http://localhost:8042/console/run-7"),
+        ("Pipeline", "https://gitlab.example/group/project/-/pipelines/4242"),
+    ]
+    assert len(meta.links) == 5
+    assert all(link.url.startswith(("http://", "https://")) for link in meta.links)
+
+
+def test_to_artifact_meta_drops_an_unparseable_link():
+    """``urlsplit`` raises on ``https://[oops`` (invalid IPv6); the link is dropped, not the turn."""
+    links = [
+        {"label": "broken", "url": "https://[oops"},
+        {"label": "ok", "url": "https://example.com/ok"},
+    ]
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "r", "metadata": {"links": links}})
+    assert meta is not None
+    assert [(link.label, link.url) for link in meta.links] == [("ok", "https://example.com/ok")]
+
+
+def test_to_artifact_meta_links_default_empty():
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "r", "metadata": {"links": "nope"}})
+    assert meta is not None and meta.links == []
+    plain = to_artifact_meta({"artifact_id": "a2", "name": "r"})
+    assert plain is not None and plain.links == [] and plain.has_report is False
 
 
 # --------------------------------------------------------------------------- #
@@ -434,3 +476,190 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     # quote + newline stripped from the ascii name (.json appended for the inline body)
     assert 'filename="evilname.json"' in cd
     assert "filename*=UTF-8''" in cd  # RFC 5987 form carries the exact name
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/artifacts/{id}/report: a producer's baked HTML report, from DeepLynx only
+# --------------------------------------------------------------------------- #
+
+_REPORT_URI = "deeplynx://organizations/1/projects/2/items/11"
+
+
+def _uq_notebook(report: object) -> dict:
+    return {
+        "artifact_id": "uq-1",
+        "name": "uq_bank_worth.ipynb",
+        "mime_type": "application/x-ipynb+json",
+        "uri": "deeplynx://organizations/1/projects/2/items/10",
+        "metadata": {"json_type": "prometheus.uq.result.v1", "deeplynx_file_id": 10, "report": report},
+    }
+
+
+@pytest.mark.parametrize(
+    ("report", "expected"),
+    [
+        ({"uri": _REPORT_URI}, 11),
+        ({"uri": _REPORT_URI + "/"}, 11),
+        # The producer's file id is never trusted: only the URI's item id counts.
+        ({"uri": _REPORT_URI, "deeplynx_file_id": 999}, 11),
+        ({"deeplynx_file_id": 11}, None),
+        ({"uri": "deeplynx://organizations/1/projects/2/items/abc"}, None),
+        ({"uri": "deeplynx://organizations/1/projects/2"}, None),
+        ({"uri": "https://storage.example/uq.html"}, None),
+        ({"uri": "http://169.254.169.254/latest/meta-data/"}, None),
+        ({"uri": "file:///app/shared/uq.html"}, None),
+        ({"uri": 11}, None),
+        ("not-a-dict", None),
+        (None, None),
+    ],
+)
+def test_report_file_id_only_from_a_deeplynx_uri(report, expected):
+    assert report_file_id(_uq_notebook(report)) == expected
+    meta = to_artifact_meta(_uq_notebook(report))
+    assert meta is not None and meta.has_report is (expected is not None)
+
+
+async def test_report_streams_the_report_not_the_notebook(monkeypatch, session_store):
+    seen = {}
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        seen.update(uri=uri, file_id=artifact["metadata"]["deeplynx_file_id"], artifact_id=artifact_id)
+        out = cache_dir / "r.html"
+        out.write_text("<html>report</html>")
+        return out
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    report = {"uri": _REPORT_URI, "deeplynx_file_id": 999}
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+
+    resp = client.get("/api/artifacts/uq-1/report")
+    assert resp.status_code == 200
+    assert resp.text == "<html>report</html>"
+    assert resp.headers["content-type"].startswith("text/html")
+    assert resp.headers["content-disposition"].startswith("inline")
+    assert 'filename="uq_bank_worth.html"' in resp.headers["content-disposition"]
+    # The report's own scripts run in an opaque origin, away from the platform cookie,
+    # and popups it opens stay sandboxed.
+    csp = resp.headers["content-security-policy"]
+    assert csp.startswith("sandbox allow-scripts")
+    assert "allow-same-origin" not in csp
+    assert "allow-popups-to-escape-sandbox" not in csp
+    assert "connect-src 'none'" in csp
+    assert resp.headers["x-content-type-options"] == "nosniff"
+    assert resp.headers["cache-control"].startswith("private")
+    # The file id is the URI's item id, never the producer's deeplynx_file_id.
+    assert seen == {"uri": _REPORT_URI, "file_id": 11, "artifact_id": "uq-1-report"}
+
+
+async def test_report_downloads_the_uri_item_from_deeplynx(monkeypatch, session_store):
+    """The real resolver runs; only the DeepLynx client's network calls are patched."""
+    from prometheus_api.storage_client.async_client import AsyncStorageClient
+    from prometheus_api.storage_client.async_resources.files import AsyncFilesResource
+
+    for key in ("DEEPLYNX_JWT_TOKEN", "DEEPLYNX_KEY", "DEEPLYNX_SECRET"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("DEEPLYNX_JWT_TOKEN", "test-token")
+    monkeypatch.setenv("DEEPLYNX_ORG_ID", "1")
+    monkeypatch.setenv("DEEPLYNX_PROJECT_ID", "2")
+    downloads: list[int] = []
+
+    async def _download(self, file_id, output_path):
+        downloads.append(file_id)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("<html>from deeplynx</html>")
+
+    async def _no_item_lookup(*_args, **_kwargs):
+        raise AssertionError("the file id comes from the URI; no item lookup is needed")
+
+    monkeypatch.setattr(AsyncFilesResource, "download", _download)
+    monkeypatch.setattr(AsyncStorageClient, "items", property(lambda self: _no_item_lookup))
+    report = {"uri": _REPORT_URI, "deeplynx_file_id": 999}
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+
+    resp = client.get("/api/artifacts/uq-1/report")
+    assert resp.status_code == 200
+    assert resp.text == "<html>from deeplynx</html>"
+    assert downloads == [11]
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        None,
+        "not-a-dict",
+        {},
+        {"uri": "file:///app/shared/uq.html"},
+        {"uri": "/tmp/uq.html"},
+        {"uri": "https://storage.example/uq.html"},
+        {"uri": "http://169.254.169.254/latest/meta-data/"},
+        {"uri": "deeplynx://organizations/1/projects/2/items/not-a-number"},
+    ],
+)
+async def test_report_404_without_a_deeplynx_report(monkeypatch, session_store, report):
+    async def _never(*_args, **_kwargs):
+        raise AssertionError("the resolver must not run for a non-DeepLynx report")
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _never)
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 404
+
+
+async def test_report_404_when_not_in_catalog(monkeypatch, session_store):
+    client = await _authed_client(monkeypatch, session_store, artifacts=[])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 404
+
+
+async def test_report_502_when_storage_fails_does_not_echo_the_uri(monkeypatch, session_store):
+    async def _fail(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return None
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _fail)
+    report = {"uri": "deeplynx://user:secret@organizations/1/projects/2/items/11"}
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook(report)])
+    resp = client.get("/api/artifacts/uq-1/report")
+    assert resp.status_code == 502
+    assert "deeplynx" not in resp.text and "secret" not in resp.text
+
+
+async def test_report_502_when_over_the_size_cap(monkeypatch, session_store):
+    from app.routers import artifacts as artifacts_router
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        out = cache_dir / "r.html"
+        out.write_text("x" * 32)
+        return out
+
+    monkeypatch.setattr(artifacts_router, "_MAX_REPORT_BYTES", 16)
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook({"uri": _REPORT_URI})])
+    assert client.get("/api/artifacts/uq-1/report").status_code == 502
+
+
+async def test_report_cleans_up_the_temp_dir_when_the_resolver_raises(monkeypatch, session_store):
+    from pathlib import Path
+
+    from app.routers import artifacts as artifacts_router
+
+    made: list[str] = []
+    real_mkdtemp = artifacts_router.tempfile.mkdtemp
+
+    def _mkdtemp(*args, **kwargs):
+        path = real_mkdtemp(*args, **kwargs)
+        made.append(path)
+        return path
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("storage exploded")
+
+    monkeypatch.setattr(artifacts_router.tempfile, "mkdtemp", _mkdtemp)
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _boom)
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook({"uri": _REPORT_URI})])
+    with pytest.raises(RuntimeError):
+        client.get("/api/artifacts/uq-1/report")
+    assert len(made) == 1 and not Path(made[0]).exists()
+
+
+def test_report_requires_auth():
+    from app.main import app
+
+    assert TestClient(app).get("/api/artifacts/uq-1/report").status_code == 401
