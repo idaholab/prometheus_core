@@ -33,6 +33,7 @@ Every numbered spec should use this shape:
 
 status: draft | implemented | retired
 sources: path/to/code.py, tests/test_feature.py, docs/example.md
+tests: tests, .github/workflows   (only for specs checked by speccheck; see below)
 depends-on: none | 001, 004
 
 ## Purpose
@@ -77,6 +78,10 @@ trailing ID syntax for behavior scenarios.
   `⚠ untested` to the requirement line.
 - Remove `⚠ untested` only when test evidence exists and the test cites or
   clearly maps to the ID.
+- If a requirement is agreed but delivered by a later, named step of a plan,
+  append `(planned: <step>)`, for example `(planned: step 3b)`, instead of
+  `⚠ untested`. The PR that delivers it removes the marker and cites the ID
+  from a test. A requirement is never both planned and untested.
 
 ## Requirement Writing
 
@@ -141,6 +146,19 @@ When extracting a spec from implemented code, inspect:
 
 Record inspected files in the `sources:` line. The list does not need every
 transitive import, but it should include the files that justify the requirements.
+
+## Checked Specs
+
+A spec folder can be checked mechanically with
+[`common/speccheck`](../../common/speccheck/README.md). Such specs add a
+`tests:` line naming the test folders, files and workflows that may cite their
+IDs (paths relative to the repository root, comma-separated, or `none`). The
+checker fails when a requirement is neither cited, `⚠ untested` nor
+`(planned: ...)`, when a test cites an unknown, retired or out-of-scope ID,
+or when a marker is left on a cited requirement. In a workflow, an ID is cited
+by a `# Covers REQ-...` (the job checks it) or `# Implements REQ-...` (the job
+is the behavior) comment inside a job. This folder's specs are not checked
+yet.
 
 ## Status Values
 

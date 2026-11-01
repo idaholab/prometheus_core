@@ -12,12 +12,18 @@ on:
       - "platform/ctl/**"
       - "platform/platformctl"
       - ".github/workflows/platformctl.yml"
+      # tests/unit/test_specs.py checks the specs with the shared checker
+      - "build/specs/**"
+      - "common/speccheck/**"
   pull_request:
     branches: [main, devel]
     paths:
       - "platform/ctl/**"
       - "platform/platformctl"
       - ".github/workflows/platformctl.yml"
+      # tests/unit/test_specs.py checks the specs with the shared checker
+      - "build/specs/**"
+      - "common/speccheck/**"
   merge_group:
     types: [checks_requested]
 

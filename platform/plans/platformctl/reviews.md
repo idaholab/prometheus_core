@@ -46,6 +46,9 @@ the reviewer looks at it:
   compose target.
 - **Security:** the secrets canary (`tests/unit/test_secrets_canary.py`) covers every new command
   and code path; `--verbose`, `--dry-run`, `--json` and `--debug` never print a secret.
+- **CI and tests:** the step removes `(planned: step N)` from every requirement it delivers in
+  [`build/specs/`](../../../build/specs/000-index.md), and the tests that cite each one prove it,
+  not just mention it. The spec checker can only see that an ID is cited.
 - **AI skills:** `--json` output stays stable and complete (schema version, fields, errors, exit
   codes), and every new command runs without a terminal (`--yes`, no following, timeouts).
 - **Rollout:** `breaking-changes.md` is complete for the step, and nothing switches docs or

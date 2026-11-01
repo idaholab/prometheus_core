@@ -1,0 +1,6 @@
+# Standard library only, so this folder isn't a uv project; CI lints it with a pinned ruff
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
