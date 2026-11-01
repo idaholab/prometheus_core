@@ -84,6 +84,13 @@ test("the expected user message follows what the backend stores for each request
   assert.equal(expectedUserMessage({ query: "", plan_approved: false, plan_rejected: true }), null);
 });
 
+test("a request with no query and nothing else to store is not watched", () => {
+  // A missing query (not just an empty one) reads as empty.
+  assert.equal(expectedUserMessage({} as never), null);
+  assert.equal(expectedUserMessage({ query: "   ", upload_ids: [], followup_answers: null }), null);
+  assert.equal(expectedUserMessage({ upload_ids: [{ upload_id: "u" }] } as never), UPLOAD_ONLY_QUERY);
+});
+
 test("only a form or a plan card counts as a reply waiting on the user", () => {
   assert.equal(isPendingInputStatus("needs_info"), true);
   assert.equal(isPendingInputStatus("plan_ready"), true);
