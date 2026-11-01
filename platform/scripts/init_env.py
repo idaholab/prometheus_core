@@ -20,6 +20,7 @@ from pathlib import Path
 SHIM = Path(__file__).resolve().parent.parent / "platformctl"
 COMMAND = ["config", "init"]
 
-print(f"moved: run `./platformctl {' '.join(COMMAND)}`", file=sys.stderr)
-sys.stderr.flush()
-os.execv("/bin/sh", ["sh", str(SHIM), *COMMAND])
+if __name__ == "__main__":
+    print(f"moved: run `./platformctl {' '.join(COMMAND)}`", file=sys.stderr)
+    sys.stderr.flush()
+    os.execv("/bin/sh", ["sh", str(SHIM), *COMMAND])
