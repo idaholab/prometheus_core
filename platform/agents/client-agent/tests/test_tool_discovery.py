@@ -338,6 +338,85 @@ def test_get_agent_card_falls_back_to_registry_gateway(monkeypatch) -> None:
     assert result == gateway_card
 
 
+def _card_client(responses, errors=()):
+    """httpx.AsyncClient stand-in: maps URLs to responses, raises for URLs in errors."""
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, endpoint):
+            if endpoint in errors:
+                raise tool_discovery.httpx.ConnectError("Name or service not known")
+            return responses.get(endpoint, _FakeResponse({}, status_code=404))
+
+    return _Client
+
+
+def test_get_agent_card_warns_when_direct_card_is_unreachable(monkeypatch, caplog) -> None:
+    gateway = f"{tool_discovery.REGISTRY_URL}/a2a/thermal-analysis-agent"
+    direct = "http://prometheus.host.internal:8042"
+    monkeypatch.setattr(tool_discovery, "_card_fallback_warned", set())
+    monkeypatch.setattr(
+        tool_discovery.httpx,
+        "AsyncClient",
+        _card_client(
+            {gateway: _FakeResponse({"skills": [{"id": "analyze_thermal"}]})},
+            errors={f"{direct}/api/agent-card"},
+        ),
+    )
+
+    with caplog.at_level("WARNING", logger=tool_discovery.logger.name):
+        result = asyncio.run(tool_discovery.get_agent_card("thermal-analysis-agent", direct))
+        asyncio.run(tool_discovery.get_agent_card("thermal-analysis-agent", direct))
+
+    assert result == {"skills": [{"id": "analyze_thermal"}]}
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1  # the repeat refresh is not logged again
+    assert direct in warnings[0]
+    assert "ConnectError" in warnings[0] and "HTTP 404" in warnings[0]
+    assert "inputSchema" in warnings[0]
+
+
+def test_get_agent_card_warns_at_each_lower_rung(monkeypatch, caplog) -> None:
+    async def no_agents():
+        return []
+
+    monkeypatch.setattr(tool_discovery, "_card_fallback_warned", set())
+    monkeypatch.setattr(tool_discovery.httpx, "AsyncClient", _card_client({}))
+    monkeypatch.setattr(tool_discovery, "discover_agents", no_agents)
+
+    with caplog.at_level("WARNING", logger=tool_discovery.logger.name):
+        result = asyncio.run(tool_discovery.get_agent_card("ghost-agent"))
+
+    assert result == {}
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 2
+    assert "registry gateway" in warnings[0] and "HTTP 404" in warnings[0]
+    assert "not in the registry's agent list" in warnings[1]
+
+
+def test_get_agent_card_direct_success_logs_nothing(monkeypatch, caplog) -> None:
+    direct = "http://thermal-agent:8000"
+    monkeypatch.setattr(tool_discovery, "_card_fallback_warned", set())
+    monkeypatch.setattr(
+        tool_discovery.httpx,
+        "AsyncClient",
+        _card_client({f"{direct}/api/agent-card": _FakeResponse({"skills": []})}),
+    )
+
+    with caplog.at_level("WARNING", logger=tool_discovery.logger.name):
+        asyncio.run(tool_discovery.get_agent_card("thermal-analysis-agent", direct))
+
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
 def test_capability_cache_refresh_routes_through_registry_gateway(monkeypatch) -> None:
     import capability_cache
 

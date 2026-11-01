@@ -140,29 +140,74 @@ async def get_agent_card(agent_id: str, direct_url: Optional[str] = None) -> Dic
     """
     normalized_direct_url = _normalize_url(direct_url or "")
     if normalized_direct_url:
+        direct_failures = []
         for path in ("/api/agent-card", "/.well-known/agent-card.json", "/.well-known/agent.json"):
             try:
                 async with httpx.AsyncClient(timeout=10.0, headers=_registry_headers()) as client:
                     response = await client.get(f"{normalized_direct_url}{path}")
                     if response.status_code == 200:
                         return response.json()
-            except Exception:
-                pass
+                    direct_failures.append(f"{path}: HTTP {response.status_code}")
+            except Exception as exc:
+                direct_failures.append(f"{path}: {type(exc).__name__}: {exc}")
+        _warn_card_fallback(
+            agent_id,
+            "direct",
+            "Agent card for %s is unreachable at its registered URL %s (%s); using the "
+            "registry gateway card instead, which can lack per-skill inputSchema, so the "
+            "planner may send calls the agent rejects. Check that this process can reach "
+            "the URL the agent registered.",
+            agent_id,
+            normalized_direct_url,
+            "; ".join(direct_failures),
+        )
 
+    gateway_url = f"{REGISTRY_URL}/a2a/{agent_id}"
     try:
         async with httpx.AsyncClient(timeout=10.0, headers=_registry_headers()) as client:
-            response = await client.get(f"{REGISTRY_URL}/a2a/{agent_id}")
+            response = await client.get(gateway_url)
             if response.status_code == 200:
                 return response.json()
-    except Exception:
-        pass
+            gateway_failure = f"HTTP {response.status_code}"
+    except Exception as exc:
+        gateway_failure = f"{type(exc).__name__}: {exc}"
+    _warn_card_fallback(
+        agent_id,
+        "gateway",
+        "Agent card for %s is unavailable from the registry gateway %s (%s); using the "
+        "registry's discovery summary, which can lack per-skill inputSchema.",
+        agent_id,
+        gateway_url,
+        gateway_failure,
+    )
 
     # Fallback: find the card in the full agent list
     agents = await discover_agents()
     for agent in agents:
         if agent["agent_id"] == agent_id:
             return agent.get("agent_card_params", {})
+    _warn_card_fallback(
+        agent_id,
+        "missing",
+        "No agent card for %s: it is not in the registry's agent list either.",
+        agent_id,
+    )
     return {}
+
+
+# (agent_id, rung) pairs already warned about. Capability refreshes repeat every
+# minute, and a misrouted agent stays misrouted, so each warning is logged once
+# per process and later repeats go to debug.
+_card_fallback_warned: set[tuple[str, str]] = set()
+
+
+def _warn_card_fallback(agent_id: str, rung: str, message: str, *args: Any) -> None:
+    key = (agent_id, rung)
+    if key in _card_fallback_warned:
+        logger.debug(message, *args)
+        return
+    _card_fallback_warned.add(key)
+    logger.warning(message, *args)
 
 
 def create_input_schema_from_skill(skill: Dict) -> type[BaseModel]:
