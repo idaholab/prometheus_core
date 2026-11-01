@@ -69,7 +69,15 @@ class DeepLynx:
             sleep(interval)
 
     def configured(self, env: dict[str, str]) -> bool:
-        """Whether `.env` already points at this server with a key it accepts, for a project that exists."""
+        """Whether `.env` already points at this server with a key it accepts, for a project that exists.
+
+        The stored key is posted to this server (a port on localhost) only when `.env` names the local
+        DeepLynx container (`INTERNAL_URL`), and only after `wait_healthy` saw the DeepLynx `/health` shape.
+        That server runs with authentication disabled, so the key protects nothing a process on the same
+        machine couldn't already reach; if something else holds the port, `.env` is rewritten with the key
+        it hands out, which `config show` and `doctor` would then show as another server. The old script did
+        the same. A review flagged it; it is left as it is on purpose.
+        """
         key, secret, project = env.get("DEEPLYNX_KEY"), env.get("DEEPLYNX_SECRET"), env.get("DEEPLYNX_PROJECT_ID")
         if env.get("DEEPLYNX_BASE_URL", "").rstrip("/") != INTERNAL_URL or not (key and secret and project):
             return False
