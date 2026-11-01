@@ -59,8 +59,9 @@ set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
 
 ```bash
 ./platformctl config init     # or: make init-env
-# then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
 ```
+
+It generates the secrets, asks you to choose an LLM profile and enter its key (see [Choose an LLM profile](#choose-an-llm-profile)), and asks whether to build on this laptop (step 2).
 
 Section 1 of `.env.example` lists what you must set; everything else has a
 working default. Back up `.env` once it exists: losing `ADMIN_DB_ENCRYPTION_KEY`
@@ -103,9 +104,13 @@ Every Python service is built `FROM` the `prometheus_api` base image. Pick one o
 
 #### Option A: build it locally (no registry access needed)
 
+`./platformctl config init` (which `make up` runs) asks "Build everything on this laptop (no INL login needed)?" -- answer Y (Enter takes the recommended answer) and it writes `LOCAL_SDK=true` to `.env`. To change it later, use `config set`, not `echo >> .env`, which would add a second `LOCAL_SDK` line:
+
 ```bash
-echo "LOCAL_SDK=true" >> .env
+./platformctl config set LOCAL_SDK=true
 ```
+
+If `make up` asks the question on a first run, it saves your answer and stops with "Run the same make command again", because `make` had already chosen the base image from the old `.env`. Run `make up` again and it builds locally.
 
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
 
@@ -113,7 +118,7 @@ The SDK base image, the backend and the frontend import the registry build cache
 
 #### Option B: pull it from the container registry
 
-The `prometheus_api` base image is pulled from INL's Github with a [PAT](https://github.inl.gov/settings/tokens/new):
+Answer n to the "Build everything on this laptop?" question (or run `./platformctl config set LOCAL_SDK=false`). The `prometheus_api` base image is then pulled from INL's Github with a [PAT](https://github.inl.gov/settings/tokens/new):
 
 The PAT (Personal Access Token) requires `read:packages` permissions. 90 days is the recommended expiration.
 
