@@ -93,7 +93,7 @@ Every Python service is built `FROM` the `prometheus_api` base image. Pick one o
 
 #### Option A: pull the published image (default)
 
-Nothing to do. `make up` pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. The image is public, so no `docker login` is needed. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
+Nothing to do. `make up` pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
 
 #### Option B: build it locally from `../sdk`
 

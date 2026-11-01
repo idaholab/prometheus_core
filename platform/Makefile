@@ -28,8 +28,8 @@ PROMETHEUS_API_BASE_IMAGE_HASH := local
 BASE_IMAGE_DEP := base-image
 else
 # Override these to pin a specific prometheus_api base image. The default is
-# the SDK image that publish-images pushes to ghcr.io (public, no login); its
-# tags are <commit date>-<7 char sha>. Keep in step with platformctl's
+# the SDK image that publish-images pushes to ghcr.io; its tags are
+# <commit date>-<7 char sha>. Keep in step with platformctl's
 # DEFAULT_BASE_IMAGE_* in ctl/platformctl/config.py.
 PROMETHEUS_API_BASE_IMAGE_REPO ?= ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel
 PROMETHEUS_API_BASE_IMAGE_HASH ?= 20261031-b999096

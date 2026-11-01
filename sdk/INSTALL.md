@@ -10,7 +10,7 @@ There are three supported ways to use `prometheus-api`, in order of preference:
 
 ## Container (recommended)
 
-Multi-arch images (`linux/amd64`, `linux/arm64`) are published to the GitHub Container Registry after every green CI run on `devel`. They are public, so no `docker login` is needed:
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to the GitHub Container Registry after every green CI run on `devel`:
 
 ```bash
 docker pull ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel:20261031-b999096
