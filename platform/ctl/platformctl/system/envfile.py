@@ -146,10 +146,12 @@ def update_text(text: str, updates: dict[str, str]) -> str:
 
     A key is replaced where `parse` reads it: its last assignment, over every line of a multi-line
     value. Earlier duplicates are left alone. A malformed file raises `EnvFileError` rather than
-    being written over.
+    being written over, and so does a key `parse` would reject, which would make the file unreadable.
     """
     text = text.lstrip("﻿").replace("\r\n", "\n")
     parse(text)
+    if any(not _KEY.fullmatch(key) for key in updates):
+        raise EnvFileError("a key to write is not a valid variable name")
     lines = text.split("\n")
     pending = dict(updates)
     last = {key: (start, end) for key, start, end, _ in _scan(lines)}

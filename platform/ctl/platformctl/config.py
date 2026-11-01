@@ -136,6 +136,11 @@ _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 """What a setting name looks like. Anything else a user typed might be a secret, so it isn't echoed."""
 
 
+def is_name(text: str) -> bool:
+    """Whether `text` is shaped like a setting name (ASCII letters, digits and `_`, not starting with a digit)."""
+    return bool(_NAME.fullmatch(text))
+
+
 def parse_set(items: list[str], what: str = "--set", instead: str = "set {key} in .env instead") -> dict[str, str]:
     """`KEY=VALUE` pairs from `--set` (or `config set`, named by `what`). Refuses secret keys.
 

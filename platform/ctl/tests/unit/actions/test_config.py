@@ -146,7 +146,8 @@ def test_from_env_does_not_echo_a_name_in_json_either(ctx_env, capsys):
 
 
 @pytest.mark.parametrize(
-    ("item", "value"), [("KEY=sentinelvalue77", "sentinelvalue77"), ("bad-name", None), ("has space", None)]
+    ("item", "value"),
+    [("KEY=sentinelvalue77", "sentinelvalue77"), ("bad-name", None), ("has space", None), ("1ABCDEFG", None)],
 )
 def test_from_env_takes_names_not_pairs(ctx_env, item, value):
     """`--from-env KEY=value` would put a value in argv, so it is refused without echoing it."""

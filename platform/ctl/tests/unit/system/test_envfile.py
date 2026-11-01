@@ -263,6 +263,13 @@ def test_update_creates_then_edits(tmp_path: Path):
     assert envfile.read(path) == {"A": "2", "B": "3"}
 
 
+@pytest.mark.parametrize("key", ["1ABC", "has space", "A=B", ""])
+def test_update_text_refuses_a_key_parse_would_reject(key):
+    """Writing `1ABC=x` would leave a file no command can read, so the key is refused before anything is written."""
+    with pytest.raises(envfile.EnvFileError, match="not a valid variable name"):
+        envfile.update_text("A=1\n", {key: "x"})
+
+
 def test_update_text_with_every_key_already_present_appends_nothing():
     """Update text with every key already present appends nothing."""
     assert envfile.update_text("A=1\nB=2\n", {"A": "3"}) == "A=3\nB=2\n"

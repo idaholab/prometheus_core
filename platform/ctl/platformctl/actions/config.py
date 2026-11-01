@@ -18,7 +18,7 @@ import argparse
 
 from platformctl import env_init, jsonout, llm_profiles
 from platformctl.actions import Subcommand
-from platformctl.config import REGISTRY, SETTINGS, ConfigError, is_safe, parse_set
+from platformctl.config import REGISTRY, SETTINGS, ConfigError, is_name, is_safe, parse_set
 from platformctl.context import Context
 from platformctl.system import envfile, terminal
 
@@ -288,7 +288,7 @@ def add_set_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _from_environment(ctx: Context, keys: list[str]) -> dict[str, str]:
     """The environment's value of each key, or a `ConfigError` naming every key that is not set there."""
-    bad = [key for key in keys if "=" in key or not key.replace("_", "A").isalnum()]
+    bad = [key for key in keys if not is_name(key)]
     if bad:
         raise ConfigError("--from-env expects key names, not KEY=value: the value is read from the environment")
     env = ctx.config.env
