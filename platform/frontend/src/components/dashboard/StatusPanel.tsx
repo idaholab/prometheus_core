@@ -13,11 +13,11 @@
 import { useState } from "react";
 import { Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PerSampleList } from "../PerSampleList";
+import { splitPerSample } from "@/lib/artifacts/perSample";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
-import { splitPerSample } from "@/lib/artifacts/perSample";
-import { PerSampleList } from "../PerSampleList";
 
 type StatusTab = "jobs" | "artifacts";
 

@@ -313,6 +313,23 @@ def _extension_hint(artifact: dict[str, Any], *, include_plaintext: bool = True)
     return None
 
 
+def _artifact_tags(artifact: dict[str, Any], metadata: dict[str, Any]) -> list[str]:
+    """Top-level ``tags`` plus any ``metadata.tags``, deduped in order.
+
+    A URI artifact sent by a PrometheusAgent crosses the A2A hop with its tags
+    only on the file part's metadata, which the client-agent's catalog merges
+    into ``metadata`` while leaving top-level ``tags`` empty. Reading both keeps
+    producer routing tags (e.g. a viewer-selecting tag such as ``exodus``) intact.
+    """
+    out: list[str] = []
+    for source in (artifact.get("tags"), metadata.get("tags")):
+        if isinstance(source, list):
+            for tag in source:
+                if tag is not None and str(tag) not in out:
+                    out.append(str(tag))
+    return out
+
+
 def classify_render_hint(artifact: dict[str, Any]) -> RenderHint:
     """Derive the frontend ``render_hint`` for one artifact.
 
@@ -445,23 +462,6 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
         section=str(section) if section else None,
         page=str(page) if page else None,
     )
-
-
-def _artifact_tags(artifact: dict[str, Any], metadata: dict[str, Any]) -> list[str]:
-    """Top-level ``tags`` plus any ``metadata.tags``, deduped in order.
-
-    A URI artifact sent by a PrometheusAgent crosses the A2A hop with its tags
-    only on the file part's metadata, which the client-agent's catalog merges
-    into ``metadata`` while leaving top-level ``tags`` empty. Reading both keeps
-    producer routing tags (e.g. a viewer-selecting tag such as ``exodus``) intact.
-    """
-    out: list[str] = []
-    for source in (artifact.get("tags"), metadata.get("tags")):
-        if isinstance(source, list):
-            for tag in source:
-                if tag is not None and str(tag) not in out:
-                    out.append(str(tag))
-    return out
 
 
 def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
