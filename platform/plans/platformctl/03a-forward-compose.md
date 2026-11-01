@@ -173,10 +173,62 @@ today; CI proves it.
   before writing the entry file. Failures also upload `doctor --json`.
 - The platform jobs depend on `platformctl: unit`.
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **Pin everything the design says is pinned** (reported). `design.md`, "The compose entry file",
+  says the tool passes every derived value in its child environment and pins `COMPOSE_FILE` and
+  `COMPOSE_PROFILES`. Step 1's `child_env` passes only the repo, hash and project name: a `.env`
+  line `USE_BUILD_CACHE=true` (on a machine without the containerd store) or `COMPOSE_PROFILES=...`
+  still changes what the tool runs. Merge `derived_values(...)` into `Compose`'s environment, set
+  both, and add a live test: `docker compose config` of a generated entry file against a `.env`
+  that conflicts. Pass only `PATH`, `HOME`, `DOCKER_*` and proxy variables to non-Compose calls
+  (`docker info`, `docker ps`), which don't need the LLM keys.
+- **The entry file's project name** (reported). `render_entry_file` writes `name: {project}`
+  unquoted, so `COMPOSE_PROJECT_NAME=123` gives "name must be a string", and a name containing a
+  newline injects an `include:` entry. Write the name with `json.dumps` and validate
+  `^[a-z0-9][a-z0-9_-]*$` in `PlatformConfig.project`; reject newlines in the file list. The entry
+  file also calls the private `envfile._format`: make it public.
+- **Streaming output** (reported). `Runner._streamed` uses `print`, which writes to real stdout
+  under `--json` and `--quiet`, and merges stderr. `down` (`capture=False`) would corrupt the JSON
+  object. Write through `Output` (stderr in JSON mode) or take a sink, and put a `capture=False`
+  command in the canary.
+- **Git-ignore every generated file** (checked: only `.platform.env` is ignored, through `*.env`).
+  Add `docker-compose.platform.yml` (already above) and the temp files `.platform.env.*` and
+  `.docker-compose.platform.yml.*` that `write_atomic` leaves, so they never show as untracked. Step
+  3b adds `docker-compose.labels.yml`.
+- **The oldest Compose** (step 1 did not measure it): `MIN_VERSION` is 2.20, unverified for
+  `include` with `env_file`, and this step is the first to run the entry file. Measure the oldest
+  version that works (live leg on it) and set `MIN_VERSION` from the result.
+- **Target-specific wording** (reported): the `docker` check's fix says "Install Docker Desktop"
+  on Linux and WSL, "Update Docker Desktop" for an old Compose, and "log out and back in" for the
+  docker group. Make each fix say the right thing for Desktop, Engine and WSL (`wsl --shutdown` or
+  `newgrp docker`), and name the Compose package for the distro (`docker-compose-plugin` on
+  Docker's repository, `docker-compose-v2` on Ubuntu).
+
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Technical:** "same behaviour" against the `make -n` fixtures step 2 recorded; that the Compose
+  argv is pinned only in the compose target; that `runner.py` strips `MAKEFLAGS` so nothing leaks
+  in from an outer `make`; `clear_registry()` through `exec`; `name:` in `docker-compose.yml`.
+- **CI and tests:** that every current Make target keeps its name and `##@` help; the one CI job
+  kept on `make`; `test_compose_static.py:96`; a test that fails first if a forwarded target stops
+  starting the platform.
+- **Security:** `down-v` passing `--yes --confirm clobber`; `logs` and the printed commands
+  scrubbed; the canary covering every new command, including ones that stream child output.
+- **Linux/WSL:** `sh $(CURDIR)/platformctl` and `make -C`; Ctrl-C and the terminal for `up
+  --foreground`; the `preflight` checks on Engine and Compose versions.
+- **User:** the `make up -> ./platformctl up` line, and no new prompts for Make users.
+- **Rollout:** a stack started by the old Makefile (project name, containers it doesn't know);
+  the generated file in `.gitignore`; `breaking-changes.md`.
+- **AI skills:** `logs` not following without a terminal; `status --json` and exit 3.
+- **Agent developer:** agents still included by `agents/*/docker-compose.yml`, unchanged.
 
 ## Done when
 

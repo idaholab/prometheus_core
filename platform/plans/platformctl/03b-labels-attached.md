@@ -122,10 +122,55 @@ agents register again after a platform restart without you doing anything.
   Engine in the distro, including a Windows process holding a platform port
   (reported busy, with the `Get-NetTCPConnection` hint).
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **"Ours" means this checkout** (reported). Step 1's `ports-free` counts any container with the
+  same Compose project name as ours, and the default name comes from the folder, so two checkouts
+  both named `platform` look like one stack. Compare the label (`io.prometheus.platform.root`, or
+  `working_dir` before the labels) with this checkout's root as well.
+- **`SO_REUSEADDR` on Linux** (reported; reproduced only on macOS). `port_free` binds without it
+  because it hides holders on macOS. On Linux, a bind without it also fails with `EADDRINUSE`
+  while `TIME_WAIT` sockets linger after `down`, so `doctor` could report a free port as held. Set
+  it on Linux only, keep the connect probe, and add a live test: `down`, then at once the ports
+  check.
+- **A port held on the Windows side of WSL2** (reported): a Windows process on 5150 or 8600 is
+  invisible to a bind inside the distro, so `doctor` passes and `up` fails. On WSL, rely more on
+  `docker ps --filter publish=` and a compose dry run; add a manual WSL checklist item (hold a port
+  from PowerShell, run `doctor`). `is_wsl` reads only `/proc/sys/kernel/osrelease`: also check
+  `/proc/version` and `WSL_DISTRO_NAME`.
+- **Text from other containers** (reported). The port message prints another container's name,
+  project and root label as they are, in a `./platformctl down` hint. Strip control characters in
+  `Output.write` and in the JSON `evidence`.
+- **Holder names** (reported): `lsof` names keep `\x20` escapes
+  (`Control\x20Center`); decode them. `ss -ltnp` shows no process for another user's socket: say
+  `sudo ss -ltnp`. Rootless Docker shows `rootlesskit`, not a container.
+- **Git-ignore `docker-compose.labels.yml`** (checked: it is not ignored), with the other
+  generated files from step 3a.
+
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Technical:** the labels file last in the entry file's `path`; folders compared with `realpath`
+  (case-insensitive on macOS); stacks started before the labels, found by `working_dir`; that
+  "ours" means this checkout, not a project with the same name from another one.
+- **CI and tests:** a port clash and a second checkout (with the same folder name) in a live test;
+  the restart of your agents against a fake target; open chats asked about only on a terminal.
+- **Security:** what `io.prometheus.platform.root` reveals; which containers the tool restarts or
+  stops (only labelled ones; `down --agents` after confirming); text from other containers'
+  labels printed with control characters.
+- **Linux/WSL:** the port check with IPv4 and IPv6 and with `TIME_WAIT` sockets; a port held on
+  the Windows side; rootless Docker showing `rootlesskit`; AirPlay on 5000 on macOS only.
+- **User:** the "something is in the way" messages: what holds the port and the lasting fix.
+- **Agent developer:** the whole edit loop with the agent label; agents without it, with the
+  snippet to add; an agent in another repository.
+- **Rollout:** `down --volumes` now asking for `clobber`; stacks that have no labels.
+- **AI skills:** `restart --if-idle` and `open_turns`; prompts without a terminal.
 
 ## Done when
 

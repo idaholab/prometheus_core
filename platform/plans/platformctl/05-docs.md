@@ -49,10 +49,27 @@ change platformctl, and a final sweep.
 
 None.
 
+## From the step 1 review
+
+- `ctl/README.md` has a "Reading `--json` output" section (`ok` means doctor ran; read
+  `counts.fail` for health). Keep it, and check it matches `design.md` ("Output") and the user
+  guide.
+- `docs/docs/windows-wsl2-setup.md`: add `./platformctl doctor`, the `bash` or `dos2unix` recovery
+  for a CRLF shim, and the Windows-side port caveat from step 3b's section above.
+
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: user, technical, AI skills.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: user, technical, AI skills.
+
+Ask them to look at:
+
+- **User:** the user guide read start to finish as a new user, each page a task with its commands;
+  `from-make.md` covering every Make target in one line.
+- **Technical:** whether `ctl/README.md` alone is enough to add an action and a check (try it);
+  that it matches the code and the places that name the commands; the final sweep's `git grep`.
+- **AI skills:** the `platform/CLAUDE.md` section on running long and interactive commands
+  (`up --no-check` in the background, `status --wait --timeout 600 --json`); the commands never to
+  run (`compose -- config`, `exec ... env`).
 
 ## Done when
 

@@ -1,0 +1,16 @@
+{
+  "command": "",
+  "error": {
+    "check": "",
+    "code": "usage",
+    "hint": "",
+    "message": "./platformctl: unrecognized arguments: --nope\n\nusage: ./platformctl [-h] [--set KEY=VALUE] [--target compose|k3d] [--dry-run]\n                     [--verbose] [--quiet] [--json] [--yes] [--debug]\n                     [--version]"
+  },
+  "ok": false,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1
+}
