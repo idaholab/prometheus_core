@@ -131,12 +131,59 @@ def no_termios(monkeypatch):
     monkeypatch.setitem(sys.modules, "termios", None)
 
 
-@pytest.mark.parametrize(("answer", "expected"), [("2", "beta"), ("", "gamma"), ("9", "gamma"), ("x", "gamma")])
-def test_choose_falls_back_to_numbers_without_termios(no_termios, monkeypatch, capsys, answer, expected):
-    """A numbered list; Enter, a number out of range or a non-number takes the default."""
-    monkeypatch.setattr(builtins, "input", lambda prompt: answer)
+@pytest.mark.parametrize(("answers", "expected"), [(["2"], "beta"), ([""], "gamma"), (["9", "x", "1"], "alpha")])
+def test_choose_falls_back_to_numbers_without_termios(no_termios, monkeypatch, capsys, answers, expected):
+    """A numbered list; Enter takes the default, and a number out of range or a non-number asks again."""
+    given = iter(answers)
+    monkeypatch.setattr(builtins, "input", lambda prompt: next(given))
     assert terminal.choose(OPTIONS, LABELS, 2) == expected
-    assert "  1. alpha  first" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "  1. alpha  first" in out
+    assert out.count("Please enter a number from 1 to 3") == len(answers) - 1
+
+
+def test_choose_without_termios_stops_when_the_input_closes(no_termios, monkeypatch):
+    """Ctrl-D at the numbered prompt is a `TerminalError`, which `config init` reports as `needs_terminal`."""
+
+    def closed(prompt):
+        """`input()` on a closed stdin."""
+        raise EOFError
+
+    monkeypatch.setattr(builtins, "input", closed)
+    with pytest.raises(terminal.TerminalError, match="input was closed"):
+        terminal.choose(OPTIONS, LABELS, 0)
+
+
+def test_confirm_stops_when_the_input_closes(monkeypatch):
+    """A closed stdin (Ctrl-D, or `< /dev/null`) is a `TerminalError`, not an `EOFError` that ends as `internal`."""
+
+    def closed(prompt):
+        """`input()` on a closed stdin."""
+        raise EOFError
+
+    monkeypatch.setattr(builtins, "input", closed)
+    with pytest.raises(terminal.TerminalError, match="input was closed"):
+        terminal.confirm("Build it?", True)
+
+
+def test_confirm_says_what_it_wants_after_a_wrong_answer(monkeypatch, capsys):
+    """`maybe` is not silently asked again: the person is told to answer y or n."""
+    given = iter(["maybe", "n"])
+    monkeypatch.setattr(builtins, "input", lambda prompt: next(given))
+    assert terminal.confirm("Build it?", True) is False
+    assert "Please answer y or n" in capsys.readouterr().out
+
+
+def test_read_secret_stops_when_the_input_closes(monkeypatch):
+    """Ctrl-D at the hidden prompt is a `TerminalError` too."""
+
+    def closed(prompt):
+        """`getpass` on a closed stdin."""
+        raise EOFError
+
+    monkeypatch.setattr(getpass, "getpass", closed)
+    with pytest.raises(terminal.TerminalError, match="input was closed"):
+        terminal.read_secret("key: ")
 
 
 @pytest.mark.parametrize(

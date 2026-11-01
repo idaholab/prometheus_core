@@ -157,7 +157,10 @@ def _decide(
     if decided:
         return None
     if ctx.yes or _asks(ctx):
-        answer = ask()
+        try:
+            answer = ask()
+        except terminal.TerminalError as exc:
+            raise ConfigError(str(exc)) from None
         _save(ctx, {key: "true" if answer else "false"})
         return f"{label}: {'yes' if answer else 'no'}"
     name = "--" + label.lower().replace(" ", "-")
@@ -167,10 +170,13 @@ def _decide(
 def _ask_local_sdk(ctx: Context) -> bool:
     """Ask whether to build everything on this laptop; the recommendation comes from a test of the registry."""
     repo, tag = ctx.config.base_image()
+    if not ctx.yes:
+        # Off the VPN this waits up to the timeout; say so, or it looks like a hang.
+        ctx.output.info("Checking whether you can pull from the INL registry (up to 15 s) ...")
     recommended = not ctx.docker.registry_reachable(f"{repo}:{tag}")
     if ctx.yes:
         return recommended
-    question = "Build everything on this laptop (no INL login needed)?" + (" (recommended)" if recommended else "")
+    question = f"Build everything on this laptop (no INL login needed)? (recommended: {'yes' if recommended else 'no'})"
     return terminal.confirm(question, recommended)
 
 
@@ -178,7 +184,7 @@ def _ask_local_deeplynx(ctx: Context) -> bool:
     """Ask whether to run DeepLynx on this laptop; yes is recommended."""
     if ctx.yes:
         return True
-    return terminal.confirm("Run DeepLynx (file storage) on this laptop? (recommended)", True)
+    return terminal.confirm("Run DeepLynx (file storage) on this laptop? (recommended: yes)", True)
 
 
 def _decided(ctx: Context, key: str) -> bool:
@@ -242,26 +248,29 @@ def init(ctx: Context, args: argparse.Namespace) -> int:
         current = envfile.read(paths.env)
 
     before = {key: ctx.config.flag(key) for key in ("LOCAL_SDK", "LOCAL_DEEPLYNX")}
-    notes = [
-        _decide(
-            ctx,
-            current,
-            key="LOCAL_SDK",
-            flag=args.local_sdk,
-            decided=_decided(ctx, "LOCAL_SDK"),
-            label="Local SDK",
-            ask=lambda: _ask_local_sdk(ctx),
-        ),
-        _decide(
-            ctx,
-            current,
-            key="LOCAL_DEEPLYNX",
-            flag=args.local_deeplynx,
-            decided=_decided(ctx, "LOCAL_DEEPLYNX") or bool(current.get("DEEPLYNX_KEY")),
-            label="Local DeepLynx",
-            ask=lambda: _ask_local_deeplynx(ctx),
-        ),
-    ]
+    try:
+        notes = [
+            _decide(
+                ctx,
+                current,
+                key="LOCAL_SDK",
+                flag=args.local_sdk,
+                decided=_decided(ctx, "LOCAL_SDK"),
+                label="Local SDK",
+                ask=lambda: _ask_local_sdk(ctx),
+            ),
+            _decide(
+                ctx,
+                current,
+                key="LOCAL_DEEPLYNX",
+                flag=args.local_deeplynx,
+                decided=_decided(ctx, "LOCAL_DEEPLYNX") or bool(current.get("DEEPLYNX_KEY")),
+                label="Local DeepLynx",
+                ask=lambda: _ask_local_deeplynx(ctx),
+            ),
+        ]
+    except ConfigError as exc:  # the terminal closed under a question
+        return _fail(ctx, "config init", "needs_terminal", str(exc))
     current = envfile.read(paths.env)
     for note in notes:
         if note:

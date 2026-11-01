@@ -494,8 +494,8 @@ def test_init_asks_the_two_local_questions_with_a_recommended_answer(init_ctx, i
     ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
     assert config_action.init(ctx, init_args()) == 0
     assert asked == [
-        ("Build everything on this laptop (no INL login needed)? (recommended)", True),
-        ("Run DeepLynx (file storage) on this laptop? (recommended)", True),
+        ("Build everything on this laptop (no INL login needed)? (recommended: yes)", True),
+        ("Run DeepLynx (file storage) on this laptop? (recommended: yes)", True),
     ]
     values = envfile.read(init_root / ".env")
     assert (values["LOCAL_SDK"], values["LOCAL_DEEPLYNX"]) == ("true", "true")
@@ -511,7 +511,37 @@ def test_init_does_not_recommend_building_locally_when_the_registry_works(init_c
     monkeypatch.setattr(terminal, "confirm", lambda question, default: asked.append((question, default)) or default)
     ctx, _, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
     config_action.init(ctx, init_args())
-    assert asked[0] == ("Build everything on this laptop (no INL login needed)?", False)
+    assert asked[0] == ("Build everything on this laptop (no INL login needed)? (recommended: no)", False)
+
+
+def test_init_says_it_is_checking_the_registry_before_the_first_question(init_ctx, monkeypatch):
+    """Off the VPN the check waits up to 15 s; the person is told, so it doesn't look like a hang."""
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", lambda question, default: default)
+    ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    config_action.init(ctx, init_args())
+    assert "Checking whether you can pull from the INL registry (up to 15 s) ..." in out.getvalue()
+
+
+def test_init_does_not_announce_the_check_with_yes(init_ctx):
+    """`--yes` asks nothing, so it prints nothing about it either."""
+    ctx, out, _ = init_ctx({"LLM_CONFIG_PROFILE": "ollama"}, yes=True)
+    config_action.init(ctx, init_args())
+    assert "Checking whether" not in out.getvalue()
+
+
+def test_init_reports_needs_terminal_when_the_input_closes_under_a_question(init_ctx, monkeypatch):
+    """Ctrl-D at a question is a clear error naming the closed input, not an `internal` traceback."""
+
+    def closed(question, default):
+        """`confirm` on a closed stdin."""
+        raise terminal.TerminalError("the input was closed before the question was answered")
+
+    monkeypatch.setattr(terminal, "interactive", lambda: True)
+    monkeypatch.setattr(terminal, "confirm", closed)
+    ctx, _, err = init_ctx({"LLM_CONFIG_PROFILE": "ollama"})
+    assert config_action.init(ctx, init_args()) == 1
+    assert "the input was closed before the question was answered" in err.getvalue()
 
 
 def test_init_skips_a_question_that_env_already_decides(init_ctx, init_root, monkeypatch):

@@ -27,6 +27,14 @@ class TerminalError(RuntimeError):
     """The terminal can't be used safely, for example when it would echo a secret."""
 
 
+def _read_line(prompt: str) -> str:
+    """`input()`, but a closed input (Ctrl-D, or no stdin) is a `TerminalError` and not an `EOFError`."""
+    try:
+        return input(prompt)
+    except EOFError:
+        raise TerminalError("the input was closed before the question was answered") from None
+
+
 def interactive() -> bool:
     """Whether both stdin and stdout are a terminal, so a question can be asked."""
     return sys.stdin.isatty() and sys.stdout.isatty()
@@ -42,8 +50,13 @@ def choose(options: list[str], labels: list[str], default: int) -> str:
     except ImportError:
         for i, line in enumerate(lines, 1):
             print(f"  {i}. {line}")
-        answer = input(f"Choice [{default + 1}]: ").strip()
-        return options[int(answer) - 1] if answer.isdigit() and 1 <= int(answer) <= len(options) else options[default]
+        while True:
+            answer = _read_line(f"Choice [{default + 1}]: ").strip()
+            if not answer:
+                return options[default]
+            if answer.isdigit() and 1 <= int(answer) <= len(options):
+                return options[int(answer) - 1]
+            print(f"Please enter a number from 1 to {len(options)}, or press Enter for {default + 1}.")
 
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
@@ -80,15 +93,16 @@ def choose(options: list[str], labels: list[str], default: int) -> str:
 def confirm(question: str, default: bool) -> bool:
     """Ask a yes/no question; Enter gives `default`, shown as the capital letter in `[Y/n]`.
 
-    Anything that does not start with `y` or `n` asks again, so a typo isn't taken as an answer.
+    Anything that does not start with `y` or `n` says so and asks again, so a typo isn't taken as an answer.
     """
     hint = "[Y/n]" if default else "[y/N]"
     while True:
-        answer = input(f"{question} {hint} ").strip().lower()
+        answer = _read_line(f"{question} {hint} ").strip().lower()
         if not answer:
             return default
         if answer[0] in "yn":
             return answer[0] == "y"
+        print("Please answer y or n, or press Enter for the answer in capitals.")
 
 
 def read_secret(prompt: str) -> str:
@@ -99,3 +113,5 @@ def read_secret(prompt: str) -> str:
             return getpass.getpass(prompt).strip()
         except getpass.GetPassWarning:
             raise TerminalError("this terminal would echo the value as you type it, so it was not asked") from None
+        except EOFError:
+            raise TerminalError("the input was closed before the value was entered") from None
