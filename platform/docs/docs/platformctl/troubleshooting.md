@@ -26,7 +26,7 @@ PASS  ports-free             3 ports are free
 - `./platformctl doctor --list` shows every check. Name one or more to run only those:
   `./platformctl doctor ports-free`.
 - `./platformctl doctor --tag preflight` runs only the checks that must pass before a start.
-- `--json` prints the result as one object, for scripts and assistants.
+- `--json` prints the result as one object, for scripts and assistants ([JSON output](index.md#json-output)).
 
 ## Common problems
 

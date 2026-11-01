@@ -40,6 +40,7 @@ Run: ./platformctl doctor platform-env
 ```
 
 Without `--wait` it checks once and exits: 0 when everything is ready, 1 when it is not. `--json` prints the same
-facts as one object.
+facts as one object ([JSON output](index.md#json-output)); a platform that is not ready is `check_failed` without
+`--wait` and `timeout` with it.
 
 `make up` runs this at the end, so it returns only when the platform is ready. `CHECK=false make up` skips it.
