@@ -368,3 +368,56 @@ test("a reply that lands after the tab closed is dropped, and polling stops", as
   await vi.advanceTimersByTimeAsync(10_000);
   expect(mocks.getConversationTasks).toHaveBeenCalledTimes(1);
 });
+
+test("a failed read that lands after the tab closed is dropped, and polling stops", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  let fail!: (e: unknown) => void;
+  mocks.getConversationTasks.mockReturnValueOnce(new Promise((_r, rej) => (fail = rej)));
+  const { unmount } = render(<ActiveJobsPanel />);
+  unmount();
+  fail(new Error("backend down"));
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(mocks.getConversationTasks).toHaveBeenCalledTimes(1);
+});
+
+test("a turn awaited with no open conversation, or after closing it, fetches nothing", () => {
+  mocks.conversationId = null;
+  mocks.awaiting = true;
+  const { rerender } = render(<ActiveJobsPanel />);
+  expect(mocks.getConversationTasks).not.toHaveBeenCalled();
+
+  mocks.conversationId = "conv-1";
+  mocks.awaiting = false;
+  mocks.getConversationTasks.mockResolvedValue(tasks([]));
+  rerender(<ActiveJobsPanel />);
+  expect(mocks.getConversationTasks).toHaveBeenCalledTimes(1);
+
+  // Close the conversation as a new turn starts: the closed poll is not kicked.
+  mocks.conversationId = null;
+  mocks.awaiting = true;
+  rerender(<ActiveJobsPanel />);
+  expect(mocks.getConversationTasks).toHaveBeenCalledTimes(1);
+});
+
+test("the tab turning hidden, or visible with the poll stopped, triggers no read", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  mocks.getConversationTasks.mockResolvedValue(tasks([node({ task_id: "a", title: "T", state: "working" })]));
+  render(<ActiveJobsPanel />);
+  expect(await screen.findByText("working")).toBeInTheDocument();
+
+  setHidden(true);
+  await act(async () => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(mocks.getConversationTasks).toHaveBeenCalledTimes(1);
+
+  // Visible again, but nothing is running so the poll stopped: no timer to cut short.
+  setHidden(false);
+  mocks.getConversationTasks.mockResolvedValue(tasks([node({ task_id: "a", title: "T", state: "completed" })]));
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(await screen.findByText("completed")).toBeInTheDocument();
+  await act(async () => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(mocks.getConversationTasks).toHaveBeenCalledTimes(2);
+});
