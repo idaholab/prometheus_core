@@ -60,6 +60,21 @@ list, Dependabot, Codecov), a `.gitattributes`, one drift test, and
 `init_env.py` creating `.env` as 0600. This is the one step that may land
 before the hackathon freeze (2026-11-03).
 
+## Requirements
+
+What this step delivered is specified in
+[`build/specs/`](../../../build/specs/000-index.md): every requirement that is
+cited by a test and has no `(planned: ...)` tag. That is most of
+[001](../../../build/specs/001-using-the-cli.md) (the shim, options, help,
+exit codes, `--json`), the precedence and `.env` parts of
+[002](../../../build/specs/002-settings-and-setup.md),
+[003](../../../build/specs/003-secrets.md) for the commands that exist,
+[006](../../../build/specs/006-doctor.md) REQ-006-01 to REQ-006-23 (the
+framework and the nine checks), and the refusals in
+[008](../../../build/specs/008-where-and-how-the-platform-runs.md).
+REQ-001-21 (JSON fields are only added) is `⚠ untested`.
+`common/speccheck --report` lists each one with the test that proves it.
+
 ## Work
 
 - **Shim** `platform/platformctl` (POSIX `sh`, executable, copyright
