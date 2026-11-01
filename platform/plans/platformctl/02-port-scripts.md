@@ -26,10 +26,15 @@ docs and `platform/README.md`; `--live` selects `tests/live`; the flaky port tes
   a key name `.env` could not parse, and makes a group- or world-readable `.env` owner-only before adding secrets.
 - `--json` prints one object on every path of `config init`, `config set` and `deeplynx setup`, not only on failure.
 - `check-prerequisites` is not forwarded to `doctor` (that is step 3a's C9), so `from-make.md` has no such row.
+- The workflow starts on every pull request and merge group, with a `changes` job that decides whether the platformctl
+  paths were touched, and a `platformctl: gate` job that always reports. Require only the gate: a required job skipped
+  by a `paths:` filter stays pending. This also gates `merge_group`, which ignores `paths:`.
+- The canary runs `status` and `deeplynx setup` against a loopback server that answers with sentinels, and captures
+  stray `print()` output; the `.env` write case and distinct sentinels for the new secrets are in.
 
 **Not done yet:** the scrubber's URL-encoded/base64 forms and URL passwords (and distinct canary sentinels);
-the canary's `CI=1`/real `_streamed`/`.env`-write cases; making the step 1 jobs *required* (branch protection, a
-repository setting) and gating `merge_group`; the macOS Python 3.9 leg asserting which interpreter ran; the
+the canary's `CI=1`/real `_streamed` cases; the repository setting that makes `platformctl: gate` a required check
+(branch protection and the merge queue; the workflow side is done); the macOS Python 3.9 leg asserting which interpreter ran; the
 WSL and arm64 legs; the `make -n` fixtures for step 3a; the hackathon-freeze check (the PR is held until after Day 2).
 
 ## Goal
