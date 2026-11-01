@@ -270,7 +270,7 @@ jobs:
     name: "platformctl: gate"
     if: ${{ always() }}
     needs: [changes, unit, coverage, shim, live]
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Every platformctl job passed or was not needed
