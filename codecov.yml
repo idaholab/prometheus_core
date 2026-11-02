@@ -85,9 +85,3 @@ flags:
   template-agent:
     paths:
       - agent-template/agent_template/
-  # Uploaded only by the path-filtered platformctl workflow, so it is not counted in
-  # after_n_builds above, and its last result carries forward to commits that don't run it
-  platformctl:
-    paths:
-      - platform/ctl/platformctl/
-    carryforward: true
