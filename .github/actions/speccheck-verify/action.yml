@@ -30,6 +30,12 @@ inputs:
     description: Name of the report artifact
     required: false
     default: speccheck-report
+  job-names-run-id:
+    description: >-
+      The run whose job names to look up (default this run). Only for testing the fallback when
+      the lookup fails; the results always come from this run
+    required: false
+    default: ""
 
 outputs:
   summary-path:
@@ -58,7 +64,7 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         REPOSITORY: ${{ github.repository }}
-        RUN_ID: ${{ github.run_id }}
+        RUN_ID: ${{ inputs.job-names-run-id || github.run_id }}
         NAMES: ${{ runner.temp }}/speccheck-job-names.json
       run: |
         if ! gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?filter=all&per_page=100" \
