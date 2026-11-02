@@ -51,7 +51,7 @@ Find why something does not work, explain the cause, and fix it. The argument: `
 
 | symptom | cause and fix |
 |---|---|
-| agent exits at startup: "Invalid required DeepLynx configuration" | every agent writes a DeepLynx execution record. Set `DEEPLYNX_JWT_TOKEN` or `DEEPLYNX_KEY` + `DEEPLYNX_SECRET`, plus `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`, in the agent `.env` (`python setup_agent.py --env-only <agent>` copies them from the platform; local DeepLynx: deck 03) |
+| agent exits at startup: "Invalid required DeepLynx configuration" | every agent writes a DeepLynx execution record. Set `DEEPLYNX_JWT_TOKEN` or `DEEPLYNX_KEY` + `DEEPLYNX_SECRET`, plus `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`, in the agent `.env` (`python setup_agent.py --env-only <agent>` copies them from the platform, which writes them with `LOCAL_DEEPLYNX=true`; deck 03) |
 | `required variable LLM_CONFIG_PROFILE is missing a value` | no default any more and `registry` is not supported: copy the platform's profile (`--env-only`), or `make init-env` in the platform |
 | build stops: "uv.lock not found" or `--locked` fails | `uv sync` (or `uv lock`) in the agent folder, commit `uv.lock`, `make up` |
 | `LLMProviderError` / `LLMConfigError` / `LLMEndpointUnavailableError` | read the one-line message: provider HTTP status, unknown profile (it lists the installed ones), or an unreachable endpoint; check `LLM_API_KEY` for that profile |

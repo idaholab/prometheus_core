@@ -47,7 +47,7 @@
 <div class="card acc">
 <div class="kpi"><span class="v">4</span></div>
 <h3>Files work</h3>
-<p class="small">A local DeepLynx: agents won't start without it.</p>
+<p class="small">A local DeepLynx (<code>LOCAL_DEEPLYNX=true</code>): agents won't start without it.</p>
 </div>
 
 </div>
@@ -82,12 +82,12 @@ Platform not starting yet? Work through the bonus slides at the end of this deck
 </tr>
 <tr>
 <td><code>http://localhost:3000</code></td>
-<td>your local DeepLynx</td>
+<td>your local DeepLynx (part of the stack)</td>
 <td>see uploads and result files</td>
 </tr>
 </tbody>
 </table>
-<p class="body">Behind them: the orchestrator (<code>client-agent</code>), two agents, a state store (Valkey), and the admin database. They talk to each other on the Docker network <code>prometheus_platform_agent-network</code>, which your agent joins too.</p>
+<p class="body">Behind them: the orchestrator (<code>client-agent</code>), two agents, a state store (Valkey), the admin database, and DeepLynx. They talk to each other on the Docker network <code>prometheus_platform_agent-network</code>, which your agent joins too.</p>
   </div>
 </section>
 
@@ -97,8 +97,9 @@ Platform not starting yet? Work through the bonus slides at the end of this deck
 <div class="grid g2" style="gap:30px;">
 <pre class="sm">cd ~/prometheus/prometheus_core/platform
 
-<span class="h">make init-env                  <span class="c"># once: creates .env (next slide)</span></span>
-<span class="h">echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env  <span class="c"># once: base image from ../sdk</span></span>
+<span class="h">make init-env                       <span class="c"># once: creates .env (next slide)</span></span>
+<span class="h">echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env       <span class="c"># once: base image from ../sdk</span></span>
+<span class="h">echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env  <span class="c"># once: DeepLynx next to the platform</span></span>
 
 make up                        <span class="c"># build, start, wait, make check</span>
 make restart                   <span class="c"># restart, no rebuild</span>
@@ -107,6 +108,9 @@ make down                      <span class="c"># stop</span></pre>
 <div class="col">
 <div class="callout info">
 <strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>): no registry, no token. Without it, <code>make up</code> tries to pull from <code>containers.github.inl.gov</code> and fails with <code>unauthorized</code>. Put it in <code>.env</code> after <code>make init-env</code>, so every later <code>make up</code> sees it.</div>
+
+<div class="callout info">
+<strong><code>LOCAL_DEEPLYNX=true</code></strong>: every <code>make up</code> also starts DeepLynx in the platform's compose project and runs <code>make deeplynx-setup</code>, which creates a project and API key and writes the <code>DEEPLYNX_*</code> lines to <code>.env</code> for you. Its UI is at <code>http://localhost:3000</code>.</div>
 
 <div class="callout bad">
 <strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
@@ -306,21 +310,28 @@ LLM_API_KEY=…
 <ul class="b">
 <li>Every upload and every result file goes through DeepLynx, INL's data store.</li>
 <li><strong>Every agent call writes an execution record there, so an agent without DeepLynx settings does not even start.</strong></li>
-<li>Everyone runs a <strong>local DeepLynx</strong> next to the platform (next three slides). The settings are the <code>DEEPLYNX_*</code> lines in <code>.env</code>.</li>
+<li>Everyone runs a <strong>local DeepLynx</strong> inside the platform stack (next slide). The settings are the <code>DEEPLYNX_*</code> lines in <code>.env</code>, and <code>make up</code> writes them for you.</li>
 </ul>
   </div>
 </section>
 
 <section class="slide">
-  <div class="head"><div class="eyebrow">Local DeepLynx · 1</div><h2>Clone, build, start</h2></div>
+  <div class="head"><div class="eyebrow">Local DeepLynx</div><h2>One line in <code>.env</code>, and <code>make up</code> does the rest</h2></div>
   <div class="content">
 <div class="grid g2" style="gap:30px;">
 <div class="col">
-<pre class="sm">git clone https://github.com/idaholab/DeepLynx.git
-cd DeepLynx
-cp .env_sample .env
-docker compose build
-docker compose up          <span class="c"># add -d to detach</span></pre>
+<pre class="sm"><span class="c"># in prometheus_core/platform, once (deck 03, &quot;Once, then four commands&quot;)</span>
+echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env
+make up</pre>
+<p class="small">With that line, <strong>every</strong> <code>make up</code> and <code>make restart</code> first runs <code>make deeplynx-setup</code>:</p>
+<ol class="b small">
+<li>starts DeepLynx's database, server, and web UI in the platform's own compose project, from the published images: nothing to clone or build</li>
+<li>creates a project named <strong>Prometheus</strong> in the default organization, and an API key for it</li>
+<li>writes <code>DEEPLYNX_BASE_URL</code>, <code>_KEY</code>, <code>_SECRET</code>, <code>_ORG_ID</code>, <code>_PROJECT_ID</code> to <code>.env</code></li>
+</ol>
+<p class="small">A key that still works is kept, so later starts change nothing. <code>setup_agent.py</code> copies the <code>DEEPLYNX_*</code> lines into your agent's <code>.env</code>.</p>
+</div>
+<div class="col">
 <table class="t sm">
 <thead>
 <tr>
@@ -331,99 +342,29 @@ docker compose up          <span class="c"># add -d to detach</span></pre>
 </thead>
 <tbody>
 <tr class="hl">
-<td><code>ui</code></td>
+<td><code>deeplynx-ui</code></td>
 <td>3000</td>
-<td>admin web UI (auth disabled locally)</td>
+<td>web UI: look at uploads and results (no login)</td>
 </tr>
 <tr class="hl">
-<td><code>server</code></td>
+<td><code>deeplynx-server</code></td>
 <td>5000</td>
-<td><strong>API</strong> at <code>/api/v1</code>, which the platform uses</td>
+<td>API; agents use <code>http://deeplynx-server:5000/api/v1</code></td>
 </tr>
 <tr>
-<td><code>docs</code></td>
-<td>3001</td>
-<td>documentation site</td>
-</tr>
-<tr>
-<td><code>nx-postgres</code></td>
-<td>5432</td>
+<td><code>deeplynx-postgres</code></td>
+<td>none</td>
 <td>its database</td>
-</tr>
-<tr>
-<td><code>mcp</code></td>
-<td>43656</td>
-<td>DeepLynx MCP server</td>
-</tr>
-<tr>
-<td><code>insight-*</code></td>
-<td>5009, 5672…</td>
-<td>only with <code>--profile insight</code></td>
 </tr>
 </tbody>
 </table>
-</div>
-<div class="col">
-<div class="card">
-<h4>It runs next to the platform</h4>
-<p class="small">DeepLynx has its own compose project and network (<code>nexus-network</code>). The platform containers reach it through your host at <code>prometheus.host.internal:5000</code>.</p>
-</div>
+<div class="callout warn">
+<strong>macOS: port 5000</strong> is often taken by the AirPlay Receiver (System Settings › General › AirDrop &amp; Handoff). Turn it off: the UI only works with the API on 5000.</div>
 
 <div class="callout warn">
-<strong>macOS: port 5000</strong> is often taken by the AirPlay Receiver (System Settings › General › AirDrop &amp; Handoff). Turn it off, or remap the <code>server</code> port.</div>
+Already running DeepLynx from its own clone? Stop it (<code>docker compose down</code> in that folder). It holds ports 3000 and 5000, and the platform no longer uses it.</div>
 
-<div class="callout warn">
-<strong>Port 5432</strong> clashes with any local Postgres. The platform's own databases do not publish ports, so they won't collide.</div>
-
-<p class="small">Pulled new DeepLynx changes? <code>docker compose up --build</code>.</p>
-</div>
-</div>
-
-  </div>
-</section>
-
-<section class="slide">
-  <div class="head"><div class="eyebrow">Local DeepLynx · 2</div><h2>Create a project at <code>http://localhost:3000</code></h2></div>
-  <div class="content">
-<div class="grid g3" style="gap:20px;">
-<div class="col">
-<img alt="Selecting the INL default organization" class="fit" src="assets/deeplynx/dl_3.png" style="border:1px solid var(--rule); border-radius:8px"/>
-<p class="small"><strong>①</strong> Skip or take the quick tour. In the top-left dropdown, select <strong>&quot;INL – default organization&quot;</strong>.</p>
-</div>
-<div class="col">
-<img alt="Empty organization with + Project button" class="fit" src="assets/deeplynx/dl_4.png" style="border:1px solid var(--rule); border-radius:8px"/>
-<p class="small"><strong>②</strong> Click <strong>&quot;+ Project&quot;</strong> and give it any name. A project is a fenced-off database for the platform.</p>
-</div>
-<div class="col">
-<img alt="Project page with project ID in URL" class="fit" src="assets/deeplynx/dl_6.png" style="border:1px solid var(--rule); border-radius:8px"/>
-<p class="small"><strong>③</strong> The URL now shows <code>localhost:3000/project/1</code>. <strong>1 is your project ID</strong>; each new project gets a new one.</p>
-</div>
-</div>
-
-  </div>
-</section>
-
-<section class="slide">
-  <div class="head"><div class="eyebrow">Local DeepLynx · 3</div><h2>Generate an API key and point the platform at it</h2></div>
-  <div class="content">
-<div class="grid" style="grid-template-columns: 0.8fr 0.8fr 1.4fr; gap:22px;">
-<div class="col">
-<img alt="Local Developer menu with Settings" class="fit" src="assets/deeplynx/dl_7.png" style="border:1px solid var(--rule); border-radius:8px"/>
-<p class="small"><strong>④</strong> Bottom left: person icon → under <em>Local Developer</em> click <strong>Settings</strong> (not the organization settings in the far-left bar).</p>
-</div>
-<div class="col">
-<img alt="API Keys section with Generate New" class="fit" src="assets/deeplynx/dl_8.png" style="border:1px solid var(--rule); border-radius:8px"/>
-<p class="small"><strong>⑤</strong> API Keys → <strong>&quot;+ Generate New&quot;</strong>. Copy the <strong>key and secret</strong> now: the secret is shown only once.</p>
-</div>
-<div class="col">
-<p class="small"><strong>⑥</strong> In <code>prometheus_core/platform/.env</code>:</p>
-<pre class="sm">DEEPLYNX_KEY=…
-DEEPLYNX_SECRET=…
-DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1/
-DEEPLYNX_ORG_ID=1
-DEEPLYNX_PROJECT_ID=1</pre>
-<p class="small">Then <code>make restart</code>. <code>setup_agent.py</code> copies every <code>DEEPLYNX_*</code> into your agent's <code>.env</code>.</p>
-<p class="small">Agent running on the host (not in Docker)? Use <code>http://localhost:5000/api/v1</code>.</p>
+<p class="small"><code>make down-v</code> deletes DeepLynx's data with the platform's; the next <code>make up</code> creates a new key, so run <code>setup_agent.py --env-only</code> for your agent again.</p>
 </div>
 </div>
 
@@ -443,7 +384,7 @@ cfg = ConnectionConfig.from_env()
     page = c.items.list(page_size=<span class="n">5</span>)
     print(<span class="s">&quot;OK&quot;</span>, cfg.base_url, len(page.items), <span class="s">&quot;items&quot;</span>)
 EOF</pre>
-<p class="small">Then upload a file in the chat. It should appear in the DeepLynx UI under your project, and <code>/artifacts</code> lists it.</p>
+<p class="small">Then upload a file in the chat. It should appear in the DeepLynx UI (<code>http://localhost:3000</code>) under the <strong>Prometheus</strong> project, and <code>/artifacts</code> lists it.</p>
 </div>
 
   </div>
@@ -462,7 +403,7 @@ EOF</pre>
 <tbody>
 <tr>
 <td>Agent exits: &quot;Invalid required DeepLynx configuration: …&quot;</td>
-<td>set <code>DEEPLYNX_KEY</code> + <code>DEEPLYNX_SECRET</code>, <code>DEEPLYNX_ORG_ID</code>, <code>DEEPLYNX_PROJECT_ID</code> in its <code>.env</code></td>
+<td>its <code>.env</code> lacks the <code>DEEPLYNX_*</code> lines: <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder</td>
 </tr>
 <tr>
 <td>Your agent disappeared from <code>/agents</code></td>
@@ -478,7 +419,7 @@ EOF</pre>
 </tr>
 <tr>
 <td>&quot;DeepLynx storage is not configured&quot;</td>
-<td>set the <code>DEEPLYNX_*</code> lines, <code>make restart</code></td>
+<td><code>LOCAL_DEEPLYNX=true</code> is missing from <code>platform/.env</code>: add it, <code>make restart</code></td>
 </tr>
 <tr>
 <td>Backend fails: <code>password authentication failed for user &quot;admin&quot;</code></td>
@@ -564,7 +505,7 @@ EOF</pre>
 </tr>
 <tr>
 <td><strong>A local DeepLynx</strong></td>
-<td>Required: agents don't start without it. Set up in this deck (Local DeepLynx · 1–3).</td>
+<td>Required: agents don't start without it. Nothing to set up: <code>LOCAL_DEEPLYNX=true</code> in <code>.env</code> runs it with the platform. Port 5000 must be free (macOS: AirPlay Receiver).</td>
 </tr>
 <tr>
 <td><strong>uv + Python 3.12</strong></td>
@@ -595,8 +536,9 @@ git remote add upstream <span class="s">\</span>
   git@github.com:idaholab/prometheus_core.git
 git switch devel
 
-make init-env                 <span class="c"># creates .env, asks for LLM + key</span>
-echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env   <span class="c"># base image from ../sdk</span></pre>
+make init-env                       <span class="c"># creates .env, asks for LLM + key</span>
+echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env       <span class="c"># base image from ../sdk</span>
+echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env  <span class="c"># DeepLynx in the stack</span></pre>
 <div class="col">
 <div class="card">
 <h4>Why a base image?</h4>
@@ -613,7 +555,7 @@ echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env   <span cla
 </section>
 
 <section class="slide bonus">
-  <div class="head"><div class="eyebrow">Bonus · Step 2 · in prometheus_core/platform</div><h2><code>.env</code>: <code>make up</code> writes it, you add one key</h2></div>
+  <div class="head"><div class="eyebrow">Bonus · Step 2 · in prometheus_core/platform</div><h2><code>.env</code>: <code>make up</code> writes it, you add two lines</h2></div>
   <div class="content">
 <div class="grid g32" style="gap:28px;">
 <table class="t sm">
@@ -633,8 +575,16 @@ echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env   <span cla
 <td><strong>you</strong>: build the base image from <code>../sdk</code></td>
 </tr>
 <tr class="hl">
+<td><code>LOCAL_DEEPLYNX=true</code></td>
+<td><strong>you</strong>: run DeepLynx with the platform</td>
+</tr>
+<tr>
 <td><code>DEEPLYNX_*</code> (key, secret, org, project, URL)</td>
-<td><strong>you</strong>: from your local DeepLynx</td>
+<td><code>make up</code> (<code>deeplynx-setup</code>), from the local DeepLynx</td>
+</tr>
+<tr>
+<td><code>DEEPLYNX_DB_PASSWORD</code> and the other DeepLynx server secrets</td>
+<td>generated</td>
 </tr>
 <tr>
 <td><code>AGENT_SECRET</code>, <code>REDIS_PASSWORD</code>, <code>ADMIN_DB_PASSWORD</code></td>
@@ -696,8 +646,12 @@ Never commit <code>.env</code>. Never paste it into chat or a PR. Back it up: lo
 <td>Set <code>LLM_CONFIG_PROFILE</code> and its <code>LLM_API_KEY</code> in <code>.env</code> (or blank the profile and rerun <code>make up</code> for the menu).</td>
 </tr>
 <tr>
-<td>Port is already allocated (5150, 8600, 6379, 3000)</td>
-<td>Another process or an old stack is using it. <code>make down</code>, or change <code>*_PORT</code> in <code>.env</code>.</td>
+<td>Port is already allocated (5150, 8600, 6379, 3000, 5000)</td>
+<td>Another process or an old stack is using it: often a DeepLynx started from its own clone (<code>docker compose down</code> there), or on macOS the AirPlay Receiver on 5000. <code>make down</code>, or change <code>*_PORT</code> in <code>.env</code>.</td>
+</tr>
+<tr>
+<td><code>make up</code> stops: &quot;DeepLynx didn't answer at http://localhost:5000/api/v1/health&quot;</td>
+<td>Something else answers on port 5000, or the server is slow on its first start. <code>make logs SERVICE=deeplynx-server</code>, free the port, <code>make up</code> again.</td>
 </tr>
 <tr>
 <td>Backend exits: &quot;jwt_secret is not configured&quot;</td>
@@ -886,9 +840,14 @@ A port is already taken, for example by a local Redis on 6379? Change the variab
 <td><code>false</code></td>
 <td><strong>Set it to <code>true</code></strong>: build the base image from <code>../sdk</code> (<code>prometheus_api:local</code>)</td>
 </tr>
+<tr class="hl">
+<td><code>LOCAL_DEEPLYNX</code></td>
+<td><code>false</code></td>
+<td><strong>Set it to <code>true</code></strong>: run DeepLynx with the platform and fill in <code>DEEPLYNX_*</code></td>
+</tr>
 <tr>
 <td><code>DEEPLYNX_BASE_URL/KEY/SECRET/ORG_ID/PROJECT_ID</code></td>
-<td>empty</td>
+<td>written by <code>make up</code></td>
 <td><strong>Required</strong>: uploads, <code>deeplynx://</code>, execution records</td>
 </tr>
 <tr>
@@ -1607,7 +1566,7 @@ fs = fsspec.filesystem(<span class="s">&quot;deeplynx&quot;</span>,
 fs.get(<span class="s">&quot;deeplynx://organizations/1/projects/1/items/42&quot;</span>,
        <span class="s">&quot;/tmp/out/&quot;</span>)          <span class="c"># → /tmp/out/42</span></pre>
 <div class="callout warn">
-No DeepLynx configured → agents exit at startup with &quot;Invalid required DeepLynx configuration: …&quot;, and uploads show &quot;DeepLynx storage is not configured&quot;. Use the local instance from the main talk.</div>
+No DeepLynx configured → agents exit at startup with &quot;Invalid required DeepLynx configuration: …&quot;, and uploads show &quot;DeepLynx storage is not configured&quot;. Set <code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code> (main talk).</div>
 
 </div>
 </div>
@@ -1628,28 +1587,28 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </thead>
 <tbody>
 <tr>
-<td>Connection refused to <code>prometheus.host.internal</code></td>
-<td>DeepLynx must listen on <code>0.0.0.0:5000</code>, and on Linux the host firewall must allow the Docker bridge. <code>host.docker.internal</code> does not exist on Linux; use <code>prometheus.host.internal</code>.</td>
+<td><code>make up</code> stops at <code>deeplynx-setup</code></td>
+<td>Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone), or <code>deeplynx-server</code> failed: <code>make logs SERVICE=deeplynx-server</code>.</td>
 </tr>
 <tr>
-<td><code>AuthenticationError</code> / 401</td>
-<td>Key and secret swapped, or the secret was not copied completely. Generate a new key.</td>
+<td><code>AuthenticationError</code> / 401 in your agent</td>
+<td>Its <code>.env</code> has an old key: after <code>make down-v</code> the platform made a new one. <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder.</td>
+</tr>
+<tr>
+<td>Connection refused to <code>deeplynx-server</code></td>
+<td>The agent is not on <code>prometheus_platform_agent-network</code>, or runs on the host: then use <code>DEEPLYNX_BASE_URL=http://localhost:5000/api/v1</code>.</td>
 </tr>
 <tr>
 <td>&quot;Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…&quot;</td>
-<td><code>DEEPLYNX_ORG_ID</code> / <code>_PROJECT_ID</code> are empty. Set them; also set key + secret <strong>or</strong> <code>DEEPLYNX_JWT_TOKEN</code>, never both.</td>
-</tr>
-<tr>
-<td>&quot;Failed to get data source ID…&quot;</td>
-<td>The project has no default data source. Set <code>DEEPLYNX_DATA_SOURCE_ID</code> (list them with <code>examples/list_datasources.py</code> in prometheus_api).</td>
+<td>The agent's <code>.env</code> has no <code>DEEPLYNX_*</code> lines: run <code>setup_agent.py --env-only</code> after a platform <code>make up</code>.</td>
 </tr>
 <tr>
 <td><code>deeplynx://</code> URI won't resolve in your agent</td>
 <td>The agent needs the <strong>same org and project</strong> in its <code>ConnectionConfig</code> as the URI.</td>
 </tr>
 <tr>
-<td>Nothing on :5000 (macOS)</td>
-<td>AirPlay Receiver has the port.</td>
+<td>UI at :3000 shows no data or errors</td>
+<td>The UI calls the API from your browser at <code>localhost:5000</code>; it only works with <code>DEEPLYNX_SERVER_PORT=5000</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -1712,7 +1671,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </tr>
 <tr>
 <td>Upload ignored: &quot;DeepLynx storage is not configured&quot;</td>
-<td>Set <code>DEEPLYNX_*</code> and <code>make restart</code>.</td>
+<td>Add <code>LOCAL_DEEPLYNX=true</code> to <code>platform/.env</code> and <code>make restart</code>.</td>
 </tr>
 <tr>
 <td>Agent container restarts, log says &quot;Invalid required DeepLynx configuration&quot;</td>

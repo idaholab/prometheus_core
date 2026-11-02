@@ -39,12 +39,11 @@ order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
   primer (deck 03) and the check question `secrets`, once.
 - **After item 6 passes**: the check question `registry-wipe`, once; offer
   `/how explain registration and discovery`.
-- **DeepLynx** (9): required, since agents exit at startup without it. Ask (header `DeepLynx`): "Guided
-  local setup" (recommended), "I have a local one already". Guided: follow
-  `artifacts.md` ("Local DeepLynx"); run the shell steps; the user does the browser steps and
-  edits the `.env` (the secret never goes into the chat); then `deeplynx-env`, a platform
-  `make restart` (yes), `deeplynx-backend`, `agent-env-sync`, and `make up` in the agent folder.
-  Already running: the same from the `.env` edit on.
+- **DeepLynx** (9): required, since agents exit at startup without it. The platform runs it with
+  `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Add the line to the platform
+  `.env` (yes), a platform `make restart` (yes; it writes the `DEEPLYNX_*` lines, no secret goes into
+  the chat), then `deeplynx-env`, `deeplynx-backend`, `agent-env-sync`, and `make up` in the agent folder.
+  A DeepLynx started from its own clone: stop it first (`docker compose down` there; ports 3000, 5000).
 - **Personal skills** (10): WARN; give the rename command for the user's own terminal.
 - **No LLM key** (8) or **no access** (2): name the mentor (`mentors.md`).
 

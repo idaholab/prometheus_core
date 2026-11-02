@@ -208,7 +208,7 @@ text = path.read_text()          # a local file, whatever the source
 ```
 
 ::: callout warn
-No DeepLynx configured → uploads never reach your agent. Check it before you start (deck 03).
+No DeepLynx configured → uploads never reach your agent. Check that `platform/.env` has `LOCAL_DEEPLYNX=true` before you start (deck 03).
 :::
 
 ---

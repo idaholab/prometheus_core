@@ -50,7 +50,7 @@ You have a key for an LLM profile.
 ### Files work
 
 {.small}
-A local DeepLynx: agents won't start without it.
+A local DeepLynx (`LOCAL_DEEPLYNX=true`): agents won't start without it.
 :::
 ::::
 
@@ -67,21 +67,22 @@ Platform not starting yet? Work through the bonus slides at the end of this deck
 |---|---|---|
 | `http://localhost:5150` | the chat UI | test your agent like a user {.hl} |
 | `http://localhost:8600` | the backend: also the agent registry and gateway | check health (`/healthz`), list registered agents (`/v1/agents`) |
-| `http://localhost:3000` | your local DeepLynx | see uploads and result files |
+| `http://localhost:3000` | your local DeepLynx (part of the stack) | see uploads and result files |
 
 {.body}
-Behind them: the orchestrator (`client-agent`), two agents, a state store (Valkey), and the admin database. They talk to each other on the Docker network `prometheus_platform_agent-network`, which your agent joins too.
+Behind them: the orchestrator (`client-agent`), two agents, a state store (Valkey), the admin database, and DeepLynx. They talk to each other on the Docker network `prometheus_platform_agent-network`, which your agent joins too.
 
 ---
 
 ## Once, then four commands {eyebrow="Day to day"}
 
 :::: grid 2 gap=30px
-```bash {.sm hl=3-4}
+```bash {.sm hl=3-5}
 cd ~/prometheus/prometheus_core/platform
 
-make init-env                  # once: creates .env (next slide)
-echo "LOCAL_SDK=true" >> .env  # once: base image from ../sdk
+make init-env                       # once: creates .env (next slide)
+echo "LOCAL_SDK=true" >> .env       # once: base image from ../sdk
+echo "LOCAL_DEEPLYNX=true" >> .env  # once: DeepLynx next to the platform
 
 make up                        # build, start, wait, make check
 make restart                   # restart, no rebuild
@@ -93,6 +94,10 @@ make down                      # stop
 
 ::: callout info
 **`LOCAL_SDK=true`**: every Python service is built `FROM` the `prometheus_api` base image. With this line, `make up` first builds that image from `../sdk` on your laptop (`prometheus_api:local`): no registry, no token. Without it, `make up` tries to pull from `containers.github.inl.gov` and fails with `unauthorized`. Put it in `.env` after `make init-env`, so every later `make up` sees it.
+:::
+
+::: callout info
+**`LOCAL_DEEPLYNX=true`**: every `make up` also starts DeepLynx in the platform's compose project and runs `make deeplynx-setup`, which creates a project and API key and writes the `DEEPLYNX_*` lines to `.env` for you. Its UI is at `http://localhost:3000`.
 :::
 
 ::: callout bad
@@ -269,113 +274,50 @@ Note: The template compose forwards LLM_CONFIG_PROFILE, LLM_API_KEY and EMBEDDIN
 
 - Every upload and every result file goes through DeepLynx, INL's data store.
 - **Every agent call writes an execution record there, so an agent without DeepLynx settings does not even start.**
-- Everyone runs a **local DeepLynx** next to the platform (next three slides). The settings are the `DEEPLYNX_*` lines in `.env`.
+- Everyone runs a **local DeepLynx** inside the platform stack (next slide). The settings are the `DEEPLYNX_*` lines in `.env`, and `make up` writes them for you.
 
 ---
 
-## Clone, build, start {eyebrow="Local DeepLynx · 1"}
+## One line in `.env`, and `make up` does the rest {eyebrow="Local DeepLynx"}
 
 :::: grid 2 gap=30px
 ```bash {.sm}
-git clone https://github.com/idaholab/DeepLynx.git
-cd DeepLynx
-cp .env_sample .env
-docker compose build
-docker compose up          # add -d to detach
+# in prometheus_core/platform, once (deck 03, "Once, then four commands")
+echo "LOCAL_DEEPLYNX=true" >> .env
+make up
 ```
+
+{.small}
+With that line, **every** `make up` and `make restart` first runs `make deeplynx-setup`:
+
+{.small}
+1. starts DeepLynx's database, server, and web UI in the platform's own compose project, from the published images: nothing to clone or build
+2. creates a project named **Prometheus** in the default organization, and an API key for it
+3. writes `DEEPLYNX_BASE_URL`, `_KEY`, `_SECRET`, `_ORG_ID`, `_PROJECT_ID` to `.env`
+
+{.small}
+A key that still works is kept, so later starts change nothing. `setup_agent.py` copies the `DEEPLYNX_*` lines into your agent's `.env`.
+
+|||
 
 {.sm}
 | Service | Host port | What |
 |---|---|---|
-| `ui` | 3000 | admin web UI (auth disabled locally) {.hl} |
-| `server` | 5000 | **API** at `/api/v1`, which the platform uses {.hl} |
-| `docs` | 3001 | documentation site |
-| `nx-postgres` | 5432 | its database |
-| `mcp` | 43656 | DeepLynx MCP server |
-| `insight-*` | 5009, 5672… | only with `--profile insight` |
+| `deeplynx-ui` | 3000 | web UI: look at uploads and results (no login) {.hl} |
+| `deeplynx-server` | 5000 | API; agents use `http://deeplynx-server:5000/api/v1` {.hl} |
+| `deeplynx-postgres` | none | its database |
 
-|||
-
-::: card
-#### It runs next to the platform
-
-{.small}
-DeepLynx has its own compose project and network (`nexus-network`). The platform containers reach it through your host at `prometheus.host.internal:5000`.
+::: callout warn
+**macOS: port 5000** is often taken by the AirPlay Receiver (System Settings › General › AirDrop & Handoff). Turn it off: the UI only works with the API on 5000.
 :::
 
 ::: callout warn
-**macOS: port 5000** is often taken by the AirPlay Receiver (System Settings › General › AirDrop & Handoff). Turn it off, or remap the `server` port.
-:::
-
-::: callout warn
-**Port 5432** clashes with any local Postgres. The platform's own databases do not publish ports, so they won't collide.
+Already running DeepLynx from its own clone? Stop it (`docker compose down` in that folder). It holds ports 3000 and 5000, and the platform no longer uses it.
 :::
 
 {.small}
-Pulled new DeepLynx changes? `docker compose up --build`.
+`make down-v` deletes DeepLynx's data with the platform's; the next `make up` creates a new key, so run `setup_agent.py --env-only` for your agent again.
 ::::
-
----
-
-## Create a project at `http://localhost:3000` {eyebrow="Local DeepLynx · 2"}
-
-::: grid 3 gap=20px
-<img alt="Selecting the INL default organization" class="fit" src="assets/deeplynx/dl_3.png" style="border:1px solid var(--rule); border-radius:8px"/>
-
-{.small}
-**①** Skip or take the quick tour. In the top-left dropdown, select **"INL – default organization"**.
-
-|||
-
-<img alt="Empty organization with + Project button" class="fit" src="assets/deeplynx/dl_4.png" style="border:1px solid var(--rule); border-radius:8px"/>
-
-{.small}
-**②** Click **"+ Project"** and give it any name. A project is a fenced-off database for the platform.
-
-|||
-
-<img alt="Project page with project ID in URL" class="fit" src="assets/deeplynx/dl_6.png" style="border:1px solid var(--rule); border-radius:8px"/>
-
-{.small}
-**③** The URL now shows `localhost:3000/project/1`. **1 is your project ID**; each new project gets a new one.
-:::
-
----
-
-## Generate an API key and point the platform at it {eyebrow="Local DeepLynx · 3"}
-
-::: cols 0.8fr 0.8fr 1.4fr gap=22px
-<img alt="Local Developer menu with Settings" class="fit" src="assets/deeplynx/dl_7.png" style="border:1px solid var(--rule); border-radius:8px"/>
-
-{.small}
-**④** Bottom left: person icon → under *Local Developer* click **Settings** (not the organization settings in the far-left bar).
-
-|||
-
-<img alt="API Keys section with Generate New" class="fit" src="assets/deeplynx/dl_8.png" style="border:1px solid var(--rule); border-radius:8px"/>
-
-{.small}
-**⑤** API Keys → **"+ Generate New"**. Copy the **key and secret** now: the secret is shown only once.
-
-|||
-
-{.small}
-**⑥** In `prometheus_core/platform/.env`:
-
-```text {.sm}
-DEEPLYNX_KEY=…
-DEEPLYNX_SECRET=…
-DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1/
-DEEPLYNX_ORG_ID=1
-DEEPLYNX_PROJECT_ID=1
-```
-
-{.small}
-Then `make restart`. `setup_agent.py` copies every `DEEPLYNX_*` into your agent's `.env`.
-
-{.small}
-Agent running on the host (not in Docker)? Use `http://localhost:5000/api/v1`.
-:::
 
 ---
 
@@ -395,7 +337,7 @@ EOF
 ```
 
 {.small}
-Then upload a file in the chat. It should appear in the DeepLynx UI under your project, and `/artifacts` lists it.
+Then upload a file in the chat. It should appear in the DeepLynx UI (`http://localhost:3000`) under the **Prometheus** project, and `/artifacts` lists it.
 :::
 
 ---
@@ -405,11 +347,11 @@ Then upload a file in the chat. It should appear in the DeepLynx UI under your p
 {.sm widths="470px|"}
 | Symptom | Fix |
 |---|---|
-| Agent exits: "Invalid required DeepLynx configuration: …" | set `DEEPLYNX_KEY` + `DEEPLYNX_SECRET`, `DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID` in its `.env` |
+| Agent exits: "Invalid required DeepLynx configuration: …" | its `.env` lacks the `DEEPLYNX_*` lines: `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder |
 | Your agent disappeared from `/agents` | the platform restarted: `docker compose -p <agent-folder> restart` |
 | LLM call gets HTTP 401 | the key for your `LLM_CONFIG_PROFILE` is missing or wrong in the agent's `.env` |
 | `LLMConfigError` / "set LLM_CONFIG_PROFILE in .env" | the profile is empty or misspelled; the message lists the installed ones |
-| "DeepLynx storage is not configured" | set the `DEEPLYNX_*` lines, `make restart` |
+| "DeepLynx storage is not configured" | `LOCAL_DEEPLYNX=true` is missing from `platform/.env`: add it, `make restart` |
 | Backend fails: `password authentication failed for user "admin"` | a second platform checkout reuses the same Docker volumes: restore the old `ADMIN_DB_PASSWORD` and `ADMIN_DB_ENCRYPTION_KEY` in `.env`, or `make clobber` (deletes users, keys, and history) |
 | Something else | `make logs SERVICE=<name>`; the appendix has the full troubleshooting tables |
 
@@ -461,7 +403,7 @@ For participants whose platform does not start yet: prerequisites, clone, `.env`
 | **`gh`, the GitHub CLI** | Used for forks and PRs. `brew install gh` (needs admin), or copy the release binary from `github.com/cli/cli/releases` into `~/.local/bin`; then `gh auth login`. |
 | **The `prometheus_api` base image** | Nothing to set up: `LOCAL_SDK=true` in `.env` builds it from `sdk/` on your laptop. |
 | **An LLM credential** | `LLM_API_KEY` for the profile you pick (INL LiteLLM, Genesis, Anthropic…), or a local ollama. |
-| **A local DeepLynx** | Required: agents don't start without it. Set up in this deck (Local DeepLynx · 1–3). |
+| **A local DeepLynx** | Required: agents don't start without it. Nothing to set up: `LOCAL_DEEPLYNX=true` in `.env` runs it with the platform. Port 5000 must be free (macOS: AirPlay Receiver). |
 | **uv + Python 3.12** | Only for running things outside Docker: tests, a host-run agent, `setup_agent.py`. `uv --version` |
 | Node.js 22 (optional) | Only to run the frontend dev server on the host (`make react-dev`). |
 | Disk space | Several GB for images. No minimum RAM is documented; if builds get killed, raise the Docker Desktop memory limit. |
@@ -482,8 +424,9 @@ git remote add upstream \
   git@github.com:idaholab/prometheus_core.git
 git switch devel
 
-make init-env                 # creates .env, asks for LLM + key
-echo "LOCAL_SDK=true" >> .env   # base image from ../sdk
+make init-env                       # creates .env, asks for LLM + key
+echo "LOCAL_SDK=true" >> .env       # base image from ../sdk
+echo "LOCAL_DEEPLYNX=true" >> .env  # DeepLynx in the stack
 ```
 
 |||
@@ -502,7 +445,7 @@ Every Python service (backend, client-agent, all agents) is built `FROM` the `pr
 
 ---
 
-## `.env`: `make up` writes it, you add one key {eyebrow="Bonus · Step 2 · in prometheus_core/platform"}
+## `.env`: `make up` writes it, you add two lines {eyebrow="Bonus · Step 2 · in prometheus_core/platform"}
 
 :::: grid 32 gap=28px
 {.sm}
@@ -510,7 +453,9 @@ Every Python service (backend, client-agent, all agents) is built `FROM` the `pr
 |---|---|
 | `LLM_CONFIG_PROFILE` + `LLM_API_KEY` | **you**: `make up` asks for both {.hl} |
 | `LOCAL_SDK=true` | **you**: build the base image from `../sdk` {.hl} |
-| `DEEPLYNX_*` (key, secret, org, project, URL) | **you**: from your local DeepLynx {.hl} |
+| `LOCAL_DEEPLYNX=true` | **you**: run DeepLynx with the platform {.hl} |
+| `DEEPLYNX_*` (key, secret, org, project, URL) | `make up` (`deeplynx-setup`), from the local DeepLynx |
+| `DEEPLYNX_DB_PASSWORD` and the other DeepLynx server secrets | generated |
 | `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD` | generated |
 | `BACKEND_JWT_SECRET` | generated (session-cookie signing key) |
 | `ADMIN_DB_ENCRYPTION_KEY` | generated (Fernet key for admin-db) |
@@ -546,7 +491,8 @@ Never commit `.env`. Never paste it into chat or a PR. Back it up: losing `ADMIN
 | `unauthorized`, `denied` or `invalid reference format` for the base image | `LOCAL_SDK=true` is missing from `.env`, so the build looks for an image registry. Add the line and run `make up` again. |
 | `pull access denied for prometheus_api` | `LOCAL_SDK=true` is set, but `docker compose` ran without make, so `prometheus_api:local` was never built. Run `make base-image`, or always go through `make up`. |
 | `make up` stops: "`LLM_API_KEY` is empty" or "`LLM_CONFIG_PROFILE=registry` … is not supported" | Set `LLM_CONFIG_PROFILE` and its `LLM_API_KEY` in `.env` (or blank the profile and rerun `make up` for the menu). |
-| Port is already allocated (5150, 8600, 6379, 3000) | Another process or an old stack is using it. `make down`, or change `*_PORT` in `.env`. |
+| Port is already allocated (5150, 8600, 6379, 3000, 5000) | Another process or an old stack is using it: often a DeepLynx started from its own clone (`docker compose down` there), or on macOS the AirPlay Receiver on 5000. `make down`, or change `*_PORT` in `.env`. |
+| `make up` stops: "DeepLynx didn't answer at http://localhost:5000/api/v1/health" | Something else answers on port 5000, or the server is slow on its first start. `make logs SERVICE=deeplynx-server`, free the port, `make up` again. |
 | Backend exits: "jwt_secret is not configured" | `BACKEND_JWT_SECRET` is empty: you ran `docker compose` without make. Run `make init-env` (an old `CHAINLIT_AUTH_SECRET` is no longer read). |
 | Backend exits during an alembic step | Migrations run in `backend/docker-entrypoint.sh` before uvicorn; `make logs SERVICE=backend`. |
 | SSL / certificate errors during `npm ci` or `pip` on the INL network | TLS inspection. The INL bundle is checked in under `common/certs/`; pull the latest `devel`. Extra CAs: drop a `*.pem` there. |
@@ -652,7 +598,8 @@ A port is already taken, for example by a local Redis on 6379? Change the variab
 | `LLM_API_KEY` | empty | The key for the chosen profile (every profile reads it) |
 | `EMBEDDING_API_KEY` | empty | Embeddings key for `anthropic`, `anl_asksage` |
 | `LOCAL_SDK` | `false` | **Set it to `true`**: build the base image from `../sdk` (`prometheus_api:local`) {.hl} |
-| `DEEPLYNX_BASE_URL/KEY/SECRET/ORG_ID/PROJECT_ID` | empty | **Required**: uploads, `deeplynx://`, execution records |
+| `LOCAL_DEEPLYNX` | `false` | **Set it to `true`**: run DeepLynx with the platform and fill in `DEEPLYNX_*` {.hl} |
+| `DEEPLYNX_BASE_URL/KEY/SECRET/ORG_ID/PROJECT_ID` | written by `make up` | **Required**: uploads, `deeplynx://`, execution records |
 | `PROMETHEUS_MAX_UPLOAD_BYTES` | 104857600 | 100 MiB upload cap |
 | `HTTP(S)_PROXY`, `NO_PROXY` | commented | Build args for Python images only |
 
@@ -1135,7 +1082,7 @@ fs.get("deeplynx://organizations/1/projects/1/items/42",
 ```
 
 ::: callout warn
-No DeepLynx configured → agents exit at startup with "Invalid required DeepLynx configuration: …", and uploads show "DeepLynx storage is not configured". Use the local instance from the main talk.
+No DeepLynx configured → agents exit at startup with "Invalid required DeepLynx configuration: …", and uploads show "DeepLynx storage is not configured". Set `LOCAL_DEEPLYNX=true` in `platform/.env` (main talk).
 :::
 ::::
 
@@ -1147,12 +1094,12 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 {.sm .wrap-code}
 | Symptom | Fix |
 |---|---|
-| Connection refused to `prometheus.host.internal` | DeepLynx must listen on `0.0.0.0:5000`, and on Linux the host firewall must allow the Docker bridge. `host.docker.internal` does not exist on Linux; use `prometheus.host.internal`. |
-| `AuthenticationError` / 401 | Key and secret swapped, or the secret was not copied completely. Generate a new key. |
-| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | `DEEPLYNX_ORG_ID` / `_PROJECT_ID` are empty. Set them; also set key + secret **or** `DEEPLYNX_JWT_TOKEN`, never both. |
-| "Failed to get data source ID…" | The project has no default data source. Set `DEEPLYNX_DATA_SOURCE_ID` (list them with `examples/list_datasources.py` in prometheus_api). |
+| `make up` stops at `deeplynx-setup` | Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone), or `deeplynx-server` failed: `make logs SERVICE=deeplynx-server`. |
+| `AuthenticationError` / 401 in your agent | Its `.env` has an old key: after `make down-v` the platform made a new one. `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder. |
+| Connection refused to `deeplynx-server` | The agent is not on `prometheus_platform_agent-network`, or runs on the host: then use `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1`. |
+| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | The agent's `.env` has no `DEEPLYNX_*` lines: run `setup_agent.py --env-only` after a platform `make up`. |
 | `deeplynx://` URI won't resolve in your agent | The agent needs the **same org and project** in its `ConnectionConfig` as the URI. |
-| Nothing on :5000 (macOS) | AirPlay Receiver has the port. |
+| UI at :3000 shows no data or errors | The UI calls the API from your browser at `localhost:5000`; it only works with `DEEPLYNX_SERVER_PORT=5000`. |
 
 {.tiny}
 `DEEPLYNX_TIMEOUT`, `_MAX_RETRIES`, and `_VERIFY_SSL` appear in `sdk/.env.example` but are ignored; pass them as `ConnectionConfig` arguments instead.
@@ -1179,7 +1126,7 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 | Symptom | Cause → fix |
 |---|---|
 | The orchestrator never calls your skill | A weak skill description or `usage_notes` (tags are not shown to it), a duplicate skill id, or a card URL the client-agent cannot reach (`EXTERNAL_AGENT_URL`). |
-| Upload ignored: "DeepLynx storage is not configured" | Set `DEEPLYNX_*` and `make restart`. |
+| Upload ignored: "DeepLynx storage is not configured" | Add `LOCAL_DEEPLYNX=true` to `platform/.env` and `make restart`. |
 | Agent container restarts, log says "Invalid required DeepLynx configuration" | Its `.env` lacks `DEEPLYNX_*`: `python setup_agent.py --env-only <dir>`, then `make up` in the agent dir. |
 | Mesh viewer error "libGL.so.1" | An old backend image. Rebuild with `make up`. |
 | "Live updates stopped — the server is unreachable" | The backend or Valkey restarted mid-stream. Reload: the session and the open conversation come back. |

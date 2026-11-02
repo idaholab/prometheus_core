@@ -25,7 +25,7 @@ Note: ANL welcoming address goes first. Then walk the agenda, the architecture o
 </div>
 
 ::: callout info
-We assume your platform already starts with `make up` and DeepLynx is set up. Not quite there? Each deck ends with **bonus catch-up slides**, and mentors will help.
+We assume your platform already starts with `make up`, with `LOCAL_SDK=true` and `LOCAL_DEEPLYNX=true` in `platform/.env`. Not quite there? Each deck ends with **bonus catch-up slides**, and mentors will help.
 :::
 
 ---
@@ -358,8 +358,9 @@ For participants who could not finish the homework. Work through these with a me
 | Docker installed and running | `docker info`, `docker compose version` (≥ 2.20) | install Docker Desktop and start it |
 | Platform cloned | `ls ~/prometheus/prometheus_core` shows `platform`, `sdk`, `agent-template` | deck 02 bonus (clone commands) |
 | Base image builds | `LOCAL_SDK=true` in `platform/.env`, then `make base-image` in `prometheus_core/platform` | deck 03 bonus (step 1) |
+| Local DeepLynx configured | `LOCAL_DEEPLYNX=true` in `platform/.env` (`make up` then runs DeepLynx and writes the `DEEPLYNX_*` lines) | deck 03 (local DeepLynx) |
 | Platform starts | `make up` in `prometheus_core/platform`, then `http://localhost:5150` | deck 03 bonus (`.env`, "the stack won't start") |
-| Local DeepLynx (**required**: no agent starts without it) | `http://localhost:3000` shows the DeepLynx UI | deck 03 (local DeepLynx) |
+| Local DeepLynx (**required**: no agent starts without it) | after `make up`, `http://localhost:3000` shows the DeepLynx UI with a **Prometheus** project | deck 03 (local DeepLynx) |
 | `uv` (for the agent session) | `uv --version` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | `gh` (decks 02 and 05) | `gh auth status` | `brew install gh` (needs admin), or copy the release binary from `github.com/cli/cli/releases` into `~/.local/bin`; then `gh auth login`. No `gh`? Use the Fork and "Compare & pull request" buttons on the web. |
 
@@ -681,7 +682,7 @@ The backend picks a viewer from `json_type`, then `mime_type`, tags, and file ex
 ::::
 
 ::: callout warn
-DeepLynx is **required**. Every skill call writes an execution record there (`self.execution_record_id`), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. We set up a local DeepLynx in the deployment session.
+DeepLynx is **required**. Every skill call writes an execution record there (`self.execution_record_id`), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. `LOCAL_DEEPLYNX=true` in `platform/.env` runs a local DeepLynx with the platform and writes the credentials for you (deployment session).
 :::
 
 ---

@@ -13,7 +13,7 @@ diagnostics. With an agent, note `<route-key>` (the second command of `registry-
    the checks of every row of the group.
 3. Primer of 2 or 3 lines on the layer, with the slide: the stack (deck 03, slide 3, A5), the
    registry and discovery (deck 03, slide 4; deck 04, A15-A16), the errors (deck 03, A19-A20),
-   the files (deck 03, slide 9; deck 04, slides 9-10).
+   the files (deck 03, slide 10; deck 04, slides 9-10).
 
 ## 2. Run the checks
 

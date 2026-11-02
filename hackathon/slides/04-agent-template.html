@@ -233,7 +233,7 @@ Prefix the <strong>card name and every skill ID</strong> with your team name. Al
     context=context, artifacts=params.get(<span class="s">&quot;artifacts&quot;</span>))
 text = path.read_text()          <span class="c"># a local file, whatever the source</span></pre>
 <div class="callout warn">
-No DeepLynx configured → uploads never reach your agent. Check it before you start (deck 03).</div>
+No DeepLynx configured → uploads never reach your agent. Check that <code>platform/.env</code> has <code>LOCAL_DEEPLYNX=true</code> before you start (deck 03).</div>
 
   </div>
 </section>

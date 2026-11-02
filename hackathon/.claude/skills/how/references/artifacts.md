@@ -61,17 +61,18 @@ docker compose -p prometheus_platform exec -T backend python -c "from prometheus
 
 ## Local DeepLynx
 
-Deck 03, slides 18-20. Free ports 3000, 5000, 5432 first.
+Deck 03, slide 11. The platform runs it: nothing to clone, build, or click through
+(`platform/docker-compose.deeplynx.yml`, `platform/scripts/deeplynx_setup.py`). Free port 5000 first
+(macOS: the AirPlay Receiver), and stop any DeepLynx started from its own clone (ports 3000, 5000).
 
-1. Next to the platform: `git clone https://github.com/idaholab/DeepLynx.git && cd DeepLynx && cp .env_sample .env && docker compose build && docker compose up -d`.
-   Check: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000` prints `200`.
-2. Open http://localhost:3000, pick "INL – default organization" (id 1), click "+ Project". The URL shows the project id.
-3. Person icon › Settings › API Keys › "+ Generate New". The secret shows once. Never paste it into the chat.
-4. In `prometheus_platform/.env` (your editor): `DEEPLYNX_KEY`, `DEEPLYNX_SECRET`,
-   `DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1`, `DEEPLYNX_ORG_ID=1`, `DEEPLYNX_PROJECT_ID`.
-5. `make down` in the agent folder, then `make restart` in the platform (it empties the registry).
-6. Copy the values into the agent, printing nothing:
-   `cd <agent> && { grep -v '^DEEPLYNX_' .env; grep -E '^DEEPLYNX_(BASE_URL|KEY|SECRET|JWT_TOKEN|ORG_ID|PROJECT_ID|DATA_SOURCE_ID)=' <platform>/.env; } > .env.new && mv .env.new .env`.
-   Only the client keys: the other `DEEPLYNX_*` lines in the platform `.env` are the DeepLynx server's own secrets.
-   This also drops them from an agent scaffolded before `setup_agent.py` stopped copying them.
-7. `make up` in the agent folder. Upload a small file in a fresh chat; `/artifacts` lists it.
+1. In the platform folder, once: `grep -c '^LOCAL_DEEPLYNX=true' .env`; on `0`, `echo "LOCAL_DEEPLYNX=true" >> .env` (after a yes).
+2. `make up` (or `make restart`). Every start target first runs `make deeplynx-setup`: it starts
+   `deeplynx-postgres`, `deeplynx-server` and `deeplynx-ui` in the platform's compose project, creates the
+   project "Prometheus" in organization 1 and an API key, and writes `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1`,
+   `DEEPLYNX_KEY`, `DEEPLYNX_SECRET`, `DEEPLYNX_ORG_ID=1` and `DEEPLYNX_PROJECT_ID` to `.env`. A key that still works is kept.
+   Expect "DeepLynx is already set up in .env." or "Saved a new DeepLynx API key for project <n> in .env."
+3. Check: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000` prints `200` (the UI, no login).
+4. Copy the values into the agent: `python3 setup_agent.py --env-only <agent>` in `agent-template/`
+   (`agent-env-sync`), then `make up` in the agent folder. Again after every `make down-v`: it deletes
+   DeepLynx's data, and the next platform start makes a new key.
+5. Upload a small file in a fresh chat; `/artifacts` lists it, and it shows in the UI under "Prometheus".

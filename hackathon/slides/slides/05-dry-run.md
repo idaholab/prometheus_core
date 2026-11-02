@@ -19,7 +19,7 @@ index:
 ### Check
 
 {.small}
-Your platform from the homework is up and current, local DeepLynx is running, and you are logged in.
+Your platform from the homework is up and current (with `LOCAL_DEEPLYNX=true`, so DeepLynx runs with it), and you are logged in.
 :::
 
 ::: card acc
@@ -87,10 +87,10 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
 
 1. Open `http://localhost:5150`; create the admin in the setup wizard if you haven't (the signing key is created for you)
 2. Chat: `/agents`, then ask a question
-3. Upload any small file: it should appear in your local DeepLynx (`http://localhost:3000`)
+3. Upload any small file: it should appear in your local DeepLynx (`http://localhost:3000`, project **Prometheus**)
 
 ::: callout warn
-Platform or DeepLynx not up yet? Use the **bonus slide** at the end of this deck, and the DeepLynx slides of deck 03.
+Platform or DeepLynx not up yet? Use the **bonus slide** at the end of this deck, and the local DeepLynx slide of deck 03.
 :::
 ::::
 
@@ -153,7 +153,7 @@ docker compose -p prometheus_platform restart client-agent
 | not in `/agents` | the platform was restarted: `docker compose -p hello-<you> restart` |
 | never routed | sharpen the description; `docker compose -p prometheus_platform restart client-agent` |
 | LLM 401 (if you added LLM calls) | the key for your `LLM_CONFIG_PROFILE` in `.env` |
-| exits at startup: "Invalid required DeepLynx configuration" | `DEEPLYNX_*` in `.env` (deck 03) |
+| exits at startup: "Invalid required DeepLynx configuration" | no `DEEPLYNX_*` in its `.env`: `LOCAL_DEEPLYNX=true` and `make up` in the platform, then `setup_agent.py --env-only` (deck 03) |
 | `ModuleNotFoundError` in the container | `uv add <pkg>`; a `COPY` line for your own modules |
 | `No module named 'prometheus_api'` in `uv run pytest` | `uv pip install -e ~/prometheus/prometheus_core/sdk` |
 | test fails: no status update sent | keep a `send_status_update` in `_execute`, or drop that assertion |
@@ -228,9 +228,9 @@ git remote add upstream \
 git fetch upstream
 cd platform            # the stack lives here
 
-make init-env                   # secrets; pick LLM profile + key
-echo "LOCAL_SDK=true" >> .env   # base image from ../sdk
-# DEEPLYNX_* from your local DeepLynx (deck 03)
+make init-env                       # secrets; pick LLM profile + key
+echo "LOCAL_SDK=true" >> .env       # base image from ../sdk
+echo "LOCAL_DEEPLYNX=true" >> .env  # DeepLynx; make up writes DEEPLYNX_*
 
 make up                   # long first build; make logs to watch
 make ps
@@ -295,7 +295,7 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
 
 1. Open `http://localhost:5150`; create the admin in the setup wizard if you haven't
 2. Chat: `/agents`, then ask a question
-3. Upload any small file: it should appear in DeepLynx
+3. Upload any small file: it should appear in DeepLynx (`http://localhost:3000`)
 
 ::: callout warn
 Platform not up yet? Use the **bonus slide** at the end of this deck, and the bonus section of deck 03.
