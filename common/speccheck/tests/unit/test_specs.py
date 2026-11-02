@@ -213,6 +213,34 @@ def test_duplicate_ids_fail(repo: Repo):
     assert_problems(repo, "T-REQ-001-01 is also at specs/001-thing.md:7")
 
 
+def test_duplicate_text_fails(repo: Repo):
+    """Text is unique across the folder, compared as `comparable`; retired requirements are skipped."""
+    repo.spec(
+        "- T-REQ-001-01: It is WRITTEN.\n- T-REQ-001-02: it is\n  written\n- T-REQ-001-03: Retired.\n- T-REQ-001-04: Retired."
+    )
+    found = problems(repo)
+    assert found == [
+        "specs/001-thing.md:8: T-REQ-001-02 has the same text as T-REQ-001-01 at specs/001-thing.md:7; "
+        "each requirement says something new"
+    ]
+    assert specs.load(repo.root / "specs", repo.root, "T").problems[0].code == "text-duplicate"
+
+
+@pytest.mark.parametrize(
+    ("text", "collapsed", "compared"),
+    [
+        ("  a\n\tb  c ", "a b c", "a b c"),
+        ("It Is.", "It Is.", "it is"),
+        ("It is . ", "It is .", "it is"),
+        ("Two..", "Two..", "two."),
+        ("", "", ""),
+    ],
+)
+def test_collapse_and_comparable(text, collapsed, compared):
+    """Whitespace to single spaces; then case folded and one trailing full stop dropped."""
+    assert (specs.collapse(text), specs.comparable(text)) == (collapsed, compared)
+
+
 class TestMarkers:
     """Continuation lines and the untested and planned markers."""
 

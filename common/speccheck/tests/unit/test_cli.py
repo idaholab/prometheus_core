@@ -130,6 +130,9 @@ class TestMain:
         """The help, and 2."""
         code, out, _ = main()
         assert code == 2 and out.startswith("usage: speccheck")
+        code, out, _ = main("--json")
+        body = json.loads(out)
+        assert (code, body["ok"], body["error"]["message"]) == (2, False, "no command given")
 
     def test_usage_error(self, modules):
         """2, on stderr; with `--json`, one object on stdout."""

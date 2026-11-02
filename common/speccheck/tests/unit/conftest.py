@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from speccheck import config, results, specs
+from speccheck.claims import Claim
 from speccheck.context import Context
 from speccheck.output import Output
 
@@ -69,9 +70,15 @@ def producer(
     return config.Producer(name=name, specs=may_claim, workflows=workflows)
 
 
+def how(test: str, id_: str) -> str:
+    """The explanation a helper gives a claim: unique to its test (or job) and ID."""
+    return f"{test} proves {id_}"
+
+
 def ci_job(name: str, *covers: str, workflows: tuple[str, ...] = ("ci",)) -> config.Producer:
-    """A `[ci.<name>]` job claiming `covers`."""
-    return config.Producer(name=name, specs=None, workflows=workflows, covers=covers, ci_job=True)
+    """A `[ci.<name>]` job claiming `covers`, each with its own explanation."""
+    claims = tuple(Claim(id_, how(name, id_)) for id_ in covers)
+    return config.Producer(name=name, specs=None, workflows=workflows, claims=claims, ci_job=True)
 
 
 def make_config(*producers: config.Producer, prefix: str = "T", title: str = "speccheck requirements") -> config.Config:
@@ -96,7 +103,7 @@ def results_file(
         results=[
             results.Result(
                 test=f"tests/test_x.py::test_{n}" if kind == "test" else producer_name,
-                covers=[id_],
+                covers=[Claim(id_, how(f"tests/test_x.py::test_{n}" if kind == "test" else producer_name, id_))],
                 outcome=outcome,
                 file="tests/test_x.py" if kind == "test" else "",
                 line=n if kind == "test" else 0,
@@ -138,5 +145,12 @@ def err(ctx: Context) -> str:
 
 def namespace(**values: Any) -> argparse.Namespace:
     """Parsed arguments for an action, with the defaults its parser would give."""
-    defaults: dict[str, Any] = {"inputs": [], "complete": False, "workflow": None, "output": None, "summary": None}
+    defaults: dict[str, Any] = {
+        "inputs": [],
+        "complete": False,
+        "workflow": None,
+        "output": None,
+        "summary": None,
+        "report_url": None,
+    }
     return argparse.Namespace(**{**defaults, **values})

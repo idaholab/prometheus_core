@@ -16,7 +16,7 @@
 - every module with code has a test file at the mirrored path;
 - every new `.py` file carries the copyright header;
 - no `pragma: no cover`;
-- only `cli.py` exits, and only `results.py` and `actions/report.py` write files.
+- only `cli.py` exits, and only `results.py`, `summary.py` and `actions/report.py` write files.
 """
 
 from __future__ import annotations
@@ -158,16 +158,17 @@ def test_requirements_tests_mirror_the_specs():
     assert tests == specs
 
 
-def test_only_the_cli_exits_and_only_two_modules_write():
-    """Actions return a code; files are written only by results.py and the report action."""
+def test_only_the_cli_exits_and_only_three_modules_write():
+    """Actions return a code; files are written only by results.py, summary.py and the report action."""
     exits, writes = [], []
     for path in PACKAGE.rglob("*.py"):
         text = path.read_text()
         name = str(path.relative_to(PACKAGE))
         if ("sys.exit" in text or "raise SystemExit" in text) and name not in ("cli.py", "__main__.py"):
             exits.append(name)
-        if any(w in text for w in ('open("w"', '"a" if append', ".write_text(", "mkstemp")) and name not in (
+        if any(w in text for w in ('open("w"', 'open("a"', ".write_text(", "mkstemp")) and name not in (
             "results.py",
+            "summary.py",
             "actions/report.py",
         ):
             writes.append(name)

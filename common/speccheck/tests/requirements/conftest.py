@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from speccheck import cli, results
+from speccheck.claims import Claim
 from tests.conftest import CONFIG, INDEX, spec
 
 
@@ -72,14 +73,20 @@ class Repo:
         return self.write(f"specs/{name}", spec(body, **kwargs))
 
     def results(self, name: str, producer: str, claims: list[tuple[str, list[str], str]], **header) -> Path:
-        """Write a results file of `(test, covers, outcome)` claims."""
+        """Write a results file of `(test, covers, outcome)` claims; each ID's how names its test and ID."""
         results_file = results.ResultsFile(
             producer=producer,
             runner="test",
             ci=header.get("ci"),
             results=[
                 results.Result(
-                    test=t, covers=c, outcome=o, file="tests/test_x.py", line=3, kind=header.get("kind", "test")
+                    test=t,
+                    # One line and well under the limit, whatever the test name holds
+                    covers=[Claim(id_, f"{' '.join(t.split())[:200]} proves {id_}") for id_ in c],
+                    outcome=o,
+                    file="tests/test_x.py",
+                    line=3,
+                    kind=header.get("kind", "test"),
                 )
                 for t, c, o in claims
             ],

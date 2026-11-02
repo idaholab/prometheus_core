@@ -14,6 +14,9 @@
 
 from __future__ import annotations
 
+import json
+import re
+
 import pytest
 
 from tests.requirements.conftest import Project
@@ -50,7 +53,10 @@ def reported(project: Project) -> Project:
     return project
 
 
-@pytest.mark.covers("SPC-REQ-006-01")
+@pytest.mark.covers(
+    "SPC-REQ-006-01",
+    "the report of a pass, a failure and an unclaimed requirement opens with the counts, then lists failed and unclaimed before passed",
+)
 def test_summary_counts_and_tables(reported: Project):
     """A summary line, a count per status, then the spec's table with what needs attention first."""
     text = reported.speccheck("report", "unit.jsonl").out
@@ -65,7 +71,46 @@ def test_summary_counts_and_tables(reported: Project):
     assert rows(text)[2][2] == "Passes\\."
 
 
-@pytest.mark.covers("SPC-REQ-006-02")
+@pytest.mark.covers(
+    "SPC-REQ-006-01",
+    "below the spec's table, the report lists each claiming test by ID with how it proves the requirement, failures first",
+)
+def test_the_report_says_how_each_claim_proves_its_requirement(reported: Project):
+    """One line per claim, after the table and before the next section, in the table's order."""
+    text = reported.speccheck("report", "unit.jsonl").out
+    table_end = text.index("\n\n", text.index("| T-REQ-001-01"))
+    listing = text[table_end:].split("## Inputs", 1)[0]
+    assert listing.strip().splitlines() == [
+        "How each claim proves its requirement:",
+        "",
+        "- **T-REQ-001-02**, test `tests/t.py::test_bad`: tests/t\\.py::test\\_bad proves T\\-REQ\\-001\\-02",
+        "- **T-REQ-001-01**, test `tests/t.py::test_ok`: tests/t\\.py::test\\_ok proves T\\-REQ\\-001\\-01",
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-03",
+    "a 1000-character explanation with a link and an img tag appears whole and escaped, while a test name is cut at 200",
+)
+def test_an_explanation_is_escaped_and_kept_whole(project: Project):
+    """Explanations get the 1000-character limit, not the 200 of a table cell, and are escaped like every other string."""
+    project.spec("- T-REQ-001-01: One.")
+    how = ("[click](https://evil)<img src=x> " * 40)[:1000]
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    project.write(
+        "u.jsonl",
+        header + json.dumps({"test": "t", "covers": [{"id": "T-REQ-001-01", "how": how}], "outcome": "passed"}) + "\n",
+    )
+    text = project.speccheck("report", "u.jsonl").out
+    line = next(line for line in text.splitlines() if line.startswith("- **T-REQ-001-01**"))
+    assert line.endswith(": " + "\\[click\\]\\(https://evil\\)\\<img src=x\\> " * 30 + "\\[click\\]\\(ht")
+    assert re.search(r"(?<!\\)\]\(https://evil", text) is None and re.search(r"(?<!\\)<img", text) is None
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-02",
+    "a passing result's evidence cell names the test, outcome, producer unit and leg 3.12, and links job 8",
+)
 def test_evidence_names_the_test_and_links_the_job(reported: Project):
     """Test, outcome, producer, leg, and a link to the job itself."""
     evidence = rows(reported.speccheck("report", "unit.jsonl", env=ENV).out)[2][3]
@@ -74,7 +119,7 @@ def test_evidence_names_the_test_and_links_the_job(reported: Project):
     )
 
 
-@pytest.mark.covers("SPC-REQ-006-02")
+@pytest.mark.covers("SPC-REQ-006-02", "a result whose job URL is the run attempt's links runs/7/attempts/2")
 def test_without_a_job_id_it_links_the_run(project: Project):
     """The fallback link is the run attempt."""
     project.spec("- T-REQ-001-01: One.")
@@ -85,7 +130,10 @@ def test_without_a_job_id_it_links_the_run(project: Project):
     )
 
 
-@pytest.mark.covers("SPC-REQ-006-03")
+@pytest.mark.covers(
+    "SPC-REQ-006-03",
+    "a test name with a link, an img tag, a pipe and a backtick stays one inert cell, and a javascript: URL isn't linked",
+)
 def test_untrusted_text_cant_inject_markdown_or_links(project: Project):
     """A test name with a link, HTML, a pipe and a backtick stays inert text in its cell, and a bad URL isn't linked.
 
@@ -104,14 +152,42 @@ def test_untrusted_text_cant_inject_markdown_or_links(project: Project):
     assert "javascript" not in text and "[job]" not in row
 
 
-@pytest.mark.covers("SPC-REQ-006-03")
 @pytest.mark.parametrize(
     ("url", "env"),
     [
-        ("https://evil.example/o/r/actions/runs/7/job/8", ENV),
-        ("https://github.com/evil/r/actions/runs/7/job/8", ENV),
-        ("https://github.com/o/r/actions/runs/7/job/8\n", ENV),
-        ("https://github.com/o/r/actions/runs/7/job/8", {}),
+        pytest.param(
+            "https://evil.example/o/r/actions/runs/7/job/8",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03",
+                "a job URL on another server than the run's isn't linked, and its host never appears in the report",
+            ),
+            id="other-server",
+        ),
+        pytest.param(
+            "https://github.com/evil/r/actions/runs/7/job/8",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03", "a job URL on the run's server but in another repository isn't linked"
+            ),
+            id="other-repository",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8\n",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
+            ),
+            id="trailing-newline",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8",
+            {},
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
+            ),
+            id="outside-ci",
+        ),
     ],
 )
 def test_only_this_runs_repository_is_linked(project: Project, url: str, env: dict):
@@ -123,7 +199,10 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
     assert "evil" not in text
 
 
-@pytest.mark.covers("SPC-REQ-006-03")
+@pytest.mark.covers(
+    "SPC-REQ-006-03",
+    "a 900-character test name is cut with an ellipsis, keeping the row under 400 characters",
+)
 def test_long_text_is_capped(project: Project):
     """A huge test name doesn't make a huge cell."""
     project.spec("- T-REQ-001-01: One.")
@@ -132,29 +211,10 @@ def test_long_text_is_capped(project: Project):
     assert len(row) < 400 and "…" in row
 
 
-@pytest.mark.covers("SPC-REQ-006-04")
-def test_the_step_summary(reported: Project):
-    """Appended, with counts, problems and only the rows that need attention, and a pointer to the artifact."""
-    reported.write("summary.md", "an earlier step's summary\n")
-    run = reported.speccheck("report", "unit.jsonl", "--summary", "summary.md")
-    assert run.code == 0
-    text = (reported.root / "summary.md").read_text()
-    assert text.startswith("an earlier step's summary\n### speccheck requirements\n")
-    assert [r[0] for r in rows(text)] == ["T-REQ-001-02", "T-REQ-001-03"]
-    assert "**2 problems**" in text and "The full report is in the `speccheck-report` artifact." in text
-
-
-@pytest.mark.covers("SPC-REQ-006-04")
-def test_the_step_summary_stays_under_the_limit(project: Project):
-    """Thousands of unclaimed requirements still give a summary under GitHub's 1 MiB."""
-    body = "\n".join(f"- T-REQ-001-{n:02}: {'Long requirement text. ' * 20}" for n in range(1, 100))
-    project.spec(body)
-    project.results("u.jsonl", "unit", [(f"t{'x' * 900}{n}", ["T-REQ-001-01"], "failed") for n in range(3000)])
-    project.speccheck("report", "u.jsonl", "--summary", "s.md")
-    assert len((project.root / "s.md").read_bytes()) <= 1024 * 1024
-
-
-@pytest.mark.covers("SPC-REQ-006-05")
+@pytest.mark.covers(
+    "SPC-REQ-006-05",
+    "the report's Inputs section lists the commit, the linked run attempt, producer unit as reported and docker as missing",
+)
 def test_the_inputs(reported: Project):
     """Commit, runs, producers reported and missing."""
     reported.write("speccheck.toml", 'specs = "specs"\nid-prefix = "T"\n[producers.unit]\n[producers.docker]\n')
@@ -166,7 +226,7 @@ def test_the_inputs(reported: Project):
     assert "- Producers reported: unit" in inputs and "- Producers missing: docker" in inputs
 
 
-@pytest.mark.covers("SPC-REQ-006-06")
+@pytest.mark.covers("SPC-REQ-006-06", "inputs that make verify exit 1 still let report write r.md and exit 0")
 def test_report_exits_0_when_verify_fails(reported: Project):
     """The same inputs fail verify and still give a report, with exit 0."""
     assert reported.speccheck("verify", "unit.jsonl").code == 1

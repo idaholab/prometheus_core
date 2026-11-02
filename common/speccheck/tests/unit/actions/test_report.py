@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""`speccheck report`: escaping, links, rows, the full report and the summary, on evaluations built in memory."""
+"""`speccheck report`: rows, explanations and the full report, on evaluations built in memory."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ import pytest
 
 from speccheck import evidence, results
 from speccheck.actions import report
+from speccheck.claims import Claim
 from speccheck.specs import Problem
 from tests.unit.conftest import make_config, make_ctx, make_requirement, make_spec, make_specs, namespace, out
 
@@ -48,7 +49,12 @@ def status(
     """A status of a fresh requirement, with `(test, outcome)` evidence from `unit`."""
     requirement = make_requirement(make_spec(), text, line=line)
     from_file = source(ci=ci)
-    items = [evidence.Evidence(results.Result(t, [requirement.id], o, kind=kind), from_file) for t, o in found]
+    items = [
+        evidence.Evidence(
+            results.Result(t, [Claim(requirement.id, f"{t} proves it")], o, kind=kind), from_file, f"{t} proves it"
+        )
+        for t, o in found
+    ]
     return evidence.Status(requirement, name, items)
 
 
@@ -57,86 +63,6 @@ def evaluation(
 ) -> evidence.Evaluation:
     """An evaluation of the given statuses."""
     return evidence.Evaluation(list(statuses), list(problems), list(reported), list(missing), list(files))
-
-
-class TestEscape:
-    """Untrusted strings in markdown."""
-
-    def test_special_characters(self):
-        """Markdown and HTML are backslashed."""
-        assert report.escape("t[x](https://evil)<img>|`") == r"t\[x\]\(https://evil\)\<img\>\|\`"
-
-    def test_one_line_and_capped(self):
-        """Whitespace collapses, and long text is cut."""
-        assert report.escape("a\n b\tc") == "a b c"
-        assert report.escape("x" * 300, 10) == "x" * 9 + "…"
-        assert report.escape(3) == "3"
-
-
-class TestCode:
-    """Untrusted strings in an inline code span, where markdown shows backslashes as they are."""
-
-    def test_literal_text_without_backticks(self):
-        """Markdown characters stay as written; a backtick is dropped so the span can't close early."""
-        assert report.code("tests/t.py::test_a[x*](y)<b>", in_table=False) == "`tests/t.py::test_a[x*](y)<b>`"
-        assert report.code("a`b``c", in_table=False) == "`abc`"
-
-    def test_a_pipe_in_a_table(self):
-        """GFM splits a row on `|` before it reads the span, so it is written `\\|` there only."""
-        assert report.code("a|b", in_table=True) == r"`a\|b`"
-        assert report.code("a|b", in_table=False) == "`a|b`"
-
-    def test_one_line_and_capped(self):
-        """Whitespace collapses, and long text is cut, after the backticks are gone."""
-        assert report.code("a\n b", in_table=False) == "`a b`"
-        assert report.code("`" * 5 + "x" * 20, 10, in_table=False) == "`" + "x" * 9 + "…`"
-
-
-class TestSafeUrl:
-    """Only run, attempt and job URLs under this run's own repository URL are linked."""
-
-    @pytest.mark.parametrize(
-        "url",
-        [
-            "javascript:alert(1)",
-            "https://evil.example/o/r/actions/runs/1/job/2",
-            "https://evil.example/o/r/actions/runs/1/job/2)[x](y",
-            "https://github.com/o/other/actions/runs/1",
-            "https://github.com/o/r2/actions/runs/1",
-            "https://github.com.evil.example/o/r/actions/runs/1",
-            "http://github.com/o/r/actions/runs/1",
-            "https://github.com/o/r/pulls/1",
-            "https://github.com/o/r/actions/runs/x",
-            "https://github.com/o/r/actions/runs/0",
-            "https://github.com/o/r/actions/runs/1\n",
-            "https://github.com/o/r/actions/runs/1/job/2/x",
-            None,
-            3,
-        ],
-    )
-    def test_rejected(self, url):
-        """Another host or repo, another shape, a trailing newline, or not a string: no link."""
-        assert report.safe_url(url, BASE) == ""
-
-    @pytest.mark.parametrize(
-        "url",
-        [
-            "https://github.com/o/r/actions/runs/1",
-            "https://github.com/o/r/actions/runs/1/attempts/2",
-            "https://github.com/o/r/actions/runs/1/job/3",
-        ],
-    )
-    def test_accepted(self, url):
-        """Run, attempt and job URLs of this repository."""
-        assert report.safe_url(url, BASE) == url
-
-    def test_a_server_with_a_port(self):
-        """GitHub Enterprise on its own host and port."""
-        assert report.safe_url("https://ghe.example:8443/o/r/actions/runs/1", "https://ghe.example:8443/o/r") != ""
-
-    def test_nothing_is_linked_without_a_base(self):
-        """Outside CI there is no repository to trust, so no link."""
-        assert report.safe_url("https://github.com/o/r/actions/runs/1", "") == ""
 
 
 class TestEvidenceCell:
@@ -253,34 +179,41 @@ class TestFull:
         assert "## Problems" not in report.full("t", evaluation(status("passed")))
 
 
-class TestSummary:
-    """The short form for a step summary."""
+class TestHows:
+    """Below a spec's table, how each claim proves its requirement."""
 
-    def test_only_the_rows_that_need_attention(self):
-        """Counts, problems, and the failed, unclaimed and not run rows; not passed."""
-        statuses = [status("passed"), status("unclaimed"), status("not run"), status("failed")]
-        text = report.summary("t", evaluation(*statuses, problems=[Problem("p", 1, "m")]))
-        assert text.startswith("### t\n\n4 requirements: 1 failed, 1 unclaimed, 1 not run, 1 passed\n")
-        assert "**1 problems**" in text
-        assert [line.split(" | ")[1] for line in text.splitlines() if line.startswith("| T-REQ")] == [
-            "❌ failed",
-            "❌ unclaimed",
-            "⏸ not run",
+    def test_each_claim_once_with_its_explanation(self):
+        """A test, a CI job, and the same test in a second leg listed once; text is escaped, a test name is code."""
+        failed = status("failed", ("t[x]", "failed"), ("t[x]", "failed"))
+        passed = status("passed", ("publish", "passed"), kind="ci")
+        assert report._hows([failed, passed]) == [
+            "How each claim proves its requirement:",
+            "",
+            "- **T-REQ-001-01**, test `t[x]`: t\\[x\\] proves it",
+            "- **T-REQ-001-01**, job `publish`: publish proves it",
+            "",
         ]
-        assert text.endswith("The full report is in the `speccheck-report` artifact.\n")
 
-    def test_nothing_needs_attention(self):
-        """No table and no problems."""
-        text = report.summary("t", evaluation(status("passed")))
-        assert "| ID |" not in text and "problems" not in text
+    def test_nothing_without_explanations(self):
+        """No evidence, or evidence with no explanation: no section."""
+        assert report._hows([status("unclaimed")]) == []
+        bare = status("passed")
+        bare.evidence = [evidence.Evidence(results.Result("t", [], "passed"), source())]
+        assert report._hows([bare]) == []
 
-    def test_it_stays_under_the_limit(self, monkeypatch: pytest.MonkeyPatch):
-        """A huge summary is cut at a line, with a note, even inside a multi-byte character."""
-        monkeypatch.setattr(report, "SUMMARY_LIMIT", 200)
-        statuses = [status("unclaimed", text=f"Unclaimed requirement é number {n}.") for n in range(30)]
-        text = report.summary("t", evaluation(*statuses))
-        assert len(text.encode()) < 300
-        assert text.endswith("\n\n… cut to fit the step summary; see the artifact.\n")
+    def test_a_long_explanation_is_kept(self):
+        """Up to MAX_HOW characters, not the cell's 200."""
+        long = status("passed")
+        long.evidence = [evidence.Evidence(results.Result("t", [], "passed"), source(), "x" * 1000)]
+        assert report._hows([long])[2].endswith(": " + "x" * 1000)
+
+    def test_the_full_report_puts_them_under_the_table(self):
+        """After the table's blank line, before the next heading."""
+        text = report.full("t", evaluation(status("passed", ("t", "passed"))))
+        assert (
+            "|\n\nHow each claim proves its requirement:\n\n- **T-REQ-001-01**, test `t`: t proves it\n\n## Inputs"
+            in text
+        )
 
 
 class TestRun:
@@ -291,11 +224,11 @@ class TestRun:
         return make_ctx(tmp_path, loaded=make_config(), specs_set=make_specs("It."), **output)
 
     def test_the_arguments(self):
-        """Inputs, scope, `--output` and `--summary`."""
+        """Inputs, scope and `--output`; the step summary is not the report's."""
         parser = argparse.ArgumentParser()
         report.add_arguments(parser)
-        args = parser.parse_args(["r", "--output", "o.md", "--summary", "s.md"])
-        assert (args.inputs, args.output, args.summary, args.complete) == (["r"], "o.md", "s.md", False)
+        args = parser.parse_args(["r", "--output", "o.md"])
+        assert vars(args) == {"inputs": ["r"], "complete": False, "workflow": None, "output": "o.md"}
 
     def test_stdout_by_default_and_exit_0_on_problems(self, tmp_path: Path):
         """The full report on stdout; an unclaimed requirement doesn't fail it."""
@@ -318,14 +251,17 @@ class TestRun:
         assert report.run(self.ctx(tmp_path), namespace(output="r.md")) == 0
         assert (tmp_path / "r.md").read_text() == "t?\n"
 
-    def test_output_and_summary(self, tmp_path: Path):
-        """`--output` is written (folders made), `--summary` appended, and stdout has the summary line."""
-        (tmp_path / "s.md").write_text("earlier step\n")
+    def test_output(self, tmp_path: Path):
+        """`--output` is written over what was there (folders made), and stdout has the summary line."""
+        (tmp_path / "out").mkdir()
+        (tmp_path / "out" / "r.md").write_text("an old report\n")
         ctx = self.ctx(tmp_path)
-        assert report.run(ctx, namespace(output="out/r.md", summary=str(tmp_path / "s.md"))) == 0
+        assert report.run(ctx, namespace(output="out/r.md")) == 0
         assert (tmp_path / "out" / "r.md").read_text().startswith("# speccheck requirements\n")
-        assert (tmp_path / "s.md").read_text().startswith("earlier step\n### speccheck requirements\n")
         assert out(ctx) == "speccheck report: 1 requirement: 1 unclaimed\n"
+        ctx = self.ctx(tmp_path)
+        assert report.run(ctx, namespace(output=str(tmp_path / "new" / "r.md"))) == 0
+        assert (tmp_path / "new" / "r.md").is_file()
 
     def test_json(self, tmp_path: Path):
         """`ok` is true even with problems; the title and the statuses."""

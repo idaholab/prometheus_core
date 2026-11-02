@@ -22,11 +22,11 @@ from speccheck.specs import Problem
 from tests.unit.conftest import err, make_ctx, make_spec, make_specs, out, spec_set
 
 
-def test_no_arguments_of_its_own():
-    """The parser is left as it was."""
+def test_the_arguments():
+    """Only `--summary` and `--report-url`."""
     parser = argparse.ArgumentParser()
     lint.add_arguments(parser)
-    assert vars(parser.parse_args([])) == {}
+    assert vars(parser.parse_args([])) == {"summary": None, "report_url": None}
 
 
 def test_clean():
@@ -47,6 +47,15 @@ def test_problems():
         "specs/001-thing.md:3: bad",
         "speccheck lint: 1 specs, 0 requirements; 1 problem",
     ]
+
+
+def test_the_summary(tmp_path):
+    """The problems, after the counts line."""
+    ctx = make_ctx(tmp_path, specs_set=spec_set(make_spec(), problems=[Problem("specs/001-thing.md", 3, "bad")]))
+    lint.run(ctx, argparse.Namespace(summary="s.md", report_url=None))
+    assert (tmp_path / "s.md").read_text() == (
+        "**speccheck:** 1 problem. 1 specs, 0 requirements\n\n- `specs/001-thing.md:3: bad`\n\n"
+    )
 
 
 def test_json():

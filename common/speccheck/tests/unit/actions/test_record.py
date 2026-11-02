@@ -64,7 +64,15 @@ def test_in_a_ci_job(tmp_path: Path):
     assert parsed.ci["job_url"] == "https://github.com/o/r/actions/runs/11/job/22"
     assert parsed.started.endswith("Z")
     assert [r.to_json() for r in parsed.results] == [
-        {"test": "publish", "covers": ["T-REQ-001-01", "T-REQ-001-02"], "outcome": "passed", "kind": "ci"}
+        {
+            "test": "publish",
+            "covers": [
+                {"id": "T-REQ-001-01", "how": "publish proves T-REQ-001-01"},
+                {"id": "T-REQ-001-02", "how": "publish proves T-REQ-001-02"},
+            ],
+            "outcome": "passed",
+            "kind": "ci",
+        }
     ]
 
 
@@ -95,7 +103,10 @@ def test_json(tmp_path: Path):
     code, text = run(tmp_path, FAKE_CI, json_mode=True)
     body = json.loads(text)
     assert (code, body["command"], body["job"]) == (0, "record", "publish")
-    assert body["covers"] == ["T-REQ-001-01", "T-REQ-001-02"]
+    assert body["covers"] == [
+        {"id": "T-REQ-001-01", "how": "publish proves T-REQ-001-01"},
+        {"id": "T-REQ-001-02", "how": "publish proves T-REQ-001-02"},
+    ]
     assert body["path"] == str(tmp_path / ".speccheck" / "publish.jsonl")
 
 
