@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from speccheck import evidence, results, specs
+from speccheck.config import ConfigError
 from tests.unit.conftest import (
     ROOT,
     ci_job,
@@ -298,6 +299,17 @@ class TestEvaluate:
         files = [results_file("unit", ("T-REQ-001-01", "passed"))]
         evaluation = evaluate(("It.",), files, UNIT, docker, complete=True, workflow="ci")
         assert (evaluation.missing, evaluation.problems, evaluation.reported) == ([], [], ["unit"])
+
+    def test_complete_with_nothing_to_expect_is_an_error(self):
+        """A workflow no producer lists, or no producers at all, can't pass the missing-producer check."""
+        docker = producer("docker", workflows=("other",))
+        files = [results_file("unit", ("T-REQ-001-01", "passed"))]
+        with pytest.raises(ConfigError, match="--workflow typo: no producer .* lists that workflow .*: ci, other"):
+            evaluate(("It.",), files, UNIT, docker, complete=True, workflow="typo")
+        with pytest.raises(ConfigError, match="declares no producers"):
+            evidence.evaluate(make_specs("It."), make_config(), files, root=ROOT, runtime=True, complete=True)
+        # Without --complete nothing is expected, so nothing is wrong
+        assert evaluate(("It.",), files, UNIT, docker, workflow="typo").missing == []
 
     def test_problems_come_in_order(self):
         """Spec problems, then claim problems, then missing producers, then statuses."""

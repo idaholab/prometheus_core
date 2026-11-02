@@ -119,6 +119,16 @@ def test_complete_needs_every_expected_producer(project: Project):
     assert project.speccheck("verify", "--complete", "--workflow", "ci", "unit.jsonl").code == 0
 
 
+@pytest.mark.covers("SPC-REQ-005-05")
+def test_complete_with_a_workflow_nobody_lists_is_an_error(project: Project):
+    """A typo or a renamed workflow must not turn the missing-producer check off."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("unit.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    run = project.speccheck("verify", "--complete", "--workflow", "typo", "unit.jsonl")
+    assert run.code == 2 and "no producer" in run.err and "typo" in run.err
+    assert project.speccheck("verify", "--workflow", "typo", "unit.jsonl").code == 0
+
+
 @pytest.mark.covers("SPC-REQ-005-06")
 def test_an_undeclared_producer_counts_for_nothing(project: Project):
     """A pass from a producer the config doesn't know is a problem, not evidence."""
