@@ -3,11 +3,13 @@ description: The final job's steps - download the run's speccheck results, publi
 
 # For the last job of a workflow, with `needs:` on every job that uploads results and
 # `if: ${{ !cancelled() }}`, so it reports even when a test job failed. The calling job needs
-# only `contents: read` (download-artifact reads this run's artifacts with the job's own token)
-# and a checkout with `persist-credentials: false`; speccheck-install installs speccheck from it.
+# `contents: read` (download-artifact reads this run's artifacts with the job's own token),
+# `actions: read` (to look up the run's job names), and a checkout with
+# `persist-credentials: false`; speccheck-install installs speccheck from it. Without
+# `actions: read` the lookup warns, and results are named by producer instead.
 # The downloaded files are untrusted data: speccheck parses them as JSON with a size limit and
 # never opens paths named in them. The report and step summary escape everything taken from
-# them. Exits with verify's code.
+# them, and from the job names. Exits with verify's code.
 # See common/speccheck/README.md, "In CI"
 
 inputs:
@@ -49,6 +51,22 @@ runs:
         path: ${{ runner.temp }}/speccheck-results
     - name: Install speccheck
       uses: ./.github/actions/speccheck-install
+    - name: Look up the run's job names
+      # A job can't read its own display name, so the final job looks them all up: job ID to
+      # name, for every attempt. A failure only costs the names, so it warns and goes on
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        NAMES: ${{ runner.temp }}/speccheck-job-names.json
+      run: |
+        if ! gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?filter=all&per_page=100" \
+            --jq '.jobs[] | {key: (.id | tostring), value: .name}' \
+            | jq -s 'from_entries' > "$NAMES"; then
+          echo "::warning::speccheck: couldn't look up this run's job names (does the job have actions: read?); results are named by producer"
+          rm -f "$NAMES"
+        fi
     - name: Report
       # report never fails on the requirements, so the report is published either way
       shell: bash
@@ -59,12 +77,15 @@ runs:
         RESULTS: ${{ runner.temp }}/speccheck-results
         REPORT: ${{ runner.temp }}/speccheck-report/report.md
         JSON: ${{ runner.temp }}/speccheck-report/report.json
+        NAMES: ${{ runner.temp }}/speccheck-job-names.json
       run: |
         mkdir -p "$RESULTS" "$(dirname "$REPORT")"
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --output "$REPORT"
-        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
+        names=()
+        if [ -s "$NAMES" ]; then names=(--job-names "$NAMES"); fi
+        speccheck report --config "$CONFIG" "${scope[@]}" "${names[@]}" "$RESULTS" --output "$REPORT"
+        speccheck report --config "$CONFIG" "${scope[@]}" "${names[@]}" "$RESULTS" --json > "$JSON"
     - name: Upload report
       id: upload-report
       if: ${{ !cancelled() }}
@@ -86,9 +107,12 @@ runs:
         WORKFLOW: ${{ inputs.workflow || github.workflow }}
         RESULTS: ${{ runner.temp }}/speccheck-results
         REPORT_URL: ${{ steps.upload-report.outputs.artifact-url }}
+        NAMES: ${{ runner.temp }}/speccheck-job-names.json
       run: |
         echo "summary-path=$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        speccheck verify --config "$CONFIG" "${scope[@]}" "$RESULTS" \
+        names=()
+        if [ -s "$NAMES" ]; then names=(--job-names "$NAMES"); fi
+        speccheck verify --config "$CONFIG" "${scope[@]}" "${names[@]}" "$RESULTS" \
           --summary "$GITHUB_STEP_SUMMARY" --report-url "$REPORT_URL"
