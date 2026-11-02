@@ -369,6 +369,20 @@ class TestFormat(CheckerTest):
         self.repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: done\n")
         self.assertProblems("status must be one of", "missing the `tests:` line")
 
+    def test_header_lines_are_read_only_above_the_first_section(self):
+        """A `status:` or `tests:` in an example further down is prose, not the spec's setting."""
+        body = "- REQ-001-01: It MUST work. ⚠ untested\n\n```\nstatus: retired\ntests: none\n```\n\ntests: gone\n"
+        self.repo.write("specs/001-thing.md", spec(body))
+        self.assertProblems()
+        _, cited, requirements = speccheck.check(self.repo.root / "specs", self.repo.root)
+        self.assertFalse(requirements[0].retired)
+
+    def test_a_repeated_header_line_fails(self):
+        """The second one would otherwise win without a word."""
+        text = spec("", tests="none").replace("depends-on: none", "status: draft\ntests: tests\ndepends-on: none")
+        self.repo.write("specs/001-thing.md", text)
+        self.assertProblems("a second `status:` line", "a second `tests:` line")
+
     def test_the_title_must_carry_the_number(self):
         """`# 001 - Name`, so a renamed file shows."""
         self.repo.write("specs/001-thing.md", spec("", tests="none").replace("# 001 -", "# 01 -"))

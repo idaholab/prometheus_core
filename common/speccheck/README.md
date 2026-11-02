@@ -32,6 +32,9 @@ tests: platform/ctl/tests, .github/workflows/platformctl.yml
 depends-on: 002
 ```
 
+The header lines are read only above the first `##`, so an example further down can't override them,
+and a second `status:` or `tests:` line is a problem.
+
 `tests:` paths are relative to `--root` (default: the current folder), comma-separated, or `none`.
 A path that doesn't exist is a problem, so a moved test folder can't silently drop every citation.
 
@@ -105,7 +108,7 @@ the file, or in a step's text is a problem rather than silent evidence.
   include the citing file.
 - `Implements` before an ID in a test file.
 - A duplicate ID, a malformed bullet (including one without the folder's prefix), an ID numbered for
-  another spec, a malformed `id-prefix:`, a missing or unknown `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
+  another spec, a malformed `id-prefix:`, a missing, repeated or unknown `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
   spec the index doesn't list.
 
 `draft` doesn't relax anything: a draft spec's requirements are planned, untested or cited, like any

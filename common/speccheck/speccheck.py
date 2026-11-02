@@ -196,9 +196,15 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
 
     current: Requirement | None = None
     seen_header = {"status": False, "tests": False}
+    in_header = True
     for number_, line in enumerate(lines, 1):
-        for key in seen_header:
+        if line.startswith("## "):
+            in_header = False
+        for key in seen_header if in_header else ():
             if line.startswith(f"{key}:"):
+                if seen_header[key]:
+                    problems.append(Problem(name, number_, f"a second `{key}:` line; a spec has one"))
+                    continue
                 seen_header[key] = True
                 value = line[len(key) + 1 :].strip()
                 if key == "status":
