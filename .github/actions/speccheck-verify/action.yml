@@ -29,6 +29,13 @@ inputs:
     required: false
     default: speccheck-report
 
+outputs:
+  summary-path:
+    description: >-
+      The step summary file the report was appended to. Each step gets its own
+      $GITHUB_STEP_SUMMARY, so a later step can't read it through that variable
+    value: ${{ steps.report.outputs.summary-path }}
+
 runs:
   using: composite
   steps:
@@ -40,6 +47,7 @@ runs:
     - name: Install speccheck
       uses: ./.github/actions/speccheck-install
     - name: Report
+      id: report
       # report never fails on the requirements, so the report is published either way
       shell: bash
       env:
@@ -55,6 +63,7 @@ runs:
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
         speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" \
           --output "$REPORT" --summary "$GITHUB_STEP_SUMMARY"
+        echo "summary-path=$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
         speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
     - name: Upload report
       if: ${{ !cancelled() }}
