@@ -175,3 +175,11 @@ def test_python_m_speccheck(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capt
     with pytest.raises(SystemExit) as done:
         runpy.run_module("speccheck", run_name="__main__")
     assert done.value.code == 0 and capsys.readouterr().out == f"speccheck {__version__}\n"
+
+
+def test_python_m_speccheck_old_python(monkeypatch: pytest.MonkeyPatch):
+    """Below Python 3.10, `python -m speccheck` exits saying so, before importing tomli."""
+    monkeypatch.setattr(sys, "version_info", (3, 9, 18, "final", 0))
+    with pytest.raises(SystemExit) as done:
+        runpy.run_module("speccheck", run_name="__main__")
+    assert "needs Python 3.10+" in str(done.value.code)
