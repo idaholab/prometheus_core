@@ -1,0 +1,17 @@
+# The checker itself (speccheck.py) is standard library only and is used by path, so nothing here
+# is installed into a project that uses it. This file only locks the tools its own CI job runs.
+[project]
+name = "speccheck"
+version = "0.1.0"
+description = "Check SDD specs against the tests and CI jobs that cite them"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "coverage>=7.13.1",
+    "ruff>=0.16",
+]
+
+[tool.uv]
+package = false

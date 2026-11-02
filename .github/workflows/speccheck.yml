@@ -47,13 +47,16 @@ jobs:
         with:
           version: "0.11.25"
           python-version: ${{ matrix.python }}
+          # Nothing here is worth caching, and a cache is one more thing to trust
+          enable-cache: false
       - name: Ruff
+        # ruff and coverage come from this folder's uv.lock, which pins them with hashes
         if: ${{ matrix.python == '3.14' }}
         run: |
-          uvx ruff@0.17.3 check --output-format=github .
-          uvx ruff@0.17.3 format --check --diff .
+          uv run --locked ruff check --output-format=github .
+          uv run --locked ruff format --check --diff .
       - name: Test, with 100% line and branch coverage
         # The checker itself is standard library only; coverage is only used here
         run: |
-          uv run --no-project --with coverage==7.13.1 python -I -m coverage run -m unittest -v
-          uv run --no-project --with coverage==7.13.1 python -I -m coverage report
+          uv run --locked python -I -m coverage run -m unittest -v
+          uv run --locked python -I -m coverage report

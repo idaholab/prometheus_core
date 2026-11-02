@@ -152,9 +152,13 @@ so a change to the checker or the specs reruns it.
 
 ```sh
 cd common/speccheck
-python3 -m unittest -v
-uvx ruff@0.17.3 check . && uvx ruff@0.17.3 format --check .
+python3 -m unittest -v                                # needs nothing installed
+uv run --locked ruff check . && uv run --locked ruff format --check .
+uv run --locked python -I -m coverage run -m unittest && uv run --locked python -I -m coverage report
 ```
+
+`pyproject.toml` and `uv.lock` here only pin the tools these commands use (`ruff`, `coverage`), with
+hashes, so Dependabot can update them. The checker itself still has no dependencies.
 
 CI (`.github/workflows/speccheck.yml`) runs them on Python 3.10 and 3.14 and requires 100% line and
 branch coverage (`.coveragerc`).
