@@ -27,7 +27,8 @@ speccheck report results/ --output report.md --summary "$GITHUB_STEP_SUMMARY"
 ```
 
 Python 3.10 or newer. At runtime it needs only the standard library, plus `tomli` on 3.10.
-A project adds it as a path dev dependency, so its `uv.lock` changes:
+
+**In this repo**, a project adds it as a path dev dependency, so its `uv.lock` changes:
 
 ```toml
 [dependency-groups]
@@ -36,6 +37,24 @@ dev = ["prometheus-speccheck"]
 [tool.uv.sources]
 prometheus-speccheck = { path = "../common/speccheck" }
 ```
+
+**In an agent, don't use a path source.** The agent Dockerfile runs
+`uv sync --locked --no-dev --no-install-project --inexact` with only `pyproject.toml` and `uv.lock`
+mounted, and `--locked` still reads the metadata of a path dependency. With `common/` missing, the
+build fails with "Failed to generate package metadata for `prometheus-speccheck`". So does a clone
+of the agent repo alone. Use one of these instead:
+
+- A git source, pinned to a commit or tag. The dev group isn't installed in the image, so the build
+  never fetches it:
+
+  ```toml
+  [tool.uv.sources]
+  prometheus-speccheck = { git = "https://github.com/idaholab/prometheus_core", subdirectory = "common/speccheck", rev = "<commit or tag>" }
+  ```
+
+- No dependency at all. Run it with `uvx`, locally and in CI, such as
+  `uvx --with pytest --with "prometheus-speccheck @ git+https://github.com/idaholab/prometheus_core@<rev>#subdirectory=common/speccheck" pytest`,
+  or `uv tool install` it for the `speccheck` command.
 
 Installing it registers the pytest plugin, which does nothing until it is configured (see "Claiming a
 requirement"). As a command on its own, install it as a uv tool, which puts `speccheck` on `PATH`:
