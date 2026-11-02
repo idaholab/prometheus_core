@@ -18,6 +18,7 @@ import json
 import re
 
 import pytest
+from markdown_it import MarkdownIt
 
 from tests.requirements.conftest import Project, spec
 
@@ -200,6 +201,46 @@ def test_untrusted_text_cant_add_markdown(project: Project):
     # Outside code spans, no bracket or angle bracket is left unescaped
     prose = re.sub(r"`[^`]*`", "", text)
     assert re.search(r"(?<!\\)\]\(https://evil", prose) is None and re.search(r"(?<!\\)<(?:img|b|i)", prose) is None
+
+
+@pytest.mark.parametrize(
+    "how",
+    [
+        pytest.param(
+            "x `a```b` ![px](https://evil.example/t.png) [login](https://evil.example/p) `",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03",
+                "an explanation pairing a single backtick with a run of three renders through CommonMark with no link or image",
+            ),
+            id="run-of-three",
+        ),
+        pytest.param(
+            "``[login](https://evil.example/p)`` and `<img src=https://evil.example/t.png>`",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03",
+                "an explanation in double-backtick spans renders through CommonMark with no link, image or HTML",
+            ),
+            id="double-backticks",
+        ),
+        pytest.param(
+            "`` ` `` [login](https://evil.example/p) ` ``` `",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03",
+                "an explanation mixing backtick runs of one, two and three renders through CommonMark with no link",
+            ),
+            id="mixed-runs",
+        ),
+    ],
+)
+def test_backtick_runs_cant_open_a_link(project: Project, how: str):
+    """The report as a markdown renderer reads it: no element that links or loads anything."""
+    project.spec("- T-REQ-001-01: One.")
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": how}], "outcome": "passed"}
+    project.write("u.jsonl", header + json.dumps(line) + "\n")
+    html = MarkdownIt("commonmark").render(project.speccheck("report", "u.jsonl").out)
+    # The report's own links are anchors within it; nothing may point anywhere else or load anything
+    assert re.findall(r'<a href="(?!#)[^"]*"|<img\b', html) == []
 
 
 @pytest.mark.covers(
