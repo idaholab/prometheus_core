@@ -784,6 +784,7 @@ jobs:
       LLM_API_KEY: placeholder
       LLM_CONFIG_PROFILE: placeholder
       PROMETHEUS_API_BASE_IMAGE_HASH: placeholder
+      PROMETHEUS_API_BASE_IMAGE_REPO: placeholder
       REDIS_PASSWORD: placeholder
       # For docker-compose.build-cache.yml, with BUILD_CACHE from the workflow
       BUILD_CACHE_PLATFORM: amd64
