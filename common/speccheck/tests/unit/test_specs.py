@@ -167,6 +167,24 @@ class TestBullets:
         repo.spec(body)
         assert_problems(repo, *["a bullet must read `- T-REQ-NNN-XX: text`"] * 4)
 
+    def test_the_message_says_what_was_found(self, repo: Repo):
+        """Each malformed shape gets its own reason, and the line's first 60 characters are echoed."""
+        long = "- T-REQ-001-09 " + "x" * 80
+        repo.spec(
+            "* T-REQ-001-01: Star.\n- **T-REQ-001-02**: Bold.\n  - T-REQ-001-03: Nested.\n"
+            f"- REQ-001-04: No prefix.\n- T-REQ-001-05 No colon.\n- T-REQ-1-6: Short.\n{long}"
+        )
+        assert_problems(
+            repo,
+            "found `*` where `-` belongs: `* T-REQ-001-01: Star.`",
+            "found the ID wrapped in markup: `- **T-REQ-001-02**: Bold.`",
+            "found an indented bullet: `- T-REQ-001-03: Nested.`",
+            "found an ID without the `T-` prefix: `- REQ-001-04: No prefix.`",
+            "found no `: ` and text after the ID: `- T-REQ-001-05 No colon.`",
+            "found an ID that is not NNN-XX: `- T-REQ-1-6: Short.`",
+            f"found no `: ` and text after the ID: `{long[:60]}…`",
+        )
+
     def test_an_id_in_the_wrong_spec_fails(self, repo: Repo):
         """T-REQ-002-XX belongs in 002."""
         repo.spec("- T-REQ-002-01: Misplaced.")
