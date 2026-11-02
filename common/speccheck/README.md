@@ -224,6 +224,10 @@ for runners in other languages.
   a skip makes it `skipped`, and an expected failure makes it `xfailed`. Skipped, deselected and
   (`--collect-only`) collected claims are written too, so `verify` can say "claimed but didn't run".
 - Under pytest-xdist the run writes one file, with every worker's results.
+- Each claiming test's node ID is written as `test`, parametrize IDs included, and CI keeps the
+  results artifact 30 days and the report 90. **A parametrize ID must not hold a secret.** Nothing
+  scrubs it, and an ID built from a fixture or an environment value (a token, a URL with
+  credentials) lands in both. Give such a parameter a fixed `id=` or `ids=`.
 - `ci` says which CI provider ran it (`provider`), and where. GitHub Actions is the only provider so
   far: its block comes from `GITHUB_*`, plus `SPECCHECK_LEG` and `SPECCHECK_JOB_ID`, which the
   workflow sets. Outside CI it is null.
