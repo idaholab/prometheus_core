@@ -337,6 +337,13 @@ class TestRecorder:
             ("t.py::test_a", "collected", "t.py", 3),
         ]
 
+    def test_an_unwritable_file_is_a_usage_error(self, tmp_path: Path):
+        """A file where the folder should be: pytest reports it as a usage error, not a traceback."""
+        (tmp_path / "blocker").write_text("a file")
+        recorder = self.recorder(tmp_path, option="blocker/r.jsonl")
+        with pytest.raises(pytest.UsageError, match="speccheck: can't write the results file: .*blocker"):
+            recorder.pytest_sessionfinish(None, 0)
+
     def test_the_producer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """SPECCHECK_PRODUCER, else the ini option, else `local`; the CI context from the environment."""
         recorder = self.recorder(tmp_path, option="a.jsonl")

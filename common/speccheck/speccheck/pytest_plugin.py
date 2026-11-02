@@ -240,7 +240,10 @@ class Recorder:
                 for nodeid, claim in sorted(self.claims.items())
             ],
         )
-        results.write(path, results_file)
+        try:
+            results.write(path, results_file)
+        except OSError as exc:
+            raise pytest.UsageError(f"speccheck: can't write the results file: {exc}") from None
 
     started = ""
     """When the session started, ISO 8601 UTC; set by `pytest_sessionstart`."""
