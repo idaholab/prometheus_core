@@ -107,6 +107,23 @@ def test_a_producer_that_didnt_report(project: Project):
     assert "T-REQ-001-01 was not run: nothing that reported claims it (waiting on: docker)" in complete.err
 
 
+@pytest.mark.covers("SPC-REQ-005-04")
+def test_an_unclaimed_requirement_waits_for_a_test_producer_that_didnt_report(project: Project):
+    """Nobody claims it yet, but a test producer that may hasn't reported: `not run`, then `unclaimed` once it has."""
+    project.write("speccheck.toml", CONFIG + '[producers.docker]\nspecs = ["001"]\n')
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("unit.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    partial = project.speccheck("verify", "unit.jsonl", "--json")
+    assert partial.code == 0 and status(partial) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "not run"}
+    assert partial.json()["requirements"][1]["waiting_on"] == ["docker"]
+    complete = project.speccheck("verify", "--complete", "unit.jsonl")
+    assert complete.code == 1 and "T-REQ-001-02 was not run" in complete.err and "(waiting on: docker)" in complete.err
+    project.results("docker.jsonl", "docker", [])
+    reported = project.speccheck("verify", "unit.jsonl", "docker.jsonl", "--json")
+    assert reported.code == 1 and status(reported) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "unclaimed"}
+    assert project.speccheck("check", "unit.jsonl", "--json").json()["requirements"][1]["status"] == "unclaimed"
+
+
 @pytest.mark.covers("SPC-REQ-005-05")
 def test_complete_needs_every_expected_producer(project: Project):
     """Every producer, or with --workflow only the ones that list it."""

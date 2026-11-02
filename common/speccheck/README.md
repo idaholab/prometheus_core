@@ -93,8 +93,8 @@ added within a `schema_version`.
 |---|---|---|
 | `passed` | at least one claiming result passed (by default one is enough, in any producer or leg) | no |
 | `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
-| `not run` | claimed only by producers that didn't report in these inputs | `verify --complete` |
-| `unclaimed` | nothing claims it, and it isn't planned, untested or retired | `check`, `verify` |
+| `not run` | claimed only by producers that didn't report in these inputs; or, in `verify`, claimed by nothing while a test producer that may claim it hasn't reported | `verify --complete` |
+| `unclaimed` | nothing claims it, and it isn't planned, untested or retired. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
 | `claimed` | (`check` only) claimed; outcomes aren't looked at | no |
 | `planned`, `untested`, `retired` | the spec says so, and nothing claims it | no |
 
