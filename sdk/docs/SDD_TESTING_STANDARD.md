@@ -1,6 +1,6 @@
 # SDD Testing Standard
 
-> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID")`; see [common/speccheck/README.md](../../common/speccheck/README.md). speccheck currently applies only to its own requirements, not yet to these specs.
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID", "how the test proves it")`; see [common/speccheck/README.md](../../common/speccheck/README.md). speccheck currently applies only to its own requirements, not yet to these specs.
 
 This document defines how tests should support the specs in `specs/`.
 Use it when adding requirements, removing `⚠ untested` markers, or reviewing

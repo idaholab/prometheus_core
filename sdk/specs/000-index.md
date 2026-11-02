@@ -1,6 +1,6 @@
 # Prometheus API Specs Index
 
-> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID")`; see [common/speccheck/README.md](../../common/speccheck/README.md). speccheck currently applies only to its own requirements, not yet to these specs.
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID", "how the test proves it")`; see [common/speccheck/README.md](../../common/speccheck/README.md). speccheck currently applies only to its own requirements, not yet to these specs.
 
 This directory is the spec-driven-development contract for `prometheus_api`.
 Specs describe required behavior that future changes must preserve or update.
