@@ -43,8 +43,12 @@ UNTESTED = "⚠ untested"
 PLANNED = re.compile(r"\(planned: [^)]+\)")
 """The marker for a requirement a later plan step delivers, such as `(planned: step 3b)`."""
 
-CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
-"""Characters that can end a line or drive a terminal or a CI log: newlines, escapes, other controls."""
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+"""Characters that can end a line, drive a terminal or a CI log, or reorder how a line reads.
+
+Newlines, escapes and other controls, the line and paragraph separators, and the bidi embedding,
+override and isolate controls (U+202A to U+202E, U+2066 to U+2069), which can make a test name
+show reversed or hide what follows it."""
 
 
 def plain(text: str) -> str:
