@@ -68,6 +68,11 @@ class TestProse:
         """No span can open and swallow the rest."""
         assert markdown.prose("a `b` c` [d]") == "a \\`b\\` c\\` \\[d\\]"
 
+    def test_a_run_of_backticks_escapes_every_backtick(self):
+        """An even count with a run of two or more pairs differently in markdown, so nothing is kept as a span."""
+        assert markdown.prose("x `a```b` [l](u) `") == "x \\`a\\`\\`\\`b\\` \\[l\\](u) \\`"
+        assert markdown.prose("``[l](u)``") == "\\`\\`\\[l\\](u)\\`\\`"
+
     def test_one_line_and_capped(self):
         """Whitespace collapses, and long text is cut with an ellipsis."""
         assert markdown.prose("a\n  b") == "a b"
