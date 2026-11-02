@@ -23,8 +23,11 @@ Standard library only, Python 3.10 or newer. The rules are in README.md next to 
 from __future__ import annotations
 
 import argparse
+import ast
+import io
 import re
 import sys
+import tokenize
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,7 +54,10 @@ IMPLEMENTS = re.compile(r"\bImplements\b")
 """On a citing line, marks the citation as "this is the implementation", not a test of it."""
 
 COVERS = re.compile(r"\bCovers\b")
-"""In a workflow, marks a comment as a citation from a job that checks the requirement."""
+"""Marks a citation: a workflow comment from a job that checks the requirement, or a line of a test."""
+
+COVERS_COMMENT = re.compile(r"^#\s*Covers\b")
+"""A Python comment that cites: `# Covers BLD-REQ-003-04`."""
 
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", "dist"}
 """Folders under a `tests:` path that are never read."""
@@ -150,7 +156,7 @@ class Citation:
     line: int
     """The 1-based line of the mention."""
     kind: str
-    """`test`, `ci` (a workflow job that checks it) or `implements`."""
+    """`test`, `ci` (a workflow job that checks it) or `implements` (a workflow job that is the behaviour)."""
     job: str = ""
     """For a workflow, the job the comment sits in."""
 
@@ -263,19 +269,61 @@ def files_under(paths: Iterable[Path]) -> Iterator[Path]:
 
 
 def citations_in(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:
-    """Every ID mentioned in a file. A file that isn't text is skipped."""
+    """Every citation in a file. A file that isn't text is skipped.
+
+    What counts depends on the file, so that a stray mention can't pass for a test:
+    - a workflow: a `# Covers` or `# Implements` comment inside a job;
+    - Python: the docstring of a `test_*` function, or a `# Covers` comment;
+    - anything else: a line with `Covers` before the ID.
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return []
     if is_workflow(path):
         return workflow_citations(path, text, root, syntax, problems)
+    if path.suffix == ".py":
+        return python_citations(path, text, root, syntax, problems)
     found = []
     for number, line in enumerate(text.splitlines(), 1):
         for match in syntax.id.finditer(line):
-            kind = "implements" if IMPLEMENTS.search(line, 0, match.start()) else "test"
-            found.append(Citation(id=match.group(0), path=path, line=number, kind=kind))
+            if COVERS.search(line, 0, match.start()):
+                found.append(Citation(id=match.group(0), path=path, line=number, kind="test"))
     return found
+
+
+def python_citations(path: Path, text: str, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:
+    """IDs in the docstring of a `test_*` function, or in a `# Covers` comment.
+
+    A mention anywhere else (a string, a helper's docstring, a plain comment) is not a citation.
+    """
+    try:
+        tree = ast.parse(text)
+        comments = [
+            (token.start[0], token.string)
+            for token in tokenize.generate_tokens(io.StringIO(text).readline)
+            if token.type == tokenize.COMMENT
+        ]
+    except (SyntaxError, ValueError):
+        problems.append(Problem(rel(path, root), 0, "this isn't valid Python, so its citations can't be read"))
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")):
+            continue
+        first = node.body[0]
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+            doc = first.value.value
+            for match in syntax.id.finditer(doc):
+                line = first.lineno + doc.count("\n", 0, match.start())
+                found.append(Citation(id=match.group(0), path=path, line=line, kind="test"))
+    for number, comment in comments:
+        if COVERS_COMMENT.match(comment):
+            found += [
+                Citation(id=match.group(0), path=path, line=number, kind="test")
+                for match in syntax.id.finditer(comment)
+            ]
+    return sorted(found, key=lambda citation: citation.line)
 
 
 def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:

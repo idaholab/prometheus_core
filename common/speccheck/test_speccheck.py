@@ -38,6 +38,11 @@ def spec(body: str, *, status: str = "implemented", tests: str = "tests", number
     )
 
 
+def cites(*ids: str) -> str:
+    """A Python test file whose one test cites the IDs in its docstring (the docstring is line 2)."""
+    return f'def test_it():\n    """Covers {" ".join(ids)}."""\n'
+
+
 class Repo:
     """A throwaway repository with a `specs/` folder, a `tests/` folder and a workflows folder."""
 
@@ -90,7 +95,7 @@ class TestCoverage(CheckerTest):
     def test_a_cited_requirement_passes(self):
         """A test that names the ID satisfies it."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
-        self.repo.write("tests/test_x.py", '"""Covers REQ-001-01."""\n')
+        self.repo.write("tests/test_x.py", cites("REQ-001-01"))
         self.assertProblems()
 
     def test_an_uncited_requirement_fails(self):
@@ -114,7 +119,7 @@ class TestCoverage(CheckerTest):
             - REQ-001-02: It MUST work later. (planned: step 3b)
         """
         self.repo.write("specs/001-thing.md", spec(body))
-        self.repo.write("tests/test_x.py", "# REQ-001-01, REQ-001-02\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-01", "REQ-001-02"))
         self.assertProblems("REQ-001-01 is cited, so remove", "REQ-001-02 is cited, so remove its `(planned")
 
     def test_planned_and_untested_together_is_a_problem(self):
@@ -146,13 +151,13 @@ class TestRetired(CheckerTest):
         self.repo.write(
             "specs/001-thing.md", spec("- REQ-001-01: Retired. Superseded by REQ-001-02.\n- REQ-001-02: New.")
         )
-        self.repo.write("tests/test_x.py", "# REQ-001-02\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-02"))
         self.assertProblems()
 
     def test_citing_a_retired_requirement_fails(self):
         """A test should cite what replaced it."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: Retired. Gone."))
-        self.repo.write("tests/test_x.py", "# REQ-001-01\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-01"))
         self.assertProblems("REQ-001-01 is retired")
 
     def test_every_requirement_in_a_retired_spec_is_retired(self):
@@ -167,7 +172,7 @@ class TestCitations(CheckerTest):
     def test_an_unknown_id_fails(self):
         """A typo or a deleted ID."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
-        self.repo.write("tests/test_x.py", "# REQ-001-01 and REQ-001-09\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-01", "REQ-001-09"))
         self.assertProblems("REQ-001-09 isn't in any spec")
 
     def test_a_citation_outside_the_specs_tests_paths_fails(self):
@@ -175,15 +180,15 @@ class TestCitations(CheckerTest):
         self.repo.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work.", tests="tests/one"))
         self.repo.write("specs/002-other.md", spec("- REQ-002-01: It MUST work.", tests="tests/two", number="002"))
-        self.repo.write("tests/one/test_x.py", "# REQ-001-01\n")
-        self.repo.write("tests/two/test_y.py", "# REQ-002-01 REQ-001-01\n")
+        self.repo.write("tests/one/test_x.py", cites("REQ-001-01"))
+        self.repo.write("tests/two/test_y.py", cites("REQ-002-01", "REQ-001-01"))
         self.assertProblems("REQ-001-01 is cited here, outside specs/001-thing.md")
 
     def test_several_tests_paths(self):
         """`tests:` takes a comma-separated list; any of them can hold the evidence."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One.\n- REQ-001-02: Two.", tests="tests/a, tests/b"))
-        self.repo.write("tests/a/test_x.py", "# REQ-001-01\n")
-        self.repo.write("tests/b/test_y.py", "# REQ-001-02\n")
+        self.repo.write("tests/a/test_x.py", cites("REQ-001-01"))
+        self.repo.write("tests/b/test_y.py", cites("REQ-001-02"))
         self.assertProblems()
 
     def test_a_tests_path_that_does_not_exist_fails(self):
@@ -203,12 +208,67 @@ class TestCitations(CheckerTest):
         (self.repo.root / "tests" / "blob.bin").write_bytes(b"\xff\xfeREQ-001-01")
         self.assertProblems("has no citing test")
 
-    def test_implements_in_a_test_file_is_reported_as_implementation(self):
-        """`Implements` marks a pointer to the behaviour, not a test of it."""
+    def test_a_mention_is_not_a_citation(self):
+        """Only a `test_*` docstring or a `# Covers` comment cites; any other mention is just text."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
-        self.repo.write("tests/conftest.py", "# Implements REQ-001-01\n")
+        source = '''\
+            """Module docstring: Covers REQ-001-01."""
+            # A plain comment about REQ-001-01.
+            NOTE = "Covers REQ-001-01"
+
+            def helper():
+                """Covers REQ-001-01."""
+
+            def test_nothing_cited():
+                """Checks something else."""
+                name = "REQ-001-01"
+
+            def test_no_docstring():
+                pass
+
+            def test_expression_first():
+                42
+        '''
+        self.repo.write("tests/test_x.py", textwrap.dedent(source))
+        self.assertProblems("REQ-001-01 has no citing test")
+
+    def test_a_covers_comment_in_python_cites(self):
+        """`# Covers` works anywhere a comment can go, for tests that can't carry a docstring."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One.\n- REQ-001-02: Two.\n- REQ-001-03: Three."))
+        source = "x = 1  # not a citation of REQ-001-03\n# Covers REQ-001-01, REQ-001-02\n"
+        self.repo.write("tests/conftest.py", source)
+        self.assertProblems("REQ-001-03 has no citing test")
+
+    def test_docstrings_of_async_and_method_tests_cite_on_their_own_line(self):
+        """A method in a test class and an async test both count, and the line is the ID's own."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One.\n- REQ-001-02: Two."))
+        source = '''\
+            class TestThing:
+                def test_a(self):
+                    """Does a thing.
+
+                    Covers REQ-001-01.
+                    """
+
+            async def test_b():
+                """Covers REQ-001-02."""
+        '''
+        self.repo.write("tests/test_x.py", textwrap.dedent(source))
         _, cited, _ = speccheck.check(self.repo.root / "specs", self.repo.root)
-        self.assertEqual([c.kind for c in cited["REQ-001-01"]], ["implements"])
+        self.assertEqual([c.line for c in cited["REQ-001-01"]], [5])
+        self.assertEqual([c.line for c in cited["REQ-001-02"]], [9])
+
+    def test_python_that_does_not_parse_is_a_problem(self):
+        """A syntax error would otherwise hide every citation in the file."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It. ⚠ untested"))
+        self.repo.write("tests/test_x.py", "def test_x(:\n")
+        self.assertProblems("tests/test_x.py: this isn't valid Python")
+
+    def test_other_languages_cite_on_a_covers_line(self):
+        """A shell script or TypeScript test has no docstring: `Covers` before the ID."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One.\n- REQ-001-02: Two."))
+        self.repo.write("tests/check.sh", "# Covers REQ-001-01\necho REQ-001-02\n")
+        self.assertProblems("REQ-001-02 has no citing test")
 
 
 class TestWorkflows(CheckerTest):
@@ -323,20 +383,20 @@ class TestPrefix(CheckerTest):
         """The prefix is part of the ID, in the spec and in the citation."""
         self.prefixed()
         self.repo.write("specs/001-thing.md", spec("- BLD-REQ-001-01: It MUST work.\n- BLD-BEH-001-01: GIVEN x."))
-        self.repo.write("tests/test_x.py", "# BLD-REQ-001-01\n")
+        self.repo.write("tests/test_x.py", cites("BLD-REQ-001-01"))
         self.assertProblems("BLD-BEH-001-01 has no citing test")
 
     def test_a_bare_id_is_not_this_folders(self):
         """`REQ-001-01` could be the SDK's; it neither cites nor trips the unknown-ID rule."""
         self.prefixed()
         self.repo.write("specs/001-thing.md", spec("- BLD-REQ-001-01: It MUST work."))
-        self.repo.write("tests/test_x.py", "# REQ-001-01 and OTHER-REQ-001-01 and BLD-REQ-001-09\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-01 and OTHER-REQ-001-01 and BLD-REQ-001-09"))
         self.assertProblems("BLD-REQ-001-01 has no citing test", "BLD-REQ-001-09 isn't in any spec")
 
     def test_a_prefixed_id_is_not_a_bare_folders(self):
         """Without a prefix, `BLD-REQ-001-01` isn't read as `REQ-001-01`."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
-        self.repo.write("tests/test_x.py", "# BLD-REQ-001-01\n")
+        self.repo.write("tests/test_x.py", cites("BLD-REQ-001-01"))
         self.assertProblems("REQ-001-01 has no citing test")
 
     def test_a_bullet_without_the_prefix_fails(self):
@@ -391,10 +451,10 @@ class TestMain(CheckerTest):
         """0 when clean, 1 with the problems on stderr; `--report` lists each ID's evidence."""
         body = "- REQ-001-01: Tested.\n- REQ-001-02: Later. (planned: step 2)\n- REQ-001-03: No. ⚠ untested"
         self.repo.write("specs/001-thing.md", spec(body))
-        self.repo.write("tests/test_x.py", "# REQ-001-01\n")
+        self.repo.write("tests/test_x.py", cites("REQ-001-01"))
         code, out, err = self.run_main("--report")
         self.assertEqual((code, err), (0, ""))
-        self.assertIn("REQ-001-01  test: tests/test_x.py:1", out)
+        self.assertIn("REQ-001-01  test: tests/test_x.py:2", out)
         self.assertIn("REQ-001-02  planned", out)
         self.assertIn("REQ-001-03  untested", out)
 

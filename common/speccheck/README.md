@@ -59,16 +59,25 @@ bullet may wrap onto lines indented by two spaces. Markers at the end of the tex
 
 A whole spec with `status: retired` counts as retired.
 
-**Citations.** Any mention of a full ID in a file under the spec's `tests:` paths, in any language:
+**Citations.** A full ID in a file under the spec's `tests:` paths counts only where a reader would
+look for it, so a stray mention can't pass for a test:
+
+- **Python:** the docstring of a `test_*` function or method, or a `# Covers` comment. A module
+  docstring, a helper's docstring, a string, or any other comment is not a citation. A file that
+  doesn't parse is a problem, because its citations can't be read.
+- **Any other language:** a line with `Covers` before the ID, such as `// Covers BLD-REQ-003-04`.
+- **Workflows:** see below.
 
 ```python
 def test_set_refuses_secret_keys():
     """Covers BLD-REQ-003-04: --set names .env instead of taking the value."""
 ```
 
-A line with `Implements` before the ID counts as a pointer to the behaviour, not a test of it; the
-report shows the difference. Caches (`__pycache__`, `node_modules`, `.venv`, ...) and binary files are
-skipped.
+Caches (`__pycache__`, `node_modules`, `.venv`, ...) and binary files are skipped.
+
+A citation shows that a test names the requirement, not that it skipped, asserts anything or proves
+it; that stays a review question. Specs that share a `tests:` folder share its evidence, so name the
+narrowest files and folders on each spec's `tests:` line.
 
 **Workflows.** In `.github/workflows/*.yml`, an ID only counts in a comment inside a job, below its
 key, starting with `Covers` (the job checks the requirement) or `Implements` (the job is the
@@ -96,8 +105,8 @@ the file, or in a step's text is a problem rather than silent evidence.
   spec the index doesn't list.
 
 `draft` doesn't relax anything: a draft spec's requirements are planned, untested or cited, like any
-other. What the checker can't tell is whether a citing test really proves the requirement; that is a
-review question.
+other. What the checker can't tell is whether a citing test really proves the requirement, or is
+skipped; that is a review question.
 
 ## Use it from a project
 
