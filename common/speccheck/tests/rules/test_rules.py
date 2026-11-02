@@ -16,12 +16,15 @@
 - every module with code has a test file at the mirrored path;
 - every new `.py` file carries the copyright header;
 - no `pragma: no cover`;
-- only `cli.py` exits, and only `results.py`, `summary.py` and `actions/report.py` write files.
+- only `cli.py` exits, and only `results.py`, `summary.py` and `actions/report.py` write files;
+- no markdown file in the repository shows a `covers` mark with one argument.
 """
 
 from __future__ import annotations
 
 import ast
+import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +41,8 @@ EXEMPT_NAMES = {"__all__", "__slots__", "pytestmark"}
 """Names Python or pytest read by name, which carry no documentation of their own."""
 HEADER = "# SPDX-License-Identifier: MIT"
 """The last line of the copyright header every file starts with."""
+ONE_ARGUMENT_COVERS = re.compile(r"""covers\(\s*("[^"]*"|'[^']*')\s*\)""")
+"""A `covers` mark with only an ID, which collection rejects (SPC-REQ-003-04)."""
 
 
 def is_docstring(node: ast.stmt) -> bool:
@@ -173,3 +178,31 @@ def test_only_the_cli_exits_and_only_three_modules_write():
         ):
             writes.append(name)
     assert (exits, writes) == ([], [])
+
+
+def one_argument_covers(text: str) -> list[int]:
+    """The 1-based lines of `text` that show a `covers` mark with only an ID."""
+    return [n for n, line in enumerate(text.splitlines(), 1) if ONE_ARGUMENT_COVERS.search(line)]
+
+
+def test_the_one_argument_covers_finder_finds_what_it_should():
+    """Both quote styles are found; the two-argument form and a bare `covers()` are not."""
+    text = 'a `covers("T-REQ-001-01")`\nb covers( \'X\' )\nc covers("T-REQ-001-01", "how")\nd covers()\n'
+    assert one_argument_covers(text) == [1, 2]
+
+
+def test_no_doc_teaches_a_one_argument_covers():
+    """Docs anywhere in the repository show the claim as collection accepts it: the ID and how."""
+
+    def git(*args: str) -> str:
+        """One git command's output, run in common/speccheck."""
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+
+    top = Path(git("rev-parse", "--show-toplevel").strip())
+    found = [
+        f"{name}:{line}"
+        for name in git("ls-files", "-z", "--full-name", "--", ":/*.md").split("\0")
+        if name and (top / name).is_file()
+        for line in one_argument_covers((top / name).read_text(encoding="utf-8", errors="replace"))
+    ]
+    assert found == [], "a one-argument covers mark (use covers(ID, how)):\n" + "\n".join(found)
