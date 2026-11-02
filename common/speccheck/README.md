@@ -204,6 +204,9 @@ def test_results_file_round_trips():
   speccheck_producer = "sdk-python"
   ```
 
+- Collection checks every claim in the spec folder, not just the tests you selected. One bad ID
+  stops pytest before any test runs, even with `pytest tests/x.py::one`. To iterate without it, run
+  `pytest -o speccheck_config=`.
 - A `covers` mark with no IDs, a non-string ID or keyword arguments always fails collection.
 - Only the marker counts. A docstring may still say what a test proves, for the reader.
 - Whether a test really proves what it claims is a review question. speccheck sees only that it
