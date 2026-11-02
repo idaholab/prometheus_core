@@ -103,6 +103,23 @@ changing commands"):
 - Only `cli.py` exits; actions return a code. Nothing but `results.py` and `report.py` writes
   files.
 
+### Shared code with platformctl
+
+Not shared yet, on purpose (decided in review of #365, finding TECH-8). Of speccheck's
+`actions/__init__.py`, `jsonout.py`, `output.py` and `context.py`, only `discover()` is identical to
+platformctl's, about eight lines. The rest differs for a reason:
+
+- `jsonout.py` and `output.py` keep CI log commands (`::`, `##[`), control characters and bidi
+  overrides out of what is printed, and escape `--json` with `ensure_ascii`. platformctl's instead
+  has error codes, a `platform` block, and a secret scrubber. Merging them risks weakening one.
+- `context.py` holds different things (a spec folder and its config, against a platform's paths,
+  adapters and target).
+- A shared package would be a dependency of the agent template, and a path dependency breaks the
+  template's Dockerfile (DEV-1 in the #365 review).
+
+The trigger to extract is a **third consumer** of the same pieces. Until then, `discover()` carries
+a comment pointing at platformctl's copy, so an edit to one reminds the editor of the other.
+
 ## Commands
 
 | Command | Reads | Fails when |
