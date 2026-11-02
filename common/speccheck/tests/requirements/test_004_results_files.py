@@ -214,6 +214,15 @@ def test_collect_only_writes_collected(project: Project):
     assert len(outcomes(project, "c.jsonl")) == len(EXPECTED)
 
 
+@pytest.mark.covers("SPC-REQ-004-02")
+def test_a_test_id_with_a_unicode_line_separator_still_reads(project: Project):
+    """U+2028 and U+0085 in a test ID are written as they are, and must not split the line on read."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("unit.jsonl", "unit", [("t.py::test[a\u2028b\u0085c]", ["T-REQ-001-01"], "passed")])
+    done = project.speccheck("verify", "unit.jsonl")
+    assert done.code == 0 and "not JSON" not in done.err
+
+
 @pytest.mark.covers("SPC-REQ-004-05")
 def test_a_file_only_when_asked(project: Project, monkeypatch: pytest.MonkeyPatch):
     """Nothing by default; the option or SPECCHECK_RESULTS (relative to where pytest started) asks for one."""
