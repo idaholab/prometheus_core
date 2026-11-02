@@ -101,8 +101,10 @@ jobs:
     runs-on: ubuntu-26.04
 ```
 
-Jobs are found by indentation under `jobs:`, so a citation in a deleted or renamed job, at the top of
-the file, or in a step's text is a problem rather than silent evidence.
+Jobs are found by indentation under `jobs:`, so a citation in a deleted or renamed job, or at the top
+of the file, is a problem rather than silent evidence. The comment must also sit with the job's own
+keys (`runs-on:`, `steps:`), at the same indent. A comment deeper than that is inside a step, where it
+could be shell text in a `run: |` block instead of a YAML comment, so it is a problem too.
 
 ## What fails
 

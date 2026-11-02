@@ -340,6 +340,31 @@ class TestWorkflows(CheckerTest):
         self.repo.write(".github/workflows/ci.yml", workflow)
         self.assertProblems("must be a comment inside a job")
 
+    def test_a_comment_inside_a_step_fails(self):
+        """In a `run: |` block a `# Covers` line is shell text, so only the job's own keys may hold one."""
+        workflow = """\
+            jobs:
+              diff-config:
+                runs-on: ubuntu-latest
+                steps:
+                  # Covers REQ-001-01: in the steps list
+                  - name: Check
+                    # Covers REQ-001-01: inside the step
+                    run: |
+                      # Covers REQ-001-01: shell text, not a comment
+                      echo hi
+              publish:
+                # Implements REQ-001-02
+                runs-on: ubuntu-latest
+            """
+        self.repo.write(".github/workflows/ci.yml", textwrap.dedent(workflow))
+        self.assertProblems(*["with the job's own keys"] * 3, "REQ-001-01 has no citing test")
+
+    def test_a_comment_in_a_job_with_no_keys_fails(self):
+        """A job with nothing but a comment has no own keys to sit with."""
+        self.repo.write(".github/workflows/ci.yml", "jobs:\n  empty:\n    # Covers REQ-001-01\n")
+        self.assertProblems("with the job's own keys", "REQ-001-01 has no citing test", "REQ-001-02 has no citing test")
+
     def test_an_id_in_a_workflow_needs_a_keyword(self):
         """A bare ID in a step name or a plain comment is not a citation."""
         workflow = textwrap.dedent(self.WORKFLOW).replace("- run: echo hi", "- run: echo REQ-001-01")

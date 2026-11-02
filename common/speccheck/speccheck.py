@@ -367,13 +367,18 @@ def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, proble
     """IDs in a workflow: only in a `# Covers ...` or `# Implements ...` comment inside a job.
 
     Jobs are found by indentation under the top-level `jobs:` key, so no YAML parser is needed. A
-    citation must be indented deeper than its job's key, so a renamed or deleted job can't keep one.
+    citation must be indented deeper than its job's key, so a renamed or deleted job can't keep one,
+    and at the same indent as the job's own keys (`runs-on:`, `steps:`). A comment deeper than that sits
+    inside a step, where it could be shell text in a `run: |` block rather than a comment.
     """
     found = []
     name = rel(path, root)
     in_jobs = False
     job_indent: int | None = None
     job = ""
+    job_number = 0
+    own_keys: dict[int, int] = {}
+    pending: list[tuple[int, int, int, str, str, list[str]]] = []
     for number, line in enumerate(text.splitlines(), 1):
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
@@ -385,6 +390,9 @@ def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, proble
             elif in_jobs and (job_indent is None or indent <= job_indent):
                 job_indent = indent
                 job = stripped.split(":", 1)[0].strip("'\"")
+                job_number += 1
+            elif in_jobs:
+                own_keys.setdefault(job_number, indent)
         ids = [match.group(0) for match in syntax.id.finditer(line)]
         if not ids:
             continue
@@ -399,7 +407,12 @@ def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, proble
         if not job or job_indent is None or indent <= job_indent:
             problems.append(Problem(name, number, "a workflow citation must be a comment inside a job, below its key"))
             continue
-        kind = "implements" if implements else "ci"
+        pending.append((number, indent, job_number, job, "implements" if implements else "ci", ids))
+    for number, indent, job_number, job, kind, ids in pending:
+        if indent != own_keys.get(job_number):
+            message = "a workflow citation must sit with the job's own keys (`runs-on:`, `steps:`), not inside a step"
+            problems.append(Problem(name, number, message))
+            continue
         found += [Citation(id=id_, path=path, line=number, kind=kind, job=job) for id_ in ids]
     return found
 
