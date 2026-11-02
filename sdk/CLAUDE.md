@@ -60,7 +60,6 @@ make version                                         # prints version from pypro
 make bump-patch | bump-minor | bump-major            # rewrites pyproject.toml
 make build-image IMAGE_TAG=<tag>                     # local amd64+arm64 builds
 make build-local [LOCAL_IMAGE=<name:tag>] [CACHE_FROM=<image:tag>] # host-arch build into the local store (default prometheus_api:local; used by platform LOCAL_SDK=true)
-make build-push IMAGE_REPO=<repo> [PUSH_LATEST=true] # multi-arch buildx push (default repo: containers.github.inl.gov/...)
 ```
 
 Default `IMAGE_TAG` is `git rev-parse --short HEAD`.
