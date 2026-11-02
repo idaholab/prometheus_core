@@ -129,6 +129,11 @@ None beyond 3a and 3b.
 - **Live:** `up backend` recreates only the backend; `agents list
   --registered` and `agents refresh` against the minimal project; the
   `compose --print` command run by hand.
+- **Specs:** remove `(planned: step 3c)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
 
 ## CI
 

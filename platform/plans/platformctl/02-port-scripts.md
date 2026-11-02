@@ -192,6 +192,11 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
   with a placeholder `.env`, while the Makefile logic still exists.
 - **Live:** `config init` on a real file in `tmp_path`, including its menu
   in a pseudo-terminal; `status --wait` against a stub server.
+- **Specs:** remove `(planned: step 2)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
 
 ## CI
 

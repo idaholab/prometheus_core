@@ -204,6 +204,11 @@ separate repository that pins `prometheus_core` as a git submodule. See
   submodule pointing at this checkout: `up --agent`, registration, refresh,
   `down --agent`; the same with `PROMETHEUS_CORE` and as a sibling; a
   platform started with `--instance` and an agent joining it.
+- **Specs:** remove `(planned: step 7)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
 
 ## CI
 

@@ -67,6 +67,14 @@ and `cluster-up` keeps its "already running" message.
 - **Git behind an adapter** (reported): `env_checks` and `config.platform_version` call `git`
   through `ctx.runner` directly. Only `system/` should know argv: add a git adapter.
 
+## Tests
+
+- **Specs:** remove `(planned: step 8)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
+
 ## Review
 
 Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, Linux/WSL.

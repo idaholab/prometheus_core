@@ -150,6 +150,11 @@ today; CI proves it.
   with Compose and with a Python child, waiting for a ready marker rather
   than sleeping;
   Make forwarding of `make up X=y`, `X=y make up` and `make -C <dir>`.
+- **Specs:** remove `(planned: step 3a)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
 
 ## CI
 

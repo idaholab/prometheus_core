@@ -51,6 +51,11 @@ See `design.md`, "Where the platform's code comes from".
   missing-image check; mixed mode.
 - **Live:** `up` from published images of a known tag (CI only, with
   registry access).
+- **Specs:** remove `(planned: step 9)` from every requirement this step delivers in
+  [`build/specs/`](../../../build/specs/000-index.md) (the index lists which specs), and cite each
+  ID from the test that proves it, as `"""Covers BLD-REQ-NNN-XX: ..."""`. `common/speccheck`
+  fails CI on a requirement with no citation and no marker; that the test really proves it is
+  the CI reviewer's check (`reviews.md`).
 
 ## Output
 
