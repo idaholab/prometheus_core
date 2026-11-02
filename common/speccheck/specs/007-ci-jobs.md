@@ -16,9 +16,11 @@ checks what its jobs proved.
 - SPC-REQ-007-03: `.github/actions/speccheck-upload` MUST upload a job's results as an artifact
   named `speccheck-results-<name>`, and MUST fail the job when there is nothing to upload.
 - SPC-REQ-007-04: `.github/actions/speccheck-verify` MUST download every `speccheck-results-*`
-  artifact of the run, write the full report and upload it as the `speccheck-report` artifact,
-  then run `verify` with `--summary` (see SPC-REQ-008-07) and the artifact's URL, and fail when
-  `verify` fails, with read-only permissions and no secrets.
+  artifact of the run, look up the display name of every job of the run, write the full report
+  with those names and upload it as the `speccheck-report` artifact, then run `verify` with
+  `--summary` (see SPC-REQ-008-07), the artifact's URL and the same names, and fail when `verify`
+  fails. It MUST need only `contents: read` and `actions: read`, and no secrets. When the names
+  can't be looked up, it MUST warn and go on without them.
 - SPC-REQ-007-05: Each result's link MUST open the job that produced it, in the run attempt that
   produced it, re-runs included. When the job can't be identified, the link MUST open that run
   attempt.

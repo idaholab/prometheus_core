@@ -250,10 +250,10 @@ Lines: one header, then one line per claiming test.
 ```json
 {"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 8.4.1",
  "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core",
-        "workflow": "test", "job": "sdk-python", "leg": "3.12",
+        "workflow": "test", "job": "sdk-python", "job_id": 456,
         "run_id": 123, "run_attempt": 1, "job_url": "https://github.com/.../job/456",
         "sha": "abc..."},
- "started": "2026-11-01T12:00:00Z"}
+ "root": "sdk", "started": "2026-11-01T12:00:00Z"}
 {"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py",
  "line": 181, "covers": [{"id": "SDK-REQ-006-08", "how": "a chat call goes through the proxy URL"}],
  "outcome": "passed"}
@@ -270,9 +270,13 @@ Lines: one header, then one line per claiming test.
   a skip in setup makes it `skipped`.
 - **Deselected and skipped tests are written too**, so `verify` can say "claimed here but didn't
   run" instead of "not claimed".
-- `ci` comes from `GITHUB_*` variables; `producer` and `leg` come from `SPECCHECK_PRODUCER` and
-  `SPECCHECK_LEG`, which the workflow sets. Outside CI, `ci` is null and the file is only useful
-  to `check`.
+- `ci` comes from `GITHUB_*` variables, plus `SPECCHECK_JOB_ID`; `producer` comes from
+  `SPECCHECK_PRODUCER`, which the workflow sets. Outside CI, `ci` is null and the file is only
+  useful to `check`. There is no `leg`: a matrix value names one axis of one kind of job, so jobs
+  are named by their display name instead, looked up by the final job (see "Job names").
+- **`root`** is the folder `file` paths are relative to (pytest's root), as a path from the
+  repository's root: `GITHUB_WORKSPACE` in CI, else git's top level, else null. The report uses it
+  to link each test to its file.
 - The file is written only when asked: `--speccheck-results=PATH` or `SPECCHECK_RESULTS`. A plain
   local `pytest` writes nothing.
 - It is written atomically at session end, so a crashed run leaves no file. `verify --complete`
@@ -298,6 +302,17 @@ which we don't use. The check run ID is the number in a job's URL
 directly. Each attempt's job has its own ID, so a re-run links its own job. When the variable is
 missing or not a number, `job_url` falls back to the run attempt's URL. The jobs API lookup isn't
 needed. Confirmed when `speccheck.yml` first runs: the report's job links open the right job.
+
+**Job names (decided 2026-11-02).** A result is labelled with the display name of the job that
+produced it, such as `speccheck: requirements python 3.12`, the name on the run page. A job can't
+read its own display name (the `job` context has no name, and `GITHUB_JOB` is the job's ID), so
+`speccheck-verify` looks them up once from the run's jobs API, which needs `actions: read`, and
+writes a map of job ID to name. `report` and `verify` take it as `--job-names FILE` and find each
+result's name by its `ci.job_id`. The map is optional: without it, or for a job not in it, a
+result is named by its producer. The names come from GitHub, not from a results file, so a pull
+request can't name a job it didn't run; they are escaped all the same. The alternative, each
+workflow setting `SPECCHECK_JOB_NAME` to the same expression as its job's `name:`, needed no
+permission but would drift when a job is renamed.
 The report trusts only the shape and the base of a results file's URL. It links one only when it
 is under the report job's own `GITHUB_SERVER_URL/GITHUB_REPOSITORY`; outside CI nothing is linked.
 
@@ -325,7 +340,6 @@ In each job that runs claiming tests:
 ```yaml
     env:
       SPECCHECK_PRODUCER: sdk-python
-      SPECCHECK_LEG: ${{ matrix.python }}
       SPECCHECK_RESULTS: ${{ github.workspace }}/.speccheck/sdk-python-${{ matrix.python }}.jsonl
     steps:
       # ...
@@ -406,19 +420,53 @@ every run, the runtime check in the final job, complete where every producer rep
 
 ## Report
 
-`report` writes one markdown document:
+`report` writes one markdown document, one section per requirement (decided 2026-11-02, after a
+first version with one table per spec read badly with long text):
 
-- a summary line and a count per status;
-- one table per spec: ID, status, the start of its text, and its evidence, one entry per result:
-  the test node ID (or CI job), the producer and leg, and a link to the job;
-- below each table, every claim with how it proves its requirement (up to 1000 characters, so not
-  in a cell);
-- requirements that are not passed sorted first within each spec;
+- the title, a summary line and a count per status;
+- **Specs:** a table with a link to each spec, its number of requirements and its count per status;
+- **one section per spec** (`##`): its title, its Purpose paragraph, and a table of its
+  requirements' IDs (each linking to its section) and statuses, `failed`, `unclaimed` and
+  `not run` first;
+- **one section per requirement** (`###`, in spec order): `ID ✅ status` as the heading, the full
+  text quoted, and a link to its line in the spec file;
+- **one section per claiming test or CI job** (`####`): the test's name linking to its line in its
+  file, then the file's path; **How:** and the explanation; then one line per result, worst
+  outcome first, naming the job by its display name and linking to it;
+- a requirement with no claims says what it waits on, or the marker to add;
 - the inputs it was built from: commit, run, and which producers reported or were missing.
 
-Everything that comes from a results file (test names, producer names, explanations) is escaped
-before it goes into markdown, and capped in length. The report is the artifact and the place to
-read everything. `--json` gives the same data for other tools.
+```markdown
+### SPC-REQ-001-01 ✅ passed
+
+> A spec file MUST be named `NNN-short-name.md`, and its first line MUST be its title, …
+
+In [`common/speccheck/specs/001-spec-format.md:12`](…/blob/<sha>/common/speccheck/specs/001-spec-format.md#L12)
+
+#### Test [`test_file_names_and_titles`](…/blob/<sha>/…/test_001_spec_format.py#L22) in `common/speccheck/tests/requirements/test_001_spec_format.py`
+
+**How:** lint reports a `Notes.md` in the folder as misnamed, and a spec titled `# 2 -` instead of `# 002 -` at line 1
+
+- ✅ passed in [speccheck: requirements python 3.10](…/job/125530458936)
+- ✅ passed in [speccheck: requirements python 3.11](…/job/125530459354)
+```
+
+**Escaping.** Everything from a results file, a spec or the job names is written so it can only
+be text: code spans are kept as written (with any backtick that would close one dropped), and
+outside them only what can make a link, image, autolink, HTML or emphasis is escaped, plus a
+leading `#`, `>`, `-` or `1.` where text starts a line. The first version escaped every `.` and
+`-`, which was safe but hard to read in the raw file.
+
+**Source links.** In CI, spec and test lines link to `<server>/<repository>/blob/<sha>/<path>#L<n>`,
+where the server, repository and commit are the run's own (`GITHUB_SERVER_URL`,
+`GITHUB_REPOSITORY`, `GITHUB_SHA`), never a results file's. A spec's path is the config's folder
+from the repository's root; a test's is the results file's `root` plus its `file`. A path is
+linked only when it is plain (letters, digits, `.`, `_`, `-`, `/`, no `..`). Outside CI nothing is
+linked. A parametrized test's cases all link to the line pytest gives, the `parametrize` (or its
+first decorator), since pytest doesn't track each `pytest.param`'s line.
+
+The report is the artifact and the place to read everything. `--json` gives the same data for
+other tools, with each requirement's `path` and `line` and each result's `job_name`.
 
 ## Step summary
 
@@ -452,7 +500,7 @@ step 1 alongside the code:
 | 003 Claims | the `covers` marker, where it may go, explanations, the collection check |
 | 004 Results files | format, outcomes, merging phases, xdist, writing only when asked |
 | 005 Evidence and verify | the status table above, partial and complete checks |
-| 006 Report | markdown, links, escaping, explanations, `--json` |
+| 006 Report | the per-requirement layout, job names, source links, escaping, `--json` |
 | 007 CI jobs | `record`, the two composite actions |
 | 008 The command line | actions, global options, exit codes, `--json` envelope, the step summary |
 

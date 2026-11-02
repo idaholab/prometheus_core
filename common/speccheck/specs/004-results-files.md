@@ -29,7 +29,11 @@ runners and the checker, so other languages can write one too.
 - SPC-REQ-004-07: A reader MUST refuse a file over its size limit or with an over-long line, and
   MUST NOT follow symlinks when it searches a folder.
 - SPC-REQ-004-08: In CI, the header MUST carry the CI context: the provider, server, repository,
-  workflow, job, leg, run ID, attempt and commit. Outside CI, `ci` MUST be null.
+  workflow, job, run ID, attempt, the job's own ID when known, and commit. Outside CI, `ci` MUST be
+  null.
 - SPC-REQ-004-09: A reader MUST reject a file with a result that claims the same ID twice, or
   whose `how` is empty, longer than 1000 characters, or contains a line break, since a writer in
   another language may not have collapsed it.
+- SPC-REQ-004-10: The header MUST give `root`, the folder that its results' `file` paths are
+  relative to, as a path from the repository's root, so a report can link each test's file. When
+  the repository's root can't be found, `root` MUST be null.
