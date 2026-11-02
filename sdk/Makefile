@@ -53,8 +53,8 @@ fix: ##@ Auto-fix ruff lint issues and format
 check: ##@ Run all checks (lint + format + typecheck)
 check: lint format typecheck
 
-hooks: ##@ Install pre-commit and pre-push hooks
-	uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+hooks: ##@ Install the repository's pre-commit and pre-push hooks
+	uv run pre-commit install --config ../.pre-commit-config.yaml --hook-type pre-commit --hook-type pre-push
 
 .PHONY: test-install
 test-install: ##@ Verify package installs and imports correctly in a clean venv
