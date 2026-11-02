@@ -175,6 +175,25 @@ class SpecSet:
     """The folder's ID patterns."""
 
 
+def what_is_wrong(line: str, syntax: Syntax) -> str:
+    """Say which way a malformed bullet line differs from the form, and echo its first 60 characters."""
+    stripped = line.strip()
+    if line[0].isspace():
+        reason = "an indented bullet"
+    elif stripped[0] != "-":
+        reason = f"`{stripped[0]}` where `-` belongs"
+    elif re.match(r"^-\s+[*_`]", line):
+        reason = "the ID wrapped in markup"
+    elif syntax.head and not re.match(rf"^-\s+{re.escape(syntax.head)}", line):
+        reason = f"an ID without the `{syntax.head}` prefix"
+    elif re.match(rf"^- {re.escape(syntax.head)}(?:REQ|BEH)-\d{{3}}-\d{{2}}(?!\d)", line):
+        reason = "no `: ` and text after the ID"
+    else:
+        reason = "an ID that is not NNN-XX"
+    shown = stripped[:60] + ("…" if len(stripped) > 60 else "")
+    return f"{reason}: `{shown}`"
+
+
 def rel(path: Path, root: Path) -> str:
     """`path` relative to `root` where possible, for messages."""
     try:
@@ -222,9 +241,8 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         if syntax.bullet_start.match(line):
             match = syntax.bullet.match(line)
             if match is None:
-                problems.append(
-                    Problem(name, line_number, f"a bullet must read `- {syntax.head}REQ-NNN-XX: text` (or BEH)")
-                )
+                message = f"a bullet must read `- {syntax.head}REQ-NNN-XX: text` (or BEH); found {what_is_wrong(line, syntax)}"
+                problems.append(Problem(name, line_number, message))
                 current = None
                 continue
             if match.group("number") != number:
