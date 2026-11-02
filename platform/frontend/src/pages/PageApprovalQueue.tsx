@@ -10,10 +10,18 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
 import { ApprovalQueue } from "../components/approval-queue/ApprovalQueue";
+import type { QueueCounter } from "../components/approval-queue/QueueSummary";
 import type { Checkpoint } from "../components/approval-queue/types";
+
+// Placeholder counters from the DES-2 corrected Figma E.1 frame.
+const COUNTERS: QueueCounter[] = [
+  { id: "pending", label: "Pending Reviews", count: 4, tone: "primary" },
+  { id: "urgent", label: "Urgent", count: 2, tone: "error" },
+  { id: "approved-today", label: "Approved Today", count: 12, tone: "info" },
+  { id: "revision-requested", label: "Revision Requested", count: 1, tone: "neutral" },
+];
 
 // Placeholder checkpoints from Figma E.1, in the queue's criticality order.
 const CHECKPOINTS: Checkpoint[] = [
@@ -61,7 +69,7 @@ const CHECKPOINTS: Checkpoint[] = [
  */
 export function PageApprovalQueue() {
   usePageHeader({ title: "Human-in-the-Loop Checkpoint Console" });
-  const [selectedId, setSelectedId] = useState(CHECKPOINTS[0].id);
 
-  return <ApprovalQueue checkpoints={CHECKPOINTS} selectedId={selectedId} onSelect={setSelectedId} />;
+  // The first checkpoint is selected, as in E.1. Changing the selection lands with AQ-5.
+  return <ApprovalQueue counters={COUNTERS} checkpoints={CHECKPOINTS} selectedId={CHECKPOINTS[0].id} />;
 }
