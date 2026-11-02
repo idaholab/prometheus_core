@@ -24,18 +24,19 @@ from tests.unit.conftest import err, make_config, make_ctx, make_specs, namespac
 
 
 def test_the_arguments():
-    """Results files and the scope."""
+    """Results files, the scope, the job names and the summary."""
     parser = argparse.ArgumentParser()
     verify.add_arguments(parser)
     assert vars(parser.parse_args(["a", "--complete"])) == {
         "inputs": ["a"],
         "complete": True,
         "workflow": None,
+        "job_names": None,
         "summary": None,
         "report_url": None,
     }
-    args = parser.parse_args(["--summary", "s.md", "--report-url", "https://x"])
-    assert (args.summary, args.report_url) == ("s.md", "https://x")
+    args = parser.parse_args(["--summary", "s.md", "--report-url", "https://x", "--job-names", "n.json"])
+    assert (args.summary, args.report_url, args.job_names) == ("s.md", "https://x", "n.json")
 
 
 def write(tmp_path: Path, outcome: str) -> None:

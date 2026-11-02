@@ -32,7 +32,8 @@ def sample() -> results.ResultsFile:
     return results.ResultsFile(
         producer="unit",
         runner="pytest 9",
-        ci={"run_id": 1, "leg": "3.12"},
+        ci={"run_id": 1, "job_id": 2},
+        root="sub",
         started="2026-11-01T00:00:00Z",
         results=[
             results.Result(
@@ -71,7 +72,7 @@ class TestFormat:
         assert len(lines) == 3
         parsed, problems = results.read(path)
         assert problems == []
-        assert parsed.producer == "unit" and parsed.ci == {"run_id": 1, "leg": "3.12"}
+        assert parsed.producer == "unit" and parsed.ci == {"run_id": 1, "job_id": 2} and parsed.root == "sub"
         assert [r.to_json() for r in parsed.results] == [r.to_json() for r in sample().results]
         assert parsed.source == path.as_posix()
 
@@ -91,7 +92,7 @@ class TestFormat:
             results.ResultsFile(producer="é", results=[results.Result("t", [Claim("X", "h")], "passed")])
         )
         assert text.splitlines() == [
-            '{"ci": null, "producer": "é", "runner": "", "schema": "speccheck-results/1", "started": ""}',
+            '{"ci": null, "producer": "é", "root": null, "runner": "", "schema": "speccheck-results/1", "started": ""}',
             '{"covers": [{"how": "h", "id": "X"}], "outcome": "passed", "test": "t"}',
         ]
 
@@ -147,6 +148,7 @@ class TestValidation:
             ([header(schema="speccheck-results/2")], "this speccheck reads only 'speccheck-results/1'"),
             ([header(producer="")], "`producer` must not be empty"),
             ([header(producer=3)], "`producer` must be a string"),
+            ([header(root=3)], "`root` must be a string"),
             ([header(runner="x" * 1001)], "`runner` is longer than 1000"),
             ([header(ci=[])], "`ci` must be an object or null"),
             ([header(ci={"run_id": [1]})], "`ci.run_id` must be a string, a number or null"),
@@ -232,16 +234,19 @@ class TestValidation:
     def test_unknown_keys_are_dropped(self):
         """A key this speccheck doesn't read, at any level, is dropped unread rather than rejected."""
         parsed, problems = parse_lines(
-            header(extra=[1], ci={"leg": "3.12", "bad": {"x": 1}}),
+            header(extra=[1], ci={"job": "unit", "leg": "3.12", "bad": {"x": 1}}),
             '{"test": "t", "covers": [{"id": "X", "how": "h", "new": 1}], "outcome": "passed", "more": 1}',
         )
         assert problems == []
-        assert parsed.ci == {"leg": "3.12"}
+        assert parsed.ci == {"job": "unit"}
         assert parsed.results[0].to_json() == {"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"}
 
     def test_null_ci_and_strings_are_fine(self):
         """A local run's header, and a CI block with null and string values."""
         assert parse_lines(header(ci=None))[1] == []
+        assert parse_lines(header(root=None))[0].root is None
+        assert parse_lines(header(root="common/speccheck"))[0].root == "common/speccheck"
+        assert parse_lines(header())[0].root is None
         assert parse_lines(header(ci={"job": "unit", "job_id": None, "run_id": 3}))[1] == []
 
     def test_read_names_the_source(self, tmp_path: Path):

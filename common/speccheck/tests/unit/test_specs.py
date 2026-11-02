@@ -94,6 +94,27 @@ class TestFilesAndIndex:
         repo.spec("", title="Spec format")
         assert specs.load(repo.root / "specs", repo.root, "T").specs[0].title == "Spec format"
 
+    def test_the_purpose_is_read(self, repo: Repo):
+        """The `## Purpose` section's lines, joined onto one, without a fenced example; "" when there's none."""
+        repo.write(
+            "specs/001-thing.md",
+            "# 001 - Thing\n\nstatus: draft\n\n## Purpose\n\nWhat it\n  is for.\n\n```\nnot this\n```\n\n"
+            "## Requirements\n\n- T-REQ-001-01: One.\n\n## Notes\n\nNot this either.\n",
+        )
+        loaded = specs.load(repo.root / "specs", repo.root, "T")
+        assert loaded.specs[0].purpose == "What it is for."
+        assert [r.text for r in loaded.requirements.values()] == ["One."]
+        repo.spec("- T-REQ-001-01: One.")
+        assert specs.load(repo.root / "specs", repo.root, "T").specs[0].purpose == ""
+
+    def test_a_heading_ends_a_bullet(self, repo: Repo):
+        """An indented line after a `## ` heading isn't more of the last bullet's text."""
+        repo.write(
+            "specs/001-thing.md",
+            "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: One.\n## Open questions\n  Two.\n",
+        )
+        assert [r.text for r in specs.load(repo.root / "specs", repo.root, "T").requirements.values()] == ["One."]
+
     def test_an_unlinked_spec_is_named(self, repo: Repo):
         """The index's problem says which file and how to link it."""
         repo.write("specs/000-index.md", "# Index\n\nSpec 002 is below.\n\n- [001](001-thing.md)\n")

@@ -454,7 +454,7 @@ def test_limits_and_symlinks(project: Project, tmp_path_factory: pytest.TempPath
 
 @pytest.mark.covers(
     "SPC-REQ-004-08",
-    "an inner run outside CI writes `ci: null`, and with GitHub variables set writes the provider, server, repository, workflow, job, leg, run, attempt and sha",
+    "an inner run outside CI writes `ci: null`, and with GitHub variables set writes the provider, server, repository, workflow, job, job ID, run, attempt and sha",
 )
 def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
     """In CI the header says which provider and where the run was; outside it, `ci` is null."""
@@ -472,21 +472,41 @@ def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
         "GITHUB_RUN_ID": "9",
         "GITHUB_RUN_ATTEMPT": "2",
         "GITHUB_SHA": "c" * 40,
-        "SPECCHECK_LEG": "3.12",
+        "SPECCHECK_JOB_ID": "77",
     }
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     project.pytest("--speccheck-results=ci.jsonl")
     ci = project.results_lines("ci.jsonl")[0]["ci"]
-    assert (ci["server"], ci["repository"], ci["workflow"], ci["job"], ci["leg"]) == (
+    assert (ci["server"], ci["repository"], ci["workflow"], ci["job"], ci["job_id"]) == (
         "https://github.com",
         "o/r",
         "test",
         "unit",
-        "3.12",
+        77,
     )
     assert (ci["run_id"], ci["run_attempt"], ci["sha"]) == (9, 2, "c" * 40)
-    assert ci["provider"] == "github"
+    assert ci["provider"] == "github" and "leg" not in ci
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-10",
+    "an inner run in a sub folder of a GITHUB_WORKSPACE writes that folder as root, a run at the workspace writes `.`, and one in no repository writes null",
+)
+def test_the_header_says_where_file_paths_start(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """`root` is pytest's root as a path from the repository's root, so `root/file` is a repository path."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the root")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(project.root.parent))
+    project.pytest("--speccheck-results=sub.jsonl")
+    header, result = project.results_lines("sub.jsonl")
+    assert (header["root"], result["file"]) == (project.root.name, "test_project.py")
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(project.root))
+    project.pytest("--speccheck-results=top.jsonl")
+    assert project.results_lines("top.jsonl")[0]["root"] == "."
+    monkeypatch.delenv("GITHUB_WORKSPACE")
+    # pytester's folder is under the system temp folder, which isn't in any repository
+    project.pytest("--speccheck-results=none.jsonl")
+    assert project.results_lines("none.jsonl")[0]["root"] is None
 
 
 RERUN_CONFTEST = """\

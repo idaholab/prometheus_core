@@ -23,8 +23,9 @@ import pytest
 from speccheck import evidence, results
 from speccheck.actions import _common
 from speccheck.claims import Claim
+from speccheck.config import ConfigError
 from speccheck.specs import Problem
-from tests.unit.conftest import err, make_ctx, make_requirement, make_spec, make_specs, namespace, out
+from tests.unit.conftest import ROOT, err, make_ctx, make_requirement, make_spec, make_specs, namespace, out
 
 
 def test_paths_are_made_relative_where_possible(tmp_path: Path):
@@ -93,7 +94,7 @@ def one_status(status: str = "passed", **ci) -> evidence.Evaluation:
     [
         ({"job_url": "https://j", "run_url": "https://r"}, "https://j"),
         ({"run_url": "https://r"}, "https://r"),
-        ({"leg": "3.12"}, ""),
+        ({"job": "unit"}, ""),
         ({}, ""),
     ],
 )
@@ -104,14 +105,23 @@ def test_evidence_json_links_the_job_then_the_run(ci, url):
 
 
 def test_statuses_json():
-    """Every field of a status and its evidence."""
-    body = _common.statuses_json(one_status(leg="3.12", job="unit"))
+    """Every field of a status and its evidence; with the repository's root, the spec's path from it."""
+    evaluation = one_status(job="unit")
+    evaluation.statuses[0].evidence[0] = evidence.Evidence(
+        evaluation.statuses[0].evidence[0].result,
+        results.ResultsFile(producer="unit", ci={"job": "unit"}, root="sub"),
+        "t proves it",
+        "unit (3.12)",
+    )
+    body = _common.statuses_json(evaluation, ROOT)
     assert body == [
         {
             "id": "T-REQ-001-01",
             "spec": "001",
             "status": "passed",
             "text": "It.",
+            "path": "specs/001-thing.md",
+            "line": 7,
             "evidence": [
                 {
                     "test": "tests/t.py::t",
@@ -119,16 +129,80 @@ def test_statuses_json():
                     "kind": "test",
                     "file": "tests/t.py",
                     "line": 3,
+                    "root": "sub",
                     "outcome": "passed",
                     "producer": "unit",
-                    "leg": "3.12",
                     "job": "unit",
+                    "job_name": "unit (3.12)",
                     "url": "",
                 }
             ],
             "waiting_on": [],
         }
     ]
+    assert _common.statuses_json(one_status())[0]["path"] is None
+
+
+class TestJobNames:
+    """`--job-names FILE`: a JSON object from job ID to display name."""
+
+    def test_the_argument(self):
+        """Optional."""
+        parser = argparse.ArgumentParser()
+        _common.add_job_names(parser)
+        assert parser.parse_args([]).job_names is None
+        assert parser.parse_args(["--job-names", "n.json"]).job_names == "n.json"
+
+    def test_none_without_the_option(self, tmp_path: Path):
+        """No option, or arguments without it: no names."""
+        assert _common.job_names(make_ctx(tmp_path), namespace()) == {}
+        assert _common.job_names(make_ctx(tmp_path), argparse.Namespace()) == {}
+
+    def test_read_relative_or_absolute_with_names_cleaned(self, tmp_path: Path):
+        """Keys become strings; a name is made one line and capped at 200 characters."""
+        (tmp_path / "n.json").write_text(json.dumps({"1": "build\n x", 2: "y" * 300}))
+        names = _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+        assert names == {"1": "build x", "2": "y" * 200}
+        assert _common.job_names(make_ctx(Path("/")), namespace(job_names=str(tmp_path / "n.json"))) == names
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            (None, "can't read"),
+            ("{", "not JSON"),
+            (b"\xff", "not JSON"),
+            ("[1]", "must be a JSON object from job ID to name"),
+            ('{"1": 2}', "must be a JSON object from job ID to name"),
+        ],
+    )
+    def test_a_bad_file_is_a_usage_error(self, tmp_path: Path, text, message: str):
+        """Missing, not JSON, not UTF-8, not an object, or a name that isn't a string."""
+        if isinstance(text, bytes):
+            (tmp_path / "n.json").write_bytes(text)
+        elif text is not None:
+            (tmp_path / "n.json").write_text(text)
+        with pytest.raises(ConfigError, match=message):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_a_huge_file_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Over MAX_JOB_NAMES bytes, before it is read."""
+        monkeypatch.setattr(_common, "MAX_JOB_NAMES", 4)
+        (tmp_path / "n.json").write_text('{"1": "build"}')
+        with pytest.raises(ConfigError, match="over 4 bytes"):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_evaluate_names_each_result(self, tmp_path: Path):
+        """The names reach the evidence, by the results file's job ID."""
+        unit = results.ResultsFile(
+            producer="unit",
+            ci={"job_id": 7},
+            results=[results.Result("t", [Claim("T-REQ-001-01", "t proves it")], "passed")],
+        )
+        results.write(tmp_path / "u.jsonl", unit)
+        (tmp_path / "n.json").write_text('{"7": "unit job"}')
+        ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+        evaluation = _common.evaluate(ctx, namespace(inputs=["u.jsonl"], job_names="n.json"), runtime=True)
+        assert evaluation.statuses[0].evidence[0].job_name == "unit job"
 
 
 class TestFinish:
