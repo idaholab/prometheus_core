@@ -25,8 +25,8 @@ on:
       - ".github/actions/speccheck-upload/**"
       - ".github/actions/speccheck-verify/**"
       - ".github/workflows/speccheck.yml"
-  merge_group:
-    types: [checks_requested]
+  # No merge_group trigger: this isn't a required check, so a merge-queue run would be advisory and
+  # cost the whole workflow (about 13 jobs) for every entry. Add it back when the check is required
 
 permissions:
   contents: read
