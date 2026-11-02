@@ -63,6 +63,7 @@ def test_a_claim_that_didnt_pass_fails_verify(project: Project, body: str, outco
         f"specs/001-thing.md:7: T-REQ-001-01 has no passing result: test_project.py::test_it {outcome} in unit"
         in run.err
     )
+    assert "; to fix: " in run.err
 
 
 @pytest.mark.covers("SPC-REQ-005-02")
