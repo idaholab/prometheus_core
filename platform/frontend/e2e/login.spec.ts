@@ -62,7 +62,11 @@ test("a signed-out visitor sees the sign-in form", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Prometheus" })).toBeVisible();
+  const logo = page.getByRole("img", { name: "Prometheus" });
+  await expect(logo).toBeVisible();
+  // A broken image still shows its alt text in a visible box, so also check
+  // the file loaded
+  expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBeGreaterThan(0);
   await expect(page.getByRole("textbox", { name: "Username" })).toBeFocused();
   await expect(page.getByLabel("Password")).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
