@@ -223,6 +223,9 @@ for runners in other languages.
 - A test's outcome merges setup, call and teardown. An error in setup or teardown makes it `error`,
   a skip makes it `skipped`, and an expected failure makes it `xfailed`. Skipped, deselected and
   (`--collect-only`) collected claims are written too, so `verify` can say "claimed but didn't run".
+- `error` is sticky. With a rerun plugin such as `pytest-rerunfailures`, an error in setup or
+  teardown on one attempt keeps the test at `error` even if a later attempt passes, so a flaky
+  fixture can't hide behind a retry. Only a claim that errored on no attempt can be `passed`.
 - Under pytest-xdist the run writes one file, with every worker's results.
 - Each claiming test's node ID is written as `test`, parametrize IDs included, and CI keeps the
   results artifact 30 days and the report 90. **A parametrize ID must not hold a secret.** Nothing
