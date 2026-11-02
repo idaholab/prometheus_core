@@ -49,7 +49,7 @@ npm run test:e2e:ui   # Playwright's UI mode, to step through a test and watch i
 
 The first run needs a browser: `npx playwright install chromium`.
 
-End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example.
+End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 

@@ -12,51 +12,17 @@
 
 /* The example for end-to-end tests: load the built app in a real browser,
  * answer its /api calls with page.route, and find elements by role and
- * accessible name the way the component tests do. */
-import { expect, test, type Request } from "@playwright/test";
-import type {
-  AuthProvider,
-  ConfigResponse,
-  ConversationHistoryResponse,
-  SessionResponse,
-  SetupStatus,
-  User,
-} from "../src/lib/api/types";
-
-/* Stub bodies are typed with the app's own API types, so a change to a
- * response shape fails `npm run typecheck` until the stubs match it. */
-type ErrorBody = { detail: string };
+ * accessible name the way the component tests do. The shared stubs and the
+ * unstubbed-call check come from ./fixtures. */
+import type { Request } from "@playwright/test";
+import type { ConfigResponse, ConversationHistoryResponse, SessionResponse, User } from "../src/lib/api/types";
+import { expect, test, type ErrorBody } from "./fixtures";
 
 /** Checks the sign-in request carries what was typed, as the backend expects it. */
 function expectLogin(request: Request, username: string, password: string) {
   expect(request.method()).toBe("POST");
   expect(request.postDataJSON()).toEqual({ username, password });
 }
-
-/* The /api calls no stub answered in the current test. The app shrugs off a
- * 404 in several places, so without this a missing stub would go unnoticed. */
-let unstubbed: string[] = [];
-
-test.beforeEach(async ({ page }) => {
-  unstubbed = [];
-  // A signed-out visitor on a set-up install: setup is done, there's no
-  // session and no OIDC provider. Anything else under /api is a 404, and is
-  // recorded so the test fails
-  await page.route("/api/**", (route) => {
-    const request = route.request();
-    unstubbed.push(`${request.method()} ${new URL(request.url()).pathname}`);
-    return route.fulfill({ status: 404, json: { detail: "Not stubbed" } satisfies ErrorBody });
-  });
-  await page.route("/api/setup/status", (route) => route.fulfill({ json: { needs_setup: false } satisfies SetupStatus }));
-  await page.route("/api/auth/me", (route) =>
-    route.fulfill({ status: 401, json: { detail: "Not authenticated" } satisfies ErrorBody }),
-  );
-  await page.route("/api/auth/providers", (route) => route.fulfill({ json: [] satisfies AuthProvider[] }));
-});
-
-test.afterEach(() => {
-  expect(unstubbed, "/api calls with no stub; add a page.route for each").toEqual([]);
-});
 
 test("a signed-out visitor sees the sign-in form", async ({ page }) => {
   await page.goto("/");
