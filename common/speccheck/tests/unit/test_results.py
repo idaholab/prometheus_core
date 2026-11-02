@@ -241,3 +241,14 @@ def test_a_failed_write_leaves_nothing(tmp_path: Path, monkeypatch: pytest.Monke
     with pytest.raises(OSError):
         results.write(tmp_path / "r.jsonl", sample())
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX modes")
+def test_a_written_file_gets_the_mode_the_umask_allows(tmp_path: Path):
+    """Not mkstemp's 0600, so a file written by a container as root can be read by the host user."""
+    old = os.umask(0o022)
+    try:
+        results.write(tmp_path / "r.jsonl", sample())
+    finally:
+        os.umask(old)
+    assert (tmp_path / "r.jsonl").stat().st_mode & 0o777 == 0o644
