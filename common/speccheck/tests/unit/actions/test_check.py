@@ -19,6 +19,7 @@ from pathlib import Path
 
 from speccheck import results
 from speccheck.actions import check
+from speccheck.claims import Claim
 from tests.unit.conftest import err, make_ctx, make_specs, namespace, out
 
 
@@ -26,12 +27,12 @@ def test_the_arguments():
     """Results files, and no scope."""
     parser = argparse.ArgumentParser()
     check.add_arguments(parser)
-    assert vars(parser.parse_args(["a"])) == {"inputs": ["a"]}
+    assert vars(parser.parse_args(["a"])) == {"inputs": ["a"], "summary": None, "report_url": None}
 
 
 def test_a_failed_claim_is_enough(tmp_path: Path):
     """`check` sees the claim, not the outcome; the unclaimed requirement is the problem."""
-    claim = results.Result("t", ["T-REQ-001-01"], "failed", file="t.py", line=1)
+    claim = results.Result("t", [Claim("T-REQ-001-01", "t claims it")], "failed", file="t.py", line=1)
     results.write(tmp_path / "c.jsonl", results.ResultsFile(producer="unit", results=[claim]))
     ctx = make_ctx(tmp_path, specs_set=make_specs("One.", "Two."))
     assert check.run(ctx, namespace(inputs=["c.jsonl"])) == 1

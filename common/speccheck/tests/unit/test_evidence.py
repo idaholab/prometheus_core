@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from speccheck import evidence, results, specs
+from speccheck import config, evidence, results, specs
+from speccheck.claims import Claim
 from speccheck.config import ConfigError
 from tests.unit.conftest import (
     ROOT,
@@ -42,7 +43,9 @@ def evidence_of(*outcomes: str, leg: str = "") -> list[evidence.Evidence]:
     """One result per outcome, from producer `unit`."""
     source = results.ResultsFile(producer="unit", ci={"leg": leg} if leg else None)
     return [
-        evidence.Evidence(results.Result(test=f"t{n}", covers=["T-REQ-001-01"], outcome=o), source)
+        evidence.Evidence(
+            results.Result(test=f"t{n}", covers=[Claim("T-REQ-001-01", f"t{n} proves it")], outcome=o), source
+        )
         for n, o in enumerate(outcomes)
     ]
 
@@ -174,7 +177,11 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
         ("untested", True, []),
         ("retired", True, []),
         ("claimed", True, []),
-        ("unclaimed", False, ['T-REQ-001-01 is not claimed; add `@pytest.mark.covers("T-REQ-001-01")`']),
+        (
+            "unclaimed",
+            False,
+            ['T-REQ-001-01 is not claimed; add `@pytest.mark.covers("T-REQ-001-01", "<how it proves it>")`'],
+        ),
         (
             "failed",
             False,
@@ -293,6 +300,71 @@ class TestEvaluate:
             "speccheck.toml: `ci.publish.covers`: T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"
         ]
 
+    def test_evidence_carries_the_explanation(self):
+        """Each piece of evidence keeps how its result says it proves the requirement."""
+        evaluation = evaluate(("It.",), [results_file("unit", ("T-REQ-001-01", "passed"))])
+        assert [e.how for e in evaluation.statuses[0].evidence] == ["tests/test_x.py::test_1 proves T-REQ-001-01"]
+
+    def test_an_explanation_copying_a_requirement_is_a_problem(self):
+        """In a results file, at the test, and in a CI job's config entry; neither claims."""
+        unit = results.ResultsFile(
+            producer="unit",
+            source="unit.jsonl",
+            results=[results.Result("t", [Claim("T-REQ-001-01", "it.")], "passed", file="t.py", line=4)],
+        )
+        job = config_producer("publish", Claim("T-REQ-001-02", "Other"))
+        evaluation = evaluate(("It.", "Other."), [unit], UNIT, job)
+        assert statuses(evaluation) == {"T-REQ-001-01": "unclaimed", "T-REQ-001-02": "unclaimed"}
+        assert messages(evaluation)[:2] == [
+            "speccheck.toml: `ci.publish.covers`: the explanation for T-REQ-001-02 is the text of T-REQ-001-02; "
+            "describe how the test proves T-REQ-001-02",
+            "t.py:4: the explanation for T-REQ-001-01 is the text of T-REQ-001-01; describe how the test proves T-REQ-001-01",
+        ]
+
+    def test_a_repeated_explanation_is_a_problem_but_still_evidence(self):
+        """Across files, and between a test and a CI job's entry; the second owner is the one reported."""
+        same = "the file is written"
+        one = results.ResultsFile(
+            producer="unit", results=[results.Result("a", [Claim("T-REQ-001-01", same)], "passed", file="a.py", line=1)]
+        )
+        two = results.ResultsFile(
+            producer="unit",
+            results=[results.Result("b", [Claim("T-REQ-001-02", same.upper())], "passed", file="b.py", line=2)],
+        )
+        evaluation = evaluate(
+            ("It.", "Other.", "Third."),
+            [one, two],
+            UNIT,
+            config_producer("publish", Claim("T-REQ-001-03", "the file is written.")),
+        )
+        assert statuses(evaluation) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "passed", "T-REQ-001-03": "not run"}
+        assert [(p.path, p.code) for p in evaluation.problems] == [("a.py", "how-duplicate"), ("b.py", "how-duplicate")]
+        assert messages(evaluation)[0] == (
+            "a.py:1: a gives the same explanation for T-REQ-001-01 as `ci.publish` does for T-REQ-001-03; "
+            "each claim says how its own test proves its requirement"
+        )
+
+    def test_two_ci_jobs_with_one_explanation(self):
+        """The second job's entry is a problem at the config, and still claims."""
+        one = config_producer("publish", Claim("T-REQ-001-01", "same"))
+        two = config_producer("deploy", Claim("T-REQ-001-02", "same"))
+        evaluation = evaluate(("It.", "Other."), [results_file("unit")], UNIT, one, two)
+        assert [(p.message.split(";")[0], p.code) for p in evaluation.problems] == [
+            (
+                "`ci.deploy.covers`: `ci.deploy` gives the same explanation for T-REQ-001-02 as `ci.publish` does for T-REQ-001-01",
+                "how-duplicate",
+            )
+        ]
+        assert evaluation.statuses[1].waiting_on == ["deploy"]
+
+    def test_the_same_claim_in_several_files_is_one_claim(self):
+        """One test in two legs, and a CI job's own result repeating its config entry."""
+        legs = [results_file("unit", ("T-REQ-001-01", "passed")), results_file("unit", ("T-REQ-001-01", "passed"))]
+        job = ci_job("publish", "T-REQ-001-02")
+        recorded = results_file("publish", ("T-REQ-001-02", "passed"), kind="ci")
+        evaluation = evaluate(("It.", "Other."), [*legs, recorded], UNIT, job)
+        assert evaluation.problems == []
+
     def test_complete_names_the_missing_producers(self):
         """Every expected producer must report; one that didn't is a problem at the config."""
         docker = producer("docker", workflows=("other",))
@@ -342,3 +414,8 @@ class TestEvaluate:
         assert "producer `docker` didn't report" in found[2]
         assert "T-REQ-001-01 was not run" in found[3] and "(waiting on: docker)" in found[3]
         assert len(found) == 4
+
+
+def config_producer(name: str, *claims: Claim) -> config.Producer:
+    """A CI job with exactly the given claims and explanations."""
+    return config.Producer(name=name, specs=None, workflows=("ci",), claims=claims, ci_job=True)

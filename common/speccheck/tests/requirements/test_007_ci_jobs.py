@@ -38,24 +38,36 @@ JOB = {
 @pytest.fixture
 def ci_project(project: Project) -> Project:
     """A project whose `publish` CI job claims T-REQ-001-01."""
-    project.write("speccheck.toml", CONFIG + '[ci.publish]\ncovers = ["T-REQ-001-01"]\nworkflows = ["ci"]\n')
+    project.write(
+        "speccheck.toml",
+        CONFIG
+        + '[ci.publish]\nworkflows = ["ci"]\n[ci.publish.covers]\n"T-REQ-001-01" = "the publish job pushes the image"\n',
+    )
     project.spec("- T-REQ-001-01: It publishes.\n- T-REQ-001-02: It is tested. ⚠ untested")
     return project
 
 
-@pytest.mark.covers("SPC-REQ-007-01")
+@pytest.mark.covers(
+    "SPC-REQ-007-01",
+    "record in job publish writes a passed ci result for its ID, and verify counts the requirement as passed by that job",
+)
 def test_record_writes_a_passed_ci_result_per_id(ci_project: Project):
     """In the job, record writes the file, and verify counts the requirement as proven by the job."""
     run = ci_project.speccheck("record", env=JOB)
     assert (run.code, run.out) == (0, "speccheck record: publish recorded T-REQ-001-01 in .speccheck/publish.jsonl\n")
     header, result = ci_project.results_lines(".speccheck/publish.jsonl")
     assert header["producer"] == "publish"
-    assert result == {"test": "publish", "covers": ["T-REQ-001-01"], "outcome": "passed", "kind": "ci"}
+    claim = {"id": "T-REQ-001-01", "how": "the publish job pushes the image"}
+    assert result == {"test": "publish", "covers": [claim], "outcome": "passed", "kind": "ci"}
     evidence = ci_project.speccheck("verify", ".speccheck", "--json").json()["requirements"][0]
     assert evidence["status"] == "passed" and evidence["evidence"][0]["kind"] == "ci"
+    assert evidence["evidence"][0]["how"] == "the publish job pushes the image"
 
 
-@pytest.mark.covers("SPC-REQ-007-01")
+@pytest.mark.covers(
+    "SPC-REQ-007-01",
+    "record in job build, which has no entry, and record outside any job both exit 2 and write nothing",
+)
 def test_record_without_an_entry_is_exit_2(ci_project: Project):
     """A job the config doesn't list, or no job at all, writes nothing."""
     run = ci_project.speccheck("record", env={**JOB, "GITHUB_JOB": "build"})
@@ -64,7 +76,11 @@ def test_record_without_an_entry_is_exit_2(ci_project: Project):
     assert not (ci_project.root / ".speccheck").exists()
 
 
-@pytest.mark.covers("SPC-REQ-007-01", "SPC-REQ-008-04")
+@pytest.mark.covers("SPC-REQ-007-01", "record with an output path under a plain file exits 2 instead of writing")
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "record --json with an unwritable output prints one object with ok false and a usage error, not a traceback",
+)
 def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
     """A file where the output folder should be: exit 2 and one JSON object, not a traceback."""
     ci_project.write("blocker", "a file, not a folder")
@@ -74,7 +90,10 @@ def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
     assert "blocker" in body["error"]["message"] and "Traceback" not in run.err
 
 
-@pytest.mark.covers("SPC-REQ-007-02")
+@pytest.mark.covers(
+    "SPC-REQ-007-02",
+    "a publish results file also claiming T-REQ-001-02 counts only T-REQ-001-01, and the extra claim is a problem",
+)
 def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     """A results file from the job that claims more than its entry lists: the extra claim is a problem."""
     ci_project.results("p.jsonl", "publish", [("publish", ["T-REQ-001-01", "T-REQ-001-02"], "passed")], kind="ci")
@@ -86,12 +105,21 @@ def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     ]
 
 
-@pytest.mark.covers("SPC-REQ-007-05", "SPC-REQ-007-07")
+@pytest.mark.covers(
+    "SPC-REQ-007-05",
+    "an inner run on attempt 3 with a check run ID links job 22, and without the ID links attempt 3",
+)
+@pytest.mark.covers(
+    "SPC-REQ-007-07",
+    "the run and job links an inner run builds from GitHub variables have the form runs/<id>/attempts/<n> and runs/<id>/job/<id>",
+)
 def test_links_point_at_the_attempt_and_the_job(ci_project: Project, monkeypatch: pytest.MonkeyPatch):
     """A test run on attempt 3 links that attempt, and its job by check run ID; without one, the attempt."""
     for name, value in {**JOB, "GITHUB_JOB": "unit"}.items():
         monkeypatch.setenv(name, value)
-    ci_project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n')
+    ci_project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 1 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
     ci_project.pytest("--speccheck-results=with-id.jsonl")
     ci = ci_project.results_lines("with-id.jsonl")[0]["ci"]
     assert ci["run_url"] == "https://github.com/o/r/actions/runs/11/attempts/3"
@@ -99,3 +127,20 @@ def test_links_point_at_the_attempt_and_the_job(ci_project: Project, monkeypatch
     monkeypatch.delenv("SPECCHECK_JOB_ID")
     ci_project.pytest("--speccheck-results=no-id.jsonl")
     assert ci_project.results_lines("no-id.jsonl")[0]["ci"]["job_url"] == ci["run_url"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-07",
+    "a GitHub artifact URL of the run's repository is linked from the summary, and one missing its run segment is not",
+)
+def test_artifact_links_have_the_github_form(ci_project: Project):
+    """`<server>/<owner>/<repo>/actions/runs/<id>/artifacts/<id>` is the one artifact form."""
+    ci_project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+    for url, linked in (
+        ("https://github.com/o/r/actions/runs/11/artifacts/5", True),
+        ("https://github.com/o/r/actions/artifacts/5", False),
+    ):
+        ci_project.speccheck("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env)
+        assert (f"[speccheck-report]({url})" in (ci_project.root / "s.md").read_text()) is linked, url
+        (ci_project.root / "s.md").unlink()

@@ -33,7 +33,10 @@ def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
     return subprocess.run([script, *argv], cwd=project.root, capture_output=True, text=True)
 
 
-@pytest.mark.covers("SPC-REQ-008-01")
+@pytest.mark.covers(
+    "SPC-REQ-008-01",
+    "the installed command's --help shows both sections and a description beside lint, check, verify, report and record",
+)
 def test_help_lists_every_command_by_section(project: Project):
     """Every command is in `--help`, under its section, with a one-line description."""
     done = command(project, "--help")
@@ -48,7 +51,10 @@ def test_help_lists_every_command_by_section(project: Project):
     assert all(listed[name] for name in ("lint", "check", "verify", "report", "record"))
 
 
-@pytest.mark.covers("SPC-REQ-008-02")
+@pytest.mark.covers(
+    "SPC-REQ-008-02",
+    "--config and --json before and after lint give the same JSON, --quiet prints nothing, and --version prints the version",
+)
 def test_global_options_before_or_after_and_version(project: Project):
     """`--config` and `--json` work either side of the command; `--version` prints the version."""
     project.write("sub/c.toml", 'specs = "../specs"\nid-prefix = "T"\n')
@@ -59,7 +65,10 @@ def test_global_options_before_or_after_and_version(project: Project):
     assert command(project, "--version").stdout == f"speccheck {speccheck.__version__}\n"
 
 
-@pytest.mark.covers("SPC-REQ-008-03")
+@pytest.mark.covers(
+    "SPC-REQ-008-03",
+    "the installed command exits 0 on a clean lint, 1 on a malformed bullet, and 2 on an unknown command or missing config",
+)
 def test_exit_codes(project: Project):
     """0 clean, 1 problems, 2 usage or config error."""
     project.spec("- T-REQ-001-01: One. ⚠ untested")
@@ -70,7 +79,10 @@ def test_exit_codes(project: Project):
     assert command(project, "lint", "--config", "missing.toml").returncode == 2
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "lint, check, verify, report, an unknown command and no command each print one JSON object, and check lists each requirement",
+)
 def test_one_json_object_on_every_exit_path(project: Project):
     """Clean, with problems (`verify` with no results is one), and on a usage error: stdout is one object."""
     project.spec("- T-REQ-001-01: One.")
@@ -92,7 +104,10 @@ def test_one_json_object_on_every_exit_path(project: Project):
     ]
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "lint, check and verify problems carry codes bullet-malformed, unclaimed and no-results, with line 0 when there is none",
+)
 def test_each_problem_has_a_stable_code(project: Project):
     """`code` names the kind of problem, so a reader of `--json` needn't parse the message; `line` 0 means none."""
     project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.")
@@ -108,7 +123,10 @@ def test_each_problem_has_a_stable_code(project: Project):
     assert [p["line"] for p in verify if p["code"] == "no-results"] == [0]
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "report --json with an output path under a plain file prints one usage-error object and no traceback",
+)
 def test_an_unwritable_output_is_still_one_json_object(project: Project):
     """A file in the way of the output folder is a usage error (2) as an object, not a traceback."""
     project.spec("- T-REQ-001-01: One.")
@@ -119,7 +137,10 @@ def test_an_unwritable_output_is_still_one_json_object(project: Project):
     assert "blocker" in body["error"]["message"] and "Traceback" not in done.stderr
 
 
-@pytest.mark.covers("SPC-REQ-008-05")
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "a failing verify leaves stdout empty, starts stderr with the problem and ends it with the counts and producer unit",
+)
 def test_problems_on_stderr_and_a_summary_last(project: Project):
     """stdout stays clean on failure; the last line counts statuses and names the producers."""
     project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
@@ -132,7 +153,10 @@ def test_problems_on_stderr_and_a_summary_last(project: Project):
     )
 
 
-@pytest.mark.covers("SPC-REQ-008-06")
+@pytest.mark.covers(
+    "SPC-REQ-008-06",
+    "a file name and test names with newlines and `::error::`, and forged `::` and `##[` paths, print escaped as path:line: message",
+)
 def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Project):
     """Every problem line is `path:line: message` or `path: message`, and nothing printed can begin `::`.
 
@@ -160,3 +184,148 @@ def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Pr
         done = command(project, "verify", "r.jsonl")
         assert done.stderr.startswith(f"{written}:3: T-REQ-009-09 isn't in any spec") and "##[" not in done.stderr
         assert all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())
+
+
+SUMMARY_ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+"""The run the summary is written in: a report link must be under its server and repository."""
+REPORT_URL = "https://github.com/o/r/actions/runs/7/artifacts/99"
+"""An artifact URL of that run, as `actions/upload-artifact` gives it."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "a passing verify appends to an earlier step's summary exactly one line of counts linking the report, and no list",
+)
+def test_a_passing_summary_is_one_line(project: Project):
+    """On a pass the summary is the counts and the link, with nothing listed."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. ⚠ untested")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    project.write("s.md", "an earlier step's summary\n")
+    run = project.run("verify", "r.jsonl", "--summary", "s.md", "--report-url", REPORT_URL, env=SUMMARY_ENV)
+    assert run.code == 0
+    assert (project.root / "s.md").read_text() == (
+        "an earlier step's summary\n"
+        f"**speccheck:** 2 requirements: 1 passed, 1 untested. Full report: [speccheck-report]({REPORT_URL})\n\n"
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "a failing verify's summary gives the problem count and counts, then one entry per problem, and no table or passed rows",
+)
+def test_a_failing_summary_lists_only_the_problems(project: Project):
+    """The problems, as the terminal prints them, after the line; nothing about what passed."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n- T-REQ-001-03: Three.")
+    project.results(
+        "r.jsonl",
+        "unit",
+        [("tests/t.py::test_ok", ["T-REQ-001-01"], "passed"), ("tests/t.py::test_bad", ["T-REQ-001-02"], "failed")],
+    )
+    run = project.run("verify", "r.jsonl", "--summary", "s.md")
+    assert run.code == 1
+    text = (project.root / "s.md").read_text()
+    assert text.endswith("`\n\n")  # a blank line after, so a later step's summary starts its own block
+    lines = text.rstrip("\n").splitlines()
+    assert lines[0] == "**speccheck:** 2 problems. 3 requirements: 1 failed, 1 unclaimed, 1 passed"
+    assert lines[1] == "" and len(lines) == 4
+    assert lines[2].startswith(
+        "- `specs/001-thing.md:8: T-REQ-001-02 has no passing result: tests/t.py::test_bad failed"
+    )
+    assert lines[3].startswith("- `specs/001-thing.md:9: T-REQ-001-03 is not claimed")
+    assert "test_ok" not in "\n".join(lines) and "|" not in "\n".join(lines)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "lint and check take --summary too: lint lists a bad bullet, check counts a collect-only run as claimed",
+)
+def test_lint_and_check_write_the_same_summary(project: Project):
+    """The same format from every command that decides failure."""
+    project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: bad bullet")
+    assert project.run("lint", "--summary", "lint.md").code == 1
+    lint = (project.root / "lint.md").read_text().splitlines()
+    assert lint[0] == "**speccheck:** 1 problem. 1 specs, 1 requirement"
+    assert lint[2].startswith("- `specs/001-thing.md:8: a bullet must read")
+    project.spec("- T-REQ-001-01: One.")
+    project.results("c.jsonl", "unit", [("t", ["T-REQ-001-01"], "collected")])
+    assert project.run("check", "c.jsonl", "--summary", "check.md").code == 0
+    assert (project.root / "check.md").read_text() == "**speccheck:** 1 requirement: 1 claimed\n\n"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "a test name holding a link, an img tag and a backtick sits inert in one code span in the summary",
+)
+def test_the_summary_is_escaped(project: Project):
+    """Text from a results file can't add a link or HTML to the step summary."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t[x](https://evil)<img src=x>`", ["T-REQ-001-01"], "failed")])
+    project.run("verify", "r.jsonl", "--summary", "s.md")
+    entry = (project.root / "s.md").read_text().splitlines()[2]
+    assert entry.startswith("- `") and entry.endswith("`") and entry.count("`") == 2
+    assert "t[x](https://evil)<img src=x> failed in unit" in entry
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "3000 missing inputs with 420-character paths give a summary under 1 MiB, cut after a whole entry with a note",
+)
+def test_the_summary_stays_under_the_limit(project: Project):
+    """Thousands of problems still fit GitHub's step summary limit, and the cut says so."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    # Long paths made of short parts: one part over 255 bytes is an OS error, not a missing file
+    missing = [f"missing/{'y' * 200}/{'z' * 200}/{n}.jsonl" for n in range(3000)]
+    assert project.run("verify", "r.jsonl", *missing, "--summary", "s.md").code == 1
+    data = (project.root / "s.md").read_bytes()
+    assert len(data) <= 1024 * 1024
+    lines = data.decode().rstrip("\n").splitlines()
+    assert lines[-1] == "- … cut to fit the step summary; the full report has every problem"
+    assert 100 < len(lines) < 3000  # cut: 3000 entries of about 460 bytes are well over the limit
+    assert all(line.startswith("- `") and line.endswith("`") for line in lines[2:-1])
+
+
+@pytest.mark.parametrize(
+    ("url", "env"),
+    [
+        pytest.param(
+            "https://evil.example/o/r/actions/runs/7/artifacts/99",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "a report URL on another server leaves the summary line without a link"
+            ),
+            id="other-server",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "a job URL of this run, not an artifact URL, is not linked as the report"
+            ),
+            id="not-an-artifact",
+        ),
+        pytest.param(
+            REPORT_URL + ")[x](https://evil",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "an artifact URL with a markdown link appended is refused whole"
+            ),
+            id="trailing-markdown",
+        ),
+        pytest.param(
+            REPORT_URL,
+            {},
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "outside CI there is no run to compare with, so even a well-formed report URL isn't linked",
+            ),
+            id="outside-ci",
+        ),
+    ],
+)
+def test_only_this_runs_report_is_linked(project: Project, url: str, env: dict):
+    """The line is written either way, without a link."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert project.run("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env).code == 0
+    assert (project.root / "s.md").read_text() == "**speccheck:** 1 requirement: 1 passed\n\n"

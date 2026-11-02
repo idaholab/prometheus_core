@@ -22,6 +22,7 @@ import pytest
 
 from speccheck import evidence, results
 from speccheck.actions import _common
+from speccheck.claims import Claim
 from speccheck.specs import Problem
 from tests.unit.conftest import err, make_ctx, make_requirement, make_spec, make_specs, namespace, out
 
@@ -48,7 +49,9 @@ class TestEvaluate:
 
     def test_inputs_are_read_relative_to_the_cwd(self, tmp_path: Path):
         """A relative input is under the cwd; sources and problems come back relative to it."""
-        unit = results.ResultsFile(producer="unit", results=[results.Result("t", ["T-REQ-001-01"], "passed")])
+        unit = results.ResultsFile(
+            producer="unit", results=[results.Result("t", [Claim("T-REQ-001-01", "t proves it")], "passed")]
+        )
         results.write(tmp_path / "r" / "unit.jsonl", unit)
         (tmp_path / "r" / "bad.jsonl").write_text("{\n")
         ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
@@ -78,8 +81,10 @@ def one_status(status: str = "passed", **ci) -> evidence.Evaluation:
     """An evaluation of one requirement with one result from `unit`."""
     requirement = make_requirement(make_spec())
     source = results.ResultsFile(producer="unit", ci=ci or None)
-    result = results.Result("tests/t.py::t", ["T-REQ-001-01"], "passed", file="tests/t.py", line=3)
-    found = [evidence.Evidence(result, source)]
+    result = results.Result(
+        "tests/t.py::t", [Claim("T-REQ-001-01", "t proves it")], "passed", file="tests/t.py", line=3
+    )
+    found = [evidence.Evidence(result, source, "t proves it")]
     return evidence.Evaluation([evidence.Status(requirement, status, found)], [], ["unit"], [])
 
 
@@ -110,6 +115,7 @@ def test_statuses_json():
             "evidence": [
                 {
                     "test": "tests/t.py::t",
+                    "how": "t proves it",
                     "kind": "test",
                     "file": "tests/t.py",
                     "line": 3,
@@ -131,7 +137,7 @@ class TestFinish:
     def test_clean(self):
         """0, and one line on stdout naming who reported."""
         ctx = make_ctx()
-        assert _common.finish(ctx, "verify", one_status()) == 0
+        assert _common.finish(ctx, namespace(), "verify", one_status()) == 0
         assert (out(ctx), err(ctx)) == ("speccheck verify: 1 requirement: 1 passed; reported: unit\n", "")
 
     def test_problems_and_missing_producers(self):
@@ -139,7 +145,7 @@ class TestFinish:
         evaluation = one_status()
         evaluation.problems, evaluation.missing = [Problem("a", 1, "bad")], ["docker"]
         ctx = make_ctx()
-        assert _common.finish(ctx, "verify", evaluation) == 1
+        assert _common.finish(ctx, namespace(), "verify", evaluation) == 1
         assert err(ctx).splitlines() == [
             "a:1: bad",
             "speccheck verify: 1 requirement: 1 passed; reported: unit; missing: docker; 1 problem",
@@ -150,17 +156,17 @@ class TestFinish:
         evaluation = one_status()
         evaluation.reported = []
         ctx = make_ctx()
-        _common.finish(ctx, "check", evaluation)
+        _common.finish(ctx, namespace(), "check", evaluation)
         assert out(ctx) == "speccheck check: 1 requirement: 1 passed\n"
         evaluation.missing = ["docker"]
         ctx = make_ctx()
-        _common.finish(ctx, "check", evaluation)
+        _common.finish(ctx, namespace(), "check", evaluation)
         assert "reported: none; missing: docker" in out(ctx)
 
     def test_verbose_lists_every_status(self):
         """Before the summary."""
         ctx = make_ctx(verbose=True)
-        _common.finish(ctx, "verify", one_status())
+        _common.finish(ctx, namespace(), "verify", one_status())
         assert out(ctx).splitlines()[0] == "T-REQ-001-01  passed"
 
     def test_json(self):
@@ -168,10 +174,20 @@ class TestFinish:
         evaluation = one_status()
         evaluation.problems = [Problem("a", 1, "bad")]
         ctx = make_ctx(json_mode=True, verbose=True)
-        assert _common.finish(ctx, "verify", evaluation) == 1
+        assert _common.finish(ctx, namespace(), "verify", evaluation) == 1
         body = json.loads(out(ctx))
         assert (body["command"], body["ok"], body["counts"]["passed"]) == ("verify", False, 1)
         assert body["requirements"] == _common.statuses_json(evaluation)
         assert body["producers"] == {"reported": ["unit"], "missing": []}
         assert body["problems"] == [{"path": "a", "line": 1, "message": "bad", "code": "problem"}]
         assert err(ctx) == ""
+
+    def test_the_summary_is_written(self, tmp_path: Path):
+        """`--summary` gets the counts line and the problems, whatever the output mode."""
+        evaluation = one_status()
+        evaluation.problems = [Problem("a", 1, "bad")]
+        ctx = make_ctx(tmp_path, json_mode=True)
+        _common.finish(ctx, namespace(summary="s.md"), "verify", evaluation)
+        assert (
+            tmp_path / "s.md"
+        ).read_text() == "**speccheck:** 1 problem. 1 requirement: 1 passed\n\n- `a:1: bad`\n\n"

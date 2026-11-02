@@ -19,6 +19,7 @@ from pathlib import Path
 
 from speccheck import results
 from speccheck.actions import verify
+from speccheck.claims import Claim
 from tests.unit.conftest import err, make_config, make_ctx, make_specs, namespace, out, producer
 
 
@@ -26,12 +27,20 @@ def test_the_arguments():
     """Results files and the scope."""
     parser = argparse.ArgumentParser()
     verify.add_arguments(parser)
-    assert vars(parser.parse_args(["a", "--complete"])) == {"inputs": ["a"], "complete": True, "workflow": None}
+    assert vars(parser.parse_args(["a", "--complete"])) == {
+        "inputs": ["a"],
+        "complete": True,
+        "workflow": None,
+        "summary": None,
+        "report_url": None,
+    }
+    args = parser.parse_args(["--summary", "s.md", "--report-url", "https://x"])
+    assert (args.summary, args.report_url) == ("s.md", "https://x")
 
 
 def write(tmp_path: Path, outcome: str) -> None:
     """unit.jsonl with one claim of T-REQ-001-01."""
-    claim = results.Result("t", ["T-REQ-001-01"], outcome)
+    claim = results.Result("t", [Claim("T-REQ-001-01", "t proves it")], outcome)
     results.write(tmp_path / "unit.jsonl", results.ResultsFile(producer="unit", results=[claim]))
 
 
@@ -71,3 +80,15 @@ def test_no_results_files_fail(tmp_path: Path):
     ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
     assert verify.run(ctx, namespace()) == 1
     assert "no results files were read (no RESULTS given)" in err(ctx)
+
+
+def test_the_summary_links_the_report(tmp_path: Path):
+    """`--report-url` is linked when it is an artifact of this run's repository."""
+    write(tmp_path, "passed")
+    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+    url = "https://github.com/o/r/actions/runs/1/artifacts/2"
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It."), env=env)
+    assert verify.run(ctx, namespace(inputs=["unit.jsonl"], summary="s.md", report_url=url)) == 0
+    assert (
+        tmp_path / "s.md"
+    ).read_text() == f"**speccheck:** 1 requirement: 1 passed. Full report: [speccheck-report]({url})\n\n"

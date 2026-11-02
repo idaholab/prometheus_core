@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from speccheck import results
+from speccheck.claims import Claim
 
 SCHEMA_FILE = Path(results.__file__).parent / "schema" / "speccheck-results-1.schema.json"
 """The JSON Schema that ships with the package."""
@@ -36,12 +37,14 @@ def sample() -> results.ResultsFile:
         results=[
             results.Result(
                 test="tests/test_x.py::test_a",
-                covers=["T-REQ-001-01"],
+                covers=[Claim("T-REQ-001-01", "test_a writes the file")],
                 outcome="passed",
                 file="tests/test_x.py",
                 line=3,
             ),
-            results.Result(test="publish", covers=["T-REQ-001-02"], outcome="passed", kind="ci"),
+            results.Result(
+                test="publish", covers=[Claim("T-REQ-001-02", "the job publishes")], outcome="passed", kind="ci"
+            ),
         ],
     )
 
@@ -74,16 +77,22 @@ class TestFormat:
 
     def test_defaults_are_left_out(self):
         """A result line carries `file`, `line` and `kind` only when they aren't the defaults."""
-        assert results.Result("t", ["X"], "passed").to_json() == {"test": "t", "covers": ["X"], "outcome": "passed"}
-        full = results.Result("t", ["X"], "passed", file="f.py", line=2, kind="ci").to_json()
+        assert results.Result("t", [Claim("X", "h")], "passed").to_json() == {
+            "test": "t",
+            "covers": [{"id": "X", "how": "h"}],
+            "outcome": "passed",
+        }
+        full = results.Result("t", [Claim("X", "h")], "passed", file="f.py", line=2, kind="ci").to_json()
         assert (full["file"], full["line"], full["kind"]) == ("f.py", 2, "ci")
 
     def test_dumps(self):
         """One sorted-key JSON object per line, header first, non-ASCII kept as is."""
-        text = results.dumps(results.ResultsFile(producer="é", results=[results.Result("t", ["X"], "passed")]))
+        text = results.dumps(
+            results.ResultsFile(producer="é", results=[results.Result("t", [Claim("X", "h")], "passed")])
+        )
         assert text.splitlines() == [
             '{"ci": null, "producer": "é", "runner": "", "schema": "speccheck-results/1", "started": ""}',
-            '{"covers": ["X"], "outcome": "passed", "test": "t"}',
+            '{"covers": [{"how": "h", "id": "X"}], "outcome": "passed", "test": "t"}',
         ]
 
     def test_the_schema_ships_and_describes_the_format(self):
@@ -94,24 +103,35 @@ class TestFormat:
         assert set(schema["$defs"]["header"]["properties"]) == results.HEADER_KEYS
         assert set(schema["$defs"]["result"]["properties"]) == results.RESULT_KEYS
         assert set(schema["$defs"]["ci"]["properties"]) == results.CI_KEYS
+        assert set(schema["$defs"]["claim"]["properties"]) == results.CLAIM_KEYS
+
+    def test_the_explanation_limit_is_the_text_limit(self):
+        """The reader caps `how` with the general text cap, so the two must agree."""
+        from speccheck.claims import MAX_HOW
+
+        assert results.MAX_TEXT == MAX_HOW
 
     @pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
     def test_a_line_separator_inside_a_test_id_survives(self, separator: str):
         """Only "\\n" ends a line: `dumps` leaves these three unescaped, and splitlines() would cut the line."""
         test = f"t.py::test[a{separator}b]"
-        written = results.dumps(results.ResultsFile(producer="unit", results=[results.Result(test, ["X"], "passed")]))
+        written = results.dumps(
+            results.ResultsFile(producer="unit", results=[results.Result(test, [Claim("X", "h")], "passed")])
+        )
         parsed, problems = results.parse(written, "r.jsonl")
         assert problems == [] and [r.test for r in parsed.results] == [test]
 
     def test_the_last_line_needs_no_newline(self):
         """A file cut off after its last line, with no "\\n", still reads."""
-        text = header() + "\n" + json.dumps({"test": "t", "covers": ["X"], "outcome": "passed"})
+        text = header() + "\n" + json.dumps({"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"})
         parsed, problems = results.parse(text, "r.jsonl")
         assert problems == [] and len(parsed.results) == 1
 
     def test_blank_lines_are_skipped(self):
         """A trailing blank line is harmless."""
-        parsed, problems = parse_lines(header(), "", json.dumps({"test": "t", "covers": ["X"], "outcome": "passed"}))
+        parsed, problems = parse_lines(
+            header(), "", json.dumps({"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"})
+        )
         assert problems == [] and len(parsed.results) == 1
 
 
@@ -135,21 +155,71 @@ class TestValidation:
             ([header(), "[]"], "2: not a valid speccheck-results/1 line: a result must be an object"),
             ([header(), '{"test": "t", "covers": [], "outcome": "passed"}'], "`covers` must be a list of 1 to 200"),
             ([header(), '{"test": "t", "covers": "X", "outcome": "passed"}'], "`covers` must be a list"),
-            ([header(), '{"test": "t", "covers": [""], "outcome": "passed"}'], "`covers[]` must not be empty"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "ok"}'], "`outcome` is 'ok'"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "kind": "x"}'], "`kind` must be one of"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": -1}'], "`line` must be a whole"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": true}'], "`line` must be a whole"),
-            ([header(), '{"test": "", "covers": ["X"], "outcome": "passed"}'], "`test` must not be empty"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed"}', "{"], "3: not JSON"),
+            (
+                [header(), '{"test": "t", "covers": ["X"], "outcome": "passed"}'],
+                "each `covers` entry must be an object",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "", "how": "h"}], "outcome": "passed"}'],
+                "`covers[].id` must not be empty",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": ""}], "outcome": "passed"}'],
+                "`covers[].how` must not be empty",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": 3}], "outcome": "passed"}'],
+                "`covers[].how` must be a string",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "a\\nb"}], "outcome": "passed"}'],
+                "`covers[].how` for X has a line break",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "' + "x" * 1001 + '"}], "outcome": "passed"}'],
+                "`covers[].how` is longer than 1000",
+            ),
+            (
+                [
+                    header(),
+                    '{"test": "t", "covers": [{"id": "X", "how": "a"}, {"id": "X", "how": "b"}], "outcome": "passed"}',
+                ],
+                "`covers` claims X more than once",
+            ),
+            ([header(), '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "ok"}'], "`outcome` is 'ok'"),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed", "kind": "x"}'],
+                "`kind` must be one of",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed", "line": -1}'],
+                "`line` must be a whole",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed", "line": true}'],
+                "`line` must be a whole",
+            ),
+            (
+                [header(), '{"test": "", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"}'],
+                "`test` must not be empty",
+            ),
+            ([header(), '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"}', "{"], "3: not JSON"),
             # Python before 3.14 raises RecursionError ("not JSON this reader accepts: nested too deeply");
             # 3.14 parses deeper and reports the unclosed bracket ("not JSON: Expecting value")
             ([header(), "[" * 30000], "2: not JSON"),
             (
-                [header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": ' + "9" * 5000 + "}"],
+                [
+                    header(),
+                    '{"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed", "line": '
+                    + "9" * 5000
+                    + "}",
+                ],
                 "2: not JSON this reader accepts: Exceeds the limit",
             ),
-            ([header(), '{"test": "\\ud800", "covers": ["X"], "outcome": "passed"}'], "`test` has a lone surrogate"),
+            (
+                [header(), '{"test": "\\ud800", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"}'],
+                "`test` has a lone surrogate",
+            ),
             ([header(runner="\udfff")], "`runner` has a lone surrogate"),
         ],
     )
@@ -163,11 +233,11 @@ class TestValidation:
         """A key this speccheck doesn't read, at any level, is dropped unread rather than rejected."""
         parsed, problems = parse_lines(
             header(extra=[1], ci={"leg": "3.12", "bad": {"x": 1}}),
-            '{"test": "t", "covers": ["X"], "outcome": "passed", "more": 1}',
+            '{"test": "t", "covers": [{"id": "X", "how": "h", "new": 1}], "outcome": "passed", "more": 1}',
         )
         assert problems == []
         assert parsed.ci == {"leg": "3.12"}
-        assert parsed.results[0].to_json() == {"test": "t", "covers": ["X"], "outcome": "passed"}
+        assert parsed.results[0].to_json() == {"test": "t", "covers": [{"id": "X", "how": "h"}], "outcome": "passed"}
 
     def test_null_ci_and_strings_are_fine(self):
         """A local run's header, and a CI block with null and string values."""
@@ -240,6 +310,13 @@ class TestLimits:
         files, problems = results.read_all([tmp_path / "a", tmp_path / "missing"])
         assert [f.producer for f in files] == ["unit"]
         assert sorted(p.message.split(":")[0] for p in problems) == ["no such results file or folder", "not JSON"]
+
+    def test_an_input_the_os_cant_look_at_is_a_problem(self, tmp_path: Path):
+        """A name longer than the file system allows is a problem for that input, not an exit 2; the rest count."""
+        results.write(tmp_path / "good.jsonl", sample())
+        files, problems = results.read_all([tmp_path / ("x" * 300), tmp_path / "good.jsonl"])
+        assert [f.producer for f in files] == ["unit"]
+        assert [(p.code, p.message.startswith("can't read: ")) for p in problems] == [("results-unreadable", True)]
 
 
 def test_a_failed_write_leaves_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

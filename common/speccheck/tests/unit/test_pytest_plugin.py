@@ -26,18 +26,49 @@ from typing import Any
 import pytest
 
 from speccheck import pytest_plugin, results
+from speccheck.claims import Claim
 from speccheck.pytest_plugin import CLAIMS, WORKER_KEY
 from tests.unit.conftest import ci_job, make_config, make_specs, producer
 
+FUNCTION = SimpleNamespace(name="test_a")
+"""The node a function's own marks sit on (anything that isn't a Module or a Class)."""
 
-def item(*marks: pytest.MarkDecorator, nodeid: str = "t.py::test_a", line: int | None = 2) -> SimpleNamespace:
-    """A fake test item carrying real `covers` marks, closest first, at `t.py` line `line` (0-based)."""
-    found = [m.mark for m in marks]
-    return SimpleNamespace(
+
+def node_of(kind: type, name: str) -> Any:
+    """A bare pytest Module or Class node, enough for `isinstance` and `.name`, built without a session."""
+    fake = type(f"Fake{kind.__name__}", (kind,), {"name": name, "__doc__": "A node that needs no session."})
+    return object.__new__(fake)
+
+
+def item(
+    *marks: pytest.MarkDecorator,
+    nodeid: str = "t.py::test_a",
+    line: int | None = 2,
+    on: Any = FUNCTION,
+    params: dict[str, Any] | None = None,
+    param_marks: tuple[pytest.MarkDecorator, ...] = (),
+    parametrize: tuple[pytest.MarkDecorator, ...] = (),
+) -> SimpleNamespace:
+    """A fake test item carrying real marks, closest first, at `t.py` line `line` (0-based).
+
+    `marks` sit on `on` (the function by default); `param_marks` are its parameter's own, so it has a
+    `callspec` with `params` whenever either `params` or `param_marks` is given.
+    """
+    own = [m.mark for m in param_marks]
+    placed = [(on, m.mark) for m in marks] + [(FUNCTION, m) for m in own]
+    found = [mark for _, mark in placed] + [m.mark for m in parametrize]
+    fake = SimpleNamespace(
         nodeid=nodeid,
+        name=nodeid.split("::")[-1],
+        originalname=nodeid.split("::")[-1].split("[")[0],
+        parent=SimpleNamespace(nodeid=nodeid.split("::")[0]),
         location=("t.py", line, "test_a"),
-        iter_markers=lambda name: [m for m in found if m.name == name],
+        iter_markers=lambda name=None: [m for m in found if name is None or m.name == name],
+        iter_markers_with_node=lambda name: [(n, m) for n, m in placed if m.name == name],
     )
+    if params is not None or own:
+        fake.callspec = SimpleNamespace(marks=own, params=params or {})
+    return fake
 
 
 def report(when: str, outcome: str, *, xfail: bool = False, nodeid: str = "t.py::test_a") -> SimpleNamespace:
@@ -91,7 +122,7 @@ class TestOptions:
         if worker:
             config.workeroutput = {}
         pytest_plugin.pytest_configure(config)
-        assert lines[0][0] == "markers" and lines[0][1].startswith("covers(*ids):")
+        assert lines[0][0] == "markers" and lines[0][1].startswith("covers(id, how):")
         assert config.stash[CLAIMS] == {}
         recorder, name = registered[0]
         assert isinstance(recorder, pytest_plugin.Recorder) and recorder.claims is config.stash[CLAIMS]
@@ -103,25 +134,107 @@ class TestOptions:
 class TestMarks:
     """Reading the `covers` marks of one test."""
 
-    def test_ids_add_up_in_order_each_once(self):
-        """Closest first, as pytest's `iter_markers` gives them; a repeat is dropped."""
-        assert pytest_plugin.ids_of(item(covers("A", "B"), covers("C", "A"))) == ["A", "B", "C"]
-        assert pytest_plugin.ids_of(item()) == []
+    def test_claims_in_order_collapsed(self):
+        """Closest first, as pytest's `iter_markers` gives them, each explanation's whitespace collapsed."""
+        found, problems = pytest_plugin.claims_of(item(covers("A", "  one\n two "), covers("B", "three")))
+        assert (found, problems) == ([Claim("A", "one two"), Claim("B", "three")], [])
+        assert pytest_plugin.claims_of(item()) == ([], [])
+
+    def test_bad_claims_are_left_out(self):
+        """A malformed mark, an unusable explanation and a repeated ID are problems; the rest still count."""
+        found, problems = pytest_plugin.claims_of(
+            item(covers("A"), covers("B", "TODO"), covers("C", "fine"), covers("C", "again"))
+        )
+        assert found == [Claim("C", "fine")]
+        assert problems == [
+            '`covers` takes two strings, the ID and how the test proves it, such as covers("T-REQ-001-01", "...")',
+            "the explanation for B is a placeholder ('TODO'); say how the test proves it",
+            "the test claims C more than once; give one explanation, or split the test",
+        ]
 
     @pytest.mark.parametrize(
-        ("marks", "message"),
+        ("mark", "message"),
         [
-            ([covers("A")], ""),
-            ([covers()], "`covers` needs at least one ID"),
-            ([covers(3)], '`covers` IDs are strings, such as "SPC-REQ-001-01"; got 3'),
-            ([covers("")], "`covers` IDs are strings, such as \"SPC-REQ-001-01\"; got ''"),
-            ([covers("A", why="x", how="y")], "`covers` takes IDs only, not keywords (how, why)"),
-            ([covers("A"), covers()], "`covers` needs at least one ID"),
+            (covers("A", "how"), ""),
+            (covers(), "`covers` takes two strings, the ID and how the test proves it"),
+            (covers("A", "b", "c"), "`covers` takes two strings, the ID and how the test proves it"),
+            (covers("A", 3), "`covers` takes two strings; got 'A', 3"),
+            (covers("", "how"), "`covers` needs an ID"),
+            (
+                covers("A", why="x", how="y"),
+                "`covers` takes the ID and how the test proves it, not keywords (how, why)",
+            ),
         ],
     )
-    def test_bad_args(self, marks, message):
-        """The first malformed mark on any level, or ""."""
-        assert pytest_plugin._bad_args(item(*marks)) == message
+    def test_shape(self, mark, message):
+        """Exactly two strings, the first not empty, and no keywords."""
+        assert pytest_plugin.shape_problem(mark.mark).startswith(message) and (
+            message or not pytest_plugin.shape_problem(mark.mark)
+        )
+
+    def test_a_plain_function_or_one_parameter_is_fine(self):
+        """A function's own mark with no parameters, and a parameter's own mark in one parametrize."""
+        assert pytest_plugin.placement_problem(item(covers("A", "a"))) == ""
+        one = item(params={"n": 1}, param_marks=(covers("A", "a"),), parametrize=(pytest.mark.parametrize("n", [1]),))
+        assert pytest_plugin.placement_problem(one) == ""
+
+    @pytest.mark.parametrize(
+        ("fake", "message"),
+        [
+            (
+                lambda: item(covers("A", "a"), on=node_of(pytest.Module, "t.py")),
+                "`covers` is on the module (`pytestmark`); move it onto each test",
+            ),
+            (
+                lambda: item(covers("A", "a"), on=node_of(pytest.Class, "TestThing")),
+                "`covers` is on class `TestThing`; move it onto each test",
+            ),
+            (
+                lambda: item(covers("A", "a"), params={"n": 1}, parametrize=(pytest.mark.parametrize("n", [1]),)),
+                "`covers` is on the function of a parametrized test",
+            ),
+            (
+                lambda: item(
+                    params={"n": 1, "x": 2},
+                    param_marks=(covers("A", "a"),),
+                    parametrize=(pytest.mark.parametrize("n", [1]), pytest.mark.parametrize("x", [2])),
+                ),
+                "a claiming test has 2 `parametrize` marks",
+            ),
+            (
+                lambda: item(
+                    params={"n": 1, "kind": "a", "other": "b"},
+                    param_marks=(covers("A", "a"),),
+                    parametrize=(pytest.mark.parametrize("n", [1]),),
+                ),
+                "a claiming test uses the parametrized fixture `kind`, `other`",
+            ),
+        ],
+    )
+    def test_a_mark_that_stands_for_several_tests(self, fake, message):
+        """Module, class, a function on a parametrized test, two parametrizes, a parametrized fixture."""
+        assert pytest_plugin.placement_problem(fake()).startswith(message)
+
+    @pytest.mark.parametrize(
+        ("mark", "names"),
+        [
+            (pytest.mark.parametrize("a, b", []), ["a", "b"]),
+            (pytest.mark.parametrize(("a", "b"), []), ["a", "b"]),
+            (pytest.mark.parametrize(["a"], []), ["a"]),
+            (pytest.mark.parametrize(argnames="a,b", argvalues=[]), ["a", "b"]),
+        ],
+    )
+    def test_argnames(self, mark, names):
+        """Every way `parametrize` takes its names: a comma string, a tuple, a list, or by keyword."""
+        assert pytest_plugin._argnames(mark.mark) == names
+
+    def test_function_id_drops_the_parameter(self):
+        """So a misplaced mark is reported once per function."""
+        assert pytest_plugin._function_id(item(nodeid="t.py::test_a[2]")) == "t.py::test_a"
+        bare = SimpleNamespace(nodeid="t.py::test_a", name="test_a", parent=None)
+        assert pytest_plugin._function_id(bare) == "t.py::test_a"
+        rootless = SimpleNamespace(nodeid="test_a", name="test_a", parent=SimpleNamespace(nodeid=""))
+        assert pytest_plugin._function_id(rootless) == "test_a"
 
     def test_where_is_one_based(self):
         """pytest's 0-based line, plus one; 0 when pytest doesn't know it."""
@@ -168,7 +281,9 @@ class TestChecker:
         check = pytest_plugin._checker(config)
         assert loaded["config"] == tmp_path / "ini" / "speccheck.toml"
         assert loaded["specs"][1] == tmp_path / "ini"
-        assert check("T-REQ-001-01") == "" and "isn't in any spec" in check("T-REQ-001-09")
+        assert check(Claim("T-REQ-001-01", "h")) == ""
+        assert "isn't in any spec" in check(Claim("T-REQ-001-09", "h"))
+        assert "is the text of T-REQ-001-01" in check(Claim("T-REQ-001-01", "it"))
         config.inipath = None
         pytest_plugin._checker(config)
         assert loaded["config"] == tmp_path / "ini" / "speccheck.toml"
@@ -176,9 +291,9 @@ class TestChecker:
     def test_the_producer_limits_the_claims(self, tmp_path: Path, loaded: dict, monkeypatch: pytest.MonkeyPatch):
         """From SPECCHECK_PRODUCER first, else the ini option."""
         config = fake_config(tmp_path, ini={"speccheck_config": "c.toml", "speccheck_producer": "unit"})
-        assert pytest_plugin._checker(config)("T-REQ-001-01") == ""
+        assert pytest_plugin._checker(config)(Claim("T-REQ-001-01", "h")) == ""
         monkeypatch.setenv("SPECCHECK_PRODUCER", "other")
-        assert "producer `other` may not claim" in pytest_plugin._checker(config)("T-REQ-001-01")
+        assert "producer `other` may not claim" in pytest_plugin._checker(config)(Claim("T-REQ-001-01", "h"))
 
     @pytest.mark.parametrize(
         ("name", "message"),
@@ -229,30 +344,52 @@ class TestCollection:
         return config.stash[CLAIMS]
 
     def test_claims_are_recorded_as_collected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """Each claiming test with its IDs and place; a test that claims nothing is left out."""
+        """Each claiming test with its claims and place; a test that claims nothing is left out."""
         config = fake_config(tmp_path)
-        claims = self.collect(config, item(covers("A", "B")), item(nodeid="t.py::test_b"), monkeypatch=monkeypatch)
-        assert claims == {"t.py::test_a": {"covers": ["A", "B"], "file": "t.py", "line": 3, "outcome": "collected"}}
+        claims = self.collect(
+            config,
+            item(covers("A", "how a"), covers("B", "how b")),
+            item(nodeid="t.py::test_b"),
+            monkeypatch=monkeypatch,
+        )
+        assert claims == {
+            "t.py::test_a": {
+                "covers": [{"id": "A", "how": "how a"}, {"id": "B", "how": "how b"}],
+                "file": "t.py",
+                "line": 3,
+                "outcome": "collected",
+            }
+        }
 
     def test_without_a_config_ids_are_not_checked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Any string is recorded."""
-        claims = self.collect(fake_config(tmp_path), item(covers("anything")), monkeypatch=monkeypatch)
-        assert claims["t.py::test_a"]["covers"] == ["anything"]
+        claims = self.collect(fake_config(tmp_path), item(covers("anything", "h")), monkeypatch=monkeypatch)
+        assert claims["t.py::test_a"]["covers"] == [{"id": "anything", "how": "h"}]
 
     def test_every_bad_claim_is_listed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """A malformed mark and each disallowed ID, at the test, with control characters written out."""
+        """Malformed marks, misplaced ones (once per function), checker refusals and repeats, with control characters written out."""
+        module = node_of(pytest.Module, "t.py")
         items = [
             item(covers(), nodeid="t.py::test_empty"),
-            item(covers("ok", "bad\n::error::"), nodeid="t.py::test_bad", line=9),
+            item(covers("ok", "fine"), covers("bad\n::error::", "b"), nodeid="t.py::test_bad", line=9),
+            item(covers("A", "m"), on=module, nodeid="t.py::test_p[1]", params={"n": 1}),
+            item(covers("A", "m"), on=module, nodeid="t.py::test_p[2]", params={"n": 2}),
+            item(covers("C", "fine"), nodeid="t.py::test_copy", line=20),
         ]
         with pytest.raises(pytest.UsageError) as raised:
             self.collect(
-                fake_config(tmp_path), *items, checker=lambda id_: "" if id_ == "ok" else "no", monkeypatch=monkeypatch
+                fake_config(tmp_path),
+                *items,
+                checker=lambda claim: "" if claim.id in ("ok", "C") else "no",
+                monkeypatch=monkeypatch,
             )
         assert str(raised.value).splitlines() == [
-            "speccheck: 2 claim(s) the spec folder doesn't allow:",
-            "t.py:3: t.py::test_empty: `covers` needs at least one ID",
+            "speccheck: 4 claim(s) the spec folder doesn't allow:",
+            't.py:3: t.py::test_empty: `covers` takes two strings, the ID and how the test proves it, such as covers("T-REQ-001-01", "...")',
             "t.py:10: t.py::test_bad: no",
+            "t.py:3: t.py::test_p: `covers` is on the module (`pytestmark`); move it onto each test, each with its own explanation",
+            "t.py:21: t.py::test_copy: t.py::test_copy gives the same explanation for C as t.py::test_bad does for ok; "
+            "each claim says how its own test proves its requirement",
         ]
 
 
@@ -305,7 +442,7 @@ def test_phases_merge(phases, expected):
     assert outcome == expected
 
 
-CLAIM = {"covers": ["T-REQ-001-01"], "file": "t.py", "line": 3}
+CLAIM = {"covers": [{"id": "T-REQ-001-01", "how": "h"}], "file": "t.py", "line": 3}
 """One recorded claim, without its outcome."""
 
 
@@ -345,6 +482,12 @@ class TestRecorder:
         recorder.pytest_testnodedown(node("t.py::new", "collected"), None)
         assert recorder.claims["t.py::new"]["outcome"] == "collected"
         recorder.pytest_testnodedown(SimpleNamespace(), None)  # a worker that crashed has no workeroutput
+
+    def test_written_claims_carry_their_explanations(self, tmp_path: Path):
+        """The results file holds each claim's ID and how."""
+        recorder = self.recorder(tmp_path, option="r.jsonl")
+        recorder.pytest_sessionfinish(None, 0)
+        assert results.read(tmp_path / "r.jsonl")[0].results[0].covers == [Claim("T-REQ-001-01", "h")]
 
     def test_sessionfinish_writes_the_file(self, tmp_path: Path):
         """Sorted by test, with the producer from the ini option, the runner and the start time."""
@@ -414,17 +557,20 @@ class TestWiring:
     def test_a_run_records_its_claims(self, pytester: pytest.Pytester):
         """The marker is registered, and a real session writes its claims with their outcomes."""
         pytester.makepyfile(
-            'import pytest\n@pytest.mark.covers("X")\ndef test_a():\n    pass\n'
-            '@pytest.mark.covers("Y")\ndef test_b():\n    pass\n'
+            'import pytest\n@pytest.mark.covers("X", "a passes")\ndef test_a():\n    pass\n'
+            '@pytest.mark.covers("Y", "b is left out")\ndef test_b():\n    pass\n'
         )
         pytester.runpytest("--strict-markers", "-k", "not test_b", "--speccheck-results=r.jsonl").assert_outcomes(
             passed=1, deselected=1
         )
         parsed, _ = results.read(pytester.path / "r.jsonl")
-        assert [(r.covers, r.outcome) for r in parsed.results] == [(["X"], "passed"), (["Y"], "deselected")]
+        assert [(r.covers, r.outcome) for r in parsed.results] == [
+            ([Claim("X", "a passes")], "passed"),
+            ([Claim("Y", "b is left out")], "deselected"),
+        ]
 
     def test_a_bad_mark_stops_the_session(self, pytester: pytest.Pytester):
         """The collection hook's UsageError reaches pytest as a usage error."""
         pytester.makepyfile("import pytest\n@pytest.mark.covers()\ndef test_a():\n    pass\n")
         run = pytester.runpytest()
-        assert run.ret == pytest.ExitCode.USAGE_ERROR and "`covers` needs at least one ID" in run.stderr.str()
+        assert run.ret == pytest.ExitCode.USAGE_ERROR and "`covers` takes two strings" in run.stderr.str()

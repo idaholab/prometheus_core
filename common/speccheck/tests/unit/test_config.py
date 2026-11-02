@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from speccheck import config
+from speccheck.claims import Claim
 from speccheck.config import ConfigError
 
 
@@ -150,29 +151,41 @@ class TestCiJobs:
 
     def test_a_ci_job_is_a_producer(self, path: Path):
         """It claims the IDs it covers, may claim any spec, and is marked as a CI job."""
-        loaded = config.from_table(table(ci={"publish": {"covers": ["T-REQ-001-01"], "workflows": ["ci"]}}), path)
-        job = loaded.producers["publish"]
-        assert (job.ci_job, job.covers, job.workflows, job.specs) == (True, ("T-REQ-001-01",), ("ci",), None)
+        body = {"covers": {"T-REQ-001-01": "  it\n publishes ", "T-REQ-001-02": "it is signed"}, "workflows": ["ci"]}
+        job = config.from_table(table(ci={"publish": body}), path).producers["publish"]
+        assert (job.ci_job, job.covers, job.workflows, job.specs) == (
+            True,
+            ("T-REQ-001-01", "T-REQ-001-02"),
+            ("ci",),
+            None,
+        )
+        assert job.claims == (Claim("T-REQ-001-01", "it publishes"), Claim("T-REQ-001-02", "it is signed"))
 
     @pytest.mark.parametrize(
         ("body", "message"),
         [
-            ({"covers": []}, "`ci.publish.covers` must list at least one ID"),
-            ({}, "`ci.publish.covers` must be a list of strings"),
-            ({"covers": ["X"], "workflows": 1}, "`ci.publish.workflows` must be a list of strings"),
+            ({"covers": {}}, "`ci.publish.covers` must claim at least one ID"),
+            ({}, "`ci.publish.covers` must be a table from ID to how the job proves it"),
+            ({"covers": ["X"]}, "`ci.publish.covers` must be a table from ID to how the job proves it"),
+            ({"covers": {"X": 3}}, "`ci.publish.covers.X` must be a string saying how the job proves it"),
+            ({"covers": {"X": " "}}, "`ci.publish.covers.X`: the explanation for X is empty"),
+            ({"covers": {"X": "tbd"}}, "`ci.publish.covers.X`: the explanation for X is a placeholder"),
+            ({"covers": {"X": "h"}, "workflows": 1}, "`ci.publish.workflows` must be a list of strings"),
         ],
     )
     def test_bad_values(self, path: Path, body, message):
-        """`covers` is required and not empty."""
+        """`covers` is a table that claims something, each explanation usable as a test's."""
         fails(path, table(ci={"publish": body}), message)
 
     def test_a_bad_name(self, path: Path):
         """The same rule as a producer's."""
-        fails(path, table(ci={"Pub": {"covers": ["X"]}}), "`ci.Pub`: a name is lowercase")
+        fails(path, table(ci={"Pub": {"covers": {"X": "h"}}}), "`ci.Pub`: a name is lowercase")
 
     def test_a_ci_job_cant_share_a_producers_name(self, path: Path):
         """Two entries would claim to be the same results file's producer."""
-        fails(path, table(producers={"x": {}}, ci={"x": {"covers": ["X"]}}), "`ci.x` has the same name as a producer")
+        fails(
+            path, table(producers={"x": {}}, ci={"x": {"covers": {"X": "h"}}}), "`ci.x` has the same name as a producer"
+        )
 
 
 class TestLoad:
