@@ -287,9 +287,24 @@ def citations_in(path: Path, root: Path, syntax: Syntax, problems: list[Problem]
     found = []
     for number, line in enumerate(text.splitlines(), 1):
         for match in syntax.id.finditer(line):
+            if implements_in_test(line[: match.start()], match.group(0), path, number, root, problems):
+                continue
             if COVERS.search(line, 0, match.start()):
                 found.append(Citation(id=match.group(0), path=path, line=number, kind="test"))
     return found
+
+
+def implements_in_test(before: str, id_: str, path: Path, number: int, root: Path, problems: list[Problem]) -> bool:
+    """Whether an ID is introduced by `Implements` (in `before`, the line's text up to it).
+
+    `Implements` says "this is the behaviour", which only a workflow job can be. In a test it is a
+    problem, so the author learns that a test cites with `Covers` instead of the ID silently counting.
+    """
+    if not IMPLEMENTS.search(before):
+        return False
+    message = f"{id_}: a test cites with `Covers`; `Implements` is only for a workflow job"
+    problems.append(Problem(rel(path, root), number, message))
+    return True
 
 
 def python_citations(path: Path, text: str, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:
@@ -316,13 +331,15 @@ def python_citations(path: Path, text: str, root: Path, syntax: Syntax, problems
             doc = first.value.value
             for match in syntax.id.finditer(doc):
                 line = first.lineno + doc.count("\n", 0, match.start())
-                found.append(Citation(id=match.group(0), path=path, line=line, kind="test"))
+                before = doc[doc.rfind("\n", 0, match.start()) + 1 : match.start()]
+                if not implements_in_test(before, match.group(0), path, line, root, problems):
+                    found.append(Citation(id=match.group(0), path=path, line=line, kind="test"))
     for number, comment in comments:
-        if COVERS_COMMENT.match(comment):
-            found += [
-                Citation(id=match.group(0), path=path, line=number, kind="test")
-                for match in syntax.id.finditer(comment)
-            ]
+        for match in syntax.id.finditer(comment):
+            if implements_in_test(comment[: match.start()], match.group(0), path, number, root, problems):
+                continue
+            if COVERS_COMMENT.match(comment):
+                found.append(Citation(id=match.group(0), path=path, line=number, kind="test"))
     return sorted(found, key=lambda citation: citation.line)
 
 

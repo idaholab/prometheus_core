@@ -258,6 +258,22 @@ class TestCitations(CheckerTest):
         self.assertEqual([c.line for c in cited["REQ-001-01"]], [5])
         self.assertEqual([c.line for c in cited["REQ-001-02"]], [9])
 
+    def test_implements_in_a_test_is_a_problem_not_evidence(self):
+        """`Implements` is for a workflow job; in a test it is reported, and never clears the requirement."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One.\n- REQ-001-02: Two.\n- REQ-001-03: Three."))
+        self.repo.write(
+            "tests/test_x.py", 'def test_a():\n    """Implements REQ-001-01."""\n\n# Implements REQ-001-02\n'
+        )
+        self.repo.write("tests/check.sh", "# Implements REQ-001-03\n")
+        self.assertProblems(
+            "REQ-001-01: a test cites with `Covers`",
+            "REQ-001-02: a test cites with `Covers`",
+            "REQ-001-03: a test cites with `Covers`",
+            "REQ-001-01 has no citing test",
+            "REQ-001-02 has no citing test",
+            "REQ-001-03 has no citing test",
+        )
+
     def test_python_that_does_not_parse_is_a_problem(self):
         """A syntax error would otherwise hide every citation in the file."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It. ⚠ untested"))

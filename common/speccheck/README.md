@@ -75,6 +75,9 @@ def test_set_refuses_secret_keys():
 
 Caches (`__pycache__`, `node_modules`, `.venv`, ...) and binary files are skipped.
 
+`Implements` is only for a workflow job that is the behaviour. In a test file it is a problem, not
+evidence, so an author who writes it learns that a test cites with `Covers`.
+
 A citation shows that a test names the requirement, not that it skipped, asserts anything or proves
 it; that stays a review question. Specs that share a `tests:` folder share its evidence, so name the
 narrowest files and folders on each spec's `tests:` line.
@@ -100,6 +103,7 @@ the file, or in a step's text is a problem rather than silent evidence.
 - A requirement that is both planned and untested.
 - A citation of an ID that is in no spec, is retired, or belongs to a spec whose `tests:` don't
   include the citing file.
+- `Implements` before an ID in a test file.
 - A duplicate ID, a malformed bullet (including one without the folder's prefix), an ID numbered for
   another spec, a malformed `id-prefix:`, a missing or unknown `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
   spec the index doesn't list.
