@@ -26,8 +26,20 @@ runs:
       shell: bash
       env:
         PYTHON: ${{ inputs.python }}
-      # The PATH entry is uv's tool bin folder, not anything an input controls
+      # The build backend comes from build-constraints.txt, by hash (uv.lock doesn't cover build
+      # requirements): it goes into a throwaway venv with --require-hashes, the wheel is built
+      # there without build isolation, so nothing else is fetched to build it, and the tool is
+      # installed from that wheel. The PATH entry is uv's tool bin folder, not anything an input
+      # controls
       run: | # zizmor: ignore[github-env]
-        uv tool install --python "$PYTHON" --no-config "$GITHUB_WORKSPACE/common/speccheck"
+        SRC="$GITHUB_WORKSPACE/common/speccheck"
+        BUILD="$RUNNER_TEMP/speccheck-build"
+        rm -rf "$BUILD"
+        uv venv --quiet --no-config --python "$PYTHON" "$BUILD/venv"
+        VIRTUAL_ENV="$BUILD/venv" uv pip install --quiet --no-config --no-cache --require-hashes --no-deps \
+          -r "$SRC/build-constraints.txt"
+        VIRTUAL_ENV="$BUILD/venv" uv build --quiet --no-config --no-cache --wheel --no-build-isolation \
+          --python "$BUILD/venv/bin/python" --out-dir "$BUILD/dist" "$SRC"
+        uv tool install --python "$PYTHON" --no-config "$BUILD"/dist/prometheus_speccheck-*.whl
         uv tool dir --bin >> "$GITHUB_PATH"
         "$(uv tool dir --bin)/speccheck" --version
