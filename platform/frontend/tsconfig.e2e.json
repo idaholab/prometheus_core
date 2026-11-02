@@ -1,19 +1,9 @@
 {
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
+    /* The e2e tests and config run in Node, not the browser */
     "lib": ["ES2022", "DOM"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["node"],
-    "skipLibCheck": true,
-    "noEmit": true,
-    "isolatedModules": true,
-
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "types": ["node"]
   },
   "include": ["e2e", "playwright.config.ts"]
 }
