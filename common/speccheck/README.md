@@ -615,7 +615,10 @@ is there for runners in other languages.
   The report uses it to link each test to its line. When pytest runs where neither can be found,
   such as in a container with one folder of the checkout mounted, set `SPECCHECK_ROOT` to that
   folder's path in the repository (for example `SPECCHECK_ROOT=sdk`), and don't pass
-  `GITHUB_WORKSPACE`, which is a host path.
+  `GITHUB_WORKSPACE`, which is a host path. Run such a container as the host's user
+  (`docker run --user "$(id -u):$(id -g)"`), or create the results folder on the host first:
+  a root container creates it in the bind mount owned by root, which the host user can't remove
+  on Docker Engine.
 - The plugin writes a file only when asked (`--speccheck-results=PATH` or `SPECCHECK_RESULTS`), at
   the end of the session. An interrupted session leaves none, so `verify --complete` reports the
   producer as missing.
