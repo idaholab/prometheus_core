@@ -18,7 +18,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist", "coverage", "public"]),
+  globalIgnores(["dist", "coverage", "public", "test-results", "playwright-report", "blob-report"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat["recommended-latest"]],
@@ -36,5 +36,10 @@ export default defineConfig([
       // them changes behaviour, so it's left for when the compiler is adopted
       "react-hooks/set-state-in-effect": "off",
     },
+  },
+  // Playwright tests and their config run in Node, not the browser
+  {
+    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    languageOptions: { globals: globals.node },
   },
 ]);

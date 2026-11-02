@@ -39,3 +39,16 @@ Tests use [Vitest](https://vitest.dev) and sit next to the code they test:
 - `*.test.tsx` runs in jsdom with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), for components. Find elements by role and accessible name and act through `@testing-library/user-event`. `src/components/ui/FilterChips.dom.test.tsx` is the example.
 
 Not every change needs tests. Test shared components, non-trivial logic and flows that would hurt to break.
+
+### End-to-end tests
+
+```bash
+npm run test:e2e      # build the app, serve it on port 5160 and run e2e/ in headless Chromium (also: make test-e2e)
+npm run test:e2e:ui   # Playwright's UI mode, to step through a test and watch it run
+```
+
+The first run needs a browser: `npx playwright install chromium`.
+
+End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example.
+
+Playwright starts the app itself, and locally it reuses one already running on port 5160. When a test fails it keeps a trace and a screenshot in `test-results/`; open a trace with `npx playwright show-trace <path>/trace.zip`. In CI, the `platform: frontend e2e` job uploads them with the HTML report as the `frontend-e2e-report` artifact.
