@@ -223,5 +223,6 @@ def _write(ctx: Context, name: str, text: str, *, append: bool) -> None:
     """Write (or append) a file named on the command line."""
     path = Path(name) if Path(name).is_absolute() else ctx.cwd / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a" if append else "w", encoding="utf-8") as stream:
+    # The reader refuses lone surrogates; `replace` keeps any that slip past from losing the report
+    with path.open("a" if append else "w", encoding="utf-8", errors="replace") as stream:
         stream.write(text)
