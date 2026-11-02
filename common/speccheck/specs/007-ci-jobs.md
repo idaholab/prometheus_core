@@ -23,3 +23,5 @@ checks what its jobs proved.
   from the run's results.
 - SPC-REQ-007-06: A results file's run and job links MUST point at the run attempt that wrote it.
   The job link MUST use the job's check run ID when the workflow passes it in.
+- SPC-REQ-007-07: `.github/actions/speccheck-install` MUST install the `speccheck` command from the
+  checkout with uv and put it on `PATH`, and `speccheck-verify` MUST run it from there.

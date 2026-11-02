@@ -4,9 +4,10 @@ description: The final job's steps - download the run's speccheck results, verif
 # For the last job of a workflow, with `needs:` on every job that uploads results and
 # `if: ${{ !cancelled() }}`, so it reports even when a test job failed. The calling job needs
 # only `contents: read` (download-artifact reads this run's artifacts with the job's own token)
-# and a checkout with `persist-credentials: false`. The downloaded files are untrusted data:
-# speccheck parses them as JSON with a size limit and never opens paths named in them. The
-# report and step summary escape everything taken from them. Exits with verify's code.
+# and a checkout with `persist-credentials: false`; speccheck-install installs speccheck from it.
+# The downloaded files are untrusted data: speccheck parses them as JSON with a size limit and
+# never opens paths named in them. The report and step summary escape everything taken from
+# them. Exits with verify's code.
 # See common/speccheck/README.md, "In CI"
 
 inputs:
@@ -36,6 +37,8 @@ runs:
       with:
         pattern: speccheck-results-*
         path: ${{ runner.temp }}/speccheck-results
+    - name: Install speccheck
+      uses: ./.github/actions/speccheck-install
     - name: Report
       # report never fails on the requirements, so the report is published either way
       shell: bash
@@ -50,10 +53,9 @@ runs:
         mkdir -p "$RESULTS" "$(dirname "$REPORT")"
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        run=(python3 -I "$GITHUB_WORKSPACE/common/speccheck/run.py")
-        "${run[@]}" report --config "$CONFIG" "${scope[@]}" "$RESULTS" \
+        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" \
           --output "$REPORT" --summary "$GITHUB_STEP_SUMMARY"
-        "${run[@]}" report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
+        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
     - name: Upload report
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -72,4 +74,4 @@ runs:
       run: |
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        python3 -I "$GITHUB_WORKSPACE/common/speccheck/run.py" verify --config "$CONFIG" "${scope[@]}" "$RESULTS"
+        speccheck verify --config "$CONFIG" "${scope[@]}" "$RESULTS"

@@ -20,4 +20,5 @@ one JSON object for scripts and agents.
   `report` MUST also give each requirement's ID, status and evidence.
 - SPC-REQ-008-05: Without `--json`, problems MUST go to stderr, and the last line MUST be a summary
   of the counts. `verify` MUST name the producers that reported and those that are missing.
-- SPC-REQ-008-06: `run.py` MUST run speccheck from a checkout with nothing installed.
+- SPC-REQ-008-06: Retired. Replaced by SPC-REQ-007-07: CI jobs run the installed `speccheck`
+  command instead of `run.py` from a checkout.

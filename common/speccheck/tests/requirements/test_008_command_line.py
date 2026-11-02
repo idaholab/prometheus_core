@@ -10,7 +10,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""specs/008-command-line.md: the installed `speccheck` command and `run.py`, as separate processes."""
+"""specs/008-command-line.md: the installed `speccheck` command, as a separate process."""
 
 from __future__ import annotations
 
@@ -24,9 +24,6 @@ import pytest
 
 import speccheck
 from tests.requirements.conftest import Project
-
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-"""common/speccheck."""
 
 
 def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
@@ -104,18 +101,3 @@ def test_problems_on_stderr_and_a_summary_last(project: Project):
     assert done.stderr.splitlines()[-1] == (
         "speccheck verify: 2 requirements: 1 unclaimed, 1 passed; reported: unit; 1 problem"
     )
-
-
-@pytest.mark.covers("SPC-REQ-008-06")
-def test_run_py_from_a_checkout(project: Project):
-    """`python3 -I run.py` with nothing installed: only the standard library on the path."""
-    if sys.version_info < (3, 11):
-        pytest.skip("run.py needs tomllib (3.11 or newer); the 3.11 to 3.14 legs prove this")
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
-    done = subprocess.run(
-        [sys.executable, "-I", "-S", str(PACKAGE_ROOT / "run.py"), "lint"],
-        cwd=project.root,
-        capture_output=True,
-        text=True,
-    )
-    assert (done.returncode, done.stdout) == (0, "speccheck lint: 1 specs, 1 requirement\n"), done.stderr
