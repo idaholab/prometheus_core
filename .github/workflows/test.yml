@@ -597,6 +597,9 @@ jobs:
     name: "platform: frontend e2e"
     needs: gitleaks
     runs-on: ubuntu-26.04
+    # About a minute normally; a hung apt-get or browser download fails here
+    # instead of holding a runner for the 6-hour default
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: platform/frontend
