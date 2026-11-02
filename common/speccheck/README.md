@@ -61,8 +61,10 @@ Exit codes: 0 fine, 1 problems, 2 usage or config error.
 **Output.** Problems go to stderr as `path:line: message`, so editors and CI logs link them. Each
 message says what to do. The last line is a summary, such as
 `speccheck verify: 58 requirements: 1 failed, 57 passed; reported: speccheck-requirements; 1 problem`.
-Control characters in anything printed are written out (`\n`, `\x1b`), so a file name or a
-results file can't start a `::error::` line.
+Control characters in anything printed are written out (`\n`, `\x1b`), and so are the GitHub
+Actions log commands: a leading `::` becomes `\x3a:` and `##[` becomes `##\x5b`. So a file name,
+spec text or results file can't start a `::error::` or `##[error]` line in a CI log. Files that
+`report` writes keep the text as written, escaped for markdown instead.
 
 **`--json`.** Exactly one object on stdout, on every exit path:
 

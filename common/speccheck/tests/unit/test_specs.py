@@ -286,6 +286,25 @@ class TestProblems:
         assert specs.plain("tests/café é/x y.py") == "tests/café é/x y.py"
         assert specs.plain(f"a\tb{chr(0x2028)}c\x7fd\x85") == "a\\tb\\u2028c\\x7fd\\x85"
 
+    @pytest.mark.parametrize(
+        ("text", "written"),
+        [
+            ("::error title=x::FORGED", r"\x3a:error title=x::FORGED"),
+            ("  ::warning::x", r"  \x3a:warning::x"),
+            ("\t::error::x", r"\t::error::x"),
+            ("a ##[error]x ##[group]y", r"a ##\x5berror]x ##\x5bgroup]y"),
+            ("a::b ::c # [x] #[y]", "a::b ::c # [x] #[y]"),
+        ],
+    )
+    def test_plain_writes_out_log_commands(self, text: str, written: str):
+        """A line can't start `::`, even after spaces, and `##[` is written out anywhere; other colons stay."""
+        assert specs.plain(text) == written
+
+    def test_a_problem_whose_path_is_a_log_command(self):
+        """A `file` field of `::error::x`, with no newline, is the start of the line and is written out."""
+        assert str(specs.Problem("::error::x", 3, "m")) == r"\x3a:error::x:3: m"
+        assert str(specs.Problem("::error::x", 0, "m")) == r"\x3a:error::x: m"
+
     def test_a_path_outside_the_root_is_printed_as_given(self, tmp_path: Path):
         """`rel` falls back to the path itself."""
         assert specs.rel(Path("/elsewhere/x.md"), tmp_path) == "/elsewhere/x.md"

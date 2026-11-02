@@ -48,12 +48,18 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
 
 
 def plain(text: str) -> str:
-    """`text` with each control character written out, such as `\\n` or `\\x1b`, so it stays on one line.
+    """`text` as one line that no CI log acts on: control characters and log commands written out.
 
-    File names and results files are not trusted, and CI logs act on a line that starts with
-    `::error::`, so nothing printed may be able to begin one.
+    Each control character is written as an escape, such as `\\n` or `\\x1b`, so the text stays on
+    one line. File names and results files are not trusted, and a GitHub Actions log acts on a
+    line that starts with `::` (after spaces), as in `::error::x`, and on `##[` anywhere in a line,
+    as in `##[error]x`. So a leading `:` is written `\\x3a` and the `[` of `##[` is written `\\x5b`.
     """
-    return CONTROL.sub(lambda match: ascii(match.group(0))[1:-1], text)
+    text = CONTROL.sub(lambda match: ascii(match.group(0))[1:-1], text).replace("##[", "##\\x5b")
+    body = text.lstrip()
+    if body.startswith("::"):
+        text = text[: len(text) - len(body)] + "\\x3a" + body[1:]
+    return text
 
 
 class Syntax:

@@ -47,6 +47,12 @@ def error(command: str, message: str) -> dict[str, Any]:
 
 
 def emit(body: dict[str, Any], stream: TextIO) -> None:
-    """Print one JSON object. `ensure_ascii` keeps control characters escaped, so a log can't act on them."""
-    stream.write(json.dumps(body, indent=2, sort_keys=True, ensure_ascii=True) + "\n")
+    """Print one JSON object that a CI log can't act on.
+
+    `ensure_ascii` keeps control characters escaped, and every line starts with spaces or a
+    bracket, so none can start `::`. A `##[` can only be inside a string, where `[` is written
+    `\\u005b`, which reads back the same.
+    """
+    text = json.dumps(body, indent=2, sort_keys=True, ensure_ascii=True).replace("##[", "##\\u005b")
+    stream.write(text + "\n")
     stream.flush()

@@ -36,3 +36,13 @@ def test_the_envelope_and_emit():
     assert json.loads(stream.getvalue()) == body
     assert "\n::x" not in stream.getvalue()
     assert jsonout.error("verify", "no config")["error"] == {"code": "usage", "message": "no config"}
+
+
+def test_emit_cant_start_a_log_command():
+    """No line of the object starts `::`, and `##[` inside a string is written so a log ignores it."""
+    body = jsonout.envelope("verify", False, [Problem("::error::x", 1, "##[error]y")])
+    stream = io.StringIO()
+    jsonout.emit(body, stream)
+    text = stream.getvalue()
+    assert json.loads(text) == body
+    assert "##[" not in text and not any(line.lstrip().startswith("::") for line in text.splitlines())

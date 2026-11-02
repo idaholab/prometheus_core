@@ -281,6 +281,15 @@ class TestRun:
         assert report.run(ctx, namespace()) == 0
         assert out(ctx).startswith("# speccheck requirements\n")
 
+    def test_stdout_cant_start_a_log_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """On stdout, which may be a CI log, each line is written out (a code span keeps `##[` and `::`)."""
+        monkeypatch.setattr(report, "full", lambda title, evaluation: "- `##[error]x`\n::error::y\n")
+        ctx = self.ctx(tmp_path)
+        assert report.run(ctx, namespace()) == 0
+        assert out(ctx) == "- `##\\x5berror]x`\n\\x3a:error::y\n"
+        assert report.run(ctx, namespace(output="r.md")) == 0
+        assert (tmp_path / "r.md").read_text() == "- `##[error]x`\n::error::y\n"
+
     def test_output_and_summary(self, tmp_path: Path):
         """`--output` is written (folders made), `--summary` appended, and stdout has the summary line."""
         (tmp_path / "s.md").write_text("earlier step\n")
