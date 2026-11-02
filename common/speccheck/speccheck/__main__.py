@@ -14,7 +14,13 @@
 
 import sys
 
-from speccheck.cli import main
+if __name__ == "__main__" and sys.version_info < (3, 10):
+    # Checked before the imports below: on 3.9 they fail with "No module named 'tomli'"
+    sys.exit(
+        f"speccheck needs Python 3.10+; this is {sys.version_info[0]}.{sys.version_info[1]}. Try `uv tool install`"
+    )
+
+from speccheck.cli import main  # noqa: E402
 
 if __name__ == "__main__":
     sys.exit(main())
