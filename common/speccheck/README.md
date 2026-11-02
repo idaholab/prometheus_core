@@ -456,6 +456,10 @@ With `--json`, stdout is exactly one object, on every exit path:
 - Each problem's `code` is a stable name for its kind, listed below. The `message` wording can
   change; the `code` doesn't.
 - `"line": 0` means the problem has no line (a whole file, or the config).
+- The two `path` fields have different bases. `problems[].path` is relative to the folder the
+  command ran in, so it opens from there. `requirements[].path` is from the repository's root, for
+  links, and is `null` outside a git repository. To match a problem to its requirement, use the
+  ID in the message, or `requirements[].id`, not the paths.
 - Fields are only added within a `schema_version`.
 
 #### Problem codes
