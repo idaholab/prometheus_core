@@ -17,7 +17,9 @@ fails locally before CI.
   malformed ID, an unknown ID, a retired ID, or an ID in a spec the producer may not claim. The
   message MUST name the test and the ID and say how to fix it: for a malformed ID it shows the ID
   format, for an unknown ID it names the spec to add it to, for a retired ID it says to claim what
-  replaced it, and for a disallowed ID it names the `producers.<name>.specs` key.
+  replaced it, and for a disallowed ID it names the `producers.<name>.specs` key. Collection MUST
+  also fail when no producer is set (by `SPECCHECK_PRODUCER` or `speccheck_producer`), because
+  without one the check of which specs the run may claim would be skipped; the message names both.
 - SPC-REQ-003-04: A `covers` mark with no IDs, with a non-string ID, or with keyword arguments
   MUST fail collection.
 - SPC-REQ-003-05: Without `speccheck_config`, the plugin MUST NOT check any claim, and MUST NOT
