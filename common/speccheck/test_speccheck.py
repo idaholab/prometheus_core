@@ -451,11 +451,30 @@ class TestFormat(CheckerTest):
         self.assertProblems("the first line must be the title")
 
     def test_file_names_and_the_index(self):
-        """Specs are named NNN-name.md and the index lists each one's number (a link or a table row)."""
+        """Specs are named NNN-name.md and the index links each one."""
         self.repo.write("specs/001-thing.md", spec("", tests="none"))
         self.repo.write("specs/002-unlisted.md", spec("", tests="none", number="002"))
         self.repo.write("specs/Notes.md", "x")
-        self.assertProblems("the index doesn't list 002 (002-unlisted.md)", "must be named NNN-short-name.md")
+        self.assertProblems("the index doesn't link 002-unlisted.md", "must be named NNN-short-name.md")
+
+    def test_a_mention_in_the_index_is_not_a_listing(self):
+        """The number or file name in prose, a code span or a link to another file doesn't list a spec."""
+        index = (
+            "# Index\n\nSpec 002 and 002-other.md are described below; `002-other.md` too.\n\n"
+            "| 002 | Other | draft |\n\n- [001](001-thing.md)\n- [elsewhere](../x/002-other.md)\n"
+        )
+        self.repo.write("specs/000-index.md", index)
+        self.repo.write("specs/001-thing.md", spec("", tests="none"))
+        self.repo.write("specs/002-other.md", spec("", tests="none", number="002"))
+        self.assertProblems("the index doesn't link 002-other.md")
+
+    def test_the_index_may_link_in_any_markdown_form(self):
+        """A table cell, a list item, `./`, an anchor and a title-less link all list the spec."""
+        index = "# Index\n\n| 001 | [Thing](./001-thing.md#purpose) |\n\n* [002](002-other.md)\n"
+        self.repo.write("specs/000-index.md", index)
+        self.repo.write("specs/001-thing.md", spec("", tests="none"))
+        self.repo.write("specs/002-other.md", spec("", tests="none", number="002"))
+        self.assertProblems()
 
     def test_a_missing_index_fails(self):
         """The index is the entry point."""

@@ -417,6 +417,15 @@ def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, proble
     return found
 
 
+def links_to(index_text: str, name: str) -> bool:
+    """Whether the index has a Markdown link to the spec file, such as `[001](001-thing.md)`.
+
+    A mention of the spec's number or name in prose is not a listing, so a spec can't be left out
+    of the index and still pass because another paragraph happens to say "001".
+    """
+    return re.search(rf"\]\((?:\./)?{re.escape(name)}(?:#[^)]*)?\)", index_text) is not None
+
+
 def load_specs(
     specs_dir: Path, root: Path, index_text: str | None, syntax: Syntax, problems: list[Problem]
 ) -> list[Spec]:
@@ -429,8 +438,9 @@ def load_specs(
         if not SPEC_FILE.match(path.name):
             problems.append(Problem(rel(path, root), 0, "a spec file must be named NNN-short-name.md"))
             continue
-        if index_text is not None and not re.search(rf"\b{path.name[:3]}\b", index_text):
-            problems.append(Problem(rel(index, root), 0, f"the index doesn't list {path.name[:3]} ({path.name})"))
+        if index_text is not None and not links_to(index_text, path.name):
+            message = f"the index doesn't link {path.name}; list it as `[{path.name[:3]}]({path.name})`"
+            problems.append(Problem(rel(index, root), 0, message))
         specs.append(parse_spec(path, root, syntax, problems))
     return specs
 

@@ -19,8 +19,9 @@ it's cited, or `untested`, `planned` or `retired`.
 
 ## What it reads
 
-**Specs.** Every `NNN-name.md` in the folder, plus `000-index.md`, which must list each spec's
-number. Each spec has a title `# NNN - Name`, a `status:` line (`draft`, `implemented` or
+**Specs.** Every `NNN-name.md` in the folder, plus `000-index.md`, which must link each spec
+by its file name, as in `[001](001-using-the-cli.md)`; a mention of the number in prose doesn't count.
+Each spec has a title `# NNN - Name`, a `status:` line (`draft`, `implemented` or
 `retired`) and a `tests:` line naming where its IDs may be cited:
 
 ```markdown
@@ -116,7 +117,7 @@ could be shell text in a `run: |` block instead of a YAML comment, so it is a pr
 - `Implements` before an ID in a test file.
 - A duplicate ID, a malformed bullet (including one without the folder's prefix), an ID numbered for
   another spec, a malformed `id-prefix:`, a missing, repeated or unknown `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
-  spec the index doesn't list.
+  spec the index doesn't link.
 
 `draft` doesn't relax anything: a draft spec's requirements are planned, untested or cited, like any
 other. What the checker can't tell is whether a citing test really proves the requirement, or is
