@@ -64,6 +64,16 @@ def test_record_without_an_entry_is_exit_2(ci_project: Project):
     assert not (ci_project.root / ".speccheck").exists()
 
 
+@pytest.mark.covers("SPC-REQ-007-01", "SPC-REQ-008-04")
+def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
+    """A file where the output folder should be: exit 2 and one JSON object, not a traceback."""
+    ci_project.write("blocker", "a file, not a folder")
+    run = ci_project.speccheck("record", "--output", "blocker/publish.jsonl", "--json", env=JOB)
+    body = run.json()
+    assert run.code == 2 and body["ok"] is False and body["error"]["code"] == "usage"
+    assert "blocker" in body["error"]["message"] and "Traceback" not in run.err
+
+
 @pytest.mark.covers("SPC-REQ-007-02")
 def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     """A results file from the job that claims more than its entry lists: the extra claim is a problem."""
