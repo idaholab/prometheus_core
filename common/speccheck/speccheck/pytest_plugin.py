@@ -105,7 +105,8 @@ def _where(item: pytest.Item) -> tuple[str, int]:
     Nothing scrubs it, so the README tells projects to keep secrets out of parametrize IDs.
     """
     path, line, _ = item.location
-    return path, (line + 1 if line is not None else 0)
+    # pytest gives the OS separator, so a native-Windows run would write `tests\x.py`
+    return Path(path).as_posix(), (line + 1 if line is not None else 0)
 
 
 def _checker(config: pytest.Config):
