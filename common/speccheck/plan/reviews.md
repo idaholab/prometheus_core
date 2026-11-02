@@ -44,7 +44,9 @@ the reviewer looks at it:
   - the results format is versioned, and a reader rejects an unknown version instead of guessing.
 - **CI and tests:**
   - above all, a test or job that claims a requirement without proving it. The checker sees
-    that a test claims an ID and passed, not that it asserts what the requirement says;
+    that a test claims an ID and passed, not that it asserts what the requirement says. Read each
+    claim's explanation against the test: it should say what the test does, and the test should
+    do it;
   - the final job runs when a test job fails (`!cancelled()`), and fails when a producer didn't
     upload (`--complete`, `if-no-files-found: error`);
   - a skipped, deselected or xfailed claim really fails `verify`, tested end to end with
@@ -55,7 +57,8 @@ the reviewer looks at it:
   - the job links open the right job, including on a re-run attempt.
 - **Security:**
   - results files and artifacts are untrusted: parsed as JSON only, size-limited, paths never
-    opened, control characters escaped in logs, markdown escaped in the report and summary;
+    opened, control characters escaped in logs, markdown escaped in the report and summary
+    (explanations included), and the summary links only the run's own report artifact;
   - the composite actions and `speccheck-report.yml` have read-only permissions, no secrets and
     `persist-credentials: false`; `workflow_run` doesn't hand a fork's artifacts anything with
     write access;

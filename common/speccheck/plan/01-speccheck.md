@@ -27,8 +27,8 @@ folder or workflow changes. Branch from `devel`, not from #355.
   ("Job links").
 - **`pytest_plugin.py`:** the `covers` marker, the collection check, outcome merging across phases,
   writing only when asked, xdist-safe (writing from the controller only).
-- **Actions:** `lint`, `check`, `verify` (`--complete`), `report` (`--output`, `--summary`,
-  `--json`), `record`. Shared `--config`, `--json`, `--quiet`, `--verbose`, `--version`.
+- **Actions:** `lint`, `check`, `verify` (`--complete`), `report` (`--output`, `--json`),
+  `record`. `lint`, `check` and `verify` take `--summary`. Shared `--config`, `--json`, `--quiet`, `--verbose`, `--version`.
 - **Composite actions:** `.github/actions/speccheck-upload/` and `.github/actions/speccheck-verify/`.
 - **speccheck's own specs** `common/speccheck/specs/` (prefix `SPC`): the index and specs 001 to 008
   from `design.md`, with requirements, every one claimed by a test or by a `[ci.*]` job.
@@ -38,8 +38,8 @@ folder or workflow changes. Branch from `devel`, not from #355.
   composite actions, and the workflow itself, with:
   - `unit`: Python 3.10, 3.11, 3.12, 3.13 and 3.14; ruff on one leg; 100% line and branch coverage;
     results uploaded per leg;
-  - `speccheck`: the final job, `needs: unit`, `verify --complete` on its own results, the report
-    in the step summary and as an artifact.
+  - `speccheck`: the final job, `needs: unit`, `verify --complete` on its own results, the
+    failures in the step summary and the report as an artifact.
   It is not a required check.
 - **Dependabot** entry for `common/speccheck` (uv).
 - **Tests mirror the code**, and a docstring test, as in platformctl.
@@ -52,8 +52,8 @@ folder or workflow changes. Branch from `devel`, not from #355.
 
 - `lint`/`check`/`verify`: the problems, then one summary line. `verify` also names the
   producers that reported and those that are missing.
-- `report --summary`: counts per status and the problem rows. The full report goes into the
-  artifact.
+- `--summary` (on `lint`, `check`, `verify`): one line of counts with a link to the report, then
+  the problems, and nothing else. The full report goes into the artifact.
 - `--json` everywhere.
 
 ## Done when
@@ -117,6 +117,26 @@ What differs from the plan above, or settles something it left open:
   007-07, and the results-file header gained `ci.provider`. Readers now ignore unknown keys, so
   fields can be added within `speccheck-results/1`, the same rule `--json` follows. The pytest
   outcome mapping moved to 003-07, and 004-03 defines the outcomes independently of the runner.
+- **How each claim proves its requirement (2026-11-02, after the review panel):** a claim is
+  `covers(ID, how)`, one mark per ID, with a required plain-text explanation of up to 1000
+  characters, whitespace collapsed. The report shows it under each table. Decided with it:
+  - **Marks go on one test only:** a plain function, or one `pytest.param` of the test's single
+    `parametrize`. Class, module and function-on-parametrized marks, a second `parametrize` and
+    parametrized fixtures fail collection. This reverses the old SPC-REQ-003-02 ("marks from every
+    level add up"), so that every explanation describes exactly one test.
+  - **No repeats:** a test claims an ID once; no two claims share an explanation (at collection,
+    and across all results in `check` and `verify`); an explanation can't be a placeholder, the
+    ID, or any requirement's text; and no two requirements in a folder share text (`lint`).
+    Texts are compared ignoring whitespace, case and a trailing full stop.
+  - **Results format:** `covers` became a list of `{"id", "how"}` objects within
+    `speccheck-results/1`, since nothing outside speccheck reads it yet. `[ci.<job>] covers`
+    became a table from ID to explanation.
+  - **Step summary shows only failures:** `report --summary` (and SPC-REQ-006-04) are gone. `lint`,
+    `check` and `verify` take `--summary`, writing one counts line with a `--report-url` link to
+    the artifact, then the problems. `speccheck-verify` uploads the report before `verify` runs,
+    so it has the link.
+  - New and changed requirements: 001-10, 002-06, 003-02, 003-04, 003-05, 003-08 to 003-11,
+    004-01, 004-09, 005-10, 006-01, 006-03, 007-01, 007-04, 007-07, 008-07 to 008-09.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
@@ -129,12 +149,16 @@ steps and in the PR that adds it:
   claim in the spec folder on every run, locally too. One malformed, unknown or retired ID, or one
   the producer may not claim, stops pytest before any test runs. Migrate a whole spec at a time, and
   use `pytest -o speccheck_config=` to iterate meanwhile.
-- **Docstring and comment citations stop counting, silently.** Only `@pytest.mark.covers("ID")`
-  counts. Until a test carries the marker, its requirement is `unclaimed`, and `verify` fails on it,
+- **Docstring and comment citations stop counting, silently.** Only
+  `@pytest.mark.covers("ID", "how")` counts. Until a test carries the marker, its requirement is `unclaimed`, and `verify` fails on it,
   but nothing complains about the old citation.
 - **The job name is the producer.** `record` takes the job from `$GITHUB_JOB`, which is the job's key
   in the workflow, and looks it up as `[ci.<job>]` in the config. Renaming the job without the
   config entry makes `record` fail.
+- **Every claim needs its own explanation.** Converting a citation means writing how that test
+  proves the requirement, and a parametrized test whose citation covered every case needs a
+  `pytest.param(..., marks=...)` per case, each saying something different. Class and module
+  marks have to move down to the tests.
 - **Two workflow pieces are needed.** A job that runs `record` needs the `speccheck-install` step.
   The workflow needs a final job, `needs:` every producer, with `if: ${{ !cancelled() }}` and
   `speccheck-verify`. Without it nothing checks the results.

@@ -10,8 +10,10 @@ runners and the checker, so other languages can write one too.
 ## Requirements
 
 - SPC-REQ-004-01: A results file MUST be JSON Lines: a header with `schema` `speccheck-results/1`,
-  the producer, the runner and the CI context, then one line per claiming test. A JSON Schema for it
-  MUST ship with the package, so a writer in another language can validate its output.
+  the producer, the runner and the CI context, then one line per claiming test. A result's
+  `covers` MUST be a list of `{"id": ..., "how": ...}` objects, one per claimed ID. A JSON Schema
+  for the format MUST ship with the package, so a writer in another language can validate its
+  output.
 - SPC-REQ-004-02: A reader MUST reject a file with any other `schema` value, a wrong type, or an
   unknown outcome, and MUST NOT use any of that file's results. A reader MUST ignore keys it doesn't
   know, so fields can be added without changing `schema`.
@@ -28,3 +30,6 @@ runners and the checker, so other languages can write one too.
   MUST NOT follow symlinks when it searches a folder.
 - SPC-REQ-004-08: In CI, the header MUST carry the CI context: the provider, server, repository,
   workflow, job, leg, run ID, attempt and commit. Outside CI, `ci` MUST be null.
+- SPC-REQ-004-09: A reader MUST reject a file with a result that claims the same ID twice, or
+  whose `how` is empty, longer than 1000 characters, or contains a line break, since a writer in
+  another language may not have collapsed it.
