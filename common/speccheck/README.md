@@ -180,7 +180,10 @@ speccheck check: 2 requirements: 2 claimed; reported: greeter-tests
 
 `check` needs no test to run, since a collect-only run sees every claim. `verify` does the same and
 also wants each claim to have passed, so it needs a real run's results. While a spec is half
-written, `pytest -o speccheck_config=` runs the tests without the claim checks.
+written, `pytest -o speccheck_config=` runs the tests without the claim checks, as long as the run
+asks for no results file: with `--speccheck-results` or `SPECCHECK_RESULTS` set, the checks that
+need no specs (the mark's shape, the explanation, repeats) still run. (`pytest -p no:speccheck`
+isn't a way round that: it unregisters the `covers` marker, which `--strict-markers` then rejects.)
 
 ### What counts as evidence
 
@@ -351,7 +354,7 @@ What surprises a project moving onto speccheck:
 - **A half-migrated suite breaks local pytest.** With `speccheck_config` set, collection checks
   every claim in the spec folder on every run. One bad claim stops pytest before any test runs,
   even `pytest tests/x.py::one`. Migrate a whole spec at a time, and use `pytest -o speccheck_config=`
-  meanwhile.
+  meanwhile, with no `SPECCHECK_RESULTS` set (with one, the shape checks still run).
 - **Docstring and comment citations stop counting, without a word.** Only
   `@pytest.mark.covers(ID, how)` counts. Until a test carries the marker, its requirement is
   unclaimed and `verify` fails on it, but nothing points at the old citation.
