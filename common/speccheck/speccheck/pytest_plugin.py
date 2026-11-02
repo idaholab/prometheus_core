@@ -207,7 +207,13 @@ def _function_id(item: pytest.Item) -> str:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Record every claiming test, before `-k` or `-m` deselects any, and fail on a claim that isn't allowed."""
+    """Record every claiming test, before `-k` or `-m` deselects any, and fail on a claim that isn't allowed.
+
+    Does nothing unless the plugin is configured: `speccheck_config` is set, or the run asks for a
+    results file, which can hold only well-formed claims (003-05).
+    """
+    if not configured(config):
+        return
     recorded = config.stash[CLAIMS]
     checker = _checker(config)
     unique = claims.Unique()
@@ -351,6 +357,11 @@ class Recorder:
     def pytest_sessionstart(self, session: pytest.Session) -> None:
         """Note when the session started."""
         self.started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def configured(config: pytest.Config) -> bool:
+    """Whether the project set `speccheck_config` or the run asked for a results file."""
+    return bool(config.getini("speccheck_config")) or results_path(config) is not None
 
 
 def results_path(config: pytest.Config) -> Path | None:

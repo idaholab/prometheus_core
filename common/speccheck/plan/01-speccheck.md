@@ -150,6 +150,12 @@ What differs from the plan above, or settles something it left open:
     repository's root.
   - **Lighter escaping** outside code spans.
   - New and changed requirements: 004-08, 004-10, 006-01, 006-02, 006-03, 006-07, 007-04, 008-10.
+- **The second review panel (2026-11-02):** fixes are the `review-panel <ID>:` commits after the
+  per-requirement report. One changes a requirement:
+  - **An unconfigured plugin is inert (TECH-3):** the shape checks (003-02, 003-04, 003-08, 003-10,
+    003-11) ran on every run, so installing speccheck broke a project with a `covers` marker of its
+    own. They now run only when `speccheck_config` is set or the run asks for a results file.
+    003-05 says so.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 

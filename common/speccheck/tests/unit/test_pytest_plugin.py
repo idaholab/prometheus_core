@@ -343,9 +343,13 @@ class TestCollection:
         pytest_plugin.pytest_collection_modifyitems(None, config, list(items))
         return config.stash[CLAIMS]
 
+    def test_unconfigured_nothing_is_recorded_or_checked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """No `speccheck_config` and no results file: even a malformed mark passes, and nothing is recorded."""
+        assert self.collect(fake_config(tmp_path), item(covers()), monkeypatch=monkeypatch) == {}
+
     def test_claims_are_recorded_as_collected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Each claiming test with its claims and place; a test that claims nothing is left out."""
-        config = fake_config(tmp_path)
+        config = fake_config(tmp_path, option="r.jsonl")
         claims = self.collect(
             config,
             item(covers("A", "how a"), covers("B", "how b")),
@@ -363,7 +367,8 @@ class TestCollection:
 
     def test_without_a_config_ids_are_not_checked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Any string is recorded."""
-        claims = self.collect(fake_config(tmp_path), item(covers("anything", "h")), monkeypatch=monkeypatch)
+        config = fake_config(tmp_path, option="r.jsonl")
+        claims = self.collect(config, item(covers("anything", "h")), monkeypatch=monkeypatch)
         assert claims["t.py::test_a"]["covers"] == [{"id": "anything", "how": "h"}]
 
     def test_every_bad_claim_is_listed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -378,7 +383,7 @@ class TestCollection:
         ]
         with pytest.raises(pytest.UsageError) as raised:
             self.collect(
-                fake_config(tmp_path),
+                fake_config(tmp_path, ini={"speccheck_config": "speccheck.toml"}),
                 *items,
                 checker=lambda claim: "" if claim.id in ("ok", "C") else "no",
                 monkeypatch=monkeypatch,
@@ -598,5 +603,5 @@ class TestWiring:
     def test_a_bad_mark_stops_the_session(self, pytester: pytest.Pytester):
         """The collection hook's UsageError reaches pytest as a usage error."""
         pytester.makepyfile("import pytest\n@pytest.mark.covers()\ndef test_a():\n    pass\n")
-        run = pytester.runpytest()
+        run = pytester.runpytest("--speccheck-results=r.jsonl")
         assert run.ret == pytest.ExitCode.USAGE_ERROR and "`covers` takes two strings" in run.stderr.str()

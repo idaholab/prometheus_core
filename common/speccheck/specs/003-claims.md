@@ -28,7 +28,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   MUST fail collection.
 - SPC-REQ-003-05: Without `speccheck_config`, the plugin MUST NOT check claims against the specs
   (003-03 and 003-09), and MUST NOT change any test's outcome. The checks that need no specs
-  (003-02, 003-04, 003-08, 003-10 and 003-11) MUST still run.
+  (003-02, 003-04, 003-08, 003-10 and 003-11) MUST run only when the run asks for a results file,
+  so installing the plugin changes nothing for a project that doesn't use it.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
 - SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
