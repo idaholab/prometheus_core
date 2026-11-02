@@ -51,4 +51,6 @@ The first run needs a browser: `npx playwright install chromium`.
 
 End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example.
 
+Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
+
 Playwright builds and starts the app itself on every run, so the tests always check your current code. If something is already using port 5160, the run fails instead of testing it; stop that server first. When a test fails it keeps a trace and a screenshot in `test-results/`; open a trace with `npx playwright show-trace <path>/trace.zip`. In CI, the `platform: frontend e2e` job uploads them with the HTML report as the `frontend-e2e-report` artifact.
