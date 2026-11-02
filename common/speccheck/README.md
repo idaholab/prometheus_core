@@ -58,7 +58,7 @@ bullet may wrap onto lines indented by two spaces. Markers at the end of the tex
 |---|---|
 | `⚠ untested` | No test yet, and none is planned. Say why under Open questions |
 | `(planned: step 3b)` | Agreed, and delivered by a later step of a plan. That step removes it |
-| Text starting `Retired.` | No longer applies. The ID stays for history and is never cited |
+| Text starting `Retired.` or `Retired:` | No longer applies. The ID stays for history and is never cited |
 
 A whole spec with `status: retired` counts as retired.
 

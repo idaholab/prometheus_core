@@ -154,6 +154,15 @@ class TestRetired(CheckerTest):
         self.repo.write("tests/test_x.py", cites("REQ-001-02"))
         self.assertProblems()
 
+    def test_only_retired_with_a_stop_retires_a_requirement(self):
+        """Text that merely starts with the word is still a live requirement that needs a test."""
+        body = (
+            "- REQ-001-01: Retired: gone.\n- REQ-001-02: Retired later, maybe.\n"
+            "- REQ-001-03: Retirement of x is allowed."
+        )
+        self.repo.write("specs/001-thing.md", spec(body))
+        self.assertProblems("REQ-001-02 has no citing test", "REQ-001-03 has no citing test")
+
     def test_citing_a_retired_requirement_fails(self):
         """A test should cite what replaced it."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: Retired. Gone."))

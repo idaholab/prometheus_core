@@ -44,6 +44,9 @@ PREFIX = re.compile(r"^[A-Z][A-Z0-9]*$")
 SPEC_FILE = re.compile(r"^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 """A numbered spec's file name: `NNN-short-name.md`."""
 
+RETIRED = re.compile(r"Retired[.:]")
+"""How a retired bullet's text starts: `Retired.` or `Retired:`, not "Retired later" or "Retirement of"."""
+
 UNTESTED = "⚠ untested"
 """The marker for a requirement that has no test yet."""
 
@@ -120,7 +123,7 @@ class Requirement:
     @property
     def retired(self) -> bool:
         """Whether the bullet, or its whole spec, is retired."""
-        return self.text.startswith("Retired") or self.spec.status == "retired"
+        return RETIRED.match(self.text) is not None or self.spec.status == "retired"
 
     @property
     def untested(self) -> bool:
