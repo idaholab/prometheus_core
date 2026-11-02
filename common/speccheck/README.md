@@ -26,6 +26,16 @@ speccheck verify --complete results/
 speccheck report results/ --output report.md --summary "$GITHUB_STEP_SUMMARY"
 ```
 
+**What to run locally.** A plain `pytest` runs the tests and checks the claims, but writes no results
+file, so there is nothing for `speccheck` to read. To check the spec folder as CI does, add
+`--speccheck-results=PATH` (or `SPECCHECK_RESULTS`) to the run, then pass that path to `check` or
+`verify`, as in the commands above. `check` is enough locally: a `--collect-only` run
+finds every claim without running the tests. `verify` wants a real run, because it needs passing
+results. The producer name (`sdk-python` in the examples) must be the same in three places: the
+`[producers.<name>]` table in the toml, `speccheck_producer` in the pytest ini options, and
+`SPECCHECK_PRODUCER` in the CI job. The environment variable wins over the ini option, so a job
+that sets it can differ from a local run that doesn't.
+
 Python 3.10 or newer. At runtime it needs only the standard library, plus `tomli` on 3.10.
 
 **In this repo**, a project adds it as a path dev dependency, so its `uv.lock` changes:
