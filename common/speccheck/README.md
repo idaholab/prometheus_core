@@ -79,7 +79,7 @@ requirement"). As a command on its own, install it as a uv tool, which puts `spe
 | `lint` | the spec folder | a spec breaks the format |
 | `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't planned, untested or retired has no claim; a claim names a malformed, unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
 | `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
-| `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json` |
+| `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json`. `--job-names FILE` (also on `verify`) names each job by its display name |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
 
 `RESULTS` are results files, or folders searched for `*.jsonl` (symlinks are not followed; a symlink given as an input is a `results-symlink` problem, and one found inside a folder is skipped).
@@ -120,7 +120,9 @@ spec text or results file can't start a `::error::` or `##[error]` line in a CI 
   "requirements": [
     {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
      "evidence": [{"test": "tests/requirements/test_002_config.py::test_the_prefix", "kind": "test", "file": "tests/requirements/test_002_config.py", "line": 70,
-                   "outcome": "failed", "producer": "speccheck-requirements", "leg": "3.12", "job": "requirements", "url": "https://..."}]}
+                   "root": "common/speccheck", "outcome": "failed", "producer": "speccheck-requirements", "job": "requirements",
+                   "job_name": "speccheck: requirements python 3.12", "url": "https://..."}],
+     "path": "common/speccheck/specs/002-config.md", "line": 18}
   ],
   "producers": {"reported": ["speccheck-requirements"], "missing": []}
 }
@@ -137,7 +139,7 @@ Each problem's `code` is a stable name for its kind (`unclaimed`, `failed`, `not
 
 | Status | Means | Fails |
 |---|---|---|
-| `passed` | at least one claiming result passed (by default one is enough, in any producer or leg) | no |
+| `passed` | at least one claiming result passed (by default one is enough, in any producer or job) | no |
 | `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
 | `not run` | claimed only by producers that didn't report in these inputs; or, in `verify`, claimed by nothing while a test producer that may claim it hasn't reported | `verify --complete` |
 | `unclaimed` | nothing claims it, and it isn't planned, untested or retired. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
@@ -296,9 +298,9 @@ kept. Neither one can stand in for the other.
 for runners in other languages.
 
 ```json
-{"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 9.2.0", "started": "2026-11-01T12:00:00Z",
+{"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 9.2.0", "started": "2026-11-01T12:00:00Z", "root": "sdk",
  "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core", "workflow": "test", "job": "sdk-python",
-        "leg": "3.12", "run_id": 123, "run_attempt": 1, "job_id": 456, "sha": "...", "ref": "...", "event": "push",
+        "run_id": 123, "run_attempt": 1, "job_id": 456, "sha": "...", "ref": "...", "event": "push",
         "run_url": ".../actions/runs/123/attempts/1", "job_url": ".../actions/runs/123/job/456"}}
 {"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py", "line": 181,
  "covers": [{"id": "SDK-REQ-006-08", "how": "a chat call goes through the proxy URL"}], "outcome": "passed"}
@@ -323,8 +325,12 @@ for runners in other languages.
   scrubs it, and an ID built from a fixture or an environment value (a token, a URL with
   credentials) lands in both. Give such a parameter a fixed `id=` or `ids=`.
 - `ci` says which CI provider ran it (`provider`), and where. GitHub Actions is the only provider so
-  far: its block comes from `GITHUB_*`, plus `SPECCHECK_LEG` and `SPECCHECK_JOB_ID`, which the
-  workflow sets. Outside CI it is null.
+  far: its block comes from `GITHUB_*`, plus `SPECCHECK_JOB_ID`, which the workflow sets. Outside
+  CI it is null. A job's display name isn't in it, since a job can't read its own; the final job
+  looks the names up (see "In CI").
+- `root` is the folder the results' `file` paths are relative to (pytest's root), as a path from
+  the repository's root: `GITHUB_WORKSPACE` in CI, else the nearest folder with a `.git`. The report
+  uses it to link each test to its line. It is null when no repository root is found.
 - A reader treats every file as untrusted. It parses JSON only, with size limits (16 MiB a file,
   64 KiB a line), and every field is checked. A file with another `schema`, a wrong type or an
   unknown outcome is rejected whole. Keys it doesn't know are dropped unread, so fields can be
@@ -342,7 +348,6 @@ In each job that runs claiming tests:
 ```yaml
     env:
       SPECCHECK_PRODUCER: sdk-python
-      SPECCHECK_LEG: ${{ matrix.python }}
       SPECCHECK_JOB_ID: ${{ job.check_run_id }}     # so the report links the job, not just the run
       SPECCHECK_RESULTS: ${{ github.workspace }}/.speccheck/sdk-python-${{ matrix.python }}.jsonl
     steps:
@@ -389,12 +394,17 @@ And at the end of the workflow:
 - **`speccheck-upload`** uploads `.speccheck/` (or `path`) as `speccheck-results-<name>`, kept 30
   days, and fails the job when there is nothing to upload.
 - **`speccheck-verify`** installs speccheck with `speccheck-install`, then downloads every
-  `speccheck-results-*` artifact of the run. It writes the report and uploads `report.md` and
-  `report.json` as `speccheck-report`, kept 90 days. Then it runs `verify --summary` with the
-  report's URL, which puts only the counts, a link to the report and the problems in the step
-  summary, and fails with it, so it also fails when no `speccheck-results-*` artifact was
-  downloaded. It needs `contents: read` only, and no secrets. With `complete`, it expects the
-  producers that list the workflow's name.
+  `speccheck-results-*` artifact of the run and looks up the run's job names from the jobs API. It
+  writes the report and uploads `report.md` and `report.json` as `speccheck-report`, kept 90 days.
+  Then it runs `verify --summary` with the report's URL, which puts only the counts, a link to the
+  report and the problems in the step summary, and fails with it, so it also fails when no
+  `speccheck-results-*` artifact was downloaded. It needs `contents: read` and `actions: read`, and
+  no secrets. Without `actions: read` it warns, and names results by producer. With `complete`, it
+  expects the producers that list the workflow's name.
+- **The report** has a table of the specs, then per spec its Purpose and a status table, then a
+  section per requirement: its full text, a link to its line in the spec, and a subsection per
+  claiming test or job with how it proves the requirement and one line per job that ran it, by
+  the job's display name. In CI, requirements and tests link to their lines at the tested commit.
 - Job links use `${{ job.check_run_id }}`, the job's check run ID, which is also the ID in its
   URL. Without it, the link is the run attempt.
 - The report links a URL from a results file only when it is a run, attempt or job URL on the

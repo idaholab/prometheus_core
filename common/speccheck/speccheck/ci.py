@@ -12,21 +12,21 @@
 
 """The GitHub Actions context of a run: where it ran, and links to its run and job.
 
-See plan/design.md, "Job links". Everything here comes from environment variables. The workflow
-sets `SPECCHECK_PRODUCER`, `SPECCHECK_LEG` and `SPECCHECK_JOB_ID` (from `${{ job.check_run_id }}`).
-The rest are GitHub's own `GITHUB_*` variables.
+See plan/design.md, "Job links" and "Job names". Everything here comes from environment variables.
+The workflow sets `SPECCHECK_PRODUCER` and `SPECCHECK_JOB_ID` (from `${{ job.check_run_id }}`).
+The rest are GitHub's own `GITHUB_*` variables. A job's display name isn't among them; the final
+job looks those up (`--job-names`).
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 PRODUCER_VAR = "SPECCHECK_PRODUCER"
 """The producer this run reports as."""
-LEG_VAR = "SPECCHECK_LEG"
-"""The matrix leg, such as a Python version; optional."""
 JOB_ID_VAR = "SPECCHECK_JOB_ID"
 """The job's numeric check run ID, from `${{ job.check_run_id }}`; optional."""
 
@@ -70,7 +70,6 @@ def context(env: Mapping[str, str]) -> dict[str, Any] | None:
         "repository": env.get("GITHUB_REPOSITORY", ""),
         "workflow": env.get("GITHUB_WORKFLOW", ""),
         "job": env.get("GITHUB_JOB", ""),
-        "leg": env.get(LEG_VAR, ""),
         "run_id": _number(env.get("GITHUB_RUN_ID")),
         "run_attempt": _number(env.get("GITHUB_RUN_ATTEMPT")) or 1,
         "job_id": _number(env.get(JOB_ID_VAR)),
@@ -115,3 +114,34 @@ def job_url(ci: Mapping[str, Any]) -> str:
     # A job URL has no attempt in it: each attempt's job has its own ID.
     base = run.split("/attempts/", 1)[0]
     return f"{base}/job/{job_id}"
+
+
+def commit_url(env: Mapping[str, str]) -> str:
+    """`<server>/<owner>/<repo>/blob/<sha>`, where this run's files are browsed, or "" outside CI.
+
+    Built from this run's own variables only, never a results file's, as `repository_url` is.
+    """
+    base, sha = repository_url(env), env.get("GITHUB_SHA", "")
+    return f"{base}/blob/{sha}" if base and SHA.fullmatch(sha) else ""
+
+
+def repository_root(start: Path, env: Mapping[str, str]) -> Path | None:
+    """The repository's root folder: `GITHUB_WORKSPACE` in CI, else the nearest folder above `start`
+    with a `.git`, else None. Found without running git."""
+    workspace = env.get("GITHUB_WORKSPACE", "")
+    if workspace:
+        return Path(workspace).resolve()
+    for folder in (start.resolve(), *start.resolve().parents):
+        if (folder / ".git").exists():
+            return folder
+    return None
+
+
+def from_root(path: Path, root: Path | None) -> str | None:
+    """`path` as a path from the repository's root (`.` for the root itself), or None when it isn't under it."""
+    if root is None:
+        return None
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return None

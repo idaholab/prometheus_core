@@ -41,9 +41,16 @@ class Evidence:
     result: Result
     """The claiming test or CI job and its outcome."""
     source: ResultsFile
-    """The results file: producer, leg and links."""
+    """The results file: producer, CI context and links."""
     how: str = ""
     """How the result says it proves this requirement."""
+    job_name: str = ""
+    """The display name of the job that produced it, from `--job-names`, or "" when not known."""
+
+    @property
+    def where(self) -> str:
+        """What produced it, for people: the job's display name when known, else the producer."""
+        return self.job_name or self.source.producer
 
 
 @dataclass
@@ -119,7 +126,7 @@ def _where(result: Result) -> tuple[str, int]:
 HINTS = {
     "failed": "fix the test or the code it checks",
     "error": "fix the setup or teardown that raised",
-    "skipped": "make the test run here, or claim the requirement from a leg where it runs",
+    "skipped": "make the test run here, or claim the requirement from a job where it runs",
     "xfailed": "an expected failure proves nothing; fix it and remove the xfail",
     "xpassed": "an unexpected pass isn't a pass; remove the xfail",
     "deselected": "run it: drop the `-k`/`-m` filter or the test's path argument that left it out",
@@ -136,10 +143,14 @@ def _hint(found: list[Evidence]) -> str:
 
 
 def _describe(evidence: Evidence) -> str:
-    """ "tests/test_x.py::test_y skipped in speccheck-requirements 3.12"."""
-    leg = (evidence.source.ci or {}).get("leg") or ""
-    where = f"{evidence.source.producer} {leg}".strip()
-    return f"{evidence.result.test} {evidence.result.outcome} in {where}"
+    """ "tests/test_x.py::test_y skipped in speccheck: requirements python 3.12", or `in <producer>`."""
+    return f"{evidence.result.test} {evidence.result.outcome} in {evidence.where}"
+
+
+def job_name(source: ResultsFile, job_names: dict[str, str]) -> str:
+    """The display name of the job that wrote `source`, by its `ci.job_id`, or "" when not known."""
+    job_id = (source.ci or {}).get("job_id")
+    return job_names.get(str(job_id), "") if job_id is not None else ""
 
 
 def evaluate(
@@ -151,12 +162,15 @@ def evaluate(
     runtime: bool,
     complete: bool = False,
     workflow: str | None = None,
+    job_names: dict[str, str] | None = None,
 ) -> Evaluation:
     """Decide every requirement's status. `runtime` is `verify` (outcomes count); otherwise `check`.
 
     With `complete`, every producer expected in `workflow` (every producer, without one) must have
-    reported, and a requirement nobody among them claims fails.
+    reported, and a requirement nobody among them claims fails. `job_names` maps a job's ID to its
+    display name, to name each result's job.
     """
+    job_names = job_names or {}
     problems = list(specs.problems)
     config_name = rel(config.path, root)
 
@@ -200,7 +214,7 @@ def evaluate(
                 why = unique.add(owner, claim.id, claim.how)
                 if why:
                     problems.append(Problem(path, line, why, "how-duplicate"))
-                claims[claim.id].append(Evidence(result, results_file, claim.how))
+                claims[claim.id].append(Evidence(result, results_file, claim.how, job_name(results_file, job_names)))
 
     expected = [p.name for p in (config.producers_in(workflow) if workflow else config.producers.values())]
     if complete and not expected:

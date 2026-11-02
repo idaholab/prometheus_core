@@ -49,7 +49,7 @@ MAX_TEXT = 1000
 MAX_COVERS = 200
 """The most IDs one result may claim."""
 
-HEADER_KEYS = {"schema", "producer", "runner", "ci", "started"}
+HEADER_KEYS = {"schema", "producer", "runner", "ci", "root", "started"}
 """The header keys this speccheck reads; a reader ignores any other (see `_known`)."""
 CI_KEYS = {
     "provider",
@@ -57,7 +57,6 @@ CI_KEYS = {
     "repository",
     "workflow",
     "job",
-    "leg",
     "run_id",
     "run_attempt",
     "job_id",
@@ -119,6 +118,8 @@ class ResultsFile:
     """What wrote it, such as `pytest 8.4.1`."""
     ci: dict[str, Any] | None = None
     """Where it ran (see `ci.context`), or None outside CI."""
+    root: str | None = None
+    """The folder `file` paths are relative to, from the repository's root (`.` for the root), or None."""
     started: str = ""
     """When the run started, ISO 8601 UTC."""
     results: list[Result] = field(default_factory=list)
@@ -133,6 +134,7 @@ class ResultsFile:
             "producer": self.producer,
             "runner": self.runner,
             "ci": self.ci,
+            "root": self.root,
             "started": self.started,
         }
 
@@ -214,6 +216,7 @@ def _header(body: Any) -> ResultsFile:
         producer=_text(body.get("producer"), "producer", allow_empty=False),
         runner=_text(body.get("runner", ""), "runner"),
         ci=ci,
+        root=None if body.get("root") is None else _text(body.get("root"), "root"),
         started=_text(body.get("started", ""), "started"),
     )
 

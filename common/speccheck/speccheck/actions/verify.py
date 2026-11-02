@@ -32,9 +32,10 @@ ORDER = 30
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """The results files, `--complete`, `--workflow` and `--summary`."""
+    """The results files, `--complete`, `--workflow`, `--job-names` and `--summary`."""
     _common.add_inputs(parser)
     _common.add_scope(parser)
+    _common.add_job_names(parser)
     summary.add_arguments(parser)
 
 

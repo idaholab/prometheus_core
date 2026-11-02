@@ -14,19 +14,22 @@
         "producer": { "$ref": "#/$defs/text", "minLength": 1, "description": "A producer declared in the spec folder's config" },
         "runner": { "$ref": "#/$defs/text", "description": "What wrote the file, such as `pytest 8.4.1`" },
         "ci": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ci" }] },
+        "root": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/text" }],
+          "description": "The folder results' `file` paths are relative to, as a path from the repository's root (`.` for the root); null when not known"
+        },
         "started": { "$ref": "#/$defs/text", "description": "ISO 8601 UTC" }
       }
     },
     "ci": {
       "type": "object",
-      "description": "Where the run happened: the CI provider, and for GitHub Actions the GITHUB_* and SPECCHECK_* variables",
+      "description": "Where the run happened: the CI provider, and for GitHub Actions the GITHUB_* variables and SPECCHECK_JOB_ID",
       "properties": {
         "provider": { "$ref": "#/$defs/scalar", "description": "The CI provider, such as `github`" },
         "server": { "$ref": "#/$defs/scalar" },
         "repository": { "$ref": "#/$defs/scalar" },
         "workflow": { "$ref": "#/$defs/scalar" },
         "job": { "$ref": "#/$defs/scalar" },
-        "leg": { "$ref": "#/$defs/scalar" },
         "run_id": { "$ref": "#/$defs/scalar" },
         "run_attempt": { "$ref": "#/$defs/scalar" },
         "job_id": { "$ref": "#/$defs/scalar" },

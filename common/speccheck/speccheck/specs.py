@@ -168,6 +168,8 @@ class Spec:
     """Its three-digit number."""
     title: str = ""
     """Its title, from the first line."""
+    purpose: str = ""
+    """Its `## Purpose` section's text, joined onto one line, or "" when it has none."""
     status: str = ""
     """Its `status:` value."""
     requirements: list[Requirement] = field(default_factory=list)
@@ -227,6 +229,8 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         spec.title = lines[0][len(f"# {number} ") :].lstrip("-– ").strip()
 
     current: Requirement | None = None
+    section = ""
+    purpose: list[str] = []
     seen_status = False
     in_header = True
     in_fence = False
@@ -239,6 +243,11 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
             continue
         if line.startswith("## "):
             in_header = False
+            section = line[3:].strip()
+            current = None
+            continue
+        if section == "Purpose" and line.strip():
+            purpose.append(line.strip())
         if in_header and line.startswith("status:"):
             if seen_status:
                 problems.append(
@@ -282,6 +291,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
 
     if not seen_status:
         problems.append(Problem(name, 0, "missing the `status:` line", "status-missing"))
+    spec.purpose = " ".join(purpose)
     return spec
 
 

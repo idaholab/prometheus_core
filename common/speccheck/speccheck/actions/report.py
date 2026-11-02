@@ -10,25 +10,28 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""`speccheck report`: the markdown report of where each requirement is proven, with links to the jobs.
+"""`speccheck report`: the markdown report of where and how each requirement is proven.
 
-It fails only on bad usage or a bad config. A bad results file shows up in the report as a problem.
-Everything taken from a results file is escaped before it goes into markdown, and capped in length.
-The step summary is not this report's: `lint`, `check` and `verify` write it with `--summary`.
+See plan/design.md, "Report". A table of specs, then per spec its Purpose and a status table, then
+a section per requirement and a subsection per claiming test or CI job. It fails only on bad usage
+or a bad config; a bad results file shows up as a problem. Everything from a results file, a spec
+or `--job-names` is written so it can only be text, and capped. The step summary is not this
+report's: `lint`, `check` and `verify` write it with `--summary`.
 """
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 from speccheck import ci, evidence, jsonout
 from speccheck.actions import _common
 from speccheck.claims import MAX_HOW
 from speccheck.context import Context
-from speccheck.evidence import Evaluation, Status
-from speccheck.markdown import code, escape, safe_url
-from speccheck.specs import plain
+from speccheck.evidence import Evaluation, Evidence, Status
+from speccheck.markdown import anchor, code, prose, safe_url, source_url
+from speccheck.specs import UNTESTED, plain
 
 NAME = "report"
 """The command name."""
@@ -39,8 +42,8 @@ SECTION = "ci"
 ORDER = 10
 """Its place in the section."""
 
-MAX_EVIDENCE = 20
-"""The most results listed for one requirement; the rest are counted."""
+MAX_EVIDENCE = 50
+"""The most results listed for one claim; the rest are counted."""
 ICONS = {
     evidence.PASSED: "✅",
     evidence.FAILED: "❌",
@@ -52,41 +55,35 @@ ICONS = {
     evidence.RETIRED: "—",
 }
 """One mark per status, beside its name."""
+OUTCOMES = ("failed", "error", "xpassed", "xfailed", "skipped", "deselected", "collected", "passed")
+"""Outcomes worst first, the order of a claim's result lines."""
+OUTCOME_ICONS = {"passed": "✅", "collected": "☑"}
+"""A mark per outcome; any other outcome is a failure, ❌."""
+
+
+@dataclass(frozen=True)
+class Links:
+    """Where links may point: this run's repository, and its files at this run's commit."""
+
+    repository: str = ""
+    """`<server>/<owner>/<repo>`, for job and run links; "" outside CI."""
+    files: str = ""
+    """`<server>/<owner>/<repo>/blob/<sha>`, for spec and test lines; "" outside CI."""
+    root: Path | None = None
+    """The repository's root folder, to give spec files' paths from it."""
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """The results files, the scope, and where to write."""
+    """The results files, the scope, the job names, and where to write."""
     _common.add_inputs(parser)
     _common.add_scope(parser)
+    _common.add_job_names(parser)
     parser.add_argument("--output", metavar="FILE", help="Write the full report here (default: stdout)")
 
 
-def _evidence_cell(status: Status, base: str) -> str:
-    """Every result for one requirement: test, outcome, producer and leg, and a link to the job."""
-    items = []
-    for item in status.evidence[:MAX_EVIDENCE]:
-        data = _common.evidence_json(item)
-        label = "job" if data["kind"] == "ci" else "test"
-        where = " ".join(part for part in (data["producer"], data["leg"]) if part)
-        text = f"{label} {code(data['test'], 150, in_table=True)} {escape(data['outcome'])} in {escape(where)}"
-        url = safe_url(data["url"], base)
-        items.append(f"{text} ([job]({url}))" if url else text)
-    if len(status.evidence) > MAX_EVIDENCE:
-        items.append(f"and {len(status.evidence) - MAX_EVIDENCE} more")
-    if not items and status.waiting_on:
-        items.append("waiting on " + ", ".join(escape(name) for name in status.waiting_on))
-    return "<br>".join(items) or "—"
-
-
-def _row(status: Status, base: str) -> str:
-    """One requirement's table row."""
-    requirement = status.requirement
-    mark = ICONS[status.status]
-    return f"| {requirement.id} | {mark} {status.status} | {escape(requirement.text, 120)} | {_evidence_cell(status, base)} |"
-
-
-TABLE_HEAD = "| ID | Status | Requirement | Evidence |\n|---|---|---|---|"
-"""The header of every requirement table."""
+def _heading(status: Status) -> str:
+    """A requirement's section heading: `SPC-REQ-001-01 ✅ passed`."""
+    return f"{status.requirement.id} {ICONS[status.status]} {status.status}"
 
 
 def _order(status: Status) -> tuple[int, int]:
@@ -94,74 +91,152 @@ def _order(status: Status) -> tuple[int, int]:
     return (evidence.STATUSES.index(status.status), status.requirement.line)
 
 
-def _hows(statuses: list[Status]) -> list[str]:
-    """Below a spec's table, each claim with how it proves its requirement, each claimant once per ID."""
+def _counts(statuses: list[Status]) -> str:
+    """ "❌ 1 failed, ✅ 8 passed": each status the list has, worst first."""
+    found = {s: sum(x.status == s for x in statuses) for s in evidence.STATUSES}
+    return ", ".join(f"{ICONS[s]} {n} {s}" for s, n in found.items() if n)
+
+
+def _spec_heading(number: str, title: str) -> str:
+    """A spec's section heading: `001 Spec format`."""
+    return f"{number} {title}".rstrip()
+
+
+def _specs_table(by_spec: dict[str, list[Status]]) -> list[str]:
+    """The table of specs: a link to each, its number of requirements, and its counts."""
+    lines = ["## Specs", "", "| Spec | Requirements | Status |", "|---|--:|---|"]
+    for number, statuses in by_spec.items():
+        heading = _spec_heading(number, statuses[0].requirement.spec.title)
+        lines.append(f"| [{prose(heading)}](#{anchor(heading)}) | {len(statuses)} | {_counts(statuses)} |")
+    return [*lines, ""]
+
+
+def _result_line(item: Evidence, links: Links) -> str:
+    """One result: its outcome and the job that produced it, linked."""
+    data = _common.evidence_json(item)
+    url = safe_url(data["url"], links.repository)
+    name = prose(item.where)
+    mark = OUTCOME_ICONS.get(data["outcome"], "❌")
+    return f"- {mark} {prose(data['outcome'])} in {f'[{name}]({url})' if url else name}"
+
+
+def _claimant_heading(item: Evidence, links: Links) -> str:
+    """A claim's heading: the test's name linking to its line, and its file; or the CI job's name."""
+    result = item.result
+    if result.kind == "ci":
+        return f"#### Job {code(result.test, in_table=False)}"
+    name = result.test.split("::", 1)[1] if "::" in result.test else result.test
+    root = item.source.root
+    # `file` is relative to pytest's root; `root` says where that is in the repository (None: unknown)
+    path = result.file if root in (None, ".") or not result.file else f"{root}/{result.file}"
+    url = source_url(links.files, path, result.line) if root is not None else ""
+    shown = f"[{code(name, 150, in_table=False)}]({url})" if url else code(name, 150, in_table=False)
+    return f"#### Test {shown}" + (f" in {code(path, 150, in_table=False)}" if path else "")
+
+
+def _claims(status: Status, links: Links) -> list[str]:
+    """One subsection per claiming test or job: its heading, how it proves the requirement, its results."""
+    by_claimant: dict[tuple[str, str, str], list[Evidence]] = {}
+    for item in status.evidence:
+        by_claimant.setdefault((item.result.kind, item.result.test, item.how), []).append(item)
     lines: list[str] = []
+    for (_, _, how), items in by_claimant.items():
+        lines += [_claimant_heading(items[0], links), ""]
+        if how:
+            lines += [f"**How:** {prose(how, MAX_HOW)}", ""]
+        ordered = sorted(items, key=lambda i: (OUTCOMES.index(i.result.outcome), i.where))
+        lines += [_result_line(item, links) for item in ordered[:MAX_EVIDENCE]]
+        if len(ordered) > MAX_EVIDENCE:
+            lines.append(f"- and {len(ordered) - MAX_EVIDENCE} more")
+        lines.append("")
+    return lines
+
+
+def _requirement(status: Status, links: Links) -> list[str]:
+    """One requirement's section: heading, full text, its spec line, then its claims or what it lacks."""
+    requirement = status.requirement
+    lines = [f"### {_heading(status)}", "", f"> {prose(requirement.text, 2000)}", ""]
+    path = ci.from_root(requirement.spec.path, links.root)
+    url = source_url(links.files, path, requirement.line)
+    if url:
+        lines += [f"In [{code(f'{path}:{requirement.line}', in_table=False)}]({url})", ""]
+    if status.evidence:
+        lines += _claims(status, links)
+    elif status.waiting_on:
+        lines += [f"Waiting on: {', '.join(prose(name) for name in status.waiting_on)}", ""]
+    elif status.status == evidence.UNCLAIMED:
+        marker = f'@pytest.mark.covers("{requirement.id}", "<how it proves it>")'
+        lines += [f"Not claimed: add `{marker}` to a test that proves it, or mark it `{UNTESTED}`.", ""]
+    return lines
+
+
+def _spec(number: str, statuses: list[Status], links: Links) -> list[str]:
+    """One spec's section: its title, Purpose and status table, then a section per requirement."""
+    spec = statuses[0].requirement.spec
+    lines = [f"## {prose(_spec_heading(number, spec.title))}", ""]
+    if spec.purpose:
+        lines += [prose(spec.purpose, 2000, line_start=True), ""]
+    lines += ["| Requirement | Status |", "|---|---|"]
+    for status in sorted(statuses, key=_order):
+        heading = _heading(status)
+        lines.append(f"| [{status.requirement.id}](#{anchor(heading)}) | {ICONS[status.status]} {status.status} |")
+    lines.append("")
     for status in statuses:
-        seen: set[tuple[str, str]] = set()
-        for item in status.evidence:
-            key = (item.result.test, item.how)
-            if key in seen or not item.how:
-                continue
-            seen.add(key)
-            label = "job" if item.result.kind == "ci" else "test"
-            lines.append(
-                f"- **{status.requirement.id}**, {label} {code(item.result.test, 150, in_table=False)}: "
-                f"{escape(item.how, MAX_HOW)}"
-            )
-    return ["How each claim proves its requirement:", "", *lines, ""] if lines else []
+        lines += _requirement(status, links)
+    return lines
 
 
 def _inputs(evaluation: Evaluation, base: str) -> list[str]:
     """The lines saying what the report was built from: commits, runs and producers."""
     commits = sorted({(f.ci or {}).get("sha") or "" for f in evaluation.files} - {""})
     runs = sorted({safe_url((f.ci or {}).get("run_url"), base) for f in evaluation.files} - {""})
-    run_links = [f"[{escape(run.rsplit('/runs/', 1)[1])}]({run})" for run in runs]
+    run_links = [f"[{prose(run.rsplit('/runs/', 1)[1])}]({run})" for run in runs]
     lines = [
-        f"- Commit: {', '.join(escape(c[:12]) for c in commits) or 'unknown (not run in CI)'}",
+        f"- Commit: {', '.join(prose(c[:12]) for c in commits) or 'unknown (not run in CI)'}",
         f"- Runs: {', '.join(run_links) or 'none'}",
-        f"- Producers reported: {', '.join(escape(p) for p in evaluation.reported) or 'none'}",
+        f"- Producers reported: {', '.join(prose(p) for p in evaluation.reported) or 'none'}",
     ]
     if evaluation.missing:
-        lines.append(f"- Producers missing: {', '.join(escape(p) for p in evaluation.missing)}")
+        lines.append(f"- Producers missing: {', '.join(prose(p) for p in evaluation.missing)}")
     return lines
 
 
-def _problems(evaluation: Evaluation) -> list[str]:
-    """The problems as a markdown list."""
-    return [f"- {code(str(p), 300, in_table=False)}" for p in evaluation.problems]
-
-
-def full(title: str, evaluation: Evaluation, base: str = "") -> str:
-    """The whole report: summary, problems, one table per spec with its claims' explanations, and the inputs."""
+def full(title: str, evaluation: Evaluation, links: Links | None = None) -> str:
+    """The whole report: counts, problems, the specs table, a section per spec, and the inputs."""
+    links = links or Links()
     counts = evaluation.counts()
-    lines = [f"# {escape(title)}", "", evidence.summary_line(counts), ""]
+    lines = [f"# {prose(title)}", "", evidence.summary_line(counts), ""]
     lines += [" · ".join(f"{ICONS[s]} {s}: {n}" for s, n in counts.items() if n), ""]
     if evaluation.problems:
-        lines += [f"## Problems ({len(evaluation.problems)})", "", *_problems(evaluation), ""]
-    by_spec: dict[str, list[Status]] = {}
-    titles: dict[str, str] = {}
-    for status in evaluation.statuses:
-        spec = status.requirement.spec
-        by_spec.setdefault(spec.number, []).append(status)
-        titles[spec.number] = spec.title
-    for number, statuses in by_spec.items():
-        ordered = sorted(statuses, key=_order)
-        lines += [f"## {number} {escape(titles[number])}", "", TABLE_HEAD]
-        lines += [_row(status, base) for status in ordered]
+        lines += [f"## Problems ({len(evaluation.problems)})", ""]
+        lines += [f"- {code(str(p), 300, in_table=False)}" for p in evaluation.problems]
         lines.append("")
-        lines += _hows(ordered)
-    lines += ["## Inputs", "", *_inputs(evaluation, base), ""]
+    by_spec: dict[str, list[Status]] = {}
+    for status in evaluation.statuses:
+        by_spec.setdefault(status.requirement.spec.number, []).append(status)
+    lines += _specs_table(by_spec)
+    for number, statuses in by_spec.items():
+        lines += _spec(number, statuses, links)
+    lines += ["## Inputs", "", *_inputs(evaluation, links.repository), ""]
     return "\n".join(lines)
+
+
+def links_for(ctx: Context) -> Links:
+    """The links this run allows: none outside CI."""
+    return Links(
+        repository=ci.repository_url(ctx.env),
+        files=ci.commit_url(ctx.env),
+        root=ci.repository_root(ctx.cwd, ctx.env),
+    )
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
     """Write the report; exit 0 unless the usage or config is bad."""
     evaluation = _common.evaluate(ctx, args, runtime=True)
     title = ctx.config().title
-    base = ci.repository_url(ctx.env)
+    links = links_for(ctx)
     if args.output:
-        _write(ctx, args.output, full(title, evaluation, base))
+        _write(ctx, args.output, full(title, evaluation, links))
     if ctx.output.json_mode:
         body = jsonout.envelope(
             NAME,
@@ -169,13 +244,13 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             evaluation.problems,
             title=title,
             counts=evaluation.counts(),
-            requirements=_common.statuses_json(evaluation),
+            requirements=_common.statuses_json(evaluation, links.root),
             producers={"reported": evaluation.reported, "missing": evaluation.missing},
         )
         jsonout.emit(body, ctx.output.out)
     elif not args.output:
         # Unlike the file, stdout may be a CI log, where code spans keep a test name as written
-        ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation, base).splitlines()))
+        ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation, links).splitlines()))
     else:
         ctx.output.summary(NAME, evidence.summary_line(evaluation.counts()), 0)
     return jsonout.EXIT_OK
