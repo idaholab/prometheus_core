@@ -14,12 +14,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from speccheck import actions
 
 
-@pytest.mark.covers("SPC-REQ-008-01")
 def test_discover_finds_every_command_in_order():
     """Every module with a NAME, in section then ORDER order, each with the full interface; helpers are skipped."""
     modules = actions.discover()

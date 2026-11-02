@@ -1,9 +1,11 @@
 name: speccheck
 
 # The spec checker (common/speccheck) and its two composite actions, checked by speccheck itself.
-# `unit` runs the tests on every supported Python and uploads their results; `speccheck-self-check`
-# runs both composite actions and `record` for real; the final `speccheck` job verifies speccheck's
-# own specs (common/speccheck/specs) from this run's results and publishes the report. Runs
+# On every supported Python, `unit` runs tests/unit under coverage (combined and held at 100% by
+# `coverage`), and `requirements` runs tests/requirements and uploads their results.
+# `speccheck-self-check` runs both composite actions and `record` for real. The final `speccheck`
+# job verifies speccheck's own specs (common/speccheck/specs) from this run's results and
+# publishes the report. Runs
 # only when those paths change, and is not a required check. See common/speccheck/plan/
 
 on:
@@ -33,6 +35,8 @@ concurrency:
 
 jobs:
   unit:
+    # tests/unit: one module at a time, under coverage. These tests claim nothing; the coverage
+    # job combines every leg and enforces 100%
     name: "speccheck: unit python ${{ matrix.python }}"
     runs-on: ubuntu-26.04
     strategy:
@@ -42,10 +46,6 @@ jobs:
     defaults:
       run:
         working-directory: common/speccheck
-    env:
-      SPECCHECK_PRODUCER: speccheck-unit
-      SPECCHECK_LEG: ${{ matrix.python }}
-      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,21 +65,13 @@ jobs:
         run: |
           uv run --locked --no-sync ruff check --output-format=github .
           uv run --locked --no-sync ruff format --check --diff .
-      - name: Test
+      - name: Unit tests
         # coverage starts before pytest loads speccheck's own plugin, so its import-time lines
-        # count. Each leg writes its own data; the coverage job combines them and enforces 100%,
-        # so a line only one Python version runs (the tomli import) still counts
+        # count. Each leg writes its own data; the coverage job combines them, so a line only one
+        # Python version runs (the tomli import) still counts
         env:
           COVERAGE_FILE: .coverage.${{ matrix.python }}
-        run: >-
-          uv run --locked --no-sync python -I -m coverage run -m pytest --color=yes
-          --speccheck-results=.speccheck/unit-${{ matrix.python }}.jsonl
-      - name: Upload speccheck results
-        if: ${{ !cancelled() }}
-        uses: ./.github/actions/speccheck-upload
-        with:
-          name: unit-${{ matrix.python }}
-          path: common/speccheck/.speccheck
+        run: uv run --locked --no-sync python -I -m coverage run -m pytest --color=yes tests/unit
       - name: Upload coverage data
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -88,6 +80,46 @@ jobs:
           path: common/speccheck/.coverage.*
           include-hidden-files: true
           if-no-files-found: error
+
+  requirements:
+    # tests/requirements: speccheck's own specs, proven through what a user sees. Not run under
+    # coverage. The results file each leg writes is this producer's evidence
+    name: "speccheck: requirements python ${{ matrix.python }}"
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    defaults:
+      run:
+        working-directory: common/speccheck
+    env:
+      SPECCHECK_PRODUCER: speccheck-requirements
+      SPECCHECK_LEG: ${{ matrix.python }}
+      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Requirements tests
+        run: >-
+          uv run --locked --no-sync pytest --color=yes tests/requirements
+          --speccheck-results=.speccheck/requirements-${{ matrix.python }}.jsonl
+      - name: Upload speccheck results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: requirements-${{ matrix.python }}
+          path: common/speccheck/.speccheck
 
   coverage:
     name: "speccheck: coverage"
@@ -128,7 +160,7 @@ jobs:
     # requirements in [ci.speccheck-self-check] (common/speccheck/speccheck.toml), and records
     # them only when every step before the record step passed
     name: "speccheck: self-check"
-    needs: unit
+    needs: requirements
     runs-on: ubuntu-26.04
     env:
       SPECCHECK_JOB_ID: ${{ job.check_run_id }}
@@ -137,8 +169,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: speccheck-verify on the unit results
-        # The unit legs' results alone are complete for the speccheck-unit producer; the
+      - name: speccheck-verify on the requirements results
+        # The requirements legs' results alone are complete for speccheck-requirements; the
         # self-check job itself hasn't reported yet, so this is a partial check
         uses: ./.github/actions/speccheck-verify
         with:
@@ -174,7 +206,7 @@ jobs:
     # The final job, the same as every workflow that proves requirements will have. It runs even
     # when a job above failed, so the report shows what was proven, and fails if anything isn't
     name: "speccheck: verify specs"
-    needs: [unit, speccheck-self-check]
+    needs: [requirements, speccheck-self-check]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-26.04
     steps:

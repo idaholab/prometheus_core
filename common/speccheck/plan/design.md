@@ -357,13 +357,14 @@ step 1 alongside the code:
 | 007 CI jobs | `record`, the two composite actions |
 | 008 The command line | actions, global options, exit codes, `--json` envelope |
 
-speccheck's tests claim them with the marker, and `speccheck.yml` ends with the same
-`speccheck-verify` job as every other workflow. A requirement such as "a skipped test is not
+speccheck's requirements tests (`tests/requirements/`, one file per spec) claim them with the
+marker, and `speccheck.yml` ends with the same `speccheck-verify` job as every other workflow. Its
+unit tests (`tests/unit/`) claim nothing and are the only tests measured for coverage. A requirement such as "a skipped test is not
 evidence" is proven by a test that runs the plugin through `pytester` on a skipped inner test,
 while the outer run records that test as passed.
 
 **Coverage with its own plugin:** pytest loads entry-point plugins before pytest-cov starts, so the
-plugin's import-time lines would be missed. speccheck's tests run under `coverage run -m pytest`,
+plugin's import-time lines would be missed. speccheck's unit tests run under `coverage run -m pytest`,
 which starts first.
 
 ## Packaging

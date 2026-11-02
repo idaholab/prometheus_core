@@ -114,7 +114,7 @@ def _where(result: Result) -> tuple[str, int]:
 
 
 def _describe(evidence: Evidence) -> str:
-    """ "tests/test_x.py::test_y skipped in speccheck-unit 3.12"."""
+    """ "tests/test_x.py::test_y skipped in speccheck-requirements 3.12"."""
     leg = (evidence.source.ci or {}).get("leg") or ""
     where = f"{evidence.source.producer} {leg}".strip()
     return f"{evidence.result.test} {evidence.result.outcome} in {where}"
@@ -205,11 +205,16 @@ def _decide(
             return Status(requirement, PLANNED)
         if requirement.untested:
             return Status(requirement, UNTESTED_STATUS)
-        # A test run that didn't report could still claim it: say so instead of calling it unclaimed.
-        waiting = sorted(
-            p.name
-            for p in config.producers.values()
-            if not p.ci_job and p.name not in reported and p.may_claim(requirement.spec.number)
+        # In verify, a test run that didn't report could still claim it, so say so instead of calling it
+        # unclaimed. check reads a collect-only run, which sees every claim: there, unclaimed is unclaimed.
+        waiting = (
+            []
+            if not runtime
+            else sorted(
+                p.name
+                for p in config.producers.values()
+                if not p.ci_job and p.name not in reported and p.may_claim(requirement.spec.number)
+            )
         )
         return Status(requirement, NOT_RUN if waiting else UNCLAIMED, waiting_on=waiting)
     if not runtime:

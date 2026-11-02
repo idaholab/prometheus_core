@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from speccheck import specs
 from tests.conftest import INDEX, Repo, spec
 
@@ -41,7 +39,6 @@ def requirements(repo: Repo, prefix: str = "T") -> list[specs.Requirement]:
     return list(specs.load(repo.root / "specs", repo.root, prefix).requirements.values())
 
 
-@pytest.mark.covers("SPC-REQ-001-01", "SPC-REQ-001-02")
 class TestFilesAndIndex:
     """File names, titles and the index."""
 
@@ -100,7 +97,6 @@ class TestFilesAndIndex:
         assert problems(repo, require_index=False) == []
 
 
-@pytest.mark.covers("SPC-REQ-001-03")
 class TestHeader:
     """The `status:` line."""
 
@@ -135,7 +131,6 @@ class TestHeader:
         assert_problems(repo)
 
 
-@pytest.mark.covers("SPC-REQ-001-04")
 class TestBullets:
     """The shape of a requirement bullet."""
 
@@ -175,14 +170,12 @@ class TestBullets:
         assert [r.id for r in requirements(repo)] == ["T-BEH-001-01"]
 
 
-@pytest.mark.covers("SPC-REQ-001-05")
 def test_duplicate_ids_fail(repo: Repo):
     """IDs are unique across the whole folder."""
     repo.spec("- T-REQ-001-01: One.\n- T-REQ-001-01: Again.")
     assert_problems(repo, "T-REQ-001-01 is also at specs/001-thing.md:7")
 
 
-@pytest.mark.covers("SPC-REQ-001-06")
 class TestMarkers:
     """Continuation lines and the untested and planned markers."""
 
@@ -216,7 +209,6 @@ class TestMarkers:
         assert not requirements(repo)[0].planned
 
 
-@pytest.mark.covers("SPC-REQ-001-07")
 class TestRetired:
     """Retired requirements."""
 
@@ -233,7 +225,6 @@ class TestRetired:
         assert requirements(repo)[0].retired
 
 
-@pytest.mark.covers("SPC-REQ-001-08")
 def test_a_fenced_example_is_not_a_requirement(repo: Repo):
     """A code block can show the format, a header line or a bullet, and none of it counts."""
     body = (
@@ -245,7 +236,6 @@ def test_a_fenced_example_is_not_a_requirement(repo: Repo):
     assert [r.id for r in requirements(repo)] == ["T-REQ-001-01"]
 
 
-@pytest.mark.covers("SPC-REQ-001-09")
 def test_the_old_checkers_lines_are_reported(repo: Repo):
     """`tests:` and `id-prefix:` moved into the config, and the messages say so."""
     repo.write("specs/000-index.md", "# Index\n\nid-prefix: T\n\n- [001](001-thing.md)\n")
@@ -257,7 +247,6 @@ def test_the_old_checkers_lines_are_reported(repo: Repo):
     )
 
 
-@pytest.mark.covers("SPC-REQ-001-10")
 class TestProblems:
     """The problem format, and control characters."""
 

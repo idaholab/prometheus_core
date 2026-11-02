@@ -19,7 +19,6 @@ import pytest
 from tests.conftest import Repo
 
 
-@pytest.mark.covers("SPC-REQ-005-08")
 def test_check_on_a_collect_only_run(repo: Repo, pytester: pytest.Pytester):
     """The local workflow from the README: collect, then check."""
     repo.root = pytester.path
@@ -37,7 +36,6 @@ def test_check_on_a_collect_only_run(repo: Repo, pytester: pytest.Pytester):
     ]
 
 
-@pytest.mark.covers("SPC-REQ-008-03")
 def test_check_with_no_problems_exits_0(repo: Repo):
     """Exit code 0, with a summary line."""
     repo.spec("- T-REQ-001-01: One. ⚠ untested")

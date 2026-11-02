@@ -24,12 +24,14 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 """common/speccheck."""
 PACKAGE = ROOT / "speccheck"
 """The package."""
 TESTS = ROOT / "tests"
 """The tests."""
+UNIT = TESTS / "unit"
+"""The unit tests, which mirror the package."""
 SOURCES = [*sorted(PACKAGE.rglob("*.py")), *sorted(TESTS.rglob("*.py")), ROOT / "run.py"]
 """Every Python file the rules cover."""
 EXEMPT_NAMES = {"__all__", "__slots__", "pytestmark"}
@@ -111,7 +113,7 @@ def expected_test_for(source: Path) -> Path:
     """The test file that mirrors a module: `actions/check.py` -> `tests/actions/test_check.py`."""
     relative = source.relative_to(PACKAGE)
     name = {"__init__": "init", "__main__": "main"}.get(relative.stem, relative.stem.lstrip("_"))
-    return TESTS / relative.parent / f"test_{name}.py"
+    return UNIT / relative.parent / f"test_{name}.py"
 
 
 def defines_code(source: Path) -> bool:
@@ -129,7 +131,7 @@ def test_tests_mirror_the_code():
     assert missing == [], "missing test files: " + ", ".join(missing)
     sources = {expected_test_for(p) for p in PACKAGE.rglob("*.py")}
     orphans = [
-        str(t.relative_to(ROOT)) for t in TESTS.rglob("test_*.py") if t not in sources and t.name not in CROSS_CUTTING
+        str(t.relative_to(ROOT)) for t in UNIT.rglob("test_*.py") if t not in sources and t.name not in CROSS_CUTTING
     ]
     assert orphans == [], "test files with no module: " + ", ".join(orphans)
 
@@ -149,6 +151,15 @@ def test_no_pragma_no_cover():
         if "pragma: no cover" in line
     ]
     assert offenders == []
+
+
+def test_requirements_tests_mirror_the_specs():
+    """One requirements test file per spec, named after it: specs/004-results-files.md -> test_004_results_files.py."""
+    specs = {
+        p.stem.replace("-", "_") for p in (ROOT / "specs").glob("[0-9][0-9][0-9]-*.md") if not p.name.startswith("000")
+    }
+    tests = {p.stem[len("test_") :] for p in (TESTS / "requirements").glob("test_*.py")}
+    assert tests == specs
 
 
 def test_only_the_cli_exits_and_only_two_modules_write():

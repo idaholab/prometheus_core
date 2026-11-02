@@ -29,7 +29,6 @@ def load_text(repo: Repo, text: str, name: str = "speccheck.toml") -> config.Con
     return config.load(repo.write(name, text))
 
 
-@pytest.mark.covers("SPC-REQ-002-01")
 class TestFind:
     """Which file is the config."""
 
@@ -68,7 +67,6 @@ class TestFind:
             load_text(repo, "[tool.other]\n", "pyproject.toml")
 
 
-@pytest.mark.covers("SPC-REQ-002-02")
 class TestPaths:
     """The spec folder."""
 
@@ -86,7 +84,6 @@ class TestPaths:
             load_text(repo, "specs = 3\n")
 
 
-@pytest.mark.covers("SPC-REQ-002-03")
 class TestUnknownKeys:
     """Every table rejects keys it doesn't know."""
 
@@ -130,7 +127,6 @@ class TestUnknownKeys:
         )
 
 
-@pytest.mark.covers("SPC-REQ-002-04")
 @pytest.mark.parametrize("bad", ["spc", "S-PC", "1SPC", 3])
 def test_a_malformed_prefix_fails(repo: Repo, bad):
     """Capital letters and digits, starting with a letter."""
@@ -139,7 +135,6 @@ def test_a_malformed_prefix_fails(repo: Repo, bad):
         load_text(repo, f'specs = "specs"\nid-prefix = {value}\n')
 
 
-@pytest.mark.covers("SPC-REQ-002-05")
 class TestProducers:
     """Which specs a producer may claim."""
 
@@ -161,7 +156,6 @@ class TestProducers:
             load_text(repo, 'specs = "specs"\n[producers.unit]\nspecs = ["1"]\n')
 
 
-@pytest.mark.covers("SPC-REQ-002-06")
 class TestCiJobs:
     """`[ci.<job>]` entries."""
 
@@ -184,7 +178,6 @@ class TestCiJobs:
             load_text(repo, 'specs = "specs"\n[producers.x]\n[ci.x]\ncovers = ["T-REQ-001-01"]\n')
 
 
-@pytest.mark.covers("SPC-REQ-002-07")
 class TestToml:
     """TOML on every Python."""
 

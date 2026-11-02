@@ -14,12 +14,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from tests.conftest import Repo
 
 
-@pytest.mark.covers("SPC-REQ-008-03", "SPC-REQ-008-05")
 def test_lint_text(repo: Repo):
     """0 and one line when clean; 1 and the problems on stderr otherwise."""
     repo.spec("- T-REQ-001-01: One.")
@@ -30,7 +27,6 @@ def test_lint_text(repo: Repo):
     assert run.err.splitlines()[-1] == "speccheck lint: 1 specs, 0 requirements; 1 problem"
 
 
-@pytest.mark.covers("SPC-REQ-008-04", "SPC-REQ-001-10")
 def test_lint_json(repo: Repo):
     """The specs and the problems, with control characters escaped by JSON."""
     repo.spec("- T-REQ-001-01: One.", status="implemented", title="Thing\x1b")

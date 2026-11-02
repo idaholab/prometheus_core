@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
-
 from speccheck.output import Output
 from speccheck.specs import Problem
 
@@ -27,7 +25,6 @@ def make(**kwargs) -> Output:
     return Output(out=io.StringIO(), err=io.StringIO(), **kwargs)
 
 
-@pytest.mark.covers("SPC-REQ-008-05", "SPC-REQ-001-10")
 def test_streams_and_modes():
     """Problems and a failing summary on stderr; info and a clean summary on stdout; control characters escaped."""
     output = make()
@@ -41,7 +38,6 @@ def test_streams_and_modes():
     assert output.err.getvalue() == "a\\n::error:::1: m\nspeccheck lint: 1 spec; 2 problems\nspeccheck: error: bad\n"
 
 
-@pytest.mark.covers("SPC-REQ-008-02")
 def test_quiet_verbose_and_json():
     """`--quiet` keeps problems; `--verbose` adds details; `--json` prints nothing but the object."""
     quiet = make(quiet=True)

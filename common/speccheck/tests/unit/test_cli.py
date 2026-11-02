@@ -24,11 +24,10 @@ import pytest
 from speccheck import __version__, cli
 from tests.conftest import Repo
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 """common/speccheck."""
 
 
-@pytest.mark.covers("SPC-REQ-008-01")
 def test_help_lists_commands_by_section(repo: Repo):
     """Both sections, every command, and a command's own help."""
     run = repo.run("--help")
@@ -38,7 +37,6 @@ def test_help_lists_commands_by_section(repo: Repo):
     assert "--complete" in repo.run("verify", "--help").out
 
 
-@pytest.mark.covers("SPC-REQ-008-02")
 class TestGlobalOptions:
     """Before or after the command."""
 
@@ -62,7 +60,6 @@ class TestGlobalOptions:
         assert repo.run("--version", "--json").json()["version"] == __version__
 
 
-@pytest.mark.covers("SPC-REQ-008-03")
 class TestExitCodes:
     """2 on a usage or config error."""
 
@@ -83,7 +80,6 @@ class TestExitCodes:
         assert run.code == 2 and "pass --config PATH" in run.err
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
 def test_errors_are_json_too(repo: Repo):
     """A usage error and a config error, each one object on stdout."""
     body = repo.run("nope", "--json").json()
@@ -94,7 +90,6 @@ def test_errors_are_json_too(repo: Repo):
     assert run.code == 2 and run.json()["command"] == "verify" and "pass --config" in run.json()["error"]["message"]
 
 
-@pytest.mark.covers("SPC-REQ-008-06")
 def test_run_py_works_from_a_checkout(repo: Repo):
     """`python3 -I run.py` needs nothing installed (here: the same interpreter, isolated mode)."""
     if sys.version_info < (3, 11):
@@ -106,7 +101,6 @@ def test_run_py_works_from_a_checkout(repo: Repo):
     assert (done.returncode, done.stdout) == (0, "speccheck lint: 1 specs, 0 requirements\n"), done.stderr
 
 
-@pytest.mark.covers("SPC-REQ-008-06")
 def test_python_m_speccheck(repo: Repo):
     """`python -m speccheck --version`."""
     done = subprocess.run(

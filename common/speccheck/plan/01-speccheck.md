@@ -76,17 +76,33 @@ What differs from the plan above, or settles something it left open:
   report artifact is never read as results. Retention is 30 days for results and 90 for the report.
 - **A `claimed` status** for `check`, which sees claims but not outcomes. `report` and `--json`
   show it.
-- **`not run` covers unreported test producers too:** a requirement nobody claims, while a test
-  producer that may claim it hasn't reported, is `not run` (waiting on that producer), not
-  `unclaimed`. Otherwise a partial check would fail on requirements whose producer simply didn't
-  run.
-- **The self-check job** (`speccheck-self-check`) runs `speccheck-verify` on the unit legs'
+- **`not run` covers unreported test producers too** (in `verify`): a requirement nobody claims,
+  while a test producer that may claim it hasn't reported, is `not run` (waiting on that producer),
+  not `unclaimed`. Otherwise a partial check would fail on requirements whose producer simply
+  didn't run.
+- **The self-check job** (`speccheck-self-check`) runs `speccheck-verify` on the requirements legs'
   results, checks that the report and summary were written, and checks that `speccheck-upload`
   refuses an empty folder. Then it records SPC-REQ-007-03 to 007-05 and uploads with
   `speccheck-upload`. The final job's `verify --complete` therefore fails if either action or
   `record` breaks.
+- **Two test suites** (decided 2026-11-01, after the first version):
+  - `tests/unit/` mirrors the package and claims nothing. It is the only suite run under coverage,
+    and it alone reaches 100% line and branch coverage (combined across 3.10 to 3.14).
+  - `tests/requirements/` has one file per spec. It proves each SPC requirement through what a
+    user sees: the CLI, real inner pytest runs and the files they write. Every test there claims
+    what it proves, and none of it counts toward coverage.
+  - A collection rule in `tests/conftest.py` fails on a mark in the unit suite, or a missing one in
+    the requirements suite. `test_rules.py` checks that the requirements files mirror the specs.
+  - The producer is `speccheck-requirements`, uploaded by the `requirements` job. The `unit` job
+    uploads only coverage data.
+  - Why: a requirement claimed from a helper's unit test proves the helper, not the promise, and
+    coverage from end-to-end tests hides untested units.
 - **Coverage** is traced into subprocesses (`patch = ["subprocess"]`), so pytester subprocess runs
-  and xdist workers count. Each leg's data is combined in a `coverage` job, as in platformctl.
+  and xdist workers in the unit suite count. Each leg's data is combined in a `coverage` job, as in
+  platformctl.
+- **`check` and unreported producers:** a requirement nothing claims is `unclaimed` in `check`,
+  even when a producer is missing from its inputs. A collect-only run sees every claim. Only
+  `verify` calls it `not run` while a producer that may claim it hasn't reported.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
