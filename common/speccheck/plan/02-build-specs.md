@@ -7,6 +7,15 @@
 Bring back the build and run specs from #355 and #361 (both closed 2026-11-01), and check
 platformctl against them with speccheck, from real test runs.
 
+## Before it starts
+
+- **What gates a merge on speccheck itself.** From this step on, platformctl installs speccheck
+  from the checkout, but `speccheck.yml` isn't a required check, so a PR can break speccheck's own
+  tests and still merge. Only its lint is required (`common/speccheck` is in `test.yml`'s `ruff`
+  matrix). Making the final job required needs the path-filter change and the promotion criterion
+  in `design.md`, "Open questions", which come after step 3. Until then, a reviewer of a PR that
+  touches `common/speccheck/` checks that `speccheck.yml` passed.
+
 ## Work
 
 - **Recover the content** from the `speccheck` and `specs-step1` branches on the fork:
