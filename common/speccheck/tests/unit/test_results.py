@@ -64,13 +64,27 @@ class TestFormat:
         path = tmp_path / "out" / "r.jsonl"
         results.write(path, sample())
         lines = path.read_text().splitlines()
-        assert json.loads(lines[0])["schema"] == "speccheck-results-1".replace("-1", "/1")
+        assert json.loads(lines[0])["schema"] == results.SCHEMA
         assert len(lines) == 3
         parsed, problems = results.read(path)
         assert problems == []
         assert parsed.producer == "unit" and parsed.ci == {"run_id": 1, "leg": "3.12"}
         assert [r.to_json() for r in parsed.results] == [r.to_json() for r in sample().results]
         assert parsed.source == path.as_posix()
+
+    def test_defaults_are_left_out(self):
+        """A result line carries `file`, `line` and `kind` only when they aren't the defaults."""
+        assert results.Result("t", ["X"], "passed").to_json() == {"test": "t", "covers": ["X"], "outcome": "passed"}
+        full = results.Result("t", ["X"], "passed", file="f.py", line=2, kind="ci").to_json()
+        assert (full["file"], full["line"], full["kind"]) == ("f.py", 2, "ci")
+
+    def test_dumps(self):
+        """One sorted-key JSON object per line, header first, non-ASCII kept as is."""
+        text = results.dumps(results.ResultsFile(producer="é", results=[results.Result("t", ["X"], "passed")]))
+        assert text.splitlines() == [
+            '{"ci": null, "producer": "é", "runner": "", "schema": "speccheck-results/1", "started": ""}',
+            '{"covers": ["X"], "outcome": "passed", "test": "t"}',
+        ]
 
     def test_the_schema_ships_and_describes_the_format(self):
         """Runners in other languages validate against it."""
@@ -130,6 +144,14 @@ class TestValidation:
         assert parse_lines(header(ci=None))[1] == []
         assert parse_lines(header(ci={"job": "unit", "job_id": None, "run_id": 3}))[1] == []
 
+    def test_read_names_the_source(self, tmp_path: Path):
+        """Problems and the parsed file carry `source` when given, else the path."""
+        path = tmp_path / "r.jsonl"
+        path.write_text(header() + "\n")
+        assert results.read(path, "shown.jsonl")[0].source == "shown.jsonl"
+        path.write_text("")
+        assert results.read(path)[1][0].path == path.as_posix()
+
 
 class TestLimits:
     """Size limits and symlinks."""
@@ -164,6 +186,7 @@ class TestLimits:
         (inputs / "link.jsonl").symlink_to(outside / "r.jsonl")
         (inputs / "dir").symlink_to(outside, target_is_directory=True)
         results.write(inputs / "real.jsonl", sample())
+        (inputs / "notes.txt").write_text("not a results file")
         assert results.collect([inputs]) == [inputs / "real.jsonl"]
         assert results.collect([inputs / "link.jsonl"]) == []
 

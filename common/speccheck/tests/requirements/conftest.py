@@ -20,12 +20,79 @@ object, the files written.
 
 from __future__ import annotations
 
+import io
 import json
 import textwrap
+from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
-from tests.conftest import CONFIG, INDEX, Repo, Run, spec
+from speccheck import cli, results
+from tests.conftest import CONFIG, INDEX, spec
+
+
+@dataclass
+class Run:
+    """One CLI run's exit code and output."""
+
+    code: int
+    """The exit code."""
+    out: str
+    """stdout."""
+    err: str
+    """stderr."""
+
+    def json(self) -> dict:
+        """stdout parsed as the one JSON object."""
+        return json.loads(self.out)
+
+
+class Repo:
+    """A throwaway folder with `speccheck.toml`, `specs/000-index.md`, and helpers to write and run."""
+
+    def __init__(self, root: Path) -> None:
+        """Write the default config and index under `root`."""
+        self.root = root
+        """The folder speccheck runs in."""
+        self.write("speccheck.toml", CONFIG)
+        self.write("specs/000-index.md", INDEX)
+
+    def write(self, name: str, text: str) -> Path:
+        """Write a file under the root and return its path."""
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def spec(self, body: str, **kwargs) -> Path:
+        """Write spec 001 (or `number=`) with `body` as its requirements."""
+        number = kwargs.get("number", "001")
+        name = kwargs.pop("name", f"{number}-thing.md")
+        return self.write(f"specs/{name}", spec(body, **kwargs))
+
+    def results(self, name: str, producer: str, claims: list[tuple[str, list[str], str]], **header) -> Path:
+        """Write a results file of `(test, covers, outcome)` claims."""
+        results_file = results.ResultsFile(
+            producer=producer,
+            runner="test",
+            ci=header.get("ci"),
+            results=[
+                results.Result(
+                    test=t, covers=c, outcome=o, file="tests/test_x.py", line=3, kind=header.get("kind", "test")
+                )
+                for t, c, o in claims
+            ],
+        )
+        path = self.root / name
+        results.write(path, results_file)
+        return path
+
+    def run(self, *argv: str, env: dict[str, str] | None = None) -> Run:
+        """Run the CLI here and return its exit code and output."""
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(list(argv), env=env or {}, cwd=self.root, out=out, err=err)
+        return Run(code, out.getvalue(), err.getvalue())
 
 
 class Project(Repo):

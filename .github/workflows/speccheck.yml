@@ -72,6 +72,11 @@ jobs:
         env:
           COVERAGE_FILE: .coverage.${{ matrix.python }}
         run: uv run --locked --no-sync python -I -m coverage run -m pytest --color=yes tests/unit
+      - name: Code base rules
+        # tests/rules: docstrings, headers and the test layout. The same on every Python and not
+        # measured, so one leg is enough
+        if: ${{ matrix.python == '3.14' }}
+        run: uv run --locked --no-sync pytest --color=yes tests/rules
       - name: Upload coverage data
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

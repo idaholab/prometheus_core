@@ -33,9 +33,10 @@ include = ["speccheck*"]
 speccheck = ["schema/*.json"]
 
 [tool.pytest.ini_options]
-# `pytest` alone runs both suites. CI runs them apart: tests/unit under coverage, and
-# tests/requirements writing the results file that proves speccheck's specs (see tests/conftest.py)
-testpaths = ["tests/unit", "tests/requirements"]
+# `pytest` alone runs every suite. CI runs them apart: tests/unit under coverage, tests/rules
+# beside it, and tests/requirements writing the results file that proves speccheck's specs
+# (see tests/conftest.py)
+testpaths = ["tests/unit", "tests/rules", "tests/requirements"]
 pythonpath = ["."]
 addopts = ["-p", "pytester", "--strict-markers"]
 # speccheck checks its own claims at collection, like any project that uses it

@@ -10,10 +10,11 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Finding, reading and validating the config."""
+"""Validating a config table, reading TOML, and finding the file."""
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -21,104 +22,33 @@ import pytest
 
 from speccheck import config
 from speccheck.config import ConfigError
-from tests.conftest import Repo
 
 
-def load_text(repo: Repo, text: str, name: str = "speccheck.toml") -> config.Config:
-    """Write a config and load it."""
-    return config.load(repo.write(name, text))
+@pytest.fixture
+def path(tmp_path: Path) -> Path:
+    """Where the config pretends to be: beside an existing `specs` folder."""
+    (tmp_path / "specs").mkdir()
+    return tmp_path / "speccheck.toml"
 
 
-class TestFind:
-    """Which file is the config."""
-
-    def test_explicit_wins(self, repo: Repo):
-        """`--config` is used even when speccheck.toml exists, relative to the current folder."""
-        repo.write("other.toml", 'specs = "specs"\n')
-        assert config.find("other.toml", repo.root) == repo.root / "other.toml"
-        assert config.find(str(repo.root / "other.toml"), Path("/")) == repo.root / "other.toml"
-
-    def test_explicit_missing(self, repo: Repo):
-        """A `--config` that doesn't exist says so."""
-        with pytest.raises(ConfigError, match="nope.toml: no such config file"):
-            config.find("nope.toml", repo.root)
-
-    def test_speccheck_toml_then_pyproject(self, repo: Repo):
-        """speccheck.toml first; without it, a pyproject.toml with [tool.speccheck]."""
-        assert config.find(None, repo.root) == repo.root / "speccheck.toml"
-        (repo.root / "speccheck.toml").unlink()
-        repo.write("pyproject.toml", '[tool.speccheck]\nspecs = "specs"\n')
-        assert config.find(None, repo.root) == repo.root / "pyproject.toml"
-
-    def test_nothing_found(self, repo: Repo):
-        """A pyproject.toml without the table doesn't count, and the message says what to pass."""
-        (repo.root / "speccheck.toml").unlink()
-        repo.write("pyproject.toml", "[tool.other]\n")
-        with pytest.raises(ConfigError, match="pass --config PATH"):
-            config.find(None, repo.root)
-
-    def test_pyproject_table(self, repo: Repo):
-        """The table is read from pyproject.toml, and errors name its dotted key."""
-        loaded = load_text(repo, '[tool.speccheck]\nspecs = "specs"\nid-prefix = "T"\n', "pyproject.toml")
-        assert loaded.prefix == "T"
-        with pytest.raises(ConfigError, match="unknown key `tool.speccheck.x`"):
-            load_text(repo, '[tool.speccheck]\nspecs = "specs"\nx = 1\n', "pyproject.toml")
-        with pytest.raises(ConfigError, match=r"no \[tool.speccheck\] table"):
-            load_text(repo, "[tool.other]\n", "pyproject.toml")
+def table(**extra) -> dict:
+    """The smallest valid table, plus `extra` (keys with `-` given as `_`)."""
+    return {"specs": "specs", **{k.replace("_", "-"): v for k, v in extra.items()}}
 
 
-class TestPaths:
-    """The spec folder."""
-
-    def test_relative_to_the_config_file(self, repo: Repo):
-        """`specs` is resolved against the config's folder, not the current one."""
-        repo.write("sub/specs/000-index.md", "")
-        loaded = load_text(repo, 'specs = "specs"\n', "sub/speccheck.toml")
-        assert loaded.specs_dir == (repo.root / "sub" / "specs").resolve()
-
-    def test_specs_must_be_a_folder(self, repo: Repo):
-        """A missing or empty `specs` is an error."""
-        with pytest.raises(ConfigError, match="`specs` is 'gone', which is not a folder"):
-            load_text(repo, 'specs = "gone"\n')
-        with pytest.raises(ConfigError, match="`specs` must name the spec folder"):
-            load_text(repo, "specs = 3\n")
+def fails(path: Path, body: dict, message: str, where: str = "") -> None:
+    """`from_table` raises a ConfigError naming the file and containing `message`."""
+    with pytest.raises(ConfigError, match=re.escape(f"{path}: ") + ".*" + re.escape(message)):
+        config.from_table(body, path, where)
 
 
-class TestUnknownKeys:
-    """Every table rejects keys it doesn't know."""
+class TestFromTable:
+    """Every key, its type, and its default."""
 
-    @pytest.mark.parametrize(
-        ("text", "key"),
-        [
-            ('specs = "specs"\nspec = "x"\n', "spec"),
-            ('specs = "specs"\n[producers.unit]\nworkflow = []\n', "producers.unit.workflow"),
-            ('specs = "specs"\n[ci.job]\ncovers = ["T-REQ-001-01"]\ncover = 1\n', "ci.job.cover"),
-            ('specs = "specs"\n[report]\nname = "x"\n', "report.name"),
-        ],
-    )
-    def test_unknown_key(self, repo: Repo, text: str, key: str):
-        """The message names the file and the dotted key."""
-        with pytest.raises(ConfigError, match=f"speccheck.toml: unknown key `{key}`"):
-            load_text(repo, text)
-
-    @pytest.mark.parametrize(
-        ("text", "message"),
-        [
-            ('specs = "specs"\nproducers = 1\n', "`producers` must be a table"),
-            ('specs = "specs"\nrequire-index = "yes"\n', "`require-index` must be true or false"),
-            ('specs = "specs"\n[report]\ntitle = 1\n', "`report.title` must be a string"),
-            ('specs = "specs"\n[producers.unit]\nworkflows = "ci"\n', "`producers.unit.workflows` must be a list"),
-            ('specs = "specs"\n[producers.Unit]\n', "a name is lowercase letters"),
-        ],
-    )
-    def test_wrong_types(self, repo: Repo, text: str, message: str):
-        """A value of the wrong type is an error naming its key."""
-        with pytest.raises(ConfigError, match=message):
-            load_text(repo, text)
-
-    def test_defaults(self, repo: Repo):
-        """Everything but `specs` is optional."""
-        loaded = load_text(repo, 'specs = "specs"\n')
+    def test_defaults(self, path: Path):
+        """Everything but `specs` is optional; the spec folder is resolved against the config's folder."""
+        loaded = config.from_table(table(), path)
+        assert loaded.specs_dir == (path.parent / "specs").resolve() and loaded.path == path
         assert (loaded.prefix, loaded.require_index, loaded.producers, loaded.title) == (
             "",
             True,
@@ -126,67 +56,188 @@ class TestUnknownKeys:
             "speccheck requirements",
         )
 
+    def test_every_key(self, path: Path):
+        """The values given are kept."""
+        loaded = config.from_table(table(id_prefix="T", require_index=False, report={"title": "Mine"}), path)
+        assert (loaded.prefix, loaded.require_index, loaded.title) == ("T", False, "Mine")
 
-@pytest.mark.parametrize("bad", ["spc", "S-PC", "1SPC", 3])
-def test_a_malformed_prefix_fails(repo: Repo, bad):
-    """Capital letters and digits, starting with a letter."""
-    value = f'"{bad}"' if isinstance(bad, str) else bad
-    with pytest.raises(ConfigError, match="`id-prefix` must be capital letters"):
-        load_text(repo, f'specs = "specs"\nid-prefix = {value}\n')
+    @pytest.mark.parametrize(
+        ("body", "key"),
+        [
+            (table(spec="x"), "spec"),
+            (table(producers={"unit": {"workflow": []}}), "producers.unit.workflow"),
+            (table(ci={"job": {"covers": ["X"], "cover": 1}}), "ci.job.cover"),
+            (table(report={"name": "x"}), "report.name"),
+        ],
+    )
+    def test_unknown_keys(self, path: Path, body, key):
+        """Every table rejects keys it doesn't know, naming the dotted key and the known ones."""
+        fails(path, body, f"unknown key `{key}` (known: ")
+
+    def test_keys_are_named_from_where_the_table_is(self, path: Path):
+        """In a pyproject.toml, `tool.speccheck.` comes first."""
+        fails(path, table(x=1), "unknown key `tool.speccheck.x`", "tool.speccheck")
+        fails(path, {"specs": 3}, "`tool.speccheck.specs` must name the spec folder", "tool.speccheck")
+
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({}, "`specs` must name the spec folder"),
+            ({"specs": ""}, "`specs` must name the spec folder"),
+            ({"specs": 3}, "`specs` must name the spec folder"),
+            ({"specs": "gone"}, "`specs` is 'gone', which is not a folder"),
+            (table(producers=1), "`producers` must be a table"),
+            (table(producers={"unit": 1}), "`producers.unit` must be a table"),
+            (table(ci=[]), "`ci` must be a table"),
+            (table(require_index="yes"), "`require-index` must be true or false"),
+            (table(report=1), "`report` must be a table"),
+            (table(report={"title": 1}), "`report.title` must be a string"),
+        ],
+    )
+    def test_wrong_values(self, path: Path, body, message):
+        """A value of the wrong type is an error naming its key."""
+        fails(path, body, message)
+
+    @pytest.mark.parametrize("bad", ["spc", "S-PC", "1SPC", 3])
+    def test_a_malformed_prefix(self, path: Path, bad):
+        """Capital letters and digits, starting with a letter."""
+        fails(path, table(id_prefix=bad), "`id-prefix` must be capital letters and digits")
 
 
 class TestProducers:
-    """Which specs a producer may claim."""
+    """`[producers.<name>]`: which specs a test run may claim, and in which workflows."""
 
-    def test_a_list_of_spec_numbers(self, repo: Repo):
-        """A producer limited to some specs may claim only those."""
-        loaded = load_text(repo, 'specs = "specs"\n[producers.unit]\nspecs = ["001", "004"]\nworkflows = ["ci"]\n')
+    def test_a_list_of_spec_numbers(self, path: Path):
+        """A producer limited to some specs may claim only those, and is expected in its workflows."""
+        loaded = config.from_table(table(producers={"unit": {"specs": ["001", "004"], "workflows": ["ci"]}}), path)
         unit = loaded.producers["unit"]
+        assert (unit.specs, unit.workflows, unit.ci_job, unit.covers) == (("001", "004"), ("ci",), False, ())
         assert unit.may_claim("004") and not unit.may_claim("002")
         assert loaded.producers_in("ci") == [unit] and loaded.producers_in("other") == []
 
-    def test_all_is_the_default(self, repo: Repo):
-        """Without `specs`, a producer may claim every spec."""
-        loaded = load_text(repo, 'specs = "specs"\n[producers.unit]\n')
-        assert loaded.producers["unit"].specs is None and loaded.producers["unit"].may_claim("123")
+    def test_all_is_the_default(self, path: Path):
+        """Without `specs`, or with `"all"`, a producer may claim every spec."""
+        for body in ({}, {"specs": "all"}):
+            unit = config.from_table(table(producers={"unit": body}), path).producers["unit"]
+            assert unit.specs is None and unit.may_claim("123") and unit.workflows == ()
 
-    def test_a_bad_spec_number(self, repo: Repo):
-        """Spec numbers are three digits, as strings."""
-        with pytest.raises(ConfigError, match="'1' is not a spec number"):
-            load_text(repo, 'specs = "specs"\n[producers.unit]\nspecs = ["1"]\n')
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({"specs": ["1"]}, "`producers.unit.specs`: '1' is not a spec number such as \"001\""),
+            ({"specs": "001"}, "`producers.unit.specs` must be a list of strings"),
+            ({"specs": [1]}, "`producers.unit.specs` must be a list of strings"),
+            ({"workflows": "ci"}, "`producers.unit.workflows` must be a list of strings"),
+        ],
+    )
+    def test_bad_values(self, path: Path, body, message):
+        """Spec numbers are three-digit strings; workflows a list of strings."""
+        fails(path, table(producers={"unit": body}), message)
+
+    @pytest.mark.parametrize("name", ["Unit", "-x", "a b", "a/b", ""])
+    def test_a_bad_name(self, path: Path, name):
+        """A name a results file or a command line couldn't carry safely."""
+        fails(path, table(producers={name: {}}), "a name is lowercase letters, digits, `-`, `_` and `.`")
+
+    @pytest.mark.parametrize("name", ["unit", "speccheck-requirements", "a.b_c", "3"])
+    def test_good_names(self, path: Path, name):
+        """Lowercase letters, digits, `-`, `_` and `.`, starting with a letter or digit."""
+        assert name in config.from_table(table(producers={name: {}}), path).producers
 
 
 class TestCiJobs:
-    """`[ci.<job>]` entries."""
+    """`[ci.<job>]`: a CI job that is itself evidence for the IDs it covers."""
 
-    def test_a_ci_job_is_a_producer(self, repo: Repo):
-        """It claims the IDs it covers, and is marked as a CI job."""
-        loaded = load_text(repo, 'specs = "specs"\n[ci.publish]\ncovers = ["T-REQ-001-01"]\nworkflows = ["ci"]\n')
+    def test_a_ci_job_is_a_producer(self, path: Path):
+        """It claims the IDs it covers, may claim any spec, and is marked as a CI job."""
+        loaded = config.from_table(table(ci={"publish": {"covers": ["T-REQ-001-01"], "workflows": ["ci"]}}), path)
         job = loaded.producers["publish"]
-        assert (job.ci_job, job.covers, job.workflows) == (True, ("T-REQ-001-01",), ("ci",))
+        assert (job.ci_job, job.covers, job.workflows, job.specs) == (True, ("T-REQ-001-01",), ("ci",), None)
 
-    def test_covers_is_required(self, repo: Repo):
-        """An empty or missing `covers` is an error."""
-        with pytest.raises(ConfigError, match="`ci.publish.covers` must list at least one ID"):
-            load_text(repo, 'specs = "specs"\n[ci.publish]\ncovers = []\n')
-        with pytest.raises(ConfigError, match="`ci.publish.covers` must be a list of strings"):
-            load_text(repo, 'specs = "specs"\n[ci.publish]\n')
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({"covers": []}, "`ci.publish.covers` must list at least one ID"),
+            ({}, "`ci.publish.covers` must be a list of strings"),
+            ({"covers": ["X"], "workflows": 1}, "`ci.publish.workflows` must be a list of strings"),
+        ],
+    )
+    def test_bad_values(self, path: Path, body, message):
+        """`covers` is required and not empty."""
+        fails(path, table(ci={"publish": body}), message)
 
-    def test_a_ci_job_cant_share_a_producers_name(self, repo: Repo):
+    def test_a_bad_name(self, path: Path):
+        """The same rule as a producer's."""
+        fails(path, table(ci={"Pub": {"covers": ["X"]}}), "`ci.Pub`: a name is lowercase")
+
+    def test_a_ci_job_cant_share_a_producers_name(self, path: Path):
         """Two entries would claim to be the same results file's producer."""
-        with pytest.raises(ConfigError, match="same name as a producer"):
-            load_text(repo, 'specs = "specs"\n[producers.x]\n[ci.x]\ncovers = ["T-REQ-001-01"]\n')
+        fails(path, table(producers={"x": {}}, ci={"x": {"covers": ["X"]}}), "`ci.x` has the same name as a producer")
 
 
-class TestToml:
-    """TOML on every Python."""
+class TestLoad:
+    """Reading TOML: a speccheck.toml is the table; a pyproject.toml has it under [tool.speccheck]."""
+
+    def test_speccheck_toml(self, path: Path):
+        """The whole file is the table."""
+        path.write_text('specs = "specs"\nid-prefix = "T"\n')
+        assert config.load(path).prefix == "T"
+
+    def test_pyproject_table(self, path: Path):
+        """The table is read from pyproject.toml, and errors name its dotted key."""
+        pyproject = path.parent / "pyproject.toml"
+        pyproject.write_text('[tool.speccheck]\nspecs = "specs"\nid-prefix = "T"\n')
+        assert config.load(pyproject).prefix == "T"
+        pyproject.write_text('[tool.speccheck]\nspecs = "specs"\nx = 1\n')
+        with pytest.raises(ConfigError, match="unknown key `tool.speccheck.x`"):
+            config.load(pyproject)
+        pyproject.write_text("[tool.other]\n")
+        with pytest.raises(ConfigError, match=r"no \[tool.speccheck\] table"):
+            config.load(pyproject)
+
+    def test_not_toml(self, path: Path):
+        """A syntax error names the file, not a traceback."""
+        path.write_text("specs = \n")
+        with pytest.raises(ConfigError, match="speccheck.toml: not valid TOML"):
+            config.load(path)
+
+    def test_missing(self, path: Path):
+        """A file that isn't there can't be read."""
+        with pytest.raises(ConfigError, match="speccheck.toml: can't read the config: No such file"):
+            config.load(path)
 
     def test_the_toml_module(self):
         """tomllib from 3.11, tomli before."""
         expected = "tomllib" if sys.version_info >= (3, 11) else "tomli"
         assert config.tomllib.__name__ == expected
 
-    def test_a_syntax_error_names_the_file(self, repo: Repo):
-        """Not a traceback."""
-        with pytest.raises(ConfigError, match="speccheck.toml: not valid TOML"):
-            load_text(repo, "specs = \n")
+
+class TestFind:
+    """Which file is the config."""
+
+    def test_explicit_wins(self, tmp_path: Path):
+        """`--config` is used even when speccheck.toml exists, relative to the cwd, or absolute."""
+        (tmp_path / "speccheck.toml").write_text("")
+        (tmp_path / "other.toml").write_text("")
+        assert config.find("other.toml", tmp_path) == tmp_path / "other.toml"
+        assert config.find(str(tmp_path / "other.toml"), Path("/")) == tmp_path / "other.toml"
+
+    def test_explicit_missing(self, tmp_path: Path):
+        """A `--config` that doesn't exist says so, as given."""
+        with pytest.raises(ConfigError, match="^nope.toml: no such config file$"):
+            config.find("nope.toml", tmp_path)
+
+    def test_speccheck_toml_then_pyproject(self, tmp_path: Path):
+        """speccheck.toml first; without it, a pyproject.toml with [tool.speccheck]."""
+        (tmp_path / "pyproject.toml").write_text('[tool.speccheck]\nspecs = "specs"\n')
+        assert config.find(None, tmp_path) == tmp_path / "pyproject.toml"
+        (tmp_path / "speccheck.toml").write_text("")
+        assert config.find(None, tmp_path) == tmp_path / "speccheck.toml"
+
+    def test_nothing_found(self, tmp_path: Path):
+        """A pyproject.toml without the table doesn't count, and the message says what to pass."""
+        with pytest.raises(ConfigError, match="pass --config PATH"):
+            config.find(None, tmp_path)
+        (tmp_path / "pyproject.toml").write_text("[tool.other]\n")
+        with pytest.raises(ConfigError, match="pass --config PATH"):
+            config.find(None, tmp_path)

@@ -10,34 +10,39 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""`speccheck check`, through the CLI, on a real collect-only run."""
+"""`speccheck check`: claims only, outcomes not looked at."""
 
 from __future__ import annotations
 
-import pytest
+import argparse
+from pathlib import Path
 
-from tests.conftest import Repo
-
-
-def test_check_on_a_collect_only_run(repo: Repo, pytester: pytest.Pytester):
-    """The local workflow from the README: collect, then check."""
-    repo.root = pytester.path
-    repo.__init__(pytester.path)
-    repo.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
-    pytester.makeini("[pytest]\nspeccheck_producer = unit\n")
-    pytester.makepyfile(test_a='import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    assert False\n')
-    pytester.runpytest("--collect-only", "-q", "--speccheck-results=.speccheck/collect.jsonl")
-    run = repo.run("check", ".speccheck/")
-    assert run.code == 1
-    assert run.err.splitlines() == [
-        'specs/001-thing.md:8: T-REQ-001-02 is not claimed; add `@pytest.mark.covers("T-REQ-001-02")` to a test '
-        "that proves it, or mark it `⚠ untested` in the spec",
-        "speccheck check: 2 requirements: 1 unclaimed, 1 claimed; reported: unit; 1 problem",
-    ]
+from speccheck import results
+from speccheck.actions import check
+from tests.unit.conftest import err, make_ctx, make_specs, namespace, out
 
 
-def test_check_with_no_problems_exits_0(repo: Repo):
-    """Exit code 0, with a summary line."""
-    repo.spec("- T-REQ-001-01: One. ⚠ untested")
-    run = repo.run("check")
-    assert (run.code, run.out) == (0, "speccheck check: 1 requirement: 1 untested\n")
+def test_the_arguments():
+    """Results files, and no scope."""
+    parser = argparse.ArgumentParser()
+    check.add_arguments(parser)
+    assert vars(parser.parse_args(["a"])) == {"inputs": ["a"]}
+
+
+def test_a_failed_claim_is_enough(tmp_path: Path):
+    """`check` sees the claim, not the outcome; the unclaimed requirement is the problem."""
+    claim = results.Result("t", ["T-REQ-001-01"], "failed", file="t.py", line=1)
+    results.write(tmp_path / "c.jsonl", results.ResultsFile(producer="unit", results=[claim]))
+    ctx = make_ctx(tmp_path, specs_set=make_specs("One.", "Two."))
+    assert check.run(ctx, namespace(inputs=["c.jsonl"])) == 1
+    assert (
+        err(ctx).splitlines()[-1]
+        == "speccheck check: 2 requirements: 1 unclaimed, 1 claimed; reported: unit; 1 problem"
+    )
+
+
+def test_clean(tmp_path: Path):
+    """Exit 0 with the summary line."""
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It. ⚠ untested"))
+    assert check.run(ctx, namespace()) == 0
+    assert out(ctx) == "speccheck check: 1 requirement: 1 untested\n"

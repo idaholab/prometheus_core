@@ -10,36 +10,40 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""How each requirement's status is decided, and which statuses are problems."""
+"""How each requirement's status is decided, and which statuses are problems, on specs and a config built in memory."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-from speccheck import config, evidence, results, specs
-from tests.conftest import CONFIG, Repo
+from speccheck import evidence, results, specs
+from tests.unit.conftest import (
+    ROOT,
+    ci_job,
+    make_config,
+    make_requirement,
+    make_spec,
+    make_specs,
+    producer,
+    results_file,
+    spec_set,
+)
+
+UNIT = producer("unit")
+"""A test producer that may claim every spec."""
+OTHER_SPECS = producer("other", may_claim=("002",))
+"""A test producer that may claim only spec 002."""
+JOB = ci_job("job", "T-REQ-001-01")
+"""A CI job claiming T-REQ-001-01."""
 
 
-def evaluate(repo: Repo, files: list[results.ResultsFile], *, runtime: bool = True, **kwargs) -> evidence.Evaluation:
-    """Evaluate the repo's specs against some results files."""
-    loaded = config.load(repo.root / "speccheck.toml")
-    spec_set = specs.load(loaded.specs_dir, repo.root, loaded.prefix, loaded.require_index)
-    return evidence.evaluate(spec_set, loaded, files, root=repo.root, runtime=runtime, **kwargs)
-
-
-def run_of(producer: str, *claims: tuple[str, str], leg: str = "") -> results.ResultsFile:
-    """A results file of `(id, outcome)` claims, one test each."""
-    return results.ResultsFile(
-        producer=producer,
-        ci={"leg": leg} if leg else None,
-        source=f"{producer}.jsonl",
-        results=[
-            results.Result(test=f"tests/test_x.py::test_{n}", covers=[id_], outcome=o, file="tests/test_x.py", line=n)
-            for n, (id_, o) in enumerate(claims, 1)
-        ],
-    )
+def evidence_of(*outcomes: str, leg: str = "") -> list[evidence.Evidence]:
+    """One result per outcome, from producer `unit`."""
+    source = results.ResultsFile(producer="unit", ci={"leg": leg} if leg else None)
+    return [
+        evidence.Evidence(results.Result(test=f"t{n}", covers=["T-REQ-001-01"], outcome=o), source)
+        for n, o in enumerate(outcomes)
+    ]
 
 
 def statuses(evaluation: evidence.Evaluation) -> dict[str, str]:
@@ -52,219 +56,65 @@ def messages(evaluation: evidence.Evaluation) -> list[str]:
     return [str(p) for p in evaluation.problems]
 
 
-class TestPassed:
-    """One passing result is enough."""
+class TestCounts:
+    """The counts and the summary line."""
 
-    def test_one_pass_among_failures(self, repo: Repo):
-        """A pass in one leg outweighs a skip in another."""
-        repo.spec("- T-REQ-001-01: It.")
-        files = [
-            run_of("unit", ("T-REQ-001-01", "skipped"), leg="3.10"),
-            run_of("unit", ("T-REQ-001-01", "passed"), leg="3.14"),
-        ]
-        evaluation = evaluate(repo, files)
-        assert statuses(evaluation) == {"T-REQ-001-01": "passed"} and evaluation.problems == []
-        assert len(evaluation.statuses[0].evidence) == 2
-
-    def test_counts_and_summary_line(self, repo: Repo):
-        """Every status is counted; the summary line leaves out the empty ones."""
-        repo.spec("- T-REQ-001-01: It.\n- T-REQ-001-02: Later. (planned: step 2)")
-        evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", "passed"))])
-        assert evaluation.counts()["passed"] == 1 and evaluation.counts()["failed"] == 0
-        assert evidence.summary_line(evaluation.counts()) == "2 requirements: 1 passed, 1 planned"
-        assert evidence.summary_line({"passed": 1}) == "1 requirement: 1 passed"
-        assert evidence.summary_line({}) == "0 requirements"
-
-
-@pytest.mark.parametrize("outcome", ["failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected"])
-def test_anything_but_passed_fails(repo: Repo, outcome: str):
-    """Only `passed` is evidence, and the problem lists what was seen."""
-    repo.spec("- T-REQ-001-01: It.")
-    evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", outcome), leg="3.12")])
-    assert statuses(evaluation) == {"T-REQ-001-01": "failed"}
-    assert messages(evaluation) == [
-        f"specs/001-thing.md:7: T-REQ-001-01 has no passing result: tests/test_x.py::test_1 {outcome} in unit 3.12"
-    ]
-
-
-def test_a_long_list_of_failures_is_cut(repo: Repo):
-    """At most five results are listed in the message."""
-    repo.spec("- T-REQ-001-01: It.")
-    evaluation = evaluate(repo, [run_of("unit", *[("T-REQ-001-01", "skipped")] * 7)])
-    assert messages(evaluation)[0].endswith("(and 2 more)")
-
-
-class TestUnclaimed:
-    """Nothing claims it."""
-
-    def test_unclaimed_fails_check_and_verify(self, repo: Repo):
-        """The message shows the marker to add."""
-        repo.spec("- T-REQ-001-01: It.")
-        for runtime in (False, True):
-            evaluation = evaluate(repo, [run_of("unit")], runtime=runtime)
-            assert statuses(evaluation) == {"T-REQ-001-01": "unclaimed"}
-            assert '@pytest.mark.covers("T-REQ-001-01")' in messages(evaluation)[0]
-
-    def test_markers_and_retirement_excuse_it(self, repo: Repo):
-        """Planned, untested and retired requirements need no claim."""
-        repo.spec("- T-REQ-001-01: A. ⚠ untested\n- T-REQ-001-02: B. (planned: step 2)\n- T-REQ-001-03: Retired. Gone.")
-        evaluation = evaluate(repo, [run_of("unit")])
-        assert list(statuses(evaluation).values()) == ["untested", "planned", "retired"]
-        assert evaluation.problems == []
-
-
-class TestNotRun:
-    """Claimed only by producers that didn't report."""
-
-    def test_a_producer_that_didnt_report(self, repo: Repo):
-        """Without results from `unit`, its requirements wait on it, and fail only a complete check."""
-        repo.spec("- T-REQ-001-01: It.")
-        evaluation = evaluate(repo, [])
-        assert statuses(evaluation) == {"T-REQ-001-01": "not run"}
-        assert evaluation.statuses[0].waiting_on == ["unit"]
-        assert evaluation.problems == []
-        complete = evaluate(repo, [], complete=True)
-        assert any("T-REQ-001-01 was not run" in m for m in messages(complete))
-
-    def test_a_ci_job_that_didnt_record(self, repo: Repo):
-        """A CI job's claim is in the config, so its requirement waits on that job by name."""
-        repo.write("speccheck.toml", CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-01"]\n')
-        repo.spec("- T-REQ-001-01: It.")
-        evaluation = evaluate(repo, [run_of("unit")])
-        assert statuses(evaluation) == {"T-REQ-001-01": "not run"}
-        assert evaluation.statuses[0].waiting_on == ["publish"]
-
-
-class TestComplete:
-    """`--complete` and `--workflow`."""
-
-    def test_missing_producers(self, repo: Repo):
-        """Every expected producer must report."""
-        repo.write("speccheck.toml", CONFIG + '\n[producers.docker]\nworkflows = ["other"]\n')
-        repo.spec("- T-REQ-001-01: It.")
-        evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", "passed"))], complete=True)
-        assert evaluation.missing == ["docker"]
-        assert any("producer `docker` didn't report" in m for m in messages(evaluation))
-
-    def test_workflow_limits_what_is_expected(self, repo: Repo):
-        """With `--workflow ci`, a producer of another workflow isn't expected."""
-        repo.write("speccheck.toml", CONFIG + '\n[producers.docker]\nworkflows = ["other"]\n')
-        repo.spec("- T-REQ-001-01: It.")
-        evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", "passed"))], complete=True, workflow="ci")
-        assert evaluation.missing == [] and evaluation.problems == []
-        assert evaluation.reported == ["unit"]
-
-
-def test_an_undeclared_producer_doesnt_count(repo: Repo):
-    """Its results are a problem, and its passes are not evidence."""
-    repo.spec("- T-REQ-001-01: It.")
-    evaluation = evaluate(repo, [run_of("stranger", ("T-REQ-001-01", "passed")), run_of("unit")])
-    assert statuses(evaluation) == {"T-REQ-001-01": "unclaimed"}
-    assert "stranger.jsonl:1: producer `stranger` isn't declared in speccheck.toml (declared: unit)" in messages(
-        evaluation
-    )
-
-
-def test_a_marker_on_a_claimed_requirement_must_go(repo: Repo):
-    """Once claimed, the marker is stale, in check and in verify."""
-    repo.spec("- T-REQ-001-01: A. ⚠ untested\n- T-REQ-001-02: B. (planned: step 2)")
-    files = [run_of("unit", ("T-REQ-001-01", "passed"), ("T-REQ-001-02", "collected"))]
-    for runtime in (False, True):
-        found = messages(evaluate(repo, files, runtime=runtime))
-        assert any("T-REQ-001-01 is claimed, so remove `⚠ untested`" in m for m in found)
-        assert any("T-REQ-001-02 is claimed, so remove its `(planned: ...)`" in m for m in found)
-
-
-class TestCheck:
-    """The static check, on a collect-only run."""
-
-    def test_collected_is_enough_for_check(self, repo: Repo):
-        """`check` looks at claims, not outcomes."""
-        repo.spec("- T-REQ-001-01: It.")
-        evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", "collected"))], runtime=False)
-        assert statuses(evaluation) == {"T-REQ-001-01": "claimed"} and evaluation.problems == []
+    def test_counts_list_every_status(self):
+        """Every status is a key, worst first, even with none."""
+        spec = make_spec()
+        status = evidence.Status(make_requirement(spec), evidence.PASSED)
+        counts = evidence.Evaluation([status], [], [], []).counts()
+        assert list(counts) == list(evidence.STATUSES)
+        assert counts["passed"] == 1 and sum(counts.values()) == 1
 
     @pytest.mark.parametrize(
-        ("claimed", "message"),
+        ("counts", "line"),
         [
-            ("REQ-001-01", "`REQ-001-01` is not an ID of this folder; IDs read like `T-REQ-001-01`"),
-            ("T-REQ-001-09", "T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"),
-            ("T-REQ-001-02", "T-REQ-001-02 is retired; claim what replaced it"),
+            ({}, "0 requirements"),
+            ({"passed": 1}, "1 requirement: 1 passed"),
+            ({"failed": 0, "passed": 1, "planned": 1}, "2 requirements: 1 passed, 1 planned"),
         ],
     )
-    def test_bad_claims(self, repo: Repo, claimed: str, message: str):
-        """Malformed, unknown and retired IDs, at the test's file and line."""
-        repo.spec("- T-REQ-001-01: It. ⚠ untested\n- T-REQ-001-02: Retired. Gone.")
-        evaluation = evaluate(repo, [run_of("unit", (claimed, "collected"))], runtime=False)
-        assert messages(evaluation) == [f"tests/test_x.py:1: {message}"]
-
-    def test_a_producer_limited_to_other_specs(self, repo: Repo):
-        """A claim outside the producer's `specs` says how to allow it."""
-        repo.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["002"]'))
-        repo.spec("- T-REQ-001-01: It. ⚠ untested")
-        evaluation = evaluate(repo, [run_of("unit", ("T-REQ-001-01", "collected"))], runtime=False)
-        assert "which producer `unit` may not claim; add it to `producers.unit.specs`" in messages(evaluation)[0]
+    def test_summary_line(self, counts, line):
+        """Empty statuses are left out; the noun agrees with the total."""
+        assert evidence.summary_line(counts) == line
 
 
-class TestCiJobClaims:
-    """A CI job may record only what its config entry lists."""
+class TestClaimProblem:
+    """Why a producer may not claim an ID."""
 
-    def test_a_ci_job_counts_for_its_own_ids(self, repo: Repo):
-        """Its recorded result passes the requirement."""
-        repo.write("speccheck.toml", CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-01"]\n')
-        repo.spec("- T-REQ-001-01: It.\n- T-REQ-001-02: Other. ⚠ untested")
-        job = run_of("publish", ("T-REQ-001-01", "passed"), ("T-REQ-001-02", "passed"))
-        evaluation = evaluate(repo, [job, run_of("unit")])
-        assert statuses(evaluation)["T-REQ-001-01"] == "passed"
-        assert any("T-REQ-001-02 isn't in `ci.publish.covers`" in m for m in messages(evaluation))
+    SPECS = make_specs("It.", "Retired. Gone.")
+    """T-REQ-001-01 live, T-REQ-001-02 retired."""
 
-    def test_a_bad_id_in_the_config(self, repo: Repo):
-        """A typo in `covers` is a problem at the config."""
-        repo.write("speccheck.toml", CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-09"]\n')
-        repo.spec("- T-REQ-001-01: It. ⚠ untested")
-        found = messages(evaluate(repo, [run_of("unit")]))
-        assert found == [
-            "speccheck.toml: `ci.publish.covers`: T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"
-        ]
-
-    def test_a_result_without_a_file(self, repo: Repo):
-        """A CI job's bad claim is reported at the job's name."""
-        repo.write("speccheck.toml", CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-01"]\n')
-        repo.spec("- T-REQ-001-01: It.")
-        job = results.ResultsFile(
-            producer="publish",
-            source="p.jsonl",
-            results=[results.Result("publish", ["T-REQ-001-09"], "passed", kind="ci")],
-        )
-        assert any(m.startswith("publish: T-REQ-001-09") for m in messages(evaluate(repo, [job, run_of("unit")])))
+    @pytest.mark.parametrize(
+        ("claimed", "who", "message"),
+        [
+            ("T-REQ-001-01", UNIT, ""),
+            ("T-REQ-001-01", None, ""),
+            ("REQ-001-01", UNIT, "`REQ-001-01` is not an ID of this folder; IDs read like `T-REQ-001-01`"),
+            ("T-REQ-001-01x", UNIT, "is not an ID of this folder"),
+            ("T-REQ-002-09", UNIT, "T-REQ-002-09 isn't in any spec; check the number, or add it to spec 002"),
+            ("T-REQ-001-02", UNIT, "T-REQ-001-02 is retired; claim what replaced it"),
+            (
+                "T-REQ-001-01",
+                OTHER_SPECS,
+                "T-REQ-001-01 is in spec 001, which producer `other` may not claim; "
+                "add it to `producers.other.specs` or claim it from another producer",
+            ),
+        ],
+    )
+    def test_claim_problem(self, claimed, who, message):
+        """Malformed, unknown, retired and not allowed, each with what to do; "" when fine."""
+        found = evidence.claim_problem(claimed, who, self.SPECS)
+        assert message in found and bool(found) == bool(message)
 
 
-def requirement(text: str = "It.", status: str = "draft", number: str = "001") -> specs.Requirement:
-    """A requirement in a spec of the given status, without a spec folder on disk."""
-    spec = specs.Spec(path=Path(f"specs/{number}-x.md"), number=number, status=status)
-    return specs.Requirement(id=f"T-REQ-{number}-01", spec=spec, line=7, text=text)
-
-
-def producer_config(*producers: config.Producer) -> config.Config:
-    """A config holding only the given producers."""
-    return config.Config(path=Path("speccheck.toml"), specs_dir=Path("specs"), producers={p.name: p for p in producers})
-
-
-UNIT = config.Producer(name="unit", specs=None, workflows=())
-"""A test producer that may claim every spec."""
-OTHER_SPECS = config.Producer(name="other", specs=("002",), workflows=())
-"""A test producer that may claim only spec 002."""
-JOB = config.Producer(name="job", specs=None, workflows=(), covers=("T-REQ-001-01",), ci_job=True)
-"""A CI job."""
-
-
-def evidence_of(*outcomes: str) -> list[evidence.Evidence]:
-    """One result per outcome, from producer `unit`."""
-    source = results.ResultsFile(producer="unit")
-    return [
-        evidence.Evidence(results.Result(test=f"t{n}", covers=["T-REQ-001-01"], outcome=o), source)
-        for n, o in enumerate(outcomes)
-    ]
+def test_where_and_describe():
+    """A claim is located by its file, or its test name without one; described with producer and leg."""
+    assert evidence._where(results.Result("t", ["X"], "passed", file="f.py", line=3)) == ("f.py", 3)
+    assert evidence._where(results.Result("publish", ["X"], "passed", kind="ci")) == ("publish", 0)
+    assert evidence._describe(evidence_of("skipped", leg="3.12")[0]) == "t0 skipped in unit 3.12"
+    assert evidence._describe(evidence_of("failed")[0]) == "t0 failed in unit"
 
 
 @pytest.mark.parametrize(
@@ -283,6 +133,9 @@ def evidence_of(*outcomes: str) -> list[evidence.Evidence]:
         ("It.", "draft", ["failed"], [], ["unit"], False, "claimed", []),
         ("It.", "draft", ["skipped", "passed"], [], ["unit"], True, "passed", []),
         ("It.", "draft", ["skipped", "xpassed"], [], ["unit"], True, "failed", []),
+        # a marker doesn't excuse a claimed requirement: it is decided by its evidence
+        ("It. ⚠ untested", "draft", ["passed"], [], ["unit"], True, "passed", []),
+        ("It. (planned: 2)", "draft", ["collected"], [], ["unit"], False, "claimed", []),
         # claimed only by a CI job in the config, which didn't report
         ("It.", "draft", [], ["job"], ["unit"], True, "not run", ["job"]),
         ("It.", "draft", [], ["job"], ["unit", "job"], True, "not run", []),
@@ -290,21 +143,25 @@ def evidence_of(*outcomes: str) -> list[evidence.Evidence]:
 )
 def test_decide(text, status, found, config_claims, reported, runtime, expected, waiting):
     """Every row of the status table in design.md, for one requirement."""
+    requirement = make_requirement(make_spec(status=status), text)
     decided = evidence._decide(
-        requirement(text, status),
-        evidence_of(*found),
-        config_claims,
-        producer_config(UNIT, OTHER_SPECS, JOB),
-        reported,
-        runtime,
+        requirement, evidence_of(*found), config_claims, make_config(UNIT, OTHER_SPECS, JOB), reported, runtime
     )
     assert (decided.status, decided.waiting_on) == (expected, waiting)
     assert decided.claimed == (expected in ("claimed", "passed", "failed") or bool(config_claims))
 
 
+@pytest.mark.parametrize("outcome", [o for o in results.OUTCOMES if o != "passed"])
+def test_anything_but_passed_is_failed(outcome: str):
+    """Only `passed` is evidence."""
+    requirement = make_requirement(make_spec())
+    decided = evidence._decide(requirement, evidence_of(outcome), [], make_config(UNIT), ["unit"], True)
+    assert decided.status == "failed"
+
+
 def test_decide_ignores_producers_that_may_not_claim_the_spec():
     """A producer limited to spec 002 that didn't report isn't waited on for spec 001."""
-    decided = evidence._decide(requirement(), [], [], producer_config(OTHER_SPECS), [], True)
+    decided = evidence._decide(make_requirement(make_spec()), [], [], make_config(OTHER_SPECS), [], True)
     assert (decided.status, decided.waiting_on) == ("unclaimed", [])
 
 
@@ -313,16 +170,151 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
     [
         ("passed", True, []),
         ("planned", True, []),
+        ("untested", True, []),
+        ("retired", True, []),
         ("claimed", True, []),
-        ("unclaimed", False, ["T-REQ-001-01 is not claimed"]),
-        ("failed", False, ["T-REQ-001-01 has no passing result"]),
+        ("unclaimed", False, ['T-REQ-001-01 is not claimed; add `@pytest.mark.covers("T-REQ-001-01")`']),
+        ("failed", False, ["T-REQ-001-01 has no passing result: t0 failed in unit 3.12"]),
         ("not run", False, []),
-        ("not run", True, ["T-REQ-001-01 was not run"]),
+        ("not run", True, ["T-REQ-001-01 was not run: nothing that reported claims it (waiting on: unit)"]),
     ],
 )
-def test_problems_of(status, complete, expected, tmp_path: Path):
-    """Which statuses are problems, with and without --complete."""
-    decided = evidence.Status(requirement(), status, evidence_of("failed") if status == "failed" else [])
-    found = [p.message for p in evidence._problems_of(decided, tmp_path, complete)]
-    assert len(found) == len(expected)
-    assert [m[: len(e)] for m, e in zip(found, expected, strict=True)] == expected
+def test_problems_of(status, complete, expected):
+    """Which statuses are problems, with and without --complete, at the spec's path and the bullet's line."""
+    requirement = make_requirement(make_spec())
+    found = evidence_of("failed", leg="3.12") if status == "failed" else []
+    decided = evidence.Status(requirement, status, found, waiting_on=["unit"] if status == "not run" else [])
+    problems = evidence._problems_of(decided, ROOT, complete)
+    assert [p.message[: len(e)] for p, e in zip(problems, expected, strict=True)] == expected
+    assert all((p.path, p.line) == ("specs/001-thing.md", 7) for p in problems)
+
+
+def test_not_run_with_nobody_to_wait_on():
+    """A CI job's requirement whose job reported nothing for it says `none`."""
+    decided = evidence.Status(make_requirement(make_spec()), "not run")
+    assert evidence._problems_of(decided, ROOT, True)[0].message.endswith("(waiting on: none)")
+
+
+def test_a_long_list_of_failures_is_cut():
+    """At most five results are listed in the message."""
+    decided = evidence.Status(make_requirement(make_spec()), "failed", evidence_of(*["skipped"] * 7))
+    message = evidence._problems_of(decided, ROOT, False)[0].message
+    assert message.count("skipped in unit") == 5 and message.endswith("(and 2 more)")
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("It. ⚠ untested", "T-REQ-001-01 is claimed, so remove `⚠ untested`"),
+        ("It. (planned: step 2)", "T-REQ-001-01 is claimed, so remove its `(planned: ...)`"),
+    ],
+)
+def test_a_marker_on_a_claimed_requirement_must_go(text, message):
+    """Once claimed, the marker is stale, whatever the status."""
+    decided = evidence.Status(make_requirement(make_spec(), text), "passed", claimed=True)
+    assert [p.message for p in evidence._problems_of(decided, ROOT, False)] == [message]
+
+
+def evaluate(spec_text: tuple[str, ...], files, *producers, runtime=True, **kwargs) -> evidence.Evaluation:
+    """`evidence.evaluate` on one spec of the given requirements and a config of `producers` (default: UNIT)."""
+    return evidence.evaluate(
+        make_specs(*spec_text), make_config(*(producers or (UNIT,))), files, root=ROOT, runtime=runtime, **kwargs
+    )
+
+
+class TestEvaluate:
+    """What `evaluate` adds to `_decide`: which claims count, CI jobs, --complete, and the problem order."""
+
+    def test_claims_are_gathered_across_files(self):
+        """A pass in one leg outweighs a skip in another; both are the requirement's evidence."""
+        files = [
+            results_file("unit", ("T-REQ-001-01", "skipped"), ci={"leg": "3.10"}),
+            results_file("unit", ("T-REQ-001-01", "passed"), ci={"leg": "3.14"}),
+        ]
+        evaluation = evaluate(("It.",), files)
+        assert statuses(evaluation) == {"T-REQ-001-01": "passed"} and evaluation.problems == []
+        assert [e.result.outcome for e in evaluation.statuses[0].evidence] == ["skipped", "passed"]
+        assert (evaluation.reported, evaluation.missing, evaluation.files) == (["unit"], [], files)
+
+    def test_an_undeclared_producer_doesnt_count(self):
+        """Its results are a problem at the file, and its passes are not evidence."""
+        files = [results_file("stranger", ("T-REQ-001-01", "passed")), results_file("unit")]
+        evaluation = evaluate(("It.",), files)
+        assert statuses(evaluation) == {"T-REQ-001-01": "unclaimed"}
+        assert messages(evaluation)[0] == (
+            "stranger.jsonl:1: producer `stranger` isn't declared in speccheck.toml (declared: unit)"
+        )
+        assert evaluate(("It.",), [files[0]], producer("x")).problems[0].message.endswith("(declared: x)")
+
+    def test_no_producers_declared(self):
+        """The message says none are."""
+        empty = evidence.evaluate(make_specs("It."), make_config(), [results_file("x")], root=ROOT, runtime=True)
+        assert "(declared: none)" in messages(empty)[0]
+
+    def test_a_bad_claim_is_a_problem_and_not_evidence(self):
+        """At the test's file and line, and the requirement stays unclaimed."""
+        evaluation = evaluate(("It.",), [results_file("unit", ("T-REQ-001-09", "passed"))], runtime=False)
+        assert statuses(evaluation) == {"T-REQ-001-01": "unclaimed"}
+        assert messages(evaluation)[0].startswith("tests/test_x.py:1: T-REQ-001-09 isn't in any spec")
+
+    def test_a_ci_job_counts_only_for_its_own_ids(self):
+        """A recorded result for an ID outside `covers` is a problem at the job's name."""
+        job = ci_job("publish", "T-REQ-001-01")
+        files = [results_file("publish", ("T-REQ-001-01", "passed"), ("T-REQ-001-02", "passed"), kind="ci")]
+        evaluation = evaluate(("It.", "Other. ⚠ untested"), files, UNIT, job)
+        assert statuses(evaluation) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "untested"}
+        assert messages(evaluation) == [
+            "publish: T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it"
+        ]
+
+    def test_a_ci_job_that_didnt_record(self):
+        """Its claim is in the config, so its requirement waits on it by name, and is claimed."""
+        evaluation = evaluate(("It.",), [results_file("unit")], UNIT, ci_job("publish", "T-REQ-001-01"))
+        status = evaluation.statuses[0]
+        assert (status.status, status.waiting_on, status.claimed) == ("not run", ["publish"], True)
+
+    def test_a_bad_id_in_a_ci_jobs_covers(self):
+        """A typo in `covers` is a problem at the config, and claims nothing."""
+        evaluation = evaluate(("It. ⚠ untested",), [results_file("unit")], UNIT, ci_job("publish", "T-REQ-001-09"))
+        assert messages(evaluation) == [
+            "speccheck.toml: `ci.publish.covers`: T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"
+        ]
+
+    def test_complete_names_the_missing_producers(self):
+        """Every expected producer must report; one that didn't is a problem at the config."""
+        docker = producer("docker", workflows=("other",))
+        files = [results_file("unit", ("T-REQ-001-01", "passed"))]
+        evaluation = evaluate(("It.",), files, UNIT, docker, complete=True)
+        assert evaluation.missing == ["docker"]
+        assert messages(evaluation) == [
+            "speccheck.toml: producer `docker` didn't report; its job failed before uploading, was skipped, "
+            "or was renamed (see `docker` in speccheck.toml)"
+        ]
+        assert evaluate(("It.",), files, UNIT, docker).missing == []
+
+    def test_workflow_limits_what_is_expected(self):
+        """With a workflow, a producer of another workflow isn't expected."""
+        docker = producer("docker", workflows=("other",))
+        files = [results_file("unit", ("T-REQ-001-01", "passed"))]
+        evaluation = evaluate(("It.",), files, UNIT, docker, complete=True, workflow="ci")
+        assert (evaluation.missing, evaluation.problems, evaluation.reported) == ([], [], ["unit"])
+
+    def test_problems_come_in_order(self):
+        """Spec problems, then claim problems, then missing producers, then statuses."""
+        spec = make_spec()
+        make_requirement(spec, "It.")
+        spec_problem = specs.Problem("specs/001-thing.md", 1, "spec")
+        evaluation = evidence.evaluate(
+            spec_set(spec, problems=[spec_problem]),
+            make_config(UNIT, producer("docker")),
+            [results_file("unit", ("T-REQ-001-09", "passed"))],
+            root=ROOT,
+            runtime=True,
+            complete=True,
+        )
+        found = messages(evaluation)
+        assert found[0] == "specs/001-thing.md:1: spec"
+        assert "T-REQ-001-09 isn't in any spec" in found[1]
+        assert "producer `docker` didn't report" in found[2]
+        assert "T-REQ-001-01 was not run" in found[3] and "(waiting on: docker)" in found[3]
+        assert len(found) == 4

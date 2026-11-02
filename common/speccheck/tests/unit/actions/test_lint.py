@@ -10,30 +10,53 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""`speccheck lint`, through the CLI."""
+"""`speccheck lint`, on a spec set built in memory."""
 
 from __future__ import annotations
 
-from tests.conftest import Repo
+import argparse
+import json
+
+from speccheck.actions import lint
+from speccheck.specs import Problem
+from tests.unit.conftest import err, make_ctx, make_spec, make_specs, out, spec_set
 
 
-def test_lint_text(repo: Repo):
-    """0 and one line when clean; 1 and the problems on stderr otherwise."""
-    repo.spec("- T-REQ-001-01: One.")
-    assert repo.run("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
-    repo.spec("- T-REQ-1-1: One.")
-    run = repo.run("lint")
-    assert run.code == 1
-    assert run.err.splitlines()[-1] == "speccheck lint: 1 specs, 0 requirements; 1 problem"
+def test_no_arguments_of_its_own():
+    """The parser is left as it was."""
+    parser = argparse.ArgumentParser()
+    lint.add_arguments(parser)
+    assert vars(parser.parse_args([])) == {}
 
 
-def test_lint_json(repo: Repo):
-    """The specs and the problems, with control characters escaped by JSON."""
-    repo.spec("- T-REQ-001-01: One.", status="implemented", title="Thing\x1b")
-    repo.write("specs/Bad\n::error::x.md", "")
-    run = repo.run("lint", "--json")
-    body = run.json()
-    assert run.code == 1 and run.err == ""
+def test_clean():
+    """0 and one line, with the counts."""
+    ctx = make_ctx(specs_set=make_specs("It."))
+    assert lint.run(ctx, argparse.Namespace()) == 0
+    assert out(ctx) == "speccheck lint: 1 specs, 1 requirement\n"
+    ctx = make_ctx(specs_set=make_specs("A.", "B."))
+    lint.run(ctx, argparse.Namespace())
+    assert out(ctx) == "speccheck lint: 1 specs, 2 requirements\n"
+
+
+def test_problems():
+    """1, and the problems then the summary on stderr."""
+    ctx = make_ctx(specs_set=spec_set(make_spec(), problems=[Problem("specs/001-thing.md", 3, "bad")]))
+    assert lint.run(ctx, argparse.Namespace()) == 1
+    assert err(ctx).splitlines() == [
+        "specs/001-thing.md:3: bad",
+        "speccheck lint: 1 specs, 0 requirements; 1 problem",
+    ]
+
+
+def test_json():
+    """Every spec with its header and count, and the problems; nothing on stderr."""
+    spec = make_spec(status="implemented", title="Thing\x1b")
+    ctx = make_ctx(specs_set=make_specs("It.", spec=spec), json_mode=True)
+    ctx.specs().problems.append(Problem("specs/x.md", 0, "m"))
+    assert lint.run(ctx, argparse.Namespace()) == 1
+    body = json.loads(out(ctx))
+    assert (body["command"], body["ok"], body["requirements"]) == ("lint", False, 1)
     assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "status": "implemented", "requirements": 1}]
-    assert "\\u001b" in run.out and "\n::error::" not in run.out
-    assert body["problems"][0]["path"] == "specs/Bad\n::error::x.md"
+    assert body["problems"] == [{"path": "specs/x.md", "line": 0, "message": "m"}]
+    assert err(ctx) == ""

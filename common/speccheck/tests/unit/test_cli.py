@@ -10,112 +10,158 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The command line: help, global options, exit codes and errors."""
+"""The parser and `main`, with fake action modules standing in for the real ones."""
 
 from __future__ import annotations
 
 import io
-import subprocess
+import json
+import runpy
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from speccheck import __version__, cli
-from tests.conftest import Repo
-
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-"""common/speccheck."""
+from speccheck.config import ConfigError
 
 
-def test_help_lists_commands_by_section(repo: Repo):
-    """Both sections, every command, and a command's own help."""
-    run = repo.run("--help")
-    assert run.code == 0
-    assert "Check specs and evidence:\n  lint      " in run.out
-    assert "In CI:\n  report    " in run.out and "  record    " in run.out
-    assert "--complete" in repo.run("verify", "--help").out
+def fake_module(name: str, section: str = "check", *, result=0, seen: list | None = None) -> SimpleNamespace:
+    """An action module whose `run` records its arguments and returns `result` (or raises it)."""
+
+    def add_arguments(parser):
+        """One positional, like the real actions' inputs."""
+        parser.add_argument("inputs", nargs="*")
+
+    def run(ctx, args):
+        """Note the call, then return or raise."""
+        if seen is not None:
+            seen.append((ctx, args))
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    return SimpleNamespace(
+        NAME=name, HELP=f"{name} help", SECTION=section, ORDER=0, add_arguments=add_arguments, run=run
+    )
 
 
-class TestGlobalOptions:
-    """Before or after the command."""
+@pytest.fixture
+def modules(monkeypatch: pytest.MonkeyPatch) -> list:
+    """`main` finds these instead of the real actions; tests may append to them."""
+    found = [fake_module("one"), fake_module("two", "ci")]
+    monkeypatch.setattr(cli.actions, "discover", lambda: found)
+    return found
 
-    def test_config_before_and_after(self, repo: Repo):
-        """`--config` works in both places."""
-        repo.write("sub/speccheck.toml", 'specs = "../specs"\nid-prefix = "T"\n')
-        repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: draft\n")
-        (repo.root / "speccheck.toml").unlink()
-        assert repo.run("--config", "sub/speccheck.toml", "lint").code == 0
-        assert repo.run("lint", "--config", "sub/speccheck.toml").code == 0
 
-    def test_json_and_quiet_after_the_command(self, repo: Repo):
-        """`lint --json` and `lint --quiet`."""
-        repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: draft\n")
-        assert repo.run("lint", "--json").json()["command"] == "lint"
-        assert repo.run("lint", "--quiet").out == ""
+def main(*argv: str, **kwargs) -> tuple[int, str, str]:
+    """Run `main` on string streams; the code, stdout and stderr."""
+    out, err = io.StringIO(), io.StringIO()
+    code = cli.main(list(argv), out=out, err=err, env=kwargs.pop("env", {}), cwd=kwargs.pop("cwd", Path("/x")))
+    return code, out.getvalue(), err.getvalue()
 
-    def test_version(self, repo: Repo):
+
+def test_sections_epilog():
+    """Each section's heading and its commands, then the pointer to a command's help."""
+    text = cli.sections_epilog([fake_module("one"), fake_module("two", "ci"), fake_module("three")])
+    assert text.splitlines() == [
+        "Check specs and evidence:",
+        "  one       one help",
+        "  three     three help",
+        "",
+        "In CI:",
+        "  two       two help",
+        "",
+        "Run `speccheck <command> --help` for a command's options.",
+    ]
+
+
+class TestParser:
+    """Global options before or after the command, and usage errors raised, not printed."""
+
+    def test_global_options_in_either_place(self):
+        """After the command they don't reset what was given before it."""
+        parser = cli.build_parser([fake_module("one")])
+        before = parser.parse_args(["--config", "c.toml", "--json", "one", "a"])
+        after = parser.parse_args(["one", "a", "--config", "c.toml", "--json"])
+        for args in (before, after):
+            assert (args.config, args.json, args.quiet, args.verbose, args.inputs) == (
+                "c.toml",
+                True,
+                False,
+                False,
+                ["a"],
+            )
+        assert parser.parse_args(["one"]).config is None
+
+    def test_a_usage_error_is_raised_with_the_usage(self):
+        """So `main` can report it as JSON."""
+        with pytest.raises(cli.UsageError, match=r"invalid choice: 'nope'(.|\n)*usage: speccheck"):
+            cli.build_parser([fake_module("one")]).parse_args(["nope"])
+
+
+class TestMain:
+    """Running an action, and every way `main` exits."""
+
+    def test_the_action_gets_a_context(self, modules):
+        """The cwd, the environment, `--config`, and output flags from the arguments."""
+        seen: list = []
+        modules.append(fake_module("three", result=1, seen=seen))
+        code, _, _ = main("three", "a", "--quiet", "--config", "c.toml", env={"X": "1"}, cwd=Path("/w"))
+        assert code == 1
+        ctx, args = seen[0]
+        assert (ctx.cwd, ctx.env, ctx.config_path, args.inputs) == (Path("/w"), {"X": "1"}, "c.toml", ["a"])
+        assert (ctx.output.quiet, ctx.output.verbose, ctx.output.json_mode) == (True, False, False)
+
+    def test_help(self, modules):
+        """0, both sections on stdout; a command's own help too."""
+        code, out, _ = main("--help")
+        assert code == 0 and "Check specs and evidence:\n  one       one help" in out and "In CI:\n  two" in out
+        assert main("one", "--help")[1].startswith("usage: speccheck one")
+
+    def test_version(self, modules):
         """Text and JSON."""
-        assert repo.run("--version").out == f"speccheck {__version__}\n"
-        assert repo.run("--version", "--json").json()["version"] == __version__
+        assert main("--version")[:2] == (0, f"speccheck {__version__}\n")
+        body = json.loads(main("--version", "--json")[1])
+        assert (body["command"], body["version"]) == ("version", __version__)
 
-
-class TestExitCodes:
-    """2 on a usage or config error."""
-
-    def test_no_command(self, repo: Repo):
+    def test_no_command(self, modules):
         """The help, and 2."""
-        run = repo.run()
-        assert run.code == 2 and "Check specs and evidence" in run.out
+        code, out, _ = main()
+        assert code == 2 and out.startswith("usage: speccheck")
 
-    def test_unknown_command(self, repo: Repo):
-        """A usage error on stderr."""
-        run = repo.run("nope")
-        assert run.code == 2 and "speccheck: error: argument <command>: invalid choice" in run.err
+    def test_usage_error(self, modules):
+        """2, on stderr; with `--json`, one object on stdout."""
+        code, out, err = main("nope")
+        assert (code, out) == (2, "") and err.startswith("speccheck: error: argument <command>: invalid choice")
+        code, out, err = main("nope", "--json")
+        body = json.loads(out)
+        assert (code, err, body["command"], body["ok"], body["error"]["code"]) == (2, "", "", False, "usage")
 
-    def test_config_error(self, repo: Repo):
-        """No config: 2 and what to pass."""
-        (repo.root / "speccheck.toml").unlink()
-        run = repo.run("lint")
-        assert run.code == 2 and "pass --config PATH" in run.err
+    def test_config_error(self, modules):
+        """An action's ConfigError is 2; with `--json` the object names the command."""
+        modules.append(fake_module("three", result=ConfigError("no config; pass --config PATH")))
+        assert main("three") == (2, "", "speccheck: error: no config; pass --config PATH\n")
+        code, out, _ = main("three", "--json")
+        body = json.loads(out)
+        assert (code, body["command"], body["error"]["message"]) == (2, "three", "no config; pass --config PATH")
 
-
-def test_errors_are_json_too(repo: Repo):
-    """A usage error and a config error, each one object on stdout."""
-    body = repo.run("nope", "--json").json()
-    assert (body["schema_version"], body["command"], body["ok"], body["problems"]) == (1, "", False, [])
-    assert body["error"]["code"] == "usage"
-    (repo.root / "speccheck.toml").unlink()
-    run = repo.run("verify", "--json")
-    assert run.code == 2 and run.json()["command"] == "verify" and "pass --config" in run.json()["error"]["message"]
-
-
-def test_run_py_works_from_a_checkout(repo: Repo):
-    """`python3 -I run.py` needs nothing installed (here: the same interpreter, isolated mode)."""
-    if sys.version_info < (3, 11):
-        pytest.skip("run.py needs tomllib, Python 3.11 or newer")
-    repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: draft\n")
-    done = subprocess.run(
-        [sys.executable, "-I", str(PACKAGE_ROOT / "run.py"), "lint"], cwd=repo.root, capture_output=True, text=True
-    )
-    assert (done.returncode, done.stdout) == (0, "speccheck lint: 1 specs, 0 requirements\n"), done.stderr
+    def test_defaults(self, modules, monkeypatch: pytest.MonkeyPatch):
+        """With nothing given, main reads sys.argv, the real streams, os.environ and the cwd."""
+        seen: list = []
+        modules.append(fake_module("three", seen=seen))
+        monkeypatch.setattr(sys, "argv", ["speccheck", "three"])
+        monkeypatch.setenv("SPECCHECK_LEG", "x")
+        assert cli.main() == 0
+        ctx, _ = seen[0]
+        assert ctx.cwd == Path.cwd() and ctx.env["SPECCHECK_LEG"] == "x"
+        assert ctx.output.out is sys.stdout and ctx.output.err is sys.stderr
 
 
-def test_python_m_speccheck(repo: Repo):
-    """`python -m speccheck --version`."""
-    done = subprocess.run(
-        [sys.executable, "-m", "speccheck", "--version"], capture_output=True, text=True, cwd=PACKAGE_ROOT
-    )
-    assert done.stdout == f"speccheck {__version__}\n"
-
-
-def test_main_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """With no arguments given, main reads sys.argv, the environment and the real streams."""
+def test_python_m_speccheck(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    """`python -m speccheck` runs main and exits with its code."""
     monkeypatch.setattr(sys, "argv", ["speccheck", "--version"])
-    out = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", out)
-    assert cli.main() == 0 and out.getvalue() == f"speccheck {__version__}\n"
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["speccheck", "lint"])
-    monkeypatch.setattr(sys, "stderr", io.StringIO())
-    assert cli.main() == 2
+    with pytest.raises(SystemExit) as done:
+        runpy.run_module("speccheck", run_name="__main__")
+    assert done.value.code == 0 and capsys.readouterr().out == f"speccheck {__version__}\n"
