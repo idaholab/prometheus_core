@@ -529,6 +529,12 @@ when no producer is set (`SPECCHECK_PRODUCER` or `speccheck_producer`), rather t
 which-specs check. With only a results file asked for, just the checks that need no specs run.
 With neither, the plugin checks nothing and writes nothing. No test's outcome ever changes.
 
+These failures come as pytest's usage error (exit 4): one `speccheck: N claim(s) the spec folder
+doesn't allow:` line, then one `file:line: test: what to do` line per problem. They have no
+`--json` and no `code`, and the run writes no results file. To get them from `check` with codes
+(`claim-invalid`), collect with `pytest --collect-only -o speccheck_config= --speccheck-results=FILE`
+while the shape is right but an ID isn't.
+
 `check` and `verify` repeat the "same explanation" check across every results file and
 `[ci.<job>]` entry; the same test in another job or attempt is the same claim. Explanations are
 compared ignoring case, whitespace and a trailing full stop. The plugin registers the marker, so
