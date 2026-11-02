@@ -305,6 +305,15 @@ class TestProblems:
         assert str(specs.Problem("::error::x", 3, "m")) == r"\x3a:error::x:3: m"
         assert str(specs.Problem("::error::x", 0, "m")) == r"\x3a:error::x: m"
 
+    @pytest.mark.parametrize("code", [*range(0x202A, 0x202F), *range(0x2066, 0x206A)])
+    def test_plain_writes_out_bidi_controls(self, code: int):
+        """Each bidi embedding, override and isolate control is written out, so text can't read reversed."""
+        assert specs.plain(f"a{chr(code)}b") == f"a\\u{code:04x}b"
+
+    def test_plain_keeps_other_right_to_left_text(self):
+        """Hebrew and Arabic letters, and the implicit marks U+200E and U+200F, aren't controls."""
+        assert specs.plain("test_שלום_مرحبا\u200e\u200f") == "test_שלום_مرحبا\u200e\u200f"
+
     def test_a_path_outside_the_root_is_printed_as_given(self, tmp_path: Path):
         """`rel` falls back to the path itself."""
         assert specs.rel(Path("/elsewhere/x.md"), tmp_path) == "/elsewhere/x.md"
