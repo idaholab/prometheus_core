@@ -34,7 +34,7 @@ make test-integration # pytest -m integration (requires .env)
 make test-all         # pytest --cov (every marker, including integration)
 make fix              # ruff check --fix . && ruff format .
 make check            # lint + format + typecheck
-make hooks            # install the repo-wide pre-commit + pre-push hooks (../.pre-commit-config.yaml: gitleaks, plus sdk ruff/mypy/tests)
+make hooks            # install the git hooks
 make test-install     # build wheel via `uv build`, install in clean venv, smoke-test imports
 ```
 

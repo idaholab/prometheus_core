@@ -74,7 +74,7 @@ changes for secrets with gitleaks, as CI does. For changes in `sdk/` they also r
 ruff on commit, and mypy plus the unit tests on push:
 
 ```bash
-cd sdk && make hooks
+make hooks
 ```
 
 ### 3. Keep changes small
