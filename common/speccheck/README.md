@@ -4,228 +4,123 @@ Checks a folder of SDD specs against the test runs that prove them. A requiremen
 only when a test (or CI job) that claims it **ran and passed** in CI. A docstring or a comment that
 mentions an ID is not evidence.
 
-- Tests claim requirements with a pytest marker that says how they prove each one,
-  `@pytest.mark.covers("SPC-REQ-004-01", "writes a results file and reads it back unchanged")`.
-- Each test run writes a results file, which the CI job uploads as an artifact.
-- The last job of each workflow downloads the results, publishes a markdown report of where and
-  how each requirement is proven, with links to the CI jobs, then runs `verify`, which puts only
-  what failed in the step summary.
+## What speccheck does
 
-The design and its decisions are in [`plan/design.md`](plan/design.md). speccheck's own
-requirements are in [`specs/`](specs/000-index.md), proven by `tests/requirements/` and checked by
-speccheck itself in [`speccheck.yml`](../../.github/workflows/speccheck.yml). Its unit tests are in
-`tests/unit/`.
+- **Every requirement points at its proof.** A test claims the requirements it proves, and says
+  how it proves each one. The report lists, for every requirement, each test or CI job that claims
+  it, how, and how it came out in each job.
+- **CI fails when a promise isn't kept.** A claimed requirement with no passing result fails the
+  workflow's last job, as does (on `devel`) a requirement nothing claims, or a job that should have
+  reported and didn't.
+- **Reviewers get a report, and a short summary.** The full report is a markdown artifact, linked
+  from the run's step summary, which lists only what failed.
 
-## Quick start
+### What the report looks like
 
-```sh
-# What a project runs locally: collect, then check that every requirement is claimed
-pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl
-speccheck check .speccheck/
-
-# What the final CI job runs on the downloaded results
-speccheck report results/ --output report.md
-speccheck verify --complete results/ --summary "$GITHUB_STEP_SUMMARY"
-```
-
-**What to run locally.** A plain `pytest` runs the tests and checks the claims, but writes no results
-file, so there is nothing for `speccheck` to read. To check the spec folder as CI does, add
-`--speccheck-results=PATH` (or `SPECCHECK_RESULTS`) to the run, then pass that path to `check` or
-`verify`, as in the commands above. `check` is enough locally: a `--collect-only` run
-finds every claim without running the tests. `verify` wants a real run, because it needs passing
-results. The producer name (`sdk-python` in the examples) must be the same in three places: the
-`[producers.<name>]` table in the toml, `speccheck_producer` in the pytest ini options, and
-`SPECCHECK_PRODUCER` in the CI job. The environment variable wins over the ini option, so a job
-that sets it can differ from a local run that doesn't.
-
-Python 3.10 or newer. At runtime it needs only the standard library, plus `tomli` on 3.10.
-
-**In this repo**, a project adds it as a path dev dependency, so its `uv.lock` changes:
-
-```toml
-[dependency-groups]
-dev = ["prometheus-speccheck"]
-
-[tool.uv.sources]
-prometheus-speccheck = { path = "../common/speccheck" }
-```
-
-**In an agent, don't use a path source.** The agent Dockerfile runs
-`uv sync --locked --no-dev --no-install-project --inexact` with only `pyproject.toml` and `uv.lock`
-mounted, and `--locked` still reads the metadata of a path dependency. With `common/` missing, the
-build fails with "Failed to generate package metadata for `prometheus-speccheck`". So does a clone
-of the agent repo alone. Use one of these instead:
-
-- A git source, pinned to a commit or tag. The dev group isn't installed in the image, so the build
-  never fetches it:
-
-  ```toml
-  [tool.uv.sources]
-  prometheus-speccheck = { git = "https://github.com/idaholab/prometheus_core", subdirectory = "common/speccheck", rev = "<commit or tag>" }
-  ```
-
-- No dependency at all. Run it with `uvx`, locally and in CI, such as
-  `uvx --with pytest --with "prometheus-speccheck @ git+https://github.com/idaholab/prometheus_core@<rev>#subdirectory=common/speccheck" pytest`,
-  or `uv tool install` it for the `speccheck` command.
-
-Installing it registers the pytest plugin, which does nothing until it is configured (see "Claiming a
-requirement"). As a command on its own, install it as a uv tool, which puts `speccheck` on `PATH`:
-`uv tool install ./common/speccheck`. In CI, the `speccheck-install` action does that (see "In CI").
-
-## Commands
-
-| Command | Reads | Fails (exit 1) when |
-|---|---|---|
-| `lint` | the spec folder | a spec breaks the format |
-| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't planned, untested or retired has no claim; a claim names a malformed, unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
-| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
-| `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json`. `--job-names FILE` (also on `verify`) names each job by its display name |
-| `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
-
-`RESULTS` are results files, or folders searched for `*.jsonl` (symlinks are not followed; a symlink given as an input is a `results-symlink` problem, and one found inside a folder is skipped).
-`--complete --workflow NAME` expects only the producers that list that workflow.
-
-**Step summary.** `lint`, `check` and `verify` take `--summary FILE` and append one line of counts,
-then one entry per problem, and nothing else. On a pass it is the line alone. `--report-url URL`
-links the full report from that line, but only when it is an artifact URL of this run's own
-repository, such as the `artifact-url` output of `actions/upload-artifact`:
+One requirement's section, from speccheck's own report in CI:
 
 ```markdown
-**speccheck:** 1 problem. 48 requirements: 1 failed, 40 passed, … Full report: [speccheck-report](…)
+### SPC-REQ-004-01 ✅ passed
 
-- `specs/004-results-files.md:12: SPC-REQ-004-01 has no passing result: …`
+> A results file MUST be JSON Lines: a header with `schema` `speccheck-results/1`, the producer, …
+
+In [`common/speccheck/specs/004-results-files.md:12`](…/blob/<commit>/common/speccheck/specs/004-results-files.md#L12)
+
+#### Test [`test_a_run_writes_json_lines_with_a_versioned_header`](…/test_004_results_files.py#L103) in `common/speccheck/tests/requirements/test_004_results_files.py`
+
+**How:** an inner run writes a header and one result line whose keys match the JSON Schema shipped in the package
+
+- ✅ passed in [speccheck: requirements python 3.10](…/job/125570969662)
+- ✅ passed in [speccheck: requirements python 3.11](…/job/125570970001)
+- …
 ```
 
-Global options work before or after the command: `--config PATH` (default `speccheck.toml` here,
-then `[tool.speccheck]` in `pyproject.toml`), `--json`, `--quiet`, `--verbose`, `--version`.
-Exit codes: 0 fine, 1 problems, 2 usage or config error.
+Above the requirements, the report has a table of every spec with its counts, and each spec opens
+with its Purpose and a table of its requirements, failures first.
 
-**Output.** Problems go to stderr as `path:line: message`, so editors and CI logs link them. Each
-message says what to do. The last line is a summary, such as
-`speccheck verify: 58 requirements: 1 failed, 57 passed; reported: speccheck-requirements; 1 problem`.
-Control characters in anything printed are written out (`\n`, `\x1b`), and so are the GitHub
-Actions log commands: a leading `::` becomes `\x3a:` and `##[` becomes `##\x5b`. So a file name,
-spec text or results file can't start a `::error::` or `##[error]` line in a CI log. Files that
-`report` writes keep the text as written, escaped for markdown instead.
+## Terms
 
-**`--json`.** Exactly one object on stdout, on every exit path:
+- **Requirement:** one bullet in a spec, with an ID such as `SPC-REQ-004-01`.
+- **Claim:** a test's `@pytest.mark.covers(ID, how)`, or a CI job's entry in the config's
+  `[ci.<job>]` table. It says that this test or job proves that requirement, and how.
+- **Producer:** something that writes results: a test run (`[producers.<name>]`) or a CI job
+  (`[ci.<job>]`). A producer may be limited to some specs, and lists the workflows it runs in.
 
-```json
-{
-  "schema_version": 1,
-  "command": "verify",
-  "ok": false,
-  "problems": [{"path": "specs/002-config.md", "line": 18, "message": "SPC-REQ-002-04 has no passing result: ...", "code": "failed"}],
-  "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "planned": 0, "untested": 0, "retired": 0},
-  "requirements": [
-    {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
-     "evidence": [{"test": "tests/requirements/test_002_config.py::test_the_prefix", "kind": "test", "file": "tests/requirements/test_002_config.py", "line": 70,
-                   "root": "common/speccheck", "outcome": "failed", "producer": "speccheck-requirements", "job": "requirements",
-                   "job_name": "speccheck: requirements python 3.12", "url": "https://..."}],
-     "path": "common/speccheck/specs/002-config.md", "line": 18}
-  ],
-  "producers": {"reported": ["speccheck-requirements"], "missing": []}
-}
-```
+## Covering a requirement
 
-A usage or config error has `"error": {"code": "usage", "message": "..."}` instead (a bare
-`speccheck --json` is one). Fields are only added within a `schema_version`.
+From a spec bullet to a local check that passes, in a small project with one spec.
 
-Each problem's `code` is a stable name for its kind (`unclaimed`, `failed`, `not-run`, `bullet-malformed`,
-`producer-missing`, `no-results`, `results-not-json` and so on); the `message` wording can change, the
-`code` doesn't. `"line": 0` means the problem has no line (it is a whole file or the config).
+### 1. Write the requirement
 
-## Statuses
-
-| Status | Means | Fails |
-|---|---|---|
-| `passed` | at least one claiming result passed (by default one is enough, in any producer or job) | no |
-| `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
-| `not run` | claimed only by producers that didn't report in these inputs; or, in `verify`, claimed by nothing while a test producer that may claim it hasn't reported | `verify --complete` |
-| `unclaimed` | nothing claims it, and it isn't planned, untested or retired. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
-| `claimed` | (`check` only) claimed; outcomes aren't looked at | no |
-| `planned`, `untested`, `retired` | the spec says so, and nothing claims it | no |
-
-A planned or untested requirement that is claimed is a problem, "remove the marker".
-
-## The spec format
-
-A spec folder holds `000-index.md` and one `NNN-short-name.md` per spec:
+A spec folder holds `000-index.md`, linking every spec, and one `NNN-short-name.md` per spec:
 
 ```markdown
-# 004 - Results files
+# 001 - Greeting
 
 status: implemented
 
+## Purpose
+
+The `greet` command says hello.
+
 ## Requirements
 
-- SPC-REQ-004-01: A results file MUST be JSON Lines ...
-- SPC-REQ-004-02: A reader MUST reject ... ⚠ untested
-- SPC-BEH-004-01: GIVEN ... WHEN ... THEN ... (planned: step 3)
-- SPC-REQ-004-03: Retired. Replaced by SPC-REQ-004-05.
+- GRT-REQ-001-01: `greet NAME` MUST print `Hello, NAME!` and exit 0.
+- GRT-REQ-001-02: `greet` with no name MUST exit 2 and say a name is needed.
 ```
 
-- **Files.** `NNN-short-name.md`, whose first line is `# NNN - Name`. With `require-index` (the
-  default), `000-index.md` must link every spec as a markdown link, such as
-  `[004](004-results-files.md)`. A mention in prose doesn't count.
-- **Header.** One `status:` line above the first `##`: `draft`, `implemented` or `retired`. An
-  `implemented` spec needs at least one requirement. Other header lines (`sources:`,
-  `depends-on:`) are free text.
-- **Bullets.** `- <prefix>-REQ-NNN-XX: text` or `- <prefix>-BEH-NNN-XX: text`, where `NNN` is the
-  spec's number. The prefix comes from the config, or is absent when `id-prefix = ""`. A bullet may
-  wrap onto lines indented two spaces. A line that starts like an ID in any other form (`*`, bold,
-  nested, missing prefix) is a problem, so it can't go unseen. IDs are unique across the folder.
-- **Markers**, anywhere in the bullet's text: `⚠ untested` (no test yet, on purpose) or
-  `(planned: <step>)` (a later plan step delivers it). Never both. Text starting `Retired.` or
-  `Retired:`, or a `retired` spec, retires a requirement. A retired ID stays in the spec and must
-  not be claimed.
-- Fenced code blocks are skipped.
-- The old checker's `tests:` line (in a spec) and `id-prefix:` line (in the index) are problems that
-  point at the config.
+- The first line is `# NNN - Name`, and one `status:` line (`draft`, `implemented` or `retired`)
+  comes before the first `##`.
+- A requirement is a bullet `- <prefix>-REQ-NNN-XX: text` (or `BEH` for behaviour), where `NNN` is
+  the spec's number. It may wrap onto lines indented two spaces.
+- A requirement with no test yet says so with `⚠ untested`, one a later plan step delivers with
+  `(planned: <step>)`, and one that's gone starts `Retired.`. None of these needs a claim.
 
-## Config
+The full rules are in "Reference", "Spec format".
 
-One config per spec folder, `speccheck.toml` or `[tool.speccheck]` in a project's `pyproject.toml`.
-Paths are relative to the config file. Unknown keys in the config are errors.
+### 2. Point speccheck at the spec folder
+
+`speccheck.toml` next to the folder (or `[tool.speccheck]` in the project's `pyproject.toml`) names
+the folder, its ID prefix, and the producers that may prove it:
 
 ```toml
-specs = "specs"                 # the spec folder
-id-prefix = "SPC"               # IDs are SPC-REQ-NNN-XX; "" for bare IDs
-require-index = true
+specs = "specs"
+id-prefix = "GRT"
 
-[producers.speccheck-requirements]      # a test run that provides evidence
-specs = "all"                   # or ["001", "004"]: the specs it may claim
-workflows = ["speccheck"]       # the workflows it runs in, for verify --complete --workflow
-
-[ci.speccheck-self-check]       # a CI job (by its job id) that is itself evidence
-workflows = ["speccheck"]
-
-[ci.speccheck-self-check.covers]  # each ID it claims, and how the job proves it
-SPC-REQ-007-03 = "the job uploads its results and checks that an empty folder fails the upload"
-
-[report]
-title = "speccheck requirements"
+[producers.greeter-tests]
+workflows = ["test"]
 ```
 
-A results file from an undeclared producer is a problem, and its results don't count.
+The pytest options turn on the plugin's checks and say which producer this run is:
 
-## Claiming a requirement
+```ini
+[pytest]
+speccheck_config = speccheck.toml
+speccheck_producer = greeter-tests
+```
+
+**The producer name must match in three places:** the `[producers.<name>]` table, the
+`speccheck_producer` ini option, and `SPECCHECK_PRODUCER` in the CI job. The environment variable
+wins over the ini option.
+
+### 3. Claim it in a test
 
 ```python
-@pytest.mark.covers("SPC-REQ-004-01", "writes a results file and reads it back unchanged")
-@pytest.mark.covers("SPC-BEH-004-02", "an unknown key in a result line is ignored, not rejected")
-def test_results_file_round_trips():
-    """A written results file reads back the same."""
+import pytest
+
+
+@pytest.mark.covers("GRT-REQ-001-01", "runs `greet Ada` and checks it prints `Hello, Ada!` with exit code 0")
+def test_greets_by_name(): ...
+
+
+@pytest.mark.covers("GRT-REQ-001-02", "runs `greet` with no name and checks it exits 2 saying a name is needed")
+def test_needs_a_name(): ...
 ```
 
-- **One mark per ID, and it says how the test proves it.** The report shows the explanation beside
-  each result, so a reviewer can judge the evidence without opening the test. It is plain text, at
-  most 1000 characters; whitespace (line breaks included) is collapsed to single spaces, so a long
-  one can span lines. Like test IDs, it goes into CI artifacts: keep secrets out of it.
-- **A mark goes on one test only:** a test function that isn't parametrized, or one parameter of
-  the test's single `parametrize`. Collection fails on a mark on a class or module, on the
-  function of a parametrized test, and on a claiming test with two `parametrize`s or a
-  parametrized fixture. Each case then says what it proves:
+- **One mark per ID, saying how the test proves it.** A test that proves two requirements has two
+  marks, each with its own explanation.
+- **A mark goes on one test only:** a plain test function, or one `pytest.param` of the test's
+  single `parametrize`, so each case says what it proves:
 
   ```python
   @pytest.mark.parametrize(
@@ -248,38 +143,51 @@ def test_results_file_round_trips():
   def test_a_claim_that_didnt_pass_fails_verify(project, body, outcome): ...
   ```
 
-  `marks=` takes a list when one case proves several requirements.
-- **Nothing repeats.** Collection always fails on a mark that isn't two strings, an explanation
-  that is empty, too long, the ID itself or a placeholder (`TODO`, `TBD`, `FIXME`, `...`, `-`),
-  a test that claims one ID twice, and two claims in the session with the same explanation.
-  `check` and `verify` repeat the last check across every results file and `[ci.<job>]` entry.
-  Explanations are compared ignoring case, whitespace and a trailing full stop.
-- The plugin registers the marker, so `--strict-markers` accepts it.
-- With `speccheck_config` in the project's pytest ini options, collection also fails (on every run,
-  locally too) on a malformed, unknown or retired ID, one the producer may not claim, and an
-  explanation that is the text of any requirement in the folder. The producer is required:
-  `SPECCHECK_PRODUCER`, or `speccheck_producer` in the ini options. Without one, collection fails
-  rather than skip the which-specs check:
+  Not on a class or a module, and not on a parametrized function.
+- **Each explanation is said once:** no two claims share one, and none is a placeholder (`TODO`),
+  the ID, or a requirement's own text.
+- **Collection checks all of this, locally too,** and stops pytest with what to fix:
 
-  ```toml
-  [tool.pytest.ini_options]
-  speccheck_config = "pyproject.toml"
-  speccheck_producer = "sdk-python"
+  ```text
+  ERROR: speccheck: 1 claim(s) the spec folder doesn't allow:
+  tests/test_greet.py:9: tests/test_greet.py::test_needs_a_name: the explanation for GRT-REQ-001-02 is a placeholder ('TODO'); say how the test proves it
   ```
 
-- Collection checks every claim in the spec folder, not just the tests you selected. One bad ID
-  stops pytest before any test runs, even with `pytest tests/x.py::one`. To iterate without it, run
-  `pytest -o speccheck_config=`.
-- Only the marker counts. A docstring may still say what a test proves, for the reader.
-- Whether a test really proves what it claims is a review question. speccheck sees only that it
-  claims an ID, says how, and passed. Read the explanation against the test.
-- `lint` also fails on two requirements in one folder, not retired, with the same text.
+The full rules are in "Reference", "Claim rules".
 
-**Which tests claim.** Claim a requirement only from a test that proves its observable behaviour:
-what a user of the thing sees, such as a command's output and exit code, a file it writes, or a
-response. A unit test of a helper claims nothing, even when the helper exists for a requirement. It
-proves the helper, not the promise. speccheck keeps the two apart in its own tests, and a project
-can do the same:
+### 4. Check it locally
+
+A plain `pytest` checks the claims but writes no results. To check the spec folder as CI does,
+collect into a results file and run `check` on it:
+
+```sh
+pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl
+speccheck check .speccheck/
+```
+
+With one requirement claimed and one not:
+
+```text
+specs/001-greeting.md:12: GRT-REQ-001-02 is not claimed; add `@pytest.mark.covers("GRT-REQ-001-02", "<how it proves it>")` to a test that proves it, or mark it `⚠ untested` in the spec
+speccheck check: 2 requirements: 1 unclaimed, 1 claimed; reported: greeter-tests; 1 problem
+```
+
+And once both are claimed, exit 0:
+
+```text
+speccheck check: 2 requirements: 2 claimed; reported: greeter-tests
+```
+
+`check` needs no test to run, since a collect-only run sees every claim. `verify` does the same and
+also wants each claim to have passed, so it needs a real run's results. While a spec is half
+written, `pytest -o speccheck_config=` runs the tests without the claim checks.
+
+### What counts as evidence
+
+Claim a requirement only from a test that proves its observable behaviour: what a user of the thing
+sees, such as a command's output and exit code, a file it writes, or a response. A unit test of a
+helper claims nothing, even when the helper exists for a requirement. It proves the helper, not the
+promise. speccheck keeps the two apart in its own tests, and a project can do the same:
 
 | | `tests/unit/` | `tests/requirements/` |
 |---|---|---|
@@ -289,59 +197,16 @@ can do the same:
 | In CI | the `unit` job | the `requirements` job, whose results file is the evidence |
 
 Coverage then says how much code the unit tests exercise, and the report says which promises are
-kept. Neither one can stand in for the other.
-
-## Results files
-
-`speccheck-results/1`, JSON Lines: a header, then one line per claiming test. The JSON Schema is
-[`speccheck/schema/speccheck-results-1.schema.json`](speccheck/schema/speccheck-results-1.schema.json),
-for runners in other languages.
-
-```json
-{"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 9.2.0", "started": "2026-11-01T12:00:00Z", "root": "sdk",
- "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core", "workflow": "test", "job": "sdk-python",
-        "run_id": 123, "run_attempt": 1, "job_id": 456, "sha": "...", "ref": "...", "event": "push",
-        "run_url": ".../actions/runs/123/attempts/1", "job_url": ".../actions/runs/123/job/456"}}
-{"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py", "line": 181,
- "covers": [{"id": "SDK-REQ-006-08", "how": "a chat call goes through the proxy URL"}], "outcome": "passed"}
-```
-
-- `covers` has one `{"id", "how"}` entry per claimed ID. A reader rejects a result that claims an ID
-  twice, or whose `how` is empty, over 1000 characters, or has a line break.
-
-- The plugin writes one only when asked, with `--speccheck-results=PATH` or `SPECCHECK_RESULTS`. A
-  plain `pytest` writes nothing.
-- It is written atomically when the session ends. An interrupted session leaves no file, so
-  `verify --complete` reports the producer as missing.
-- A test's outcome merges setup, call and teardown. An error in setup or teardown makes it `error`,
-  a skip makes it `skipped`, and an expected failure makes it `xfailed`. Skipped, deselected and
-  (`--collect-only`) collected claims are written too, so `verify` can say "claimed but didn't run".
-- `error` is sticky. With a rerun plugin such as `pytest-rerunfailures`, an error in setup or
-  teardown on one attempt keeps the test at `error` even if a later attempt passes, so a flaky
-  fixture can't hide behind a retry. Only a claim that errored on no attempt can be `passed`.
-- Under pytest-xdist the run writes one file, with every worker's results.
-- Each claiming test's node ID is written as `test`, parametrize IDs included, and CI keeps the
-  results artifact 30 days and the report 90. **A parametrize ID must not hold a secret.** Nothing
-  scrubs it, and an ID built from a fixture or an environment value (a token, a URL with
-  credentials) lands in both. Give such a parameter a fixed `id=` or `ids=`.
-- `ci` says which CI provider ran it (`provider`), and where. GitHub Actions is the only provider so
-  far: its block comes from `GITHUB_*`, plus `SPECCHECK_JOB_ID`, which the workflow sets. Outside
-  CI it is null. A job's display name isn't in it, since a job can't read its own; the final job
-  looks the names up (see "In CI").
-- `root` is the folder the results' `file` paths are relative to (pytest's root), as a path from
-  the repository's root: `GITHUB_WORKSPACE` in CI, else the nearest folder with a `.git`. The report
-  uses it to link each test to its line. It is null when no repository root is found.
-- A reader treats every file as untrusted. It parses JSON only, with size limits (16 MiB a file,
-  64 KiB a line), and every field is checked. A file with another `schema`, a wrong type or an
-  unknown outcome is rejected whole. Keys it doesn't know are dropped unread, so fields can be
-  added within `speccheck-results/1`. Paths in the file are never opened.
+kept. Neither one can stand in for the other. Whether a test really proves what it claims is a
+review question: speccheck sees that it claims an ID, says how, and passed. Read the explanation
+against the test.
 
 ## In CI
 
 **Not supported yet outside this repo.** The actions are local (`./.github/actions/...`), and
 `speccheck-install` installs from `$GITHUB_WORKSPACE/common/speccheck`, so this section works only
-in the prometheus_core monorepo. An agent in its own repo can run speccheck locally (see "Quick
-start"), but has no CI setup yet.
+in the prometheus_core monorepo. An agent in its own repo can run speccheck locally (see "Covering
+a requirement"), but has no CI setup yet.
 
 How a requirement gets proven in a workflow, using speccheck's own
 [`speccheck.yml`](../../.github/workflows/speccheck.yml) as the example. Its `unit` and `coverage`
@@ -391,6 +256,8 @@ flowchart TD
   its job, uploads it, then runs `verify`, whose exit code is the job's. `--complete` (on `devel`)
   also fails on a producer that didn't report.
 
+### Set up a workflow
+
 In each job that runs claiming tests:
 
 ```yaml
@@ -418,7 +285,7 @@ runs only when the steps before it passed:
           name: sdk-install
 ```
 
-And at the end of the workflow:
+And at the end of the workflow, which needs `actions: read` and `contents: read`:
 
 ```yaml
   speccheck:
@@ -435,26 +302,288 @@ And at the end of the workflow:
           complete: ${{ github.event_name != 'pull_request' }}
 ```
 
-- **`speccheck-install`** installs `common/speccheck` from the checkout with `uv tool install`
-  and puts `speccheck` on `PATH`. It sets up uv with no cache and leaves the job's own environment
-  alone. A job that runs `pytest` in its own uv environment doesn't need it: the plugin comes with
-  the project's dev dependencies.
+- **`speccheck-install`** puts the `speccheck` command on `PATH` (with `uv tool install`, from the
+  checkout), and leaves the job's own environment alone. A job that runs `pytest` in its own uv
+  environment doesn't need it: the plugin comes with the project's dev dependencies.
 - **`speccheck-upload`** uploads `.speccheck/` (or `path`) as `speccheck-results-<name>`, kept 30
   days, and fails the job when there is nothing to upload.
-- **`speccheck-verify`** installs speccheck with `speccheck-install`, then downloads every
-  `speccheck-results-*` artifact of the run and looks up the run's job names from the jobs API. It
-  writes the report and uploads `report.md` and `report.json` as `speccheck-report`, kept 90 days.
-  Then it runs `verify --summary` with the report's URL, which puts only the counts, a link to the
-  report and the problems in the step summary, and fails with it, so it also fails when no
-  `speccheck-results-*` artifact was downloaded. It needs `contents: read` and `actions: read`, and
-  no secrets. Without `actions: read` it warns, and names results by producer. With `complete`, it
-  expects the producers that list the workflow's name.
-- **The report** has a table of the specs, then per spec its Purpose and a status table, then a
-  section per requirement: its full text, a link to its line in the spec, and a subsection per
-  claiming test or job with how it proves the requirement and one line per job that ran it, by
-  the job's display name. In CI, requirements and tests link to their lines at the tested commit.
-- Job links use `${{ job.check_run_id }}`, the job's check run ID, which is also the ID in its
-  URL. Without it, the link is the run attempt.
-- The report links a URL from a results file only when it is a run, attempt or job URL on the
-  report job's own `GITHUB_SERVER_URL` and `GITHUB_REPOSITORY`. A results file can't link
-  elsewhere, and a report built outside CI has no links.
+- **`speccheck-verify`** downloads every `speccheck-results-*` artifact of the run, looks up the
+  run's job names, writes the report and uploads it as `speccheck-report` (kept 90 days), then runs
+  `verify` and fails with it. It needs no secrets. Without `actions: read` it warns, and names
+  results by producer.
+
+### Reading the report and the step summary
+
+**The report** (`report.md` in the `speccheck-report` artifact) has a table of the specs, then per
+spec its Purpose and a status table, then a section per requirement: its full text, a link to its
+line in the spec, and a subsection per claiming test or job, with how it proves the requirement
+and one line per job that ran it, by the job's display name. In CI, requirements and tests link to
+their lines at the commit the run tested. `report.json` holds the same data.
+
+**The step summary** is one line of counts linking the report, then one entry per problem, and
+nothing else. On a pass it is the line alone:
+
+```markdown
+**speccheck:** 1 problem. 48 requirements: 1 failed, 40 passed, … Full report: [speccheck-report](…)
+
+- `specs/004-results-files.md:12: SPC-REQ-004-01 has no passing result: …`
+```
+
+**Each requirement has one status:**
+
+| Status | Means | Fails |
+|---|---|---|
+| `passed` | at least one claiming result passed (one is enough, in any producer or job) | no |
+| `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
+| `not run` | claimed only by producers that didn't report in these inputs; or, in `verify`, claimed by nothing while a test producer that may claim it hasn't reported | `verify --complete` |
+| `unclaimed` | nothing claims it, and it isn't planned, untested or retired. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
+| `claimed` | (`check` only) claimed; outcomes aren't looked at | no |
+| `planned`, `untested`, `retired` | the spec says so, and nothing claims it | no |
+
+A planned or untested requirement that is claimed is a problem: remove the marker.
+
+### Adopting it in a project
+
+What surprises a project moving onto speccheck:
+
+- **A half-migrated suite breaks local pytest.** With `speccheck_config` set, collection checks
+  every claim in the spec folder on every run. One bad claim stops pytest before any test runs,
+  even `pytest tests/x.py::one`. Migrate a whole spec at a time, and use `pytest -o speccheck_config=`
+  meanwhile.
+- **Docstring and comment citations stop counting, without a word.** Only
+  `@pytest.mark.covers(ID, how)` counts. Until a test carries the marker, its requirement is
+  unclaimed and `verify` fails on it, but nothing points at the old citation.
+- **Every claim needs its own explanation.** A parametrized test whose citation covered every case
+  needs a `pytest.param(..., marks=...)` per case, each saying something different. Class and
+  module marks move down to the tests.
+- **A CI job's ID is its producer.** `record` takes the job from `$GITHUB_JOB`, the job's key in the
+  workflow, and looks it up as `[ci.<job>]`. Renaming the job without the config entry makes
+  `record` fail.
+- **A workflow needs both pieces:** the upload in each producing job, and the final job, with
+  `needs:` on every producer, `if: ${{ !cancelled() }}`, and `speccheck-verify`. Without the final
+  job nothing checks the results.
+- **The old checker's settings move to the config.** A spec's `tests:` line and the index's
+  `id-prefix:` line are `lint` problems that say where each setting lives now.
+
+### Installing it
+
+Python 3.10 or newer. At runtime it needs only the standard library, plus `tomli` on 3.10.
+Installing it registers the pytest plugin, which does nothing until it is configured.
+
+**In this repo**, a project adds it as a path dev dependency, so its `uv.lock` changes:
+
+```toml
+[dependency-groups]
+dev = ["prometheus-speccheck"]
+
+[tool.uv.sources]
+prometheus-speccheck = { path = "../common/speccheck" }
+```
+
+**In an agent, don't use a path source:** the agent's Docker build and a clone of the agent repo
+alone don't have `common/`, and `uv sync --locked` fails on it. Use a git source pinned to a commit
+or tag instead (the dev group isn't installed in the image, so the build never fetches it), or run
+it with `uvx` and no dependency at all:
+
+```toml
+[tool.uv.sources]
+prometheus-speccheck = { git = "https://github.com/idaholab/prometheus_core", subdirectory = "common/speccheck", rev = "<commit or tag>" }
+```
+
+**As a command on its own,** `uv tool install ./common/speccheck` puts `speccheck` on `PATH`. In
+CI, the `speccheck-install` action does that.
+
+## Reference
+
+The details. The source of truth is speccheck's own specs, in [`specs/`](specs/000-index.md).
+
+### Commands and options
+
+| Command | Reads | Fails (exit 1) when |
+|---|---|---|
+| `lint` | the spec folder | a spec breaks the format |
+| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't planned, untested or retired has no claim; a claim names a malformed, unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
+| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
+| `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json` |
+| `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
+
+- `RESULTS` are results files, or folders searched for `*.jsonl`. Symlinks aren't followed: one
+  given as an input is a `results-symlink` problem, and one inside a folder is skipped.
+- `--complete --workflow NAME` (on `verify` and `report`) expects only the producers that list that
+  workflow.
+- `--job-names FILE` (on `verify` and `report`) is a JSON object from a job's ID to its display
+  name, to name each result's job. It is optional; without it a result is named by its producer. A
+  file that isn't such an object is a usage error.
+- `--summary FILE` (on `lint`, `check` and `verify`) appends the step summary. `--report-url URL`
+  links the report from it, only when it is an artifact URL of this run's own repository, such as
+  the `artifact-url` output of `actions/upload-artifact`.
+- Global options work before or after the command: `--config PATH` (default `speccheck.toml` here,
+  then `[tool.speccheck]` in `pyproject.toml`), `--json`, `--quiet`, `--verbose`, `--version`.
+- Exit codes: 0 fine, 1 problems, 2 usage or config error.
+
+### Output and --json
+
+Problems go to stderr as `path:line: message`, so editors and CI logs link them, and each message
+says what to do. The last line is a summary, such as
+`speccheck verify: 58 requirements: 1 failed, 57 passed; reported: speccheck-requirements; 1 problem`.
+
+With `--json`, stdout is exactly one object, on every exit path:
+
+```json
+{
+  "schema_version": 1,
+  "command": "verify",
+  "ok": false,
+  "problems": [{"path": "specs/002-config.md", "line": 18, "message": "SPC-REQ-002-04 has no passing result: ...", "code": "failed"}],
+  "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "planned": 0, "untested": 0, "retired": 0},
+  "requirements": [
+    {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
+     "evidence": [{"test": "tests/requirements/test_002_config.py::test_the_prefix", "kind": "test", "file": "tests/requirements/test_002_config.py", "line": 70,
+                   "root": "common/speccheck", "outcome": "failed", "producer": "speccheck-requirements", "job": "requirements",
+                   "job_name": "speccheck: requirements python 3.12", "url": "https://..."}],
+     "path": "common/speccheck/specs/002-config.md", "line": 18}
+  ],
+  "producers": {"reported": ["speccheck-requirements"], "missing": []}
+}
+```
+
+- A usage or config error has `"error": {"code": "usage", "message": "..."}` instead (a bare
+  `speccheck --json` is one).
+- Each problem's `code` is a stable name for its kind (`unclaimed`, `failed`, `not-run`,
+  `bullet-malformed`, `producer-missing`, `no-results`, `results-not-json` and so on). The
+  `message` wording can change; the `code` doesn't.
+- `"line": 0` means the problem has no line (a whole file, or the config).
+- Fields are only added within a `schema_version`.
+
+### Spec format
+
+- **Files.** `NNN-short-name.md`, whose first line is `# NNN - Name`. Any other `.md` file in the
+  folder is a problem. With `require-index` (the default), `000-index.md` must link every spec as a
+  markdown link, such as `[004](004-results-files.md)`; a mention in prose doesn't count.
+- **Header.** One `status:` line above the first `##`: `draft`, `implemented` or `retired`. An
+  `implemented` spec needs at least one requirement; a `draft` spec's requirements are checked
+  like an `implemented` spec's.
+  Other header lines (`sources:`, `depends-on:`) are free text.
+- **Purpose.** A `## Purpose` section, when there is one, is shown under the spec's heading in the
+  report.
+- **Bullets.** `- <prefix>-REQ-NNN-XX: text` or `- <prefix>-BEH-NNN-XX: text`, where `NNN` is the
+  spec's number. The prefix comes from the config, or is absent when `id-prefix = ""`. A bullet may
+  wrap onto lines indented two spaces. A line that starts like an ID in any other form (`*`, bold,
+  nested, missing prefix) is a problem, so it can't go unseen.
+- **Unique.** IDs are unique across the folder, and so is the text of every requirement that isn't
+  retired (compared ignoring case, whitespace and a trailing full stop).
+- **Markers**, anywhere in the bullet's text: `⚠ untested` (no test yet, on purpose) or
+  `(planned: <step>)` (a later plan step delivers it). Never both. Text starting `Retired.` or
+  `Retired:`, or a `retired` spec, retires a requirement. A retired ID stays in the spec and must
+  not be claimed.
+- Fenced code blocks are skipped.
+
+### Config
+
+One config per spec folder: `speccheck.toml`, or `[tool.speccheck]` in a project's `pyproject.toml`.
+Paths are relative to the config file, and an unknown key is an error.
+
+```toml
+specs = "specs"                 # the spec folder
+id-prefix = "SPC"               # IDs are SPC-REQ-NNN-XX; "" for bare IDs
+require-index = true            # 000-index.md must link every spec
+
+[producers.speccheck-requirements]      # a test run that provides evidence
+specs = "all"                   # or ["001", "004"]: the specs it may claim
+workflows = ["speccheck"]       # the workflows it runs in, for verify --complete --workflow
+
+[ci.speccheck-self-check]       # a CI job (by its job id) that is itself evidence
+workflows = ["speccheck"]
+
+[ci.speccheck-self-check.covers]  # each ID it claims, and how the job proves it
+SPC-REQ-007-03 = "the job uploads its results and checks that an empty folder fails the upload"
+
+[report]
+title = "speccheck requirements"
+```
+
+A `[ci.<job>]` entry claims at least one ID and can't share a name with a producer, and its
+explanations follow the same rules as a test's. A results file from an undeclared producer is a
+problem, and its results don't count.
+
+### Claim rules
+
+Collection fails, on every run and whatever tests were selected:
+
+- on a mark that isn't exactly two strings, the ID and the explanation;
+- on a mark on a class or module, on the function of a parametrized test, and on a claiming test
+  with two `parametrize`s or a parametrized fixture (`marks=` on a `pytest.param` takes a list
+  when one case proves several requirements);
+- on an explanation that, with its whitespace collapsed (line breaks included), is empty, over
+  1000 characters, the ID itself, or a placeholder (`TODO`, `TBD`, `FIXME`, `...`, `-`);
+- on a test that claims one ID twice, and on two claims in the session with the same explanation.
+
+With `speccheck_config` set it also fails on a malformed, unknown or retired ID, on one the
+producer may not claim, on an explanation that is the text of any requirement in the folder, and
+when no producer is set (`SPECCHECK_PRODUCER` or `speccheck_producer`), rather than skip the
+which-specs check. Without `speccheck_config`, only the checks that need no specs run, and no
+test's outcome changes.
+
+`check` and `verify` repeat the "same explanation" check across every results file and
+`[ci.<job>]` entry; the same test in another job or attempt is the same claim. Explanations are
+compared ignoring case, whitespace and a trailing full stop. The plugin registers the marker, so
+`--strict-markers` accepts it. Only the marker counts: a docstring may still say what a test proves,
+for the reader.
+
+### Results files
+
+`speccheck-results/1`, JSON Lines: a header, then one line per claiming test. The JSON Schema,
+[`speccheck/schema/speccheck-results-1.schema.json`](speccheck/schema/speccheck-results-1.schema.json),
+is there for runners in other languages.
+
+```json
+{"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 9.2.0", "started": "2026-11-01T12:00:00Z", "root": "sdk",
+ "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core", "workflow": "test", "job": "sdk-python",
+        "run_id": 123, "run_attempt": 1, "job_id": 456, "sha": "...", "ref": "...", "event": "push",
+        "run_url": ".../actions/runs/123/attempts/1", "job_url": ".../actions/runs/123/job/456"}}
+{"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py", "line": 181,
+ "covers": [{"id": "SDK-REQ-006-08", "how": "a chat call goes through the proxy URL"}], "outcome": "passed"}
+```
+
+- `covers` has one `{"id", "how"}` entry per claimed ID.
+- `ci` says which CI provider ran it and where. GitHub Actions is the only provider so far: its
+  block comes from `GITHUB_*`, plus `SPECCHECK_JOB_ID`. Outside CI it is null. A job can't read its
+  own display name, so the final job looks the names up and passes them as `--job-names`.
+- `root` is the folder the `file` paths are relative to (pytest's root), as a path from the
+  repository's root: `GITHUB_WORKSPACE` in CI, else the nearest folder with a `.git`, else null.
+  The report uses it to link each test to its line.
+- The plugin writes a file only when asked (`--speccheck-results=PATH` or `SPECCHECK_RESULTS`), at
+  the end of the session. An interrupted session leaves none, so `verify --complete` reports the
+  producer as missing.
+- A test's outcome merges its setup, call and teardown: an error in setup or teardown makes it
+  `error`, a skip `skipped`, and an expected failure `xfailed`. `error` is sticky, so a flaky
+  fixture can't hide behind a rerun plugin's retry. Skipped, deselected and (`--collect-only`)
+  collected claims are written too, so `verify` can say "claimed but didn't run".
+- Under pytest-xdist the run writes one file, with every worker's results.
+
+The rest (what a reader rejects, size limits, atomic writes) is in
+[`specs/004-results-files.md`](specs/004-results-files.md).
+
+### Security
+
+- **Results files are untrusted,** since a pull request controls what its tests write. A reader
+  parses JSON only, with size limits, checks every field, rejects a bad file whole, and never opens
+  a path named in one.
+- **Nothing speccheck prints can start a CI log command:** control characters, a leading `::` and
+  `##[` are written out (see [`specs/008-command-line.md`](specs/008-command-line.md)).
+- **The report and the summary can only hold text.** Everything from a results file, a spec or the
+  job names is escaped, and links go only to this run's own repository: its jobs and runs, its
+  files at the tested commit, and its report artifact. A report built outside CI has no links.
+- **Keep secrets out of test IDs and explanations.** Both go into artifacts CI keeps for weeks, and
+  nothing scrubs them. Give a parameter built from a fixture or an environment value (a token, a
+  URL with credentials) a fixed `id=` or `ids=`.
+- `speccheck-verify` needs `contents: read` and `actions: read` only, and no secrets.
+
+### For maintainers
+
+- The design and its decisions: [`plan/design.md`](plan/design.md), and the plan steps in
+  [`plan/`](plan/README.md).
+- speccheck's own requirements: [`specs/`](specs/000-index.md), proven by `tests/requirements/`
+  (one file per spec) and checked by speccheck itself in
+  [`speccheck.yml`](../../.github/workflows/speccheck.yml). Its unit tests are in `tests/unit/`,
+  and rules about the code base in `tests/rules/`.
