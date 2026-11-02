@@ -235,6 +235,17 @@ def test_a_file_only_when_asked(project: Project, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.covers("SPC-REQ-004-05")
+def test_an_unwritable_results_path_is_a_usage_error(project: Project):
+    """A file where the folder should be: pytest says why and exits as a usage error, with no traceback."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n')
+    (project.root / "blocker").write_text("a file, not a folder")
+    run = project.pytest("--speccheck-results=blocker/r.jsonl")
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    assert "speccheck: can't write the results file" in "\n".join(run.stderr.lines + run.stdout.lines)
+    assert "Traceback" not in run.stdout.str()
+
+
+@pytest.mark.covers("SPC-REQ-004-05")
 def test_an_interrupted_session_leaves_no_file(project: Project):
     """A KeyboardInterrupt mid-run (in a separate process, as a real one would be) writes nothing."""
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    raise KeyboardInterrupt\n')
