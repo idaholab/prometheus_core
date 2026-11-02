@@ -13,7 +13,7 @@
 /* The example for end-to-end tests: load the built app in a real browser,
  * answer its /api calls with page.route, and find elements by role and
  * accessible name the way the component tests do. */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Request } from "@playwright/test";
 import type {
   AuthProvider,
   ConfigResponse,
@@ -26,6 +26,12 @@ import type {
 /* Stub bodies are typed with the app's own API types, so a change to a
  * response shape fails `npm run typecheck` until the stubs match it. */
 type ErrorBody = { detail: string };
+
+/** Checks the sign-in request carries what was typed, as the backend expects it. */
+function expectLogin(request: Request, username: string, password: string) {
+  expect(request.method()).toBe("POST");
+  expect(request.postDataJSON()).toEqual({ username, password });
+}
 
 /* The /api calls no stub answered in the current test. The app shrugs off a
  * 404 in several places, so without this a missing stub would go unnoticed. */
@@ -70,8 +76,10 @@ test("wrong credentials show an error", async ({ page }) => {
 
   await page.getByRole("textbox", { name: "Username" }).fill("someone");
   await page.getByLabel("Password").fill("not-the-password");
+  const login = page.waitForRequest("/api/auth/login");
   await page.getByRole("button", { name: "Sign in" }).click();
 
+  expectLogin(await login, "someone", "not-the-password");
   await expect(page.getByRole("alert")).toHaveText("Invalid credentials");
 });
 
@@ -117,7 +125,10 @@ test("signing in opens the app as the user the server returned", async ({ page }
 
   await page.getByRole("textbox", { name: "Username" }).fill("someone");
   await page.getByLabel("Password").fill("the-password");
+  const login = page.waitForRequest("/api/auth/login");
   await page.getByRole("button", { name: "Sign in" }).click();
+
+  expectLogin(await login, "someone", "the-password");
 
   await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
