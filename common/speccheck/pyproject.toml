@@ -23,7 +23,11 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=84.2.1", "wheel"]
+# Pinned exactly: speccheck-install builds this in the job that holds the run's downloaded
+# artifacts, so the build backend shouldn't change under it. setuptools builds wheels itself
+# (since 70.1), so `wheel` isn't needed. uv.lock doesn't cover build requirements, so a
+# bump here is its own change
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
