@@ -137,6 +137,19 @@ What differs from the plan above, or settles something it left open:
     so it has the link.
   - New and changed requirements: 001-10, 002-06, 003-02, 003-04, 003-05, 003-08 to 003-11,
     004-01, 004-09, 005-10, 006-01, 006-03, 007-01, 007-04, 007-07, 008-07 to 008-09.
+- **The report, one section per requirement (2026-11-02, from the first CI report):** the table
+  per spec read badly once the text was long. The report now has a table of specs, then per spec
+  its Purpose and a status table, then a section per requirement and a subsection per claiming
+  test or job. Decided with it:
+  - **Jobs by display name, not matrix value:** `SPECCHECK_LEG` and `ci.leg` are gone, since a
+    matrix value can't name a job with two axes or none. `speccheck-verify` looks up the run's job
+    names from the jobs API (now `actions: read` as well as `contents: read`) and passes them to
+    `report` and `verify` as `--job-names`, which is optional.
+  - **Source links:** each requirement links to its spec line, and each test to its line, at the
+    tested commit. The results header gained `root`, so a test's file is known from the
+    repository's root.
+  - **Lighter escaping** outside code spans.
+  - New and changed requirements: 004-08, 004-10, 006-01, 006-02, 006-03, 006-07, 007-04, 008-10.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 

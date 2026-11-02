@@ -32,3 +32,6 @@ object for scripts and agents.
 - SPC-REQ-008-09: With `--report-url URL`, the summary line MUST link to the full report, but only
   when the URL has the form of an artifact link of a supported CI provider (see SPC-REQ-007-07) on
   the run's server and repository. Otherwise the line MUST have no link.
+- SPC-REQ-008-10: `report` and `verify` MUST take `--job-names FILE`, a JSON object from a job's ID
+  to its display name, and name each job that way in what they write. It MUST be optional, and a
+  file that isn't such an object MUST be a usage error.
