@@ -93,6 +93,22 @@ def test_one_json_object_on_every_exit_path(project: Project):
 
 
 @pytest.mark.covers("SPC-REQ-008-04")
+def test_each_problem_has_a_stable_code(project: Project):
+    """`code` names the kind of problem, so a reader of `--json` needn't parse the message; `line` 0 means none."""
+    project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.")
+    for argv, code in (
+        (["lint", "--json"], "bullet-malformed"),
+        (["check", "--json"], "unclaimed"),
+        (["verify", "--json"], "no-results"),
+    ):
+        problems = json.loads(command(project, *argv).stdout)["problems"]
+        assert code in {p["code"] for p in problems}, argv
+        assert all(set(p) == {"path", "line", "message", "code"} for p in problems), argv
+    verify = json.loads(command(project, "verify", "--json").stdout)["problems"]
+    assert [p["line"] for p in verify if p["code"] == "no-results"] == [0]
+
+
+@pytest.mark.covers("SPC-REQ-008-04")
 def test_an_unwritable_output_is_still_one_json_object(project: Project):
     """A file in the way of the output folder is a usage error (2) as an object, not a traceback."""
     project.spec("- T-REQ-001-01: One.")

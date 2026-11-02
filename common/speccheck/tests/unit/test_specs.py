@@ -291,7 +291,12 @@ class TestProblems:
         """With a line and without one."""
         assert str(specs.Problem("a.md", 3, "bad")) == "a.md:3: bad"
         assert str(specs.Problem("a.md", 0, "bad")) == "a.md: bad"
-        assert specs.Problem("a.md", 3, "bad").to_json() == {"path": "a.md", "line": 3, "message": "bad"}
+        assert specs.Problem("a.md", 3, "bad").to_json() == {
+            "path": "a.md",
+            "line": 3,
+            "message": "bad",
+            "code": "problem",
+        }
 
     def test_control_characters_are_written_out(self):
         """A newline can't start a `::error::` line in a CI log."""

@@ -73,7 +73,7 @@ spec text or results file can't start a `::error::` or `##[error]` line in a CI 
   "schema_version": 1,
   "command": "verify",
   "ok": false,
-  "problems": [{"path": "specs/002-config.md", "line": 18, "message": "SPC-REQ-002-04 has no passing result: ..."}],
+  "problems": [{"path": "specs/002-config.md", "line": 18, "message": "SPC-REQ-002-04 has no passing result: ...", "code": "failed"}],
   "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "planned": 0, "untested": 0, "retired": 0},
   "requirements": [
     {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
@@ -84,8 +84,12 @@ spec text or results file can't start a `::error::` or `##[error]` line in a CI 
 }
 ```
 
-A usage or config error has `"error": {"code": "usage", "message": "..."}` instead. Fields are only
-added within a `schema_version`.
+A usage or config error has `"error": {"code": "usage", "message": "..."}` instead (a bare
+`speccheck --json` is one). Fields are only added within a `schema_version`.
+
+Each problem's `code` is a stable name for its kind (`unclaimed`, `failed`, `not-run`, `bullet-malformed`,
+`producer-missing`, `no-results`, `results-not-json` and so on); the `message` wording can change, the
+`code` doesn't. `"line": 0` means the problem has no line (it is a whole file or the config).
 
 ## Statuses
 

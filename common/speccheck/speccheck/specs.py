@@ -102,9 +102,11 @@ class Problem:
     path: str
     """The file, relative to where speccheck runs where possible."""
     line: int
-    """The 1-based line number, or 0 for the whole file."""
+    """The 1-based line number, or 0 when there is none (the problem is the whole file or the config)."""
     message: str
     """What is wrong and what to do about it."""
+    code: str = "problem"
+    """A stable kebab-case name for the kind of problem, such as `unclaimed`; it does not change with the wording."""
 
     def __str__(self) -> str:
         """`path:line: message`, the form editors and CI logs link, with control characters written out."""
@@ -113,7 +115,7 @@ class Problem:
 
     def to_json(self) -> dict:
         """The problem as a JSON object (the text is left as is; JSON escapes it)."""
-        return {"path": self.path, "line": self.line, "message": self.message}
+        return {"path": self.path, "line": self.line, "message": self.message, "code": self.code}
 
 
 @dataclass
@@ -209,7 +211,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     name = rel(path, root)
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or not lines[0].startswith(f"# {number} "):
-        problems.append(Problem(name, 1, f"the first line must be the title, `# {number} - <name>`"))
+        problems.append(Problem(name, 1, f"the first line must be the title, `# {number} - <name>`", "spec-title"))
     else:
         spec.title = lines[0][len(f"# {number} ") :].lstrip("-– ").strip()
 
@@ -228,26 +230,35 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
             in_header = False
         if in_header and line.startswith("status:"):
             if seen_status:
-                problems.append(Problem(name, line_number, "a second `status:` line; a spec has one"))
+                problems.append(
+                    Problem(name, line_number, "a second `status:` line; a spec has one", "status-repeated")
+                )
             else:
                 seen_status = True
                 spec.status = line[len("status:") :].strip()
                 if spec.status not in STATUSES:
-                    problems.append(Problem(name, line_number, f"status must be one of {', '.join(STATUSES)}"))
+                    problems.append(
+                        Problem(name, line_number, f"status must be one of {', '.join(STATUSES)}", "status-invalid")
+                    )
         if in_header and line.startswith("tests:"):
             message = "the `tests:` line is gone; say which producers may claim this spec in the config instead"
-            problems.append(Problem(name, line_number, message))
+            problems.append(Problem(name, line_number, message, "tests-line-gone"))
 
         if syntax.bullet_start.match(line):
             match = syntax.bullet.match(line)
             if match is None:
                 message = f"a bullet must read `- {syntax.head}REQ-NNN-XX: text` (or BEH); found {what_is_wrong(line, syntax)}"
-                problems.append(Problem(name, line_number, message))
+                problems.append(Problem(name, line_number, message, "bullet-malformed"))
                 current = None
                 continue
             if match.group("number") != number:
                 problems.append(
-                    Problem(name, line_number, f"{match.group('id')} belongs in spec {match.group('number')}")
+                    Problem(
+                        name,
+                        line_number,
+                        f"{match.group('id')} belongs in spec {match.group('number')}",
+                        "bullet-wrong-spec",
+                    )
                 )
             current = Requirement(
                 id=match.group("id"), spec=spec, line=line_number, text=line[match.end("id") + 2 :].strip()
@@ -259,7 +270,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
             current = None
 
     if not seen_status:
-        problems.append(Problem(name, 0, "missing the `status:` line"))
+        problems.append(Problem(name, 0, "missing the `status:` line", "status-missing"))
     return spec
 
 
@@ -279,38 +290,46 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
     index = specs_dir / INDEX
     index_text = index.read_text(encoding="utf-8") if index.is_file() else None
     if index_text is None and require_index:
-        problems.append(Problem(rel(index, root), 0, f"the spec folder needs a {INDEX} that links every spec"))
+        problems.append(
+            Problem(rel(index, root), 0, f"the spec folder needs a {INDEX} that links every spec", "index-missing")
+        )
     if index_text is not None:
         for line_number, line in enumerate(index_text.splitlines(), 1):
             if line.startswith("id-prefix:"):
                 message = "the `id-prefix:` line is gone; set `id-prefix` in the config instead"
-                problems.append(Problem(rel(index, root), line_number, message))
+                problems.append(Problem(rel(index, root), line_number, message, "id-prefix-line-gone"))
 
     specs = []
     for path in sorted(specs_dir.glob("*.md")):
         if path.name == INDEX:
             continue
         if not SPEC_FILE.match(path.name):
-            problems.append(Problem(rel(path, root), 0, "a spec file must be named NNN-short-name.md"))
+            problems.append(
+                Problem(rel(path, root), 0, "a spec file must be named NNN-short-name.md", "spec-file-name")
+            )
             continue
         if require_index and index_text is not None and not links_to(index_text, path.name):
             message = f"the index doesn't link {path.name}; list it as `[{path.name[:3]}]({path.name})`"
-            problems.append(Problem(rel(index, root), 0, message))
+            problems.append(Problem(rel(index, root), 0, message, "index-link-missing"))
         specs.append(parse_spec(path, root, syntax, problems))
 
     requirements: dict[str, Requirement] = {}
     for spec in specs:
         name = rel(spec.path, root)
         if spec.status == "implemented" and not spec.requirements:
-            problems.append(Problem(name, 0, "an implemented spec needs at least one requirement"))
+            problems.append(Problem(name, 0, "an implemented spec needs at least one requirement", "spec-empty"))
         for requirement in spec.requirements:
             if requirement.id in requirements:
                 first = requirements[requirement.id]
                 where = f"{rel(first.spec.path, root)}:{first.line}"
-                problems.append(Problem(name, requirement.line, f"{requirement.id} is also at {where}; IDs are unique"))
+                problems.append(
+                    Problem(
+                        name, requirement.line, f"{requirement.id} is also at {where}; IDs are unique", "id-duplicate"
+                    )
+                )
                 continue
             requirements[requirement.id] = requirement
             if requirement.untested and requirement.planned:
                 message = f"{requirement.id} is both planned and untested; keep one marker"
-                problems.append(Problem(name, requirement.line, message))
+                problems.append(Problem(name, requirement.line, message, "marker-conflict"))
     return SpecSet(specs=specs, requirements=requirements, problems=problems, syntax=syntax)
