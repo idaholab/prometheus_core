@@ -19,7 +19,7 @@ CI context in a real run are proven in tests/requirements/test_003 and test_004.
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from typing import Any
 
@@ -127,6 +127,12 @@ class TestMarks:
         """pytest's 0-based line, plus one; 0 when pytest doesn't know it."""
         assert pytest_plugin._where(item(line=2)) == ("t.py", 3)
         assert pytest_plugin._where(item(line=None)) == ("t.py", 0)
+
+    def test_where_uses_forward_slashes(self, monkeypatch: pytest.MonkeyPatch):
+        """The file is stored with `/` even where the OS separator is `\\`, so results read the same everywhere."""
+        monkeypatch.setattr(pytest_plugin, "Path", PureWindowsPath)
+        windows = SimpleNamespace(location=("tests\\x.py", 0, "test_a"))
+        assert pytest_plugin._where(windows) == ("tests/x.py", 1)
 
 
 class TestChecker:
