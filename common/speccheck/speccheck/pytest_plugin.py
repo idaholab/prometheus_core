@@ -99,7 +99,11 @@ def _bad_args(item: pytest.Item) -> str:
 
 
 def _where(item: pytest.Item) -> tuple[str, int]:
-    """The test's file and 1-based line, from pytest's own location."""
+    """The test's file and 1-based line, from pytest's own location.
+
+    The node ID is written as is, parametrize IDs included, into artifacts CI keeps for weeks.
+    Nothing scrubs it, so the README tells projects to keep secrets out of parametrize IDs.
+    """
     path, line, _ = item.location
     return path, (line + 1 if line is not None else 0)
 
