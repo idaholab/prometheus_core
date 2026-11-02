@@ -14,7 +14,7 @@
  * answer its /api calls with page.route, and find elements by role and
  * accessible name the way the component tests do. */
 import { expect, test } from "@playwright/test";
-import type { AuthProvider, SetupStatus } from "../src/lib/api/types";
+import type { AuthProvider, ConfigResponse, SessionResponse, SetupStatus, User } from "../src/lib/api/types";
 
 /* Stub bodies are typed with the app's own API types, so a change to a
  * response shape fails `npm run typecheck` until the stubs match it. */
@@ -52,4 +52,49 @@ test("wrong credentials show an error", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page.getByRole("alert")).toHaveText("Invalid credentials");
+});
+
+test("signing in opens the app as the user the server returned", async ({ page }) => {
+  // An admin, because only an admin sees the Admin entry, so the test fails
+  // if the app doesn't read the user out of the login response
+  const user: User = { identifier: "someone", role: "admin", provider: "local" };
+  await page.route("/api/auth/login", (route) => route.fulfill({ json: { user } }));
+  // What the app loads once signed in: its config, a new chat session, and the
+  // live event stream, which stays open with no events
+  await page.route("/api/config", (route) =>
+    route.fulfill({
+      json: {
+        profiles: [],
+        chat_intro: "Welcome",
+        chat_suggestion_title: "What would you like to do today?",
+        workflow_suggestions: [],
+        auto_approve_steps: false,
+        max_upload_bytes: 10_000_000,
+      } satisfies ConfigResponse,
+    }),
+  );
+  await page.route("/api/sessions", (route) =>
+    route.fulfill({
+      json: {
+        conversation_id: "conversation-1",
+        profile: "",
+        chat_intro: "Welcome",
+        chat_suggestion_title: "What would you like to do today?",
+        workflow_suggestions: [],
+        auto_approve_steps: false,
+      } satisfies SessionResponse,
+    }),
+  );
+  await page.route("/api/events", (route) =>
+    route.fulfill({ headers: { "content-type": "text/event-stream" }, body: "" }),
+  );
+  await page.goto("/");
+
+  await page.getByRole("textbox", { name: "Username" }).fill("someone");
+  await page.getByLabel("Password").fill("the-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toHaveCount(0);
 });
