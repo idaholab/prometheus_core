@@ -420,6 +420,33 @@ def test_xdist_writes_one_file_with_every_workers_results(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-004-06",
+    "an inner run with -n 1 whose worker dies mid-run still writes the claim that passed before the crash as passed",
+)
+def test_xdist_keeps_what_a_crashed_worker_ran(project: Project):
+    """The crashed worker sends no claims; the controller's relayed reports keep the pass."""
+    project.tests(
+        """\
+        import os
+        import pytest
+
+        @pytest.mark.covers("T-REQ-001-01", "inner claim that passes before the crash")
+        def test_a():
+            pass
+
+        def test_b():
+            os._exit(1)
+
+        @pytest.mark.covers("T-REQ-001-01", "inner claim that runs on the replacement worker")
+        def test_c():
+            pass
+        """
+    )
+    project.pytest("-p", "xdist", "-n", "1", "--speccheck-results=x.jsonl", subprocess=True)
+    assert outcomes(project, "x.jsonl") == {"test_a": "passed", "test_c": "passed"}
+
+
+@pytest.mark.covers(
     "SPC-REQ-004-07",
     "verify refuses a 70,000-character line and ignores a symlinked file and folder in the results folder, so nothing is reported",
 )

@@ -18,7 +18,9 @@ until asked:
 - with `--speccheck-results=PATH` or `SPECCHECK_RESULTS`, the session writes a results file.
 
 Under pytest-xdist each worker collects and runs its share of the tests and sends its claims and
-outcomes back in `workeroutput`. Only the controller writes the file.
+outcomes back in `workeroutput`. Only the controller writes the file. A worker that crashes sends no
+`workeroutput`, so the controller also keeps the outcome of every test from the reports xdist relays
+to it, and uses that for a test whose claims only a replacement worker, which didn't run it, sent.
 """
 
 from __future__ import annotations
@@ -277,6 +279,9 @@ class Recorder:
         """The session's config."""
         self.claims: dict[str, dict[str, Any]] = config.stash[CLAIMS]
         """The session's claims, by node ID."""
+        self.relayed: dict[str, str] = {}
+        """Outcomes merged from the reports of tests this process has no claims for, by node ID: on the
+        xdist controller, every test's, relayed from the worker that ran it."""
 
     def pytest_deselected(self, items: list[pytest.Item]) -> None:
         """A deselected claiming test is written as `deselected`, so verify can say it didn't run."""
@@ -290,6 +295,8 @@ class Recorder:
         claim = self.claims.get(report.nodeid)
         if claim is not None:
             claim["outcome"] = merge(claim["outcome"], report)
+        else:
+            self.relayed[report.nodeid] = merge(self.relayed.get(report.nodeid, "collected"), report)
 
     @pytest.hookimpl(optionalhook=True)
     def pytest_testnodedown(self, node: Any, error: Any) -> None:
@@ -299,6 +306,13 @@ class Recorder:
             if current is None or RANK.get(current["outcome"], 2) < RANK.get(claim["outcome"], 2):
                 self.claims[nodeid] = dict(claim)
 
+    def apply_relayed(self) -> None:
+        """Give a claim that no worker ran the outcome the controller saw relayed: its worker crashed (004-06)."""
+        for nodeid, outcome in self.relayed.items():
+            claim = self.claims.get(nodeid)
+            if claim is not None and claim["outcome"] in RANK and outcome not in RANK:
+                claim["outcome"] = outcome
+
     @pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
         """Write the results file, from the controller only, unless the run was interrupted or never started."""
@@ -307,6 +321,7 @@ class Recorder:
         path = results_path(self.config)
         if path is None:
             return
+        self.apply_relayed()
         results_file = results.ResultsFile(
             producer=os.environ.get(ci.PRODUCER_VAR) or self.config.getini("speccheck_producer") or "local",
             runner=f"pytest {pytest.__version__}",

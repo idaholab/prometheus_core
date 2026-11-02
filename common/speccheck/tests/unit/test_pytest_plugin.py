@@ -483,6 +483,21 @@ class TestRecorder:
         assert recorder.claims["t.py::new"]["outcome"] == "collected"
         recorder.pytest_testnodedown(SimpleNamespace(), None)  # a worker that crashed has no workeroutput
 
+    def test_relayed_reports_fill_in_what_a_crashed_worker_ran(self, tmp_path: Path):
+        """A report for a test with no claims here is kept; it replaces only `collected` or `deselected`."""
+        recorder = pytest_plugin.Recorder(fake_config(tmp_path))
+        for phase in (report("setup", "passed", nodeid="t.py::a"), report("call", "passed", nodeid="t.py::a")):
+            recorder.pytest_runtest_logreport(phase)
+        recorder.pytest_runtest_logreport(report("call", "failed", nodeid="t.py::b"))
+        recorder.pytest_runtest_logreport(report("call", "passed", nodeid="t.py::nothing"))
+        recorder.claims.update(
+            {"t.py::a": {**CLAIM, "outcome": "collected"}, "t.py::b": {**CLAIM, "outcome": "passed"}}
+        )
+        recorder.apply_relayed()
+        assert recorder.claims["t.py::a"]["outcome"] == "passed"
+        assert recorder.claims["t.py::b"]["outcome"] == "passed"  # a worker's own outcome wins
+        assert "t.py::nothing" not in recorder.claims
+
     def test_written_claims_carry_their_explanations(self, tmp_path: Path):
         """The results file holds each claim's ID and how."""
         recorder = self.recorder(tmp_path, option="r.jsonl")
