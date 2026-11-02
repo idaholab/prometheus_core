@@ -175,7 +175,11 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
         ("retired", True, []),
         ("claimed", True, []),
         ("unclaimed", False, ['T-REQ-001-01 is not claimed; add `@pytest.mark.covers("T-REQ-001-01")`']),
-        ("failed", False, ["T-REQ-001-01 has no passing result: t0 failed in unit 3.12"]),
+        (
+            "failed",
+            False,
+            ["T-REQ-001-01 has no passing result: t0 failed in unit 3.12; to fix: fix the test or the code it checks"],
+        ),
         ("not run", False, []),
         ("not run", True, ["T-REQ-001-01 was not run: nothing that reported claims it (waiting on: unit)"]),
     ],
@@ -200,7 +204,15 @@ def test_a_long_list_of_failures_is_cut():
     """At most five results are listed in the message."""
     decided = evidence.Status(make_requirement(make_spec()), "failed", evidence_of(*["skipped"] * 7))
     message = evidence._problems_of(decided, ROOT, False)[0].message
-    assert message.count("skipped in unit") == 5 and message.endswith("(and 2 more)")
+    assert message.count("skipped in unit") == 5 and "(and 2 more); to fix: " in message
+
+
+def test_the_hint_names_each_outcome_once():
+    """Mixed outcomes get one hint each, in the order seen; an outcome with no hint adds none."""
+    decided = evidence.Status(make_requirement(make_spec()), "failed", evidence_of("skipped", "failed", "skipped"))
+    message = evidence._problems_of(decided, ROOT, False)[0].message
+    assert message.endswith(f"; to fix: {evidence.HINTS['skipped']}; or {evidence.HINTS['failed']}")
+    assert evidence._hint([]) == ""
 
 
 @pytest.mark.parametrize(

@@ -113,6 +113,25 @@ def _where(result: Result) -> tuple[str, int]:
     return (result.file or result.test), result.line
 
 
+HINTS = {
+    "failed": "fix the test or the code it checks",
+    "error": "fix the setup or teardown that raised",
+    "skipped": "make the test run here, or claim the requirement from a leg where it runs",
+    "xfailed": "an expected failure proves nothing; fix it and remove the xfail",
+    "xpassed": "an unexpected pass isn't a pass; remove the xfail",
+    "deselected": "run it: drop the `-k`/`-m` filter or the test's path argument that left it out",
+    "collected": "the run ended before it ran; look for an earlier crash or `-x`",
+}
+"""What to do about each outcome that isn't a pass."""
+
+
+def _hint(found: list[Evidence]) -> str:
+    """One hint per distinct outcome among `found`, in the order seen."""
+    outcomes = dict.fromkeys(e.result.outcome for e in found)
+    hints = [HINTS[o] for o in outcomes if o in HINTS]
+    return f"; to fix: {'; or '.join(hints)}" if hints else ""
+
+
 def _describe(evidence: Evidence) -> str:
     """ "tests/test_x.py::test_y skipped in speccheck-requirements 3.12"."""
     leg = (evidence.source.ci or {}).get("leg") or ""
@@ -259,7 +278,9 @@ def _problems_of(status: Status, root, complete: bool) -> list[Problem]:
     elif status.status == FAILED:
         seen = "; ".join(_describe(e) for e in status.evidence[:5])
         more = f" (and {len(status.evidence) - 5} more)" if len(status.evidence) > 5 else ""
-        problems.append(Problem(name, line, f"{requirement.id} has no passing result: {seen}{more}", FAILED))
+        problems.append(
+            Problem(name, line, f"{requirement.id} has no passing result: {seen}{more}{_hint(status.evidence)}", FAILED)
+        )
     elif status.status == NOT_RUN and complete:
         waiting = ", ".join(status.waiting_on) or "none"
         message = f"{requirement.id} was not run: nothing that reported claims it (waiting on: {waiting})"
