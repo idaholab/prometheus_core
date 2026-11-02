@@ -134,6 +134,13 @@ def dumps(results_file: ResultsFile) -> str:
     return "".join(json.dumps(line, sort_keys=True, ensure_ascii=False) + "\n" for line in lines)
 
 
+def _umask() -> int:
+    """The process umask; it can only be read by setting it."""
+    mask = os.umask(0)
+    os.umask(mask)
+    return mask
+
+
 def write(path: Path, results_file: ResultsFile) -> None:
     """Write atomically: to a temporary file beside `path`, then renamed over it, so a crash leaves nothing."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,6 +148,9 @@ def write(path: Path, results_file: ResultsFile) -> None:
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             stream.write(dumps(results_file))
+        # mkstemp makes the file 0600; give it the mode an ordinary new file would get, so a file written by
+        # a container as root can be read by the host user
+        os.chmod(temporary, 0o666 & ~_umask())
         os.replace(temporary, path)
     except BaseException:
         os.unlink(temporary)
