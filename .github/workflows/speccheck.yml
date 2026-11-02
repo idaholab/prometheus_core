@@ -29,6 +29,8 @@ on:
   # cost the whole workflow (about 13 jobs) for every entry. Add it back when the check is required
 
 permissions:
+  # actions: read lets speccheck-verify look up this run's job names, to name each result's job
+  actions: read
   contents: read
 
 concurrency:
@@ -102,7 +104,6 @@ jobs:
         working-directory: common/speccheck
     env:
       SPECCHECK_PRODUCER: speccheck-requirements
-      SPECCHECK_LEG: ${{ matrix.python }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -197,6 +198,10 @@ jobs:
           grep -qE '^\*\*speccheck:\*\* .*Full report: \[speccheck-report\]\(https://github\.com/.+/actions/runs/[0-9]+/artifacts/[0-9]+\)$' "$SUMMARY" \
             || { echo "no summary line linking the report in $SUMMARY" >&2; cat "$SUMMARY" >&2; exit 1; }
           if grep -q '^- ' "$SUMMARY"; then echo "a passing verify listed problems in $SUMMARY" >&2; exit 1; fi
+          # The job names were looked up: a result is named by its job's display name, linked to the job
+          grep -qE '^- ✅ passed in \[speccheck: requirements python 3\.[0-9]+\]\(https://github\.com/.+/job/[0-9]+\)$' \
+            "$RUNNER_TEMP/speccheck-report/report.md" \
+            || { echo "the report doesn't name the requirements jobs by their display names" >&2; exit 1; }
       - name: speccheck-verify with the default report name
         # The final job publishes `speccheck-report` too and replaces this one (the upload sets
         # overwrite), so the default name is exercised here and the final job's report is kept
@@ -226,12 +231,13 @@ jobs:
           test -s "$RUNNER_TEMP/speccheck-report/report.md"
           rm "$RUNNER_TEMP/speccheck-results/bad.jsonl"
       - name: Read-only permissions and no secrets
-        # SPC-REQ-007-04: the workflow grants contents: read and nothing else, no job widens it,
-        # and neither the workflow nor the actions it runs name a secret
+        # SPC-REQ-007-04: the workflow grants actions: read and contents: read and nothing else,
+        # no job widens it, and neither the workflow nor the actions it runs name a secret
         run: |
           workflow=.github/workflows/speccheck.yml
           grep -qx 'permissions:' "$workflow"
-          test "$(grep -A1 -x 'permissions:' "$workflow" | tail -n 1)" = "  contents: read"
+          test "$(sed -n '/^permissions:$/,/^$/p' "$workflow" | grep -E '^  [a-z-]+:' | sort | tr '\n' ' ')" \
+            = "  actions: read   contents: read "
           test "$(grep -cE '^ *permissions:' "$workflow")" = 1
           ! grep -nE 'secrets\.' "$workflow" .github/actions/speccheck-*/action.yml
       - name: speccheck-upload refuses an empty folder

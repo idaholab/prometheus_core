@@ -10,7 +10,7 @@ inputs:
   name:
     description: >-
       Artifact name after the `speccheck-results-` prefix, unique in the run (for a matrix job,
-      include the leg, such as `sdk-python-3.12`)
+      include the matrix values, such as `sdk-python-3.12`)
     required: true
   path:
     description: The results file, or a folder of them
