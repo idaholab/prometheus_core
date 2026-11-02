@@ -368,7 +368,9 @@ What surprises a project moving onto speccheck:
 ### Installing it
 
 Python 3.10 or newer. At runtime it needs only the standard library, plus `tomli` on 3.10.
-Installing it registers the pytest plugin, which does nothing until it is configured.
+Installing it registers the pytest plugin, which does nothing until it is configured: until the
+project sets `speccheck_config` or a run asks for a results file, no claim is checked, even its
+shape, so a project with a `covers` marker of its own is unaffected.
 
 **In this repo**, a project adds it as a path dev dependency, so its `uv.lock` changes:
 
@@ -508,7 +510,8 @@ problem, and its results don't count.
 
 ### Claim rules
 
-Collection fails, on every run and whatever tests were selected:
+When the plugin is configured (`speccheck_config` is set, or the run asks for a results file with
+`--speccheck-results` or `SPECCHECK_RESULTS`), collection fails, whatever tests were selected:
 
 - on a mark that isn't exactly two strings, the ID and the explanation;
 - on a mark on a class or module, on the function of a parametrized test, and on a claiming test
@@ -521,8 +524,8 @@ Collection fails, on every run and whatever tests were selected:
 With `speccheck_config` set it also fails on a malformed, unknown or retired ID, on one the
 producer may not claim, on an explanation that is the text of any requirement in the folder, and
 when no producer is set (`SPECCHECK_PRODUCER` or `speccheck_producer`), rather than skip the
-which-specs check. Without `speccheck_config`, only the checks that need no specs run, and no
-test's outcome changes.
+which-specs check. With only a results file asked for, just the checks that need no specs run.
+With neither, the plugin checks nothing and writes nothing. No test's outcome ever changes.
 
 `check` and `verify` repeat the "same explanation" check across every results file and
 `[ci.<job>]` entry; the same test in another job or attempt is the same claim. Explanations are

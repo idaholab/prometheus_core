@@ -28,8 +28,11 @@ def claims(project: Project, results: str = "r.jsonl") -> dict[str, list[dict[st
 
 
 def usage_error(project: Project, *args: str) -> str:
-    """Run the project's tests, check that collection stopped them, and return stderr."""
-    run = project.pytest(*args)
+    """Run the project's tests asking for a results file, check that collection stopped them, and return stderr.
+
+    Asking for a results file is what turns on the checks that need no specs (003-05).
+    """
+    run = project.pytest("--speccheck-results=r.jsonl", *args)
     assert run.ret == pytest.ExitCode.USAGE_ERROR, run.stdout.str()
     return run.stderr.str()
 
@@ -261,10 +264,11 @@ def test_a_malformed_mark_fails_collection(project: Project, mark: str, message:
 
 @pytest.mark.covers(
     "SPC-REQ-003-05",
-    "with no speccheck settings, a nonsense ID collects and the inner run reports pytest's own passed, failed and skipped, writing no file",
+    "with no speccheck settings, a nonsense ID, a one-argument mark and a TODO explanation collect, and the inner run "
+    "reports pytest's own passed, failed and skipped, writing no file",
 )
 def test_unconfigured_the_plugin_changes_nothing(project: Project):
-    """No config and no results path: a bad ID passes collection, outcomes are pytest's, no file is written."""
+    """No config and no results path: no claim is checked, outcomes are pytest's, no file is written."""
     project.tests(
         """\
         import pytest
@@ -273,11 +277,11 @@ def test_unconfigured_the_plugin_changes_nothing(project: Project):
         def test_passes():
             pass
 
-        @pytest.mark.covers("T-REQ-001-01", "fails")
+        @pytest.mark.covers("T-REQ-001-01")
         def test_fails():
             assert False
 
-        @pytest.mark.covers("T-REQ-001-01", "skips")
+        @pytest.mark.covers("T-REQ-001-01", "TODO")
         def test_skips():
             pytest.skip("no")
         """
@@ -288,15 +292,15 @@ def test_unconfigured_the_plugin_changes_nothing(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-003-05",
-    "with no speccheck_config, an explanation copied from a spec bullet is accepted, while a TODO one still stops collection",
+    "asking only for a results file, an explanation copied from a spec bullet is accepted, while a TODO one still stops collection",
 )
 def test_unconfigured_only_the_spec_free_checks_run(project: Project):
-    """Without the config there are no specs to compare against; the checks that need none still run."""
+    """With a results file but no config there are no specs to compare against; the checks that need none run."""
     project.spec("- T-REQ-001-01: The thing MUST work.")
     project.tests(
         'import pytest\n@pytest.mark.covers("T-REQ-001-01", "The thing MUST work.")\ndef test_a():\n    pass\n'
     )
-    project.pytest().assert_outcomes(passed=1)
+    project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "TODO")\ndef test_a():\n    pass\n')
     assert "is a placeholder ('TODO')" in usage_error(project)
 
