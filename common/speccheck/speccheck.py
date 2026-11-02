@@ -32,14 +32,11 @@ from pathlib import Path
 STATUSES = ("draft", "implemented", "retired")
 """The values a spec's `status:` line may take."""
 
-ID_PATTERN = re.compile(r"\b(REQ|BEH)-(\d{3})-(\d{2})\b")
-"""A full requirement or behavior ID, such as `REQ-003-04`."""
+PREFIX_LINE = re.compile(r"^id-prefix:(.*)$")
+"""The index line that gives a folder's IDs a prefix, such as `id-prefix: BLD`."""
 
-BULLET_START = re.compile(r"^- (REQ|BEH)\b")
-"""A line that starts a requirement or behavior bullet, well-formed or not."""
-
-BULLET = re.compile(r"^- ((?:REQ|BEH)-(\d{3})-\d{2}): \S")
-"""A well-formed bullet: `- REQ-NNN-XX: text`."""
+PREFIX = re.compile(r"^[A-Z][A-Z0-9]*$")
+"""A well-formed prefix: capital letters and digits, starting with a letter."""
 
 SPEC_FILE = re.compile(r"^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 """A numbered spec's file name: `NNN-short-name.md`."""
@@ -58,6 +55,27 @@ COVERS = re.compile(r"\bCovers\b")
 
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", "dist"}
 """Folders under a `tests:` path that are never read."""
+
+
+class Syntax:
+    """The ID patterns of one spec folder, whose IDs may carry a prefix such as `BLD-REQ-003-04`.
+
+    A prefix keeps one folder's IDs apart from another's, since both number their specs from 001.
+    With a prefix, a bare `REQ-003-04` is not one of this folder's IDs; without one, a prefixed ID
+    is not either.
+    """
+
+    def __init__(self, prefix: str = "") -> None:
+        """Compile the patterns for IDs written with `prefix` (none for bare IDs)."""
+        self.head = f"{prefix}-" if prefix else ""
+        """What comes before `REQ` or `BEH` in an ID, such as `BLD-`."""
+        head = re.escape(self.head)
+        self.id = re.compile(rf"(?<![\w-]){head}(?:REQ|BEH)-\d{{3}}-\d{{2}}\b")
+        """A full ID anywhere in a line."""
+        self.bullet_start = re.compile(rf"^- (?:{head})?(?:REQ|BEH)\b")
+        """A line that starts a requirement or behavior bullet, well-formed or not."""
+        self.bullet = re.compile(rf"^- (?P<id>{head}(?:REQ|BEH)-(?P<number>\d{{3}})-\d{{2}}): \S")
+        """A well-formed bullet: `- <prefix>REQ-NNN-XX: text`."""
 
 
 @dataclass(frozen=True)
@@ -145,7 +163,23 @@ def rel(path: Path, root: Path) -> str:
         return path.as_posix()
 
 
-def parse_spec(path: Path, root: Path, problems: list[Problem]) -> Spec:
+def read_prefix(index_text: str, name: str, problems: list[Problem]) -> str:
+    """The `id-prefix:` of the index, or "" for bare IDs. It sits before the first `##`."""
+    for number, line in enumerate(index_text.splitlines(), 1):
+        if line.startswith("## "):
+            break
+        match = PREFIX_LINE.match(line)
+        if match is None:
+            continue
+        prefix = match.group(1).strip()
+        if PREFIX.match(prefix):
+            return prefix
+        problems.append(Problem(name, number, "id-prefix must be capital letters and digits, such as `BLD`"))
+        break
+    return ""
+
+
+def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) -> Spec:
     """Read one spec file's header lines and bullets, recording format problems."""
     number = path.name[:3]
     spec = Spec(path=path, number=number)
@@ -168,15 +202,19 @@ def parse_spec(path: Path, root: Path, problems: list[Problem]) -> Spec:
                 else:
                     spec.tests = parse_tests_line(value, root, name, number_, problems)
 
-        if BULLET_START.match(line):
-            match = BULLET.match(line)
+        if syntax.bullet_start.match(line):
+            match = syntax.bullet.match(line)
             if match is None:
-                problems.append(Problem(name, number_, "a bullet must read `- REQ-NNN-XX: text` (or BEH)"))
+                problems.append(
+                    Problem(name, number_, f"a bullet must read `- {syntax.head}REQ-NNN-XX: text` (or BEH)")
+                )
                 current = None
                 continue
-            if match.group(2) != number:
-                problems.append(Problem(name, number_, f"{match.group(1)} belongs in spec {match.group(2)}"))
-            current = Requirement(id=match.group(1), spec=spec, line=number_, text=line[match.end(1) + 2 :].strip())
+            if match.group("number") != number:
+                problems.append(Problem(name, number_, f"{match.group('id')} belongs in spec {match.group('number')}"))
+            current = Requirement(
+                id=match.group("id"), spec=spec, line=number_, text=line[match.end("id") + 2 :].strip()
+            )
             spec.requirements.append(current)
         elif current is not None and line.startswith("  ") and line.strip():
             current.text += " " + line.strip()
@@ -224,23 +262,23 @@ def files_under(paths: Iterable[Path]) -> Iterator[Path]:
             yield candidate
 
 
-def citations_in(path: Path, root: Path, problems: list[Problem]) -> list[Citation]:
+def citations_in(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:
     """Every ID mentioned in a file. A file that isn't text is skipped."""
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return []
     if is_workflow(path):
-        return workflow_citations(path, text, root, problems)
+        return workflow_citations(path, text, root, syntax, problems)
     found = []
     for number, line in enumerate(text.splitlines(), 1):
-        for match in ID_PATTERN.finditer(line):
+        for match in syntax.id.finditer(line):
             kind = "implements" if IMPLEMENTS.search(line, 0, match.start()) else "test"
             found.append(Citation(id=match.group(0), path=path, line=number, kind=kind))
     return found
 
 
-def workflow_citations(path: Path, text: str, root: Path, problems: list[Problem]) -> list[Citation]:
+def workflow_citations(path: Path, text: str, root: Path, syntax: Syntax, problems: list[Problem]) -> list[Citation]:
     """IDs in a workflow: only in a `# Covers ...` or `# Implements ...` comment inside a job.
 
     Jobs are found by indentation under the top-level `jobs:` key, so no YAML parser is needed. A
@@ -262,7 +300,7 @@ def workflow_citations(path: Path, text: str, root: Path, problems: list[Problem
             elif in_jobs and (job_indent is None or indent <= job_indent):
                 job_indent = indent
                 job = stripped.split(":", 1)[0].strip("'\"")
-        ids = [match.group(0) for match in ID_PATTERN.finditer(line)]
+        ids = [match.group(0) for match in syntax.id.finditer(line)]
         if not ids:
             continue
         comment = stripped.startswith("#")
@@ -281,13 +319,12 @@ def workflow_citations(path: Path, text: str, root: Path, problems: list[Problem
     return found
 
 
-def load_specs(specs_dir: Path, root: Path, problems: list[Problem]) -> list[Spec]:
+def load_specs(
+    specs_dir: Path, root: Path, index_text: str | None, syntax: Syntax, problems: list[Problem]
+) -> list[Spec]:
     """Every numbered spec in the folder, checked against the index."""
     specs = []
     index = specs_dir / "000-index.md"
-    index_text = index.read_text(encoding="utf-8") if index.is_file() else None
-    if index_text is None:
-        problems.append(Problem(rel(index, root), 0, "the spec folder needs a 000-index.md"))
     for path in sorted(specs_dir.glob("*.md")):
         if path.name == "000-index.md":
             continue
@@ -296,14 +333,22 @@ def load_specs(specs_dir: Path, root: Path, problems: list[Problem]) -> list[Spe
             continue
         if index_text is not None and not re.search(rf"\b{path.name[:3]}\b", index_text):
             problems.append(Problem(rel(index, root), 0, f"the index doesn't list {path.name[:3]} ({path.name})"))
-        specs.append(parse_spec(path, root, problems))
+        specs.append(parse_spec(path, root, syntax, problems))
     return specs
 
 
 def check(specs_dir: Path, root: Path) -> tuple[list[Problem], dict[str, list[Citation]], list[Requirement]]:
     """Every problem, the citations of each known ID, and every requirement, in spec order."""
     problems: list[Problem] = []
-    specs = load_specs(specs_dir, root, problems)
+    index = specs_dir / "000-index.md"
+    index_text = index.read_text(encoding="utf-8") if index.is_file() else None
+    prefix = ""
+    if index_text is None:
+        problems.append(Problem(rel(index, root), 0, "the spec folder needs a 000-index.md"))
+    else:
+        prefix = read_prefix(index_text, rel(index, root), problems)
+    syntax = Syntax(prefix)
+    specs = load_specs(specs_dir, root, index_text, syntax, problems)
 
     requirements: dict[str, Requirement] = {}
     for spec in specs:
@@ -322,7 +367,7 @@ def check(specs_dir: Path, root: Path) -> tuple[list[Problem], dict[str, list[Ci
     scanned = [path for spec in specs for path in spec.tests]
     cited: dict[str, list[Citation]] = {id_: [] for id_ in requirements}
     for path in files_under(scanned):
-        for citation in citations_in(path, root, problems):
+        for citation in citations_in(path, root, syntax, problems):
             where = rel(citation.path, root)
             requirement = requirements.get(citation.id)
             if requirement is None:

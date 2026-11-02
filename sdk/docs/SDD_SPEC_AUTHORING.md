@@ -157,8 +157,10 @@ checker fails when a requirement is neither cited, `⚠ untested` nor
 `(planned: ...)`, when a test cites an unknown, retired or out-of-scope ID,
 or when a marker is left on a cited requirement. In a workflow, an ID is cited
 by a `# Covers REQ-...` (the job checks it) or `# Implements REQ-...` (the job
-is the behavior) comment inside a job. This folder's specs are not checked
-yet.
+is the behavior) comment inside a job. A folder whose spec numbers could be
+confused with another folder's can give its IDs a prefix with an
+`id-prefix: BLD` line in its index, making them `BLD-REQ-NNN-XX`; see the
+checker's README. This folder's specs are not checked yet.
 
 ## Status Values
 

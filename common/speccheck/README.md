@@ -35,7 +35,20 @@ depends-on: 002
 `tests:` paths are relative to `--root` (default: the current folder), comma-separated, or `none`.
 A path that doesn't exist is a problem, so a moved test folder can't silently drop every citation.
 
-**Bullets.** `- REQ-NNN-XX: text` and `- BEH-NNN-XX: text`, where `NNN` is the spec's own number. A
+**IDs and the prefix.** An ID is `REQ-NNN-XX` or `BEH-NNN-XX`, where `NNN` is the spec's own number.
+Two folders that both number their specs from 001 would reuse the same IDs, so a folder can give its
+IDs a prefix with an `id-prefix:` line in `000-index.md`, above its first `##`:
+
+```markdown
+id-prefix: BLD
+```
+
+Its IDs are then `BLD-REQ-NNN-XX` and `BLD-BEH-NNN-XX`, in the specs and in every citation. The
+prefix is capital letters and digits, starting with a letter. With a prefix, a bare `REQ-004-07` in a
+test is not one of this folder's IDs and is ignored, and without one a prefixed ID is ignored. Folders
+with no `id-prefix:` line (such as `sdk/specs/`) keep bare IDs.
+
+**Bullets.** `- REQ-NNN-XX: text` and `- BEH-NNN-XX: text`, with the prefix if the folder has one. A
 bullet may wrap onto lines indented by two spaces. Markers at the end of the text:
 
 | Marker | Means |
@@ -50,7 +63,7 @@ A whole spec with `status: retired` counts as retired.
 
 ```python
 def test_set_refuses_secret_keys():
-    """Covers REQ-003-04: --set names .env instead of taking the value."""
+    """Covers BLD-REQ-003-04: --set names .env instead of taking the value."""
 ```
 
 A line with `Implements` before the ID counts as a pointer to the behaviour, not a test of it; the
@@ -64,7 +77,7 @@ behaviour, such as a publish job):
 ```yaml
 jobs:
   compose-config-unchanged:
-    # Covers REQ-007-12: the merged compose config is identical to the old Makefile's
+    # Covers BLD-REQ-007-12: the merged compose config is identical to the old Makefile's
     runs-on: ubuntu-26.04
 ```
 
@@ -78,8 +91,8 @@ the file, or in a step's text is a problem rather than silent evidence.
 - A requirement that is both planned and untested.
 - A citation of an ID that is in no spec, is retired, or belongs to a spec whose `tests:` don't
   include the citing file.
-- A duplicate ID, a malformed bullet, an ID numbered for another spec, a missing or unknown
-  `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
+- A duplicate ID, a malformed bullet (including one without the folder's prefix), an ID numbered for
+  another spec, a malformed `id-prefix:`, a missing or unknown `status:`, a missing `tests:`, a title without the number, a file not named `NNN-name.md`, or a
   spec the index doesn't list.
 
 `draft` doesn't relax anything: a draft spec's requirements are planned, untested or cited, like any

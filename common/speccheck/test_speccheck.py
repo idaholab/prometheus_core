@@ -312,6 +312,68 @@ class TestFormat(CheckerTest):
         self.assertProblems("needs a 000-index.md")
 
 
+class TestPrefix(CheckerTest):
+    """An `id-prefix:` in the index keeps this folder's IDs apart from another folder's."""
+
+    def prefixed(self, line: str = "id-prefix: BLD") -> None:
+        """Give the index an `id-prefix:` line (or whatever `line` says) above its first `##`."""
+        self.repo.write("specs/000-index.md", f"# Index\n\n{line}\n\n## Specs\n\n- [001](001-thing.md)\n")
+
+    def test_prefixed_ids_are_cited_and_checked(self):
+        """The prefix is part of the ID, in the spec and in the citation."""
+        self.prefixed()
+        self.repo.write("specs/001-thing.md", spec("- BLD-REQ-001-01: It MUST work.\n- BLD-BEH-001-01: GIVEN x."))
+        self.repo.write("tests/test_x.py", "# BLD-REQ-001-01\n")
+        self.assertProblems("BLD-BEH-001-01 has no citing test")
+
+    def test_a_bare_id_is_not_this_folders(self):
+        """`REQ-001-01` could be the SDK's; it neither cites nor trips the unknown-ID rule."""
+        self.prefixed()
+        self.repo.write("specs/001-thing.md", spec("- BLD-REQ-001-01: It MUST work."))
+        self.repo.write("tests/test_x.py", "# REQ-001-01 and OTHER-REQ-001-01 and BLD-REQ-001-09\n")
+        self.assertProblems("BLD-REQ-001-01 has no citing test", "BLD-REQ-001-09 isn't in any spec")
+
+    def test_a_prefixed_id_is_not_a_bare_folders(self):
+        """Without a prefix, `BLD-REQ-001-01` isn't read as `REQ-001-01`."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
+        self.repo.write("tests/test_x.py", "# BLD-REQ-001-01\n")
+        self.assertProblems("REQ-001-01 has no citing test")
+
+    def test_a_bullet_without_the_prefix_fails(self):
+        """The message shows the form to write."""
+        self.prefixed()
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work. ⚠ untested"))
+        self.assertProblems("a bullet must read `- BLD-REQ-NNN-XX: text`")
+
+    def test_the_number_check_names_the_whole_id(self):
+        """A prefixed ID numbered for another spec says so."""
+        self.prefixed()
+        self.repo.write("specs/001-thing.md", spec("- BLD-REQ-002-01: Misplaced. ⚠ untested"))
+        self.assertProblems("BLD-REQ-002-01 belongs in spec 002")
+
+    def test_a_workflow_citation_carries_the_prefix(self):
+        """`# Covers BLD-REQ-...` in a job counts; a bare ID in a comment is ignored."""
+        self.prefixed()
+        self.repo.write("specs/001-thing.md", spec("- BLD-REQ-001-01: Same.", tests=".github/workflows"))
+        workflow = "jobs:\n  check:\n    # Covers BLD-REQ-001-01 (not REQ-001-01)\n    runs-on: x\n"
+        self.repo.write(".github/workflows/ci.yml", workflow)
+        self.assertProblems()
+
+    def test_a_malformed_prefix_fails(self):
+        """Capital letters and digits, starting with a letter."""
+        for bad in ("bld", "B-LD", "1BLD", ""):
+            with self.subTest(prefix=bad):
+                self.prefixed(f"id-prefix: {bad}")
+                self.repo.write("specs/001-thing.md", spec("", tests="none"))
+                self.assertProblems("id-prefix must be capital letters and digits")
+
+    def test_the_prefix_line_must_come_before_the_first_section(self):
+        """An `id-prefix:` in an example further down is prose, not the setting."""
+        self.repo.write("specs/000-index.md", "# Index\n\n## Specs\n\nid-prefix: BLD\n\n- [001](001-thing.md)\n")
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: Bare. ⚠ untested"))
+        self.assertProblems()
+
+
 class TestMain(CheckerTest):
     """The command line."""
 

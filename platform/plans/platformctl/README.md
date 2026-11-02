@@ -118,7 +118,7 @@ When a step is done, set its status here and in its file to `Done (<date>,
 - **Specs:** what the tool guarantees a user is specified in
   [`build/specs/`](../../../build/specs/000-index.md) (001–099). A requirement a later step
   delivers carries `(planned: step N)`. That step's PR removes the marker, cites the ID from a test
-  (`"""Covers REQ-004-07: ..."""`), and adds any requirement it finds missing.
+  (`"""Covers BLD-REQ-004-07: ..."""`), and adds any requirement it finds missing.
   `common/speccheck` fails CI when a requirement has no citing test and no marker.
 - Every PR lists its **breaking changes** (`breaking-changes.md`) and has a
   short "What changes for you" block: commands, files created, first-run

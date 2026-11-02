@@ -11,6 +11,12 @@ including the `tests:` line and the `(planned: <step>)` marker, and
 [SDD_TESTING_STANDARD.md](../../sdk/docs/SDD_TESTING_STANDARD.md). The
 library's own behaviour stays in [`sdk/specs/`](../../sdk/specs/000-index.md).
 
+id-prefix: BLD
+
+Every ID here starts with `BLD-`, as in `BLD-REQ-004-07`. `sdk/specs/` numbers
+its specs from 001 too, so a bare `REQ-004-07` would be ambiguous in a test,
+a comment or a review.
+
 ## Areas
 
 Each area has a block of numbers, so it can grow without renumbering.
