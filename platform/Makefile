@@ -87,12 +87,13 @@ FRONTEND_PROD_PORT ?= 8080
 FRONTEND_PORT := $(if $(filter dev,$(PROFILE)),$(FRONTEND_DEV_PORT),$(if $(filter prod,$(PROFILE)),$(FRONTEND_PROD_PORT),))
 
 # All per-agent compose files found on disk (checked-out submodules only).
-AGENT_COMPOSE_FILES := $(shell find agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+# -L follows symlinks so symlinked agent directories are included.
+AGENT_COMPOSE_FILES := $(shell find -L agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 ifeq ($(DEBUG_AGENTS),true)
-AGENT_COMPOSE_FILES += $(shell find agents/debug-agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+AGENT_COMPOSE_FILES += $(shell find -L agents/debug-agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 endif
 ifeq ($(OPTIONAL_AGENTS),true)
-AGENT_COMPOSE_FILES += $(shell find agents/optional -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+AGENT_COMPOSE_FILES += $(shell find -L agents/optional -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 endif
 
 # Build the -f flags for docker compose.

@@ -7,8 +7,9 @@ run-name: >-
   || format('Publish images {0}', github.ref_name) }}
 
 # Publishes the devel images to ghcr.io after the test workflow passes on a
-# push to devel. Tags are <commit date>-<7 char sha>, e.g. 20261014-ea90a3d.
-# The -devel suffix keeps these separate from future release images.
+# push to devel. Tags are <commit date>-<7 char sha>, e.g. 20261014-ea90a3d,
+# plus latest when the commit is still the tip of devel. The -devel suffix
+# keeps these separate from future release images.
 
 on:
   # zizmor: ignore[dangerous-triggers] Only acts on successful push runs of
@@ -40,6 +41,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       prefix: ${{ steps.meta.outputs.prefix }}
       suffix: ${{ steps.meta.outputs.suffix }}
+      latest: ${{ steps.meta.outputs.latest }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,6 +51,8 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Compute tag
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(git rev-parse HEAD)
           # Commit date in UTC, so the tag doesn't depend on the runner or a rebuild
@@ -57,11 +61,23 @@ jobs:
           # ghcr.io/idaholab/prometheus_core upstream; a fork publishes to its
           # own namespace. ghcr.io requires lowercase names
           prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # Only the tip of devel also gets latest, so a run for an older commit
+          # (its test run finished after a newer one's) can't move latest back.
+          # The concurrency group runs these one at a time, so the tip can't
+          # change under a run that already decided
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/devel" --jq .sha)
+          if [ "$sha" = "$tip" ]; then
+            latest=true
+          else
+            latest=false
+            echo "::notice::$sha is not the tip of devel ($tip), so it isn't tagged latest"
+          fi
           {
             echo "sha=$sha"
             echo "tag=$tag"
             echo "prefix=$prefix"
             echo "suffix=-devel"
+            echo "latest=$latest"
           } >> "$GITHUB_OUTPUT"
 
   sdk:
@@ -77,6 +93,7 @@ jobs:
       suffix: ${{ needs.meta.outputs.suffix }}
       tag: ${{ needs.meta.outputs.tag }}
       sha: ${{ needs.meta.outputs.sha }}
+      latest: ${{ needs.meta.outputs.latest == 'true' }}
       context: sdk
       file: sdk/Dockerfile
       build-contexts: certs=common/certs
@@ -94,6 +111,7 @@ jobs:
       suffix: ${{ needs.meta.outputs.suffix }}
       tag: ${{ needs.meta.outputs.tag }}
       sha: ${{ needs.meta.outputs.sha }}
+      latest: ${{ needs.meta.outputs.latest == 'true' }}
       # Same context and sdk/certs contexts as docker-compose.yml
       context: platform/backend
       file: platform/backend/Dockerfile
@@ -114,6 +132,7 @@ jobs:
       suffix: ${{ needs.meta.outputs.suffix }}
       tag: ${{ needs.meta.outputs.tag }}
       sha: ${{ needs.meta.outputs.sha }}
+      latest: ${{ needs.meta.outputs.latest == 'true' }}
       # Same context, target, and certs context as docker-compose.yml
       context: platform
       file: platform/frontend/Dockerfile
@@ -132,6 +151,7 @@ jobs:
           PREFIX: ${{ needs.meta.outputs.prefix }}
           SUFFIX: ${{ needs.meta.outputs.suffix }}
           TAG: ${{ needs.meta.outputs.tag }}
+          LATEST: ${{ needs.meta.outputs.latest }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           SDK_RESULT: ${{ needs.sdk.result }}
           BACKEND_RESULT: ${{ needs.backend.result }}
@@ -155,6 +175,12 @@ jobs:
           }
           {
             echo "## Published images \`$TAG\`"
+            echo
+            if [ "$LATEST" = true ]; then
+              echo "Also tagged \`latest\`: this commit is the tip of devel."
+            else
+              echo "Not tagged \`latest\`: this commit is no longer the tip of devel."
+            fi
             echo
             echo "| Image | Reference | Status |"
             echo "|---|---|---|"
