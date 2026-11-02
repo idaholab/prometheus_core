@@ -68,7 +68,7 @@ def test_evidence_names_the_test_and_links_the_job(reported: Project):
     """Test, outcome, producer, leg, and a link to the job itself."""
     evidence = rows(reported.speccheck("report", "unit.jsonl").out)[2][3]
     assert evidence == (
-        "test `tests/t\\.py::test\\_ok` passed in unit 3\\.12 ([job](https://github.com/o/r/actions/runs/7/job/8))"
+        "test `tests/t.py::test_ok` passed in unit 3\\.12 ([job](https://github.com/o/r/actions/runs/7/job/8))"
     )
 
 
@@ -82,7 +82,11 @@ def test_without_a_job_id_it_links_the_run(project: Project):
 
 @pytest.mark.covers("SPC-REQ-006-03")
 def test_untrusted_text_cant_inject_markdown_or_links(project: Project):
-    """A test name with a link, HTML and a pipe stays inert text in its cell, and a bad URL isn't linked."""
+    """A test name with a link, HTML, a pipe and a backtick stays inert text in its cell, and a bad URL isn't linked.
+
+    The test name is a code span, where markdown and HTML mean nothing, with its backtick dropped
+    so it can't close the span; the leg, outside the span, is backslash-escaped.
+    """
     project.spec("- T-REQ-001-01: One.")
     evil = "t[click](https://evil)<img src=x onerror=1>|`"
     project.results(
@@ -91,7 +95,7 @@ def test_untrusted_text_cant_inject_markdown_or_links(project: Project):
     text = project.speccheck("report", "u.jsonl").out
     row = next(line for line in text.splitlines() if line.startswith("| T-REQ-001-01"))
     assert row.count(" | ") == 3
-    assert "<img" not in row.replace("\\<img", "") and "](https://evil)" not in row.replace("\\]\\(", "")
+    assert rows(text)[0][3] == "test `t[click](https://evil)<img src=x onerror=1>\\|` passed in unit a\\|b"
     assert "javascript" not in text and "[job]" not in row
 
 

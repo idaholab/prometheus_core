@@ -69,6 +69,25 @@ class TestEscape:
         assert report.escape(3) == "3"
 
 
+class TestCode:
+    """Untrusted strings in an inline code span, where markdown shows backslashes as they are."""
+
+    def test_literal_text_without_backticks(self):
+        """Markdown characters stay as written; a backtick is dropped so the span can't close early."""
+        assert report.code("tests/t.py::test_a[x*](y)<b>", in_table=False) == "`tests/t.py::test_a[x*](y)<b>`"
+        assert report.code("a`b``c", in_table=False) == "`abc`"
+
+    def test_a_pipe_in_a_table(self):
+        """GFM splits a row on `|` before it reads the span, so it is written `\\|` there only."""
+        assert report.code("a|b", in_table=True) == r"`a\|b`"
+        assert report.code("a|b", in_table=False) == "`a|b`"
+
+    def test_one_line_and_capped(self):
+        """Whitespace collapses, and long text is cut, after the backticks are gone."""
+        assert report.code("a\n b", in_table=False) == "`a b`"
+        assert report.code("`" * 5 + "x" * 20, 10, in_table=False) == "`" + "x" * 9 + "…`"
+
+
 class TestSafeUrl:
     """Only run and job URLs of the shape this tool builds are linked."""
 
@@ -107,7 +126,7 @@ class TestEvidenceCell:
     def test_a_test_with_a_job_link(self):
         """Test, outcome, producer and leg, then the link."""
         cell = report._evidence_cell(status("passed", ("tests/t.py::test_a", "passed"), ci=CI))
-        assert cell == rf"test `tests/t\.py::test\_a` passed in unit 3\.12 ([job]({JOB_URL}))"
+        assert cell == rf"test `tests/t.py::test_a` passed in unit 3\.12 ([job]({JOB_URL}))"
 
     def test_the_run_when_there_is_no_job_and_none_when_unsafe(self):
         """The run link stands in for the job's; an unsafe one is dropped."""
@@ -122,8 +141,8 @@ class TestEvidenceCell:
         )
 
     def test_a_backtick_cant_close_the_code_span(self):
-        """Backticks are dropped from the test name inside the span (leaving escape's backslash)."""
-        assert report._evidence_cell(status("passed", ("a`b", "passed"))) == r"test `a\b` passed in unit"
+        """A backtick in the test name is dropped, and nothing is left in its place."""
+        assert report._evidence_cell(status("passed", ("a`b", "passed"))) == "test `ab` passed in unit"
 
     def test_many_results_are_counted(self, monkeypatch: pytest.MonkeyPatch):
         """After MAX_EVIDENCE results, the rest are a count."""
@@ -183,9 +202,9 @@ class TestInputs:
 
 
 def test_problems_are_a_list_of_code_spans():
-    """Escaped and without backticks, so a problem can't break out of its span."""
-    lines = report._problems(evaluation(problems=[Problem("a`b.md", 1, "x*y")]))
-    assert lines == [r"- `a\b\.md:1: x\*y`"]
+    """Literal and without backticks, so a problem reads as written and can't break out of its span."""
+    lines = report._problems(evaluation(problems=[Problem("a`b.md", 1, "x*y|z")]))
+    assert lines == ["- `ab.md:1: x*y|z`"]
 
 
 class TestFull:

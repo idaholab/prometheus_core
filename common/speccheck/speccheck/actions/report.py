@@ -74,6 +74,19 @@ def escape(text: str, limit: int = MAX_CELL) -> str:
     return MARKDOWN_SPECIAL.sub(r"\\\1", text)
 
 
+def code(text: str, limit: int = MAX_CELL, *, in_table: bool) -> str:
+    """Text as an inline code span: one line, capped, with no backtick to close the span early.
+
+    Markdown takes everything in a code span literally, so backslash escapes would show. The one
+    exception is a table cell, where GFM splits on `|` before it reads the span, so a `|` there is
+    written `\\|` (which GFM turns back into `|`).
+    """
+    text = " ".join(str(text).replace("`", "").split())
+    if len(text) > limit:
+        text = text[: limit - 1] + "…"
+    return f"`{text.replace('|', chr(92) + '|') if in_table else text}`"
+
+
 def safe_url(url: Any) -> str:
     """The URL when it is one this tool would have built (https, our run's form), else ""."""
     if not isinstance(url, str):
@@ -94,7 +107,7 @@ def _evidence_cell(status: Status) -> str:
         data = _common.evidence_json(item)
         label = "job" if data["kind"] == "ci" else "test"
         where = " ".join(part for part in (data["producer"], data["leg"]) if part)
-        text = f"{label} `{escape(data['test'], 150).replace('`', '')}` {escape(data['outcome'])} in {escape(where)}"
+        text = f"{label} {code(data['test'], 150, in_table=True)} {escape(data['outcome'])} in {escape(where)}"
         url = safe_url(data["url"])
         items.append(f"{text} ([job]({url}))" if url else text)
     if len(status.evidence) > MAX_EVIDENCE:
@@ -137,7 +150,7 @@ def _inputs(evaluation: Evaluation) -> list[str]:
 
 def _problems(evaluation: Evaluation) -> list[str]:
     """The problems as a markdown list."""
-    return [f"- `{escape(str(p), 300).replace('`', '')}`" for p in evaluation.problems]
+    return [f"- {code(str(p), 300, in_table=False)}" for p in evaluation.problems]
 
 
 def full(title: str, evaluation: Evaluation) -> str:
