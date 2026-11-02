@@ -205,6 +205,33 @@ class TestCitations(CheckerTest):
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It. ⚠ untested", tests="tests/gone"))
         self.assertProblems("`tests:` names tests/gone")
 
+    def test_a_tests_path_outside_the_root_fails(self):
+        """An absolute path or `..` could pull in a file nobody reviewed with the spec."""
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (Path(outside.name) / "evidence.py").write_text(cites("REQ-001-01"), encoding="utf-8")
+        for item in (outside.name, "../elsewhere", "tests/../.."):
+            with self.subTest(tests=item):
+                self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It. ⚠ untested", tests=item))
+                self.assertProblems(f"`tests:` names {item}, which is outside the root")
+
+    def test_a_symlink_that_leaves_the_root_is_not_followed(self):
+        """A link in a test folder to a folder or a file elsewhere contributes no citations."""
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (Path(outside.name) / "evidence.py").write_text(cites("REQ-001-01"), encoding="utf-8")
+        (self.repo.root / "tests" / "linked_dir").symlink_to(outside.name, target_is_directory=True)
+        (self.repo.root / "tests" / "linked_file.py").symlink_to(Path(outside.name) / "evidence.py")
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
+        self.assertProblems("REQ-001-01 has no citing test")
+
+    def test_a_symlink_inside_the_root_still_counts(self):
+        """Only links that leave the repository are refused."""
+        self.repo.write("tests/real/evidence.py", cites("REQ-001-01"))
+        (self.repo.root / "tests" / "linked.py").symlink_to(self.repo.root / "tests" / "real" / "evidence.py")
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: It MUST work."))
+        self.assertProblems()
+
     def test_tests_none(self):
         """A spec with no requirements yet can say `tests: none`."""
         self.repo.write("specs/001-thing.md", spec("", tests="none"))

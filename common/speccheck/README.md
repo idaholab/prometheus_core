@@ -39,6 +39,8 @@ and a second `status:` or `tests:` line is a problem.
 
 `tests:` paths are relative to `--root` (default: the current folder), comma-separated, or `none`.
 A path that doesn't exist is a problem, so a moved test folder can't silently drop every citation.
+A path that leaves the root (absolute, or through `..`) is a problem too, and a symlink under a
+`tests:` folder that leads outside the root is skipped, so evidence always comes from the repository.
 
 **IDs and the prefix.** An ID is `REQ-NNN-XX` or `BEH-NNN-XX`, where `NNN` is the spec's own number.
 Two folders that both number their specs from 001 would reuse the same IDs, so a folder can give its

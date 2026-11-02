@@ -273,11 +273,23 @@ def parse_tests_line(value: str, root: Path, name: str, line: int, problems: lis
     paths = []
     for item in (part.strip() for part in value.split(",")):
         path = root / item
-        if not path.exists():
+        if not is_inside(path, root):
+            problems.append(Problem(name, line, f"`tests:` names {item}, which is outside the root"))
+        elif not path.exists():
             problems.append(Problem(name, line, f"`tests:` names {item}, which doesn't exist under the root"))
         else:
             paths.append(path)
     return paths
+
+
+def is_inside(path: Path, root: Path) -> bool:
+    """Whether `path`, with `..` and symlinks resolved, is `root` or under it.
+
+    A `tests:` entry or a symlink under one must not lead outside the repository, where an ID in a
+    file nobody reviewed with the spec could stand in for a test.
+    """
+    resolved, base = path.resolve(), root.resolve()
+    return resolved == base or base in resolved.parents
 
 
 def is_workflow(path: Path) -> bool:
@@ -285,14 +297,18 @@ def is_workflow(path: Path) -> bool:
     return path.suffix in (".yml", ".yaml") and path.parent.name == "workflows" and path.parent.parent.name == ".github"
 
 
-def files_under(paths: Iterable[Path]) -> Iterator[Path]:
-    """Every readable file under the given files and folders, each once, in a stable order."""
+def files_under(paths: Iterable[Path], root: Path) -> Iterator[Path]:
+    """Every readable file under the given files and folders, each once, in a stable order.
+
+    A symlink that leads outside the root is skipped, so a link in a test folder can't pull in
+    files from elsewhere.
+    """
     seen: set[Path] = set()
     for path in paths:
         candidates = [path] if path.is_file() else sorted(path.rglob("*"))
         for candidate in candidates:
             resolved = candidate.resolve()
-            if resolved in seen or not candidate.is_file():
+            if resolved in seen or not candidate.is_file() or not is_inside(candidate, root):
                 continue
             inside = candidate.relative_to(path).parts[:-1] if candidate != path else ()
             if any(part in SKIP_DIRS for part in inside):
@@ -487,7 +503,7 @@ def check(specs_dir: Path, root: Path) -> tuple[list[Problem], dict[str, list[Ci
 
     scanned = [path for spec in specs for path in spec.tests]
     cited: dict[str, list[Citation]] = {id_: [] for id_ in requirements}
-    for path in files_under(scanned):
+    for path in files_under(scanned, root):
         for citation in citations_in(path, root, syntax, problems):
             where = rel(citation.path, root)
             requirement = requirements.get(citation.id)
