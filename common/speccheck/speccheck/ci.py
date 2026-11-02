@@ -29,6 +29,10 @@ PRODUCER_VAR = "SPECCHECK_PRODUCER"
 """The producer this run reports as."""
 JOB_ID_VAR = "SPECCHECK_JOB_ID"
 """The job's numeric check run ID, from `${{ job.check_run_id }}`; optional."""
+ROOT_VAR = "SPECCHECK_ROOT"
+"""pytest's root as a path from the repository's root, such as `sdk`; optional. For a run whose
+repository root can't be found from where pytest runs, such as in a container with one folder
+mounted."""
 
 SERVER = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d+)?$")
 """A server URL safe to build links from: https, a host name, an optional port, nothing else."""
@@ -135,6 +139,17 @@ def repository_root(start: Path, env: Mapping[str, str]) -> Path | None:
         if (folder / ".git").exists():
             return folder
     return None
+
+
+def results_root(rootpath: Path, env: Mapping[str, str]) -> str | None:
+    """A results file's `root`: `SPECCHECK_ROOT` when set, else pytest's root from the repository's root.
+
+    The value is written as given; the report links a path only when it is plain (SPC-REQ-006-07).
+    """
+    override = env.get(ROOT_VAR, "").strip().strip("/")
+    if override:
+        return override
+    return from_root(rootpath, repository_root(rootpath, env))
 
 
 def from_root(path: Path, root: Path | None) -> str | None:

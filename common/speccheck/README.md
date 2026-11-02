@@ -612,7 +612,10 @@ is there for runners in other languages.
   own display name, so the final job looks the names up and passes them as `--job-names`.
 - `root` is the folder the `file` paths are relative to (pytest's root), as a path from the
   repository's root: `GITHUB_WORKSPACE` in CI, else the nearest folder with a `.git`, else null.
-  The report uses it to link each test to its line.
+  The report uses it to link each test to its line. When pytest runs where neither can be found,
+  such as in a container with one folder of the checkout mounted, set `SPECCHECK_ROOT` to that
+  folder's path in the repository (for example `SPECCHECK_ROOT=sdk`), and don't pass
+  `GITHUB_WORKSPACE`, which is a host path.
 - The plugin writes a file only when asked (`--speccheck-results=PATH` or `SPECCHECK_RESULTS`), at
   the end of the session. An interrupted session leaves none, so `verify --complete` reports the
   producer as missing.

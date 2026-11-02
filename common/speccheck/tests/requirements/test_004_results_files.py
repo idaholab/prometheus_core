@@ -536,6 +536,21 @@ def test_the_header_says_where_file_paths_start(project: Project, monkeypatch: p
     assert project.results_lines("none.jsonl")[0]["root"] is None
 
 
+@pytest.mark.covers(
+    "SPC-REQ-004-10",
+    "an inner run whose GITHUB_WORKSPACE doesn't hold pytest's root, as in a container, writes the SPECCHECK_ROOT it was given as root",
+)
+def test_an_override_gives_root_when_it_cant_be_found(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """In a container the host's workspace path isn't where pytest runs; `SPECCHECK_ROOT` says where it is."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the override")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", "/home/runner/work/r/r")
+    project.pytest("--speccheck-results=lost.jsonl")
+    assert project.results_lines("lost.jsonl")[0]["root"] is None
+    monkeypatch.setenv("SPECCHECK_ROOT", "sdk/")
+    project.pytest("--speccheck-results=given.jsonl")
+    assert project.results_lines("given.jsonl")[0]["root"] == "sdk"
+
+
 RERUN_CONFTEST = """\
 from _pytest.runner import runtestprotocol
 

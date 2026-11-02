@@ -180,6 +180,13 @@ class TestRepositoryRoot:
         assert ci.repository_root(tmp_path, {}) is None
 
 
+def test_results_root(tmp_path: Path):
+    """`SPECCHECK_ROOT` wins, its slashes trimmed; without it, pytest's root from the repository's root."""
+    assert ci.results_root(tmp_path, {"SPECCHECK_ROOT": "/sdk/", "GITHUB_WORKSPACE": str(tmp_path)}) == "sdk"
+    assert ci.results_root(tmp_path / "a", {"SPECCHECK_ROOT": " ", "GITHUB_WORKSPACE": str(tmp_path)}) == "a"
+    assert ci.results_root(tmp_path, {"GITHUB_WORKSPACE": "/elsewhere"}) is None
+
+
 def test_from_root(tmp_path: Path):
     """A path under the root from it, the root itself as `.`, else None."""
     root = tmp_path.resolve()

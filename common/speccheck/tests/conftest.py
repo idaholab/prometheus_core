@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-SPECCHECK_VARS = ("SPECCHECK_RESULTS", "SPECCHECK_PRODUCER", "SPECCHECK_LEG", "SPECCHECK_JOB_ID")
+SPECCHECK_VARS = ("SPECCHECK_RESULTS", "SPECCHECK_PRODUCER", "SPECCHECK_LEG", "SPECCHECK_JOB_ID", "SPECCHECK_ROOT")
 """The variables the CI job sets for the outer run, which must not leak into a test's inner runs."""
 GITHUB_VARS = (
     "GITHUB_ACTIONS",
