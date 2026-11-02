@@ -15,10 +15,12 @@ Every requirement gets one status from the specs, the config and the results fil
   `passed` (failed, error, skipped, xfailed, xpassed, deselected, collected) MUST be `failed` in
   `verify`, and the problem MUST list those results.
 - SPC-REQ-005-03: A requirement that is not retired, planned or untested, and that nothing claims,
-  MUST be `unclaimed`, and both `check` and `verify` MUST fail on it. The message MUST show the
+  MUST be `unclaimed`, and `check` MUST fail on it. `verify` MUST do the same, unless a test
+  producer that may claim the requirement hasn't reported (see 005-04). The message MUST show the
   marker to add.
-- SPC-REQ-005-04: A requirement claimed only by producers that didn't report MUST be `not run`.
-  It MUST fail `verify` only with `--complete`.
+- SPC-REQ-005-04: In `verify`, a requirement MUST be `not run` when it is claimed only by
+  producers that didn't report, or when nothing claims it and a test producer that may claim it
+  hasn't reported. It MUST fail `verify` only with `--complete`.
 - SPC-REQ-005-05: With `--complete`, `verify` MUST fail on every expected producer that didn't
   report: every producer, or with `--workflow` the producers that list that workflow.
 - SPC-REQ-005-06: A results file from a producer the config doesn't declare MUST be a problem, and
