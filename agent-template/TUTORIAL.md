@@ -310,11 +310,11 @@ its topology and collects their results in a `state` dict:
 ```python
 async def _run_pattern(self, input_data, context, event_queue):
     state = {"input_data": input_data}
-    for _ in range(MAX_ITERATIONS):          # a "loop" pattern, e.g. Reflection
+    for _ in range(MAX_ITERATIONS):  # a "loop" pattern, e.g. Reflection
         state["draft"] = await self._step_draft(state, context, event_queue)
         state["critique"] = await self._step_critique(state, context, event_queue)
         state["revise"] = await self._step_revise(state, context, event_queue)
-        if state.get("revise") is None:       # TODO(author): your stop condition
+        if state.get("revise") is None:  # TODO(author): your stop condition
             break
     return state
 ```
