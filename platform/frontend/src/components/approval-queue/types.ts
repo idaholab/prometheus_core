@@ -26,4 +26,36 @@ export interface Checkpoint {
   confidence: string;
   /** Display string, e.g. "14m ago". */
   submitted: string;
+  /** The artifact under review, shown on the Artifact Preview tab. */
+  artifact?: CheckpointArtifact;
+}
+
+/** Shown as a tinted label with an icon: pass in success, warn in warning. */
+export type MetricStatus = "pass" | "warn";
+
+export interface CheckpointMetric {
+  id: string;
+  name: string;
+  /** Display string, e.g. "42,198 hex". */
+  value: string;
+  status: MetricStatus;
+  /** Display string, e.g. "40k". */
+  threshold: string;
+}
+
+export interface CheckpointArtifact {
+  /** Caption for the preview area, e.g. "3D Mesh Preview - RC-7 Assembly". */
+  previewLabel: string;
+  fileName: string;
+  /** Display string, e.g. "12.4 MB". */
+  size: string;
+  /** Display string, e.g. "14 min ago". */
+  generated: string;
+  metrics: CheckpointMetric[];
+  requirement: {
+    id: string;
+    /** Display string, e.g. "v2.1". */
+    version: string;
+    text: string;
+  };
 }

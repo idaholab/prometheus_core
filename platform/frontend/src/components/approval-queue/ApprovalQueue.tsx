@@ -41,7 +41,7 @@ export function ApprovalQueue({ counters, checkpoints, selectedId }: ApprovalQue
         <QueueSummary counters={counters} />
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <SectionLabel>System approval checkpoint queue</SectionLabel>
-          <span className="text-[11px] uppercase text-base-content/50">Order: criticality_desc</span>
+          <span className="text-[11px] uppercase text-base-content/50">Sorted by: Most urgent first</span>
         </div>
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {checkpoints.map((checkpoint) => (

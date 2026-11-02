@@ -10,10 +10,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import { Button } from "../ui/Button";
 import { StatusPill } from "../ui/StatusPill";
 import { Tabs, type Tab } from "../ui/Tabs";
+import { ArtifactPreview } from "./ArtifactPreview";
 import type { Checkpoint } from "./types";
 
 type DetailTab = "artifact-preview" | "quality-metrics" | "agent-trace" | "requirements";
@@ -31,15 +32,15 @@ interface CheckpointDetailProps {
 
 /**
  * The selected checkpoint's details (Figma E.1): the header (ID, title,
- * priority and provenance), the detail tabs, and the review footer. Display
- * only: tab switching and the review actions land with AQ-5, and each tab's
- * content with its own ticket.
+ * priority and provenance), the detail tabs, and the review footer. Only
+ * Artifact Preview has content so far; the other tabs show a placeholder until
+ * their own tickets. The review actions land with AQ-5.
  */
 export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
-  const { id, title, priority, workflow, agent, confidence } = checkpoint;
+  const { id, title, priority, workflow, agent, confidence, artifact } = checkpoint;
   const panelId = useId();
   const notesId = useId();
-  const tab: DetailTab = "artifact-preview";
+  const [tab, setTab] = useState<DetailTab>("artifact-preview");
   const tabLabel = DETAIL_TABS.find((t) => t.id === tab)?.label;
 
   return (
@@ -49,7 +50,7 @@ export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
           <div className="flex min-w-0 flex-col gap-0.5">
             {/* Sizes go on each span: the base layer sets span font-size, so it isn't inherited. */}
             <span className="font-mono text-[11px] text-primary">{id}</span>
-            <h2 className="m-0 break-words text-lg font-bold text-base-content">{title}</h2>
+            <h2 className="m-0 wrap-break-word text-lg font-bold text-base-content">{title}</h2>
           </div>
           <StatusPill label={priority} tone={priority === "urgent" ? "error" : "neutral"} className="mt-1" />
         </div>
@@ -60,7 +61,7 @@ export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
           </div>
           <div className="flex min-w-0 gap-2">
             <dt className="uppercase text-base-content/50">Producing agent:</dt>
-            <dd className="m-0 break-words font-medium text-base-content">{agent}</dd>
+            <dd className="m-0 wrap-break-word font-medium text-base-content">{agent}</dd>
           </div>
           <div className="flex min-w-0 gap-1.5 rounded bg-info/10 px-2.5 py-1 font-bold uppercase text-info">
             <dt>Confidence:</dt>
@@ -70,15 +71,15 @@ export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
       </header>
 
       <div className="flex min-w-0 flex-col gap-4">
-        {/* Tab switching lands with AQ-5; until then the selection is fixed. */}
-        <Tabs tabs={DETAIL_TABS} selected={tab} onChange={() => undefined} label="Checkpoint details" panelId={panelId} />
-        <div
-          id={panelId}
-          role="tabpanel"
-          aria-label={tabLabel}
-          className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-base-content/10 bg-base-200 p-6 text-center text-sm text-base-content/40"
-        >
-          {tabLabel} coming soon
+        <Tabs tabs={DETAIL_TABS} selected={tab} onChange={setTab} label="Checkpoint details" panelId={panelId} />
+        <div id={panelId} role="tabpanel" aria-label={tabLabel} className="min-w-0">
+          {tab === "artifact-preview" && artifact ? (
+            <ArtifactPreview artifact={artifact} />
+          ) : (
+            <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-base-content/10 bg-base-200 p-6 text-center text-sm text-base-content/40">
+              {tabLabel} coming soon
+            </div>
+          )}
         </div>
       </div>
 
@@ -95,7 +96,7 @@ export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
         {/* The review actions land with AQ-5. */}
         <div className="flex flex-wrap gap-2">
           <Button label="Reject" variant="error" outline size="sm" />
-          <Button label="Request Revision" outline size="sm" />
+          <Button label="Request Revision" outline subtle size="sm" />
           <Button label="Approve & Deploy" variant="primary" size="sm" />
         </div>
       </section>

@@ -23,7 +23,7 @@ const COUNTERS: QueueCounter[] = [
   { id: "revision-requested", label: "Revision Requested", count: 1, tone: "neutral" },
 ];
 
-// Placeholder checkpoints from Figma E.1, in the queue's criticality order.
+// Placeholder checkpoints from Figma E.1, most urgent first.
 const CHECKPOINTS: Checkpoint[] = [
   {
     id: "CKP-8841",
@@ -33,6 +33,25 @@ const CHECKPOINTS: Checkpoint[] = [
     agent: "Mesh Generator v1.8",
     confidence: "98.4%",
     submitted: "14m ago",
+    artifact: {
+      previewLabel: "3D Mesh Preview - RC-7 Assembly",
+      fileName: "mesh_rc7_assembly.vtk",
+      size: "12.4 MB",
+      generated: "14 min ago",
+      metrics: [
+        { id: "cell-count", name: "Cell Count", value: "42,198 hex", status: "pass", threshold: "40k" },
+        { id: "orthogonal-quality", name: "Orthogonal Quality", value: "0.88", status: "pass", threshold: "0.7" },
+        { id: "aspect-ratio", name: "Aspect Ratio", value: "3.2 max", status: "warn", threshold: "3.0" },
+        { id: "skewness", name: "Skewness", value: "0.31 avg", status: "pass", threshold: "0.5" },
+        { id: "volume-change", name: "Volume Change", value: "0.2%", status: "pass", threshold: "0.5%" },
+        { id: "boundary-layers", name: "Boundary Layers", value: "5 layers", status: "pass", threshold: "4" },
+      ],
+      requirement: {
+        id: "REQ-TR-842",
+        version: "v2.1",
+        text: "Fuel assembly coolant velocity must sustain cross-flow mesh bounds under 5.2 m/s transient states without boundary model distortion.",
+      },
+    },
   },
   {
     id: "CKP-8842",
