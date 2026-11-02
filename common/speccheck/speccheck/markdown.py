@@ -47,6 +47,47 @@ def code(text: str, limit: int = MAX_CELL, *, in_table: bool) -> str:
     return f"`{text.replace('|', chr(92) + '|') if in_table else text}`"
 
 
+PROSE_SPECIAL = re.compile(r"([\\\[\]<>*_~|&])")
+"""Outside a code span, what can start a link, image, autolink, HTML, emphasis, strikethrough, an
+entity or a table cell; each is escaped with a backslash."""
+BLOCK_START = re.compile(r"^(\s*)([#>+=-]|\d+[.)])")
+"""A line start markdown reads as a heading, quote, list or rule."""
+
+
+def prose(text: str, limit: int = MAX_CELL, *, line_start: bool = False) -> str:
+    """Text as markdown that can only be text: one line, capped, code spans kept as written.
+
+    Outside code spans only PROSE_SPECIAL is escaped, so `.` and `-` read as they are. Text with an
+    unmatched backtick has every backtick escaped instead, so no span can swallow what follows. With
+    `line_start`, the text starts its own line, so a leading BLOCK_START is escaped too.
+    """
+    text = " ".join(str(text).split())
+    if len(text) > limit:
+        text = text[: limit - 1] + "…"
+    if text.count("`") % 2:
+        out = PROSE_SPECIAL.sub(r"\\\1", text).replace("`", "\\`")
+    else:
+        parts = text.split("`")
+        out = "`".join(part if n % 2 else PROSE_SPECIAL.sub(r"\\\1", part) for n, part in enumerate(parts))
+    return BLOCK_START.sub(lambda m: m.group(1) + "\\" + m.group(2), out) if line_start else out
+
+
+def anchor(heading: str) -> str:
+    """GitHub's link anchor for a heading: lower case, punctuation and emoji dropped, spaces as `-`."""
+    return re.sub(r"[^\w\- ]", "", heading.lower()).replace(" ", "-")
+
+
+PLAIN_PATH = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
+"""A repository path safe to put in a link: letters, digits, `_`, `.`, `-`, and `/` between parts."""
+
+
+def source_url(base: str, path: str | None, line: int = 0) -> str:
+    """`<base>/<path>#L<line>`, a file at this run's commit, when `base` is known and `path` is plain, else ""."""
+    if not (base and path and PLAIN_PATH.fullmatch(path)) or ".." in path.split("/"):
+        return ""
+    return f"{base}/{path}" + (f"#L{line}" if line > 0 else "")
+
+
 RUN_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}(?:/(?:attempts|job)/[1-9][0-9]{0,19})?")
 """What follows `<server>/<owner>/<repo>` in a run, run attempt or job URL."""
 ARTIFACT_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}/artifacts/[1-9][0-9]{0,19}")
