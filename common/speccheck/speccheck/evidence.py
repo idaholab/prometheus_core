@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from speccheck.config import Config, Producer
+from speccheck.config import Config, ConfigError, Producer
 from speccheck.results import Result, ResultsFile
 from speccheck.specs import UNTESTED, Problem, Requirement, SpecSet, rel
 
@@ -170,6 +170,15 @@ def evaluate(
                 config_claims[claimed].append(producer.name)
 
     expected = [p.name for p in (config.producers_in(workflow) if workflow else config.producers.values())]
+    if complete and not expected:
+        # An empty expectation would pass the missing-producer check for nothing, so a typo or a renamed
+        # workflow would turn the check off without a sound.
+        if workflow:
+            known = ", ".join(sorted({w for p in config.producers.values() for w in p.workflows})) or "none"
+            raise ConfigError(
+                f"--workflow {workflow}: no producer in {config_name} lists that workflow (workflows listed: {known})"
+            )
+        raise ConfigError(f"--complete: {config_name} declares no producers, so there is nothing to expect")
     missing = sorted(set(expected) - set(reported)) if complete else []
     for name in missing:
         message = (
