@@ -17,8 +17,9 @@ reporter writes the same `speccheck-results/1` files (`design.md`, "Vitest").
   `design.md` and choose the claim form.
 - **Reporter** in `common/speccheck/vitest/` (TypeScript, no runtime dependencies), mapping
   vitest states onto the outcomes. Validated against the JSON Schema from step 1.
-- **Claim helper** `covers("FE-REQ-001-01")` (or the name/tag form if metadata doesn't work for
-  skipped tests).
+- **Claim helper** `covers("FE-REQ-001-01", "how")` (or the name/tag form if metadata doesn't
+  work for skipped tests), with the pytest rules: inside one `it`/`test`, never a `describe`, one
+  per case of `test.each`, and a unique explanation.
 - **Static check:** `speccheck check` reads a `vitest list --json` run (or the reporter's file from
   a collect-only run), since vitest has no collection hook to fail early.
 - **How the frontend gets it:** a local `file:` dependency in `package.json` or a path in the

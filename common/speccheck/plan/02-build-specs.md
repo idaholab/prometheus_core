@@ -18,9 +18,10 @@ platformctl against them with speccheck, from real test runs.
   - drop each spec's `tests:` line and the index's `id-prefix:` line; their content moves into
     `build/specs/speccheck.toml` (prefix `BLD`, producers for `platformctl-unit` and the
     `test.yml` jobs that prove platform requirements);
-  - turn every docstring citation in `platform/ctl/tests` into `@pytest.mark.covers(...)`;
-  - turn every `# Covers` / `# Implements` workflow comment into a `[ci.<job>]` claim plus a
-    `record` step in that job.
+  - turn every docstring citation in `platform/ctl/tests` into `@pytest.mark.covers(ID, how)`,
+    writing how each test proves its requirement;
+  - turn every `# Covers` / `# Implements` workflow comment into a `[ci.<job>]` claim (an
+    explanation per ID) plus a `record` step in that job.
 - **platformctl:** add `prometheus-speccheck` as a path dev dependency (lock change), set
   `speccheck_config` in its pytest options, set the producer variables in `platformctl.yml`, upload
   results from the `unit` legs, and end the workflow with the `speccheck-verify` job.

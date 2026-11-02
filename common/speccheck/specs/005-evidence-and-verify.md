@@ -31,3 +31,7 @@ Every requirement gets one status from the specs, the config and the results fil
   claimed requirement is `claimed` whatever its results' outcomes are.
 - SPC-REQ-005-09: `verify` MUST fail when it read no results file, with or without `--complete`,
   and the problem MUST say that nothing is proven.
+- SPC-REQ-005-10: `check` and `verify` MUST fail when two claims give the same explanation, across
+  every results file read and every `[ci.<job>]` entry, compared as in SPC-REQ-003-09. Claims from
+  the same test or CI job (in another leg, producer or attempt) are one claim. The problem MUST
+  name both.

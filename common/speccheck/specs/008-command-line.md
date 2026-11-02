@@ -23,3 +23,12 @@ object for scripts and agents.
 - SPC-REQ-008-06: Every problem MUST be printed as `path:line: message`. Everything speccheck prints
   MUST have control characters written out (`\n`, `\x1b`), so no file name, spec text or results
   file can start a CI log command.
+- SPC-REQ-008-07: `lint`, `check` and `verify` MUST take `--summary FILE` and append to it one
+  line, then one list entry per problem, and nothing else. The line MUST give the number of
+  problems when there are any, then the same counts as the summary line on the terminal.
+- SPC-REQ-008-08: What `--summary` writes MUST be escaped as in SPC-REQ-006-03 and MUST stay under
+  the step summary's 1 MiB limit. When it doesn't fit, it MUST be cut after a whole entry and say
+  that it was cut.
+- SPC-REQ-008-09: With `--report-url URL`, the summary line MUST link to the full report, but only
+  when the URL has the form of an artifact link of a supported CI provider (see SPC-REQ-007-07) on
+  the run's server and repository. Otherwise the line MUST have no link.

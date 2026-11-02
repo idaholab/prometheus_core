@@ -19,9 +19,10 @@ are marked so this step can pass, and step 4 works through them.
   including `agent-template/` and `platform/`). One mechanical commit, separate from the rest, so
   it is easy to review.
 - **Markers:** turn the existing citations (docstrings such as `"""Covers REQ-002-14."""` and
-  comments such as `# REQ-005-14, BEH-005-05: ...`, about 43 IDs) into `covers` marks. Where a
-  comment cites an ID for one parameter of a parameterized test, use `pytest.param(...,
-  marks=...)`.
+  comments such as `# REQ-005-14, BEH-005-05: ...`, about 43 IDs) into `covers(ID, how)` marks,
+  each saying how that test proves the requirement. A parametrized test claims per
+  `pytest.param(..., marks=...)`, never on the function, and class or module marks move down to
+  each test.
 - **The rest:** run `check` and mark each requirement no test claims `⚠ untested`, with a line
   under the spec's Open questions. That is about 200. This is honest about the current state, and
   step 4 removes the markers.

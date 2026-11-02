@@ -100,6 +100,7 @@ changing commands"):
 - **Output:** problems on stderr as `path:line: message`, so editors and CI logs link them; a
   one-line summary at the end ("12 requirements: 10 passed, 1 planned, 1 untested"). `--json`
   prints one object with `schema_version`, `command`, `ok`, the result, and `problems`.
+- **Step summary:** `lint`, `check` and `verify` take `--summary FILE` (see "Step summary").
 - Only `cli.py` exits; actions return a code. Nothing but `results.py` and `report.py` writes
   files.
 
@@ -127,7 +128,7 @@ a comment pointing at platformctl's copy, so an edit to one reminds the editor o
 | `lint` | the spec folder | a spec breaks the format (the #355 rules, minus `tests:` and citations) |
 | `check` | specs, config, results files (from a collect-only run or a real one) | a requirement that is not planned, untested or retired has no claim; a claim names an unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
 | `verify` | specs, config, the results files from a CI run | everything `check` fails on, plus: a claimed requirement with no passing result among the producers that reported; with `--complete`, a requirement no reported producer claims, or an expected producer that didn't report |
-| `report` | the same as `verify` | never, unless the inputs are malformed: it writes markdown (`--output`, `--summary` for `$GITHUB_STEP_SUMMARY`) or `--json` |
+| `report` | the same as `verify` | never, unless the inputs are malformed: it writes the full markdown report (`--output`) or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry; writes a results file with one passed result for each ID the job claims |
 
 `check` is what you run locally:
@@ -154,7 +155,7 @@ specs = "all"                   # or ["001", "004"]: the specs it may claim
 workflows = ["speccheck"]       # the workflows it runs in, for verify --complete
 
 [ci.speccheck-self-check]       # a CI job that is itself evidence; `record` reads this
-covers = ["SPC-REQ-007-02"]
+covers = { "SPC-REQ-007-02" = "the self-check job records only the IDs listed here" }
 
 [report]
 title = "speccheck requirements"
@@ -176,20 +177,67 @@ Decisions:
 ## Claiming a requirement
 
 ```python
-@pytest.mark.covers("SPC-REQ-004-01", "SPC-BEH-004-02")
+@pytest.mark.covers("SPC-REQ-004-01", "writes a results file and reads it back unchanged")
+@pytest.mark.covers("SPC-BEH-004-02", "an unknown key in a result line is ignored, not rejected")
 def test_results_file_round_trips():
     """A written results file reads back the same."""
 ```
 
-- Works wherever a pytest mark does: on a function, a class (every method), a module
-  (`pytestmark = pytest.mark.covers(...)`) or one parameter
-  (`pytest.param(..., marks=pytest.mark.covers(...))`). Marks from all levels add up.
+- **One mark per ID, with how the test proves it** (decided 2026-11-02). The report shows the
+  explanation next to each result, so a reviewer can tell whether the evidence fits the
+  requirement without opening the test. It is required and positional: `covers(ID, how)`.
+- **Where a mark may go:** on a test function that isn't parametrized, or on one
+  `pytest.param(..., marks=...)` of the test's own single `@pytest.mark.parametrize`. A mark on a
+  class or module, on the function of a parametrized test, on a test with two `parametrize`s, or
+  on a test that uses a parametrized fixture fails collection. Every mark then lands on exactly
+  one test, so "one explanation, one test" holds, and each case of a parametrized test says what
+  it proves:
+
+  ```python
+  @pytest.mark.parametrize(
+      ("body", "outcome"),
+      [
+          pytest.param(
+              "assert False",
+              "failed",
+              marks=pytest.mark.covers("SPC-REQ-005-02", "a claiming test that fails makes the requirement failed"),
+              id="failed",
+          ),
+          pytest.param(
+              'pytest.skip("no")',
+              "skipped",
+              marks=pytest.mark.covers("SPC-REQ-005-02", "a skipped claiming test isn't evidence"),
+              id="skipped",
+          ),
+      ],
+  )
+  def test_a_claim_that_didnt_pass_fails_verify(project, body, outcome): ...
+  ```
+
+  `marks=` takes a list when one case proves several requirements. The alternative, marks on
+  every level with each claim recording where its mark was written, was dropped: it needs a
+  `from` field from every writer, and a class-wide sentence says less than one per test.
+- **The explanation:** whitespace is collapsed to single spaces, so a long one can span lines in
+  the decorator. It is plain text, at most 1000 characters, and escaped wherever it is shown.
+  Like node IDs, it goes into CI artifacts, so keep secrets out of it.
+- **Rules, at collection** (SPC-REQ-003-02 to 003-11, on any run, locally too):
+  - a mark takes exactly two strings;
+  - the explanation isn't empty, too long, the ID itself, or a placeholder (`TODO`, `TBD`,
+    `FIXME`, `...`, `-`);
+  - a test claims each ID once;
+  - no two claims in the session share an explanation, whatever their IDs;
+  - with `speccheck_config` set in the pytest ini options (agreed 2026-11-01): the ID is
+    well-formed, known, not retired and allowed for the producer, and the explanation isn't the
+    text of any requirement in the folder.
+
+  Texts are compared after collapsing whitespace, ignoring case and dropping a trailing full
+  stop. `check` and `verify` repeat the uniqueness rule across every results file and
+  `[ci.<job>]` entry, since one session sees only its own claims. Whether an explanation is a
+  good one is left to review.
 - The plugin registers the marker, so `--strict-markers` accepts it.
-- **At collection** (any run, locally too), when the project has `speccheck_config` set in its
-  pytest ini options, the plugin fails the session on a malformed ID, an unknown or retired ID,
-  or an ID its producer may not claim. This is the static layer that runs on every
-  `pytest` (agreed 2026-11-01).
 - A test with no `covers` mark is fine and is not recorded.
+- **Requirement text is unique too:** `lint` fails on two requirements in one folder, not
+  retired, with the same text (SPC-REQ-001-10).
 
 ## Results files
 
@@ -204,8 +252,13 @@ Lines: one header, then one line per claiming test.
         "sha": "abc..."},
  "started": "2026-11-01T12:00:00Z"}
 {"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py",
- "line": 181, "covers": ["SDK-REQ-006-08"], "outcome": "passed"}
+ "line": 181, "covers": [{"id": "SDK-REQ-006-08", "how": "a chat call goes through the proxy URL"}],
+ "outcome": "passed"}
 ```
+
+- **`covers`** is a list of `{"id", "how"}` objects. This changed within `speccheck-results/1`
+  (2026-11-02), since nothing outside speccheck read the file yet. A reader rejects a result that
+  claims an ID twice, or whose `how` is empty, over 1000 characters, or has a line break.
 
 - **Outcomes:** `passed`, `failed`, `error`, `skipped`, `xfailed`, `xpassed`, `deselected`,
   `collected` (a `--collect-only` run). Only `passed` is evidence. `xpassed` is not, since the test
@@ -299,9 +352,10 @@ And at the end of the workflow:
   prefix (not `speccheck-`, so the report artifact and other `speccheck-*` artifacts are never
   read as results), 30 days' retention, and `if-no-files-found: error`, so a job that should have
   written results and didn't fails.
-- **`speccheck-verify`** downloads every `speccheck-results-*` artifact of the run, runs `verify` and
-  `report --summary`, and uploads the report as the `speccheck-report` artifact. It runs even when
-  a test job failed, so the report shows what was proven. Its exit code is `verify`'s.
+- **`speccheck-verify`** downloads every `speccheck-results-*` artifact of the run, writes the
+  report (`report --output` and `--json`), uploads it as the `speccheck-report` artifact, then runs
+  `verify --summary "$GITHUB_STEP_SUMMARY" --report-url <the upload's artifact-url>`. It runs even
+  when a test job failed, so the report shows what was proven. Its exit code is `verify`'s.
 - Both are composite actions in this repository, pinned like every other action in them, and
   checked by zizmor and actionlint.
 
@@ -311,8 +365,8 @@ Some requirements are a CI job rather than a test: an image builds for both arch
 wheel installs into a clean venv, devel images are published. #355 let a workflow comment claim
 them, but a comment proves nothing ran.
 
-Instead, the job claims them in the config (`[ci.<job>] covers = [...]`) and records them as its
-last step, which runs only when the steps before it succeeded:
+Instead, the job claims them in the config (`[ci.<job>] covers = { "<ID>" = "<how>" }`, an
+explanation per ID, checked like a test's) and records them as its last step, which runs only when the steps before it succeeded:
 
 ```yaml
       - uses: ./.github/actions/speccheck-install
@@ -322,8 +376,8 @@ last step, which runs only when the steps before it succeeded:
         if: ${{ !cancelled() }}
 ```
 
-- `record` writes a results file with one `passed` result for each of the job's IDs, with
-  `test` set to the job name and `kind: "ci"`. The report shows it as a job, not a test.
+- `record` writes a results file with one `passed` result claiming each of the job's IDs with its
+  explanation, with `test` set to the job name and `kind: "ci"`. The report shows it as a job, not a test.
 - The `speccheck-install` action installs the `speccheck` command with `uv tool install` from the
   checkout, so a job that never set up uv for its own work can still record. (This replaced a
   `run.py` that ran the package from the checkout with the system Python.)
@@ -354,13 +408,34 @@ every run, the runtime check in the final job, complete where every producer rep
 - a summary line and a count per status;
 - one table per spec: ID, status, the start of its text, and its evidence, one entry per result:
   the test node ID (or CI job), the producer and leg, and a link to the job;
+- below each table, every claim with how it proves its requirement (up to 1000 characters, so not
+  in a cell);
 - requirements that are not passed sorted first within each spec;
 - the inputs it was built from: commit, run, and which producers reported or were missing.
 
-Everything that comes from a results file (test names, producer names) is escaped before it goes
-into markdown, and capped in length. Step summaries have a 1 MiB limit, so `--summary` writes only
-the summary and the problem rows, and the full report goes into the artifact. `--json` gives the
-same data for other tools.
+Everything that comes from a results file (test names, producer names, explanations) is escaped
+before it goes into markdown, and capped in length. The report is the artifact and the place to
+read everything. `--json` gives the same data for other tools.
+
+## Step summary
+
+The step summary shows only what failed (decided 2026-11-02). `lint`, `check` and `verify` take
+`--summary FILE` and append one line, then one list entry per problem, and nothing else:
+
+> **speccheck:** 2 problems. 48 requirements: 1 failed, 1 unclaimed, 2 not run, 37 passed, 4 planned, 2 untested, 1 retired. Full report: [speccheck-report](…)
+>
+> - SPC-REQ-004-01 failed in `tests/requirements/test_004_results.py::test_round_trip` ([job](…))
+> - SPC-REQ-006-03 is not claimed; add `@pytest.mark.covers("SPC-REQ-006-03", "…")` to a test that proves it
+
+- On a pass, the line alone, without the problem count. It is the way to the artifact from the
+  run page, and an empty summary would look like a step that never ran.
+- The counts are the terminal's summary line. `check` shows `claimed` where `verify` shows
+  `passed`. `not run` without `--complete` is counted but not listed, since it isn't a failure.
+- `--report-url URL` links the report, only when it has the form of an artifact link on the run's
+  own server and repository. Otherwise the line has no link.
+- Everything is escaped as in the report and the whole stays under GitHub's 1 MiB limit, cut
+  after a whole entry, with a note, when it doesn't fit.
+- `report --summary` is gone: one summary format, written by the commands that decide failure.
 
 ## speccheck's own specs
 
@@ -371,12 +446,12 @@ step 1 alongside the code:
 |---|---|
 | 001 Spec format | files, index, headers, bullets, markers, prefix, what `lint` rejects |
 | 002 Config | file discovery, keys, validation, errors |
-| 003 Claims | the `covers` marker, mark levels, the collection check |
+| 003 Claims | the `covers` marker, where it may go, explanations, the collection check |
 | 004 Results files | format, outcomes, merging phases, xdist, writing only when asked |
 | 005 Evidence and verify | the status table above, partial and complete checks |
-| 006 Report | markdown, links, escaping, summary limits, `--json` |
+| 006 Report | markdown, links, escaping, explanations, `--json` |
 | 007 CI jobs | `record`, the two composite actions |
-| 008 The command line | actions, global options, exit codes, `--json` envelope |
+| 008 The command line | actions, global options, exit codes, `--json` envelope, the step summary |
 
 speccheck's requirements tests (`tests/requirements/`, one file per spec) claim them with the
 marker, and `speccheck.yml` ends with the same `speccheck-verify` job as every other workflow. Its
@@ -431,11 +506,13 @@ Possible without changing the checker: a vitest reporter writes the same results
 - **The claim:** vitest has no markers. Options, to choose in step 5 against the vitest version in
   use then (the frontend is on vitest 4.1):
   1. per-test metadata (vitest has a task `meta` object a reporter can read), set by a
-     `covers("FE-REQ-001-01")` helper inside the test;
+     `covers("FE-REQ-001-01", "how")` helper inside the test;
   2. the ID in the test's name or tag, which every reporter can read.
 
   Option 1 is closer to the pytest marker. It needs checking that the metadata reaches the
-  reporter for tests that are skipped or filtered out, not just ones that ran.
+  reporter for tests that are skipped or filtered out, not just ones that ran. Either way the
+  pytest rules carry over: an explanation per ID, a claim inside one `it`/`test` (never on a
+  `describe`), one per case of `test.each`, and unique explanations.
 - **The collection check** happens in `speccheck check` instead of at collection, unless vitest's
   reporter hooks run early enough.
 - **Before any of this:** the frontend has no spec folder yet. Step 5 starts by writing one, or is
