@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 
+from speccheck import summary
 from speccheck.actions import _common
 from speccheck.context import Context
 
@@ -36,11 +37,12 @@ ORDER = 20
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """The results files to read."""
+    """The results files to read, and `--summary`."""
     _common.add_inputs(parser)
+    summary.add_arguments(parser)
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
     """Report claim problems and unclaimed requirements."""
     evaluation = _common.evaluate(ctx, args, runtime=False)
-    return _common.finish(ctx, NAME, evaluation)
+    return _common.finish(ctx, args, NAME, evaluation)

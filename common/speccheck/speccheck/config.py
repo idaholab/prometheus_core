@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from speccheck.claims import Claim, collapse, how_problem
 from speccheck.specs import PREFIX
 
 if sys.version_info >= (3, 11):
@@ -65,10 +66,15 @@ class Producer:
     """The spec numbers it may claim, or None for all of them."""
     workflows: tuple[str, ...]
     """The workflows it runs in, so `verify --complete` knows when it should have reported."""
-    covers: tuple[str, ...] = ()
-    """For a CI job (`[ci.<job>]`), the IDs it claims; empty for a test run."""
+    claims: tuple[Claim, ...] = ()
+    """For a CI job (`[ci.<job>]`), what it claims and how; empty for a test run."""
     ci_job: bool = False
     """Whether it is a CI job that `record` writes results for, rather than a test run."""
+
+    @property
+    def covers(self) -> tuple[str, ...]:
+        """For a CI job, the IDs it claims, in config order."""
+        return tuple(claim.id for claim in self.claims)
 
     def may_claim(self, spec_number: str) -> bool:
         """Whether this producer may claim a requirement of the given spec."""
@@ -225,8 +231,20 @@ def _ci_job(name: str, body: dict[str, Any], path: Path, key: str) -> Producer:
     """One `[ci.<job>]` table: a CI job that is itself the evidence for the IDs it covers."""
     _check_name(name, path, key)
     _unknown(body, CI_KEYS, path, key)
-    covers = _strings(body.get("covers"), path, f"{key}.covers")
+    covers = body.get("covers")
+    example = '{ "T-REQ-001-01" = "how the job proves it" }'
+    if not isinstance(covers, dict):
+        raise ConfigError(f"{path}: `{key}.covers` must be a table from ID to how the job proves it, such as {example}")
     if not covers:
-        raise ConfigError(f"{path}: `{key}.covers` must list at least one ID")
+        raise ConfigError(f"{path}: `{key}.covers` must claim at least one ID")
+    claims = []
+    for claimed, how in covers.items():
+        if not isinstance(how, str):
+            raise ConfigError(f"{path}: `{key}.covers.{claimed}` must be a string saying how the job proves it")
+        how = collapse(how)
+        why = how_problem(claimed, how)
+        if why:
+            raise ConfigError(f"{path}: `{key}.covers.{claimed}`: {why}")
+        claims.append(Claim(claimed, how))
     workflows = _strings(body.get("workflows", []), path, f"{key}.workflows")
-    return Producer(name=name, specs=None, workflows=workflows, covers=covers, ci_job=True)
+    return Producer(name=name, specs=None, workflows=workflows, claims=tuple(claims), ci_job=True)

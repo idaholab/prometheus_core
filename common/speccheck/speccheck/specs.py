@@ -51,6 +51,17 @@ override and isolate controls (U+202A to U+202E, U+2066 to U+2069), which can ma
 show reversed or hide what follows it."""
 
 
+def collapse(text: str) -> str:
+    """`text` with each run of whitespace, line breaks included, made one space, and the ends trimmed."""
+    return " ".join(text.split())
+
+
+def comparable(text: str) -> str:
+    """`text` as compared for sameness: whitespace collapsed, case ignored, one trailing full stop dropped."""
+    text = collapse(text).casefold()
+    return text[:-1].rstrip() if text.endswith(".") else text
+
+
 def plain(text: str) -> str:
     """`text` as one line that no CI log acts on: control characters and log commands written out.
 
@@ -314,6 +325,7 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
         specs.append(parse_spec(path, root, syntax, problems))
 
     requirements: dict[str, Requirement] = {}
+    texts: dict[str, Requirement] = {}
     for spec in specs:
         name = rel(spec.path, root)
         if spec.status == "implemented" and not spec.requirements:
@@ -332,4 +344,13 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
             if requirement.untested and requirement.planned:
                 message = f"{requirement.id} is both planned and untested; keep one marker"
                 problems.append(Problem(name, requirement.line, message, "marker-conflict"))
+            if requirement.retired:
+                continue
+            same = texts.setdefault(comparable(requirement.text), requirement)
+            if same is not requirement:
+                where = f"{rel(same.spec.path, root)}:{same.line}"
+                message = (
+                    f"{requirement.id} has the same text as {same.id} at {where}; each requirement says something new"
+                )
+                problems.append(Problem(name, requirement.line, message, "text-duplicate"))
     return SpecSet(specs=specs, requirements=requirements, problems=problems, syntax=syntax)

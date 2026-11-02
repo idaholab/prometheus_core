@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import argparse
 
-from speccheck import jsonout
+from speccheck import jsonout, summary
 from speccheck.context import Context
 
 NAME = "lint"
@@ -30,7 +30,8 @@ ORDER = 10
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """lint takes no arguments of its own."""
+    """`--summary`."""
+    summary.add_arguments(parser)
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
@@ -39,6 +40,7 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
     ok = not specs.problems
     count = len(specs.requirements)
     text = f"{len(specs.specs)} specs, {count} requirement{'' if count == 1 else 's'}"
+    summary.write(ctx, args, text, specs.problems)
     if ctx.output.json_mode:
         body = jsonout.envelope(
             NAME,

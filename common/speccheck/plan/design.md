@@ -58,8 +58,11 @@ common/speccheck/
     jsonout.py              # the versioned --json envelope
     config.py               # load and validate speccheck.toml / [tool.speccheck]
     specs.py                # spec folder parsing (from #355)
+    claims.py               # a claim (ID and how) and the rules for its explanation
     results.py              # the results file format: read, write, validate, merge
     evidence.py             # claims + outcomes -> one status per requirement
+    markdown.py             # escaping and the only links allowed, for the report and summary
+    summary.py              # --summary: the failures-only step summary
     ci.py                   # GitHub Actions context: run, job, attempt, URLs
     pytest_plugin.py        # the `covers` marker, collection check, results writer
     actions/
@@ -101,7 +104,7 @@ changing commands"):
   one-line summary at the end ("12 requirements: 10 passed, 1 planned, 1 untested"). `--json`
   prints one object with `schema_version`, `command`, `ok`, the result, and `problems`.
 - **Step summary:** `lint`, `check` and `verify` take `--summary FILE` (see "Step summary").
-- Only `cli.py` exits; actions return a code. Nothing but `results.py` and `report.py` writes
+- Only `cli.py` exits; actions return a code. Nothing but `results.py`, `summary.py` and `report.py` writes
   files.
 
 ### Shared code with platformctl

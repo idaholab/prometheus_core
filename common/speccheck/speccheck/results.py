@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from speccheck.claims import Claim
 from speccheck.specs import Problem
 
 SCHEMA = "speccheck-results/1"
@@ -44,7 +45,7 @@ MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_LINE_BYTES = 64 * 1024
 """The longest line read."""
 MAX_TEXT = 1000
-"""The longest string field kept, after which a field is a problem."""
+"""The longest string field kept, after which a field is a problem; also the longest explanation."""
 MAX_COVERS = 200
 """The most IDs one result may claim."""
 
@@ -69,6 +70,10 @@ CI_KEYS = {
 """The keys of a header's `ci` block this speccheck reads; any other is ignored."""
 RESULT_KEYS = {"test", "file", "line", "covers", "outcome", "kind"}
 """The result keys this speccheck reads; any other is ignored."""
+CLAIM_KEYS = {"id", "how"}
+"""The keys of one `covers` entry this speccheck reads; any other is ignored."""
+LINE_BREAK = re.compile(r"[\n\r\x0b\x0c\x1c-\x1e\x85  ]")
+"""Anything that starts a new line; an explanation is one line, since another writer may not collapse it."""
 
 
 @dataclass
@@ -77,8 +82,8 @@ class Result:
 
     test: str
     """The test's node ID, or the CI job's name."""
-    covers: list[str]
-    """The IDs it claims."""
+    covers: list[Claim]
+    """What it claims: each ID, and how it proves it."""
     outcome: str
     """One of OUTCOMES."""
     file: str = ""
@@ -90,7 +95,11 @@ class Result:
 
     def to_json(self) -> dict[str, Any]:
         """The result line's object."""
-        body: dict[str, Any] = {"test": self.test, "covers": self.covers, "outcome": self.outcome}
+        body: dict[str, Any] = {
+            "test": self.test,
+            "covers": [claim.to_json() for claim in self.covers],
+            "outcome": self.outcome,
+        }
         if self.file:
             body["file"] = self.file
         if self.line:
@@ -209,6 +218,22 @@ def _header(body: Any) -> ResultsFile:
     )
 
 
+def _claim(body: Any, seen: set[str]) -> Claim:
+    """Validate one `covers` entry: an ID not seen before in this result, and a one-line explanation."""
+    if not isinstance(body, dict):
+        raise Invalid('each `covers` entry must be an object, {"id": ..., "how": ...}')
+    body = _known(body, CLAIM_KEYS)
+    claimed = _text(body.get("id"), "covers[].id", allow_empty=False)
+    # `_text` caps it at MAX_TEXT, which is MAX_HOW (a unit test keeps them equal)
+    how = _text(body.get("how"), "covers[].how", allow_empty=False)
+    if LINE_BREAK.search(how):
+        raise Invalid(f"`covers[].how` for {claimed} has a line break; an explanation is one line")
+    if claimed in seen:
+        raise Invalid(f"`covers` claims {claimed} more than once")
+    seen.add(claimed)
+    return Claim(claimed, how)
+
+
 def _result(body: Any) -> Result:
     """Validate one result line."""
     if not isinstance(body, dict):
@@ -216,7 +241,9 @@ def _result(body: Any) -> Result:
     body = _known(body, RESULT_KEYS)
     covers = body.get("covers")
     if not isinstance(covers, list) or not covers or len(covers) > MAX_COVERS:
-        raise Invalid(f"`covers` must be a list of 1 to {MAX_COVERS} IDs")
+        raise Invalid(f"`covers` must be a list of 1 to {MAX_COVERS} claims")
+    seen: set[str] = set()
+    claimed = [_claim(item, seen) for item in covers]
     outcome = body.get("outcome")
     if outcome not in OUTCOMES:
         raise Invalid(f"`outcome` is {outcome!r}; it must be one of {', '.join(OUTCOMES)}")
@@ -228,7 +255,7 @@ def _result(body: Any) -> Result:
         raise Invalid("`line` must be a whole number")
     return Result(
         test=_text(body.get("test"), "test", allow_empty=False),
-        covers=[_text(item, "covers[]", allow_empty=False) for item in covers],
+        covers=claimed,
         outcome=outcome,
         file=_text(body.get("file", ""), "file"),
         line=line,
@@ -311,15 +338,22 @@ def read_all(paths: Iterable[Path]) -> tuple[list[ResultsFile], list[Problem]]:
     """Every results file under the inputs, and the problems; a missing input is a problem."""
     files: list[ResultsFile] = []
     problems: list[Problem] = []
-    inputs = list(paths)
-    for path in inputs:
-        if path.is_symlink():
+    found_inputs = []
+    for path in paths:
+        try:
+            symlink, exists = path.is_symlink(), path.exists()
+        except OSError as exc:  # such as a name longer than the file system allows
+            problems.append(Problem(path.as_posix(), 0, f"can't read: {exc.strerror}", "results-unreadable"))
+            continue
+        if symlink:
             problems.append(
                 Problem(path.as_posix(), 0, "is a symlink, which isn't followed; skipped", "results-symlink")
             )
-        elif not path.exists():
+        elif not exists:
             problems.append(Problem(path.as_posix(), 0, "no such results file or folder", "results-missing"))
-    for path in collect(p for p in inputs if p.exists()):
+        else:
+            found_inputs.append(path)
+    for path in collect(found_inputs):
         parsed, found = read(path)
         problems += found
         if parsed is not None:

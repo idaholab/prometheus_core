@@ -21,7 +21,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from speccheck import evidence, jsonout, results
+from speccheck import evidence, jsonout, results, summary
 from speccheck.context import Context
 from speccheck.evidence import Evaluation
 from speccheck.specs import Problem
@@ -88,6 +88,7 @@ def evidence_json(item: evidence.Evidence) -> dict[str, Any]:
     ci = item.source.ci or {}
     return {
         "test": item.result.test,
+        "how": item.how,
         "kind": item.result.kind,
         "file": item.result.file,
         "line": item.result.line,
@@ -114,9 +115,11 @@ def statuses_json(evaluation: Evaluation) -> list[dict[str, Any]]:
     ]
 
 
-def finish(ctx: Context, command: str, evaluation: Evaluation) -> int:
-    """Print the problems and the summary (or the JSON object) for `check` or `verify`, and return the exit code."""
+def finish(ctx: Context, args: argparse.Namespace, command: str, evaluation: Evaluation) -> int:
+    """Print the problems and the summary (or the JSON object) for `check` or `verify`, write `--summary`,
+    and return the exit code."""
     ok = not evaluation.problems
+    summary.write(ctx, args, evidence.summary_line(evaluation.counts()), evaluation.problems)
     text = evidence.summary_line(evaluation.counts())
     if evaluation.reported or evaluation.missing:
         text += f"; reported: {', '.join(evaluation.reported) or 'none'}"
