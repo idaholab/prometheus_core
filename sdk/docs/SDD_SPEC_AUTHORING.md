@@ -1,6 +1,6 @@
 # SDD Spec Authoring Standard
 
-> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID")`; see [common/speccheck/README.md](../../common/speccheck/README.md).
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID")`; see [common/speccheck/README.md](../../common/speccheck/README.md). speccheck currently applies only to its own requirements, not yet to these specs.
 
 This document defines how to write and update specs in `specs/` for
 spec-driven development in `prometheus_api`. Use it when adding a capability,
