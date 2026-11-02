@@ -50,8 +50,8 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 const ICON_SIZE_CLASSES: Record<ButtonSize, string> = {
   xs: "size-3",
   sm: "size-4.5",
-  md: "size-4",
-  lg: "size-5",
+  md: "size-5",
+  lg: "size-6",
 };
 
 /** Padding on the icon side of an icon-and-text button, about 3/4 of DaisyUI's
