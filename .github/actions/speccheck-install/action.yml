@@ -1,0 +1,33 @@
+name: speccheck install
+description: Install the speccheck command from this checkout with uv, and put it on PATH
+
+# For a job that runs speccheck itself, such as `speccheck record` as a job's last step.
+# speccheck-verify uses it, so its callers don't need it. Needs a checkout of this repo (with
+# `persist-credentials: false`); it installs common/speccheck from there, not from an index.
+# It sets up uv only to install the tool, with no cache, and leaves the job's own Python and
+# environment alone. See common/speccheck/README.md, "In CI"
+
+inputs:
+  python:
+    description: The Python version uv installs speccheck with
+    required: false
+    default: "3.14"
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      with:
+        version: "0.11.25"
+        # Nothing here is worth caching, and a cache is one more thing to trust
+        enable-cache: false
+    - name: Install speccheck
+      shell: bash
+      env:
+        PYTHON: ${{ inputs.python }}
+      # The PATH entry is uv's tool bin folder, not anything an input controls
+      run: | # zizmor: ignore[github-env]
+        uv tool install --python "$PYTHON" --no-config "$GITHUB_WORKSPACE/common/speccheck"
+        uv tool dir --bin >> "$GITHUB_PATH"
+        "$(uv tool dir --bin)/speccheck" --version

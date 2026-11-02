@@ -38,8 +38,8 @@ prometheus-speccheck = { path = "../common/speccheck" }
 ```
 
 Installing it registers the pytest plugin, which does nothing until it is configured (see "Claiming a
-requirement"). In a CI job with no environment set up, `python3 -I common/speccheck/run.py <command>`
-runs it from the checkout (Python 3.11 or newer, for `tomllib`).
+requirement"). As a command on its own, install it as a uv tool, which puts `speccheck` on `PATH`:
+`uv tool install ./common/speccheck`. In CI, the `speccheck-install` action does that (see "In CI").
 
 ## Commands
 
@@ -250,7 +250,8 @@ A job that is itself the evidence (`[ci.<job>]` in the config) records as its la
 runs only when the steps before it passed:
 
 ```yaml
-      - run: python3 -I common/speccheck/run.py record --config sdk/pyproject.toml
+      - uses: ./.github/actions/speccheck-install
+      - run: speccheck record --config sdk/pyproject.toml
       - uses: ./.github/actions/speccheck-upload
         if: ${{ !cancelled() }}
         with:
@@ -274,9 +275,13 @@ And at the end of the workflow:
           complete: ${{ github.event_name != 'pull_request' }}
 ```
 
+- **`speccheck-install`** installs `common/speccheck` from the checkout with `uv tool install`
+  and puts `speccheck` on `PATH`. It sets up uv with no cache and leaves the job's own environment
+  alone. A job that runs `pytest` in its own uv environment doesn't need it: the plugin comes with
+  the project's dev dependencies.
 - **`speccheck-upload`** uploads `.speccheck/` (or `path`) as `speccheck-results-<name>`, kept 30
   days, and fails the job when there is nothing to upload.
-- **`speccheck-verify`** downloads every `speccheck-results-*` artifact of the run. It writes the
+- **`speccheck-verify`** installs speccheck with `speccheck-install`, then downloads every `speccheck-results-*` artifact of the run. It writes the
   report and appends the short form (counts, problems and the rows that need attention, under
   the 1 MiB limit) to the step summary. It uploads `report.md` and `report.json` as
   `speccheck-report`, kept 90 days, then runs `verify` and fails with it. It needs `contents: read`

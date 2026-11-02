@@ -49,7 +49,6 @@ common/speccheck/
   pyproject.toml            # name prometheus-speccheck, import name speccheck
   uv.lock
   README.md                 # usage, and the spec format (moved from sdk/docs in step 3)
-  run.py                    # `python3 -I run.py <command>`, for CI jobs with no environment
   speccheck.toml            # speccheck's own config (its specs, its producers)
   speccheck/
     __init__.py, __main__.py
@@ -296,16 +295,18 @@ Instead, the job claims them in the config (`[ci.<job>] covers = [...]`) and rec
 last step, which runs only when the steps before it succeeded:
 
 ```yaml
+      - uses: ./.github/actions/speccheck-install
       - name: Record speccheck evidence
-        run: python3 -I common/speccheck/run.py record --config sdk/pyproject.toml
+        run: speccheck record --config sdk/pyproject.toml
       - uses: ./.github/actions/speccheck-upload
         if: ${{ !cancelled() }}
 ```
 
 - `record` writes a results file with one `passed` result for each of the job's IDs, with
   `test` set to the job name and `kind: "ci"`. The report shows it as a job, not a test.
-- `run.py` needs nothing installed beyond Python 3.11 or newer (for `tomllib`), so it works in jobs
-  that never set up uv. Every runner image we use has one.
+- The `speccheck-install` action installs the `speccheck` command with `uv tool install` from the
+  checkout, so a job that never set up uv for its own work can still record. (This replaced a
+  `run.py` that ran the package from the checkout with the system Python.)
 - A job that failed never reaches the step, so its IDs are `not run`. On a complete check they fail.
 - **What this can't prove:** that the job checks what the requirement says. A job that records
   "image builds for arm64" could stop building arm64 and still record it. As with tests, the CI

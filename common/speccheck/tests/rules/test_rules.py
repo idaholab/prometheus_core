@@ -32,7 +32,7 @@ TESTS = ROOT / "tests"
 """The tests."""
 UNIT = TESTS / "unit"
 """The unit tests, which mirror the package."""
-SOURCES = [*sorted(PACKAGE.rglob("*.py")), *sorted(TESTS.rglob("*.py")), ROOT / "run.py"]
+SOURCES = [*sorted(PACKAGE.rglob("*.py")), *sorted(TESTS.rglob("*.py"))]
 """Every Python file the rules cover."""
 EXEMPT_NAMES = {"__all__", "__slots__", "pytestmark"}
 """Names Python or pytest read by name, which carry no documentation of their own."""
@@ -89,7 +89,7 @@ def undocumented(path: Path) -> list[str]:
 
 
 def test_every_function_and_variable_has_a_docstring():
-    """The rule covers the package, run.py and every test."""
+    """The rule covers the package and every test."""
     found = [line for path in SOURCES for line in undocumented(path)]
     assert found == [], f"{len(found)} without a docstring:\n" + "\n".join(found)
 
