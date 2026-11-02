@@ -1,5 +1,5 @@
 name: speccheck verify
-description: The final job's steps - download the run's speccheck results, verify them, publish the report
+description: The final job's steps - download the run's speccheck results, publish the report, verify them
 
 # For the last job of a workflow, with `needs:` on every job that uploads results and
 # `if: ${{ !cancelled() }}`, so it reports even when a test job failed. The calling job needs
@@ -34,7 +34,7 @@ outputs:
     description: >-
       The step summary file the report was appended to. Each step gets its own
       $GITHUB_STEP_SUMMARY, so a later step can't read it through that variable
-    value: ${{ steps.report.outputs.summary-path }}
+    value: ${{ steps.verify.outputs.summary-path }}
   report-artifact-id:
     description: The ID of the uploaded report artifact
     value: ${{ steps.upload-report.outputs.artifact-id }}
@@ -50,7 +50,6 @@ runs:
     - name: Install speccheck
       uses: ./.github/actions/speccheck-install
     - name: Report
-      id: report
       # report never fails on the requirements, so the report is published either way
       shell: bash
       env:
@@ -64,9 +63,7 @@ runs:
         mkdir -p "$RESULTS" "$(dirname "$REPORT")"
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" \
-          --output "$REPORT" --summary "$GITHUB_STEP_SUMMARY"
-        echo "summary-path=$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
+        speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --output "$REPORT"
         speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
     - name: Upload report
       id: upload-report
@@ -80,13 +77,18 @@ runs:
         if-no-files-found: error
         retention-days: 90
     - name: Verify
+      id: verify
+      # After the upload, so the step summary can link the report. The summary is the failures only
       shell: bash
       env:
         CONFIG: ${{ inputs.config }}
         COMPLETE: ${{ inputs.complete }}
         WORKFLOW: ${{ inputs.workflow || github.workflow }}
         RESULTS: ${{ runner.temp }}/speccheck-results
+        REPORT_URL: ${{ steps.upload-report.outputs.artifact-url }}
       run: |
+        echo "summary-path=$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
         scope=()
         if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
-        speccheck verify --config "$CONFIG" "${scope[@]}" "$RESULTS"
+        speccheck verify --config "$CONFIG" "${scope[@]}" "$RESULTS" \
+          --summary "$GITHUB_STEP_SUMMARY" --report-url "$REPORT_URL"
