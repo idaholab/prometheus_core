@@ -14,7 +14,8 @@ python3 common/speccheck/speccheck.py --specs build/specs --report   # also list
 ```
 
 Problems go to stderr as `path:line: message`, and the exit code is 1 if there are any (2 for a
-usage error). `--report` prints one line per ID on stdout: `test`, `ci` or `implements` with where
+usage error). Control characters in a printed path are written out (`\n`, `\x1b`), because CI logs
+act on a line that starts with `::error::` and a file name can contain a newline. `--report` prints one line per ID on stdout: `test`, `ci` or `implements` with where
 it's cited, or `untested`, `planned` or `retired`.
 
 ## What it reads

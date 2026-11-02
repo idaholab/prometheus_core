@@ -62,6 +62,9 @@ COVERS = re.compile(r"\bCovers\b")
 COVERS_COMMENT = re.compile(r"^#\s*Covers\b")
 """A Python comment that cites: `# Covers BLD-REQ-003-04`."""
 
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+"""Characters that can end a line or drive a terminal or a CI log: newlines, escapes, other controls."""
+
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", "dist"}
 """Folders under a `tests:` path that are never read."""
 
@@ -91,6 +94,15 @@ class Syntax:
         """A well-formed bullet: `- <prefix>REQ-NNN-XX: text`."""
 
 
+def plain(text: str) -> str:
+    """`text` with each control character written out, such as `\\n` or `\\x1b`, so it stays on one line.
+
+    File names come from the repository, and CI logs act on a line that starts with `::error::`, so
+    a name with a newline in it must not be able to begin one.
+    """
+    return CONTROL.sub(lambda match: ascii(match.group(0))[1:-1], text)
+
+
 @dataclass(frozen=True)
 class Problem:
     """One rule a spec or a citation breaks."""
@@ -104,7 +116,8 @@ class Problem:
 
     def __str__(self) -> str:
         """`path:line: message`, the form editors and CI logs link."""
-        return f"{self.path}:{self.line}: {self.message}" if self.line else f"{self.path}: {self.message}"
+        text = f"{self.path}:{self.line}: {self.message}" if self.line else f"{self.path}: {self.message}"
+        return plain(text)
 
 
 @dataclass
@@ -528,7 +541,7 @@ def evidence_summary(requirement: Requirement, citations: list[Citation], root: 
         if citation.job:
             where += f" job {citation.job}"
         parts.append(f"{citation.kind}: {where}:{citation.line}")
-    return "; ".join(parts)
+    return plain("; ".join(parts))
 
 
 def main(argv: list[str] | None = None) -> int:

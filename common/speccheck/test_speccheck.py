@@ -594,6 +594,24 @@ class TestMain(CheckerTest):
         self.assertIn("speccheck: 2 problems\n", err)
         self.assertEqual(speccheck.rel(Path("/elsewhere/x.md"), self.repo.root), "/elsewhere/x.md")
 
+    def test_control_characters_in_a_file_name_cannot_start_a_log_command(self):
+        """A name with a newline would put `::error::...` at the start of a line, which CI acts on."""
+        self.repo.write("specs/001-thing.md", spec("- REQ-001-01: One. ⚠ untested"))
+        self.repo.write("tests/a\n::error::injected.py", cites("REQ-001-09"))
+        self.repo.write("tests/b\x1b[31m.sh", "# Covers REQ-001-01\n")
+        code, out, err = self.run_main("--report")
+        self.assertEqual(code, 1)
+        for line in (out + err).splitlines():
+            self.assertFalse(line.startswith("::"), line)
+        self.assertIn(r"tests/a\n::error::injected.py:2: REQ-001-09 isn't in any spec", err)
+        self.assertIn(r"tests/b\x1b[31m.sh:1", out)
+
+    def test_plain_leaves_ordinary_text_alone(self):
+        """Paths with spaces, accents and symbols read as written."""
+        self.assertEqual(speccheck.plain("tests/café é/x y.py"), "tests/café é/x y.py")
+        separator = chr(0x2028)
+        self.assertEqual(speccheck.plain(f"a\tb{separator}c\x7fd\x85"), r"a\tb\u2028c\x7fd\x85")
+
     def test_a_missing_specs_folder_is_a_usage_error(self):
         """argparse's exit 2."""
         code, _, err = self.run_main("--specs", str(self.repo.root / "nope"))
