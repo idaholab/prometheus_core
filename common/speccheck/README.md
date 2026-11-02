@@ -115,6 +115,8 @@ could be shell text in a `run: |` block instead of a YAML comment, so it is a pr
 - A requirement that no test cites and that is neither `⚠ untested`, planned nor retired.
 - `⚠ untested` or `(planned: ...)` on a requirement that a test cites: remove the marker.
 - A requirement that is both planned and untested.
+- A spec with `status: implemented` and no requirements, which would pass with nothing to check. A
+  `draft` skeleton may be empty.
 - A citation of an ID that is in no spec, is retired, or belongs to a spec whose `tests:` don't
   include the citing file.
 - `Implements` before an ID in a test file.

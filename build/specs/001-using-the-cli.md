@@ -13,6 +13,11 @@ contract, and running without a terminal. This spec owns the rules every
 command shares, so the command specs don't repeat them.
 
 ## Requirements
+- BLD-REQ-001-01: A command line that the parser rejects MUST exit 2 with the
+  usage message on stderr. With `--json` it MUST print one object with
+  `ok: false` and `error.code: "usage"` on stdout, and nothing on stderr.
+- BLD-REQ-001-02: `./platformctl status` MUST exit 3 when the platform is not
+  running, so a script can tell "not running" from a failure. (planned: step 2)
 
 ## Behavior
 

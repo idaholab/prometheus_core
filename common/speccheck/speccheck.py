@@ -501,6 +501,10 @@ def check(specs_dir: Path, root: Path) -> tuple[list[Problem], dict[str, list[Ci
                     Problem(rel(spec.path, root), requirement.line, f"{requirement.id} is both planned and untested")
                 )
 
+    for spec in specs:
+        if spec.status == "implemented" and not spec.requirements:
+            problems.append(Problem(rel(spec.path, root), 0, "an implemented spec needs at least one requirement"))
+
     scanned = [path for spec in specs for path in spec.tests]
     cited: dict[str, list[Citation]] = {id_: [] for id_ in requirements}
     for path in files_under(scanned, root):

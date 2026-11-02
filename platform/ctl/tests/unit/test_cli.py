@@ -237,7 +237,7 @@ def test_no_command_prints_help(env):
 
 
 def test_usage_error_text_and_json(env):
-    """Usage error text and json."""
+    """Covers BLD-REQ-001-01: a rejected command line exits 2, in text or as one `usage` JSON object."""
     code, out, err = call("nope", env=env)
     assert code == 2 and out == "" and "invalid choice" in err
     code, out, err = call("--json", "doctor", "--nope", env=env)

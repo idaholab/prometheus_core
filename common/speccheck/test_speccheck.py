@@ -30,7 +30,7 @@ INDEX = "# Index\n\n- [001](001-thing.md)\n"
 """An index that links the one spec most tests write."""
 
 
-def spec(body: str, *, status: str = "implemented", tests: str = "tests", number: str = "001") -> str:
+def spec(body: str, *, status: str = "draft", tests: str = "tests", number: str = "001") -> str:
     """A spec file with the header lines filled in and `body` as its Requirements section."""
     return (
         f"# {number} - Thing\n\nstatus: {status}\nsources: x.py\ntests: {tests}\ndepends-on: none\n\n"
@@ -126,6 +126,18 @@ class TestCoverage(CheckerTest):
         """A requirement is either waiting for a step or untested, not both."""
         self.repo.write("specs/001-thing.md", spec("- REQ-001-01: Later. (planned: step 7) ⚠ untested"))
         self.assertProblems("both planned and untested")
+
+    def test_an_implemented_spec_needs_a_requirement(self):
+        """A skeleton is fine as a draft, but "implemented" with nothing to check would pass vacuously."""
+        self.repo.write("specs/001-thing.md", spec("", status="implemented", tests="none"))
+        self.assertProblems("an implemented spec needs at least one requirement")
+
+    def test_draft_and_retired_specs_may_be_empty(self):
+        """Only a spec that claims to be implemented must say something."""
+        self.repo.write("specs/000-index.md", INDEX + "- [002](002-old.md)\n")
+        self.repo.write("specs/001-thing.md", spec("", status="draft", tests="none"))
+        self.repo.write("specs/002-old.md", spec("", status="retired", tests="none", number="002"))
+        self.assertProblems()
 
     def test_a_draft_spec_is_held_to_the_same_rules(self):
         """Draft only describes the spec; an unplanned, uncited requirement still fails."""
