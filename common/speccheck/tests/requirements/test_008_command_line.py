@@ -122,3 +122,13 @@ def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Pr
     done = command(project, "verify", "r.jsonl")
     assert done.returncode == 1 and all(not line.startswith("::") for line in done.stderr.splitlines())
     assert "t\\n::error::evil failed in unit" in done.stderr
+    project.results("r.jsonl", "unit", [("::error title=x::FORGED", ["T-REQ-001-01"], "failed")])
+    done = command(project, "verify", "r.jsonl")
+    assert done.returncode == 1 and all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())
+    assert "\\x3a:error title=x::FORGED" not in done.stderr  # mid-line, so left as written
+    for forged, written in [("::error::x", "\\x3a:error::x"), ("##[error]x", "##\\x5berror]x")]:
+        path = project.results("r.jsonl", "unit", [("t", ["T-REQ-009-09"], "passed")])
+        path.write_text(path.read_text().replace('"file": "tests/test_x.py"', f'"file": "{forged}"'))
+        done = command(project, "verify", "r.jsonl")
+        assert done.stderr.startswith(f"{written}:3: T-REQ-009-09 isn't in any spec") and "##[" not in done.stderr
+        assert all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())

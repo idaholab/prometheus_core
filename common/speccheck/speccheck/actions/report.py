@@ -27,6 +27,7 @@ from speccheck import ci, evidence, jsonout
 from speccheck.actions import _common
 from speccheck.context import Context
 from speccheck.evidence import Evaluation, Status
+from speccheck.specs import plain
 
 NAME = "report"
 """The command name."""
@@ -211,7 +212,8 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         )
         jsonout.emit(body, ctx.output.out)
     elif not args.output and not args.summary:
-        ctx.output.out.write(full(title, evaluation))
+        # Unlike the files, stdout may be a CI log, where code spans keep a test name as written
+        ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation).splitlines()))
     else:
         ctx.output.summary(NAME, evidence.summary_line(evaluation.counts()), 0)
     return jsonout.EXIT_OK
