@@ -36,4 +36,5 @@ runners and the checker, so other languages can write one too.
   another language may not have collapsed it.
 - SPC-REQ-004-10: The header MUST give `root`, the folder that its results' `file` paths are
   relative to, as a path from the repository's root, so a report can link each test's file. When
-  the repository's root can't be found, `root` MUST be null.
+  `SPECCHECK_ROOT` is set, `root` MUST be its value, so a run in a container can say where it is.
+  Otherwise, when the repository's root can't be found, `root` MUST be null.

@@ -333,7 +333,7 @@ class Recorder:
             runner=f"pytest {pytest.__version__}",
             ci=ci.context(os.environ),
             # `file` is relative to pytest's root, so say where that is in the repository
-            root=ci.from_root(Path(self.config.rootpath), ci.repository_root(Path(self.config.rootpath), os.environ)),
+            root=ci.results_root(Path(self.config.rootpath), os.environ),
             started=self.started,
             results=[
                 results.Result(

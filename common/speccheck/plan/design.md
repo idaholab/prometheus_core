@@ -284,7 +284,9 @@ Lines: one header, then one line per claiming test.
 - **pytest-xdist:** the controller sees every worker's reports, so the plugin writes from the
   controller only. Tested in step 1 even though nothing uses xdist yet.
 - **Docker** (`sdk-docker` runs pytest inside the image): the results path must be in the mounted
-  checkout. The CI variables are passed into the container with `-e`.
+  checkout. The CI variables are passed into the container with `-e`, except `GITHUB_WORKSPACE`,
+  a host path; `SPECCHECK_ROOT` gives pytest's root in the repository instead (`sdk`), or the
+  report loses every test link.
 
 **Job links.** The report links each result to its job. The run URL
 (`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT`)
