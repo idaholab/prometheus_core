@@ -177,6 +177,7 @@ jobs:
         with:
           persist-credentials: false
       - name: speccheck-verify on the requirements results
+        id: verify
         # The requirements legs' results alone are complete for speccheck-requirements; the
         # self-check job itself hasn't reported yet, so this is a partial check
         uses: ./.github/actions/speccheck-verify
@@ -184,11 +185,15 @@ jobs:
           config: common/speccheck/speccheck.toml
           report-name: speccheck-report-self-check
       - name: The report artifact and the step summary were written
+        # $GITHUB_STEP_SUMMARY is a new file in each step, so check the one the action wrote
+        env:
+          SUMMARY: ${{ steps.verify.outputs.summary-path }}
         run: |
           test -s "$RUNNER_TEMP/speccheck-report/report.md"
           python3 -I -c 'import json, sys; body = json.load(open(sys.argv[1])); assert body["command"] == "report" and body["requirements"], body' \
             "$RUNNER_TEMP/speccheck-report/report.json"
-          grep -q "speccheck requirements" "$GITHUB_STEP_SUMMARY"
+          test -n "$SUMMARY" || { echo "speccheck-verify gave no summary-path" >&2; exit 1; }
+          grep -q "speccheck requirements" "$SUMMARY" || { echo "no report summary in $SUMMARY" >&2; exit 1; }
       - name: speccheck-upload refuses an empty folder
         id: empty-upload
         continue-on-error: true
