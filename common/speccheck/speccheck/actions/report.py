@@ -88,20 +88,21 @@ def code(text: str, limit: int = MAX_CELL, *, in_table: bool) -> str:
     return f"`{text.replace('|', chr(92) + '|') if in_table else text}`"
 
 
-def safe_url(url: Any) -> str:
-    """The URL when it is one this tool would have built (https, our run's form), else ""."""
-    if not isinstance(url, str):
-        return ""
-    match = re.match(
-        r"^(https://[A-Za-z0-9.-]+(?::\d+)?)/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/actions/runs/\d+(?:/(?:attempts|job)/\d+)?$",
-        url,
-    )
-    if match is None or not ci.SERVER.match(match.group(1)):
-        return ""
-    return url
+RUN_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}(?:/(?:attempts|job)/[1-9][0-9]{0,19})?")
+"""What follows `<server>/<owner>/<repo>` in a run, run attempt or job URL."""
 
 
-def _evidence_cell(status: Status) -> str:
+def safe_url(url: Any, base: str) -> str:
+    """The URL when it is a run, attempt or job URL under `base`, this run's repository URL, else "".
+
+    `base` comes from `ci.repository_url`; without one (outside CI) nothing is linked.
+    """
+    if not (base and isinstance(url, str) and url.startswith(base + "/")):
+        return ""
+    return url if RUN_PATH.fullmatch(url[len(base) :]) else ""
+
+
+def _evidence_cell(status: Status, base: str) -> str:
     """Every result for one requirement: test, outcome, producer and leg, and a link to the job."""
     items = []
     for item in status.evidence[:MAX_EVIDENCE]:
@@ -109,7 +110,7 @@ def _evidence_cell(status: Status) -> str:
         label = "job" if data["kind"] == "ci" else "test"
         where = " ".join(part for part in (data["producer"], data["leg"]) if part)
         text = f"{label} {code(data['test'], 150, in_table=True)} {escape(data['outcome'])} in {escape(where)}"
-        url = safe_url(data["url"])
+        url = safe_url(data["url"], base)
         items.append(f"{text} ([job]({url}))" if url else text)
     if len(status.evidence) > MAX_EVIDENCE:
         items.append(f"and {len(status.evidence) - MAX_EVIDENCE} more")
@@ -118,11 +119,11 @@ def _evidence_cell(status: Status) -> str:
     return "<br>".join(items) or "—"
 
 
-def _row(status: Status) -> str:
+def _row(status: Status, base: str) -> str:
     """One requirement's table row."""
     requirement = status.requirement
     mark = ICONS[status.status]
-    return f"| {requirement.id} | {mark} {status.status} | {escape(requirement.text, 120)} | {_evidence_cell(status)} |"
+    return f"| {requirement.id} | {mark} {status.status} | {escape(requirement.text, 120)} | {_evidence_cell(status, base)} |"
 
 
 TABLE_HEAD = "| ID | Status | Requirement | Evidence |\n|---|---|---|---|"
@@ -134,10 +135,10 @@ def _order(status: Status) -> tuple[int, int]:
     return (evidence.STATUSES.index(status.status), status.requirement.line)
 
 
-def _inputs(evaluation: Evaluation) -> list[str]:
+def _inputs(evaluation: Evaluation, base: str) -> list[str]:
     """The lines saying what the report was built from: commits, runs and producers."""
     commits = sorted({(f.ci or {}).get("sha") or "" for f in evaluation.files} - {""})
-    runs = sorted({safe_url((f.ci or {}).get("run_url")) for f in evaluation.files} - {""})
+    runs = sorted({safe_url((f.ci or {}).get("run_url"), base) for f in evaluation.files} - {""})
     run_links = [f"[{escape(run.rsplit('/runs/', 1)[1])}]({run})" for run in runs]
     lines = [
         f"- Commit: {', '.join(escape(c[:12]) for c in commits) or 'unknown (not run in CI)'}",
@@ -154,7 +155,7 @@ def _problems(evaluation: Evaluation) -> list[str]:
     return [f"- {code(str(p), 300, in_table=False)}" for p in evaluation.problems]
 
 
-def full(title: str, evaluation: Evaluation) -> str:
+def full(title: str, evaluation: Evaluation, base: str = "") -> str:
     """The whole report: summary, problems, one table per spec, and the inputs."""
     counts = evaluation.counts()
     lines = [f"# {escape(title)}", "", evidence.summary_line(counts), ""]
@@ -169,13 +170,13 @@ def full(title: str, evaluation: Evaluation) -> str:
         titles[spec.number] = spec.title
     for number, statuses in by_spec.items():
         lines += [f"## {number} {escape(titles[number])}", "", TABLE_HEAD]
-        lines += [_row(status) for status in sorted(statuses, key=_order)]
+        lines += [_row(status, base) for status in sorted(statuses, key=_order)]
         lines.append("")
-    lines += ["## Inputs", "", *_inputs(evaluation), ""]
+    lines += ["## Inputs", "", *_inputs(evaluation, base), ""]
     return "\n".join(lines)
 
 
-def summary(title: str, evaluation: Evaluation) -> str:
+def summary(title: str, evaluation: Evaluation, base: str = "") -> str:
     """The short form for a step summary: counts, problems, and the rows that aren't fine, within the size limit."""
     counts = evaluation.counts()
     lines = [f"### {escape(title)}", "", evidence.summary_line(counts), ""]
@@ -183,7 +184,7 @@ def summary(title: str, evaluation: Evaluation) -> str:
         lines += [f"**{len(evaluation.problems)} problems**", "", *_problems(evaluation), ""]
     attention = [s for s in evaluation.statuses if s.status in (evidence.FAILED, evidence.UNCLAIMED, evidence.NOT_RUN)]
     if attention:
-        lines += [TABLE_HEAD, *(_row(s) for s in sorted(attention, key=_order)), ""]
+        lines += [TABLE_HEAD, *(_row(s, base) for s in sorted(attention, key=_order)), ""]
     lines += ["The full report is in the `speccheck-report` artifact.", ""]
     text = "\n".join(lines)
     if len(text.encode("utf-8")) > SUMMARY_LIMIT:
@@ -196,10 +197,11 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
     """Write the report; exit 0 unless the usage or config is bad."""
     evaluation = _common.evaluate(ctx, args, runtime=True)
     title = ctx.config().title
+    base = ci.repository_url(ctx.env)
     if args.output:
-        _write(ctx, args.output, full(title, evaluation), append=False)
+        _write(ctx, args.output, full(title, evaluation, base), append=False)
     if args.summary:
-        _write(ctx, args.summary, summary(title, evaluation), append=True)
+        _write(ctx, args.summary, summary(title, evaluation, base), append=True)
     if ctx.output.json_mode:
         body = jsonout.envelope(
             NAME,
@@ -213,7 +215,7 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         jsonout.emit(body, ctx.output.out)
     elif not args.output and not args.summary:
         # Unlike the files, stdout may be a CI log, where code spans keep a test name as written
-        ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation).splitlines()))
+        ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation, base).splitlines()))
     else:
         ctx.output.summary(NAME, evidence.summary_line(evaluation.counts()), 0)
     return jsonout.EXIT_OK

@@ -26,6 +26,8 @@ CI = {
     "job_url": "https://github.com/o/r/actions/runs/7/job/8",
 }
 """A results file's CI block, from a re-run with a job ID."""
+ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+"""The run `report` is in: links must be under its server and repository."""
 
 
 def rows(text: str) -> list[list[str]]:
@@ -66,7 +68,7 @@ def test_summary_counts_and_tables(reported: Project):
 @pytest.mark.covers("SPC-REQ-006-02")
 def test_evidence_names_the_test_and_links_the_job(reported: Project):
     """Test, outcome, producer, leg, and a link to the job itself."""
-    evidence = rows(reported.speccheck("report", "unit.jsonl").out)[2][3]
+    evidence = rows(reported.speccheck("report", "unit.jsonl", env=ENV).out)[2][3]
     assert evidence == (
         "test `tests/t.py::test_ok` passed in unit 3\\.12 ([job](https://github.com/o/r/actions/runs/7/job/8))"
     )
@@ -77,7 +79,10 @@ def test_without_a_job_id_it_links_the_run(project: Project):
     """The fallback link is the run attempt."""
     project.spec("- T-REQ-001-01: One.")
     project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": CI["run_url"]})
-    assert "([job](https://github.com/o/r/actions/runs/7/attempts/2))" in project.speccheck("report", "u.jsonl").out
+    assert (
+        "([job](https://github.com/o/r/actions/runs/7/attempts/2))"
+        in project.speccheck("report", "u.jsonl", env=ENV).out
+    )
 
 
 @pytest.mark.covers("SPC-REQ-006-03")
@@ -97,6 +102,25 @@ def test_untrusted_text_cant_inject_markdown_or_links(project: Project):
     assert row.count(" | ") == 3
     assert rows(text)[0][3] == "test `t[click](https://evil)<img src=x onerror=1>\\|` passed in unit a\\|b"
     assert "javascript" not in text and "[job]" not in row
+
+
+@pytest.mark.covers("SPC-REQ-006-03")
+@pytest.mark.parametrize(
+    ("url", "env"),
+    [
+        ("https://evil.example/o/r/actions/runs/7/job/8", ENV),
+        ("https://github.com/evil/r/actions/runs/7/job/8", ENV),
+        ("https://github.com/o/r/actions/runs/7/job/8\n", ENV),
+        ("https://github.com/o/r/actions/runs/7/job/8", {}),
+    ],
+)
+def test_only_this_runs_repository_is_linked(project: Project, url: str, env: dict):
+    """A run or job URL on another host or repository isn't linked, and outside CI nothing is."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": url, "run_url": url})
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert "[job]" not in text and "- Runs: none" in text
+    assert "evil" not in text
 
 
 @pytest.mark.covers("SPC-REQ-006-03")
@@ -134,7 +158,7 @@ def test_the_step_summary_stays_under_the_limit(project: Project):
 def test_the_inputs(reported: Project):
     """Commit, runs, producers reported and missing."""
     reported.write("speccheck.toml", 'specs = "specs"\nid-prefix = "T"\n[producers.unit]\n[producers.docker]\n')
-    reported.speccheck("report", "unit.jsonl", "--complete", "--output", "out/report.md")
+    reported.speccheck("report", "unit.jsonl", "--complete", "--output", "out/report.md", env=ENV)
     text = (reported.root / "out" / "report.md").read_text()
     inputs = text.split("## Inputs", 1)[1]
     assert "- Commit: dddddddddddd" in inputs

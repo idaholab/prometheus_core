@@ -292,3 +292,6 @@ And at the end of the workflow:
   only, and no secrets. With `complete`, it expects the producers that list the workflow's name.
 - Job links use `${{ job.check_run_id }}`, the job's check run ID, which is also the ID in its
   URL. Without it, the link is the run attempt.
+- The report links a URL from a results file only when it is a run, attempt or job URL on the
+  report job's own `GITHUB_SERVER_URL` and `GITHUB_REPOSITORY`. A results file can't link
+  elsewhere, and a report built outside CI has no links.
