@@ -39,6 +39,10 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
+    // vite preview proxies /api to VITE_BACKEND_URL, which defaults to the
+    // local backend on 8600. Port 9 has nothing listening, so a call a test
+    // forgot to stub fails with a 502 instead of reaching a real backend
+    env: { VITE_BACKEND_URL: "http://127.0.0.1:9" },
     // Never reuse a server already on the port: vite preview serves the last
     // build, so a leftover one would test old code. --strictPort fails instead
     reuseExistingServer: false,
