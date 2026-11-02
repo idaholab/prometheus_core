@@ -103,6 +103,7 @@ export function LeftPanel({
           variant="ghost"
           size="sm"
           icon={<PanelLeft />}
+          muted={false}
           ariaLabel={isOpen ? "Collapse sidebar" : "Expand sidebar"}
           tooltipPlacement={isOpen ? "left" : "right"}
           onClick={onToggle}

@@ -70,7 +70,7 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" icon={<Bell />} ariaLabel="Notifications" tooltipPlacement="bottom" />
+        <Button variant="ghost" size="sm" icon={<Bell />} ariaLabel="Notifications" tooltipPlacement="bottom" muted={false} />
         <div className="h-6 w-px bg-base-300" />
         <div className="dropdown dropdown-end">
           <div
