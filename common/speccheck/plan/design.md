@@ -456,6 +456,10 @@ Found on `devel` as of 2026-11-01:
 
 - Artifact retention for `speccheck-*` (30 days?), and whether the report artifact is kept longer.
 - Whether `speccheck` (the final job) becomes a required check, and when. Not before step 3.
+  `speccheck.yml` is path-filtered, so it can't be required as it stands: a path-filtered required
+  check stays "Expected" forever on a PR that touches none of those paths, and blocks it. Promotion
+  needs the path filter dropped or an always-run job that reports for every PR, such as a job that
+  skips its work when no speccheck path changed but still passes.
 - Whether `verify --complete` on `devel` pushes is enough, or a nightly run is also wanted.
 - Whether the report is also published somewhere permanent (the docs site, a PR comment), not
   just as an artifact.
