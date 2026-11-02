@@ -44,6 +44,11 @@ on:
         required: false
         type: string
         default: ""
+      latest:
+        description: Also tag the image latest
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -138,6 +143,7 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         env:
           TAG: ${{ inputs.tag }}
+          LATEST: ${{ inputs.latest }}
           SOURCE: ${{ github.server_url }}/${{ github.repository }}
           SHA: ${{ inputs.sha }}
         run: |
@@ -147,9 +153,13 @@ jobs:
             echo "::error::Expected 2 digests (amd64, arm64), found ${#digests[@]}"
             exit 1
           fi
+          tags=(--tag "$IMAGE:$TAG")
+          if [ "$LATEST" = true ]; then
+            tags+=(--tag "$IMAGE:latest")
+          fi
           # The index annotation is what links the ghcr.io package to this repo
           docker buildx imagetools create \
-            --tag "$IMAGE:$TAG" \
+            "${tags[@]}" \
             --annotation "index:org.opencontainers.image.source=$SOURCE" \
             --annotation "index:org.opencontainers.image.revision=$SHA" \
             "${digests[@]/#/$IMAGE@sha256:}"
