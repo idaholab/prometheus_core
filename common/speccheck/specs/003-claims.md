@@ -35,6 +35,9 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
   expected failure makes it `xfailed`, and an unexpected pass makes it `xpassed`. An `error` MUST
   stay `error` for the rest of the session, including when a rerun plugin's later attempt passes.
+  A `failed` call MUST NOT stick: when a rerun plugin's later attempt passes, the test is `passed`,
+  so a flaky test proves its requirement once it passes. Telling flaky tests apart is the rerun
+  plugin's job, not speccheck's.
   A `--collect-only` run MUST write each claiming test as `collected`.
 - SPC-REQ-003-08: Each run of whitespace in an explanation, newlines included, MUST become one
   space, and the ends MUST be trimmed, before it is checked or written. Collection MUST then fail
