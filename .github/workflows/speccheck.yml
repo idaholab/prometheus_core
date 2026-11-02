@@ -171,6 +171,11 @@ jobs:
     # them only when every step before the record step passed
     name: "speccheck: self-check"
     needs: requirements
+    # Runs even when a requirements leg failed, so the final job doesn't also report this job as a
+    # missing producer on top of the real failure. When a leg's failure reaches the results its
+    # first speccheck-verify fails, so `record` doesn't run and its requirements stay unproven;
+    # otherwise its checks of the actions stand on their own
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
