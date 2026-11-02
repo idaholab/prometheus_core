@@ -30,7 +30,11 @@ SECTIONS = (
 
 
 def discover() -> list[ModuleType]:
-    """Every action module, in `--help` order: section, then ORDER, then name."""
+    """Every action module, in `--help` order: section, then ORDER, then name.
+
+    The same as platformctl's `actions.discover()` (`platform/ctl/platformctl/actions/__init__.py`).
+    Not shared yet: see plan/design.md, "Shared code with platformctl".
+    """
     modules = []
     for info in pkgutil.iter_modules(__path__):
         module = importlib.import_module(f"{__name__}.{info.name}")
