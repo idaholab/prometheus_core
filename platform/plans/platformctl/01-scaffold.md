@@ -7,11 +7,11 @@
 
 - **CI is its own workflow**, `.github/workflows/platformctl.yml` (path-filtered, not
   required), not new jobs in `test.yml`: a `paths:` filter applies to a whole workflow. The
-  `ruff` project list in `test.yml` gains `platform/ctl`. **Codecov:** the coverage job uploads with a
-  `platformctl` flag, defined in `codecov.yml` with `carryforward`, but the upload is not counted
-  in `after_n_builds` (still 16): the workflow runs only when `platform/ctl` changes, so counting
-  it would stall every other PR's status. Step 2 raises the count when the jobs become
-  unconditional.
+  `ruff` project list in `test.yml` gains `platform/ctl`. **Coverage is not in Codecov:** each unit
+  leg enforces 100% line and branch coverage itself (`fail_under` in `pyproject.toml`). The first
+  version combined the legs and uploaded a `platformctl` flag with `carryforward`, but Codecov
+  carries a flag forward only about ten commits, after which `codecov/project` failed on every PR
+  that did not touch `platform/ctl` (#347).
 - **Not done:** the measurement of the oldest Compose that supports `include` with `env_file`
   (and the live leg on it), and the manual WSL checklist. `MIN_VERSION` in
   `system/compose.py` is still 2.20, from deck 03, and unverified for `env_file`.

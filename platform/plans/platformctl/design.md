@@ -824,12 +824,11 @@ restart.
   `.github/dependabot.yml` (`test_dependabot.py` requires it), and the unit
   job uses `uv sync --frozen`.
 - `platformctl: unit`: ruff, then unit tests on Python 3.10 to 3.14 on
-  Ubuntu, plus one `macos-latest` leg; then the combined coverage check.
-  Each leg uploads its coverage data; the combine step remaps paths with
-  `[tool.coverage.paths]` (Linux and macOS paths differ), runs
-  `coverage combine`, enforces 100%, and uploads through
-  `.github/actions/coverage` with a `platformctl` flag, as the sdk, backend
-  and agent-template do. The same job runs `make -C platform help` and
+  Ubuntu, plus one `macos-latest` leg. Each leg enforces 100% line and
+  branch coverage itself (`fail_under` in `pyproject.toml`), and nothing is
+  uploaded to Codecov: the workflow is path-filtered, and a flag that only
+  some commits upload falls out of Codecov after about ten commits (#347).
+  The same job runs `make -C platform help` and
   `make -C platform doctor`, and checks every `##@` target still exists.
 - `platformctl: shim`: a pytest that runs `sh platformctl` with a `PATH` of
   fake `python3.x` and `uv` stub scripts in `tmp_path`: the search order,
