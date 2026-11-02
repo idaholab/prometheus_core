@@ -78,8 +78,12 @@ class Syntax:
         head = re.escape(self.head)
         self.id = re.compile(rf"(?<![\w-]){head}(?:REQ|BEH)-\d{{3}}-\d{{2}}\b")
         """A full ID anywhere in a line."""
-        self.bullet_start = re.compile(rf"^- (?:{head})?(?:REQ|BEH)\b")
-        """A line that starts a requirement or behavior bullet, well-formed or not."""
+        self.bullet_start = re.compile(rf"^\s*[-*+]\s+[*_`]*(?:{head})?(?:REQ|BEH)\b")
+        """A line that starts a requirement or behavior bullet in any list style, well-formed or not.
+
+        `* REQ-...`, `- **REQ-...**` and an indented `  - REQ-...` all count, so none of them can
+        slip past the checker as ordinary text.
+        """
         self.bullet = re.compile(rf"^- (?P<id>{head}(?:REQ|BEH)-(?P<number>\d{{3}})-\d{{2}}): \S")
         """A well-formed bullet: `- <prefix>REQ-NNN-XX: text`."""
 
@@ -197,7 +201,14 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     current: Requirement | None = None
     seen_header = {"status": False, "tests": False}
     in_header = True
+    in_fence = False
     for number_, line in enumerate(lines, 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            current = None
+            continue
+        if in_fence:
+            continue
         if line.startswith("## "):
             in_header = False
         for key in seen_header if in_header else ():

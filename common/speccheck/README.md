@@ -62,6 +62,11 @@ bullet may wrap onto lines indented by two spaces. Markers at the end of the tex
 
 A whole spec with `status: retired` counts as retired.
 
+A list item that starts with an ID in any other style (`* REQ-...`, `- **REQ-...**`, `+ REQ-...`, or
+a nested `  - REQ-...`) is reported as a malformed bullet instead of being skipped, so a requirement
+can't escape the checker by its formatting. Fenced code blocks (``` or ~~~) are ignored, so a spec
+can show the format as an example.
+
 **Citations.** A full ID in a file under the spec's `tests:` paths counts only where a reader would
 look for it, so a stray mention can't pass for a test:
 

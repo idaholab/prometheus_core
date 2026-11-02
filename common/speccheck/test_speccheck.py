@@ -359,6 +359,34 @@ class TestFormat(CheckerTest):
         self.repo.write("specs/001-thing.md", spec("- REQ-1-1: Short.\n- REQ-001-02 Missing colon."))
         self.assertProblems("a bullet must read", "a bullet must read")
 
+    def test_every_bullet_style_is_a_bullet(self):
+        """`*`, bold, backticks and a nested bullet are malformed, not invisible."""
+        body = (
+            "- REQ-001-01: Fine. ⚠ untested\n* REQ-001-02: Star.\n- **REQ-001-03**: Bold.\n"
+            "  - REQ-001-04: Nested.\n+ BEH-001-01 Plus."
+        )
+        self.repo.write("specs/001-thing.md", spec(body))
+        self.assertProblems(*["a bullet must read"] * 4)
+
+    def test_a_nested_bullet_is_not_glued_to_the_one_above(self):
+        """It ends the previous requirement's text instead of extending it."""
+        body = "- REQ-001-01: Real. ⚠ untested\n  - REQ-001-02: nested (planned: step 2)"
+        self.repo.write("specs/001-thing.md", spec(body))
+        _, _, requirements = speccheck.check(self.repo.root / "specs", self.repo.root)
+        self.assertEqual([r.id for r in requirements], ["REQ-001-01"])
+        self.assertFalse(requirements[0].planned)
+
+    def test_a_fenced_example_is_not_a_requirement(self):
+        """A code block can show the format, a header line or a bullet, and none of it counts."""
+        body = (
+            "- REQ-001-01: Real. ⚠ untested\n\n```markdown\n- REQ-001-09: Example\n* REQ-1-1 bad\n```\n\n"
+            "~~~\n- REQ-001-08: Tilde\n~~~"
+        )
+        self.repo.write("specs/001-thing.md", spec(body))
+        self.assertProblems()
+        _, _, requirements = speccheck.check(self.repo.root / "specs", self.repo.root)
+        self.assertEqual([r.id for r in requirements], ["REQ-001-01"])
+
     def test_an_id_in_the_wrong_spec_fails(self):
         """REQ-002-XX belongs in 002."""
         self.repo.write("specs/001-thing.md", spec("- REQ-002-01: Misplaced. ⚠ untested"))
