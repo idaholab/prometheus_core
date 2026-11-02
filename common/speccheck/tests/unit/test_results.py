@@ -311,12 +311,26 @@ class TestLimits:
         assert [f.producer for f in files] == ["unit"]
         assert sorted(p.message.split(":")[0] for p in problems) == ["no such results file or folder", "not JSON"]
 
-    def test_an_input_the_os_cant_look_at_is_a_problem(self, tmp_path: Path):
-        """A name longer than the file system allows is a problem for that input, not an exit 2; the rest count."""
+    def test_an_input_the_os_cant_look_at_is_a_problem(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """An OS error looking at an input is a problem for that input, not an exit 2; the rest count.
+
+        Whether a too-long name raises depends on the platform (macOS does, Linux reports it
+        missing), so the error is made here.
+        """
         results.write(tmp_path / "good.jsonl", sample())
-        files, problems = results.read_all([tmp_path / ("x" * 300), tmp_path / "good.jsonl"])
+        bad = tmp_path / "bad.jsonl"
+        real = Path.is_symlink
+
+        def is_symlink(self: Path) -> bool:
+            """Raise for `bad` as an over-long name would, and answer for anything else."""
+            if self == bad:
+                raise OSError(63, "File name too long")
+            return real(self)
+
+        monkeypatch.setattr(Path, "is_symlink", is_symlink)
+        files, problems = results.read_all([bad, tmp_path / "good.jsonl"])
         assert [f.producer for f in files] == ["unit"]
-        assert [(p.code, p.message.startswith("can't read: ")) for p in problems] == [("results-unreadable", True)]
+        assert [(p.code, p.message) for p in problems] == [("results-unreadable", "can't read: File name too long")]
 
 
 def test_a_failed_write_leaves_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
