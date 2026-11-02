@@ -58,5 +58,5 @@ def test_json():
     body = json.loads(out(ctx))
     assert (body["command"], body["ok"], body["requirement_count"]) == ("lint", False, 1)
     assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "status": "implemented", "requirement_count": 1}]
-    assert body["problems"] == [{"path": "specs/x.md", "line": 0, "message": "m"}]
+    assert body["problems"] == [{"path": "specs/x.md", "line": 0, "message": "m", "code": "problem"}]
     assert err(ctx) == ""

@@ -80,7 +80,7 @@ def _relative(path: str, cwd: Path) -> str:
 
 def _relocate(problem: Problem, cwd: Path) -> Problem:
     """The problem with its path made relative to where speccheck runs."""
-    return Problem(_relative(problem.path, cwd), problem.line, problem.message)
+    return Problem(_relative(problem.path, cwd), problem.line, problem.message, problem.code)
 
 
 def evidence_json(item: evidence.Evidence) -> dict[str, Any]:

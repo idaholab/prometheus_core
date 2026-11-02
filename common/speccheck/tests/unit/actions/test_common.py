@@ -173,5 +173,5 @@ class TestFinish:
         assert (body["command"], body["ok"], body["counts"]["passed"]) == ("verify", False, 1)
         assert body["requirements"] == _common.statuses_json(evaluation)
         assert body["producers"] == {"reported": ["unit"], "missing": []}
-        assert body["problems"] == [{"path": "a", "line": 1, "message": "bad"}]
+        assert body["problems"] == [{"path": "a", "line": 1, "message": "bad", "code": "problem"}]
         assert err(ctx) == ""

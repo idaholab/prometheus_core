@@ -146,7 +146,7 @@ def evaluate(
         if producer is None:
             known = ", ".join(sorted(config.producers)) or "none"
             message = f"producer `{results_file.producer}` isn't declared in {config_name} (declared: {known})"
-            problems.append(Problem(results_file.source, 1, message))
+            problems.append(Problem(results_file.source, 1, message, "producer-undeclared"))
             continue
         for result in results_file.results:
             for claimed in result.covers:
@@ -155,7 +155,7 @@ def evaluate(
                     why = f"{claimed} isn't in `ci.{producer.name}.covers`, so job `{producer.name}` may not record it"
                 if why:
                     path, line = _where(result)
-                    problems.append(Problem(path, line, why))
+                    problems.append(Problem(path, line, why, "claim-invalid"))
                 else:
                     claims[claimed].append(Evidence(result, results_file))
 
@@ -165,7 +165,7 @@ def evaluate(
         for claimed in producer.covers:
             why = claim_problem(claimed, None, specs)
             if why:
-                problems.append(Problem(config_name, 0, f"`ci.{producer.name}.covers`: {why}"))
+                problems.append(Problem(config_name, 0, f"`ci.{producer.name}.covers`: {why}", "config-claim-invalid"))
             else:
                 config_claims[claimed].append(producer.name)
 
@@ -185,7 +185,7 @@ def evaluate(
             f"producer `{name}` didn't report; its job failed before uploading, was skipped, or was renamed "
             f"(see `{name}` in {config_name})"
         )
-        problems.append(Problem(config_name, 0, message))
+        problems.append(Problem(config_name, 0, message, "producer-missing"))
 
     statuses = []
     status_problems: list[Problem] = []
@@ -243,21 +243,25 @@ def _problems_of(status: Status, root, complete: bool) -> list[Problem]:
     line = requirement.line
     problems = []
     if status.claimed and requirement.untested:
-        problems.append(Problem(name, line, f"{requirement.id} is claimed, so remove `{UNTESTED}`"))
+        problems.append(
+            Problem(name, line, f"{requirement.id} is claimed, so remove `{UNTESTED}`", "untested-marker-stale")
+        )
     if status.claimed and requirement.planned:
-        problems.append(Problem(name, line, f"{requirement.id} is claimed, so remove its `(planned: ...)`"))
+        problems.append(
+            Problem(name, line, f"{requirement.id} is claimed, so remove its `(planned: ...)`", "planned-marker-stale")
+        )
     if status.status == UNCLAIMED:
         message = (
             f'{requirement.id} is not claimed; add `@pytest.mark.covers("{requirement.id}")` to a test that '
             f"proves it, or mark it `{UNTESTED}` in the spec"
         )
-        problems.append(Problem(name, line, message))
+        problems.append(Problem(name, line, message, UNCLAIMED))
     elif status.status == FAILED:
         seen = "; ".join(_describe(e) for e in status.evidence[:5])
         more = f" (and {len(status.evidence) - 5} more)" if len(status.evidence) > 5 else ""
-        problems.append(Problem(name, line, f"{requirement.id} has no passing result: {seen}{more}"))
+        problems.append(Problem(name, line, f"{requirement.id} has no passing result: {seen}{more}", FAILED))
     elif status.status == NOT_RUN and complete:
         waiting = ", ".join(status.waiting_on) or "none"
         message = f"{requirement.id} was not run: nothing that reported claims it (waiting on: {waiting})"
-        problems.append(Problem(name, line, message))
+        problems.append(Problem(name, line, message, "not-run"))
     return problems

@@ -44,5 +44,5 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         # would be green with no evidence at all, such as when no results artifact was downloaded
         where = ", ".join(args.inputs) if args.inputs else "no RESULTS given"
         message = f"no results files were read ({where}), so nothing is proven"
-        evaluation.problems.append(Problem(rel(ctx.config().path, ctx.cwd), 0, message))
+        evaluation.problems.append(Problem(rel(ctx.config().path, ctx.cwd), 0, message, "no-results"))
     return _common.finish(ctx, NAME, evaluation)

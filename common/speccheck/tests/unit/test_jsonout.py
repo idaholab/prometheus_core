@@ -28,7 +28,7 @@ def test_the_envelope_and_emit():
         "schema_version": 1,
         "command": "lint",
         "ok": False,
-        "problems": [{"path": "a", "line": 1, "message": "b\n::x"}],
+        "problems": [{"path": "a", "line": 1, "message": "b\n::x", "code": "problem"}],
         "specs": [],
     }
     stream = io.StringIO()

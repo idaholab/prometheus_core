@@ -234,10 +234,10 @@ def parse(text: str, source: str) -> tuple[ResultsFile | None, list[Problem]]:
     if lines[-1] == "":
         lines.pop()
     if not lines:
-        return None, [Problem(source, 0, "empty results file; the run that wrote it may have crashed")]
+        return None, [Problem(source, 0, "empty results file; the run that wrote it may have crashed", "results-empty")]
     for number, line in enumerate(lines, 1):
         if len(line.encode("utf-8")) > MAX_LINE_BYTES:
-            return None, [Problem(source, number, f"line longer than {MAX_LINE_BYTES} bytes")]
+            return None, [Problem(source, number, f"line longer than {MAX_LINE_BYTES} bytes", "results-line-too-long")]
     parsed: ResultsFile | None = None
     for number, line in enumerate(lines, 1):
         if number > 1 and not line.strip():
@@ -249,13 +249,15 @@ def parse(text: str, source: str) -> tuple[ResultsFile | None, list[Problem]]:
             else:
                 parsed.results.append(_result(body))
         except json.JSONDecodeError as exc:
-            return None, [Problem(source, number, f"not JSON: {exc.msg}")]
+            return None, [Problem(source, number, f"not JSON: {exc.msg}", "results-not-json")]
         except RecursionError:
-            return None, [Problem(source, number, "not JSON this reader accepts: nested too deeply")]
+            return None, [
+                Problem(source, number, "not JSON this reader accepts: nested too deeply", "results-not-json")
+            ]
         except ValueError as exc:  # such as an integer of more digits than Python converts
-            return None, [Problem(source, number, f"not JSON this reader accepts: {exc}")]
+            return None, [Problem(source, number, f"not JSON this reader accepts: {exc}", "results-not-json")]
         except Invalid as exc:
-            return None, [Problem(source, number, f"not a valid {SCHEMA} line: {exc}")]
+            return None, [Problem(source, number, f"not a valid {SCHEMA} line: {exc}", "results-invalid")]
     parsed.source = source
     return parsed, []
 
@@ -266,14 +268,16 @@ def read(path: Path, source: str | None = None) -> tuple[ResultsFile | None, lis
     try:
         size = path.stat().st_size
         if size > MAX_FILE_BYTES:
-            return None, [Problem(source, 0, f"results file is {size} bytes; the limit is {MAX_FILE_BYTES}")]
+            return None, [
+                Problem(source, 0, f"results file is {size} bytes; the limit is {MAX_FILE_BYTES}", "results-too-large")
+            ]
         data = path.read_bytes()
     except OSError as exc:
-        return None, [Problem(source, 0, f"can't read: {exc.strerror}")]
+        return None, [Problem(source, 0, f"can't read: {exc.strerror}", "results-unreadable")]
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        return None, [Problem(source, 0, "not UTF-8 text")]
+        return None, [Problem(source, 0, "not UTF-8 text", "results-not-utf8")]
     return parse(text, source)
 
 
@@ -300,7 +304,7 @@ def read_all(paths: Iterable[Path]) -> tuple[list[ResultsFile], list[Problem]]:
     inputs = list(paths)
     for path in inputs:
         if not path.exists() and not path.is_symlink():
-            problems.append(Problem(path.as_posix(), 0, "no such results file or folder"))
+            problems.append(Problem(path.as_posix(), 0, "no such results file or folder", "results-missing"))
     for path in collect(p for p in inputs if p.exists()):
         parsed, found = read(path)
         problems += found
