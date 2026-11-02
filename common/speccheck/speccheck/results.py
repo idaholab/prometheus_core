@@ -313,7 +313,11 @@ def read_all(paths: Iterable[Path]) -> tuple[list[ResultsFile], list[Problem]]:
     problems: list[Problem] = []
     inputs = list(paths)
     for path in inputs:
-        if not path.exists() and not path.is_symlink():
+        if path.is_symlink():
+            problems.append(
+                Problem(path.as_posix(), 0, "is a symlink, which isn't followed; skipped", "results-symlink")
+            )
+        elif not path.exists():
             problems.append(Problem(path.as_posix(), 0, "no such results file or folder", "results-missing"))
     for path in collect(p for p in inputs if p.exists()):
         parsed, found = read(path)

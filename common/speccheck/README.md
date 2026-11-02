@@ -80,7 +80,7 @@ requirement"). As a command on its own, install it as a uv tool, which puts `spe
 | `report [RESULTS...]` | the same as `verify` | never on the requirements; writes markdown to stdout, `--output FILE` and `--summary FILE` (appended), or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
 
-`RESULTS` are results files, or folders searched for `*.jsonl` (symlinks are not followed).
+`RESULTS` are results files, or folders searched for `*.jsonl` (symlinks are not followed; a symlink given as an input is a `results-symlink` problem, and one found inside a folder is skipped).
 `--complete --workflow NAME` expects only the producers that list that workflow.
 
 Global options work before or after the command: `--config PATH` (default `speccheck.toml` here,

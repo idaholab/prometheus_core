@@ -220,6 +220,18 @@ class TestLimits:
         assert results.collect([inputs]) == [inputs / "real.jsonl"]
         assert results.collect([inputs / "link.jsonl"]) == []
 
+    def test_a_symlink_input_is_a_problem(self, tmp_path: Path):
+        """A symlink given as an input is skipped, and says so, whether or not its target exists."""
+        results.write(tmp_path / "r.jsonl", sample())
+        (tmp_path / "link.jsonl").symlink_to(tmp_path / "r.jsonl")
+        (tmp_path / "broken.jsonl").symlink_to(tmp_path / "gone.jsonl")
+        files, problems = results.read_all([tmp_path / "link.jsonl", tmp_path / "broken.jsonl"])
+        assert files == []
+        assert [(p.path, p.code) for p in problems] == [
+            ((tmp_path / "link.jsonl").as_posix(), "results-symlink"),
+            ((tmp_path / "broken.jsonl").as_posix(), "results-symlink"),
+        ]
+
     def test_read_all(self, tmp_path: Path):
         """Files and folders; a missing input and a bad file are problems, good files still count."""
         results.write(tmp_path / "a" / "good.jsonl", sample())
