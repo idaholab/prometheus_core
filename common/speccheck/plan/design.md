@@ -461,5 +461,13 @@ Found on `devel` as of 2026-11-01:
   needs the path filter dropped or an always-run job that reports for every PR, such as a job that
   skips its work when no speccheck path changed but still passes.
 - Whether `verify --complete` on `devel` pushes is enough, or a nightly run is also wanted.
+- **Promotion criterion** for making `speccheck` a required check (after step 3 and the path-filter
+  change above). "Green on `devel` for a while" can't be counted in days, because the workflow runs
+  on `devel` only when a speccheck path changes. It is met when:
+  - the last 10 runs of `speccheck.yml` on `devel` that touched speccheck paths are green, and
+  - the final job of every adopter's workflow (steps 3 and 4) has been green on its last 10 `devel`
+    runs, or, if the nightly run above is added, on 14 nightly runs in a row.
+  A scheduled run would make the second condition a count of days, and is the alternative if the
+  adopters' runs are too sparse.
 - Whether the report is also published somewhere permanent (the docs site, a PR comment), not
   just as an artifact.
