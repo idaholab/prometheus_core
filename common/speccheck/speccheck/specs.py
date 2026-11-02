@@ -1,0 +1,288 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+"""Read a folder of SDD specs: the index, each spec's header, and its REQ and BEH bullets.
+
+The format is described in the README. This module only reads specs; which tests claim which
+requirement comes from results files (`results.py`), never from the spec text.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+STATUSES = ("draft", "implemented", "retired")
+"""The values a spec's `status:` line may take."""
+
+PREFIX = re.compile(r"^[A-Z][A-Z0-9]*$")
+"""A well-formed ID prefix: capital letters and digits, starting with a letter."""
+
+SPEC_FILE = re.compile(r"^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
+"""A numbered spec's file name: `NNN-short-name.md`."""
+
+INDEX = "000-index.md"
+"""The index file every spec folder has."""
+
+RETIRED = re.compile(r"Retired[.:]")
+"""How a retired bullet's text starts: `Retired.` or `Retired:`, not "Retired later" or "Retirement of"."""
+
+UNTESTED = "⚠ untested"
+"""The marker for a requirement that has no test yet."""
+
+PLANNED = re.compile(r"\(planned: [^)]+\)")
+"""The marker for a requirement a later plan step delivers, such as `(planned: step 3b)`."""
+
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
+"""Characters that can end a line or drive a terminal or a CI log: newlines, escapes, other controls."""
+
+
+def plain(text: str) -> str:
+    """`text` with each control character written out, such as `\\n` or `\\x1b`, so it stays on one line.
+
+    File names and results files are not trusted, and CI logs act on a line that starts with
+    `::error::`, so nothing printed may be able to begin one.
+    """
+    return CONTROL.sub(lambda match: ascii(match.group(0))[1:-1], text)
+
+
+class Syntax:
+    """The ID patterns of one spec folder, whose IDs may carry a prefix such as `SPC-REQ-003-04`.
+
+    A prefix keeps one folder's IDs apart from another's, since both number their specs from 001.
+    With a prefix, a bare `REQ-003-04` is not one of this folder's IDs; without one, a prefixed ID
+    is not either.
+    """
+
+    def __init__(self, prefix: str = "") -> None:
+        """Compile the patterns for IDs written with `prefix` (none for bare IDs)."""
+        self.head = f"{prefix}-" if prefix else ""
+        """What comes before `REQ` or `BEH` in an ID, such as `SPC-`."""
+        head = re.escape(self.head)
+        self.id = re.compile(rf"{head}(?:REQ|BEH)-(?P<number>\d{{3}})-\d{{2}}")
+        """A full ID, matched against a whole string with `fullmatch`."""
+        self.bullet_start = re.compile(rf"^\s*[-*+]\s+[*_`]*(?:{head})?(?:REQ|BEH)\b")
+        """A line that starts a requirement or behavior bullet in any list style, well-formed or not.
+
+        `* REQ-...`, `- **REQ-...**` and an indented `  - REQ-...` all count, so none of them can
+        slip past the checker as ordinary text.
+        """
+        self.bullet = re.compile(rf"^- (?P<id>{head}(?:REQ|BEH)-(?P<number>\d{{3}})-\d{{2}}): \S")
+        """A well-formed bullet: `- <prefix>REQ-NNN-XX: text`."""
+
+    def example(self) -> str:
+        """An example ID in this folder's form, for messages."""
+        return f"{self.head}REQ-001-01"
+
+
+@dataclass(frozen=True)
+class Problem:
+    """One rule that a spec, a config, a results file or a claim breaks."""
+
+    path: str
+    """The file, relative to where speccheck runs where possible."""
+    line: int
+    """The 1-based line number, or 0 for the whole file."""
+    message: str
+    """What is wrong and what to do about it."""
+
+    def __str__(self) -> str:
+        """`path:line: message`, the form editors and CI logs link, with control characters written out."""
+        text = f"{self.path}:{self.line}: {self.message}" if self.line else f"{self.path}: {self.message}"
+        return plain(text)
+
+    def to_json(self) -> dict:
+        """The problem as a JSON object (the text is left as is; JSON escapes it)."""
+        return {"path": self.path, "line": self.line, "message": self.message}
+
+
+@dataclass
+class Requirement:
+    """One REQ or BEH bullet in a spec."""
+
+    id: str
+    """The ID, such as `SPC-REQ-003-04`."""
+    spec: Spec
+    """The spec it belongs to."""
+    line: int
+    """Where the bullet starts in the spec file."""
+    text: str
+    """The bullet's text after the ID, joined across its continuation lines."""
+
+    @property
+    def retired(self) -> bool:
+        """Whether the bullet, or its whole spec, is retired."""
+        return RETIRED.match(self.text) is not None or self.spec.status == "retired"
+
+    @property
+    def untested(self) -> bool:
+        """Whether the bullet carries `⚠ untested`."""
+        return UNTESTED in self.text
+
+    @property
+    def planned(self) -> bool:
+        """Whether the bullet carries `(planned: ...)`."""
+        return PLANNED.search(self.text) is not None
+
+
+@dataclass
+class Spec:
+    """One numbered spec file."""
+
+    path: Path
+    """The spec file."""
+    number: str
+    """Its three-digit number."""
+    title: str = ""
+    """Its title, from the first line."""
+    status: str = ""
+    """Its `status:` value."""
+    requirements: list[Requirement] = field(default_factory=list)
+    """Its REQ and BEH bullets, in order."""
+
+
+@dataclass
+class SpecSet:
+    """Every spec of one folder, and the problems found reading them."""
+
+    specs: list[Spec]
+    """The specs, in file name order."""
+    requirements: dict[str, Requirement]
+    """Every requirement by ID, in spec order; a duplicate ID keeps the first."""
+    problems: list[Problem]
+    """Format problems, as `lint` reports them."""
+    syntax: Syntax
+    """The folder's ID patterns."""
+
+
+def rel(path: Path, root: Path) -> str:
+    """`path` relative to `root` where possible, for messages."""
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) -> Spec:
+    """Read one spec file's header line and bullets, recording format problems."""
+    number = path.name[:3]
+    spec = Spec(path=path, number=number)
+    name = rel(path, root)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or not lines[0].startswith(f"# {number} "):
+        problems.append(Problem(name, 1, f"the first line must be the title, `# {number} - <name>`"))
+    else:
+        spec.title = lines[0][len(f"# {number} ") :].lstrip("-– ").strip()
+
+    current: Requirement | None = None
+    seen_status = False
+    in_header = True
+    in_fence = False
+    for line_number, line in enumerate(lines, 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            current = None
+            continue
+        if in_fence:
+            continue
+        if line.startswith("## "):
+            in_header = False
+        if in_header and line.startswith("status:"):
+            if seen_status:
+                problems.append(Problem(name, line_number, "a second `status:` line; a spec has one"))
+            else:
+                seen_status = True
+                spec.status = line[len("status:") :].strip()
+                if spec.status not in STATUSES:
+                    problems.append(Problem(name, line_number, f"status must be one of {', '.join(STATUSES)}"))
+        if in_header and line.startswith("tests:"):
+            message = "the `tests:` line is gone; say which producers may claim this spec in the config instead"
+            problems.append(Problem(name, line_number, message))
+
+        if syntax.bullet_start.match(line):
+            match = syntax.bullet.match(line)
+            if match is None:
+                problems.append(
+                    Problem(name, line_number, f"a bullet must read `- {syntax.head}REQ-NNN-XX: text` (or BEH)")
+                )
+                current = None
+                continue
+            if match.group("number") != number:
+                problems.append(
+                    Problem(name, line_number, f"{match.group('id')} belongs in spec {match.group('number')}")
+                )
+            current = Requirement(
+                id=match.group("id"), spec=spec, line=line_number, text=line[match.end("id") + 2 :].strip()
+            )
+            spec.requirements.append(current)
+        elif current is not None and line.startswith("  ") and line.strip():
+            current.text += " " + line.strip()
+        else:
+            current = None
+
+    if not seen_status:
+        problems.append(Problem(name, 0, "missing the `status:` line"))
+    return spec
+
+
+def links_to(index_text: str, name: str) -> bool:
+    """Whether the index has a Markdown link to the spec file, such as `[001](001-thing.md)`.
+
+    A mention of the spec's number or name in prose is not a listing, so a spec can't be left out
+    of the index and still pass because another paragraph happens to say "001".
+    """
+    return re.search(rf"\]\((?:\./)?{re.escape(name)}(?:#[^)]*)?\)", index_text) is not None
+
+
+def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = True) -> SpecSet:
+    """Read every spec in the folder and check the format; `root` is what paths in messages are relative to."""
+    problems: list[Problem] = []
+    syntax = Syntax(prefix)
+    index = specs_dir / INDEX
+    index_text = index.read_text(encoding="utf-8") if index.is_file() else None
+    if index_text is None and require_index:
+        problems.append(Problem(rel(index, root), 0, f"the spec folder needs a {INDEX} that links every spec"))
+    if index_text is not None:
+        for line_number, line in enumerate(index_text.splitlines(), 1):
+            if line.startswith("id-prefix:"):
+                message = "the `id-prefix:` line is gone; set `id-prefix` in the config instead"
+                problems.append(Problem(rel(index, root), line_number, message))
+
+    specs = []
+    for path in sorted(specs_dir.glob("*.md")):
+        if path.name == INDEX:
+            continue
+        if not SPEC_FILE.match(path.name):
+            problems.append(Problem(rel(path, root), 0, "a spec file must be named NNN-short-name.md"))
+            continue
+        if require_index and index_text is not None and not links_to(index_text, path.name):
+            message = f"the index doesn't link {path.name}; list it as `[{path.name[:3]}]({path.name})`"
+            problems.append(Problem(rel(index, root), 0, message))
+        specs.append(parse_spec(path, root, syntax, problems))
+
+    requirements: dict[str, Requirement] = {}
+    for spec in specs:
+        name = rel(spec.path, root)
+        if spec.status == "implemented" and not spec.requirements:
+            problems.append(Problem(name, 0, "an implemented spec needs at least one requirement"))
+        for requirement in spec.requirements:
+            if requirement.id in requirements:
+                first = requirements[requirement.id]
+                where = f"{rel(first.spec.path, root)}:{first.line}"
+                problems.append(Problem(name, requirement.line, f"{requirement.id} is also at {where}; IDs are unique"))
+                continue
+            requirements[requirement.id] = requirement
+            if requirement.untested and requirement.planned:
+                message = f"{requirement.id} is both planned and untested; keep one marker"
+                problems.append(Problem(name, requirement.line, message))
+    return SpecSet(specs=specs, requirements=requirements, problems=problems, syntax=syntax)

@@ -1,0 +1,75 @@
+name: speccheck verify
+description: The final job's steps - download the run's speccheck results, verify them, publish the report
+
+# For the last job of a workflow, with `needs:` on every job that uploads results and
+# `if: ${{ !cancelled() }}`, so it reports even when a test job failed. The calling job needs
+# only `contents: read` (download-artifact reads this run's artifacts with the job's own token)
+# and a checkout with `persist-credentials: false`. The downloaded files are untrusted data:
+# speccheck parses them as JSON with a size limit and never opens paths named in them. The
+# report and step summary escape everything taken from them. Exits with verify's code.
+# See common/speccheck/README.md, "In CI"
+
+inputs:
+  config:
+    description: The spec folder's config, speccheck.toml or a pyproject.toml, relative to the checkout
+    required: true
+  complete:
+    description: >-
+      "true" to also fail on a producer of this workflow that didn't report, and on a requirement
+      nothing that reported claims (use it where every producer runs, such as on devel)
+    required: false
+    default: "false"
+  workflow:
+    description: With complete, expect the producers that list this workflow (default the workflow's name)
+    required: false
+    default: ""
+  report-name:
+    description: Name of the report artifact
+    required: false
+    default: speccheck-report
+
+runs:
+  using: composite
+  steps:
+    - name: Download speccheck results
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        pattern: speccheck-results-*
+        path: ${{ runner.temp }}/speccheck-results
+    - name: Report
+      # report never fails on the requirements, so the report is published either way
+      shell: bash
+      env:
+        CONFIG: ${{ inputs.config }}
+        COMPLETE: ${{ inputs.complete }}
+        WORKFLOW: ${{ inputs.workflow || github.workflow }}
+        RESULTS: ${{ runner.temp }}/speccheck-results
+        REPORT: ${{ runner.temp }}/speccheck-report/report.md
+        JSON: ${{ runner.temp }}/speccheck-report/report.json
+      run: |
+        mkdir -p "$RESULTS" "$(dirname "$REPORT")"
+        scope=()
+        if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
+        run=(python3 -I "$GITHUB_WORKSPACE/common/speccheck/run.py")
+        "${run[@]}" report --config "$CONFIG" "${scope[@]}" "$RESULTS" \
+          --output "$REPORT" --summary "$GITHUB_STEP_SUMMARY"
+        "${run[@]}" report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
+    - name: Upload report
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.report-name }}
+        path: ${{ runner.temp }}/speccheck-report
+        if-no-files-found: error
+        retention-days: 90
+    - name: Verify
+      shell: bash
+      env:
+        CONFIG: ${{ inputs.config }}
+        COMPLETE: ${{ inputs.complete }}
+        WORKFLOW: ${{ inputs.workflow || github.workflow }}
+        RESULTS: ${{ runner.temp }}/speccheck-results
+      run: |
+        scope=()
+        if [ "$COMPLETE" = "true" ]; then scope=(--complete --workflow "$WORKFLOW"); fi
+        python3 -I "$GITHUB_WORKSPACE/common/speccheck/run.py" verify --config "$CONFIG" "${scope[@]}" "$RESULTS"

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/idaholab/prometheus_core/common/speccheck/speccheck-results-1.schema.json",
+  "title": "speccheck-results/1",
+  "description": "One line of a speccheck results file (JSON Lines). The first line is a header; every other line is a result. A reader rejects a file whose header has any other schema value.",
+  "oneOf": [{ "$ref": "#/$defs/header" }, { "$ref": "#/$defs/result" }],
+  "$defs": {
+    "text": { "type": "string", "maxLength": 1000 },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "producer"],
+      "properties": {
+        "schema": { "const": "speccheck-results/1" },
+        "producer": { "$ref": "#/$defs/text", "minLength": 1, "description": "A producer declared in the spec folder's config" },
+        "runner": { "$ref": "#/$defs/text", "description": "What wrote the file, such as `pytest 8.4.1`" },
+        "ci": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ci" }] },
+        "started": { "$ref": "#/$defs/text", "description": "ISO 8601 UTC" }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the run happened, from GITHUB_* and SPECCHECK_* variables",
+      "properties": {
+        "server": { "$ref": "#/$defs/scalar" },
+        "repository": { "$ref": "#/$defs/scalar" },
+        "workflow": { "$ref": "#/$defs/scalar" },
+        "job": { "$ref": "#/$defs/scalar" },
+        "leg": { "$ref": "#/$defs/scalar" },
+        "run_id": { "$ref": "#/$defs/scalar" },
+        "run_attempt": { "$ref": "#/$defs/scalar" },
+        "job_id": { "$ref": "#/$defs/scalar" },
+        "sha": { "$ref": "#/$defs/scalar" },
+        "ref": { "$ref": "#/$defs/scalar" },
+        "event": { "$ref": "#/$defs/scalar" },
+        "run_url": { "$ref": "#/$defs/scalar" },
+        "job_url": { "$ref": "#/$defs/scalar" }
+      }
+    },
+    "scalar": { "oneOf": [{ "type": "null" }, { "type": "integer" }, { "$ref": "#/$defs/text" }] },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test", "covers", "outcome"],
+      "properties": {
+        "test": { "$ref": "#/$defs/text", "minLength": 1, "description": "The test's node ID, or the CI job's name" },
+        "file": { "$ref": "#/$defs/text", "description": "The test file; never opened by the reader" },
+        "line": { "type": "integer", "minimum": 0 },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/text", "minLength": 1 }
+        },
+        "outcome": {
+          "enum": ["passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected"],
+          "description": "Only `passed` is evidence"
+        },
+        "kind": { "enum": ["test", "ci"], "default": "test" }
+      }
+    }
+  }
+}

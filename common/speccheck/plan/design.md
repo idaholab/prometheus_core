@@ -212,10 +212,19 @@ Lines: one header, then one line per claiming test.
 **Job links.** The report links each result to its job. The run URL
 (`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT`)
 is always available. A job-level URL needs the job's numeric ID, which the job's own environment
-doesn't provide as a `GITHUB_*` variable. Step 1 checks whether `${{ job.check_run_id }}` is
+doesn't provide as a `GITHUB_*` variable. Step 1 checked whether `${{ job.check_run_id }}` is
 available on our runners and, if so, passes it in as `SPECCHECK_JOB_ID`. Otherwise `verify` can
 look up job IDs from the run's jobs API (`actions: read`) by name. If neither works, the link is the
 run plus the job name.
+
+**Outcome (2026-11-01, step 1):** GitHub documents `job.check_run_id` ("the check run ID of the
+current job") in the `job` context on github.com. It is not available on GitHub Enterprise Server,
+which we don't use. The check run ID is the number in a job's URL
+(`.../actions/runs/<run>/job/<check_run_id>`). So every job that writes results sets
+`SPECCHECK_JOB_ID: ${{ job.check_run_id }}`, and the results file's `job_url` links the job
+directly. Each attempt's job has its own ID, so a re-run links its own job. When the variable is
+missing or not a number, `job_url` falls back to the run attempt's URL. The jobs API lookup isn't
+needed. Confirmed when `speccheck.yml` first runs: the report's job links open the right job.
 
 ## How a requirement's status is decided
 
@@ -267,10 +276,11 @@ And at the end of the workflow:
           complete: ${{ github.event_name != 'pull_request' }}
 ```
 
-- **`speccheck-upload`** wraps `actions/upload-artifact` with the `speccheck-` name prefix, a
-  short retention (to decide: 30 days), and `if-no-files-found: error`, so a job that should have
+- **`speccheck-upload`** wraps `actions/upload-artifact` with the `speccheck-results-` name
+  prefix (not `speccheck-`, so the report artifact and other `speccheck-*` artifacts are never
+  read as results), 30 days' retention, and `if-no-files-found: error`, so a job that should have
   written results and didn't fails.
-- **`speccheck-verify`** downloads every `speccheck-*` artifact of the run, runs `verify` and
+- **`speccheck-verify`** downloads every `speccheck-results-*` artifact of the run, runs `verify` and
   `report --summary`, and uploads the report as the `speccheck-report` artifact. It runs even when
   a test job failed, so the report shows what was proven. Its exit code is `verify`'s.
 - Both are composite actions in this repository, pinned like every other action in them, and

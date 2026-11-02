@@ -20,7 +20,7 @@ platformctl requirements) are closed; their spec content is reworked onto this t
 
 | # | File | Summary | Depends on | Status |
 |---|------|---------|------------|--------|
-| 1 | [`01-speccheck.md`](01-speccheck.md) | The package: spec parsing, config, results files, the pytest plugin, `lint`/`check`/`verify`/`report`/`record`, the upload and verify actions, its own specs, its own workflow checked by itself | - | Not started |
+| 1 | [`01-speccheck.md`](01-speccheck.md) | The package: spec parsing, config, results files, the pytest plugin, `lint`/`check`/`verify`/`report`/`record`, the upload and verify actions, its own specs, its own workflow checked by itself | - | In review |
 | 2 | [`02-build-specs.md`](02-build-specs.md) | Bring back the build and run specs (from #355/#361) and check platformctl against them | 1 | Not started |
 | 3 | [`03-sdk-adopt.md`](03-sdk-adopt.md) | `sdk/specs` on speccheck: the `SDK-` prefix, markers instead of citations, results from the sdk jobs, the final job | 1 | Not started |
 | 4 | [`04-sdk-evidence.md`](04-sdk-evidence.md) | Mark or test the sdk requirements nobody cites yet | 3 | Not started |
