@@ -132,6 +132,8 @@ def main(
             out.write(f"speccheck {__version__}\n")
         return jsonout.EXIT_OK
     if not args.command:
+        if args.json:
+            return fail("no command given")
         parser.print_help(out)
         return jsonout.EXIT_USAGE
 

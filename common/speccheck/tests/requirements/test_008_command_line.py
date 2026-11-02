@@ -80,6 +80,7 @@ def test_one_json_object_on_every_exit_path(project: Project):
         (["verify", "--json"], 1),
         (["report", "--json"], 0),
         (["nope", "--json"], 2),
+        (["--json"], 2),
     ):
         done = command(project, *argv)
         body = json.loads(done.stdout)
