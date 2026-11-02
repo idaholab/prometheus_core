@@ -161,6 +161,31 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
 
 
 @pytest.mark.covers("SPC-REQ-004-02")
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        # "nested too deeply" before Python 3.14, "Expecting value" on 3.14: either way, "not JSON"
+        ("[" * 30000, "not JSON"),
+        ('{"test": "t", "covers": ["T-REQ-001-01"], "outcome": "passed", "line": ' + "9" * 5000 + "}", "digits"),
+        ('{"test": "t\\ud800", "covers": ["T-REQ-001-01"], "outcome": "passed"}', "lone surrogate"),
+    ],
+)
+def test_a_hostile_line_is_a_problem_not_a_crash(project: Project, line: str, message: str):
+    """Deep nesting, a huge number and a lone surrogate reject the file, and `--json` still gives one object."""
+    project.spec("- T-REQ-001-01: One.")
+    good = {"test": "good", "covers": ["T-REQ-001-01"], "outcome": "passed"}
+    header = {"schema": "speccheck-results/1", "producer": "unit"}
+    project.write("r.jsonl", "\n".join([json.dumps(header), json.dumps(good), line]) + "\n")
+    for command in ("verify", "report"):
+        run = project.speccheck(command, "r.jsonl", "--json")
+        assert run.code == (1 if command == "verify" else 0)
+        problems = run.json()["problems"]
+        assert any(p["path"] == "r.jsonl" and p["line"] == 3 and message in p["message"] for p in problems)
+        assert run.json()["requirements"][0]["status"] != "passed"
+    assert project.speccheck("report", "r.jsonl", "--output", "r.md").code == 0
+
+
+@pytest.mark.covers("SPC-REQ-004-02")
 def test_unknown_keys_are_ignored(project: Project):
     """A newer writer's extra fields, in the header, its `ci` block and a result, don't stop the file counting."""
     project.spec("- T-REQ-001-01: One.")

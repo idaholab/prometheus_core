@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -146,6 +147,10 @@ def write(path: Path, results_file: ResultsFile) -> None:
         raise
 
 
+SURROGATE = re.compile("[\ud800-\udfff]")
+"""A lone surrogate: valid in JSON's `\\u` escapes, but not text, so it can't be written out as UTF-8."""
+
+
 class Invalid(Exception):
     """A field of a results file is wrong; the message says which."""
 
@@ -156,6 +161,8 @@ def _text(value: Any, name: str, *, allow_empty: bool = True) -> str:
         raise Invalid(f"`{name}` must be a string")
     if len(value) > MAX_TEXT:
         raise Invalid(f"`{name}` is longer than {MAX_TEXT} characters")
+    if SURROGATE.search(value):
+        raise Invalid(f"`{name}` has a lone surrogate (`\\ud800` to `\\udfff`), which isn't text")
     if not allow_empty and not value:
         raise Invalid(f"`{name}` must not be empty")
     return value
@@ -239,6 +246,10 @@ def parse(text: str, source: str) -> tuple[ResultsFile | None, list[Problem]]:
                 parsed.results.append(_result(body))
         except json.JSONDecodeError as exc:
             return None, [Problem(source, number, f"not JSON: {exc.msg}")]
+        except RecursionError:
+            return None, [Problem(source, number, "not JSON this reader accepts: nested too deeply")]
+        except ValueError as exc:  # such as an integer of more digits than Python converts
+            return None, [Problem(source, number, f"not JSON this reader accepts: {exc}")]
         except Invalid as exc:
             return None, [Problem(source, number, f"not a valid {SCHEMA} line: {exc}")]
     parsed.source = source

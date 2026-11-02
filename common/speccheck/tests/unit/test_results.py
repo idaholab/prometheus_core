@@ -128,6 +128,15 @@ class TestValidation:
             ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": true}'], "`line` must be a whole"),
             ([header(), '{"test": "", "covers": ["X"], "outcome": "passed"}'], "`test` must not be empty"),
             ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed"}', "{"], "3: not JSON"),
+            # Python before 3.14 raises RecursionError ("not JSON this reader accepts: nested too deeply");
+            # 3.14 parses deeper and reports the unclosed bracket ("not JSON: Expecting value")
+            ([header(), "[" * 30000], "2: not JSON"),
+            (
+                [header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": ' + "9" * 5000 + "}"],
+                "2: not JSON this reader accepts: Exceeds the limit",
+            ),
+            ([header(), '{"test": "\\ud800", "covers": ["X"], "outcome": "passed"}'], "`test` has a lone surrogate"),
+            ([header(runner="\udfff")], "`runner` has a lone surrogate"),
         ],
     )
     def test_rejected(self, lines: list[str], message: str):

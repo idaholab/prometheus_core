@@ -290,6 +290,12 @@ class TestRun:
         assert report.run(ctx, namespace(output="r.md")) == 0
         assert (tmp_path / "r.md").read_text() == "- `##[error]x`\n::error::y\n"
 
+    def test_a_lone_surrogate_cant_lose_the_report(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Text that isn't valid UTF-8 is replaced in the file rather than failing the write."""
+        monkeypatch.setattr(report, "full", lambda title, evaluation: "t\ud800\n")
+        assert report.run(self.ctx(tmp_path), namespace(output="r.md")) == 0
+        assert (tmp_path / "r.md").read_text() == "t?\n"
+
     def test_output_and_summary(self, tmp_path: Path):
         """`--output` is written (folders made), `--summary` appended, and stdout has the summary line."""
         (tmp_path / "s.md").write_text("earlier step\n")
