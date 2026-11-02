@@ -263,7 +263,11 @@ def phase_outcome(report: pytest.TestReport) -> str | None:
 
 
 def merge(current: str, report: pytest.TestReport) -> str:
-    """The outcome after one more phase: an error in setup or teardown wins over everything else."""
+    """The outcome after one more phase: an error in setup or teardown wins over everything else.
+
+    Only `error` sticks. A failed call is replaced by a later attempt's outcome, so with a rerun
+    plugin a test that fails and then passes is `passed` (SPC-REQ-003-07).
+    """
     new = phase_outcome(report)
     if new is None or current == "error":
         return current

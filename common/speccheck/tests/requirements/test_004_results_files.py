@@ -594,20 +594,30 @@ def test_error_then_clean(breaks_on_the_first_attempt):
 @pytest.mark.covers("T-REQ-001-01", "inner claim 16 of T-REQ-001-01")
 def test_teardown_skip_keeps_the_call(skips_in_teardown):
     pass
+
+
+CALLS = []
+
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 17 of T-REQ-001-01")
+def test_fails_then_passes():
+    CALLS.append(1)
+    assert len(CALLS) > 1
 """
-"""A teardown error on the first attempt only, and a skip in teardown."""
+"""A teardown error on the first attempt only, a skip in teardown, and a call that fails once."""
 
 
 @pytest.mark.covers(
     "SPC-REQ-003-07",
-    "a rerun plugin's clean second attempt after a teardown error stays error, and a skip in teardown keeps passed",
+    "a rerun plugin's clean second attempt after a teardown error stays error, a call that fails then passes is passed, and a skip in teardown keeps passed",
 )
 def test_an_error_stays_through_a_rerun_and_a_teardown_skip_changes_nothing(project: Project):
-    """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a skip in teardown keeps `passed`."""
+    """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a failed call doesn't stick."""
     project.write("conftest.py", RERUN_CONFTEST)
     project.tests(RERUN_TESTS)
     project.pytest("--speccheck-results=r.jsonl")
     assert outcomes(project, "r.jsonl") == {
         "test_error_then_clean": "error",
         "test_teardown_skip_keeps_the_call": "passed",
+        "test_fails_then_passes": "passed",
     }
