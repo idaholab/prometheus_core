@@ -9,7 +9,7 @@ working by forwarding to it.
 - Command reference and the Make mapping: [`commands.md`](commands.md)
 - What breaks, and what only behaves differently:
   [`breaking-changes.md`](breaking-changes.md)
-- The independent reviews each step gets before merging:
+- The review panel each step gets before merging, and which reviewers:
   [`reviews.md`](reviews.md)
 - One file per step below. Each step is one pull request and leaves `devel`
   working.
@@ -22,10 +22,13 @@ any code was written.
 
 The hackathon runs on 2026-11-06 (Day 2 follows). Its slides, skills and
 knowledge base are frozen from 2026-11-03 until after Day 2, and so are
-`platform/Makefile`, the docs and repo-wide files such as `.gitattributes`.
-Only step 1 may land before the freeze, and it touches nothing outside
-`platform/ctl/` and the `platform/platformctl` shim: no Makefile, docs,
-slides, skills or required CI jobs. Steps 2 onward land after Day 2.
+`platform/Makefile` and the docs. Only step 1 may land before the freeze. Its
+code stays in `platform/ctl/` and the `platform/platformctl` shim, and it
+changes no Makefile, docs, slides or skills. It does add CI plumbing (its own
+workflow, and `doctor` steps in two existing `test.yml` jobs), a
+`.gitattributes` for the shim and `*.sh`, a drift test, and `.env` created
+0600 by `init_env.py`; `01-scaffold.md` lists them. Steps 2 onward land after
+Day 2.
 
 **Before the freeze, separately from this plan:** the hackathon skills and
 knowledge base still use container names that #310 removed
@@ -45,7 +48,7 @@ LiteLLM text that step 6 fixes). Check them again before each step.
 | # | File | Summary | Depends on | Status |
 |---|------|---------|------------|--------|
 | 1 | [`01-scaffold.md`](01-scaffold.md) | Shim, package, settings, runner, compose target, output, `doctor` framework, test setup, path-filtered CI | - | Not started |
-| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts; `make doctor`, `.gitattributes`, the user guide, required CI | 1 | Not started |
+| 2 | [`02-port-scripts.md`](02-port-scripts.md) | `config init`, `status`, `deeplynx setup`; remove the old scripts; `make doctor`, a wider `.gitattributes`, the user guide, required CI | 1 | Not started |
 | 3a | [`03a-forward-compose.md`](03a-forward-compose.md) | The compose entry file; the Makefile forwards every compose target with the same behaviour | 2 | Not started |
 | 3b | [`03b-labels-attached.md`](03b-labels-attached.md) | Platform labels, "already running elsewhere", port checks, restarting your agent | 3a | Not started |
 | 3c | [`03c-groups-docs.md`](03c-groups-docs.md) | `agents`, `reset`, `compose`, per-service `up`; switch docs, slides and CI to `./platformctl` | 3b | Not started |
@@ -70,6 +73,18 @@ When a step is done, set its status here and in its file to `Done (<date>,
   never count toward coverage.
 - Commands are grouped by what they act on, not by Make target names (see
   `commands.md`); Make only forwards.
+- **Every function, global and class variable has its own brief docstring**, in the package and
+  in the tests (test functions, fixtures, helpers and test constants alike). That includes every
+  field of a dataclass and every class attribute. A variable's docstring is a `"""foo"""` string on
+  the line after its assignment. `tests/unit/test_docstrings.py` fails on a missing one. A
+  docstring says what the thing does or is for, not its name again: "Two problems are counted
+  as \"2 problems\"", not "Several problems are plural".
+- **Tests mirror the code.** The unit tests for `platformctl/system/compose.py` are in
+  `tests/unit/system/test_compose.py`, and `__init__.py` and `__main__.py` map to
+  `test_init.py` and `test_main.py`. A test fails when a module that defines code has no test
+  file at its mirrored path, or a test file has no module (apart from the few tests of the
+  whole tool, such as the secrets canary). Live tests are split by component
+  (`tests/live/`).
 - One file per top-level command in `actions/` (a group's subcommands share
   it until it grows into a package). Only `system/runner.py` starts
   subprocesses. Actions talk to a deployment target, never to
@@ -95,12 +110,11 @@ When a step is done, set its status here and in its file to `Done (<date>,
 - **Useful output:** each command says what it's doing and ends with what
   the user needs next, e.g. `up` ends with what's running and the URLs
   (`design.md`, "Output"). Each step lists the output it adds.
-- **Every step is reviewed before merging** by the reviewer agents listed for
-  it in `reviews.md` (user, agent developer, technical, CI, security,
-  rollout, Linux/WSL, AI skills), each with fresh context; the PR records
-  what was fixed, deferred or rejected. The CI reviewer looks above all for
-  what would break for a user that no test catches, and the simplest test
-  that would.
+- **Every step is reviewed before merging** with the `/review-panel` skill,
+  using the reviewers listed for it in `reviews.md` (user, agent developer,
+  technical, CI and tests, security, rollout, Linux/WSL, AI skills), each with
+  fresh context. The CI reviewer looks above all for what would break for a
+  user that no test catches, and the simplest test that would.
 - Every PR lists its **breaking changes** (`breaking-changes.md`) and has a
   short "What changes for you" block: commands, files created, first-run
   effects, how to roll back.

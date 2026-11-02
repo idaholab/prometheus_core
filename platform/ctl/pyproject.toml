@@ -1,0 +1,55 @@
+[project]
+name = "platformctl"
+version = "0.1.0"
+description = "Run and diagnose the Prometheus platform"
+readme = "README.md"
+requires-python = ">=3.10"
+# Standard library only at runtime: running the platform needs nothing but Python.
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.16",
+]
+
+[build-system]
+requires = ["setuptools>=84.2.1", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["platformctl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+pythonpath = ["."]
+markers = [
+    "live: runs against the real Docker (only with --live; never counted toward coverage)",
+]
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["platformctl"]
+relative_files = true
+
+[tool.coverage.paths]
+# Linux and macOS checkouts differ; combine remaps them onto one tree.
+source = [
+    "platformctl",
+    "*/platform/ctl/platformctl",
+    "*/ctl/platformctl",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_also = ['if __name__ == "__main__":']
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

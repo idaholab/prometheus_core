@@ -1,0 +1,108 @@
+{
+  "checks": [
+    {
+      "area": "laptop",
+      "id": "docker",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "id": "build-cache-store",
+      "tags": [
+        "preflight"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "platform",
+      "id": "platform-env",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "id": "base-image-pin",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "platform",
+      "id": "env-hides-environment",
+      "tags": [
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "platform",
+      "id": "env-derived-keys",
+      "tags": [
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "platform",
+      "id": "env-file",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "id": "ports-free",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "id": "checkout-path",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ],
+      "targets": [
+        "compose"
+      ]
+    }
+  ],
+  "command": "doctor",
+  "ok": true,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1
+}

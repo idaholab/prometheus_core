@@ -207,6 +207,9 @@ def prompt_llm(text: str) -> str:
 def main() -> int:
     if not ENV.exists():
         shutil.copyfile(EXAMPLE, ENV)
+        # Owner-only before any secret is written to it. Later rewrites keep this mode. An
+        # existing .env is left as it is
+        ENV.chmod(0o600)
         print(f"Created {ENV.name} from {EXAMPLE.name}.")
 
     text, filled = fill_secrets(ENV.read_text(), generators(EXAMPLE.read_text()))

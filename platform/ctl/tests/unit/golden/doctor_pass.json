@@ -1,0 +1,132 @@
+{
+  "checks": [
+    {
+      "area": "laptop",
+      "evidence": "Docker Desktop 29.1.0, Compose 2.40.0, context desktop-linux",
+      "fix": "",
+      "fix_kind": "you",
+      "id": "docker",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "evidence": "the containerd image store is on",
+      "fix": "",
+      "fix_kind": "you",
+      "id": "build-cache-store",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight"
+      ]
+    },
+    {
+      "area": "platform",
+      "evidence": "6 required values are set",
+      "fix": "",
+      "fix_kind": "yes",
+      "id": "platform-env",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "evidence": "the base image is containers.github.inl.gov/genesis/prometheus_api:1914b55",
+      "fix": "",
+      "fix_kind": "yes",
+      "id": "base-image-pin",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    },
+    {
+      "area": "platform",
+      "evidence": "no .env value hides a different environment value",
+      "fix": "",
+      "fix_kind": "you",
+      "id": "env-hides-environment",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "diagnose"
+      ]
+    },
+    {
+      "area": "platform",
+      "evidence": ".env sets no key the tool derives",
+      "fix": "",
+      "fix_kind": "you",
+      "id": "env-derived-keys",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "diagnose"
+      ]
+    },
+    {
+      "area": "platform",
+      "evidence": ".env not ignored by git",
+      "fix": "Run `chmod 600 .env` and make sure `.env` is in .gitignore.",
+      "fix_kind": "safe",
+      "id": "env-file",
+      "skipped_because": "",
+      "status": "WARN",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "evidence": "3 ports are free",
+      "fix": "",
+      "fix_kind": "yes",
+      "id": "ports-free",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    },
+    {
+      "area": "laptop",
+      "evidence": "the checkout location is fine",
+      "fix": "",
+      "fix_kind": "you",
+      "id": "checkout-path",
+      "skipped_because": "",
+      "status": "PASS",
+      "tags": [
+        "preflight",
+        "diagnose"
+      ]
+    }
+  ],
+  "command": "doctor",
+  "counts": {
+    "fail": 0,
+    "pass": 8,
+    "skip": 0,
+    "warn": 1
+  },
+  "ok": true,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1
+}

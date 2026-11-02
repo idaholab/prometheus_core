@@ -45,5 +45,13 @@ None.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: user, agent developer, AI skills.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: user, agent developer, AI skills.
+
+Ask them to look at:
+
+- **User:** every fixed command is a `./platformctl` one and works as written; no mention left of
+  podman, the LiteLLM proxy, `clear-litellm-db` or the generate script.
+- **Agent developer:** the container names (`docker exec`, `docker restart`) against a running
+  stack; `troubleshooting.md` no longer listing messages nothing prints.
+- **AI skills:** the skills' `allowed-tools` against the new commands; the decks rebuilt in a
+  separate last commit.

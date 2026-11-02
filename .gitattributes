@@ -1,0 +1,5 @@
+# Files that run on a Unix shell must keep LF line endings, even in a checkout made by
+# Windows git with core.autocrlf=true (for WSL, on /mnt/c): `#!/bin/sh\r` fails with
+# "bad interpreter", before any Python can run and say what is wrong.
+platform/platformctl text eol=lf
+*.sh text eol=lf

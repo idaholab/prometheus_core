@@ -92,7 +92,7 @@ CI job to `./platformctl`.
   - **Prerequisites:** deck 03's "Before you clone" table
     (`03-deployment.md`, "GNU make, git, python3" row) says Python 3.10+,
     found automatically, with one copy-paste install line if there's none
-    (`brew install python@3.12`, or the uv installer); uv and Python 3.12
+    (the uv installer, the shim's only suggestion); uv and Python 3.12
     stop being "only for outside Docker". The "What `make init-env` does"
     slide becomes `config init`.
   - **Older clones:** next to the first `./platformctl` command, one line:
@@ -141,8 +141,24 @@ None beyond 3a and 3b.
 
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Technical:** `up <service...>` building and waiting only for those services; the `compose --`
+  refusals and what `compose --print` shows.
+- **CI and tests:** the CI jobs that switch to `./platformctl`; the docs test (every
+  `./platformctl` line parses) over everything the step touches; no stub left standing.
+- **Security:** `compose --` printing "output is not redacted" on every run; `agents list
+  --registered` never printing `AGENT_SECRET`; skills' `allowed-tools` never listing `compose --`,
+  `reset` or `down`.
+- **AI skills:** `allowed-tools` as wildcards on the shim path with no `cd`; the skills against an
+  older clone; every command an assistant runs works without a terminal.
+- **User:** no mixed `make` and `./platformctl` blocks in the slides, and commands that paste.
+- **Linux/WSL:** the commands in the docs on WSL.
+- **Rollout:** the hackathon freeze (2026-11-03); the `git grep` for the deleted scripts;
+  `breaking-changes.md`.
+- **Agent developer:** `logs --since` and `up <service>` in the loop.
 
 ## Done when
 

@@ -112,10 +112,47 @@ command does. The `--json` schema is versioned (`schema_version` 1).
 - **Docs test:** every check id the skills cite exists in `doctor --list`
   or is listed as manual.
 
+## From the step 1 review
+
+Findings the step 1 review deferred to here. "Checked" means the review's author reproduced it;
+"reported" means a reviewer found it and nobody has reproduced it yet, so reproduce it first.
+
+- **Five step 1 checks are not in `checks.md`** (checked: 0 matches for each): `build-cache-store`,
+  `env-hides-environment`, `env-derived-keys`, `env-file` and `checkout-path`. Add them to the
+  table above, and to `checks.md` when the hackathon freeze lifts. Step 1 promised a test that
+  checks the ids the skills cite against `doctor --list`; the docs test below is that test, so it
+  must pass over these five too. Also compare each check's tags and fix kind with `checks.md`
+  (`ports-free` is `preflight,diagnose` in the tool; the reviewer read `checks.md` as `diagnose`
+  only).
+- **Fix text that says how, and for whom** (reported). The `platform-env` fix says `make init-env`
+  (a raw Make target that prompts in a terminal): tell an assistant to ask the user first. The
+  rootless branch of the daemon-down check tests `info.rootless`, which is always false when
+  `docker info` failed, so "rootless" is never named.
+- **`doctor --json` should say what it checked** (reported): add the selected check ids and the
+  target to the object, since a skill otherwise has to call `--version --json` first.
+- **Timeouts** (reported): the port probe and the Docker calls have timeouts of 0.3 s, 10 s and 30
+  s and no overall limit; a hung daemon can take up to a minute per call. Add `--timeout`, or
+  document the worst case for assistants.
+
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: all eight.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: all eight.
+
+Ask them to look at:
+
+- **Technical:** that every `checks.md` id is a `doctor` check or manual with a reason, as the
+  table says; the agent checks in their own modules, independent of the platform folder (step 7
+  reuses them); the hints printed when `up` fails.
+- **CI and tests:** a test that the ids the skills cite exist in `doctor --list` (step 1 promised
+  it and only some ids matched); each check passing, failing and skipped against recorded output.
+- **Security:** evidence from logs as the matched error class, never the line; a private key found
+  in an agent's `.env` named but not printed; `.env` sync reported as `same` or `differs` only.
+- **AI skills:** `--json` per check with `fix_kind` and `skipped_because`; the `/diagnose` skill
+  using them; how `ok`, `counts.fail` and the exit code relate.
+- **Linux/WSL:** `prometheus.host.internal` from a container (rootless Docker, ufw); the `tools`
+  and `registry-login` checks on a distro.
+- **User and agent developer:** the "Why isn't it called?" group, in words they would act on.
+- **Rollout:** a stale `.platform.env`; keys missing from an existing `.env`.
 
 ## Done when
 

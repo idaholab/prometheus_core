@@ -76,6 +76,7 @@ jobs:
           projects=(
             sdk
             platform/backend
+            platform/ctl
             platform/tests
             platform/scripts:../tests
             platform/agents
@@ -1070,11 +1071,19 @@ jobs:
             -e "s|^DEEPLYNX_PROJECT_ID=.*|DEEPLYNX_PROJECT_ID=$DEEPLYNX_PROJECT_ID|" \
             .env
           rm .env.bak
+      - name: Doctor before the start
+        # Nothing is running yet, so every port must be free, and the .env just
+        # created must pass the checks
+        uses: ./.github/actions/platformctl-doctor
       - name: Start
         # make up waits for every healthcheck, then runs make check: the
         # backend and frontend on their host ports, the frontend's /api proxy,
         # and every agent registered with the backend
         run: make up
+      - name: Doctor with the platform running
+        # The platform's own containers hold the ports, which doctor must not
+        # count against it
+        uses: ./.github/actions/platformctl-doctor
       - name: Sync test environment
         working-directory: platform/tests
         run: uv sync --frozen
@@ -1108,6 +1117,8 @@ jobs:
           make down-v
           make up
           diff "$RUNNER_TEMP/platform.env" .env
+      - name: Doctor after the volumes were deleted
+        uses: ./.github/actions/platformctl-doctor
       - name: Integration tests again
         # Against the stack the last make up started, on empty volumes
         env:
@@ -1189,6 +1200,11 @@ jobs:
         # backend and frontend on their host ports, the frontend's /api proxy,
         # and every agent registered with the backend
         run: make up
+      - name: Doctor with the platform and DeepLynX running
+        # The ports of the platform and of DeepLynX are held by the platform's
+        # own containers, which doctor must not count against it. No doctor
+        # run before the start: make up creates .env, and doctor needs it
+        uses: ./.github/actions/platformctl-doctor
       - name: Sync test environment
         working-directory: platform/tests
         run: uv sync --frozen
@@ -1228,6 +1244,8 @@ jobs:
             echo "::error::make up kept the DeepLynx key from before make down-v"
             exit 1
           fi
+      - name: Doctor after the volumes were deleted
+        uses: ./.github/actions/platformctl-doctor
       - name: Integration tests again
         # With the key make up saved after make down-v
         env:

@@ -1,0 +1,16 @@
+{
+  "command": "doctor",
+  "error": {
+    "check": "",
+    "code": "usage",
+    "hint": "List them with: ./platformctl doctor --list",
+    "message": "unknown check id: nope"
+  },
+  "ok": false,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1
+}

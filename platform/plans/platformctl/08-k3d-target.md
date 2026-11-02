@@ -57,7 +57,27 @@ and `cluster-up` keeps its "already running" message.
 - Checks declare the targets they apply to.
 - Agent discovery returns records, not compose file paths.
 
+## From the step 1 review
+
+- **A target registry** (reported). `context.build` validates the target name and then always
+  builds `ComposeTarget`, and `Context.target` is typed as `ComposeTarget`, so a second target means
+  editing `context.py`. Add a `TARGETS` registry (name to class) and type the field as the base
+  class. `Target.service_url`, `ComposeTarget.build_cache_on` and `Compose.exec` had no callers in
+  step 1: use or drop them.
+- **Git behind an adapter** (reported): `env_checks` and `config.platform_version` call `git`
+  through `ctx.runner` directly. Only `system/` should know argv: add a git adapter.
+
 ## Review
 
-Before merging, run the reviewers in `reviews.md` for this step: technical, CI, security, rollout, Linux/WSL.
-Record each finding in the PR as fixed, deferred or rejected.
+Before merging, run `/review-panel` on the PR (see `reviews.md`) with these reviewers: technical, CI and tests, security, rollout, Linux/WSL.
+
+Ask them to look at:
+
+- **Technical:** that no action changes, only the target and its adapters; `cluster up|down|reset`
+  replacing the `cluster-*` targets and `cluster-up.sh`.
+- **CI and tests:** `cluster-up`'s "already running" output that `test.yml:272` checks; the cost
+  of a cluster in CI.
+- **Security:** acting on the wrong kubectl context; the registry on `localhost:5001`; secrets in
+  manifests or Helm values.
+- **Rollout:** people using `make cluster-*` and the `--cluster` mode of `check-local-prereqs.sh`.
+- **Linux/WSL:** k3d on Docker Desktop and on Engine; the local registry.

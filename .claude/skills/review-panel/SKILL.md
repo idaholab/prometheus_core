@@ -118,7 +118,7 @@ Then adjust:
   notes list a breaking change. A full panel on a patch bump wastes the reviewers' time.
 - If `platform/plans/<name>/reviews.md` names the reviewers for this step, propose those.
 - Give each proposed reviewer a reason of a few words (the path or what the change does). The
-  same reason goes in the question and in the report's reviewer table.
+  same reason goes in the question and on the reviewer's **Why:** line in the report.
 
 ## 3. Ask the user to confirm
 
@@ -183,14 +183,14 @@ If no reviewer is selected, stop and say so.
 1. **Verify before reporting.** Read the code for every blocker and major finding, and run the
    command if one is named. Mark each one `confirmed`, `not reproduced` (say why), or
    `unchecked` (say why). Spot-check the minor findings.
-2. **Outside my focus.** These notes aren't findings, so don't put them in a reviewer's table
-   as they are. Drop a note that another reviewer's findings already cover. When the reviewer
+2. **Outside my focus.** These notes aren't findings, so don't put them in a reviewer's
+   findings as they are. Drop a note that another reviewer's findings already cover. When the reviewer
    who owns that area wasn't on the panel, name the note on the "Not on the panel" line as a
    reason to rerun with them. When no reviewer covered it, check it as you would a minor
    finding, and report it under the reviewer who raised it if it holds up.
 3. **Duplicates.** When two reviewers found the same problem, give the full finding to the
    reviewer who showed it best (usually the one that ran something). The other reviewer's
-   section gets a one-line "Same as CI-2" row, plus anything that reviewer added. If they rated
+   section gets a one-line "Same as CI-2" bullet, plus anything that reviewer added. If they rated
    it differently, keep the higher severity and give both ratings.
 4. **Write the report** exactly as `report-template.md` describes. Show it in the terminal
    in that same format.
@@ -198,5 +198,7 @@ If no reviewer is selected, stop and say so.
 6. Ask (header `Next`) what to do: "Fix the confirmed findings", "Post the report to the PR",
    or "Nothing". Offer posting only for a PR target. Posting is outward-facing, so show the
    exact comment first. Then write it to `$TMPDIR/review-<n>.md` and run `gh pr comment <n>
-   --repo idaholab/prometheus_core --body-file "$TMPDIR/review-<n>.md"`. When findings are
-   fixed later, record each one in the PR as fixed, deferred (to what), or rejected (why).
+   --repo idaholab/prometheus_core --body-file "$TMPDIR/review-<n>.md"`. When fixing
+   findings, follow the report's last line: one commit per finding, with a subject that starts
+   with `review-panel <ID>:`, such as `review-panel SEC-2: <what changed>`. Record each finding in the PR as fixed, deferred
+   (to what), or rejected (why).
