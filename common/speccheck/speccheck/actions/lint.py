@@ -45,10 +45,10 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             ok,
             specs.problems,
             specs=[
-                {"number": s.number, "title": s.title, "status": s.status, "requirements": len(s.requirements)}
+                {"number": s.number, "title": s.title, "status": s.status, "requirement_count": len(s.requirements)}
                 for s in specs.specs
             ],
-            requirements=count,
+            requirement_count=count,
         )
         jsonout.emit(body, ctx.output.out)
     ctx.output.problems(specs.problems)
