@@ -14,21 +14,42 @@
  * answer its /api calls with page.route, and find elements by role and
  * accessible name the way the component tests do. */
 import { expect, test } from "@playwright/test";
-import type { AuthProvider, ConfigResponse, SessionResponse, SetupStatus, User } from "../src/lib/api/types";
+import type {
+  AuthProvider,
+  ConfigResponse,
+  ConversationHistoryResponse,
+  SessionResponse,
+  SetupStatus,
+  User,
+} from "../src/lib/api/types";
 
 /* Stub bodies are typed with the app's own API types, so a change to a
  * response shape fails `npm run typecheck` until the stubs match it. */
 type ErrorBody = { detail: string };
 
+/* The /api calls no stub answered in the current test. The app shrugs off a
+ * 404 in several places, so without this a missing stub would go unnoticed. */
+let unstubbed: string[] = [];
+
 test.beforeEach(async ({ page }) => {
+  unstubbed = [];
   // A signed-out visitor on a set-up install: setup is done, there's no
-  // session and no OIDC provider. Anything else under /api is a 404
-  await page.route("/api/**", (route) => route.fulfill({ status: 404, json: { detail: "Not stubbed" } satisfies ErrorBody }));
+  // session and no OIDC provider. Anything else under /api is a 404, and is
+  // recorded so the test fails
+  await page.route("/api/**", (route) => {
+    const request = route.request();
+    unstubbed.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    return route.fulfill({ status: 404, json: { detail: "Not stubbed" } satisfies ErrorBody });
+  });
   await page.route("/api/setup/status", (route) => route.fulfill({ json: { needs_setup: false } satisfies SetupStatus }));
   await page.route("/api/auth/me", (route) =>
     route.fulfill({ status: 401, json: { detail: "Not authenticated" } satisfies ErrorBody }),
   );
   await page.route("/api/auth/providers", (route) => route.fulfill({ json: [] satisfies AuthProvider[] }));
+});
+
+test.afterEach(() => {
+  expect(unstubbed, "/api calls with no stub; add a page.route for each").toEqual([]);
 });
 
 test("a signed-out visitor sees the sign-in form", async ({ page }) => {
@@ -59,8 +80,9 @@ test("signing in opens the app as the user the server returned", async ({ page }
   // if the app doesn't read the user out of the login response
   const user: User = { identifier: "someone", role: "admin", provider: "local" };
   await page.route("/api/auth/login", (route) => route.fulfill({ json: { user } }));
-  // What the app loads once signed in: its config, a new chat session, and the
-  // live event stream, which stays open with no events
+  // What the app loads once signed in: its config, a new chat session, an
+  // empty chat history, and the live event stream, which stays open with no
+  // events
   await page.route("/api/config", (route) =>
     route.fulfill({
       json: {
@@ -84,6 +106,9 @@ test("signing in opens the app as the user the server returned", async ({ page }
         auto_approve_steps: false,
       } satisfies SessionResponse,
     }),
+  );
+  await page.route("/api/conversations/recent*", (route) =>
+    route.fulfill({ json: { available: true, conversations: [] } satisfies ConversationHistoryResponse }),
   );
   await page.route("/api/events", (route) =>
     route.fulfill({ headers: { "content-type": "text/event-stream" }, body: "" }),
