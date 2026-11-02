@@ -1,0 +1,20 @@
+# speccheck's own config: its specs, and what may prove them. See README.md, "Config".
+
+specs = "specs"
+id-prefix = "SPC"
+require-index = true
+
+# speccheck's unit tests, every leg of the `unit` job in speccheck.yml
+[producers.speccheck-unit]
+specs = "all"
+workflows = ["speccheck"]
+
+# The `speccheck-self-check` job in speccheck.yml. It runs speccheck-verify on the unit legs'
+# results, checks that speccheck-upload refuses an empty folder, then records and uploads with
+# speccheck-upload. `record` is its last step before the upload, so it runs only when all of that passed
+[ci.speccheck-self-check]
+covers = ["SPC-REQ-007-03", "SPC-REQ-007-04", "SPC-REQ-007-05"]
+workflows = ["speccheck"]
+
+[report]
+title = "speccheck requirements"

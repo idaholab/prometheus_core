@@ -1,6 +1,6 @@
 # 1: speccheck
 
-> **Status: Not started**
+> **Status: In review (2026-11-01)**
 
 ## Goal
 
@@ -65,6 +65,30 @@ folder or workflow changes. Branch from `devel`, not from #355.
   report shows that requirement as `failed`.
 - Nothing outside `common/speccheck/`, `.github/actions/speccheck-*/`,
   `.github/workflows/speccheck.yml` and `.github/dependabot.yml` changed.
+
+## As built
+
+What differs from the plan above, or settles something it left open:
+
+- **Job links:** `${{ job.check_run_id }}` exists on github.com, so jobs pass it as
+  `SPECCHECK_JOB_ID` and links go to the job itself (`design.md`, "Job links").
+- **Artifact names:** results are `speccheck-results-<name>`, not `speccheck-<name>`, so the
+  report artifact is never read as results. Retention is 30 days for results and 90 for the report.
+- **A `claimed` status** for `check`, which sees claims but not outcomes. `report` and `--json`
+  show it.
+- **`not run` covers unreported test producers too:** a requirement nobody claims, while a test
+  producer that may claim it hasn't reported, is `not run` (waiting on that producer), not
+  `unclaimed`. Otherwise a partial check would fail on requirements whose producer simply didn't
+  run.
+- **The self-check job** (`speccheck-self-check`) runs `speccheck-verify` on the unit legs'
+  results, checks that the report and summary were written, and checks that `speccheck-upload`
+  refuses an empty folder. Then it records SPC-REQ-007-03 to 007-05 and uploads with
+  `speccheck-upload`. The final job's `verify --complete` therefore fails if either action or
+  `record` breaks.
+- **Coverage** is traced into subprocesses (`patch = ["subprocess"]`), so pytester subprocess runs
+  and xdist workers count. Each leg's data is combined in a `coverage` job, as in platformctl.
+- **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
+  runs both on the PR.
 
 ## Reviewers
 

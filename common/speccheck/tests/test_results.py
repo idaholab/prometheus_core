@@ -1,0 +1,194 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+"""The results file: writing, reading and validating it."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import pytest
+
+from speccheck import results
+
+SCHEMA_FILE = Path(results.__file__).parent / "schema" / "speccheck-results-1.schema.json"
+"""The JSON Schema that ships with the package."""
+
+
+def sample() -> results.ResultsFile:
+    """A results file with one test and one CI job result."""
+    return results.ResultsFile(
+        producer="unit",
+        runner="pytest 9",
+        ci={"run_id": 1, "leg": "3.12"},
+        started="2026-11-01T00:00:00Z",
+        results=[
+            results.Result(
+                test="tests/test_x.py::test_a",
+                covers=["T-REQ-001-01"],
+                outcome="passed",
+                file="tests/test_x.py",
+                line=3,
+            ),
+            results.Result(test="publish", covers=["T-REQ-001-02"], outcome="passed", kind="ci"),
+        ],
+    )
+
+
+def header(**change) -> str:
+    """A header line, with some keys changed."""
+    return json.dumps({"schema": results.SCHEMA, "producer": "unit", **change})
+
+
+def parse_lines(*lines: str):
+    """Parse a file made of the given lines."""
+    return results.parse("\n".join(lines) + "\n", "r.jsonl")
+
+
+@pytest.mark.covers("SPC-REQ-004-01")
+class TestFormat:
+    """JSON Lines with a versioned header, and the schema file."""
+
+    def test_round_trip(self, tmp_path: Path):
+        """A written file reads back the same."""
+        path = tmp_path / "out" / "r.jsonl"
+        results.write(path, sample())
+        lines = path.read_text().splitlines()
+        assert json.loads(lines[0])["schema"] == "speccheck-results-1".replace("-1", "/1")
+        assert len(lines) == 3
+        parsed, problems = results.read(path)
+        assert problems == []
+        assert parsed.producer == "unit" and parsed.ci == {"run_id": 1, "leg": "3.12"}
+        assert [r.to_json() for r in parsed.results] == [r.to_json() for r in sample().results]
+        assert parsed.source == path.as_posix()
+
+    def test_the_schema_ships_and_describes_the_format(self):
+        """Runners in other languages validate against it."""
+        schema = json.loads(SCHEMA_FILE.read_text())
+        assert schema["$defs"]["header"]["properties"]["schema"]["const"] == results.SCHEMA
+        assert schema["$defs"]["result"]["properties"]["outcome"]["enum"] == list(results.OUTCOMES)
+        assert set(schema["$defs"]["header"]["properties"]) == results.HEADER_KEYS
+        assert set(schema["$defs"]["result"]["properties"]) == results.RESULT_KEYS
+        assert set(schema["$defs"]["ci"]["properties"]) == results.CI_KEYS
+
+    def test_blank_lines_are_skipped(self):
+        """A trailing blank line is harmless."""
+        parsed, problems = parse_lines(header(), "", json.dumps({"test": "t", "covers": ["X"], "outcome": "passed"}))
+        assert problems == [] and len(parsed.results) == 1
+
+
+@pytest.mark.covers("SPC-REQ-004-02")
+class TestValidation:
+    """A bad file is a problem, and none of its results count."""
+
+    @pytest.mark.parametrize(
+        ("lines", "message"),
+        [
+            ([], "empty results file"),
+            (["{"], "1: not JSON"),
+            (["[]"], "the first line must be the header"),
+            ([header(schema="speccheck-results/2")], "this speccheck reads only 'speccheck-results/1'"),
+            ([header(extra=1)], "unknown header key `extra`"),
+            ([header(producer="")], "`producer` must not be empty"),
+            ([header(producer=3)], "`producer` must be a string"),
+            ([header(runner="x" * 1001)], "`runner` is longer than 1000"),
+            ([header(ci=[])], "`ci` must be an object or null"),
+            ([header(ci={"bad": 1})], "unknown key `ci.bad`"),
+            ([header(ci={"run_id": [1]})], "`ci.run_id` must be a string, a number or null"),
+            ([header(ci={"run_id": True})], "`ci.run_id` must be a string, a number or null"),
+            ([header(ci={"job": "x" * 1001})], "`ci.job` is longer"),
+            ([header(), "[]"], "2: not a valid speccheck-results/1 line: a result must be an object"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "more": 1}'], "unknown result key `more`"),
+            ([header(), '{"test": "t", "covers": [], "outcome": "passed"}'], "`covers` must be a list of 1 to 200"),
+            ([header(), '{"test": "t", "covers": "X", "outcome": "passed"}'], "`covers` must be a list"),
+            ([header(), '{"test": "t", "covers": [""], "outcome": "passed"}'], "`covers[]` must not be empty"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "ok"}'], "`outcome` is 'ok'"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "kind": "x"}'], "`kind` must be one of"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": -1}'], "`line` must be a whole"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "line": true}'], "`line` must be a whole"),
+            ([header(), '{"test": "", "covers": ["X"], "outcome": "passed"}'], "`test` must not be empty"),
+            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed"}', "{"], "3: not JSON"),
+        ],
+    )
+    def test_rejected(self, lines: list[str], message: str):
+        """Each rule, with the line it's on."""
+        parsed, problems = parse_lines(*lines) if lines else results.parse("", "r.jsonl")
+        assert parsed is None
+        assert len(problems) == 1 and message in str(problems[0]), problems
+
+    def test_null_ci_and_strings_are_fine(self):
+        """A local run's header, and a CI block with null and string values."""
+        assert parse_lines(header(ci=None))[1] == []
+        assert parse_lines(header(ci={"job": "unit", "job_id": None, "run_id": 3}))[1] == []
+
+
+@pytest.mark.covers("SPC-REQ-004-07")
+class TestLimits:
+    """Size limits and symlinks."""
+
+    def test_a_file_over_the_limit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Refused before it is read."""
+        monkeypatch.setattr(results, "MAX_FILE_BYTES", 10)
+        path = tmp_path / "r.jsonl"
+        path.write_text(header() + "\n")
+        parsed, problems = results.read(path)
+        assert parsed is None and "the limit is 10" in str(problems[0])
+
+    def test_a_line_over_the_limit(self):
+        """One huge line is a problem, not a memory spike in json.loads."""
+        parsed, problems = parse_lines(header(), "x" * (results.MAX_LINE_BYTES + 1))
+        assert parsed is None and "2: line longer than" in str(problems[0])
+
+    def test_unreadable_and_not_utf8(self, tmp_path: Path):
+        """A folder named like a file, and bytes that aren't UTF-8."""
+        (tmp_path / "d.jsonl").mkdir()
+        assert "can't read" in str(results.read(tmp_path / "d.jsonl")[1][0])
+        (tmp_path / "b.jsonl").write_bytes(b"\xff\xfe")
+        assert "not UTF-8" in str(results.read(tmp_path / "b.jsonl")[1][0])
+
+    def test_symlinks_are_not_followed(self, tmp_path: Path):
+        """A link in an artifact can't point the reader at a file elsewhere."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        results.write(outside / "r.jsonl", sample())
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        (inputs / "link.jsonl").symlink_to(outside / "r.jsonl")
+        (inputs / "dir").symlink_to(outside, target_is_directory=True)
+        results.write(inputs / "real.jsonl", sample())
+        assert results.collect([inputs]) == [inputs / "real.jsonl"]
+        assert results.collect([inputs / "link.jsonl"]) == []
+
+    def test_read_all(self, tmp_path: Path):
+        """Files and folders; a missing input and a bad file are problems, good files still count."""
+        results.write(tmp_path / "a" / "good.jsonl", sample())
+        (tmp_path / "a" / "bad.jsonl").write_text("{\n")
+        (tmp_path / "a" / "notes.txt").write_text("ignored")
+        files, problems = results.read_all([tmp_path / "a", tmp_path / "missing"])
+        assert [f.producer for f in files] == ["unit"]
+        assert sorted(p.message.split(":")[0] for p in problems) == ["no such results file or folder", "not JSON"]
+
+
+@pytest.mark.covers("SPC-REQ-004-05")
+def test_a_failed_write_leaves_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The file is written to a temporary name and renamed, so a crash leaves no partial file."""
+
+    def broken(*args):
+        """os.replace failing, as on a full disk."""
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", broken)
+    with pytest.raises(OSError):
+        results.write(tmp_path / "r.jsonl", sample())
+    assert list(tmp_path.iterdir()) == []

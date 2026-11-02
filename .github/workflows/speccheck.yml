@@ -1,0 +1,190 @@
+name: speccheck
+
+# The spec checker (common/speccheck) and its two composite actions, checked by speccheck itself.
+# `unit` runs the tests on every supported Python and uploads their results; `speccheck-self-check`
+# runs both composite actions and `record` for real; the final `speccheck` job verifies speccheck's
+# own specs (common/speccheck/specs) from this run's results and publishes the report. Runs
+# only when those paths change, and is not a required check. See common/speccheck/plan/
+
+on:
+  push:
+    branches: [devel]
+    paths:
+      - "common/speccheck/**"
+      - ".github/actions/speccheck-upload/**"
+      - ".github/actions/speccheck-verify/**"
+      - ".github/workflows/speccheck.yml"
+  pull_request:
+    branches: [main, devel]
+    paths:
+      - "common/speccheck/**"
+      - ".github/actions/speccheck-upload/**"
+      - ".github/actions/speccheck-verify/**"
+      - ".github/workflows/speccheck.yml"
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit:
+    name: "speccheck: unit python ${{ matrix.python }}"
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    defaults:
+      run:
+        working-directory: common/speccheck
+    env:
+      SPECCHECK_PRODUCER: speccheck-unit
+      SPECCHECK_LEG: ${{ matrix.python }}
+      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python }}
+          # Nothing here is worth caching, and a cache is one more thing to trust
+          enable-cache: false
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Ruff
+        if: ${{ matrix.python == '3.14' }}
+        run: |
+          uv run --locked --no-sync ruff check --output-format=github .
+          uv run --locked --no-sync ruff format --check --diff .
+      - name: Test
+        # coverage starts before pytest loads speccheck's own plugin, so its import-time lines
+        # count. Each leg writes its own data; the coverage job combines them and enforces 100%,
+        # so a line only one Python version runs (the tomli import) still counts
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.python }}
+        run: >-
+          uv run --locked --no-sync python -I -m coverage run -m pytest --color=yes
+          --speccheck-results=.speccheck/unit-${{ matrix.python }}.jsonl
+      - name: Upload speccheck results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: unit-${{ matrix.python }}
+          path: common/speccheck/.speccheck
+      - name: Upload coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: speccheck-coverage-${{ matrix.python }}
+          path: common/speccheck/.coverage.*
+          include-hidden-files: true
+          if-no-files-found: error
+
+  coverage:
+    name: "speccheck: coverage"
+    needs: unit
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: common/speccheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.25"
+          python-version: "3.14"
+          enable-cache: false
+      - name: Sync environment
+        run: uv sync --locked
+      - name: Download coverage data
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: speccheck-coverage-*
+          path: common/speccheck
+          merge-multiple: true
+      - name: Combine and enforce 100% line and branch coverage
+        # fail_under = 100 is in pyproject.toml
+        run: |
+          uv run --locked --no-sync coverage combine
+          uv run --locked --no-sync coverage report
+
+  speccheck-self-check:
+    # The job's id is the [ci.speccheck-self-check] entry's name: `record` finds its claims by
+    # $GITHUB_JOB, so renaming the job makes verify --complete report the producer as missing.
+    # The composite actions and `record`, run for real. This job is the evidence for the
+    # requirements in [ci.speccheck-self-check] (common/speccheck/speccheck.toml), and records
+    # them only when every step before the record step passed
+    name: "speccheck: self-check"
+    needs: unit
+    runs-on: ubuntu-26.04
+    env:
+      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: speccheck-verify on the unit results
+        # The unit legs' results alone are complete for the speccheck-unit producer; the
+        # self-check job itself hasn't reported yet, so this is a partial check
+        uses: ./.github/actions/speccheck-verify
+        with:
+          config: common/speccheck/speccheck.toml
+          report-name: speccheck-report-self-check
+      - name: The report artifact and the step summary were written
+        run: |
+          test -s "$RUNNER_TEMP/speccheck-report/report.md"
+          python3 -I -c 'import json, sys; body = json.load(open(sys.argv[1])); assert body["command"] == "report" and body["requirements"], body' \
+            "$RUNNER_TEMP/speccheck-report/report.json"
+          grep -q "speccheck requirements" "$GITHUB_STEP_SUMMARY"
+      - name: speccheck-upload refuses an empty folder
+        id: empty-upload
+        continue-on-error: true
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: must-not-exist
+          path: ${{ runner.temp }}/nothing-here
+      - name: The empty upload failed
+        env:
+          OUTCOME: ${{ steps.empty-upload.outcome }}
+        run: test "$OUTCOME" = failure
+      - name: Record speccheck evidence
+        run: python3 -I common/speccheck/run.py record --config common/speccheck/speccheck.toml --output .speccheck/self-check.jsonl
+      - name: Upload speccheck results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: self-check
+          path: .speccheck
+
+  speccheck:
+    # The final job, the same as every workflow that proves requirements will have. It runs even
+    # when a job above failed, so the report shows what was proven, and fails if anything isn't
+    name: "speccheck: verify specs"
+    needs: [unit, speccheck-self-check]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify
+        uses: ./.github/actions/speccheck-verify
+        with:
+          config: common/speccheck/speccheck.toml
+          # speccheck's own producers all run on every event of this workflow
+          complete: "true"

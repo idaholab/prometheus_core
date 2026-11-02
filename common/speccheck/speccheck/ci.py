@@ -1,0 +1,101 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+"""The GitHub Actions context of a run: where it ran, and links to its run and job.
+
+See plan/design.md, "Job links". Everything here comes from environment variables. The workflow
+sets `SPECCHECK_PRODUCER`, `SPECCHECK_LEG` and `SPECCHECK_JOB_ID` (from `${{ job.check_run_id }}`).
+The rest are GitHub's own `GITHUB_*` variables.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping
+from typing import Any
+
+PRODUCER_VAR = "SPECCHECK_PRODUCER"
+"""The producer this run reports as."""
+LEG_VAR = "SPECCHECK_LEG"
+"""The matrix leg, such as a Python version; optional."""
+JOB_ID_VAR = "SPECCHECK_JOB_ID"
+"""The job's numeric check run ID, from `${{ job.check_run_id }}`; optional."""
+
+SERVER = re.compile(r"^https://[A-Za-z0-9.-]+(?::\d+)?$")
+"""A server URL safe to build links from: https, a host name, an optional port, nothing else."""
+REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+"""`owner/name`."""
+DIGITS = re.compile(r"^[1-9][0-9]{0,19}$")
+"""A positive run, attempt or job ID."""
+SHA = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
+"""A full SHA-1 or SHA-256 commit hash."""
+
+
+def in_github_actions(env: Mapping[str, str]) -> bool:
+    """Whether this is a GitHub Actions run."""
+    return env.get("GITHUB_ACTIONS") == "true"
+
+
+def _number(value: Any) -> int | None:
+    """A positive integer from a string or an int, or None for anything else."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and DIGITS.match(value):
+        return int(value)
+    return None
+
+
+def context(env: Mapping[str, str]) -> dict[str, Any] | None:
+    """The `ci` block of a results file header, or None outside GitHub Actions."""
+    if not in_github_actions(env):
+        return None
+    block: dict[str, Any] = {
+        "server": env.get("GITHUB_SERVER_URL", ""),
+        "repository": env.get("GITHUB_REPOSITORY", ""),
+        "workflow": env.get("GITHUB_WORKFLOW", ""),
+        "job": env.get("GITHUB_JOB", ""),
+        "leg": env.get(LEG_VAR, ""),
+        "run_id": _number(env.get("GITHUB_RUN_ID")),
+        "run_attempt": _number(env.get("GITHUB_RUN_ATTEMPT")) or 1,
+        "job_id": _number(env.get(JOB_ID_VAR)),
+        "sha": env.get("GITHUB_SHA", ""),
+        "ref": env.get("GITHUB_REF", ""),
+        "event": env.get("GITHUB_EVENT_NAME", ""),
+    }
+    block["run_url"] = run_url(block)
+    block["job_url"] = job_url(block)
+    return block
+
+
+def run_url(ci: Mapping[str, Any]) -> str:
+    """The run attempt's URL, or "" when the parts aren't safe to build a link from."""
+    server, repository = ci.get("server"), ci.get("repository")
+    run_id, attempt = _number(ci.get("run_id")), _number(ci.get("run_attempt"))
+    if not (isinstance(server, str) and SERVER.match(server)):
+        return ""
+    if not (isinstance(repository, str) and REPOSITORY.match(repository)) or run_id is None:
+        return ""
+    url = f"{server}/{repository}/actions/runs/{run_id}"
+    return f"{url}/attempts/{attempt}" if attempt else url
+
+
+def job_url(ci: Mapping[str, Any]) -> str:
+    """The job's own URL when its ID is known, else the run's URL, else ""."""
+    run = run_url(ci)
+    job_id = _number(ci.get("job_id"))
+    if not run or job_id is None:
+        return run
+    # A job URL has no attempt in it: each attempt's job has its own ID.
+    base = run.split("/attempts/", 1)[0]
+    return f"{base}/job/{job_id}"
