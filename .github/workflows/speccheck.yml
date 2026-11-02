@@ -101,7 +101,6 @@ jobs:
     env:
       SPECCHECK_PRODUCER: speccheck-requirements
       SPECCHECK_LEG: ${{ matrix.python }}
-      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,6 +115,9 @@ jobs:
       - name: Sync environment
         run: uv sync --locked
       - name: Requirements tests
+        env:
+          # The `job` context is only available to steps, not to a job's own `env`
+          SPECCHECK_JOB_ID: ${{ job.check_run_id }}
         run: >-
           uv run --locked --no-sync pytest --color=yes tests/requirements
           --speccheck-results=.speccheck/requirements-${{ matrix.python }}.jsonl
@@ -167,8 +169,6 @@ jobs:
     name: "speccheck: self-check"
     needs: requirements
     runs-on: ubuntu-26.04
-    env:
-      SPECCHECK_JOB_ID: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,6 +199,9 @@ jobs:
           OUTCOME: ${{ steps.empty-upload.outcome }}
         run: test "$OUTCOME" = failure
       - name: Record speccheck evidence
+        env:
+          # The `job` context is only available to steps, not to a job's own `env`
+          SPECCHECK_JOB_ID: ${{ job.check_run_id }}
         run: python3 -I common/speccheck/run.py record --config common/speccheck/speccheck.toml --output .speccheck/self-check.jsonl
       - name: Upload speccheck results
         if: ${{ !cancelled() }}
