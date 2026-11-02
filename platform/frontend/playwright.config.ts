@@ -39,8 +39,9 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
-    // Locally, reuse a preview that's already running instead of rebuilding
-    reuseExistingServer: !CI,
+    // Never reuse a server already on the port: vite preview serves the last
+    // build, so a leftover one would test old code. --strictPort fails instead
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });
