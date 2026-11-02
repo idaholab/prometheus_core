@@ -11,9 +11,12 @@ specs = "all"
 workflows = ["speccheck"]
 
 # The `speccheck-self-check` job in speccheck.yml. It runs speccheck-verify on the requirements legs'
-# results (which installs speccheck with speccheck-install), checks that speccheck-upload refuses an
-# empty folder, then records with the installed `speccheck` and uploads with speccheck-upload.
-# `record` is its last step before the upload, so it runs only when all of that passed
+# results (which installs speccheck with speccheck-install), runs it again with the default report
+# name, checks that it fails on a results file that can't be read and still publishes its report,
+# checks that the workflow grants only `contents: read` and names no secret, checks that
+# speccheck-upload refuses an empty folder, then records with the installed `speccheck` and uploads
+# with speccheck-upload. `record` is its last step before the upload, so it runs only when all of
+# that passed
 [ci.speccheck-self-check]
 covers = ["SPC-REQ-007-03", "SPC-REQ-007-04", "SPC-REQ-007-06"]
 workflows = ["speccheck"]

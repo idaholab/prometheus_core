@@ -194,6 +194,43 @@ jobs:
             "$RUNNER_TEMP/speccheck-report/report.json"
           test -n "$SUMMARY" || { echo "speccheck-verify gave no summary-path" >&2; exit 1; }
           grep -q "speccheck requirements" "$SUMMARY" || { echo "no report summary in $SUMMARY" >&2; exit 1; }
+      - name: speccheck-verify with the default report name
+        # The final job publishes `speccheck-report` too and replaces this one (the upload sets
+        # overwrite), so the default name is exercised here and the final job's report is kept
+        id: default-report
+        uses: ./.github/actions/speccheck-verify
+        with:
+          config: common/speccheck/speccheck.toml
+      - name: The default-named report was uploaded
+        env:
+          ARTIFACT_ID: ${{ steps.default-report.outputs.report-artifact-id }}
+        run: test -n "$ARTIFACT_ID" || { echo "speccheck-verify uploaded no report artifact" >&2; exit 1; }
+      - name: Add a results file that can't be read
+        # download-artifact adds to this folder, so the next speccheck-verify reads this file too
+        run: echo 'not json' > "$RUNNER_TEMP/speccheck-results/bad.jsonl"
+      - name: speccheck-verify on the bad file
+        id: failing-verify
+        continue-on-error: true
+        uses: ./.github/actions/speccheck-verify
+        with:
+          config: common/speccheck/speccheck.toml
+          report-name: speccheck-report-self-check-failing
+      - name: The verify failed, and published its report anyway
+        env:
+          OUTCOME: ${{ steps.failing-verify.outcome }}
+        run: |
+          test "$OUTCOME" = failure || { echo "speccheck-verify was $OUTCOME on a bad results file" >&2; exit 1; }
+          test -s "$RUNNER_TEMP/speccheck-report/report.md"
+          rm "$RUNNER_TEMP/speccheck-results/bad.jsonl"
+      - name: Read-only permissions and no secrets
+        # SPC-REQ-007-04: the workflow grants contents: read and nothing else, no job widens it,
+        # and neither the workflow nor the actions it runs name a secret
+        run: |
+          workflow=.github/workflows/speccheck.yml
+          grep -qx 'permissions:' "$workflow"
+          test "$(grep -A1 -x 'permissions:' "$workflow" | tail -n 1)" = "  contents: read"
+          test "$(grep -cE '^ *permissions:' "$workflow")" = 1
+          ! grep -nE 'secrets\.' "$workflow" .github/actions/speccheck-*/action.yml
       - name: speccheck-upload refuses an empty folder
         id: empty-upload
         continue-on-error: true
