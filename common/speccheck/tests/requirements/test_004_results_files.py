@@ -327,3 +327,62 @@ def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
     )
     assert (ci["run_id"], ci["run_attempt"], ci["sha"]) == (9, 2, "c" * 40)
     assert ci["provider"] == "github"
+
+
+RERUN_CONFTEST = """\
+from _pytest.runner import runtestprotocol
+
+
+def pytest_runtest_protocol(item, nextitem):
+    # What a rerun plugin does: the whole setup, call and teardown again, every report logged
+    item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+    for _ in range(2):
+        for report in runtestprotocol(item, nextitem=nextitem, log=False):
+            item.ihook.pytest_runtest_logreport(report=report)
+    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
+    return True
+"""
+"""A conftest that runs every test twice, the way a rerun plugin does."""
+
+RERUN_TESTS = """\
+import pytest
+
+ATTEMPTS = []
+
+
+@pytest.fixture
+def breaks_on_the_first_attempt():
+    yield
+    ATTEMPTS.append(1)
+    if len(ATTEMPTS) == 1:
+        raise RuntimeError("teardown, first attempt only")
+
+
+@pytest.fixture
+def skips_in_teardown():
+    yield
+    pytest.skip("teardown")
+
+
+@pytest.mark.covers("T-REQ-001-01")
+def test_error_then_clean(breaks_on_the_first_attempt):
+    pass
+
+
+@pytest.mark.covers("T-REQ-001-01")
+def test_teardown_skip_keeps_the_call(skips_in_teardown):
+    pass
+"""
+"""A teardown error on the first attempt only, and a skip in teardown."""
+
+
+@pytest.mark.covers("SPC-REQ-003-07")
+def test_an_error_stays_through_a_rerun_and_a_teardown_skip_changes_nothing(project: Project):
+    """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a skip in teardown keeps `passed`."""
+    project.write("conftest.py", RERUN_CONFTEST)
+    project.tests(RERUN_TESTS)
+    project.pytest("--speccheck-results=r.jsonl")
+    assert outcomes(project, "r.jsonl") == {
+        "test_error_then_clean": "error",
+        "test_teardown_skip_keeps_the_call": "passed",
+    }
