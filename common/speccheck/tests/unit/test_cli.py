@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import io
 import json
-import runpy
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -172,17 +172,21 @@ class TestMain:
         assert ctx.output.out is sys.stdout and ctx.output.err is sys.stderr
 
 
-def test_python_m_speccheck(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+def python(*args: str) -> subprocess.CompletedProcess:
+    """This Python, isolated, in a subprocess: no pytest import hook, so the result is the same under xdist."""
+    return subprocess.run([sys.executable, "-I", *args], capture_output=True, text=True, check=False)
+
+
+def test_python_m_speccheck():
     """`python -m speccheck` runs main and exits with its code."""
-    monkeypatch.setattr(sys, "argv", ["speccheck", "--version"])
-    with pytest.raises(SystemExit) as done:
-        runpy.run_module("speccheck", run_name="__main__")
-    assert done.value.code == 0 and capsys.readouterr().out == f"speccheck {__version__}\n"
+    done = python("-m", "speccheck", "--version")
+    assert (done.returncode, done.stdout) == (0, f"speccheck {__version__}\n")
 
 
-def test_python_m_speccheck_old_python(monkeypatch: pytest.MonkeyPatch):
+def test_python_m_speccheck_old_python():
     """Below Python 3.10, `python -m speccheck` exits saying so, before importing tomli."""
-    monkeypatch.setattr(sys, "version_info", (3, 9, 18, "final", 0))
-    with pytest.raises(SystemExit) as done:
-        runpy.run_module("speccheck", run_name="__main__")
-    assert "needs Python 3.10+" in str(done.value.code)
+    done = python(
+        "-c",
+        "import runpy, sys; sys.version_info = (3, 9, 18, 'final', 0); runpy.run_module('speccheck', run_name='__main__')",
+    )
+    assert done.returncode == 1 and "needs Python 3.10+" in done.stderr
