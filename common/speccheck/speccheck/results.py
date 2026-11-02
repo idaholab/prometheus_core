@@ -228,7 +228,11 @@ def _result(body: Any) -> Result:
 
 def parse(text: str, source: str) -> tuple[ResultsFile | None, list[Problem]]:
     """Parse one file's text; on any problem return None and the problem, so one bad file can't count."""
-    lines = text.splitlines()
+    # Split on "\n" only, as `dumps` writes it: splitlines() also splits on U+2028, U+0085 and the like,
+    # which `ensure_ascii=False` leaves unescaped inside a test ID, and would cut that line in two.
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
     if not lines:
         return None, [Problem(source, 0, "empty results file; the run that wrote it may have crashed")]
     for number, line in enumerate(lines, 1):

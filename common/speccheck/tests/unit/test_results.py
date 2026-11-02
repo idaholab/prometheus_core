@@ -95,6 +95,20 @@ class TestFormat:
         assert set(schema["$defs"]["result"]["properties"]) == results.RESULT_KEYS
         assert set(schema["$defs"]["ci"]["properties"]) == results.CI_KEYS
 
+    @pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
+    def test_a_line_separator_inside_a_test_id_survives(self, separator: str):
+        """Only "\\n" ends a line: `dumps` leaves these three unescaped, and splitlines() would cut the line."""
+        test = f"t.py::test[a{separator}b]"
+        written = results.dumps(results.ResultsFile(producer="unit", results=[results.Result(test, ["X"], "passed")]))
+        parsed, problems = results.parse(written, "r.jsonl")
+        assert problems == [] and [r.test for r in parsed.results] == [test]
+
+    def test_the_last_line_needs_no_newline(self):
+        """A file cut off after its last line, with no "\\n", still reads."""
+        text = header() + "\n" + json.dumps({"test": "t", "covers": ["X"], "outcome": "passed"})
+        parsed, problems = results.parse(text, "r.jsonl")
+        assert problems == [] and len(parsed.results) == 1
+
     def test_blank_lines_are_skipped(self):
         """A trailing blank line is harmless."""
         parsed, problems = parse_lines(header(), "", json.dumps({"test": "t", "covers": ["X"], "outcome": "passed"}))
