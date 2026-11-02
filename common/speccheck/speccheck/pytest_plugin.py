@@ -109,7 +109,10 @@ def _where(item: pytest.Item) -> tuple[str, int]:
 
 
 def _checker(config: pytest.Config):
-    """A function giving the reason an ID may not be claimed (or ""), or None without `speccheck_config`."""
+    """A function giving the reason an ID may not be claimed (or ""), or None without `speccheck_config`.
+
+    With `speccheck_config` a producer is required, from `SPECCHECK_PRODUCER` or `speccheck_producer`.
+    """
     name = config.getini("speccheck_config")
     if not name:
         return None
@@ -121,11 +124,17 @@ def _checker(config: pytest.Config):
         raise pytest.UsageError(f"speccheck: {exc}") from None
     spec_set = specs_module.load(loaded.specs_dir, base, loaded.prefix, loaded.require_index)
     producer_name = os.environ.get(ci.PRODUCER_VAR) or config.getini("speccheck_producer")
-    producer = loaded.producers.get(producer_name) if producer_name else None
-    if producer_name and producer is None:
-        known = ", ".join(sorted(loaded.producers)) or "none"
+    known = ", ".join(sorted(loaded.producers)) or "none"
+    if not producer_name:
+        # Without one, the check of which specs this run may claim would be skipped without a word
+        raise pytest.UsageError(
+            f"speccheck: no producer set; set `speccheck_producer` in the ini options or ${ci.PRODUCER_VAR} "
+            f"(declared in {path}: {known})"
+        )
+    producer = loaded.producers.get(producer_name)
+    if producer is None:
         raise pytest.UsageError(f"speccheck: producer `{producer_name}` isn't declared in {path} (declared: {known})")
-    if producer is not None and producer.ci_job:
+    if producer.ci_job:
         raise pytest.UsageError(f"speccheck: `{producer_name}` is a [ci] job in {path}, not a test run")
     return lambda claimed: claim_problem(claimed, producer, spec_set)
 

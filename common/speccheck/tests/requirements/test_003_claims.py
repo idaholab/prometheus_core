@@ -111,6 +111,21 @@ def test_a_good_claim_passes_collection(project: Project):
     project.pytest().assert_outcomes(passed=1)
 
 
+@pytest.mark.covers("SPC-REQ-003-03")
+def test_a_configured_run_needs_a_producer(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """With `speccheck_config` and no producer, collection fails and names both ways to set one; either works."""
+    project.spec("- T-REQ-001-01: One.")
+    project.ini("speccheck_config = speccheck.toml\n")
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n')
+    monkeypatch.delenv("SPECCHECK_PRODUCER", raising=False)
+    run = project.pytest()
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    err = run.stderr.str()
+    assert "no producer set" in err and "`speccheck_producer`" in err and "$SPECCHECK_PRODUCER" in err
+    monkeypatch.setenv("SPECCHECK_PRODUCER", "unit")
+    project.pytest().assert_outcomes(passed=1)
+
+
 @pytest.mark.covers("SPC-REQ-003-04")
 @pytest.mark.parametrize(
     ("mark", "message"),

@@ -158,7 +158,7 @@ class TestChecker:
 
     def test_the_config_is_beside_the_ini_file(self, tmp_path: Path, loaded: dict):
         """Relative to the ini file's folder, else the rootdir; the specs relative to the same place."""
-        config = fake_config(tmp_path / "ini", ini={"speccheck_config": "speccheck.toml"})
+        config = fake_config(tmp_path / "ini", ini={"speccheck_config": "speccheck.toml", "speccheck_producer": "unit"})
         check = pytest_plugin._checker(config)
         assert loaded["config"] == tmp_path / "ini" / "speccheck.toml"
         assert loaded["specs"][1] == tmp_path / "ini"
@@ -195,6 +195,16 @@ class TestChecker:
         config = fake_config(tmp_path, ini={"speccheck_config": "c.toml", "speccheck_producer": "x"})
         with pytest.raises(pytest.UsageError, match=r"\(declared: none\)"):
             pytest_plugin._checker(config)
+
+    def test_no_producer_stops_the_session(self, tmp_path: Path, loaded: dict):
+        """A configured run with no producer would skip the which-specs check, so it names both ways to set one."""
+        config = fake_config(tmp_path, ini={"speccheck_config": "c.toml"})
+        with pytest.raises(pytest.UsageError) as raised:
+            pytest_plugin._checker(config)
+        assert str(raised.value) == (
+            "speccheck: no producer set; set `speccheck_producer` in the ini options or $SPECCHECK_PRODUCER "
+            f"(declared in {tmp_path / 'c.toml'}: other, publish, unit)"
+        )
 
     def test_a_config_error_stops_the_session(self, tmp_path: Path):
         """A missing config is a usage error, not a traceback."""

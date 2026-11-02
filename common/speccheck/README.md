@@ -176,7 +176,8 @@ def test_results_file_round_trips():
 - The plugin registers the marker, so `--strict-markers` accepts it.
 - With `speccheck_config` in the project's pytest ini options, collection fails (on every run,
   locally too) on a malformed, unknown or retired ID, or one the producer may not claim. The
-  producer is `SPECCHECK_PRODUCER`, or `speccheck_producer` in the ini options:
+  producer is required: `SPECCHECK_PRODUCER`, or `speccheck_producer` in the ini options. Without
+  one, collection fails rather than skip the which-specs check:
 
   ```toml
   [tool.pytest.ini_options]
