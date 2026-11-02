@@ -147,6 +147,16 @@ class TestMain:
         body = json.loads(out)
         assert (code, body["command"], body["error"]["message"]) == (2, "three", "no config; pass --config PATH")
 
+    def test_os_error(self, modules):
+        """An unwritable path is a usage error (2), and with `--json` still one object."""
+        modules.append(fake_module("four", result=NotADirectoryError(20, "Not a directory", "/x/y")))
+        code, out, err = main("four")
+        assert (code, out) == (2, "") and "Not a directory" in err and "/x/y" in err
+        code, out, _ = main("four", "--json")
+        body = json.loads(out)
+        assert (code, body["command"], body["error"]["code"]) == (2, "four", "usage")
+        assert "Not a directory" in body["error"]["message"]
+
     def test_defaults(self, modules, monkeypatch: pytest.MonkeyPatch):
         """With nothing given, main reads sys.argv, the real streams, os.environ and the cwd."""
         seen: list = []

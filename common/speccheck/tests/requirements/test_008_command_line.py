@@ -91,6 +91,17 @@ def test_one_json_object_on_every_exit_path(project: Project):
     ]
 
 
+@pytest.mark.covers("SPC-REQ-008-04")
+def test_an_unwritable_output_is_still_one_json_object(project: Project):
+    """A file in the way of the output folder is a usage error (2) as an object, not a traceback."""
+    project.spec("- T-REQ-001-01: One.")
+    project.write("blocker", "a file, not a folder")
+    done = command(project, "report", "--json", "--output", "blocker/report.md")
+    body = json.loads(done.stdout)
+    assert done.returncode == 2 and body["ok"] is False and body["error"]["code"] == "usage"
+    assert "blocker" in body["error"]["message"] and "Traceback" not in done.stderr
+
+
 @pytest.mark.covers("SPC-REQ-008-05")
 def test_problems_on_stderr_and_a_summary_last(project: Project):
     """stdout stays clean on failure; the last line counts statuses and names the producers."""

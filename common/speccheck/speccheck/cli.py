@@ -146,3 +146,6 @@ def main(
         return args._run(ctx, args)
     except ConfigError as exc:
         return fail(str(exc))
+    except OSError as exc:
+        # An unwritable output path or an unreadable file: report it as the one JSON object, not a traceback
+        return fail(str(exc))
