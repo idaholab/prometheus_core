@@ -167,7 +167,8 @@ steps and in the PR that adds it:
 - **A half-migrated suite breaks local pytest.** With `speccheck_config` set, collection checks every
   claim in the spec folder on every run, locally too. One malformed, unknown or retired ID, or one
   the producer may not claim, stops pytest before any test runs. Migrate a whole spec at a time, and
-  use `pytest -o speccheck_config=` to iterate meanwhile.
+  use `pytest -o speccheck_config=` to iterate meanwhile. That turns every check off only when no
+  results file is asked for.
 - **Docstring and comment citations stop counting, silently.** Only
   `@pytest.mark.covers("ID", "how")` counts. Until a test carries the marker, its requirement is `unclaimed`, and `verify` fails on it,
   but nothing complains about the old citation.
