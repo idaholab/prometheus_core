@@ -10,80 +10,112 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""`speccheck record`, with a fake CI environment, and what verify makes of its file."""
+"""`speccheck record`: a CI job's results file, from its `[ci.<job>]` entry."""
 
 from __future__ import annotations
 
+import argparse
+import json
+from pathlib import Path
+
 import pytest
 
-from speccheck import results
-from tests.conftest import CONFIG, Repo
+from speccheck import __version__, results
+from speccheck.actions import record
+from speccheck.config import ConfigError
+from tests.unit.conftest import ci_job, make_config, make_ctx, namespace, out, producer
 
 FAKE_CI = {
     "GITHUB_ACTIONS": "true",
     "GITHUB_SERVER_URL": "https://github.com",
     "GITHUB_REPOSITORY": "o/r",
-    "GITHUB_WORKFLOW": "ci",
     "GITHUB_JOB": "publish",
     "GITHUB_RUN_ID": "11",
     "GITHUB_RUN_ATTEMPT": "1",
     "SPECCHECK_JOB_ID": "22",
 }
 """A fake GitHub Actions job named `publish`."""
+CONFIG = make_config(producer("unit"), ci_job("publish", "T-REQ-001-01", "T-REQ-001-02"))
+"""A config with one test producer and one CI job."""
 
 
-@pytest.fixture
-def ci_repo(repo: Repo) -> Repo:
-    """A repo whose config has a `[ci.publish]` job claiming one requirement."""
-    repo.write("speccheck.toml", CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-01"]\nworkflows = ["ci"]\n')
-    repo.spec("- T-REQ-001-01: Published.\n- T-REQ-001-02: Tested. ⚠ untested")
-    return repo
+def run(tmp_path: Path, env: dict[str, str] | None = None, **args) -> tuple[int, str]:
+    """Run `record` in `tmp_path`; the exit code and stdout."""
+    ctx = make_ctx(tmp_path, loaded=CONFIG, env=env, json_mode=args.pop("json_mode", False))
+    code = record.run(ctx, namespace(job=args.pop("job", None), **args))
+    return code, out(ctx)
 
 
-class TestRecord:
-    """Writing a CI job's results."""
+def test_the_arguments():
+    """`--job` and `--output`, both optional."""
+    parser = argparse.ArgumentParser()
+    record.add_arguments(parser)
+    assert vars(parser.parse_args([])) == {"job": None, "output": None}
 
-    def test_record_in_a_fake_ci_job(self, ci_repo: Repo):
-        """One passed `ci` result per ID, with the job link; verify counts it."""
-        run = ci_repo.run("record", env=FAKE_CI)
-        assert run.code == 0, run.err
-        assert run.out == "speccheck record: publish recorded T-REQ-001-01 in .speccheck/publish.jsonl\n"
-        parsed, problems = results.read(ci_repo.root / ".speccheck" / "publish.jsonl")
-        assert problems == []
-        assert parsed.producer == "publish" and parsed.runner.startswith("speccheck record ")
-        assert parsed.ci["job_url"] == "https://github.com/o/r/actions/runs/11/job/22"
-        assert [r.to_json() for r in parsed.results] == [
-            {"test": "publish", "covers": ["T-REQ-001-01"], "outcome": "passed", "kind": "ci"}
-        ]
-        verify = ci_repo.run("verify", ".speccheck", "--json")
-        assert verify.json()["requirements"][0]["status"] == "passed"
 
-    def test_job_and_output_options(self, ci_repo: Repo):
-        """`--job` and `--output` win over the environment; SPECCHECK_RESULTS over the default."""
-        assert ci_repo.run("record", "--job", "publish", "--output", "a.jsonl").code == 0
-        assert (ci_repo.root / "a.jsonl").is_file()
-        assert ci_repo.run("record", env={**FAKE_CI, "SPECCHECK_RESULTS": "b.jsonl"}).code == 0
-        assert (ci_repo.root / "b.jsonl").is_file()
+def test_in_a_ci_job(tmp_path: Path):
+    """One passed `ci` result for the job's IDs, with the CI context and the version."""
+    code, text = run(tmp_path, FAKE_CI)
+    assert code == 0
+    assert text == "speccheck record: publish recorded T-REQ-001-01, T-REQ-001-02 in .speccheck/publish.jsonl\n"
+    parsed, problems = results.read(tmp_path / ".speccheck" / "publish.jsonl")
+    assert problems == []
+    assert (parsed.producer, parsed.runner) == ("publish", f"speccheck record {__version__}")
+    assert parsed.ci["job_url"] == "https://github.com/o/r/actions/runs/11/job/22"
+    assert parsed.started.endswith("Z")
+    assert [r.to_json() for r in parsed.results] == [
+        {"test": "publish", "covers": ["T-REQ-001-01", "T-REQ-001-02"], "outcome": "passed", "kind": "ci"}
+    ]
 
-    def test_json(self, ci_repo: Repo):
-        """The job, its IDs and the file written."""
-        body = ci_repo.run("record", "--json", env=FAKE_CI).json()
-        assert (body["job"], body["covers"]) == ("publish", ["T-REQ-001-01"])
-        assert body["path"].endswith("publish.jsonl")
 
-    @pytest.mark.parametrize(
-        ("argv", "env", "message"),
-        [
-            (["record"], {}, "no job name: pass --job NAME"),
-            (["record", "--job", "unit"], {}, "no [ci.unit] entry for this job (CI jobs: publish)"),
-            (["record", "--job", "other"], {}, "no [ci.other] entry"),
-        ],
-    )
-    def test_no_entry_is_exit_2(self, ci_repo: Repo, argv, env, message):
-        """A job without a `[ci.<job>]` entry, or a test producer, can't record."""
-        run = ci_repo.run(*argv, env=env)
-        assert run.code == 2 and message in run.err
+def test_outside_ci(tmp_path: Path):
+    """`--job` names the entry, and the header has no CI block."""
+    assert run(tmp_path, job="publish")[0] == 0
+    assert results.read(tmp_path / ".speccheck" / "publish.jsonl")[0].ci is None
 
-    def test_no_ci_jobs_at_all(self, repo: Repo):
-        """The message says there are none."""
-        assert "(CI jobs: none)" in repo.run("record", "--job", "x").err
+
+@pytest.mark.parametrize(
+    ("args", "env", "written"),
+    [
+        ({"output": "a.jsonl"}, {"SPECCHECK_RESULTS": "b.jsonl"}, "a.jsonl"),
+        ({}, {"SPECCHECK_RESULTS": "b.jsonl"}, "b.jsonl"),
+        ({"output": "ABS"}, {}, "abs/c.jsonl"),
+    ],
+)
+def test_where_it_writes(tmp_path: Path, args, env, written):
+    """`--output`, else SPECCHECK_RESULTS, else .speccheck/<job>.jsonl; an absolute path as given."""
+    if args.get("output") == "ABS":
+        args["output"] = str(tmp_path / "abs" / "c.jsonl")
+    assert run(tmp_path, env, job="publish", **args)[0] == 0
+    assert (tmp_path / written).is_file()
+
+
+def test_json(tmp_path: Path):
+    """The job, its IDs and the file written."""
+    code, text = run(tmp_path, FAKE_CI, json_mode=True)
+    body = json.loads(text)
+    assert (code, body["command"], body["job"]) == (0, "record", "publish")
+    assert body["covers"] == ["T-REQ-001-01", "T-REQ-001-02"]
+    assert body["path"] == str(tmp_path / ".speccheck" / "publish.jsonl")
+
+
+@pytest.mark.parametrize(
+    ("job", "message"),
+    [
+        (None, "no job name: pass --job NAME"),
+        ("unit", "no [ci.unit] entry for this job (CI jobs: publish)"),
+        ("other", "no [ci.other] entry"),
+    ],
+)
+def test_no_entry_is_a_config_error(tmp_path: Path, job, message):
+    """No job name, a test producer, or an unknown name: nothing is written."""
+    with pytest.raises(ConfigError, match=message.replace("[", r"\[").replace("(", r"\(").replace(")", r"\)")):
+        run(tmp_path, job=job)
+    assert not (tmp_path / ".speccheck").exists()
+
+
+def test_no_ci_jobs_at_all(tmp_path: Path):
+    """The message says there are none."""
+    ctx = make_ctx(tmp_path, loaded=make_config(producer("unit")))
+    with pytest.raises(ConfigError, match=r"\(CI jobs: none\)"):
+        record.run(ctx, namespace(job="x"))

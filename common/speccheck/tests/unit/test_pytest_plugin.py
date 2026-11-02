@@ -10,429 +10,390 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The pytest plugin, tested by running real inner pytest sessions through `pytester`.
+"""The pytest plugin's functions and hooks, called directly with fake items, reports and configs.
 
-These are the parts that can only fail in a real run: marker levels, the collection check, the
-outcome of every kind of test, xdist, and writing the file only when asked.
+Two small pytester runs at the end check the wiring the fakes can't: that pytest loads the plugin,
+calls its hooks by their names, and stops a session on a bad claim. Every outcome, xdist, and the
+CI context in a real run are proven in tests/requirements/test_003 and test_004.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 from speccheck import pytest_plugin, results
-from tests.conftest import CONFIG, Repo, spec
-
-INNER_SPEC = """\
-- T-REQ-001-01: One.
-- T-REQ-001-02: Two.
-- T-REQ-001-03: Three.
-- T-REQ-001-04: Four.
-- T-REQ-001-05: Five.
-- T-REQ-001-06: Retired. Gone.
-"""
-"""The requirements the inner projects claim."""
-
-OUTCOMES_TESTS = """\
-import pytest
-
-@pytest.fixture
-def broken_teardown():
-    yield
-    raise RuntimeError("teardown")
-
-@pytest.fixture
-def broken_setup():
-    raise RuntimeError("setup")
-
-@pytest.mark.covers("T-REQ-001-01")
-def test_passes():
-    pass
-
-@pytest.mark.covers("T-REQ-001-02")
-def test_skipped():
-    pytest.skip("not today")
-
-@pytest.mark.covers("T-REQ-001-03")
-@pytest.mark.xfail(reason="known")
-def test_xfailed():
-    assert False
-
-@pytest.mark.covers("T-REQ-001-04")
-def test_teardown_fails(broken_teardown):
-    pass
-
-@pytest.mark.covers("T-REQ-001-05")
-def test_deselected_one():
-    pass
-
-@pytest.mark.covers("T-REQ-001-05")
-def test_setup_fails(broken_setup):
-    pass
-
-@pytest.mark.covers("T-REQ-001-05")
-@pytest.mark.xfail(reason="known")
-def test_xpassed():
-    pass
-
-@pytest.mark.covers("T-REQ-001-05")
-def test_fails():
-    assert False
-
-@pytest.mark.covers("T-REQ-001-05")
-@pytest.mark.skipif(True, reason="never")
-def test_skipped_in_setup():
-    pass
-
-def test_claims_nothing():
-    pass
-"""
-"""An inner test file with one claiming test of every outcome."""
+from speccheck.pytest_plugin import CLAIMS, WORKER_KEY
+from tests.unit.conftest import ci_job, make_config, make_specs, producer
 
 
-def project(pytester: pytest.Pytester, tests: str = OUTCOMES_TESTS, *, ini: str = "") -> Path:
-    """An inner project: config, specs, and a test file. `ini` adds pytest ini options."""
-    pytester.makefile(".toml", speccheck=CONFIG)
-    pytester.mkdir("specs")
-    (pytester.path / "specs" / "000-index.md").write_text("- [001](001-thing.md)\n")
-    (pytester.path / "specs" / "001-thing.md").write_text(spec(INNER_SPEC))
-    pytester.makeini(f"[pytest]\naddopts = -p no:cacheprovider\n{ini}")
-    pytester.makepyfile(test_inner=tests)
-    return pytester.path
+def item(*marks: pytest.MarkDecorator, nodeid: str = "t.py::test_a", line: int | None = 2) -> SimpleNamespace:
+    """A fake test item carrying real `covers` marks, closest first, at `t.py` line `line` (0-based)."""
+    found = [m.mark for m in marks]
+    return SimpleNamespace(
+        nodeid=nodeid,
+        location=("t.py", line, "test_a"),
+        iter_markers=lambda name: [m for m in found if m.name == name],
+    )
 
 
-def outcomes(path: Path) -> dict[str, str]:
-    """Test name -> outcome, from a results file."""
-    parsed, problems = results.read(path)
-    assert problems == []
-    return {r.test.split("::")[1]: r.outcome for r in parsed.results}
+def report(when: str, outcome: str, *, xfail: bool = False, nodeid: str = "t.py::test_a") -> SimpleNamespace:
+    """A fake TestReport for one phase."""
+    fake = SimpleNamespace(
+        nodeid=nodeid, when=when, passed=outcome == "passed", failed=outcome == "failed", skipped=outcome == "skipped"
+    )
+    if xfail:
+        fake.wasxfail = "reason"
+    return fake
 
 
-def test_the_marker_is_registered(pytester: pytest.Pytester):
-    """`--strict-markers` accepts `covers` with no config at all, and `--markers` lists it."""
-    pytester.makepyfile('import pytest\n@pytest.mark.covers("X")\ndef test_a():\n    pass\n')
-    pytester.runpytest("--strict-markers").assert_outcomes(passed=1)
-    assert "covers(*ids)" in pytester.runpytest("--markers").stdout.str()
+def fake_config(tmp_path: Path, *, ini: dict[str, str] | None = None, option: str | None = None, **attrs: Any):
+    """A fake pytest config: ini values, the `--speccheck-results` option, and an empty claims stash."""
+    ini = ini or {}
+    return SimpleNamespace(
+        getini=lambda name: ini.get(name, ""),
+        getoption=lambda name: option,
+        invocation_params=SimpleNamespace(dir=tmp_path),
+        inipath=tmp_path / "pytest.ini",
+        rootpath=tmp_path,
+        stash={CLAIMS: {}},
+        **attrs,
+    )
 
 
-def test_marks_on_every_level_add_up(pytester: pytest.Pytester):
-    """Module, class, function and parameter marks, each ID once."""
-    tests = """\
-import pytest
-pytestmark = pytest.mark.covers("T-REQ-001-01")
-
-@pytest.mark.covers("T-REQ-001-02")
-class TestThing:
-    @pytest.mark.covers("T-REQ-001-03", "T-REQ-001-01")
-    def test_method(self):
-        pass
-
-@pytest.mark.parametrize("n", [1, pytest.param(2, marks=pytest.mark.covers("T-REQ-001-04"))])
-def test_param(n):
-    pass
-"""
-    project(pytester, tests)
-    path = pytester.path / "r.jsonl"
-    pytester.runpytest(f"--speccheck-results={path}").assert_outcomes(passed=3)
-    parsed, _ = results.read(path)
-    covers = {r.test.split("::", 1)[1]: r.covers for r in parsed.results}
-    assert covers == {
-        "TestThing::test_method": ["T-REQ-001-03", "T-REQ-001-01", "T-REQ-001-02"],
-        "test_param[1]": ["T-REQ-001-01"],
-        "test_param[2]": ["T-REQ-001-04", "T-REQ-001-01"],
-    }
+covers = pytest.mark.covers
+"""The marker, for building marks."""
 
 
-class TestCollectionCheck:
-    """With `speccheck_config`, a bad claim fails collection."""
+class TestOptions:
+    """What the plugin adds to pytest's command line and ini file, and what `configure` sets up."""
 
-    def test_bad_claims_fail_collection(self, pytester: pytest.Pytester):
-        """Malformed, unknown and retired IDs, each with the test and what to do."""
-        tests = """\
-import pytest
+    def test_addoption(self):
+        """`--speccheck-results`, `speccheck_config` and `speccheck_producer`."""
+        added: dict[str, list] = {"options": [], "ini": []}
+        group = SimpleNamespace(addoption=lambda *args, **kwargs: added["options"].append(args[0]))
+        parser = SimpleNamespace(getgroup=lambda name: group, addini=lambda name, *rest: added["ini"].append(name))
+        pytest_plugin.pytest_addoption(parser)
+        assert added == {"options": ["--speccheck-results"], "ini": ["speccheck_config", "speccheck_producer"]}
 
-@pytest.mark.covers("T-REQ-1-1")
-def test_malformed():
-    pass
-
-@pytest.mark.covers("T-REQ-001-09")
-def test_unknown():
-    pass
-
-@pytest.mark.covers("T-REQ-001-06")
-def test_retired():
-    pass
-"""
-        project(pytester, tests, ini="speccheck_config = speccheck.toml\nspeccheck_producer = unit\n")
-        run = pytester.runpytest()
-        assert run.ret == pytest.ExitCode.USAGE_ERROR
-        err = run.stderr.str()
-        assert "speccheck: 3 claim(s) the spec folder doesn't allow" in err
-        assert "test_inner.py:3: test_inner.py::test_malformed: `T-REQ-1-1` is not an ID of this folder" in err
-        assert "test_inner.py::test_unknown: T-REQ-001-09 isn't in any spec" in err
-        assert "test_inner.py::test_retired: T-REQ-001-06 is retired; claim what replaced it" in err
-
-    def test_a_producer_limited_to_other_specs(self, pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch):
-        """SPECCHECK_PRODUCER picks the producer whose `specs` limit applies."""
-        project(
-            pytester,
-            'import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n',
-            ini="speccheck_config = speccheck.toml\n",
+    @pytest.mark.parametrize("worker", [False, True])
+    def test_configure(self, tmp_path: Path, worker: bool):
+        """The marker line, an empty claims dict, a Recorder; a worker shares its claims in `workeroutput`."""
+        lines, registered = [], []
+        config = SimpleNamespace(
+            addinivalue_line=lambda key, line: lines.append((key, line)),
+            stash={},
+            pluginmanager=SimpleNamespace(register=lambda plugin, name: registered.append((plugin, name))),
         )
-        (pytester.path / "speccheck.toml").write_text(CONFIG + '\n[producers.other]\nspecs = ["002"]\n')
-        monkeypatch.setenv("SPECCHECK_PRODUCER", "other")
-        run = pytester.runpytest()
-        assert run.ret == pytest.ExitCode.USAGE_ERROR
-        assert "which producer `other` may not claim" in run.stderr.str()
-        monkeypatch.setenv("SPECCHECK_PRODUCER", "unit")
-        pytester.runpytest().assert_outcomes(passed=1)
+        if worker:
+            config.workeroutput = {}
+        pytest_plugin.pytest_configure(config)
+        assert lines[0][0] == "markers" and lines[0][1].startswith("covers(*ids):")
+        assert config.stash[CLAIMS] == {}
+        recorder, name = registered[0]
+        assert isinstance(recorder, pytest_plugin.Recorder) and recorder.claims is config.stash[CLAIMS]
+        assert name == f"speccheck-recorder-{id(config)}"
+        if worker:
+            assert config.workeroutput[WORKER_KEY] is config.stash[CLAIMS]
 
-    def test_a_good_claim_and_no_producer(self, pytester: pytest.Pytester):
-        """Without a producer, only the ID itself is checked."""
-        project(
-            pytester,
-            'import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n',
-            ini="speccheck_config = speccheck.toml\n",
-        )
-        pytester.runpytest().assert_outcomes(passed=1)
+
+class TestMarks:
+    """Reading the `covers` marks of one test."""
+
+    def test_ids_add_up_in_order_each_once(self):
+        """Closest first, as pytest's `iter_markers` gives them; a repeat is dropped."""
+        assert pytest_plugin.ids_of(item(covers("A", "B"), covers("C", "A"))) == ["A", "B", "C"]
+        assert pytest_plugin.ids_of(item()) == []
 
     @pytest.mark.parametrize(
-        ("setup", "message"),
+        ("marks", "message"),
         [
-            ("speccheck_config = missing.toml\n", "missing.toml: can't read the config"),
-            ("speccheck_config = speccheck.toml\nspeccheck_producer = nobody\n", "producer `nobody` isn't declared"),
-            ("speccheck_config = speccheck.toml\nspeccheck_producer = publish\n", "`publish` is a [ci] job"),
+            ([covers("A")], ""),
+            ([covers()], "`covers` needs at least one ID"),
+            ([covers(3)], '`covers` IDs are strings, such as "SPC-REQ-001-01"; got 3'),
+            ([covers("")], "`covers` IDs are strings, such as \"SPC-REQ-001-01\"; got ''"),
+            ([covers("A", why="x", how="y")], "`covers` takes IDs only, not keywords (how, why)"),
+            ([covers("A"), covers()], "`covers` needs at least one ID"),
         ],
     )
-    def test_config_errors(self, pytester: pytest.Pytester, setup: str, message: str):
-        """A missing config, an unknown producer, or a CI job as a test run, stop the session."""
-        project(pytester, "def test_a():\n    pass\n", ini=setup)
-        (pytester.path / "speccheck.toml").write_text(CONFIG + '\n[ci.publish]\ncovers = ["T-REQ-001-01"]\n')
-        run = pytester.runpytest()
-        assert run.ret == pytest.ExitCode.USAGE_ERROR
-        assert message in run.stderr.str()
+    def test_bad_args(self, marks, message):
+        """The first malformed mark on any level, or ""."""
+        assert pytest_plugin._bad_args(item(*marks)) == message
+
+    def test_where_is_one_based(self):
+        """pytest's 0-based line, plus one; 0 when pytest doesn't know it."""
+        assert pytest_plugin._where(item(line=2)) == ("t.py", 3)
+        assert pytest_plugin._where(item(line=None)) == ("t.py", 0)
+
+
+class TestChecker:
+    """The collection check, built from `speccheck_config`."""
+
+    @pytest.fixture
+    def loaded(self, monkeypatch: pytest.MonkeyPatch) -> dict:
+        """The config and specs the checker sees, instead of reading files; what it asked for."""
+        asked: dict = {}
+        cfg = make_config(producer("unit"), producer("other", may_claim=("002",)), ci_job("publish", "T-REQ-001-01"))
+
+        def load(path):
+            """Note the path; return the config."""
+            asked["config"] = path
+            return cfg
+
+        def load_specs(*args):
+            """Note the arguments; return one spec of one requirement."""
+            asked["specs"] = args
+            return make_specs("It.")
+
+        monkeypatch.setattr(pytest_plugin.config_module, "load", load)
+        monkeypatch.setattr(pytest_plugin.specs_module, "load", load_specs)
+        return asked
+
+    def test_without_a_config_there_is_no_check(self, tmp_path: Path):
+        """None, and nothing is read."""
+        assert pytest_plugin._checker(fake_config(tmp_path)) is None
+
+    def test_the_config_is_beside_the_ini_file(self, tmp_path: Path, loaded: dict):
+        """Relative to the ini file's folder, else the rootdir; the specs relative to the same place."""
+        config = fake_config(tmp_path / "ini", ini={"speccheck_config": "speccheck.toml"})
+        check = pytest_plugin._checker(config)
+        assert loaded["config"] == tmp_path / "ini" / "speccheck.toml"
+        assert loaded["specs"][1] == tmp_path / "ini"
+        assert check("T-REQ-001-01") == "" and "isn't in any spec" in check("T-REQ-001-09")
+        config.inipath = None
+        pytest_plugin._checker(config)
+        assert loaded["config"] == tmp_path / "ini" / "speccheck.toml"
+
+    def test_the_producer_limits_the_claims(self, tmp_path: Path, loaded: dict, monkeypatch: pytest.MonkeyPatch):
+        """From SPECCHECK_PRODUCER first, else the ini option."""
+        config = fake_config(tmp_path, ini={"speccheck_config": "c.toml", "speccheck_producer": "unit"})
+        assert pytest_plugin._checker(config)("T-REQ-001-01") == ""
+        monkeypatch.setenv("SPECCHECK_PRODUCER", "other")
+        assert "producer `other` may not claim" in pytest_plugin._checker(config)("T-REQ-001-01")
+
+    @pytest.mark.parametrize(
+        ("name", "message"),
+        [
+            ("nobody", "speccheck: producer `nobody` isn't declared in {path} (declared: other, publish, unit)"),
+            ("publish", "speccheck: `publish` is a [ci] job in {path}, not a test run"),
+        ],
+    )
+    def test_a_bad_producer_stops_the_session(self, tmp_path: Path, loaded: dict, name, message):
+        """An undeclared producer, or a CI job, as a test run."""
+        config = fake_config(tmp_path, ini={"speccheck_config": "c.toml", "speccheck_producer": name})
+        with pytest.raises(pytest.UsageError) as raised:
+            pytest_plugin._checker(config)
+        assert str(raised.value) == message.format(path=tmp_path / "c.toml")
+
+    def test_no_producers_declared(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """The message says none are."""
+        monkeypatch.setattr(pytest_plugin.config_module, "load", lambda path: make_config())
+        monkeypatch.setattr(pytest_plugin.specs_module, "load", lambda *args: make_specs())
+        config = fake_config(tmp_path, ini={"speccheck_config": "c.toml", "speccheck_producer": "x"})
+        with pytest.raises(pytest.UsageError, match=r"\(declared: none\)"):
+            pytest_plugin._checker(config)
+
+    def test_a_config_error_stops_the_session(self, tmp_path: Path):
+        """A missing config is a usage error, not a traceback."""
+        config = fake_config(tmp_path, ini={"speccheck_config": "missing.toml"})
+        with pytest.raises(pytest.UsageError, match="speccheck: .*missing.toml: can't read the config"):
+            pytest_plugin._checker(config)
+
+
+class TestCollection:
+    """`pytest_collection_modifyitems`: recording claims, and failing on bad ones."""
+
+    def collect(self, config, *items, checker=None, monkeypatch: pytest.MonkeyPatch) -> dict:
+        """Run the hook with `checker` standing in for `_checker`; the claims recorded."""
+        monkeypatch.setattr(pytest_plugin, "_checker", lambda config: checker)
+        pytest_plugin.pytest_collection_modifyitems(None, config, list(items))
+        return config.stash[CLAIMS]
+
+    def test_claims_are_recorded_as_collected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Each claiming test with its IDs and place; a test that claims nothing is left out."""
+        config = fake_config(tmp_path)
+        claims = self.collect(config, item(covers("A", "B")), item(nodeid="t.py::test_b"), monkeypatch=monkeypatch)
+        assert claims == {"t.py::test_a": {"covers": ["A", "B"], "file": "t.py", "line": 3, "outcome": "collected"}}
+
+    def test_without_a_config_ids_are_not_checked(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Any string is recorded."""
+        claims = self.collect(fake_config(tmp_path), item(covers("anything")), monkeypatch=monkeypatch)
+        assert claims["t.py::test_a"]["covers"] == ["anything"]
+
+    def test_every_bad_claim_is_listed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """A malformed mark and each disallowed ID, at the test, with control characters written out."""
+        items = [
+            item(covers(), nodeid="t.py::test_empty"),
+            item(covers("ok", "bad\n::error::"), nodeid="t.py::test_bad", line=9),
+        ]
+        with pytest.raises(pytest.UsageError) as raised:
+            self.collect(
+                fake_config(tmp_path), *items, checker=lambda id_: "" if id_ == "ok" else "no", monkeypatch=monkeypatch
+            )
+        assert str(raised.value).splitlines() == [
+            "speccheck: 2 claim(s) the spec folder doesn't allow:",
+            "t.py:3: t.py::test_empty: `covers` needs at least one ID",
+            "t.py:10: t.py::test_bad: no",
+        ]
 
 
 @pytest.mark.parametrize(
-    ("mark", "message"),
+    ("when", "outcome", "xfail", "expected"),
     [
-        ("pytest.mark.covers()", "`covers` needs at least one ID"),
-        ("pytest.mark.covers(3)", "`covers` IDs are strings"),
-        ('pytest.mark.covers("")', "`covers` IDs are strings"),
-        ('pytest.mark.covers("T-REQ-001-01", why="x")', "`covers` takes IDs only, not keywords (why)"),
+        ("call", "passed", False, "passed"),
+        ("call", "passed", True, "xpassed"),
+        ("call", "skipped", False, "skipped"),
+        ("call", "skipped", True, "xfailed"),
+        ("call", "failed", False, "failed"),
+        ("setup", "passed", False, None),
+        ("setup", "failed", False, "error"),
+        ("setup", "skipped", False, "skipped"),
+        ("setup", "skipped", True, "xfailed"),
+        ("teardown", "passed", False, None),
+        ("teardown", "failed", False, "error"),
     ],
 )
-def test_malformed_marks_fail_collection(pytester: pytest.Pytester, mark: str, message: str):
-    """Even without a config: the mark itself is wrong."""
-    pytester.makepyfile(f"import pytest\n@{mark}\ndef test_a():\n    pass\n")
-    run = pytester.runpytest()
-    assert run.ret == pytest.ExitCode.USAGE_ERROR
-    assert message in run.stderr.str()
-
-
-def test_unconfigured_it_does_nothing(pytester: pytest.Pytester):
-    """No config, no results path: nothing is checked or written, and outcomes are pytest's own."""
-    project(pytester)
-    run = pytester.runpytest("-k", "not deselected_one")
-    run.assert_outcomes(passed=3, failed=1, skipped=2, xfailed=1, xpassed=1, errors=2, deselected=1)
-    assert sorted(p.name for p in pytester.path.iterdir() if p.suffix == ".jsonl") == []
-
-
-def test_a_docstring_mention_is_not_a_claim(pytester: pytest.Pytester):
-    """Only the marker counts."""
-    project(pytester, 'def test_a():\n    """Covers T-REQ-001-01."""\n    # Covers T-REQ-001-02\n')
-    path = pytester.path / "r.jsonl"
-    pytester.runpytest(f"--speccheck-results={path}").assert_outcomes(passed=1)
-    assert results.read(path)[0].results == []
-
-
-def test_every_outcome_is_recorded(pytester: pytest.Pytester):
-    """Each phase merged into one outcome; skipped and deselected tests are written too."""
-    project(pytester)
-    path = pytester.path / "r.jsonl"
-    # Deselecting a test that claims nothing too: it is still not written
-    pytester.runpytest(f"--speccheck-results={path}", "-k", "not deselected_one and not claims_nothing")
-    assert outcomes(path) == {
-        "test_passes": "passed",
-        "test_skipped": "skipped",
-        "test_xfailed": "xfailed",
-        "test_teardown_fails": "error",
-        "test_deselected_one": "deselected",
-        "test_setup_fails": "error",
-        "test_xpassed": "xpassed",
-        "test_fails": "failed",
-        "test_skipped_in_setup": "skipped",
-    }
+def test_phase_outcome(when, outcome, xfail, expected):
+    """What one phase says: a passing setup or teardown says nothing."""
+    assert pytest_plugin.phase_outcome(report(when, outcome, xfail=xfail)) == expected
 
 
 @pytest.mark.parametrize(
     ("phases", "expected"),
     [
-        ([("setup", "passed", False), ("call", "passed", False), ("teardown", "passed", False)], "passed"),
-        ([("setup", "passed", False), ("call", "passed", False), ("teardown", "failed", False)], "error"),
-        ([("setup", "passed", False), ("call", "passed", False), ("teardown", "skipped", False)], "passed"),
-        ([("setup", "failed", False), ("teardown", "passed", False)], "error"),
-        ([("setup", "skipped", False), ("teardown", "passed", False)], "skipped"),
-        ([("setup", "skipped", True)], "xfailed"),
-        ([("setup", "passed", False), ("call", "failed", False), ("teardown", "failed", False)], "error"),
-        ([("setup", "passed", True), ("call", "skipped", True)], "xfailed"),
-        ([("setup", "passed", True), ("call", "passed", True)], "xpassed"),
+        ([("setup", "passed"), ("call", "passed"), ("teardown", "passed")], "passed"),
+        ([("setup", "passed"), ("call", "passed"), ("teardown", "failed")], "error"),
+        ([("setup", "passed"), ("call", "passed"), ("teardown", "skipped")], "passed"),
+        ([("setup", "failed"), ("teardown", "passed")], "error"),
+        ([("setup", "skipped"), ("teardown", "passed")], "skipped"),
+        ([("setup", "passed"), ("call", "failed"), ("teardown", "failed")], "error"),
+        ([("setup", "failed"), ("teardown", "skipped")], "error"),
     ],
 )
 def test_phases_merge(phases, expected):
-    """Every phase combination: an error in setup or teardown wins; a teardown skip changes nothing."""
-
-    def report(when: str, outcome: str, xfail: bool) -> SimpleNamespace:
-        """A fake TestReport for one phase."""
-        fake = SimpleNamespace(
-            when=when, passed=outcome == "passed", failed=outcome == "failed", skipped=outcome == "skipped"
-        )
-        if xfail:
-            fake.wasxfail = "reason"
-        return fake
-
+    """An error in setup or teardown wins; a teardown skip changes nothing."""
     outcome = "collected"
-    for when, result, xfail in phases:
-        outcome = pytest_plugin.merge(outcome, report(when, result, xfail))
+    for when, result in phases:
+        outcome = pytest_plugin.merge(outcome, report(when, result))
     assert outcome == expected
 
 
-def test_collect_only_writes_collected(pytester: pytest.Pytester):
-    """`--collect-only` runs nothing, so every claim is `collected`."""
-    project(pytester)
-    path = pytester.path / "c.jsonl"
-    pytester.runpytest("--collect-only", "-q", f"--speccheck-results={path}")
-    assert set(outcomes(path).values()) == {"collected"}
+CLAIM = {"covers": ["T-REQ-001-01"], "file": "t.py", "line": 3}
+"""One recorded claim, without its outcome."""
 
 
-class TestWritingOnlyWhenAsked:
-    """The option, the variable, and no file after an interrupted session."""
+class TestRecorder:
+    """The session's hooks, on a fake config."""
 
-    def test_the_environment_variable(self, pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch):
-        """SPECCHECK_RESULTS, relative to where pytest was started, and the producer from SPECCHECK_PRODUCER."""
-        project(pytester)
-        monkeypatch.setenv("SPECCHECK_RESULTS", "out/r.jsonl")
-        monkeypatch.setenv("SPECCHECK_PRODUCER", "unit")
-        pytester.runpytest("-q")
-        parsed, _ = results.read(pytester.path / "out" / "r.jsonl")
-        assert parsed.producer == "unit" and parsed.runner.startswith("pytest ") and parsed.started.endswith("Z")
-        assert parsed.ci is None
+    def recorder(self, tmp_path: Path, **kwargs) -> pytest_plugin.Recorder:
+        """A Recorder on a fake config holding one claim, still `collected`."""
+        recorder = pytest_plugin.Recorder(fake_config(tmp_path, **kwargs))
+        recorder.claims["t.py::test_a"] = {**CLAIM, "outcome": "collected"}
+        return recorder
 
-    def test_the_producer_defaults(self, pytester: pytest.Pytester):
-        """From the ini option, else `local`."""
-        project(pytester, "def test_a():\n    pass\n", ini="speccheck_producer = unit\n")
-        pytester.runpytest("--speccheck-results=a.jsonl")
-        assert results.read(pytester.path / "a.jsonl")[0].producer == "unit"
-        pytester.makeini("[pytest]\n")
-        pytester.runpytest("--speccheck-results=b.jsonl")
-        assert results.read(pytester.path / "b.jsonl")[0].producer == "local"
+    def test_deselected(self, tmp_path: Path):
+        """A deselected claiming test is marked; one that claims nothing is ignored."""
+        recorder = self.recorder(tmp_path)
+        recorder.pytest_deselected([item(), item(nodeid="other")])
+        assert recorder.claims["t.py::test_a"]["outcome"] == "deselected" and "other" not in recorder.claims
 
-    def test_an_interrupted_session_leaves_no_file(self, pytester: pytest.Pytester):
-        """A KeyboardInterrupt mid-run: no file, so verify reports the producer as missing."""
-        project(
-            pytester, "import pytest\n@pytest.mark.covers('T-REQ-001-01')\ndef test_a():\n    raise KeyboardInterrupt\n"
+    def test_logreport_merges_each_phase(self, tmp_path: Path):
+        """Into the claiming test's outcome; another test's report changes nothing."""
+        recorder = self.recorder(tmp_path)
+        for phase in (report("setup", "passed"), report("call", "failed"), report("call", "passed", nodeid="other")):
+            recorder.pytest_runtest_logreport(phase)
+        assert recorder.claims["t.py::test_a"]["outcome"] == "failed" and "other" not in recorder.claims
+
+    def test_merging_workers_keeps_the_run_outcome(self, tmp_path: Path):
+        """Every worker collects every test; the one that ran it has the real outcome; deselected beats collected."""
+        recorder = self.recorder(tmp_path)
+
+        def node(nodeid: str, outcome: str) -> SimpleNamespace:
+            """A finished worker that reports one claim."""
+            return SimpleNamespace(workeroutput={WORKER_KEY: {nodeid: {**CLAIM, "outcome": outcome}}})
+
+        for outcome in ("deselected", "collected", "passed", "collected", "deselected"):
+            recorder.pytest_testnodedown(node("t.py::test_a", outcome), None)
+        assert recorder.claims["t.py::test_a"]["outcome"] == "passed"
+        recorder.pytest_testnodedown(node("t.py::new", "collected"), None)
+        assert recorder.claims["t.py::new"]["outcome"] == "collected"
+        recorder.pytest_testnodedown(SimpleNamespace(), None)  # a worker that crashed has no workeroutput
+
+    def test_sessionfinish_writes_the_file(self, tmp_path: Path):
+        """Sorted by test, with the producer from the ini option, the runner and the start time."""
+        recorder = self.recorder(tmp_path, option="out/r.jsonl", ini={"speccheck_producer": "unit"})
+        recorder.claims["a.py::test_first"] = {**CLAIM, "outcome": "passed"}
+        recorder.pytest_sessionstart(None)
+        recorder.pytest_sessionfinish(None, pytest.ExitCode.TESTS_FAILED)
+        parsed, problems = results.read(tmp_path / "out" / "r.jsonl")
+        assert problems == []
+        assert (parsed.producer, parsed.ci, parsed.started) == ("unit", None, recorder.started)
+        assert parsed.runner == f"pytest {pytest.__version__}" and parsed.started.endswith("Z")
+        assert [(r.test, r.outcome, r.file, r.line) for r in parsed.results] == [
+            ("a.py::test_first", "passed", "t.py", 3),
+            ("t.py::test_a", "collected", "t.py", 3),
+        ]
+
+    def test_the_producer(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """SPECCHECK_PRODUCER, else the ini option, else `local`; the CI context from the environment."""
+        recorder = self.recorder(tmp_path, option="a.jsonl")
+        recorder.pytest_sessionfinish(None, 0)
+        assert results.read(tmp_path / "a.jsonl")[0].producer == "local"
+        monkeypatch.setenv("SPECCHECK_PRODUCER", "env")
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        recorder.pytest_sessionfinish(None, 0)
+        parsed = results.read(tmp_path / "a.jsonl")[0]
+        assert parsed.producer == "env" and parsed.ci is not None
+
+    @pytest.mark.parametrize("status", list(pytest_plugin.NO_WRITE))
+    def test_no_file_after_an_unfinished_session(self, tmp_path: Path, status):
+        """Interrupted, crashed or a usage error: the run proves nothing."""
+        self.recorder(tmp_path, option="r.jsonl").pytest_sessionfinish(None, status)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_no_file_when_not_asked_or_on_a_worker(self, tmp_path: Path):
+        """Without a path, or on an xdist worker, which has `workerinput`."""
+        self.recorder(tmp_path).pytest_sessionfinish(None, 0)
+        self.recorder(tmp_path, option="r.jsonl", workerinput={}).pytest_sessionfinish(None, 0)
+        assert list(tmp_path.iterdir()) == []
+
+
+class TestResultsPath:
+    """Where the file goes."""
+
+    def test_the_option_then_the_variable(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """`--speccheck-results` wins over SPECCHECK_RESULTS; relative to where pytest started."""
+        assert pytest_plugin.results_path(fake_config(tmp_path)) is None
+        monkeypatch.setenv("SPECCHECK_RESULTS", "env.jsonl")
+        assert pytest_plugin.results_path(fake_config(tmp_path)) == tmp_path / "env.jsonl"
+        assert pytest_plugin.results_path(fake_config(tmp_path, option="opt.jsonl")) == tmp_path / "opt.jsonl"
+
+    def test_an_absolute_path(self, tmp_path: Path):
+        """As given."""
+        path = tmp_path / "elsewhere" / "r.jsonl"
+        assert pytest_plugin.results_path(fake_config(Path("/start"), option=str(path))) == path
+
+
+class TestWiring:
+    """pytest loads the plugin and calls its hooks by name."""
+
+    def test_a_run_records_its_claims(self, pytester: pytest.Pytester):
+        """The marker is registered, and a real session writes its claims with their outcomes."""
+        pytester.makepyfile(
+            'import pytest\n@pytest.mark.covers("X")\ndef test_a():\n    pass\n'
+            '@pytest.mark.covers("Y")\ndef test_b():\n    pass\n'
         )
-        # In a subprocess: an in-process KeyboardInterrupt would reach the outer session's tracer too
-        run = pytester.runpytest_subprocess("--speccheck-results=r.jsonl")
-        assert run.ret == pytest.ExitCode.INTERRUPTED
-        assert not (pytester.path / "r.jsonl").exists()
+        pytester.runpytest("--strict-markers", "-k", "not test_b", "--speccheck-results=r.jsonl").assert_outcomes(
+            passed=1, deselected=1
+        )
+        parsed, _ = results.read(pytester.path / "r.jsonl")
+        assert [(r.covers, r.outcome) for r in parsed.results] == [(["X"], "passed"), (["Y"], "deselected")]
 
-    def test_a_usage_error_leaves_no_file(self, pytester: pytest.Pytester):
-        """A bad claim stops the session before it runs, and nothing is written."""
-        project(pytester, "import pytest\n@pytest.mark.covers()\ndef test_a():\n    pass\n")
-        pytester.runpytest("--speccheck-results=r.jsonl")
-        assert not (pytester.path / "r.jsonl").exists()
-
-
-def test_xdist_writes_once_from_the_controller(pytester: pytest.Pytester):
-    """With two workers, one file with every test's real outcome, not a worker's `collected`."""
-    project(pytester)
-    path = pytester.path / "x.jsonl"
-    pytester.runpytest_subprocess("-p", "xdist", "-n", "2", f"--speccheck-results={path}", "-k", "not deselected_one")
-    assert outcomes(path) == {
-        "test_passes": "passed",
-        "test_skipped": "skipped",
-        "test_xfailed": "xfailed",
-        "test_teardown_fails": "error",
-        "test_deselected_one": "deselected",
-        "test_setup_fails": "error",
-        "test_xpassed": "xpassed",
-        "test_fails": "failed",
-        "test_skipped_in_setup": "skipped",
-    }
-    assert [p.name for p in pytester.path.glob("*.jsonl")] == ["x.jsonl"]
-
-
-def test_a_worker_never_writes(pytester: pytest.Pytester):
-    """The write hook returns early on a worker, which has `workerinput`."""
-    config = SimpleNamespace(workerinput={})
-    recorder = pytest_plugin.Recorder.__new__(pytest_plugin.Recorder)
-    recorder.config, recorder.claims = config, {}
-    recorder.pytest_sessionfinish(None, 0)  # would fail on getoption if it went on
-
-
-def test_merging_workers_keeps_the_run_outcome():
-    """Every worker collects every test; the one that ran it has the real outcome."""
-    recorder = pytest_plugin.Recorder.__new__(pytest_plugin.Recorder)
-    recorder.claims = {}
-    claim = {"covers": ["X"], "file": "f", "line": 1}
-
-    def node(outcome: str) -> SimpleNamespace:
-        """A finished worker that reports one claim."""
-        return SimpleNamespace(workeroutput={pytest_plugin.WORKER_KEY: {"t": {**claim, "outcome": outcome}}})
-
-    for outcome in ("collected", "passed", "collected", "deselected"):
-        recorder.pytest_testnodedown(node(outcome), None)
-    assert recorder.claims["t"]["outcome"] == "passed"
-    recorder.pytest_testnodedown(SimpleNamespace(), None)
-
-
-def test_a_ci_run_writes_the_context(pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch):
-    """In GitHub Actions the header carries the run, and links to it."""
-    project(pytester, "def test_a():\n    pass\n")
-    for name, value in {
-        "GITHUB_ACTIONS": "true",
-        "GITHUB_SERVER_URL": "https://github.com",
-        "GITHUB_REPOSITORY": "o/r",
-        "GITHUB_RUN_ID": "9",
-        "GITHUB_RUN_ATTEMPT": "1",
-        "SPECCHECK_LEG": "3.12",
-    }.items():
-        monkeypatch.setenv(name, value)
-    pytester.runpytest("--speccheck-results=r.jsonl")
-    header = json.loads((pytester.path / "r.jsonl").read_text().splitlines()[0])
-    assert header["ci"]["leg"] == "3.12"
-    assert header["ci"]["run_url"] == "https://github.com/o/r/actions/runs/9/attempts/1"
-
-
-def test_a_skipped_claim_fails_verify_and_a_passing_one_passes(
-    pytester: pytest.Pytester, repo: Repo, monkeypatch: pytest.MonkeyPatch
-):
-    """End to end: an inner run writes the file, and `verify` on it decides the requirement."""
-    tests = """\
-import os
-import pytest
-
-@pytest.mark.covers("T-REQ-001-01")
-def test_it():
-    if os.environ.get("SKIP_IT"):
-        pytest.skip("skipped on purpose")
-"""
-    project(pytester, tests, ini="speccheck_config = speccheck.toml\nspeccheck_producer = unit\n")
-    (pytester.path / "specs" / "001-thing.md").write_text(spec("- T-REQ-001-01: One."))
-    repo.root = pytester.path
-
-    pytester.runpytest("--speccheck-results=pass.jsonl").assert_outcomes(passed=1)
-    run = repo.run("verify", "--complete", "pass.jsonl")
-    assert run.code == 0, run.err
-    assert "1 requirement: 1 passed" in run.out
-
-    monkeypatch.setenv("SKIP_IT", "1")
-    pytester.runpytest("--speccheck-results=skip.jsonl").assert_outcomes(skipped=1)
-    run = repo.run("verify", "--complete", "skip.jsonl")
-    assert run.code == 1
-    assert "T-REQ-001-01 has no passing result: test_inner.py::test_it skipped in unit" in run.err
+    def test_a_bad_mark_stops_the_session(self, pytester: pytest.Pytester):
+        """The collection hook's UsageError reaches pytest as a usage error."""
+        pytester.makepyfile("import pytest\n@pytest.mark.covers()\ndef test_a():\n    pass\n")
+        run = pytester.runpytest()
+        assert run.ret == pytest.ExitCode.USAGE_ERROR and "`covers` needs at least one ID" in run.stderr.str()

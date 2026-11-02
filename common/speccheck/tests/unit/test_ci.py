@@ -100,3 +100,33 @@ class TestLinks:
         assert ci.run_url({"server": "https://ghe.example:8443", "repository": "a/b", "run_id": 5}) == (
             "https://ghe.example:8443/a/b/actions/runs/5"
         )
+
+
+@pytest.mark.parametrize(
+    ("value", "number"),
+    [
+        ("1", 1),
+        ("456", 456),
+        (7, 7),
+        ("0", None),
+        ("01", None),
+        ("-1", None),
+        ("1.5", None),
+        (" 1", None),
+        ("1" * 21, None),
+        (0, None),
+        (-3, None),
+        (True, None),
+        (None, None),
+        (1.0, None),
+    ],
+)
+def test_number(value, number):
+    """Only a positive whole number, from a string of digits or an int; never a bool."""
+    assert ci._number(value) == number
+
+
+def test_in_github_actions():
+    """Only `GITHUB_ACTIONS=true`."""
+    assert ci.in_github_actions({"GITHUB_ACTIONS": "true"})
+    assert not any(ci.in_github_actions({"GITHUB_ACTIONS": v}) for v in ("1", "True", ""))

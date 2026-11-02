@@ -10,14 +10,44 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Spec parsing, ported from #355's tests without the citation and `tests:` rules."""
+"""Reading a spec folder: file names, the index, the header, bullets and markers; and the ID syntax."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from speccheck import specs
-from tests.conftest import INDEX, Repo, spec
+from tests.conftest import INDEX, spec
+
+
+class Repo:
+    """A spec folder under a temporary root, with the index most tests start from."""
+
+    def __init__(self, root: Path) -> None:
+        """Write `specs/000-index.md` linking spec 001."""
+        self.root = root
+        """The root paths in problems are relative to."""
+        self.write("specs/000-index.md", INDEX)
+
+    def write(self, name: str, text: str) -> Path:
+        """Write a file under the root."""
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def spec(self, body: str, **kwargs) -> Path:
+        """Write spec 001 (or `number=`, named `name=`) with `body` as its requirements."""
+        name = kwargs.pop("name", f"{kwargs.get('number', '001')}-thing.md")
+        return self.write(f"specs/{name}", spec(body, **kwargs))
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Repo:
+    """A fresh spec folder."""
+    return Repo(tmp_path)
 
 
 def problems(repo: Repo, prefix: str = "T", require_index: bool = True) -> list[str]:
@@ -64,25 +94,14 @@ class TestFilesAndIndex:
         repo.spec("", title="Spec format")
         assert specs.load(repo.root / "specs", repo.root, "T").specs[0].title == "Spec format"
 
-    def test_a_mention_in_the_index_is_not_a_listing(self, repo: Repo):
-        """The number or file name in prose, a code span or a link to another file doesn't list a spec."""
-        repo.write(
-            "specs/000-index.md",
-            "# Index\n\nSpec 002 and 002-other.md are below; `002-other.md` too.\n\n"
-            "| 002 | Other | draft |\n\n- [001](001-thing.md)\n- [elsewhere](../x/002-other.md)\n",
-        )
+    def test_an_unlinked_spec_is_named(self, repo: Repo):
+        """The index's problem says which file and how to link it."""
+        repo.write("specs/000-index.md", "# Index\n\nSpec 002 is below.\n\n- [001](001-thing.md)\n")
         repo.spec("")
         repo.spec("", number="002", name="002-other.md")
-        assert_problems(repo, "the index doesn't link 002-other.md")
-
-    def test_the_index_may_link_in_any_markdown_form(self, repo: Repo):
-        """A table cell, a list item, `./`, an anchor and a title-less link all list the spec."""
-        repo.write(
-            "specs/000-index.md", "# Index\n\n| 001 | [Thing](./001-thing.md#purpose) |\n\n* [002](002-other.md)\n"
-        )
-        repo.spec("")
-        repo.spec("", number="002", name="002-other.md")
-        assert_problems(repo)
+        assert problems(repo) == [
+            "specs/000-index.md: the index doesn't link 002-other.md; list it as `[002](002-other.md)`"
+        ]
 
     def test_a_missing_index_fails_only_when_required(self, repo: Repo):
         """The index is the entry point, unless the config says a folder has none."""
@@ -270,6 +289,64 @@ class TestProblems:
     def test_a_path_outside_the_root_is_printed_as_given(self, tmp_path: Path):
         """`rel` falls back to the path itself."""
         assert specs.rel(Path("/elsewhere/x.md"), tmp_path) == "/elsewhere/x.md"
+
+
+@pytest.mark.parametrize(
+    ("index", "linked"),
+    [
+        ("- [001](001-thing.md)", True),
+        ("| 001 | [Thing](./001-thing.md#purpose) |", True),
+        ("* [x](001-thing.md)", True),
+        ("[](001-thing.md)", True),
+        ("Spec 001 and 001-thing.md, in prose.", False),
+        ("`001-thing.md`", False),
+        ("| 001 | Thing | draft |", False),
+        ("- [elsewhere](../x/001-thing.md)", False),
+        ("- [other](001-thing.md.bak)", False),
+        ("- [other](x001-thing.md)", False),
+    ],
+)
+def test_links_to(index: str, linked: bool):
+    """Only a markdown link to the file itself lists it; a mention doesn't."""
+    assert specs.links_to(index, "001-thing.md") is linked
+
+
+class TestSyntax:
+    """One folder's ID patterns."""
+
+    @pytest.mark.parametrize(
+        ("prefix", "good", "bad"),
+        [
+            ("T", ["T-REQ-001-01", "T-BEH-123-99"], ["REQ-001-01", "T-REQ-1-1", "T-XYZ-001-01", "U-REQ-001-01"]),
+            ("", ["REQ-001-01", "BEH-001-01"], ["T-REQ-001-01", "REQ-001-1"]),
+        ],
+    )
+    def test_ids(self, prefix: str, good: list[str], bad: list[str]):
+        """A whole ID in this folder's form, and nothing else."""
+        syntax = specs.Syntax(prefix)
+        assert all(syntax.id.fullmatch(i) for i in good) and not any(syntax.id.fullmatch(i) for i in bad)
+        assert syntax.id.fullmatch(good[0]).group("number") == good[0].split("-")[-2]
+
+    @pytest.mark.parametrize(
+        ("line", "starts", "well_formed"),
+        [
+            ("- T-REQ-001-01: Text.", True, True),
+            ("- T-REQ-001-01 Text.", True, False),
+            ("* T-REQ-001-01: Text.", True, False),
+            ("- **T-REQ-001-01**: Text.", True, False),
+            ("  - T-REQ-001-01: Text.", True, False),
+            ("+ T-BEH-001-01: Text.", True, False),
+            ("- T-REQ-001-01:", True, False),
+            ("- REQ-001-01: Text.", True, False),
+            ("- Some text about T-REQ-001-01.", False, False),
+            ("T-REQ-001-01: not a bullet", False, False),
+        ],
+    )
+    def test_bullets(self, line: str, starts: bool, well_formed: bool):
+        """Every list style starts a bullet, so none slips past as text; only `- ID: text` is well-formed."""
+        syntax = specs.Syntax("T")
+        assert bool(syntax.bullet_start.match(line)) is starts
+        assert bool(syntax.bullet.match(line)) is well_formed
 
     def test_the_example_id_has_the_prefix(self):
         """Messages show an ID in the folder's own form."""

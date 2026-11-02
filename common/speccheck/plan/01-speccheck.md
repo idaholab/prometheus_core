@@ -92,7 +92,12 @@ What differs from the plan above, or settles something it left open:
     user sees: the CLI, real inner pytest runs and the files they write. Every test there claims
     what it proves, and none of it counts toward coverage.
   - A collection rule in `tests/conftest.py` fails on a mark in the unit suite, or a missing one in
-    the requirements suite. `test_rules.py` checks that the requirements files mirror the specs.
+    the requirements suite. `tests/rules/` (rules about the code base, run beside the unit tests
+    and not measured) checks that the unit files mirror the package and the requirements files
+    mirror the specs.
+  - Unit tests build their inputs in memory (`tests/unit/conftest.py`) and call one module
+    directly: no CLI round trip, no subprocess, and only two small pytester runs for the plugin's
+    wiring. The command line and real runs are the requirements suite's job.
   - The producer is `speccheck-requirements`, uploaded by the `requirements` job. The `unit` job
     uploads only coverage data.
   - Why: a requirement claimed from a helper's unit test proves the helper, not the promise, and

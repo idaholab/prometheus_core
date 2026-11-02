@@ -36,8 +36,6 @@ SOURCES = [*sorted(PACKAGE.rglob("*.py")), *sorted(TESTS.rglob("*.py")), ROOT / 
 """Every Python file the rules cover."""
 EXEMPT_NAMES = {"__all__", "__slots__", "pytestmark"}
 """Names Python or pytest read by name, which carry no documentation of their own."""
-CROSS_CUTTING = {"test_rules.py"}
-"""Tests of the whole code base rather than one module."""
 HEADER = "# SPDX-License-Identifier: MIT"
 """The last line of the copyright header every file starts with."""
 
@@ -110,7 +108,7 @@ def test_the_docstring_checker_finds_what_it_should():
 
 
 def expected_test_for(source: Path) -> Path:
-    """The test file that mirrors a module: `actions/check.py` -> `tests/actions/test_check.py`."""
+    """The test file that mirrors a module: `actions/check.py` -> `tests/unit/actions/test_check.py`."""
     relative = source.relative_to(PACKAGE)
     name = {"__init__": "init", "__main__": "main"}.get(relative.stem, relative.stem.lstrip("_"))
     return UNIT / relative.parent / f"test_{name}.py"
@@ -130,9 +128,7 @@ def test_tests_mirror_the_code():
     ]
     assert missing == [], "missing test files: " + ", ".join(missing)
     sources = {expected_test_for(p) for p in PACKAGE.rglob("*.py")}
-    orphans = [
-        str(t.relative_to(ROOT)) for t in UNIT.rglob("test_*.py") if t not in sources and t.name not in CROSS_CUTTING
-    ]
+    orphans = [str(t.relative_to(ROOT)) for t in UNIT.rglob("test_*.py") if t not in sources]
     assert orphans == [], "test files with no module: " + ", ".join(orphans)
 
 
