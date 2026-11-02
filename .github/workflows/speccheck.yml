@@ -244,6 +244,14 @@ jobs:
         run: test "$OUTCOME" = failure
       - name: Install speccheck
         uses: ./.github/actions/speccheck-install
+      - name: speccheck verify on an empty folder fails
+        # No results read means nothing is proven, even without --complete (SPC-REQ-005-09)
+        run: |
+          mkdir "$RUNNER_TEMP/no-results"
+          if speccheck verify --config common/speccheck/speccheck.toml "$RUNNER_TEMP/no-results"; then
+            echo "speccheck verify passed with no results files" >&2
+            exit 1
+          fi
       - name: Record speccheck evidence
         env:
           # The `job` context is only available to steps, not to a job's own `env`

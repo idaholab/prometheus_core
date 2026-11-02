@@ -47,7 +47,7 @@ requirement"). As a command on its own, install it as a uv tool, which puts `spe
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format |
 | `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't planned, untested or retired has no claim; a claim names a malformed, unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
-| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
+| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
 | `report [RESULTS...]` | the same as `verify` | never on the requirements; writes markdown to stdout, `--output FILE` and `--summary FILE` (appended), or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
 
@@ -295,7 +295,8 @@ And at the end of the workflow:
 - **`speccheck-verify`** installs speccheck with `speccheck-install`, then downloads every `speccheck-results-*` artifact of the run. It writes the
   report and appends the short form (counts, problems and the rows that need attention, under
   the 1 MiB limit) to the step summary. It uploads `report.md` and `report.json` as
-  `speccheck-report`, kept 90 days, then runs `verify` and fails with it. It needs `contents: read`
+  `speccheck-report`, kept 90 days, then runs `verify` and fails with it, so it also fails when no
+  `speccheck-results-*` artifact was downloaded. It needs `contents: read`
   only, and no secrets. With `complete`, it expects the producers that list the workflow's name.
 - Job links use `${{ job.check_run_id }}`, the job's check run ID, which is also the ID in its
   URL. Without it, the link is the run attempt.

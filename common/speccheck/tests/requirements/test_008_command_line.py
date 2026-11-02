@@ -72,12 +72,12 @@ def test_exit_codes(project: Project):
 
 @pytest.mark.covers("SPC-REQ-008-04")
 def test_one_json_object_on_every_exit_path(project: Project):
-    """Clean, with problems, and on a usage error: stdout is one object with the fixed fields."""
+    """Clean, with problems (`verify` with no results is one), and on a usage error: stdout is one object."""
     project.spec("- T-REQ-001-01: One.")
     for argv, code in (
         (["lint", "--json"], 0),
         (["check", "--json"], 1),
-        (["verify", "--json"], 0),
+        (["verify", "--json"], 1),
         (["report", "--json"], 0),
         (["nope", "--json"], 2),
     ):
