@@ -120,6 +120,25 @@ What differs from the plan above, or settles something it left open:
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
+## Adopting
+
+What will surprise a project that adopts speccheck (steps 3 and 4), to repeat in the migration
+steps and in the PR that adds it:
+
+- **A half-migrated suite breaks local pytest.** With `speccheck_config` set, collection checks every
+  claim in the spec folder on every run, locally too. One malformed, unknown or retired ID, or one
+  the producer may not claim, stops pytest before any test runs. Migrate a whole spec at a time, and
+  use `pytest -o speccheck_config=` to iterate meanwhile.
+- **Docstring and comment citations stop counting, silently.** Only `@pytest.mark.covers("ID")`
+  counts. Until a test carries the marker, its requirement is `unclaimed`, and `verify` fails on it,
+  but nothing complains about the old citation.
+- **The job name is the producer.** `record` takes the job from `$GITHUB_JOB`, which is the job's key
+  in the workflow, and looks it up as `[ci.<job>]` in the config. Renaming the job without the
+  config entry makes `record` fail.
+- **Two workflow pieces are needed.** A job that runs `record` needs the `speccheck-install` step.
+  The workflow needs a final job, `needs:` every producer, with `if: ${{ !cancelled() }}` and
+  `speccheck-verify`. Without it nothing checks the results.
+
 ## Reviewers
 
 technical, CI and tests, security, AI skills. See `reviews.md` for what to point each at.
