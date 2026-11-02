@@ -111,17 +111,14 @@ class TestValidation:
             (["{"], "1: not JSON"),
             (["[]"], "the first line must be the header"),
             ([header(schema="speccheck-results/2")], "this speccheck reads only 'speccheck-results/1'"),
-            ([header(extra=1)], "unknown header key `extra`"),
             ([header(producer="")], "`producer` must not be empty"),
             ([header(producer=3)], "`producer` must be a string"),
             ([header(runner="x" * 1001)], "`runner` is longer than 1000"),
             ([header(ci=[])], "`ci` must be an object or null"),
-            ([header(ci={"bad": 1})], "unknown key `ci.bad`"),
             ([header(ci={"run_id": [1]})], "`ci.run_id` must be a string, a number or null"),
             ([header(ci={"run_id": True})], "`ci.run_id` must be a string, a number or null"),
             ([header(ci={"job": "x" * 1001})], "`ci.job` is longer"),
             ([header(), "[]"], "2: not a valid speccheck-results/1 line: a result must be an object"),
-            ([header(), '{"test": "t", "covers": ["X"], "outcome": "passed", "more": 1}'], "unknown result key `more`"),
             ([header(), '{"test": "t", "covers": [], "outcome": "passed"}'], "`covers` must be a list of 1 to 200"),
             ([header(), '{"test": "t", "covers": "X", "outcome": "passed"}'], "`covers` must be a list"),
             ([header(), '{"test": "t", "covers": [""], "outcome": "passed"}'], "`covers[]` must not be empty"),
@@ -138,6 +135,16 @@ class TestValidation:
         parsed, problems = parse_lines(*lines) if lines else results.parse("", "r.jsonl")
         assert parsed is None
         assert len(problems) == 1 and message in str(problems[0]), problems
+
+    def test_unknown_keys_are_dropped(self):
+        """A key this speccheck doesn't read, at any level, is dropped unread rather than rejected."""
+        parsed, problems = parse_lines(
+            header(extra=[1], ci={"leg": "3.12", "bad": {"x": 1}}),
+            '{"test": "t", "covers": ["X"], "outcome": "passed", "more": 1}',
+        )
+        assert problems == []
+        assert parsed.ci == {"leg": "3.12"}
+        assert parsed.results[0].to_json() == {"test": "t", "covers": ["X"], "outcome": "passed"}
 
     def test_null_ci_and_strings_are_fine(self):
         """A local run's header, and a CI block with null and string values."""

@@ -40,6 +40,10 @@ SHA = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 """A full SHA-1 or SHA-256 commit hash."""
 
 
+PROVIDER = "github"
+"""The `ci.provider` value of a GitHub Actions run, the only CI provider so far."""
+
+
 def in_github_actions(env: Mapping[str, str]) -> bool:
     """Whether this is a GitHub Actions run."""
     return env.get("GITHUB_ACTIONS") == "true"
@@ -61,6 +65,7 @@ def context(env: Mapping[str, str]) -> dict[str, Any] | None:
     if not in_github_actions(env):
         return None
     block: dict[str, Any] = {
+        "provider": PROVIDER,
         "server": env.get("GITHUB_SERVER_URL", ""),
         "repository": env.get("GITHUB_REPOSITORY", ""),
         "workflow": env.get("GITHUB_WORKFLOW", ""),

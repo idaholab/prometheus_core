@@ -89,7 +89,7 @@ added within a `schema_version`.
 
 | Status | Means | Fails |
 |---|---|---|
-| `passed` | at least one claiming result passed (one is enough, in any producer or leg) | no |
+| `passed` | at least one claiming result passed (by default one is enough, in any producer or leg) | no |
 | `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
 | `not run` | claimed only by producers that didn't report in these inputs | `verify --complete` |
 | `unclaimed` | nothing claims it, and it isn't planned, untested or retired | `check`, `verify` |
@@ -136,7 +136,7 @@ status: implemented
 ## Config
 
 One config per spec folder, `speccheck.toml` or `[tool.speccheck]` in a project's `pyproject.toml`.
-Paths are relative to the config file. Unknown keys are errors.
+Paths are relative to the config file. Unknown keys in the config are errors.
 
 ```toml
 specs = "specs"                 # the spec folder
@@ -148,7 +148,7 @@ specs = "all"                   # or ["001", "004"]: the specs it may claim
 workflows = ["speccheck"]       # the workflows it runs in, for verify --complete --workflow
 
 [ci.speccheck-self-check]       # a CI job (by its job id) that is itself evidence
-covers = ["SPC-REQ-007-05"]
+covers = ["SPC-REQ-007-03"]
 workflows = ["speccheck"]
 
 [report]
@@ -207,7 +207,7 @@ for runners in other languages.
 
 ```json
 {"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 9.2.0", "started": "2026-11-01T12:00:00Z",
- "ci": {"server": "https://github.com", "repository": "idaholab/prometheus_core", "workflow": "test", "job": "sdk-python",
+ "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core", "workflow": "test", "job": "sdk-python",
         "leg": "3.12", "run_id": 123, "run_attempt": 1, "job_id": 456, "sha": "...", "ref": "...", "event": "push",
         "run_url": ".../actions/runs/123/attempts/1", "job_url": ".../actions/runs/123/job/456"}}
 {"test": "tests/test_llm_client.py::test_chat_proxy", "file": "tests/test_llm_client.py", "line": 181,
@@ -221,12 +221,14 @@ for runners in other languages.
 - A test's outcome merges setup, call and teardown. An error in setup or teardown makes it `error`,
   a skip makes it `skipped`, and an expected failure makes it `xfailed`. Skipped, deselected and
   (`--collect-only`) collected claims are written too, so `verify` can say "claimed but didn't run".
-- Under pytest-xdist the controller writes the file, with every worker's results.
-- `ci` comes from `GITHUB_*`, plus `SPECCHECK_LEG` and `SPECCHECK_JOB_ID`, which the workflow
-  sets. Outside GitHub Actions it is null.
+- Under pytest-xdist the run writes one file, with every worker's results.
+- `ci` says which CI provider ran it (`provider`), and where. GitHub Actions is the only provider so
+  far: its block comes from `GITHUB_*`, plus `SPECCHECK_LEG` and `SPECCHECK_JOB_ID`, which the
+  workflow sets. Outside CI it is null.
 - A reader treats every file as untrusted. It parses JSON only, with size limits (16 MiB a file,
-  64 KiB a line), and every field is checked. A file with another `schema` or an unknown key is
-  rejected whole. Paths in the file are never opened.
+  64 KiB a line), and every field is checked. A file with another `schema`, a wrong type or an
+  unknown outcome is rejected whole. Keys it doesn't know are dropped unread, so fields can be
+  added within `speccheck-results/1`. Paths in the file are never opened.
 
 ## In CI
 

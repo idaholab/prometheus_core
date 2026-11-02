@@ -15,9 +15,15 @@ fails locally before CI.
   level add up.
 - SPC-REQ-003-03: When the project sets `speccheck_config`, collection MUST fail on a claim of a
   malformed ID, an unknown ID, a retired ID, or an ID in a spec the producer may not claim. The
-  message MUST name the test and say what to do.
+  message MUST name the test and the ID and say how to fix it: for a malformed ID it shows the ID
+  format, for an unknown ID it names the spec to add it to, for a retired ID it says to claim what
+  replaced it, and for a disallowed ID it names the `producers.<name>.specs` key.
 - SPC-REQ-003-04: A `covers` mark with no IDs, with a non-string ID, or with keyword arguments
   MUST fail collection.
-- SPC-REQ-003-05: Without `speccheck_config` and without a results path, the plugin MUST NOT check
-  or write anything, and MUST NOT change any test's outcome.
+- SPC-REQ-003-05: Without `speccheck_config`, the plugin MUST NOT check any claim, and MUST NOT
+  change any test's outcome.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
+- SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
+  and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
+  expected failure makes it `xfailed`, and an unexpected pass makes it `xpassed`. A `--collect-only`
+  run MUST write each claiming test as `collected`.

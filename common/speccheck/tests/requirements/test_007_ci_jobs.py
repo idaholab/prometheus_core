@@ -12,7 +12,7 @@
 
 """specs/007-ci-jobs.md: `record` in a fake CI job, and links in what a real run writes.
 
-SPC-REQ-007-03 to 007-05 (the composite actions, end to end) are proven by the
+SPC-REQ-007-03, 007-04 and 007-06 (the composite actions, end to end) are proven by the
 `speccheck-self-check` job in speccheck.yml, which claims them in speccheck.toml, not here.
 """
 
@@ -76,7 +76,7 @@ def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     ]
 
 
-@pytest.mark.covers("SPC-REQ-007-06")
+@pytest.mark.covers("SPC-REQ-007-05", "SPC-REQ-007-07")
 def test_links_point_at_the_attempt_and_the_job(ci_project: Project, monkeypatch: pytest.MonkeyPatch):
     """A test run on attempt 3 links that attempt, and its job by check run ID; without one, the attempt."""
     for name, value in {**JOB, "GITHUB_JOB": "unit"}.items():

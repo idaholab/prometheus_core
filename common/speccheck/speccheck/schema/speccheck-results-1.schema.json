@@ -2,13 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/idaholab/prometheus_core/common/speccheck/speccheck-results-1.schema.json",
   "title": "speccheck-results/1",
-  "description": "One line of a speccheck results file (JSON Lines). The first line is a header; every other line is a result. A reader rejects a file whose header has any other schema value.",
+  "description": "One line of a speccheck results file (JSON Lines). The first line is a header; every other line is a result. A reader rejects a file whose header has any other schema value, and ignores keys it doesn't know, so fields may be added within speccheck-results/1.",
   "oneOf": [{ "$ref": "#/$defs/header" }, { "$ref": "#/$defs/result" }],
   "$defs": {
     "text": { "type": "string", "maxLength": 1000 },
     "header": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["schema", "producer"],
       "properties": {
         "schema": { "const": "speccheck-results/1" },
@@ -20,9 +19,9 @@
     },
     "ci": {
       "type": "object",
-      "additionalProperties": false,
-      "description": "Where the run happened, from GITHUB_* and SPECCHECK_* variables",
+      "description": "Where the run happened: the CI provider, and for GitHub Actions the GITHUB_* and SPECCHECK_* variables",
       "properties": {
+        "provider": { "$ref": "#/$defs/scalar", "description": "The CI provider, such as `github`" },
         "server": { "$ref": "#/$defs/scalar" },
         "repository": { "$ref": "#/$defs/scalar" },
         "workflow": { "$ref": "#/$defs/scalar" },
@@ -41,7 +40,6 @@
     "scalar": { "oneOf": [{ "type": "null" }, { "type": "integer" }, { "$ref": "#/$defs/text" }] },
     "result": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["test", "covers", "outcome"],
       "properties": {
         "test": { "$ref": "#/$defs/text", "minLength": 1, "description": "The test's node ID, or the CI job's name" },

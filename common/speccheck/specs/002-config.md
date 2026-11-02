@@ -21,5 +21,5 @@ One config describes one spec folder: where it is, its ID prefix, and what may p
   list of spec numbers. `"all"` is the default.
 - SPC-REQ-002-06: A `[ci.<job>]` entry MUST list at least one ID in `covers`, and MUST NOT share a
   name with a producer.
-- SPC-REQ-002-07: The config MUST read on Python 3.10, through `tomli`, as well as on newer
-  Pythons through `tomllib`. A TOML syntax error MUST be an error naming the file.
+- SPC-REQ-002-07: The config MUST be read the same way on every supported Python, 3.10 and newer. A
+  TOML syntax error MUST be an error naming the file.

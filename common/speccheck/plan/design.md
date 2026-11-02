@@ -152,7 +152,8 @@ Decisions:
   there, and `check` reads the same table, so the static check needs no YAML parser and there is
   one place to change. Renaming or deleting the job means `verify --complete` fails on a missing
   producer, so a claim can't outlive its job.
-- No matrix setting: one passing result in any job or leg is enough (agreed 2026-11-01). The
+- No matrix setting: by default, one passing result in any job or leg is enough (agreed
+  2026-11-01; "by default" leaves room for an "every leg" option later). The
   report lists every result.
 
 ## Claiming a requirement
@@ -180,7 +181,7 @@ Lines: one header, then one line per claiming test.
 
 ```json
 {"schema": "speccheck-results/1", "producer": "sdk-python", "runner": "pytest 8.4.1",
- "ci": {"server": "https://github.com", "repository": "idaholab/prometheus_core",
+ "ci": {"provider": "github", "server": "https://github.com", "repository": "idaholab/prometheus_core",
         "workflow": "test", "job": "sdk-python", "leg": "3.12",
         "run_id": 123, "run_attempt": 1, "job_url": "https://github.com/.../job/456",
         "sha": "abc..."},

@@ -102,7 +102,7 @@ def outcomes(project: Project, name: str) -> dict[str, str]:
 
 @pytest.mark.covers("SPC-REQ-004-01")
 def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
-    """A header, then one line per claiming test, each matching the shipped schema's shape."""
+    """A header, then one line per claiming test, each matching the schema shipped in the package."""
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n')
     project.pytest("--speccheck-results=r.jsonl")
     header, result = project.results_lines("r.jsonl")
@@ -126,7 +126,6 @@ def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
     ("change", "message"),
     [
         ({"schema": "speccheck-results/2"}, "this speccheck reads only 'speccheck-results/1'"),
-        ({"extra": 1}, "unknown header key `extra`"),
         ({"producer": 3}, "`producer` must be a string"),
     ],
 )
@@ -147,7 +146,6 @@ def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, mes
     ("line", "message"),
     [
         ({"test": "t", "covers": ["T-REQ-001-01"], "outcome": "ok"}, "`outcome` is 'ok'"),
-        ({"test": "t", "covers": ["T-REQ-001-01"], "outcome": "passed", "x": 1}, "unknown result key `x`"),
         ({"test": "t", "covers": "T-REQ-001-01", "outcome": "passed"}, "`covers` must be a list"),
     ],
 )
@@ -162,7 +160,19 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
     assert f"r.jsonl:3: not a valid speccheck-results/1 line: {message}" in run.err
 
 
-@pytest.mark.covers("SPC-REQ-004-03", "SPC-REQ-004-04")
+@pytest.mark.covers("SPC-REQ-004-02")
+def test_unknown_keys_are_ignored(project: Project):
+    """A newer writer's extra fields, in the header, its `ci` block and a result, don't stop the file counting."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit", "extra": 1, "ci": {"leg": "3.12", "new": "x"}}
+    line = {"test": "t", "covers": ["T-REQ-001-01"], "outcome": "passed", "x": 1}
+    project.write("r.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    assert run.code == 0 and run.json()["problems"] == []
+    assert run.json()["requirements"][0]["status"] == "passed"
+
+
+@pytest.mark.covers("SPC-REQ-003-07", "SPC-REQ-004-03", "SPC-REQ-004-04")
 def test_every_outcome_and_deselected_tests_are_written(project: Project):
     """Setup, call and teardown merged into one outcome; skipped and deselected claims are written; unclaimed tests aren't."""
     project.tests(OUTCOMES)
@@ -170,7 +180,7 @@ def test_every_outcome_and_deselected_tests_are_written(project: Project):
     assert outcomes(project, "r.jsonl") == EXPECTED
 
 
-@pytest.mark.covers("SPC-REQ-004-04")
+@pytest.mark.covers("SPC-REQ-003-07")
 def test_collect_only_writes_collected(project: Project):
     """Nothing runs, so every claim is `collected`."""
     project.tests(OUTCOMES)
@@ -202,7 +212,7 @@ def test_an_interrupted_session_leaves_no_file(project: Project):
 
 @pytest.mark.covers("SPC-REQ-004-06")
 def test_xdist_writes_one_file_with_every_workers_results(project: Project):
-    """Two workers: one file, written by the controller, with each test's real outcome."""
+    """Two workers: one file, with each test's real outcome."""
     project.tests(OUTCOMES)
     project.pytest(
         "-p",
@@ -244,7 +254,7 @@ def test_limits_and_symlinks(project: Project, tmp_path_factory: pytest.TempPath
 
 @pytest.mark.covers("SPC-REQ-004-08")
 def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
-    """In GitHub Actions the header says where the run was; outside it, `ci` is null."""
+    """In CI the header says which provider and where the run was; outside it, `ci` is null."""
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01")\ndef test_a():\n    pass\n')
     project.pytest("--speccheck-results=local.jsonl")
     assert project.results_lines("local.jsonl")[0]["ci"] is None
@@ -271,3 +281,4 @@ def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
         "3.12",
     )
     assert (ci["run_id"], ci["run_attempt"], ci["sha"]) == (9, 2, "c" * 40)
+    assert ci["provider"] == "github"
