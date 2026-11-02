@@ -7,8 +7,10 @@ whether implementation and specs still match.
 ## Core Rule
 
 Every implemented requirement should have test evidence or carry `⚠ untested`
-in the spec. Behavior scenarios should map to at least one test whenever they
-describe a regression-prone or user-visible edge case.
+in the spec. A requirement that a later, named step of a plan delivers carries
+`(planned: <step>)` instead, and that step's change removes the marker and cites
+the ID from a test. Behavior scenarios should map to at least one test whenever
+they describe a regression-prone or user-visible edge case.
 
 ## Test Traceability
 
@@ -23,6 +25,10 @@ def test_registry_retries_default_url_on_failure():
 For dense parameterized tests, cite IDs in the parameter name, nearby comment,
 or assertion message. Avoid large traceability tables unless a future workflow
 needs them.
+
+A spec folder checked by [`common/speccheck`](../../common/speccheck/README.md)
+is stricter: there an ID counts only in the docstring of a `test_*` function or
+in a `# Covers REQ-...` comment, so cite it in one of those.
 
 ## Test Levels
 
