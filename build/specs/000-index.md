@@ -86,6 +86,11 @@ step's PR removes the marker and cites the ID from its tests.
 
 [`common/speccheck`](../../common/speccheck/README.md) checks this folder:
 every requirement is cited by a test or a CI job, marked `⚠ untested`, or
-marked planned. For 001–099, a CI job counts as evidence only for what a
-unit test can't show, such as a real Compose version, a real runner or the
-merged compose config; platformctl's 100% unit coverage rule still applies.
+marked planned.
+
+The checker only sees that an ID is cited. Two rules about the evidence are
+reviewed, not checked. For 001–099, a CI job should be the evidence only for
+what a unit test can't show, such as a real Compose version, a real runner or
+the merged compose config; platformctl's 100% unit coverage rule still
+applies. And a citing test should prove the requirement, not just mention it.
+The CI reviewer looks at both on each step's PR (`platform/plans/platformctl/reviews.md`).
