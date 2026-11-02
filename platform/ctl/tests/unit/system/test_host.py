@@ -58,10 +58,25 @@ def listen(family=socket.AF_INET, address="127.0.0.1"):
 
 
 def free_port() -> int:
-    """A port that was free a moment ago."""
-    sock, port = listen()
-    sock.close()
-    return port
+    """A port that was free a moment ago on 0.0.0.0 and ::, the addresses `port_free` binds.
+
+    The OS hands out a port that is free on the address asked for. On macOS a port free on
+    127.0.0.1 can still be in use on another address, such as a VPN client's outbound
+    connection, so `port_free` fails its bind of 0.0.0.0. Pick on 0.0.0.0 and check ::
+    too, so the port is free on both.
+    """
+    while True:
+        sock, port = listen(address="0.0.0.0")
+        sock.close()
+        if not socket.has_ipv6 or not hostmod._ipv6_usable():
+            return port
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as six:
+            six.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            try:
+                six.bind(("::", port))
+            except OSError:
+                continue
+        return port
 
 
 def test_port_free_and_taken_on_ipv4():

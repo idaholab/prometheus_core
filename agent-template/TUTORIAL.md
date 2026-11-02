@@ -212,10 +212,12 @@ from prometheus_api.agent import PrometheusAgent
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events import EventQueue
 
+
 class MyAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue) -> dict:
         ...
         return {"status": "success", "result": ...}
+
 
 if __name__ == "__main__":
     MyAgent(agent_name="My Agent").run()
@@ -240,8 +242,8 @@ It must return a `dict`. The base class automatically wraps the returned dict as
 ```python
 async def _execute(self, params, context, event_queue):
     material_id = params.get("material_id")
-    temperature  = params.get("temperature_c", 25.0)   # with default
-    skill_id     = params.get("skill_id")               # which skill was called
+    temperature = params.get("temperature_c", 25.0)  # with default
+    skill_id = params.get("skill_id")  # which skill was called
 
     if not material_id:
         return {"status": "error", "error": "material_id is required"}
@@ -273,7 +275,7 @@ Just return a plain dict. Keep the keys consistent with what you described in `o
 return {
     "status": "success",
     "material_id": material_id,
-    "result": { ... },
+    "result": {...},
     "agent": self.agent_name,
 }
 ```
@@ -342,6 +344,7 @@ from anthropic import Anthropic
 LLM_API_KEY = os.getenv("LLM_API_KEY")  # an Anthropic key, set in .env
 MODEL_NAME = os.getenv("MODEL_NAME", "claude-sonnet-4-6")
 
+
 class SummarizerAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
         text = params.get("text")
@@ -372,6 +375,7 @@ import os
 
 import httpx
 
+
 class DataFetcherAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
         record_id = params.get("record_id")
@@ -398,6 +402,7 @@ not block the event loop. For a short call, fire-and-await is enough:
 ```python
 import asyncio
 
+
 class SimulationAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
         await self.send_status_update(context, event_queue, message="Running simulation…")
@@ -407,6 +412,7 @@ class SimulationAgent(PrometheusAgent):
     def _run_simulation(self, params):
         # blocking computation here — regular synchronous Python, no asyncio.
         import numpy as np
+
         data = np.array(params.get("values", []))
         return {"mean": float(data.mean()), "std": float(data.std())}
 ```
@@ -429,14 +435,15 @@ its events, flushes on completion, re-raises its errors, and signals cancellatio
 ```python
 from prometheus_api.agent import PrometheusAgent, PrometheusWorker
 
+
 class SimulationWorker(PrometheusWorker):
     def __init__(self, items):
         super().__init__()
         self.items = items
 
-    def run(self):                        # plain synchronous code on a worker thread
+    def run(self):  # plain synchronous code on a worker thread
         for i, item in enumerate(self.items, 1):
-            if self.cancelled:            # threads can't be killed — stop cooperatively
+            if self.cancelled:  # threads can't be killed — stop cooperatively
                 return {"status": "cancelled", "done": i - 1}
             self.emit_status_update(f"Processing {i}/{len(self.items)}…")
             heavy_blocking_call(item)
@@ -444,6 +451,7 @@ class SimulationWorker(PrometheusWorker):
         # numerical simulation); supports append/last_chunk for streaming chunks.
         self.emit_json_artifact({"processed": len(self.items)}, name="summary")
         return {"status": "success", "processed": len(self.items)}
+
 
 class SimulationAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
@@ -465,16 +473,18 @@ import asyncio
 import queue
 import threading
 
+
 class ProgressReporter:
     """Worker thread writes; event loop reads. queue.Queue keeps every
     message (a 'latest value' field would drop updates between polls)."""
+
     def __init__(self):
         self._queue: "queue.Queue[str]" = queue.Queue()
 
-    def report(self, message):        # called FROM the worker thread
+    def report(self, message):  # called FROM the worker thread
         self._queue.put(str(message))
 
-    def drain(self):                  # called FROM the event loop
+    def drain(self):  # called FROM the event loop
         msgs = []
         while True:
             try:
@@ -482,22 +492,23 @@ class ProgressReporter:
             except queue.Empty:
                 return msgs
 
+
 class SimulationAgent(PrometheusAgent):
     async def _execute(self, params, context, event_queue):
         progress = ProgressReporter()
-        cancel = threading.Event()   # threads can't be killed; cancel cooperatively
+        cancel = threading.Event()  # threads can't be killed; cancel cooperatively
         work = asyncio.create_task(asyncio.to_thread(self._run, params, progress, cancel))
 
         try:
             while not work.done():
                 for msg in progress.drain():
                     await self.send_status_update(context, event_queue, message=msg)
-                await asyncio.sleep(1.0)   # yields → heartbeat + SSE keep flowing
-            for msg in progress.drain():    # flush the last messages
+                await asyncio.sleep(1.0)  # yields → heartbeat + SSE keep flowing
+            for msg in progress.drain():  # flush the last messages
                 await self.send_status_update(context, event_queue, message=msg)
-            return await work               # recover result / re-raise exceptions
+            return await work  # recover result / re-raise exceptions
         except asyncio.CancelledError:
-            cancel.set()                    # caller disconnected — ask the worker to stop
+            cancel.set()  # caller disconnected — ask the worker to stop
             raise
 
     def _run(self, params, progress, cancel):
@@ -534,7 +545,7 @@ A complete, runnable reference lives in the platform's
 Never hard-code secrets or URLs. Read them from environment variables using `os.getenv`:
 
 ```python
-API_KEY  = os.getenv("MY_API_KEY")        # returns None if not set
+API_KEY = os.getenv("MY_API_KEY")  # returns None if not set
 BASE_URL = os.getenv("BASE_URL", "https://api.example.com")  # with default
 ```
 
@@ -1046,7 +1057,7 @@ it for you before `_execute` runs — you just read the result:
 
 ```python
 async def _execute(self, params, context, event_queue):
-    user_id = params["user_id"]   # verified by the base class; never spoofable
+    user_id = params["user_id"]  # verified by the base class; never spoofable
     # or equivalently: user_id = self.current_user_id()
     ...
 ```
@@ -1091,7 +1102,8 @@ Instead of (or in addition to) returning a dict, your agent can emit typed artif
 ```python
 # Inline JSON artifact (available to downstream agents by artifact_id)
 await self.send_json_artifact(
-    context=context, event_queue=event_queue,
+    context=context,
+    event_queue=event_queue,
     payload={"score": 0.95, "label": "acceptable"},
     name="analysis_result",
     json_type="prometheus.my_agent.result.v1",
@@ -1101,7 +1113,8 @@ return {"message": "Analysis complete.", "agent": self.agent_name}
 
 # File artifact (URI-backed, e.g. a local file or deeplynx:// reference)
 await self.send_artifact_reference(
-    context=context, event_queue=event_queue,
+    context=context,
+    event_queue=event_queue,
     name="report.pdf",
     description="Generated PDF report",
     uri="file:///tmp/report.pdf",
@@ -1124,10 +1137,10 @@ deterministic cache):
 async def _execute(self, params, context, event_queue):
     mesh_path = await self.get_artifact_file_path(
         params["artifact_id"],
-        context=context,                      # supplies the conversation scope
-        artifacts=params.get("artifacts"),    # catalog passed by the orchestrator
+        context=context,  # supplies the conversation scope
+        artifacts=params.get("artifacts"),  # catalog passed by the orchestrator
     )
-    result = analyze_mesh(mesh_path)          # a plain pathlib.Path
+    result = analyze_mesh(mesh_path)  # a plain pathlib.Path
     ...
 ```
 
@@ -1142,7 +1155,8 @@ conversation message instead:
 
 ```python
 await self.send_conversation_message(
-    context, event_queue,
+    context,
+    event_queue,
     "Corrosion margin is within limits, but the dataset for 350 °C is sparse.",
 )
 ```
@@ -1157,7 +1171,8 @@ finishes:
 ```python
 async def _execute(self, params, context, event_queue):
     await self.declare_long_running(
-        context, event_queue,
+        context,
+        event_queue,
         estimate_seconds=1800,
         message="Meshing and running the simulation — this takes ~30 minutes.",
     )
@@ -1175,20 +1190,24 @@ If your agent needs information it cannot infer from the initial call, it can pa
 ```python
 from prometheus_api.agent import MissingInput
 
+
 async def _execute(self, params, context, event_queue):
     if params.get("temperature_c") is None:
         await self.send_input_required(
-            context=context, event_queue=event_queue,
-            missing_inputs=[MissingInput(
-                name="temperature_c",
-                description="Operating temperature in °C.",
-                user_prompt="What operating temperature (°C)?",
-                type="number",
-                required=True,
-            )],
+            context=context,
+            event_queue=event_queue,
+            missing_inputs=[
+                MissingInput(
+                    name="temperature_c",
+                    description="Operating temperature in °C.",
+                    user_prompt="What operating temperature (°C)?",
+                    type="number",
+                    required=True,
+                )
+            ],
             hint="I need an operating temperature to continue.",
         )
-        return {}   # suspend — do NOT return real results here
+        return {}  # suspend — do NOT return real results here
 
     # On resume, params holds every original argument plus the answer,
     # so params["temperature_c"] is set; no saved state is needed.
@@ -1204,7 +1223,7 @@ When your agent card lists more than one skill, dispatch on `params.get("skill_i
 ```python
 async def _execute(self, params, context, event_queue):
     dispatch = {
-        "analyze":  self._handle_analyze,
+        "analyze": self._handle_analyze,
         "summarize": self._handle_summarize,
     }
     handler = dispatch.get(params.get("skill_id"))
@@ -1223,7 +1242,8 @@ from prometheus_api.storage_client.connection import ConnectionConfig
 
 config = ConnectionConfig.from_env()
 artifact = await self.send_deeplynx_artifact(
-    context=context, event_queue=event_queue,
+    context=context,
+    event_queue=event_queue,
     file_path=Path("/tmp/output.csv"),
     name="simulation_output.csv",
     description="Agent simulation results",
