@@ -123,7 +123,7 @@ def test_fenced_examples_are_ignored(project: Project):
         "- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* bad\nstatus: retired\n```"
     )
     run = project.speccheck("lint", "--json")
-    assert run.code == 0 and run.json()["requirements"] == 1
+    assert run.code == 0 and run.json()["requirement_count"] == 1
 
 
 @pytest.mark.covers("SPC-REQ-001-09")

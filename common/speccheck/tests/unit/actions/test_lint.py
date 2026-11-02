@@ -56,7 +56,7 @@ def test_json():
     ctx.specs().problems.append(Problem("specs/x.md", 0, "m"))
     assert lint.run(ctx, argparse.Namespace()) == 1
     body = json.loads(out(ctx))
-    assert (body["command"], body["ok"], body["requirements"]) == ("lint", False, 1)
-    assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "status": "implemented", "requirements": 1}]
+    assert (body["command"], body["ok"], body["requirement_count"]) == ("lint", False, 1)
+    assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "status": "implemented", "requirement_count": 1}]
     assert body["problems"] == [{"path": "specs/x.md", "line": 0, "message": "m"}]
     assert err(ctx) == ""
