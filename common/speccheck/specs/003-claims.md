@@ -25,5 +25,6 @@ fails locally before CI.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
 - SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
-  expected failure makes it `xfailed`, and an unexpected pass makes it `xpassed`. A `--collect-only`
-  run MUST write each claiming test as `collected`.
+  expected failure makes it `xfailed`, and an unexpected pass makes it `xpassed`. An `error` MUST
+  stay `error` for the rest of the session, including when a rerun plugin's later attempt passes.
+  A `--collect-only` run MUST write each claiming test as `collected`.
