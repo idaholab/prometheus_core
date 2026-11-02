@@ -35,6 +35,9 @@ outputs:
       The step summary file the report was appended to. Each step gets its own
       $GITHUB_STEP_SUMMARY, so a later step can't read it through that variable
     value: ${{ steps.report.outputs.summary-path }}
+  report-artifact-id:
+    description: The ID of the uploaded report artifact
+    value: ${{ steps.upload-report.outputs.artifact-id }}
 
 runs:
   using: composite
@@ -66,11 +69,14 @@ runs:
         echo "summary-path=$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
         speccheck report --config "$CONFIG" "${scope[@]}" "$RESULTS" --json > "$JSON"
     - name: Upload report
+      id: upload-report
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ inputs.report-name }}
         path: ${{ runner.temp }}/speccheck-report
+        # A re-run attempt, or a second verify in one run, replaces the report
+        overwrite: true
         if-no-files-found: error
         retention-days: 90
     - name: Verify
