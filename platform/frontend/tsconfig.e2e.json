@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    /* The e2e tests and config run in Node, not the browser */
-    "lib": ["ES2022", "DOM"],
-    "types": ["node"]
-  },
-  "include": ["e2e", "playwright.config.ts"]
-}
