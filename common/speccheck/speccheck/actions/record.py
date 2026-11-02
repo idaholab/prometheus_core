@@ -12,7 +12,8 @@
 
 """`speccheck record`: the last step of a CI job that is itself evidence writes a passed result per ID it claims.
 
-The job's IDs come from `[ci.<job>] covers = [...]` in the config, never from the command line, so
+The job's IDs, and how it proves each, come from `[ci.<job>] covers = { ID = "how" }` in the
+config, never from the command line, so
 the claim is reviewed with the config. The step runs only when the steps before it succeeded.
 """
 
@@ -67,11 +68,12 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         runner=f"speccheck record {_version()}",
         ci=ci.context(ctx.env),
         started=started,
-        results=[results.Result(test=job, covers=list(producer.covers), outcome="passed", kind="ci")],
+        results=[results.Result(test=job, covers=list(producer.claims), outcome="passed", kind="ci")],
     )
     results.write(path, results_file)
     if ctx.output.json_mode:
-        body = jsonout.envelope(NAME, True, [], job=job, covers=list(producer.covers), path=str(path))
+        covers = [claim.to_json() for claim in producer.claims]
+        body = jsonout.envelope(NAME, True, [], job=job, covers=covers, path=str(path))
         jsonout.emit(body, ctx.output.out)
     ctx.output.summary(NAME, f"{job} recorded {', '.join(producer.covers)} in {output}", 0)
     return jsonout.EXIT_OK

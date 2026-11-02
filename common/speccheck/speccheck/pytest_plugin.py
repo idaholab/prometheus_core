@@ -30,13 +30,13 @@ from typing import Any
 
 import pytest
 
-from speccheck import ci, results
+from speccheck import ci, claims, results
 from speccheck import config as config_module
 from speccheck import specs as specs_module
 from speccheck.evidence import claim_problem
 
 MARKER = "covers"
-"""The marker's name: `@pytest.mark.covers("SPC-REQ-001-01", ...)`."""
+"""The marker's name: `@pytest.mark.covers("SPC-REQ-001-01", "how the test proves it")`."""
 RESULTS_VAR = "SPECCHECK_RESULTS"
 """The environment variable that asks for a results file, when `--speccheck-results` isn't given."""
 WORKER_KEY = "speccheck"
@@ -45,7 +45,11 @@ NO_WRITE = (pytest.ExitCode.INTERRUPTED, pytest.ExitCode.INTERNAL_ERROR, pytest.
 """Exit statuses after which no results file is written: the run didn't finish, so it proves nothing."""
 
 CLAIMS = pytest.StashKey[dict]()
-"""The session's claims, by node ID: `{"covers", "file", "line", "outcome"}`."""
+"""The session's claims, by node ID: `{"covers": [{"id", "how"}], "file", "line", "outcome"}`."""
+WHERE_TO_PUT_IT = (
+    "put the claim on each pytest.param(..., marks=...) of one @pytest.mark.parametrize, each with its own explanation"
+)
+"""What a misplaced mark's message says to do."""
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -64,7 +68,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     """Register the marker, and start the claims (shared with the controller on an xdist worker)."""
     config.addinivalue_line(
-        "markers", f"{MARKER}(*ids): the spec requirements this test proves, such as SPC-REQ-001-01"
+        "markers", f"{MARKER}(id, how): the spec requirement this test proves, and how it proves it"
     )
     claims: dict[str, dict[str, Any]] = {}
     config.stash[CLAIMS] = claims
@@ -75,27 +79,75 @@ def pytest_configure(config: pytest.Config) -> None:
     config.pluginmanager.register(Recorder(config), f"speccheck-recorder-{id(config)}")
 
 
-def ids_of(item: pytest.Item) -> list[str]:
-    """The IDs every `covers` mark on the test claims (function, class, module and parameter), each once."""
-    found: list[str] = []
-    for mark in item.iter_markers(MARKER):
-        for value in mark.args:
-            if value not in found:
-                found.append(value)
-    return found
+def _argnames(mark: pytest.Mark) -> list[str]:
+    """The argument names one `parametrize` mark sets: `"a, b"`, `("a", "b")` or `["a"]`."""
+    names = mark.args[0] if mark.args else mark.kwargs.get("argnames", ())
+    if isinstance(names, str):
+        return [name.strip() for name in names.split(",") if name.strip()]
+    return [str(name) for name in names]
 
 
-def _bad_args(item: pytest.Item) -> str:
-    """Why the test's `covers` marks are malformed, or ""."""
-    for mark in item.iter_markers(MARKER):
-        if mark.kwargs:
-            return f"`{MARKER}` takes IDs only, not keywords ({', '.join(sorted(mark.kwargs))})"
-        if not mark.args:
-            return f"`{MARKER}` needs at least one ID"
-        for value in mark.args:
-            if not isinstance(value, str) or not value:
-                return f'`{MARKER}` IDs are strings, such as "SPC-REQ-001-01"; got {value!r}'
+def placement_problem(item: pytest.Item) -> str:
+    """Why the test's `covers` marks are where a claim can't be, or "" (SPC-REQ-003-02).
+
+    A mark must land on exactly one test: a function that isn't parametrized, or one parameter of
+    the test's single `parametrize`. Anywhere else, one explanation would stand for several tests.
+    """
+    callspec = getattr(item, "callspec", None)
+    own = [id(mark) for mark in callspec.marks] if callspec is not None else []
+    for node, mark in item.iter_markers_with_node(MARKER):
+        if isinstance(node, pytest.Module):
+            return f"`{MARKER}` is on the module (`pytestmark`); move it onto each test, each with its own explanation"
+        if isinstance(node, pytest.Class):
+            return f"`{MARKER}` is on class `{node.name}`; move it onto each test, each with its own explanation"
+        if callspec is not None and id(mark) not in own:
+            return f"`{MARKER}` is on the function of a parametrized test; {WHERE_TO_PUT_IT}"
+    if callspec is None:
+        return ""
+    parametrizes = list(item.iter_markers("parametrize"))
+    if len(parametrizes) > 1:
+        return f"a claiming test has {len(parametrizes)} `parametrize` marks; {WHERE_TO_PUT_IT}"
+    from_fixtures = sorted(set(callspec.params) - {name for mark in parametrizes for name in _argnames(mark)})
+    if from_fixtures:
+        names = ", ".join(f"`{name}`" for name in from_fixtures)
+        return f"a claiming test uses the parametrized fixture {names}; {WHERE_TO_PUT_IT}"
     return ""
+
+
+def shape_problem(mark: pytest.Mark) -> str:
+    """Why one `covers` mark isn't `covers(ID, how)`, or "" (SPC-REQ-003-04)."""
+    if mark.kwargs:
+        return f"`{MARKER}` takes the ID and how the test proves it, not keywords ({', '.join(sorted(mark.kwargs))})"
+    if len(mark.args) != 2:
+        return f'`{MARKER}` takes two strings, the ID and how the test proves it, such as covers("T-REQ-001-01", "...")'
+    if not all(isinstance(value, str) for value in mark.args):
+        return f"`{MARKER}` takes two strings; got {', '.join(repr(value) for value in mark.args)}"
+    if not mark.args[0]:
+        return f"`{MARKER}` needs an ID"
+    return ""
+
+
+def claims_of(item: pytest.Item) -> tuple[list[claims.Claim], list[str]]:
+    """The test's claims in mark order, each explanation collapsed, and the problems with them.
+
+    A claim with a problem is left out. Checks only what needs no specs: 003-04, 003-08 and 003-10.
+    """
+    found: list[claims.Claim] = []
+    problems: list[str] = []
+    for mark in item.iter_markers(MARKER):
+        bad = shape_problem(mark)
+        if bad:
+            problems.append(bad)
+            continue
+        claimed, how = mark.args[0], claims.collapse(mark.args[1])
+        bad = claims.how_problem(claimed, how)
+        if bad:
+            problems.append(bad)
+        elif any(claim.id == claimed for claim in found):
+            problems.append(f"the test claims {claimed} more than once; give one explanation, or split the test")
+        else:
+            found.append(claims.Claim(claimed, how))
+    return found, problems
 
 
 def _where(item: pytest.Item) -> tuple[str, int]:
@@ -110,7 +162,7 @@ def _where(item: pytest.Item) -> tuple[str, int]:
 
 
 def _checker(config: pytest.Config):
-    """A function giving the reason an ID may not be claimed (or ""), or None without `speccheck_config`.
+    """A function giving why the specs don't allow a claim (or ""), or None without `speccheck_config`.
 
     With `speccheck_config` a producer is required, from `SPECCHECK_PRODUCER` or `speccheck_producer`.
     """
@@ -137,29 +189,50 @@ def _checker(config: pytest.Config):
         raise pytest.UsageError(f"speccheck: producer `{producer_name}` isn't declared in {path} (declared: {known})")
     if producer.ci_job:
         raise pytest.UsageError(f"speccheck: `{producer_name}` is a [ci] job in {path}, not a test run")
-    return lambda claimed: claim_problem(claimed, producer, spec_set)
+
+    def check(claim: claims.Claim) -> str:
+        """Why the specs don't allow this claim (003-03, 003-09), or ""."""
+        return claim_problem(claim.id, producer, spec_set) or claims.copied_problem(claim.id, claim.how, spec_set)
+
+    return check
+
+
+def _function_id(item: pytest.Item) -> str:
+    """The test function's node ID without a parameter ID, so a problem with it is reported once."""
+    name = getattr(item, "originalname", None) or item.name
+    return f"{item.parent.nodeid}::{name}" if item.parent is not None and item.parent.nodeid else item.nodeid
 
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
     """Record every claiming test, before `-k` or `-m` deselects any, and fail on a claim that isn't allowed."""
-    claims = config.stash[CLAIMS]
+    recorded = config.stash[CLAIMS]
     checker = _checker(config)
+    unique = claims.Unique()
     problems: list[str] = []
     for item in items:
         if not any(True for _ in item.iter_markers(MARKER)):
             continue
         path, line = _where(item)
-        bad = _bad_args(item)
-        if bad:
-            problems.append(f"{path}:{line}: {item.nodeid}: {bad}")
+        placed = placement_problem(item)
+        if placed:
+            problem = f"{path}:{line}: {_function_id(item)}: {placed}"
+            if problem not in problems:
+                problems.append(problem)
             continue
-        covers = ids_of(item)
-        for claimed in covers if checker else ():
-            why = checker(claimed)
+        found, bad = claims_of(item)
+        problems += [f"{path}:{line}: {item.nodeid}: {why}" for why in bad]
+        for claim in found:
+            why = (checker(claim) if checker else "") or unique.add(item.nodeid, claim.id, claim.how)
             if why:
                 problems.append(f"{path}:{line}: {item.nodeid}: {why}")
-        claims[item.nodeid] = {"covers": covers, "file": path, "line": line, "outcome": "collected"}
+        if found:
+            recorded[item.nodeid] = {
+                "covers": [claim.to_json() for claim in found],
+                "file": path,
+                "line": line,
+                "outcome": "collected",
+            }
     if problems:
         lines = "\n".join(specs_module.plain(p) for p in problems)
         raise pytest.UsageError(f"speccheck: {len(problems)} claim(s) the spec folder doesn't allow:\n{lines}")
@@ -242,7 +315,7 @@ class Recorder:
             results=[
                 results.Result(
                     test=nodeid,
-                    covers=claim["covers"],
+                    covers=[claims.Claim(c["id"], c["how"]) for c in claim["covers"]],
                     outcome=claim["outcome"],
                     file=claim["file"],
                     line=claim["line"],

@@ -14,38 +14,33 @@
 
 It fails only on bad usage or a bad config. A bad results file shows up in the report as a problem.
 Everything taken from a results file is escaped before it goes into markdown, and capped in length.
+The step summary is not this report's: `lint`, `check` and `verify` write it with `--summary`.
 """
 
 from __future__ import annotations
 
 import argparse
-import re
 from pathlib import Path
-from typing import Any
 
 from speccheck import ci, evidence, jsonout
 from speccheck.actions import _common
+from speccheck.claims import MAX_HOW
 from speccheck.context import Context
 from speccheck.evidence import Evaluation, Status
+from speccheck.markdown import code, escape, safe_url
 from speccheck.specs import plain
 
 NAME = "report"
 """The command name."""
-HELP = "Write the markdown report (--output FILE, --summary FILE) or --json"
+HELP = "Write the full markdown report (--output FILE) or --json"
 """The one-line help."""
 SECTION = "ci"
 """The `--help` section."""
 ORDER = 10
 """Its place in the section."""
 
-MAX_CELL = 200
-"""The longest text kept in one table cell, after which it is cut with `…`."""
 MAX_EVIDENCE = 20
 """The most results listed for one requirement; the rest are counted."""
-SUMMARY_LIMIT = 900 * 1024
-"""The most bytes `--summary` writes: GitHub's step summary limit is 1 MiB."""
-MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()#+\-.!|<>~&])")
-"""Characters that mean something in markdown or HTML, escaped with a backslash."""
 ICONS = {
     evidence.PASSED: "✅",
     evidence.FAILED: "❌",
@@ -64,42 +59,6 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     _common.add_inputs(parser)
     _common.add_scope(parser)
     parser.add_argument("--output", metavar="FILE", help="Write the full report here (default: stdout)")
-    parser.add_argument("--summary", metavar="FILE", help="Append the short form here, such as $GITHUB_STEP_SUMMARY")
-
-
-def escape(text: str, limit: int = MAX_CELL) -> str:
-    """Text safe in a markdown table cell: one line, special characters escaped, at most `limit` characters."""
-    text = " ".join(str(text).split())
-    if len(text) > limit:
-        text = text[: limit - 1] + "…"
-    return MARKDOWN_SPECIAL.sub(r"\\\1", text)
-
-
-def code(text: str, limit: int = MAX_CELL, *, in_table: bool) -> str:
-    """Text as an inline code span: one line, capped, with no backtick to close the span early.
-
-    Markdown takes everything in a code span literally, so backslash escapes would show. The one
-    exception is a table cell, where GFM splits on `|` before it reads the span, so a `|` there is
-    written `\\|` (which GFM turns back into `|`).
-    """
-    text = " ".join(str(text).replace("`", "").split())
-    if len(text) > limit:
-        text = text[: limit - 1] + "…"
-    return f"`{text.replace('|', chr(92) + '|') if in_table else text}`"
-
-
-RUN_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}(?:/(?:attempts|job)/[1-9][0-9]{0,19})?")
-"""What follows `<server>/<owner>/<repo>` in a run, run attempt or job URL."""
-
-
-def safe_url(url: Any, base: str) -> str:
-    """The URL when it is a run, attempt or job URL under `base`, this run's repository URL, else "".
-
-    `base` comes from `ci.repository_url`; without one (outside CI) nothing is linked.
-    """
-    if not (base and isinstance(url, str) and url.startswith(base + "/")):
-        return ""
-    return url if RUN_PATH.fullmatch(url[len(base) :]) else ""
 
 
 def _evidence_cell(status: Status, base: str) -> str:
@@ -135,6 +94,24 @@ def _order(status: Status) -> tuple[int, int]:
     return (evidence.STATUSES.index(status.status), status.requirement.line)
 
 
+def _hows(statuses: list[Status]) -> list[str]:
+    """Below a spec's table, each claim with how it proves its requirement, each claimant once per ID."""
+    lines: list[str] = []
+    for status in statuses:
+        seen: set[tuple[str, str]] = set()
+        for item in status.evidence:
+            key = (item.result.test, item.how)
+            if key in seen or not item.how:
+                continue
+            seen.add(key)
+            label = "job" if item.result.kind == "ci" else "test"
+            lines.append(
+                f"- **{status.requirement.id}**, {label} {code(item.result.test, 150, in_table=False)}: "
+                f"{escape(item.how, MAX_HOW)}"
+            )
+    return ["How each claim proves its requirement:", "", *lines, ""] if lines else []
+
+
 def _inputs(evaluation: Evaluation, base: str) -> list[str]:
     """The lines saying what the report was built from: commits, runs and producers."""
     commits = sorted({(f.ci or {}).get("sha") or "" for f in evaluation.files} - {""})
@@ -156,7 +133,7 @@ def _problems(evaluation: Evaluation) -> list[str]:
 
 
 def full(title: str, evaluation: Evaluation, base: str = "") -> str:
-    """The whole report: summary, problems, one table per spec, and the inputs."""
+    """The whole report: summary, problems, one table per spec with its claims' explanations, and the inputs."""
     counts = evaluation.counts()
     lines = [f"# {escape(title)}", "", evidence.summary_line(counts), ""]
     lines += [" · ".join(f"{ICONS[s]} {s}: {n}" for s, n in counts.items() if n), ""]
@@ -169,28 +146,13 @@ def full(title: str, evaluation: Evaluation, base: str = "") -> str:
         by_spec.setdefault(spec.number, []).append(status)
         titles[spec.number] = spec.title
     for number, statuses in by_spec.items():
+        ordered = sorted(statuses, key=_order)
         lines += [f"## {number} {escape(titles[number])}", "", TABLE_HEAD]
-        lines += [_row(status, base) for status in sorted(statuses, key=_order)]
+        lines += [_row(status, base) for status in ordered]
         lines.append("")
+        lines += _hows(ordered)
     lines += ["## Inputs", "", *_inputs(evaluation, base), ""]
     return "\n".join(lines)
-
-
-def summary(title: str, evaluation: Evaluation, base: str = "") -> str:
-    """The short form for a step summary: counts, problems, and the rows that aren't fine, within the size limit."""
-    counts = evaluation.counts()
-    lines = [f"### {escape(title)}", "", evidence.summary_line(counts), ""]
-    if evaluation.problems:
-        lines += [f"**{len(evaluation.problems)} problems**", "", *_problems(evaluation), ""]
-    attention = [s for s in evaluation.statuses if s.status in (evidence.FAILED, evidence.UNCLAIMED, evidence.NOT_RUN)]
-    if attention:
-        lines += [TABLE_HEAD, *(_row(s, base) for s in sorted(attention, key=_order)), ""]
-    lines += ["The full report is in the `speccheck-report` artifact.", ""]
-    text = "\n".join(lines)
-    if len(text.encode("utf-8")) > SUMMARY_LIMIT:
-        cut = text.encode("utf-8")[:SUMMARY_LIMIT].decode("utf-8", "ignore")
-        text = cut.rsplit("\n", 1)[0] + "\n\n… cut to fit the step summary; see the artifact.\n"
-    return text
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
@@ -199,9 +161,7 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
     title = ctx.config().title
     base = ci.repository_url(ctx.env)
     if args.output:
-        _write(ctx, args.output, full(title, evaluation, base), append=False)
-    if args.summary:
-        _write(ctx, args.summary, summary(title, evaluation, base), append=True)
+        _write(ctx, args.output, full(title, evaluation, base))
     if ctx.output.json_mode:
         body = jsonout.envelope(
             NAME,
@@ -213,18 +173,18 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             producers={"reported": evaluation.reported, "missing": evaluation.missing},
         )
         jsonout.emit(body, ctx.output.out)
-    elif not args.output and not args.summary:
-        # Unlike the files, stdout may be a CI log, where code spans keep a test name as written
+    elif not args.output:
+        # Unlike the file, stdout may be a CI log, where code spans keep a test name as written
         ctx.output.out.write("".join(plain(line) + "\n" for line in full(title, evaluation, base).splitlines()))
     else:
         ctx.output.summary(NAME, evidence.summary_line(evaluation.counts()), 0)
     return jsonout.EXIT_OK
 
 
-def _write(ctx: Context, name: str, text: str, *, append: bool) -> None:
-    """Write (or append) a file named on the command line."""
+def _write(ctx: Context, name: str, text: str) -> None:
+    """Write a file named on the command line, making its folder."""
     path = Path(name) if Path(name).is_absolute() else ctx.cwd / name
     path.parent.mkdir(parents=True, exist_ok=True)
     # The reader refuses lone surrogates; `replace` keeps any that slip past from losing the report
-    with path.open("a" if append else "w", encoding="utf-8", errors="replace") as stream:
+    with path.open("w", encoding="utf-8", errors="replace") as stream:
         stream.write(text)

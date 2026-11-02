@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 
+from speccheck import summary
 from speccheck.actions import _common
 from speccheck.context import Context
 from speccheck.specs import Problem, rel
@@ -31,9 +32,10 @@ ORDER = 30
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """The results files, `--complete` and `--workflow`."""
+    """The results files, `--complete`, `--workflow` and `--summary`."""
     _common.add_inputs(parser)
     _common.add_scope(parser)
+    summary.add_arguments(parser)
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
@@ -45,4 +47,4 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         where = ", ".join(args.inputs) if args.inputs else "no RESULTS given"
         message = f"no results files were read ({where}), so nothing is proven"
         evaluation.problems.append(Problem(rel(ctx.config().path, ctx.cwd), 0, message, "no-results"))
-    return _common.finish(ctx, NAME, evaluation)
+    return _common.finish(ctx, args, NAME, evaluation)

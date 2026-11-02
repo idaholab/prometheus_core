@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from speccheck.claims import Unique, copied_problem
 from speccheck.config import Config, ConfigError, Producer
 from speccheck.results import Result, ResultsFile
 from speccheck.specs import UNTESTED, Problem, Requirement, SpecSet, rel
@@ -41,6 +42,8 @@ class Evidence:
     """The claiming test or CI job and its outcome."""
     source: ResultsFile
     """The results file: producer, leg and links."""
+    how: str = ""
+    """How the result says it proves this requirement."""
 
 
 @dataclass
@@ -157,6 +160,22 @@ def evaluate(
     problems = list(specs.problems)
     config_name = rel(config.path, root)
 
+    # CI jobs claim in the config itself, so their claims are known even when they didn't report. They
+    # are read first, so a test that repeats a job's explanation is the one reported.
+    unique = Unique()
+    config_claims: dict[str, list[str]] = {id_: [] for id_ in specs.requirements}
+    for producer in config.producers.values():
+        for claim in producer.claims:
+            where = f"`ci.{producer.name}.covers`"
+            why = claim_problem(claim.id, None, specs) or copied_problem(claim.id, claim.how, specs)
+            if why:
+                problems.append(Problem(config_name, 0, f"{where}: {why}", "config-claim-invalid"))
+                continue
+            repeat = unique.add(f"`ci.{producer.name}`", claim.id, claim.how)
+            if repeat:
+                problems.append(Problem(config_name, 0, f"{where}: {repeat}", "how-duplicate"))
+            config_claims[claim.id].append(producer.name)
+
     # Claims from results files, kept only when the producer is declared and may claim the ID.
     claims: dict[str, list[Evidence]] = {id_: [] for id_ in specs.requirements}
     reported = sorted({f.producer for f in files})
@@ -168,25 +187,20 @@ def evaluate(
             problems.append(Problem(results_file.source, 1, message, "producer-undeclared"))
             continue
         for result in results_file.results:
-            for claimed in result.covers:
-                why = claim_problem(claimed, producer, specs)
-                if not why and producer.ci_job and claimed not in producer.covers:
-                    why = f"{claimed} isn't in `ci.{producer.name}.covers`, so job `{producer.name}` may not record it"
+            path, line = _where(result)
+            for claim in result.covers:
+                why = claim_problem(claim.id, producer, specs) or copied_problem(claim.id, claim.how, specs)
+                if not why and producer.ci_job and claim.id not in producer.covers:
+                    why = f"{claim.id} isn't in `ci.{producer.name}.covers`, so job `{producer.name}` may not record it"
                 if why:
-                    path, line = _where(result)
                     problems.append(Problem(path, line, why, "claim-invalid"))
-                else:
-                    claims[claimed].append(Evidence(result, results_file))
-
-    # CI jobs claim in the config itself, so their claims are known even when they didn't report.
-    config_claims: dict[str, list[str]] = {id_: [] for id_ in specs.requirements}
-    for producer in config.producers.values():
-        for claimed in producer.covers:
-            why = claim_problem(claimed, None, specs)
-            if why:
-                problems.append(Problem(config_name, 0, f"`ci.{producer.name}.covers`: {why}", "config-claim-invalid"))
-            else:
-                config_claims[claimed].append(producer.name)
+                    continue
+                # A CI job's result repeats its config entry, so it is that same claim
+                owner = f"`ci.{producer.name}`" if result.kind == "ci" else result.test
+                why = unique.add(owner, claim.id, claim.how)
+                if why:
+                    problems.append(Problem(path, line, why, "how-duplicate"))
+                claims[claim.id].append(Evidence(result, results_file, claim.how))
 
     expected = [p.name for p in (config.producers_in(workflow) if workflow else config.producers.values())]
     if complete and not expected:
@@ -271,8 +285,8 @@ def _problems_of(status: Status, root, complete: bool) -> list[Problem]:
         )
     if status.status == UNCLAIMED:
         message = (
-            f'{requirement.id} is not claimed; add `@pytest.mark.covers("{requirement.id}")` to a test that '
-            f"proves it, or mark it `{UNTESTED}` in the spec"
+            f'{requirement.id} is not claimed; add `@pytest.mark.covers("{requirement.id}", "<how it proves it>")` '
+            f"to a test that proves it, or mark it `{UNTESTED}` in the spec"
         )
         problems.append(Problem(name, line, message, UNCLAIMED))
     elif status.status == FAILED:
