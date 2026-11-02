@@ -25,7 +25,13 @@ from __future__ import annotations
 import ast
 import re
 import subprocess
+import sys
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 """common/speccheck."""
@@ -178,6 +184,16 @@ def test_only_the_cli_exits_and_only_three_modules_write():
         ):
             writes.append(name)
     assert (exits, writes) == ([], [])
+
+
+def test_the_build_backend_pin_agrees_with_its_hashes():
+    """build-constraints.txt pins pyproject's `[build-system] requires` exactly, with a hash on every entry."""
+    requires = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
+    text = (ROOT / "build-constraints.txt").read_text()
+    body = " ".join(line for line in text.splitlines() if not line.startswith("#")).replace("\\", " ")
+    entries = re.split(r"\s+(?=[A-Za-z])", body.strip())  # each entry starts with its name
+    assert [entry.split()[0] for entry in entries] == requires
+    assert all(re.search(r"--hash=sha256:[0-9a-f]{64}", entry) for entry in entries)
 
 
 def one_argument_covers(text: str) -> list[int]:

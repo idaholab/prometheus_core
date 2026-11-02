@@ -303,7 +303,9 @@ And at the end of the workflow, which needs `actions: read` and `contents: read`
 ```
 
 - **`speccheck-install`** puts the `speccheck` command on `PATH` (with `uv tool install`, from the
-  checkout), and leaves the job's own environment alone. A job that runs `pytest` in its own uv
+  checkout), and leaves the job's own environment alone. It builds the wheel with the build
+  backend pinned by hash in `build-constraints.txt`, since `uv.lock` doesn't cover build
+  requirements. A job that runs `pytest` in its own uv
   environment doesn't need it: the plugin comes with the project's dev dependencies.
 - **`speccheck-upload`** uploads `.speccheck/` (or `path`) as `speccheck-results-<name>`, kept 30
   days, and fails the job when there is nothing to upload.
