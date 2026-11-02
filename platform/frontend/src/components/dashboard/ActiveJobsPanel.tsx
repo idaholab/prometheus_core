@@ -175,9 +175,12 @@ export function ActiveJobsPanel() {
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [available, setAvailable] = useState(true);
   const [failed, setFailed] = useState(false);
-  // Read inside the poll without restarting it (which would clear the list).
+  // Read inside the poll without restarting it (which would clear the list). Kept in
+  // sync in an effect, not during render (react-hooks/refs).
   const awaitingRef = useRef(awaiting);
-  awaitingRef.current = awaiting;
+  useEffect(() => {
+    awaitingRef.current = awaiting;
+  }, [awaiting]);
   // Restarts a stopped poll; set by the effect below for the open conversation.
   const kick = useRef<() => void>(() => {});
 
