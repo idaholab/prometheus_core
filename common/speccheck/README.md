@@ -10,8 +10,9 @@ mentions an ID is not evidence.
   report of where each requirement is proven, with links to the CI jobs.
 
 The design and its decisions are in [`plan/design.md`](plan/design.md). speccheck's own
-requirements are in [`specs/`](specs/000-index.md), checked by speccheck itself in
-[`speccheck.yml`](../../.github/workflows/speccheck.yml).
+requirements are in [`specs/`](specs/000-index.md), proven by `tests/requirements/` and checked by
+speccheck itself in [`speccheck.yml`](../../.github/workflows/speccheck.yml). Its unit tests are in
+`tests/unit/`.
 
 ## Quick start
 
@@ -59,7 +60,7 @@ Exit codes: 0 fine, 1 problems, 2 usage or config error.
 
 **Output.** Problems go to stderr as `path:line: message`, so editors and CI logs link them. Each
 message says what to do. The last line is a summary, such as
-`speccheck verify: 58 requirements: 1 failed, 57 passed; reported: speccheck-unit; 1 problem`.
+`speccheck verify: 58 requirements: 1 failed, 57 passed; reported: speccheck-requirements; 1 problem`.
 Control characters in anything printed are written out (`\n`, `\x1b`), so a file name or a
 results file can't start a `::error::` line.
 
@@ -74,10 +75,10 @@ results file can't start a `::error::` line.
   "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "planned": 0, "untested": 0, "retired": 0},
   "requirements": [
     {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
-     "evidence": [{"test": "tests/test_config.py::test_a", "kind": "test", "file": "tests/test_config.py", "line": 133,
-                   "outcome": "failed", "producer": "speccheck-unit", "leg": "3.12", "job": "unit", "url": "https://..."}]}
+     "evidence": [{"test": "tests/requirements/test_002_config.py::test_the_prefix", "kind": "test", "file": "tests/requirements/test_002_config.py", "line": 70,
+                   "outcome": "failed", "producer": "speccheck-requirements", "leg": "3.12", "job": "requirements", "url": "https://..."}]}
   ],
-  "producers": {"reported": ["speccheck-unit"], "missing": []}
+  "producers": {"reported": ["speccheck-requirements"], "missing": []}
 }
 ```
 
@@ -142,7 +143,7 @@ specs = "specs"                 # the spec folder
 id-prefix = "SPC"               # IDs are SPC-REQ-NNN-XX; "" for bare IDs
 require-index = true
 
-[producers.speccheck-unit]      # a test run that provides evidence
+[producers.speccheck-requirements]      # a test run that provides evidence
 specs = "all"                   # or ["001", "004"]: the specs it may claim
 workflows = ["speccheck"]       # the workflows it runs in, for verify --complete --workflow
 
@@ -181,6 +182,22 @@ def test_results_file_round_trips():
 - Only the marker counts. A docstring may still say what a test proves, for the reader.
 - Whether a test really proves what it claims is a review question. speccheck sees only that it
   claims an ID and passed.
+
+**Which tests claim.** Claim a requirement only from a test that proves its observable behaviour:
+what a user of the thing sees, such as a command's output and exit code, a file it writes, or a
+response. A unit test of a helper claims nothing, even when the helper exists for a requirement. It
+proves the helper, not the promise. speccheck keeps the two apart in its own tests, and a project
+can do the same:
+
+| | `tests/unit/` | `tests/requirements/` |
+|---|---|---|
+| Tests | one module at a time, mirroring the package | one spec per file, through the public interface |
+| `covers` marks | none (collection fails on one) | every test (collection fails without one) |
+| Coverage | the only suite measured, held at 100% | not measured |
+| In CI | the `unit` job | the `requirements` job, whose results file is the evidence |
+
+Coverage then says how much code the unit tests exercise, and the report says which promises are
+kept. Neither one can stand in for the other.
 
 ## Results files
 

@@ -17,13 +17,10 @@ from __future__ import annotations
 import io
 import json
 
-import pytest
-
 from speccheck import jsonout
 from speccheck.specs import Problem
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
 def test_the_envelope_and_emit():
     """The fixed fields, extra fields, and one line-safe object."""
     body = jsonout.envelope("lint", False, [Problem("a", 1, "b\n::x")], specs=[])

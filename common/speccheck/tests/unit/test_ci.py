@@ -35,7 +35,6 @@ GITHUB = {
 """A fake GitHub Actions environment, on a re-run attempt."""
 
 
-@pytest.mark.covers("SPC-REQ-004-08")
 class TestContext:
     """The `ci` block."""
 
@@ -58,7 +57,6 @@ class TestContext:
         assert (block["run_attempt"], block["job_id"]) == (1, None)
 
 
-@pytest.mark.covers("SPC-REQ-007-06")
 class TestLinks:
     """Run and job URLs."""
 

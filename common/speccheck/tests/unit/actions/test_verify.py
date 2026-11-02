@@ -14,12 +14,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from tests.conftest import CONFIG, Repo
 
 
-@pytest.mark.covers("SPC-REQ-008-05", "SPC-REQ-005-05")
 def test_verify_names_reported_and_missing_producers(repo: Repo):
     """Problems on stderr, then the summary with who reported and who didn't."""
     repo.write("speccheck.toml", CONFIG + '\n[producers.docker]\nworkflows = ["ci"]\n')
@@ -33,7 +30,6 @@ def test_verify_names_reported_and_missing_producers(repo: Repo):
     assert lines[-1] == "speccheck verify: 1 requirement: 1 passed; reported: unit; missing: docker; 1 problem"
 
 
-@pytest.mark.covers("SPC-REQ-008-05")
 def test_a_clean_verify_prints_one_line(repo: Repo):
     """On stdout, nothing on stderr; `--verbose` adds every status; `--quiet` prints nothing."""
     repo.spec("- T-REQ-001-01: It.")
@@ -45,7 +41,6 @@ def test_a_clean_verify_prints_one_line(repo: Repo):
     assert repo.run("--quiet", "verify", "unit.jsonl").out == ""
 
 
-@pytest.mark.covers("SPC-REQ-008-04")
 def test_verify_json(repo: Repo):
     """Every requirement with its status and evidence, and the problems, in one object."""
     repo.spec("- T-REQ-001-01: It.\n- T-REQ-001-02: Other.")
@@ -75,7 +70,6 @@ def test_verify_json(repo: Repo):
     assert body["producers"] == {"reported": ["unit"], "missing": []}
 
 
-@pytest.mark.covers("SPC-REQ-004-02")
 def test_a_bad_results_file_is_a_problem_at_its_path(repo: Repo):
     """A broken file is reported where it is, relative to where speccheck runs."""
     repo.spec("- T-REQ-001-01: It. ⚠ untested")
@@ -86,7 +80,6 @@ def test_a_bad_results_file_is_a_problem_at_its_path(repo: Repo):
     assert "missing.jsonl: no such results file or folder" in run.err
 
 
-@pytest.mark.covers("SPC-REQ-005-04")
 def test_absolute_inputs(repo: Repo):
     """An absolute path works too; a path outside the folder is printed as given."""
     repo.spec("- T-REQ-001-01: It.")

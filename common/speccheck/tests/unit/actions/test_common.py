@@ -16,13 +16,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from speccheck.actions import _common
 from speccheck.specs import Problem
 
 
-@pytest.mark.covers("SPC-REQ-008-05")
 def test_paths_are_made_relative_where_possible(tmp_path: Path):
     """Under the current folder: relative; elsewhere: as given."""
     assert _common._relative(str(tmp_path / "a" / "b.jsonl"), tmp_path) == "a/b.jsonl"

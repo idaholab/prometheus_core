@@ -4,12 +4,13 @@ specs = "specs"
 id-prefix = "SPC"
 require-index = true
 
-# speccheck's unit tests, every leg of the `unit` job in speccheck.yml
-[producers.speccheck-unit]
+# tests/requirements, every leg of the `requirements` job in speccheck.yml. The unit tests
+# (tests/unit) claim nothing: they are for coverage and for finding a broken module fast
+[producers.speccheck-requirements]
 specs = "all"
 workflows = ["speccheck"]
 
-# The `speccheck-self-check` job in speccheck.yml. It runs speccheck-verify on the unit legs'
+# The `speccheck-self-check` job in speccheck.yml. It runs speccheck-verify on the requirements legs'
 # results, checks that speccheck-upload refuses an empty folder, then records and uploads with
 # speccheck-upload. `record` is its last step before the upload, so it runs only when all of that passed
 [ci.speccheck-self-check]

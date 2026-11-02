@@ -40,7 +40,6 @@ def ci_repo(repo: Repo) -> Repo:
     return repo
 
 
-@pytest.mark.covers("SPC-REQ-007-01")
 class TestRecord:
     """Writing a CI job's results."""
 

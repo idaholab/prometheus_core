@@ -35,7 +35,6 @@ def two_requirements(repo: Repo) -> None:
     repo.results("unit.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")], ci=CI)
 
 
-@pytest.mark.covers("SPC-REQ-006-01")
 def test_the_full_report(repo: Repo):
     """Summary, counts, problems, and one table per spec with the failures first."""
     two_requirements(repo)
@@ -49,7 +48,6 @@ def test_the_full_report(repo: Repo):
     assert [row.split(" | ")[0] for row in rows] == ["| T-REQ-001-02", "| T-REQ-001-01"]
 
 
-@pytest.mark.covers("SPC-REQ-006-02")
 def test_evidence_links_to_the_job(repo: Repo):
     """Test, outcome, producer and leg, and the job link; the run when there's no job ID."""
     two_requirements(repo)
@@ -62,7 +60,6 @@ def test_evidence_links_to_the_job(repo: Repo):
     assert "([job](https://github.com/o/r/actions/runs/7/attempts/1))" in repo.run("report", "unit.jsonl").out
 
 
-@pytest.mark.covers("SPC-REQ-006-02")
 def test_a_ci_job_and_a_waiting_requirement(repo: Repo):
     """A CI job's result says `job`; a requirement nobody reported for says who it waits on."""
     repo.write(
@@ -76,7 +73,6 @@ def test_a_ci_job_and_a_waiting_requirement(repo: Repo):
     assert "waiting on unit" in text
 
 
-@pytest.mark.covers("SPC-REQ-006-02")
 def test_many_results_are_counted(repo: Repo, monkeypatch: pytest.MonkeyPatch):
     """After MAX_EVIDENCE results, the rest are a count."""
     monkeypatch.setattr(report, "MAX_EVIDENCE", 2)
@@ -85,7 +81,6 @@ def test_many_results_are_counted(repo: Repo, monkeypatch: pytest.MonkeyPatch):
     assert "<br>and 2 more" in repo.run("report", "u.jsonl").out
 
 
-@pytest.mark.covers("SPC-REQ-006-03")
 class TestEscaping:
     """Untrusted strings in markdown."""
 
@@ -137,7 +132,6 @@ class TestEscaping:
         assert "javascript" not in text and "[job]" not in text
 
 
-@pytest.mark.covers("SPC-REQ-006-04")
 class TestSummary:
     """The step summary."""
 
@@ -162,7 +156,6 @@ class TestSummary:
         assert text.endswith("… cut to fit the step summary; see the artifact.\n")
 
 
-@pytest.mark.covers("SPC-REQ-006-05")
 def test_the_inputs_are_listed(repo: Repo):
     """Commit, runs, and which producers reported or were missing."""
     repo.write("speccheck.toml", 'specs = "specs"\nid-prefix = "T"\n[producers.unit]\n[producers.docker]\n')
@@ -175,7 +168,6 @@ def test_the_inputs_are_listed(repo: Repo):
     assert "- Producers missing: docker" in text
 
 
-@pytest.mark.covers("SPC-REQ-006-05")
 def test_inputs_outside_ci(repo: Repo):
     """No CI block: the report says so."""
     repo.spec("- T-REQ-001-01: It. ⚠ untested")
@@ -186,7 +178,6 @@ def test_inputs_outside_ci(repo: Repo):
     assert "| ID |" not in summary and "problems" not in summary
 
 
-@pytest.mark.covers("SPC-REQ-006-06", "SPC-REQ-008-04")
 def test_report_exits_0_on_failures_and_gives_json(repo: Repo):
     """The report is published even when verify fails, and `--json` is the same data."""
     two_requirements(repo)
@@ -196,3 +187,26 @@ def test_report_exits_0_on_failures_and_gives_json(repo: Repo):
     assert body["title"] == "speccheck requirements"
     assert [r["status"] for r in body["requirements"]] == ["passed", "unclaimed"]
     assert len(body["problems"]) == 1
+
+
+def test_order_puts_attention_first():
+    """Failed, unclaimed and not run before passed, then planned, untested and retired; ties in spec order."""
+    from pathlib import Path
+
+    from speccheck import evidence, specs
+
+    spec = specs.Spec(path=Path("s.md"), number="001")
+
+    def status(name: str, line: int) -> evidence.Status:
+        """A status for a requirement on `line`."""
+        return evidence.Status(specs.Requirement(id=f"T-{line}", spec=spec, line=line, text=""), name)
+
+    statuses = [
+        status("retired", 1),
+        status("passed", 2),
+        status("failed", 9),
+        status("failed", 3),
+        status("not run", 4),
+    ]
+    ordered = [(s.status, s.requirement.line) for s in sorted(statuses, key=report._order)]
+    assert ordered == [("failed", 3), ("failed", 9), ("not run", 4), ("passed", 2), ("retired", 1)]

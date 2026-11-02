@@ -14,14 +14,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from speccheck.context import Context
 from speccheck.output import Output
 from tests.conftest import Repo
 
 
-@pytest.mark.covers("SPC-REQ-002-01")
 def test_the_config_is_loaded_once(repo: Repo):
     """The config is found from the current folder on first use, then kept."""
     ctx = Context(cwd=repo.root, output=Output(), env={})

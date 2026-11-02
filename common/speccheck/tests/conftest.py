@@ -10,7 +10,14 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Fixtures shared by every test: a throwaway spec folder with a config, and a way to run the CLI."""
+"""Fixtures shared by every test, and the rule that keeps the two kinds of test apart.
+
+- `tests/unit/` tests one module at a time, mirrors `speccheck/`, and is the only suite run under
+  coverage. Its tests claim nothing.
+- `tests/requirements/` proves speccheck's own specs (`specs/`), one file per spec, through what a
+  user sees: the command line, a real pytest run, the files written. Every test there claims the
+  requirements it proves with `covers`, and none of it counts toward coverage.
+"""
 
 from __future__ import annotations
 
@@ -57,6 +64,27 @@ INDEX = "# Index\n\n- [001](001-thing.md)\n"
 def spec(body: str, *, status: str = "draft", number: str = "001", title: str = "Thing") -> str:
     """A spec file with the header filled in and `body` as its Requirements section."""
     return f"# {number} - {title}\n\nstatus: {status}\n\n## Requirements\n\n{textwrap.dedent(body).strip()}\n"
+
+
+TESTS = Path(__file__).resolve().parent
+"""The tests folder."""
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Fail collection on a unit test that claims a requirement, or a requirements test that claims none."""
+    problems = []
+    for item in items:
+        path = Path(str(item.path)).resolve()
+        if TESTS not in path.parents:
+            continue  # a pytester inner run's tests
+        part = path.relative_to(TESTS).parts[0]
+        claims = item.get_closest_marker("covers") is not None
+        if part == "unit" and claims:
+            problems.append(f"{item.nodeid}: a unit test claims nothing; prove requirements in tests/requirements/")
+        elif part == "requirements" and not claims:
+            problems.append(f"{item.nodeid}: a requirements test claims what it proves with @pytest.mark.covers(...)")
+    if problems:
+        raise pytest.UsageError("\n".join(problems))
 
 
 @pytest.fixture(autouse=True)

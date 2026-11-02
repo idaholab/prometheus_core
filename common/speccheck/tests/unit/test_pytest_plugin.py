@@ -112,7 +112,6 @@ def outcomes(path: Path) -> dict[str, str]:
     return {r.test.split("::")[1]: r.outcome for r in parsed.results}
 
 
-@pytest.mark.covers("SPC-REQ-003-01")
 def test_the_marker_is_registered(pytester: pytest.Pytester):
     """`--strict-markers` accepts `covers` with no config at all, and `--markers` lists it."""
     pytester.makepyfile('import pytest\n@pytest.mark.covers("X")\ndef test_a():\n    pass\n')
@@ -120,7 +119,6 @@ def test_the_marker_is_registered(pytester: pytest.Pytester):
     assert "covers(*ids)" in pytester.runpytest("--markers").stdout.str()
 
 
-@pytest.mark.covers("SPC-REQ-003-02")
 def test_marks_on_every_level_add_up(pytester: pytest.Pytester):
     """Module, class, function and parameter marks, each ID once."""
     tests = """\
@@ -149,7 +147,6 @@ def test_param(n):
     }
 
 
-@pytest.mark.covers("SPC-REQ-003-03")
 class TestCollectionCheck:
     """With `speccheck_config`, a bad claim fails collection."""
 
@@ -220,7 +217,6 @@ def test_retired():
         assert message in run.stderr.str()
 
 
-@pytest.mark.covers("SPC-REQ-003-04")
 @pytest.mark.parametrize(
     ("mark", "message"),
     [
@@ -238,7 +234,6 @@ def test_malformed_marks_fail_collection(pytester: pytest.Pytester, mark: str, m
     assert message in run.stderr.str()
 
 
-@pytest.mark.covers("SPC-REQ-003-05")
 def test_unconfigured_it_does_nothing(pytester: pytest.Pytester):
     """No config, no results path: nothing is checked or written, and outcomes are pytest's own."""
     project(pytester)
@@ -247,7 +242,6 @@ def test_unconfigured_it_does_nothing(pytester: pytest.Pytester):
     assert sorted(p.name for p in pytester.path.iterdir() if p.suffix == ".jsonl") == []
 
 
-@pytest.mark.covers("SPC-REQ-003-06")
 def test_a_docstring_mention_is_not_a_claim(pytester: pytest.Pytester):
     """Only the marker counts."""
     project(pytester, 'def test_a():\n    """Covers T-REQ-001-01."""\n    # Covers T-REQ-001-02\n')
@@ -256,7 +250,6 @@ def test_a_docstring_mention_is_not_a_claim(pytester: pytest.Pytester):
     assert results.read(path)[0].results == []
 
 
-@pytest.mark.covers("SPC-REQ-004-03", "SPC-REQ-004-04")
 def test_every_outcome_is_recorded(pytester: pytest.Pytester):
     """Each phase merged into one outcome; skipped and deselected tests are written too."""
     project(pytester)
@@ -276,7 +269,6 @@ def test_every_outcome_is_recorded(pytester: pytest.Pytester):
     }
 
 
-@pytest.mark.covers("SPC-REQ-004-03")
 @pytest.mark.parametrize(
     ("phases", "expected"),
     [
@@ -309,7 +301,6 @@ def test_phases_merge(phases, expected):
     assert outcome == expected
 
 
-@pytest.mark.covers("SPC-REQ-004-04")
 def test_collect_only_writes_collected(pytester: pytest.Pytester):
     """`--collect-only` runs nothing, so every claim is `collected`."""
     project(pytester)
@@ -318,7 +309,6 @@ def test_collect_only_writes_collected(pytester: pytest.Pytester):
     assert set(outcomes(path).values()) == {"collected"}
 
 
-@pytest.mark.covers("SPC-REQ-004-05")
 class TestWritingOnlyWhenAsked:
     """The option, the variable, and no file after an interrupted session."""
 
@@ -358,7 +348,6 @@ class TestWritingOnlyWhenAsked:
         assert not (pytester.path / "r.jsonl").exists()
 
 
-@pytest.mark.covers("SPC-REQ-004-06")
 def test_xdist_writes_once_from_the_controller(pytester: pytest.Pytester):
     """With two workers, one file with every test's real outcome, not a worker's `collected`."""
     project(pytester)
@@ -378,7 +367,6 @@ def test_xdist_writes_once_from_the_controller(pytester: pytest.Pytester):
     assert [p.name for p in pytester.path.glob("*.jsonl")] == ["x.jsonl"]
 
 
-@pytest.mark.covers("SPC-REQ-004-06")
 def test_a_worker_never_writes(pytester: pytest.Pytester):
     """The write hook returns early on a worker, which has `workerinput`."""
     config = SimpleNamespace(workerinput={})
@@ -387,7 +375,6 @@ def test_a_worker_never_writes(pytester: pytest.Pytester):
     recorder.pytest_sessionfinish(None, 0)  # would fail on getoption if it went on
 
 
-@pytest.mark.covers("SPC-REQ-004-06")
 def test_merging_workers_keeps_the_run_outcome():
     """Every worker collects every test; the one that ran it has the real outcome."""
     recorder = pytest_plugin.Recorder.__new__(pytest_plugin.Recorder)
@@ -404,7 +391,6 @@ def test_merging_workers_keeps_the_run_outcome():
     recorder.pytest_testnodedown(SimpleNamespace(), None)
 
 
-@pytest.mark.covers("SPC-REQ-004-08")
 def test_a_ci_run_writes_the_context(pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch):
     """In GitHub Actions the header carries the run, and links to it."""
     project(pytester, "def test_a():\n    pass\n")
@@ -423,7 +409,6 @@ def test_a_ci_run_writes_the_context(pytester: pytest.Pytester, monkeypatch: pyt
     assert header["ci"]["run_url"] == "https://github.com/o/r/actions/runs/9/attempts/1"
 
 
-@pytest.mark.covers("SPC-BEH-005-01")
 def test_a_skipped_claim_fails_verify_and_a_passing_one_passes(
     pytester: pytest.Pytester, repo: Repo, monkeypatch: pytest.MonkeyPatch
 ):

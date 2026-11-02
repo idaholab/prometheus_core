@@ -56,7 +56,6 @@ def parse_lines(*lines: str):
     return results.parse("\n".join(lines) + "\n", "r.jsonl")
 
 
-@pytest.mark.covers("SPC-REQ-004-01")
 class TestFormat:
     """JSON Lines with a versioned header, and the schema file."""
 
@@ -88,7 +87,6 @@ class TestFormat:
         assert problems == [] and len(parsed.results) == 1
 
 
-@pytest.mark.covers("SPC-REQ-004-02")
 class TestValidation:
     """A bad file is a problem, and none of its results count."""
 
@@ -133,7 +131,6 @@ class TestValidation:
         assert parse_lines(header(ci={"job": "unit", "job_id": None, "run_id": 3}))[1] == []
 
 
-@pytest.mark.covers("SPC-REQ-004-07")
 class TestLimits:
     """Size limits and symlinks."""
 
@@ -180,7 +177,6 @@ class TestLimits:
         assert sorted(p.message.split(":")[0] for p in problems) == ["no such results file or folder", "not JSON"]
 
 
-@pytest.mark.covers("SPC-REQ-004-05")
 def test_a_failed_write_leaves_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The file is written to a temporary name and renamed, so a crash leaves no partial file."""
 
