@@ -34,6 +34,12 @@ are marked so this step can pass, and step 4 works through them.
   `sdk-docker`'s `uv export --only-dev` still installs (the checkout is mounted at `/src`, so
   `../common/speccheck` is not there). Likely fix: mount the repository root and work in
   `/src/sdk`.
+  - Pass the CI variables with `-e` except `GITHUB_WORKSPACE` (a host path), and set
+    `SPECCHECK_ROOT=sdk`, so the report still links each test.
+  - Run the container as the runner's user (`--user "$(id -u):$(id -g)"`), or create
+    `.speccheck/` on the host before `docker run`. Otherwise a root container creates the
+    folder in the bind mount owned by root, and on Docker Engine (a self-hosted runner, a
+    developer's machine) the host user can't remove it.
 - **Docs:** `sdk/docs/SDD_SPEC_AUTHORING.md` and `SDD_TESTING_STANDARD.md` say how to claim a
   requirement (the marker) and point to speccheck's README for the checked rules, instead of the
   docstring form. `sdk/specs/000-index.md`'s "How Agents Use These Specs" says the same.
