@@ -418,7 +418,7 @@ cluster-reset: ##@ Delete and recreate the local k3d cluster
 ##@ Frontend (React)
 ##@
 
-.PHONY: react-dev react-build react-check
+.PHONY: react-dev react-build react-check react-test-e2e
 
 react-dev: ##@ Run React frontend dev server on host, no Docker (frontend/)
 	$(MAKE) -C frontend dev
@@ -426,5 +426,8 @@ react-dev: ##@ Run React frontend dev server on host, no Docker (frontend/)
 react-build: ##@ Build React frontend for production (frontend/)
 	$(MAKE) -C frontend build
 
-react-check: ##@ Run React frontend lint + typecheck (frontend/)
+react-check: ##@ Run React frontend lint + typecheck + unit and component tests (frontend/)
 	$(MAKE) -C frontend check
+
+react-test-e2e: ##@ Run React frontend end-to-end tests in headless Chromium (frontend/)
+	$(MAKE) -C frontend test-e2e

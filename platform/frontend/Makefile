@@ -22,7 +22,7 @@ test: ##@ Run the unit and component tests (vitest)
 test-e2e: ##@ Run the end-to-end tests (Playwright, headless Chromium)
 	npm run test:e2e
 
-check: ##@ Run all checks (lint + typecheck + test)
+check: ##@ Run lint + typecheck + test; the end-to-end tests are separate (make test-e2e)
 check: lint typecheck test
 
 install: ##@ Install dependencies
