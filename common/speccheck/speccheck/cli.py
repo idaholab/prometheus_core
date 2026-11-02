@@ -89,6 +89,18 @@ def build_parser(modules: list[ModuleType]) -> argparse.ArgumentParser:
     return parser
 
 
+def _replacing(stream: TextIO) -> TextIO:
+    """A real console stream, set to write a character its encoding lacks as `?` instead of raising.
+
+    The output uses symbols such as ✅ and ⏸, which a non-UTF-8 console (a Windows code page, an odd
+    locale) can't encode.
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(errors="replace")
+    return stream
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -99,8 +111,10 @@ def main(
 ) -> int:
     """Parse the arguments, run the action and return its exit code."""
     argv = list(sys.argv[1:] if argv is None else argv)
-    out = out or sys.stdout
-    err = err or sys.stderr
+    if out is None:
+        out = _replacing(sys.stdout)
+    if err is None:
+        err = _replacing(sys.stderr)
     modules = actions.discover()
     parser = build_parser(modules)
     wants_json = "--json" in argv

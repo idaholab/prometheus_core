@@ -172,6 +172,18 @@ class TestMain:
         assert ctx.output.out is sys.stdout and ctx.output.err is sys.stderr
 
 
+def test_a_console_that_cant_encode_a_symbol_gets_a_question_mark():
+    """A real stream is set to replace what it can't encode; one that can't be reconfigured is left as is."""
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="ascii")
+    assert cli._replacing(console) is console
+    console.write("✅ ok\n")
+    console.flush()
+    assert raw.getvalue() == b"? ok\n"
+    plain = io.StringIO()
+    assert cli._replacing(plain) is plain
+
+
 def python(*args: str) -> subprocess.CompletedProcess:
     """This Python, isolated, in a subprocess: no pytest import hook, so the result is the same under xdist."""
     return subprocess.run([sys.executable, "-I", *args], capture_output=True, text=True, check=False)
