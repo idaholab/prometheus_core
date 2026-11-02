@@ -31,6 +31,10 @@ RUN_URL = "https://github.com/o/r/actions/runs/7/attempts/1"
 """A run attempt's link."""
 CI = {"leg": "3.12", "job": "unit", "sha": "b" * 40, "run_url": RUN_URL, "job_url": JOB_URL}
 """A results file's CI block with a job link."""
+BASE = "https://github.com/o/r"
+"""This run's repository URL, the only one linked."""
+ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+"""The variables `BASE` comes from."""
 
 
 def source(producer: str = "unit", ci: dict | None = None) -> results.ResultsFile:
@@ -89,35 +93,50 @@ class TestCode:
 
 
 class TestSafeUrl:
-    """Only run and job URLs of the shape this tool builds are linked."""
+    """Only run, attempt and job URLs under this run's own repository URL are linked."""
 
     @pytest.mark.parametrize(
         "url",
         [
             "javascript:alert(1)",
+            "https://evil.example/o/r/actions/runs/1/job/2",
             "https://evil.example/o/r/actions/runs/1/job/2)[x](y",
+            "https://github.com/o/other/actions/runs/1",
+            "https://github.com/o/r2/actions/runs/1",
+            "https://github.com.evil.example/o/r/actions/runs/1",
             "http://github.com/o/r/actions/runs/1",
             "https://github.com/o/r/pulls/1",
             "https://github.com/o/r/actions/runs/x",
+            "https://github.com/o/r/actions/runs/0",
+            "https://github.com/o/r/actions/runs/1\n",
+            "https://github.com/o/r/actions/runs/1/job/2/x",
             None,
             3,
         ],
     )
     def test_rejected(self, url):
-        """Anything else gives no link."""
-        assert report.safe_url(url) == ""
+        """Another host or repo, another shape, a trailing newline, or not a string: no link."""
+        assert report.safe_url(url, BASE) == ""
 
     @pytest.mark.parametrize(
         "url",
         [
             "https://github.com/o/r/actions/runs/1",
             "https://github.com/o/r/actions/runs/1/attempts/2",
-            "https://ghe.example:8443/o/r/actions/runs/1/job/3",
+            "https://github.com/o/r/actions/runs/1/job/3",
         ],
     )
     def test_accepted(self, url):
-        """Run, attempt and job URLs, on any https host."""
-        assert report.safe_url(url) == url
+        """Run, attempt and job URLs of this repository."""
+        assert report.safe_url(url, BASE) == url
+
+    def test_a_server_with_a_port(self):
+        """GitHub Enterprise on its own host and port."""
+        assert report.safe_url("https://ghe.example:8443/o/r/actions/runs/1", "https://ghe.example:8443/o/r") != ""
+
+    def test_nothing_is_linked_without_a_base(self):
+        """Outside CI there is no repository to trust, so no link."""
+        assert report.safe_url("https://github.com/o/r/actions/runs/1", "") == ""
 
 
 class TestEvidenceCell:
@@ -125,42 +144,45 @@ class TestEvidenceCell:
 
     def test_a_test_with_a_job_link(self):
         """Test, outcome, producer and leg, then the link."""
-        cell = report._evidence_cell(status("passed", ("tests/t.py::test_a", "passed"), ci=CI))
+        cell = report._evidence_cell(status("passed", ("tests/t.py::test_a", "passed"), ci=CI), BASE)
         assert cell == rf"test `tests/t.py::test_a` passed in unit 3\.12 ([job]({JOB_URL}))"
 
     def test_the_run_when_there_is_no_job_and_none_when_unsafe(self):
         """The run link stands in for the job's; an unsafe one is dropped."""
-        cell = report._evidence_cell(status("passed", ("t", "passed"), ci={"run_url": RUN_URL}))
+        cell = report._evidence_cell(status("passed", ("t", "passed"), ci={"run_url": RUN_URL}), BASE)
         assert cell.endswith(f"([job]({RUN_URL}))")
-        assert "[job]" not in report._evidence_cell(status("passed", ("t", "passed"), ci={"job_url": "javascript:x"}))
+        assert "[job]" not in report._evidence_cell(
+            status("passed", ("t", "passed"), ci={"job_url": "javascript:x"}), BASE
+        )
 
     def test_a_ci_job_and_no_leg(self):
         """A CI job's result says `job`; no leg, no trailing space."""
         assert (
-            report._evidence_cell(status("passed", ("publish", "passed"), kind="ci")) == "job `publish` passed in unit"
+            report._evidence_cell(status("passed", ("publish", "passed"), kind="ci"), BASE)
+            == "job `publish` passed in unit"
         )
 
     def test_a_backtick_cant_close_the_code_span(self):
         """A backtick in the test name is dropped, and nothing is left in its place."""
-        assert report._evidence_cell(status("passed", ("a`b", "passed"))) == "test `ab` passed in unit"
+        assert report._evidence_cell(status("passed", ("a`b", "passed")), BASE) == "test `ab` passed in unit"
 
     def test_many_results_are_counted(self, monkeypatch: pytest.MonkeyPatch):
         """After MAX_EVIDENCE results, the rest are a count."""
         monkeypatch.setattr(report, "MAX_EVIDENCE", 2)
-        cell = report._evidence_cell(status("passed", *[(f"t{n}", "passed") for n in range(4)]))
+        cell = report._evidence_cell(status("passed", *[(f"t{n}", "passed") for n in range(4)]), BASE)
         assert cell.count("<br>") == 2 and cell.endswith("<br>and 2 more")
 
     def test_waiting_and_nothing(self):
         """Without evidence: who it waits on, else a dash."""
         waiting = status("not run")
         waiting.waiting_on = ["unit", "a|b"]
-        assert report._evidence_cell(waiting) == r"waiting on unit, a\|b"
-        assert report._evidence_cell(status("unclaimed")) == "—"
+        assert report._evidence_cell(waiting, BASE) == r"waiting on unit, a\|b"
+        assert report._evidence_cell(status("unclaimed"), BASE) == "—"
 
 
 def test_a_row_stays_four_columns():
     """ID, icon and status, escaped text, evidence."""
-    row = report._row(status("failed", ("t|x", "skipped"), text="Pipes | and <b>"))
+    row = report._row(status("failed", ("t|x", "skipped"), text="Pipes | and <b>"), BASE)
     assert row == r"| T-REQ-001-01 | ❌ failed | Pipes \| and \<b\> | test `t\|x` skipped in unit |"
     assert row.count(" | ") == 3
 
@@ -184,7 +206,7 @@ class TestInputs:
     def test_from_ci_files(self):
         """Commits, run links and producers, each once."""
         files = [source(ci=CI), source(ci=CI), source(ci={"run_url": "javascript:x", "sha": ""})]
-        lines = report._inputs(evaluation(files=files, missing=["docker"]))
+        lines = report._inputs(evaluation(files=files, missing=["docker"]), BASE)
         assert lines == [
             "- Commit: bbbbbbbbbbbb",
             f"- Runs: [7/attempts/1]({RUN_URL})",
@@ -194,7 +216,7 @@ class TestInputs:
 
     def test_outside_ci(self):
         """No CI block and nobody reported."""
-        assert report._inputs(evaluation(files=[source()], reported=[])) == [
+        assert report._inputs(evaluation(files=[source()], reported=[]), "") == [
             "- Commit: unknown (not run in CI)",
             "- Runs: none",
             "- Producers reported: none",
@@ -283,7 +305,7 @@ class TestRun:
 
     def test_stdout_cant_start_a_log_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """On stdout, which may be a CI log, each line is written out (a code span keeps `##[` and `::`)."""
-        monkeypatch.setattr(report, "full", lambda title, evaluation: "- `##[error]x`\n::error::y\n")
+        monkeypatch.setattr(report, "full", lambda title, evaluation, base: "- `##[error]x`\n::error::y\n")
         ctx = self.ctx(tmp_path)
         assert report.run(ctx, namespace()) == 0
         assert out(ctx) == "- `##\\x5berror]x`\n\\x3a:error::y\n"
@@ -292,7 +314,7 @@ class TestRun:
 
     def test_a_lone_surrogate_cant_lose_the_report(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Text that isn't valid UTF-8 is replaced in the file rather than failing the write."""
-        monkeypatch.setattr(report, "full", lambda title, evaluation: "t\ud800\n")
+        monkeypatch.setattr(report, "full", lambda title, evaluation, base: "t\ud800\n")
         assert report.run(self.ctx(tmp_path), namespace(output="r.md")) == 0
         assert (tmp_path / "r.md").read_text() == "t?\n"
 

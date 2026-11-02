@@ -95,6 +95,17 @@ def run_url(ci: Mapping[str, Any]) -> str:
     return f"{url}/attempts/{attempt}" if attempt else url
 
 
+def repository_url(env: Mapping[str, str]) -> str:
+    """`<server>/<owner>/<repo>` from this run's `GITHUB_SERVER_URL` and `GITHUB_REPOSITORY`, or "".
+
+    The only base a report links to: a results file's own URLs are not trusted to name the host.
+    """
+    server, repository = env.get("GITHUB_SERVER_URL", ""), env.get("GITHUB_REPOSITORY", "")
+    if not (SERVER.fullmatch(server) and REPOSITORY.fullmatch(repository)):
+        return ""
+    return f"{server}/{repository}"
+
+
 def job_url(ci: Mapping[str, Any]) -> str:
     """The job's own URL when its ID is known, else the run's URL, else ""."""
     run = run_url(ci)

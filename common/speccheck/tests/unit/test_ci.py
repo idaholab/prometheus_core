@@ -71,6 +71,24 @@ class TestLinks:
         """`${{ job.check_run_id }}` gives the job's own page; each attempt's job has its own ID."""
         assert ci.context(GITHUB)["job_url"] == "https://github.com/idaholab/prometheus_core/actions/runs/123/job/456"
 
+    @pytest.mark.parametrize(
+        ("server", "repository", "url"),
+        [
+            ("https://github.com", "o/r", "https://github.com/o/r"),
+            ("https://ghe.example:8443", "o/r", "https://ghe.example:8443/o/r"),
+            ("http://github.com", "o/r", ""),
+            ("https://github.com/", "o/r", ""),
+            ("https://github.com", "o/r/x", ""),
+            ("https://github.com", "o/r\n", ""),
+            ("", "o/r", ""),
+            ("https://github.com", "", ""),
+        ],
+    )
+    def test_repository_url(self, server: str, repository: str, url: str):
+        """The base a report links under, only from a safe server and an `owner/name`."""
+        env = {"GITHUB_SERVER_URL": server, "GITHUB_REPOSITORY": repository}
+        assert ci.repository_url(env) == url
+
     def test_without_a_job_id_the_job_link_is_the_run(self):
         """The fallback when the workflow doesn't pass SPECCHECK_JOB_ID."""
         env = {k: v for k, v in GITHUB.items() if k != "SPECCHECK_JOB_ID"}

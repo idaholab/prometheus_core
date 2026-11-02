@@ -225,6 +225,8 @@ which we don't use. The check run ID is the number in a job's URL
 directly. Each attempt's job has its own ID, so a re-run links its own job. When the variable is
 missing or not a number, `job_url` falls back to the run attempt's URL. The jobs API lookup isn't
 needed. Confirmed when `speccheck.yml` first runs: the report's job links open the right job.
+The report trusts only the shape and the base of a results file's URL. It links one only when it
+is under the report job's own `GITHUB_SERVER_URL/GITHUB_REPOSITORY`; outside CI nothing is linked.
 
 ## How a requirement's status is decided
 
