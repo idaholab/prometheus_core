@@ -99,8 +99,18 @@ def test_one_json_object_on_every_exit_path(project: Project):
         assert done.returncode == code, argv
         assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
     check = json.loads(command(project, "check", "--json").stdout)
+    # `path` is the spec file from the repository's root; pytester's folder is in none, so null
     assert check["requirements"] == [
-        {"id": "T-REQ-001-01", "spec": "001", "status": "unclaimed", "text": "One.", "evidence": [], "waiting_on": []}
+        {
+            "id": "T-REQ-001-01",
+            "spec": "001",
+            "status": "unclaimed",
+            "text": "One.",
+            "path": None,
+            "line": 7,
+            "evidence": [],
+            "waiting_on": [],
+        }
     ]
 
 
@@ -329,3 +339,69 @@ def test_only_this_runs_report_is_linked(project: Project, url: str, env: dict):
     project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
     assert project.run("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env).code == 0
     assert (project.root / "s.md").read_text() == "**speccheck:** 1 requirement: 1 passed\n\n"
+
+
+JOB_CI = {"job": "unit", "job_id": 41, "run_url": "https://github.com/o/r/actions/runs/7"}
+"""A results file's CI block from job 41."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-10",
+    "verify --job-names names job 41 by its display name in the problem, the summary and --json, and without the option names its producer",
+)
+def test_verify_names_jobs_by_the_map(project: Project):
+    """The same map as the report's, so the summary and the report name jobs alike; it is optional."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=JOB_CI)
+    project.write("names.json", json.dumps({"41": "unit python 3.12"}))
+    named = project.run("verify", "r.jsonl", "--job-names", "names.json", "--summary", "s.md")
+    assert named.code == 1 and "t failed in unit python 3.12" in named.err
+    assert "t failed in unit python 3.12" in (project.root / "s.md").read_text()
+    body = project.run("verify", "r.jsonl", "--job-names", "names.json", "--json").json()
+    assert body["requirements"][0]["evidence"][0]["job_name"] == "unit python 3.12"
+    plain = project.run("verify", "r.jsonl")
+    assert "t failed in unit;" in plain.err
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        pytest.param(
+            None,
+            "--job-names names.json: can't read",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10", "a --job-names file that doesn't exist exits 2 saying it can't be read"
+            ),
+            id="missing",
+        ),
+        pytest.param(
+            "{not json",
+            "--job-names names.json: not JSON",
+            marks=pytest.mark.covers("SPC-REQ-008-10", "a --job-names file that isn't JSON exits 2"),
+            id="not-json",
+        ),
+        pytest.param(
+            '["unit"]',
+            "--job-names names.json: must be a JSON object from job ID to name",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10", "a --job-names list instead of an object exits 2, showing the object form"
+            ),
+            id="a-list",
+        ),
+        pytest.param(
+            '{"41": 3}',
+            "--job-names names.json: must be a JSON object from job ID to name",
+            marks=pytest.mark.covers("SPC-REQ-008-10", "a --job-names object with a number for a name exits 2"),
+            id="not-a-string",
+        ),
+    ],
+)
+def test_a_bad_job_names_file_is_a_usage_error(project: Project, content: str | None, message: str):
+    """For report and verify alike: exit 2 and the message, not a traceback."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=JOB_CI)
+    if content is not None:
+        project.write("names.json", content)
+    for command_name in ("report", "verify"):
+        run = project.run(command_name, "r.jsonl", "--job-names", "names.json")
+        assert run.code == 2 and message in run.err and "Traceback" not in run.err, command_name

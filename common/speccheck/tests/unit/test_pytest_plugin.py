@@ -489,6 +489,17 @@ class TestRecorder:
         recorder.pytest_sessionfinish(None, 0)
         assert results.read(tmp_path / "r.jsonl")[0].results[0].covers == [Claim("T-REQ-001-01", "h")]
 
+    def test_root_is_pytests_root_from_the_repository(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """In CI, pytest's root from `GITHUB_WORKSPACE`; `.` when they're the same folder."""
+        (tmp_path / "sub").mkdir()
+        recorder = self.recorder(tmp_path / "sub", option=str(tmp_path / "r.jsonl"))
+        monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+        recorder.pytest_sessionfinish(None, 0)
+        assert results.read(tmp_path / "r.jsonl")[0].root == "sub"
+        monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path / "sub"))
+        recorder.pytest_sessionfinish(None, 0)
+        assert results.read(tmp_path / "r.jsonl")[0].root == "."
+
     def test_sessionfinish_writes_the_file(self, tmp_path: Path):
         """Sorted by test, with the producer from the ini option, the runner and the start time."""
         recorder = self.recorder(tmp_path, option="out/r.jsonl", ini={"speccheck_producer": "unit"})

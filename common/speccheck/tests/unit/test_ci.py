@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from speccheck import ci
@@ -29,7 +31,6 @@ GITHUB = {
     "GITHUB_SHA": "a" * 40,
     "GITHUB_REF": "refs/heads/devel",
     "GITHUB_EVENT_NAME": "push",
-    "SPECCHECK_LEG": "3.12",
     "SPECCHECK_JOB_ID": "456",
 }
 """A fake GitHub Actions environment, on a re-run attempt."""
@@ -42,7 +43,7 @@ class TestContext:
         """Every field, from the environment."""
         block = ci.context(GITHUB)
         assert block["repository"] == "idaholab/prometheus_core"
-        assert (block["workflow"], block["job"], block["leg"]) == ("speccheck", "unit", "3.12")
+        assert (block["workflow"], block["job"]) == ("speccheck", "unit") and "leg" not in block
         assert (block["run_id"], block["run_attempt"], block["job_id"]) == (123, 2, 456)
         assert block["sha"] == "a" * 40
         assert block["provider"] == ci.PROVIDER == "github"
@@ -149,3 +150,40 @@ def test_in_github_actions():
     """Only `GITHUB_ACTIONS=true`."""
     assert ci.in_github_actions({"GITHUB_ACTIONS": "true"})
     assert not any(ci.in_github_actions({"GITHUB_ACTIONS": v}) for v in ("1", "True", ""))
+
+
+def test_commit_url():
+    """This run's repository and a full commit hash; nothing outside CI or with a bad hash."""
+    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r", "GITHUB_SHA": "a" * 40}
+    assert ci.commit_url(env) == "https://github.com/o/r/blob/" + "a" * 40
+    assert ci.commit_url({**env, "GITHUB_SHA": "a" * 39}) == ""
+    assert ci.commit_url({**env, "GITHUB_SHA": "../x"}) == ""
+    assert ci.commit_url({"GITHUB_SHA": "a" * 40}) == ""
+
+
+class TestRepositoryRoot:
+    """Where the repository starts."""
+
+    def test_the_workspace_in_ci(self, tmp_path: Path):
+        """`GITHUB_WORKSPACE` wins, resolved."""
+        assert ci.repository_root(tmp_path, {"GITHUB_WORKSPACE": str(tmp_path / "w")}) == (tmp_path / "w").resolve()
+
+    def test_the_nearest_git_folder(self, tmp_path: Path):
+        """Without the variable, the nearest folder up with a `.git`, a folder or a worktree's file."""
+        (tmp_path / "repo" / "a" / "b").mkdir(parents=True)
+        (tmp_path / "repo" / ".git").write_text("gitdir: elsewhere\n")
+        assert ci.repository_root(tmp_path / "repo" / "a" / "b", {}) == (tmp_path / "repo").resolve()
+
+    def test_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """No variable and no `.git` above: None."""
+        monkeypatch.setattr(Path, "exists", lambda self: False)
+        assert ci.repository_root(tmp_path, {}) is None
+
+
+def test_from_root(tmp_path: Path):
+    """A path under the root from it, the root itself as `.`, else None."""
+    root = tmp_path.resolve()
+    assert ci.from_root(tmp_path / "a" / "b.md", root) == "a/b.md"
+    assert ci.from_root(tmp_path, root) == "."
+    assert ci.from_root(Path("/elsewhere/x"), root) is None
+    assert ci.from_root(tmp_path / "x", None) is None

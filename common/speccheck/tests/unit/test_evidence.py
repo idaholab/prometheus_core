@@ -39,12 +39,15 @@ JOB = ci_job("job", "T-REQ-001-01")
 """A CI job claiming T-REQ-001-01."""
 
 
-def evidence_of(*outcomes: str, leg: str = "") -> list[evidence.Evidence]:
-    """One result per outcome, from producer `unit`."""
-    source = results.ResultsFile(producer="unit", ci={"leg": leg} if leg else None)
+def evidence_of(*outcomes: str, job_name: str = "") -> list[evidence.Evidence]:
+    """One result per outcome, from producer `unit`, in the job named `job_name` when given."""
+    source = results.ResultsFile(producer="unit")
     return [
         evidence.Evidence(
-            results.Result(test=f"t{n}", covers=[Claim("T-REQ-001-01", f"t{n} proves it")], outcome=o), source
+            results.Result(test=f"t{n}", covers=[Claim("T-REQ-001-01", f"t{n} proves it")], outcome=o),
+            source,
+            f"t{n} proves it",
+            job_name,
         )
         for n, o in enumerate(outcomes)
     ]
@@ -114,10 +117,10 @@ class TestClaimProblem:
 
 
 def test_where_and_describe():
-    """A claim is located by its file, or its test name without one; described with producer and leg."""
+    """A claim is located by its file, or its test name without one; described by job name, else producer."""
     assert evidence._where(results.Result("t", ["X"], "passed", file="f.py", line=3)) == ("f.py", 3)
     assert evidence._where(results.Result("publish", ["X"], "passed", kind="ci")) == ("publish", 0)
-    assert evidence._describe(evidence_of("skipped", leg="3.12")[0]) == "t0 skipped in unit 3.12"
+    assert evidence._describe(evidence_of("skipped", job_name="unit (3.12)")[0]) == "t0 skipped in unit (3.12)"
     assert evidence._describe(evidence_of("failed")[0]) == "t0 failed in unit"
 
 
@@ -185,7 +188,9 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
         (
             "failed",
             False,
-            ["T-REQ-001-01 has no passing result: t0 failed in unit 3.12; to fix: fix the test or the code it checks"],
+            [
+                "T-REQ-001-01 has no passing result: t0 failed in unit (3.12); to fix: fix the test or the code it checks"
+            ],
         ),
         ("not run", False, []),
         ("not run", True, ["T-REQ-001-01 was not run: nothing that reported claims it (waiting on: unit)"]),
@@ -194,7 +199,7 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
 def test_problems_of(status, complete, expected):
     """Which statuses are problems, with and without --complete, at the spec's path and the bullet's line."""
     requirement = make_requirement(make_spec())
-    found = evidence_of("failed", leg="3.12") if status == "failed" else []
+    found = evidence_of("failed", job_name="unit (3.12)") if status == "failed" else []
     decided = evidence.Status(requirement, status, found, waiting_on=["unit"] if status == "not run" else [])
     problems = evidence._problems_of(decided, ROOT, complete)
     assert [p.message[: len(e)] for p, e in zip(problems, expected, strict=True)] == expected
@@ -246,14 +251,18 @@ class TestEvaluate:
     """What `evaluate` adds to `_decide`: which claims count, CI jobs, --complete, and the problem order."""
 
     def test_claims_are_gathered_across_files(self):
-        """A pass in one leg outweighs a skip in another; both are the requirement's evidence."""
+        """A pass in one job outweighs a skip in another; both are the requirement's evidence, named by job."""
         files = [
-            results_file("unit", ("T-REQ-001-01", "skipped"), ci={"leg": "3.10"}),
-            results_file("unit", ("T-REQ-001-01", "passed"), ci={"leg": "3.14"}),
+            results_file("unit", ("T-REQ-001-01", "skipped"), ci={"job_id": 10}),
+            results_file("unit", ("T-REQ-001-01", "passed"), ci={"job_id": 14}),
         ]
-        evaluation = evaluate(("It.",), files)
+        evaluation = evaluate(("It.",), files, job_names={"10": "unit 3.10"})
         assert statuses(evaluation) == {"T-REQ-001-01": "passed"} and evaluation.problems == []
-        assert [e.result.outcome for e in evaluation.statuses[0].evidence] == ["skipped", "passed"]
+        found = evaluation.statuses[0].evidence
+        assert [(e.result.outcome, e.job_name, e.where) for e in found] == [
+            ("skipped", "unit 3.10", "unit 3.10"),
+            ("passed", "", "unit"),
+        ]
         assert (evaluation.reported, evaluation.missing, evaluation.files) == (["unit"], [], files)
 
     def test_an_undeclared_producer_doesnt_count(self):
@@ -419,3 +428,12 @@ class TestEvaluate:
 def config_producer(name: str, *claims: Claim) -> config.Producer:
     """A CI job with exactly the given claims and explanations."""
     return config.Producer(name=name, specs=None, workflows=("ci",), claims=claims, ci_job=True)
+
+
+def test_job_name():
+    """By the results file's `ci.job_id`, as a string key; "" without an ID or a name for it."""
+    names = {"7": "build"}
+    assert evidence.job_name(results.ResultsFile(producer="u", ci={"job_id": 7}), names) == "build"
+    assert evidence.job_name(results.ResultsFile(producer="u", ci={"job_id": 8}), names) == ""
+    assert evidence.job_name(results.ResultsFile(producer="u", ci={}), names) == ""
+    assert evidence.job_name(results.ResultsFile(producer="u"), names) == ""

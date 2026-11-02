@@ -152,5 +152,6 @@ def namespace(**values: Any) -> argparse.Namespace:
         "output": None,
         "summary": None,
         "report_url": None,
+        "job_names": None,
     }
     return argparse.Namespace(**{**defaults, **values})
