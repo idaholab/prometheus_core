@@ -137,15 +137,3 @@ def test_the_old_checkers_lines_say_where_the_setting_went(project: Project):
         "specs/001-thing.md:4: the `tests:` line is gone; say which producers may claim this spec in the config"
         in run.err
     )
-
-
-@pytest.mark.covers("SPC-REQ-001-10")
-def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Project):
-    """Every problem line is `path:line: message` or `path: message`, and a file name can't begin `::`."""
-    project.spec("- T-REQ-1-1: Bad.")
-    project.write("specs/x\n::error::evil.md", "")
-    run = project.speccheck("lint")
-    lines = run.err.splitlines()[:-1]
-    assert lines and all(not line.startswith("::") for line in run.err.splitlines())
-    assert "specs/001-thing.md:7: a bullet must read" in run.err
-    assert "specs/x\\n::error::evil.md: a spec file must be named" in run.err

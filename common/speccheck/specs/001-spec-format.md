@@ -15,7 +15,7 @@ be found, has one ID, and says whether it is tested, planned or retired.
   spec as a markdown link. Mentioning a spec's number or name in prose is not enough.
 - SPC-REQ-001-03: A spec MUST have one `status:` line above its first `##` section, with the
   value `draft`, `implemented` or `retired`. An `implemented` spec MUST have at least one
-  requirement.
+  requirement. A `draft` spec's requirements MUST be checked like an `implemented` spec's.
 - SPC-REQ-001-04: A requirement MUST be a bullet `- <prefix>-REQ-NNN-XX: text` or
   `- <prefix>-BEH-NNN-XX: text`, where NNN is the spec's own number. A bullet that starts like an
   ID in any other form (`*`, bold, nested, without the prefix) is a problem, so it can't go unseen.
@@ -27,5 +27,3 @@ be found, has one ID, and says whether it is tested, planned or retired.
 - SPC-REQ-001-08: Lines inside fenced code blocks MUST NOT be read as requirements or headers.
 - SPC-REQ-001-09: A spec's `tests:` line and an index's `id-prefix:` line from the old checker MUST
   be reported, saying where the setting lives now.
-- SPC-REQ-001-10: Every problem MUST be printed as `path:line: message`, with control characters
-  written out, so that a file name can't start a CI log command.

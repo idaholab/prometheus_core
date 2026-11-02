@@ -9,8 +9,8 @@ Every requirement gets one status from the specs, the config and the results fil
 
 ## Requirements
 
-- SPC-REQ-005-01: A requirement MUST be `passed` only when at least one claiming result passed.
-  One passing result in any producer or leg is enough.
+- SPC-REQ-005-01: By default, a requirement MUST be `passed` when at least one claiming result
+  passed, in any producer or leg.
 - SPC-REQ-005-02: A claimed requirement whose claiming results all came out as something other than
   `passed` (failed, error, skipped, xfailed, xpassed, deselected, collected) MUST be `failed` in
   `verify`, and the problem MUST list those results.
@@ -25,7 +25,5 @@ Every requirement gets one status from the specs, the config and the results fil
   its results MUST NOT count.
 - SPC-REQ-005-07: A requirement that carries the untested or the planned marker and is claimed
   MUST be a problem that says to remove the marker.
-- SPC-REQ-005-08: `check` MUST read a collect-only run's results and fail on unclaimed requirements
-  and disallowed claims, whatever the outcomes are.
-- SPC-BEH-005-01: GIVEN a test that claims a requirement and is skipped WHEN its run's results file
-  is verified THEN the requirement is `failed`, while the same test passing makes it `passed`.
+- SPC-REQ-005-08: `check` MUST accept a collect-only run's results and MUST NOT look at outcomes: a
+  claimed requirement is `claimed` whatever its results' outcomes are.

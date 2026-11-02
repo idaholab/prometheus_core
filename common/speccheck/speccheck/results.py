@@ -48,8 +48,9 @@ MAX_COVERS = 200
 """The most IDs one result may claim."""
 
 HEADER_KEYS = {"schema", "producer", "runner", "ci", "started"}
-"""The keys a header may have."""
+"""The header keys this speccheck reads; a reader ignores any other (see `_known`)."""
 CI_KEYS = {
+    "provider",
     "server",
     "repository",
     "workflow",
@@ -64,9 +65,9 @@ CI_KEYS = {
     "run_url",
     "job_url",
 }
-"""The keys a header's `ci` block may have."""
+"""The keys of a header's `ci` block this speccheck reads; any other is ignored."""
 RESULT_KEYS = {"test", "file", "line", "covers", "outcome", "kind"}
-"""The keys a result line may have."""
+"""The result keys this speccheck reads; any other is ignored."""
 
 
 @dataclass
@@ -160,22 +161,24 @@ def _text(value: Any, name: str, *, allow_empty: bool = True) -> str:
     return value
 
 
+def _known(body: dict[str, Any], keys: set[str]) -> dict[str, Any]:
+    """Only the keys this speccheck reads: a newer writer may add fields within a schema, and those are
+    dropped here, unread and never printed."""
+    return {key: value for key, value in body.items() if key in keys}
+
+
 def _header(body: Any) -> ResultsFile:
     """Validate the header line."""
     if not isinstance(body, dict):
         raise Invalid("the first line must be the header object")
     if body.get("schema") != SCHEMA:
         raise Invalid(f"`schema` is {body.get('schema')!r}; this speccheck reads only {SCHEMA!r}")
-    unknown = set(body) - HEADER_KEYS
-    if unknown:
-        raise Invalid(f"unknown header key `{sorted(unknown)[0]}`")
+    body = _known(body, HEADER_KEYS)
     ci = body.get("ci")
     if ci is not None:
         if not isinstance(ci, dict):
             raise Invalid("`ci` must be an object or null")
-        unknown = set(ci) - CI_KEYS
-        if unknown:
-            raise Invalid(f"unknown key `ci.{sorted(unknown)[0]}`")
+        ci = _known(ci, CI_KEYS)
         for key, value in ci.items():
             if value is not None and not isinstance(value, (str, int)) or isinstance(value, bool):
                 raise Invalid(f"`ci.{key}` must be a string, a number or null")
@@ -193,9 +196,7 @@ def _result(body: Any) -> Result:
     """Validate one result line."""
     if not isinstance(body, dict):
         raise Invalid("a result must be an object")
-    unknown = set(body) - RESULT_KEYS
-    if unknown:
-        raise Invalid(f"unknown result key `{sorted(unknown)[0]}`")
+    body = _known(body, RESULT_KEYS)
     covers = body.get("covers")
     if not isinstance(covers, list) or not covers or len(covers) > MAX_COVERS:
         raise Invalid(f"`covers` must be a list of 1 to {MAX_COVERS} IDs")

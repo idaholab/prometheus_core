@@ -45,6 +45,7 @@ class TestContext:
         assert (block["workflow"], block["job"], block["leg"]) == ("speccheck", "unit", "3.12")
         assert (block["run_id"], block["run_attempt"], block["job_id"]) == (123, 2, 456)
         assert block["sha"] == "a" * 40
+        assert block["provider"] == ci.PROVIDER == "github"
 
     def test_outside_ci(self):
         """None, so a local file is only good for `check`."""

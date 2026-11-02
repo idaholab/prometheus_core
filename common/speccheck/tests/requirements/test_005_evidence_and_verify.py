@@ -158,7 +158,7 @@ def test_check_on_a_collect_only_run(project: Project):
     )
 
 
-@pytest.mark.covers("SPC-BEH-005-01")
+@pytest.mark.covers("SPC-REQ-005-02")
 def test_skipped_then_passing(project: Project, monkeypatch: pytest.MonkeyPatch):
     """GIVEN a claiming test WHEN it is skipped THEN verify fails, and WHEN it passes THEN verify passes."""
     project.spec("- T-REQ-001-01: One.")

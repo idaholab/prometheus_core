@@ -15,13 +15,15 @@ checks what its jobs proved.
 - SPC-REQ-007-03: `.github/actions/speccheck-upload` MUST upload a job's results as an artifact
   named `speccheck-results-<name>`, and MUST fail the job when there is nothing to upload.
 - SPC-REQ-007-04: `.github/actions/speccheck-verify` MUST download every `speccheck-results-*`
-  artifact of the run, run `verify`, put the summary in the step summary, upload the full report as the
-  `speccheck-report` artifact, and fail when `verify` fails, with read-only permissions and no
-  secrets.
-- SPC-REQ-007-05: In `speccheck.yml`, `record` and both composite actions MUST run end to end in a
-  real workflow run, and the final `speccheck` job MUST verify speccheck's own specs completely
-  from the run's results.
-- SPC-REQ-007-06: A results file's run and job links MUST point at the run attempt that wrote it.
-  The job link MUST use the job's check run ID when the workflow passes it in.
-- SPC-REQ-007-07: `.github/actions/speccheck-install` MUST install the `speccheck` command from the
-  checkout with uv and put it on `PATH`, and `speccheck-verify` MUST run it from there.
+  artifact of the run, run `verify`, append the summary (see SPC-REQ-006-04) to the step summary,
+  upload the full report as the `speccheck-report` artifact, and fail when `verify` fails, with
+  read-only permissions and no secrets.
+- SPC-REQ-007-05: Each result's link MUST open the job that produced it, in the run attempt that
+  produced it, re-runs included. When the job can't be identified, the link MUST open that run
+  attempt.
+- SPC-REQ-007-06: After one `speccheck-install` step, a job MUST be able to run the `speccheck`
+  command without setting up Python itself, and `speccheck-verify` MUST use that command.
+- SPC-REQ-007-07: GitHub Actions MUST be a supported CI provider: the CI context comes from its
+  `GITHUB_*` variables, and its run and job links have the form
+  `<server>/<owner>/<repo>/actions/runs/<id>`, optionally followed by `/attempts/<n>` or
+  `/job/<id>`.

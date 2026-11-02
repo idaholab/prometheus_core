@@ -82,7 +82,7 @@ What differs from the plan above, or settles something it left open:
   didn't run.
 - **The self-check job** (`speccheck-self-check`) runs `speccheck-verify` on the requirements legs'
   results, checks that the report and summary were written, and checks that `speccheck-upload`
-  refuses an empty folder. Then it records SPC-REQ-007-03 to 007-05 and uploads with
+  refuses an empty folder. Then it records SPC-REQ-007-03, 007-04 and 007-06 and uploads with
   `speccheck-upload`. The final job's `verify --complete` therefore fails if either action or
   `record` breaks.
 - **Two test suites** (decided 2026-11-01, after the first version):
@@ -108,6 +108,15 @@ What differs from the plan above, or settles something it left open:
 - **`check` and unreported producers:** a requirement nothing claims is `unclaimed` in `check`,
   even when a producer is missing from its inputs. A collect-only run sees every claim. Only
   `verify` calls it `not run` while a producer that may claim it hasn't reported.
+- **Spec review (2026-11-02):** the requirements were reviewed for overlap, for focus on users,
+  and for decisions that would be hard to undo. SPC-BEH-005-01 and the old 007-05 were removed as
+  duplicates, the retired 008-06 was dropped (nothing was merged yet), and 001-10 became 008-06,
+  which covers all output. Requirements that named a mechanism (module layout, uv,
+  `tomli`, the xdist controller, `check_run_id`) now state what the user gets. 005-01 says "by
+  default", so an "every leg must pass" option can come later. The GitHub specifics moved into
+  007-07, and the results-file header gained `ci.provider`. Readers now ignore unknown keys, so
+  fields can be added within `speccheck-results/1`, the same rule `--json` follows. The pytest
+  outcome mapping moved to 003-07, and 004-03 defines the outcomes independently of the runner.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 

@@ -35,16 +35,17 @@ def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
 
 @pytest.mark.covers("SPC-REQ-008-01")
 def test_help_lists_every_command_by_section(project: Project):
-    """Each actions/ module is a command in `--help`, under its section."""
+    """Every command is in `--help`, under its section, with a one-line description."""
     done = command(project, "--help")
-    actions = Path(speccheck.__file__).parent / "actions"
-    names = sorted(p.stem for p in actions.glob("*.py") if not p.stem.startswith("_"))
     assert done.returncode == 0
     assert "Check specs and evidence:" in done.stdout and "In CI:" in done.stdout
-    listed = sorted(
-        line.split()[0] for line in done.stdout.splitlines() if line.startswith("  ") and not line.startswith("   ")
-    )
-    assert [n for n in names if n in listed] == names
+    listed = {
+        line.split()[0]: line.split(None, 1)[1:]
+        for line in done.stdout.splitlines()
+        if line.startswith("  ") and not line.startswith("   ") and not line.lstrip().startswith("-")
+    }
+    assert {"lint", "check", "verify", "report", "record"} <= set(listed)
+    assert all(listed[name] for name in ("lint", "check", "verify", "report", "record"))
 
 
 @pytest.mark.covers("SPC-REQ-008-02")
@@ -101,3 +102,23 @@ def test_problems_on_stderr_and_a_summary_last(project: Project):
     assert done.stderr.splitlines()[-1] == (
         "speccheck verify: 2 requirements: 1 unclaimed, 1 passed; reported: unit; 1 problem"
     )
+
+
+@pytest.mark.covers("SPC-REQ-008-06")
+def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Project):
+    """Every problem line is `path:line: message` or `path: message`, and nothing printed can begin `::`.
+
+    Control characters are written out whether they come from a file name or from a results file.
+    """
+    project.spec("- T-REQ-1-1: Bad.")
+    project.write("specs/x\n::error::evil.md", "")
+    done = command(project, "lint")
+    assert done.stderr.splitlines()[:-1] and all(not line.startswith("::") for line in done.stderr.splitlines())
+    assert "specs/001-thing.md:7: a bullet must read" in done.stderr
+    assert "specs/x\\n::error::evil.md: a spec file must be named" in done.stderr
+    (project.root / "specs" / "x\n::error::evil.md").unlink()
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t\n::error::evil", ["T-REQ-001-01"], "failed")])
+    done = command(project, "verify", "r.jsonl")
+    assert done.returncode == 1 and all(not line.startswith("::") for line in done.stderr.splitlines())
+    assert "t\\n::error::evil failed in unit" in done.stderr
