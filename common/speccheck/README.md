@@ -265,6 +265,11 @@ for runners in other languages.
 
 ## In CI
 
+**Not supported yet outside this repo.** The actions are local (`./.github/actions/...`), and
+`speccheck-install` installs from `$GITHUB_WORKSPACE/common/speccheck`, so this section works only
+in the prometheus_core monorepo. An agent in its own repo can run speccheck locally (see "Quick
+start"), but has no CI setup yet.
+
 In each job that runs claiming tests:
 
 ```yaml
