@@ -29,3 +29,5 @@ Every requirement gets one status from the specs, the config and the results fil
   MUST be a problem that says to remove the marker.
 - SPC-REQ-005-08: `check` MUST accept a collect-only run's results and MUST NOT look at outcomes: a
   claimed requirement is `claimed` whatever its results' outcomes are.
+- SPC-REQ-005-09: `verify` MUST fail when it read no results file, with or without `--complete`,
+  and the problem MUST say that nothing is proven.

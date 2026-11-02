@@ -60,3 +60,14 @@ def test_complete_and_workflow_are_passed_on(tmp_path: Path):
     assert "missing: docker" in err(ctx)
     ctx = make_ctx(tmp_path, loaded=loaded, specs_set=make_specs("It."))
     assert verify.run(ctx, namespace(inputs=["unit.jsonl"], complete=True, workflow="ci")) == 0
+
+
+def test_no_results_files_fail(tmp_path: Path):
+    """Nothing read: a problem on the config, naming what was given, whether or not it is complete."""
+    (tmp_path / "empty").mkdir()
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+    assert verify.run(ctx, namespace(inputs=["empty"])) == 1
+    assert "no results files were read (empty), so nothing is proven" in err(ctx)
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+    assert verify.run(ctx, namespace()) == 1
+    assert "no results files were read (no RESULTS given)" in err(ctx)

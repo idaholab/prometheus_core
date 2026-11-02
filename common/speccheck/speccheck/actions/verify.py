@@ -18,6 +18,7 @@ import argparse
 
 from speccheck.actions import _common
 from speccheck.context import Context
+from speccheck.specs import Problem, rel
 
 NAME = "verify"
 """The command name."""
@@ -36,6 +37,12 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
-    """Report every requirement that failed, or (with `--complete`) wasn't run."""
+    """Report every requirement that failed, or (with `--complete`) wasn't run, and fail when no results were read."""
     evaluation = _common.evaluate(ctx, args, runtime=True)
+    if not evaluation.files:
+        # Nothing proved anything. Without --complete every requirement is only "not run", so this
+        # would be green with no evidence at all, such as when no results artifact was downloaded
+        where = ", ".join(args.inputs) if args.inputs else "no RESULTS given"
+        message = f"no results files were read ({where}), so nothing is proven"
+        evaluation.problems.append(Problem(rel(ctx.config().path, ctx.cwd), 0, message))
     return _common.finish(ctx, NAME, evaluation)

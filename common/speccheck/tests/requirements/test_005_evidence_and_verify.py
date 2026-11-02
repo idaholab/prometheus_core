@@ -199,3 +199,15 @@ def test_skipped_then_passing(project: Project, monkeypatch: pytest.MonkeyPatch)
     project.pytest("--speccheck-results=pass.jsonl").assert_outcomes(passed=1)
     passed = project.speccheck("verify", "--complete", "pass.jsonl", "--json")
     assert passed.code == 0 and status(passed) == {"T-REQ-001-01": "passed"}
+
+
+@pytest.mark.covers("SPC-REQ-005-09")
+def test_verify_with_no_results_files_fails(project: Project):
+    """An empty folder, a folder with no results, and no argument at all: exit 1 and a problem, with or without --complete."""
+    project.spec("- T-REQ-001-01: One.")
+    project.write("empty/note.txt", "not a results file")
+    for argv in (["empty"], ["--complete", "empty"], []):
+        run = project.speccheck("verify", *argv, "--json")
+        messages = [p["message"] for p in run.json()["problems"]]
+        assert run.code == 1 and run.json()["ok"] is False, argv
+        assert any("no results files were read" in m and "nothing is proven" in m for m in messages), argv
