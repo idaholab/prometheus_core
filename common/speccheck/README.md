@@ -343,6 +343,54 @@ for runners in other languages.
 in the prometheus_core monorepo. An agent in its own repo can run speccheck locally (see "Quick
 start"), but has no CI setup yet.
 
+How a requirement gets proven in a workflow, using speccheck's own
+[`speccheck.yml`](../../.github/workflows/speccheck.yml) as the example. Its `unit` and `coverage`
+jobs claim nothing, so they aren't shown:
+
+```mermaid
+flowchart TD
+    subgraph tests["requirements"]
+        pytest["pytest tests/requirements<br/>one job per Python, 3.10 to 3.14<br/>collection checks every covers(ID, how) claim"]
+        results[(".speccheck/requirements-3.x.jsonl<br/>one result per claiming test")]
+        upload1["speccheck-upload"]
+        pytest -->|"--speccheck-results"| results --> upload1
+    end
+
+    subgraph job["speccheck-self-check"]
+        steps["a CI job that is itself evidence:<br/>its steps run the composite actions for real"]
+        record["speccheck record<br/>one passed result per ID in [ci.speccheck-self-check] covers"]
+        upload2["speccheck-upload"]
+        steps -->|"only when every step passed"| record --> upload2
+    end
+
+    upload1 --> artifacts[("artifacts<br/>speccheck-results-*")]
+    upload2 --> artifacts
+
+    subgraph final["speccheck: verify specs"]
+        download["needs both jobs, and runs even when one failed:<br/>download every speccheck-results-* artifact"]
+        names["look up the run's job names<br/>(jobs API, actions: read)"]
+        report["speccheck report --job-names"]
+        verify["speccheck verify --job-names --summary --report-url"]
+        download --> names --> report
+        report -->|"report.md, report.json"| reportartifact[("artifact<br/>speccheck-report")]
+        reportartifact -->|"its URL"| verify
+    end
+
+    artifacts --> download
+    verify --> summary["step summary<br/>one line of counts and a link to the report,<br/>then the failures, if any"]
+    verify --> status{"exit code"}
+    status -->|"0"| pass(["job passes"])
+    status -->|"1: a claim failed, skipped or wasn't run"| fail(["job fails"])
+```
+
+- **Claim:** a test says what it proves with `@pytest.mark.covers(ID, how)`. A CI job claims in
+  the config's `[ci.<job>]` table and records it as its last step, so it only counts if the job
+  got that far.
+- **Collect:** each test job writes a results file and uploads it as `speccheck-results-<name>`.
+- **Check:** the final job reads every results file, writes the report with each result named by
+  its job, uploads it, then runs `verify`, whose exit code is the job's. `--complete` (on `devel`)
+  also fails on a producer that didn't report.
+
 In each job that runs claiming tests:
 
 ```yaml
