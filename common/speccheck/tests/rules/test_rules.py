@@ -196,6 +196,22 @@ def test_the_build_backend_pin_agrees_with_its_hashes():
     assert all(re.search(r"--hash=sha256:[0-9a-f]{64}", entry) for entry in entries)
 
 
+def test_every_problem_code_is_in_the_readme():
+    """Each code the package can give a Problem is a row of the README's "Problem codes" table, and no row is stale."""
+    text = (ROOT / "README.md").read_text()
+    table = text[text.index("#### Problem codes") :].split("\n\n", 3)[2]
+    documented = set(re.findall(r"^\| `([a-z0-9-]+)` \|", table, re.M))
+    used: set[str] = set()
+    for path in PACKAGE.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "Problem" and len(node.args) == 4:
+                code = node.args[3]
+                if isinstance(code, ast.Constant):
+                    used.add(code.value)
+    used |= {"unclaimed", "failed"}  # evidence.py passes these as the UNCLAIMED and FAILED statuses
+    assert sorted(used - documented) == [] and sorted(documented - used) == []
+
+
 def one_argument_covers(text: str) -> list[int]:
     """The 1-based lines of `text` that show a `covers` mark with only an ID."""
     return [n for n, line in enumerate(text.splitlines(), 1) if ONE_ARGUMENT_COVERS.search(line)]

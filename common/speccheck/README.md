@@ -453,11 +453,54 @@ With `--json`, stdout is exactly one object, on every exit path:
 
 - A usage or config error has `"error": {"code": "usage", "message": "..."}` instead (a bare
   `speccheck --json` is one).
-- Each problem's `code` is a stable name for its kind (`unclaimed`, `failed`, `not-run`,
-  `bullet-malformed`, `producer-missing`, `no-results`, `results-not-json` and so on). The
-  `message` wording can change; the `code` doesn't.
+- Each problem's `code` is a stable name for its kind, listed below. The `message` wording can
+  change; the `code` doesn't.
 - `"line": 0` means the problem has no line (a whole file, or the config).
 - Fields are only added within a `schema_version`.
+
+#### Problem codes
+
+Every code a problem can have. A rules test fails when the code gains one this table doesn't list.
+
+| Code | Means |
+|---|---|
+| `bullet-malformed` | a line starts like an ID but isn't `- <prefix>-REQ-NNN-XX: text` |
+| `bullet-wrong-spec` | an ID's number isn't its spec's |
+| `id-duplicate` | an ID appears twice in the folder |
+| `text-duplicate` | two requirements have the same text |
+| `marker-conflict` | a requirement is both `⚠ untested` and `(planned: ...)` |
+| `spec-file-name` | a file in the folder isn't `NNN-short-name.md` |
+| `spec-title` | a spec's first line isn't `# NNN - <name>` |
+| `spec-empty` | an `implemented` spec has no requirements |
+| `status-missing` | a spec has no `status:` line |
+| `status-invalid` | the `status:` isn't `draft`, `implemented` or `retired` |
+| `status-repeated` | a spec has a second `status:` line |
+| `index-missing` | `require-index` is on and there's no `000-index.md` |
+| `index-link-missing` | the index doesn't link a spec |
+| `tests-line-gone` | a spec still has the old `tests:` line; it moved to the config |
+| `id-prefix-line-gone` | the index still has the old `id-prefix:` line; it moved to the config |
+| `unclaimed` | nothing claims a requirement that should be |
+| `failed` | every result that claims a requirement failed, errored, was skipped or didn't run |
+| `not-run` | with `--complete`, the producers that may claim a requirement didn't report |
+| `untested-marker-stale` | a requirement marked `⚠ untested` is claimed; remove the marker |
+| `planned-marker-stale` | a requirement marked `(planned: ...)` is claimed; remove the marker |
+| `claim-invalid` | a result claims an ID that is malformed, unknown, retired, or not the producer's to claim |
+| `config-claim-invalid` | a `[ci.<job>] covers` entry claims an ID like that |
+| `how-duplicate` | two claims give the same explanation |
+| `producer-undeclared` | a results file comes from a producer the config doesn't declare |
+| `producer-missing` | with `--complete`, a declared producer sent no results |
+| `no-results` | `verify` read no results file at all |
+| `results-missing` | an input path doesn't exist |
+| `results-symlink` | an input is a symlink, which isn't followed |
+| `results-unreadable` | an input can't be read |
+| `results-too-large` | a results file is over the size limit |
+| `results-line-too-long` | a line in a results file is over the length limit |
+| `results-empty` | a results file is empty |
+| `results-not-utf8` | a results file isn't UTF-8 |
+| `results-not-json` | a line in a results file isn't JSON |
+| `results-invalid` | a line doesn't match `speccheck-results/1` |
+
+A usage or config error isn't a problem: it is the `error` object, whose `code` is `usage`.
 
 ### Spec format
 
