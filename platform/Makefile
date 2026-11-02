@@ -45,20 +45,12 @@ DEBUG_AGENTS ?= false
 # dependencies and dominates the build time). Default: false.
 OPTIONAL_AGENTS ?= false
 
-# Set LOCAL_DEEPLYNX=true to also run DeepLynx (docker-compose.deeplynx.yml)
-# from its published images, and point the platform at it: every start target
-# first starts DeepLynx and runs `make deeplynx-setup`, which writes the
-# DEEPLYNX_* settings to .env. Its web UI is at http://localhost:3000.
-# Default: false.
-LOCAL_DEEPLYNX ?= false
-DEEPLYNX_SERVER_PORT ?= 5000
-DEEPLYNX_DEP := $(if $(filter true,$(LOCAL_DEEPLYNX)),deeplynx-setup,)
-
 # Publish the client-agent port for host-driven full-system tests without
 # changing the runtime API surface. The system-test suite itself never starts
 # or reconfigures Docker.
 PROMETHEUS_SYSTEM_TESTING ?= false
 CLIENT_AGENT_PORT ?= 8001
+LITELLM_LOCAL_PORT ?= 9977
 PROMETHEUS_SYSTEM_TEST_URL ?= http://localhost:$(CLIENT_AGENT_PORT)
 
 # Set PROFILE=prod to bring up the React frontend in production mode instead,
@@ -85,16 +77,15 @@ BACKEND_PORT ?= 8600
 FRONTEND_DEV_PORT ?= 5150
 FRONTEND_PROD_PORT ?= 8080
 FRONTEND_PORT := $(if $(filter dev,$(PROFILE)),$(FRONTEND_DEV_PORT),$(if $(filter prod,$(PROFILE)),$(FRONTEND_PROD_PORT),))
-
 # All per-agent compose files found on disk (checked-out submodules only).
-AGENT_COMPOSE_FILES := $(shell find agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+# -L follows symlinks so symlinked agent directories are included.
+AGENT_COMPOSE_FILES := $(shell find -L agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 ifeq ($(DEBUG_AGENTS),true)
-AGENT_COMPOSE_FILES += $(shell find agents/debug-agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+AGENT_COMPOSE_FILES += $(shell find -L agents/debug-agents -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 endif
 ifeq ($(OPTIONAL_AGENTS),true)
-AGENT_COMPOSE_FILES += $(shell find agents/optional -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
+AGENT_COMPOSE_FILES += $(shell find -L agents/optional -mindepth 2 -maxdepth 2 -name docker-compose.yml 2>/dev/null | sort)
 endif
-
 # Build the -f flags for docker compose.
 COMPOSE_FILES := -f $(COMPOSE_BASE)
 ifeq ($(PROMETHEUS_SYSTEM_TESTING),true)
@@ -102,9 +93,6 @@ COMPOSE_FILES += -f docker-compose.system-test.yml
 endif
 ifneq ($(AGENT_COMPOSE_FILES),)
 COMPOSE_FILES += -f $(COMPOSE_AGENTS)
-endif
-ifeq ($(LOCAL_DEEPLYNX),true)
-COMPOSE_FILES += -f docker-compose.deeplynx.yml
 endif
 # Automatically include docker-compose.override.yml if present (local dev overrides).
 ifneq ($(wildcard docker-compose.override.yml),)
@@ -119,31 +107,13 @@ endif
 ifneq ($(wildcard $(COMPOSE_AGENTS)),)
 COMPOSE_FILES_NG += -f $(COMPOSE_AGENTS)
 endif
-ifeq ($(LOCAL_DEEPLYNX),true)
-COMPOSE_FILES_NG += -f docker-compose.deeplynx.yml
-endif
 ifneq ($(wildcard docker-compose.override.yml),)
 COMPOSE_FILES_NG += -f docker-compose.override.yml
 endif
 
-# The builds of the sdk base image, backend and frontend import the registry
-# cache that publish-images writes. BUILD_CACHE is its prefix (one package per
-# image); a fork can point it at its own. The tag is the host's platform. The
-# agent images aren't published, so they build uncached. Importing a registry
-# cache needs the containerd image store (Docker Desktop's default). Set
-# USE_BUILD_CACHE=false (in .env or on the command line) to build without it,
-# e.g. when offline. Default: true.
-USE_BUILD_CACHE ?= true
-BUILD_CACHE ?= ghcr.io/idaholab/prometheus_core/buildcache-prometheus
-ifeq ($(USE_BUILD_CACHE),true)
-BUILD_CACHE_PLATFORM ?= $(if $(filter arm64 aarch64,$(shell uname -m)),arm64,amd64)
-export BUILD_CACHE
-export BUILD_CACHE_PLATFORM
-COMPOSE_FILES += -f docker-compose.build-cache.yml
-COMPOSE_FILES_NG += -f docker-compose.build-cache.yml
-endif
-
 CLEAR_COMPOSE_FILES ?= $(COMPOSE_FILES_NG)
+
+LITELLM_DB_VOLUME := $(COMPOSE_PROJECT_NAME)_litellm-db-data
 
 ##@
 ##@ Help
@@ -190,8 +160,7 @@ PREREQUISITE_TARGETS := \
 	ng-up-fg \
 	ng-restart \
 	ng-restart-fg \
-	clear-agent-registry \
-	deeplynx-setup \
+	clear-litellm-db \
 	down \
 	down-v \
 	base-image \
@@ -202,7 +171,7 @@ PREREQUISITE_TARGETS := \
 
 $(PREREQUISITE_TARGETS): check-prerequisites
 
-.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-agent-registry deeplynx-setup clear-admin-users clobber help
+.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-litellm-db clear-admin-users clobber help
 
 FORCE:
 
@@ -265,73 +234,60 @@ check: ##@ Wait until the running platform answers on its host ports and every a
 ##@ Compose
 ##@
 
-up: ##@ Clear agent registrations, build and start all services (detached), then wait until they are up (CHECK=false to skip). Set PROFILE=dev|prod to include the React frontend.
+up: ##@ Clear LiteLLM DB, build and start all services (detached), then wait until they are up (CHECK=false to skip). Set PROFILE=dev|prod to include the React frontend.
 up: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-up: $(BASE_IMAGE_DEP) generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+up: $(BASE_IMAGE_DEP) generate init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build -d $(UP_WAIT) $(UP_ARGS)
 	$(RUN_CHECK)
 
-up-fg: ##@ Clear agent registrations, then build and start all services (foreground). Set PROFILE=dev|prod to include the React frontend.
+up-fg: ##@ Clear LiteLLM DB, then build and start all services (foreground). Set PROFILE=dev|prod to include the React frontend.
 up-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-up-fg: $(BASE_IMAGE_DEP) generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+up-fg: $(BASE_IMAGE_DEP) generate init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build
 
-restart: ##@ Clear agent registrations, then restart all services without rebuilding.
+restart: ##@ Clear LiteLLM DB, then restart all services without rebuilding.
 restart: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-restart: generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+restart: generate init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (foreground).
+restart-fg: ##@ Clear LiteLLM DB, then restart all services without rebuilding (foreground).
 restart-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-restart-fg: generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+restart-fg: generate init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up
 
-ng-up: ##@ Clear agent registrations, then start without regenerating agents compose.
-ng-up: $(BASE_IMAGE_DEP) init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-up: ##@ Clear LiteLLM DB, then start without regenerating agents compose.
+ng-up: $(BASE_IMAGE_DEP) init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-ng-up-fg: ##@ Clear agent registrations, then start without regenerating (foreground).
-ng-up-fg: $(BASE_IMAGE_DEP) init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-up-fg: ##@ Clear LiteLLM DB, then start without regenerating (foreground).
+ng-up-fg: $(BASE_IMAGE_DEP) init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build
 
-ng-restart: ##@ Clear agent registrations, then restart without rebuilding or regenerating.
-ng-restart: init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-restart: ##@ Clear LiteLLM DB, then restart without rebuilding or regenerating.
+ng-restart: init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding or regenerating (foreground).
-ng-restart-fg: init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-restart-fg: ##@ Clear LiteLLM DB, then restart without rebuilding or regenerating (foreground).
+ng-restart-fg: init-env clear-litellm-db
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up
 
 init-env: ##@ Create .env from .env.example if missing, generate blank secrets, check the LLM API key
 	@python3 scripts/init_env.py
 
-# Agents register with the backend at startup and the registry lives in Valkey,
-# which persists across restarts. Clearing it on every launch keeps an agent that
-# was removed (or renamed) from lingering as a tool. Valkey must be up to clear
-# it, so this starts only redis; the start target that follows reuses it.
-clear-agent-registry: ##@ Stop services and delete only the agent registrations from Valkey
+clear-litellm-db: ##@ Stop services and remove only the LiteLLM Postgres volume
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) down --remove-orphans
-	$(COMPOSE) $(CLEAR_COMPOSE_FILES) up -d redis
-	@$(COMPOSE) $(CLEAR_COMPOSE_FILES) exec -T redis sh -c '\
-		cli="valkey-cli --no-auth-warning -a $$REDIS_PASSWORD"; \
-		for i in $$(seq 1 30); do $$cli ping >/dev/null 2>&1 && break; sleep 1; done; \
-		printf "Cleared %s agent registration key(s).\n" "$$($$cli DEL prometheus:agent-registry)"'
-
-# The agents read DEEPLYNX_* when they start, so DeepLynx has to be up and its
-# key in .env before the rest of the stack starts. Only the DeepLynx services
-# start here, from just the files they need, so the ng-* targets still don't
-# regenerate the agents compose file; the start target that follows reuses them.
-deeplynx-setup: init-env
-deeplynx-setup: ##@ Start the local DeepLynx (LOCAL_DEEPLYNX=true) and save a project and API key for it in .env
-	@if [ "$(LOCAL_DEEPLYNX)" != true ]; then \
-		printf "LOCAL_DEEPLYNX is not true; set it (in .env or on the command line) to run DeepLynx locally.\n"; \
-		exit 1; \
+	@set -e; \
+	volume=$$(docker volume ls -q \
+		--filter "label=com.docker.compose.project=$(COMPOSE_PROJECT_NAME)" \
+		--filter "label=com.docker.compose.volume=litellm-db-data"); \
+	if [ -n "$$volume" ]; then \
+		docker volume rm -f $$volume; \
+	else \
+		printf "LiteLLM DB volume %s does not exist; nothing to remove.\n" "$(LITELLM_DB_VOLUME)"; \
 	fi
-	$(COMPOSE) -f $(COMPOSE_BASE) -f docker-compose.deeplynx.yml up -d --wait --wait-timeout $(WAIT_TIMEOUT) deeplynx-postgres deeplynx-server deeplynx-ui
-	@python3 scripts/deeplynx_setup.py --port $(DEEPLYNX_SERVER_PORT)
 
 clear-admin-users: ##@ Delete all rows from admin-db's users table (re-triggers the first-run setup wizard)
 	@if ! $(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) ps --status running --services 2>/dev/null | grep -qx admin-db; then \
@@ -341,11 +297,11 @@ clear-admin-users: ##@ Delete all rows from admin-db's users table (re-triggers 
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) exec -T admin-db psql -U admin -d admin -c "TRUNCATE TABLE users;"
 	@printf "Deleted all rows from admin-db's users table -- the platform will show the first-run setup wizard again.\n"
 
-# Volumes whose contents are tied to secrets generated into .env: admin-db's
-# Postgres data dir (its password is fixed at first init, admin rows are
+# Volumes whose contents are tied to secrets generated into .env: the two
+# Postgres data dirs (passwords are fixed at first init, admin rows are
 # encrypted with ADMIN_DB_ENCRYPTION_KEY) and Valkey (sessions and history of
 # users that live in admin-db). Caches (mesh-cache, model caches) are kept.
-CLOBBER_VOLUMES := admin-db-data valkey-data
+CLOBBER_VOLUMES := admin-db-data litellm-db-data valkey-data
 
 clobber: ##@ Stop services and delete the DB and Valkey volumes (users, keys, history). For reinstalling after .env was lost.
 	@printf "This deletes ALL users, signing keys, OIDC config, and chat history of\n"
@@ -373,8 +329,7 @@ down-v: ##@ Stop all services and remove volumes
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down -v
 
 base-image: ##@ Build the prometheus_api base image from ../sdk (automatic before builds when LOCAL_SDK=true)
-	$(MAKE) -C ../sdk build-local LOCAL_IMAGE=$(PROMETHEUS_API_BASE_IMAGE_REPO):$(PROMETHEUS_API_BASE_IMAGE_HASH) \
-		$(if $(filter true,$(USE_BUILD_CACHE)),CACHE_FROM=$(BUILD_CACHE)_sdk-devel:$(BUILD_CACHE_PLATFORM))
+	$(MAKE) -C ../sdk build-local LOCAL_IMAGE=$(PROMETHEUS_API_BASE_IMAGE_REPO):$(PROMETHEUS_API_BASE_IMAGE_HASH)
 
 build: ##@ Build images without starting
 build: $(BASE_IMAGE_DEP) generate
