@@ -27,4 +27,7 @@ runs:
         path: ${{ inputs.path }}
         include-hidden-files: true
         if-no-files-found: error
+        # A re-run of a job in the same run uploads the same name again; the new attempt replaces
+        # the old one, so speccheck-verify never merges stale results
+        overwrite: true
         retention-days: 30
