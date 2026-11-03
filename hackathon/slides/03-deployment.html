@@ -646,12 +646,12 @@ Never commit <code>.env</code>. Never paste it into chat or a PR. Back it up: lo
 <td>Set <code>LLM_CONFIG_PROFILE</code> and its <code>LLM_API_KEY</code> in <code>.env</code> (or blank the profile and rerun <code>make up</code> for the menu).</td>
 </tr>
 <tr>
-<td>Port is already allocated (5150, 8600, 6379, 3000, 5000)</td>
-<td>Another process or an old stack is using it: often a DeepLynx started from its own clone (<code>docker compose down</code> there), or on macOS the AirPlay Receiver on 5000. <code>make down</code>, or change <code>*_PORT</code> in <code>.env</code>.</td>
+<td>&quot;port is already allocated&quot; / &quot;address already in use&quot; (5150, 8600, 6379, 3000, 5000)</td>
+<td>Another process or an old stack is using it: often a DeepLynx started from its own clone (<code>docker compose down</code> there), or on macOS the AirPlay Receiver on 5000. Find it: <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code>. Then <code>make down</code> there, or change <code>*_PORT</code> in <code>.env</code>.</td>
 </tr>
 <tr>
-<td><code>make up</code> stops: &quot;DeepLynx didn't answer at http://localhost:5000/api/v1/health&quot;</td>
-<td>Something else answers on port 5000, or the server is slow on its first start. <code>make logs SERVICE=deeplynx-server</code>, free the port, <code>make up</code> again.</td>
+<td><code>make up</code> stops: &quot;DeepLynx didn't answer at http://localhost:5000/api/v1/health&quot; (after up to 5 minutes)</td>
+<td>Something else answers on port 5000 (<code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code>), or the server is slow on its first start. <code>make logs SERVICE=deeplynx-server</code>, free the port, <code>make up</code> again.</td>
 </tr>
 <tr>
 <td>Backend exits: &quot;jwt_secret is not configured&quot;</td>
@@ -1587,8 +1587,8 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </thead>
 <tbody>
 <tr>
-<td><code>make up</code> stops at <code>deeplynx-setup</code></td>
-<td>Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone), or <code>deeplynx-server</code> failed: <code>make logs SERVICE=deeplynx-server</code>.</td>
+<td><code>make up</code> stops at <code>deeplynx-setup</code>: &quot;port is already allocated&quot;, or &quot;DeepLynx didn't answer…&quot; after up to 5 minutes</td>
+<td>Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone): <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code> names the process. Or <code>deeplynx-server</code> failed: <code>make logs SERVICE=deeplynx-server</code>.</td>
 </tr>
 <tr>
 <td><code>AuthenticationError</code> / 401 in your agent</td>
