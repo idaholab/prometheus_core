@@ -223,10 +223,11 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     spec = Spec(path=path, number=number)
     name = rel(path, root)
     lines = path.read_text(encoding="utf-8").splitlines()
-    if not lines or not lines[0].startswith(f"# {number} "):
+    title = re.match(rf"# {number} - (\S.*)", lines[0]) if lines else None
+    if title is None:
         problems.append(Problem(name, 1, f"the first line must be the title, `# {number} - <name>`", "spec-title"))
     else:
-        spec.title = lines[0][len(f"# {number} ") :].lstrip("-– ").strip()
+        spec.title = title.group(1).strip()
 
     current: Requirement | None = None
     section = ""

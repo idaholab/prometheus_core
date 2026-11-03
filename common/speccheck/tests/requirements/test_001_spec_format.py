@@ -36,6 +36,27 @@ def test_file_names_and_titles(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-001-01",
+    "lint reports a title with no dash, one with a dash but no name, a title that is not on line 1, and three misnamed files, each at its line or path",
+)
+def test_only_nnn_dash_name_is_a_title(project: Project):
+    """`# NNN - Name` is the one title form, on the first line; file names are exactly `NNN-short-name.md`."""
+    title_error = "specs/001-thing.md:1: the first line must be the title, `# 001 - <name>`"
+    for first in ("# 001 Thing", "# 001 -", "# 001 -   ", "# 001-Thing", "", "<!-- c -->\n# 001 - Thing"):
+        project.write("specs/001-thing.md", f"{first}\n\nstatus: draft\n")
+        run = project.speccheck("lint")
+        assert run.code == 1 and title_error in run.err, first
+    project.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: draft\n")
+    assert project.speccheck("lint").code == 0
+    # `002-Other.md`, not a capitalised twin of 001-thing.md: that would be the same file on a case-insensitive disk
+    for name in ("1-a.md", "002-Other.md", "001.md"):
+        project.write(f"specs/{name}", "x")
+        run = project.speccheck("lint")
+        assert run.code == 1 and f"specs/{name}: a spec file must be named NNN-short-name.md" in run.err, name
+        (project.root / "specs" / name).unlink()
+
+
+@pytest.mark.covers(
     "SPC-REQ-001-02",
     "an index that names 002-other.md only in prose fails lint with the link to add, a missing index fails, and require-index = false turns the check off",
 )
