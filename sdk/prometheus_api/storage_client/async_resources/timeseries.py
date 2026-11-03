@@ -10,52 +10,43 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Async timeseries resource."""
+"""Timeseries resource for asynchronous operations."""
 
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional, Sequence
+from ..models.timeseries import TimeseriesResult
+from ..resources.timeseries import build_query_payload
 from .base import AsyncBaseResource
 
 
 class AsyncTimeseriesResource(AsyncBaseResource):
-    """Handles async operations related to timeseries data."""
-
-    async def upload(
-        self, file_path: Path, data_source_id: int, description: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Upload timeseries data from a file asynchronously."""
-        if not file_path.exists():
-            raise ValueError(f"File does not exist: {file_path}")
-
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.name, f)}
-            data = {}
-
-            if description:
-                data["description"] = description
-
-            response = await self._client._request(
-                "POST",
-                f"{self._base_path}/datasources/{data_source_id}/timeseries",
-                files=files,
-                data=data,
-            )
-
-        data = response.json()
-        return data if isinstance(data, dict) else {"result": data}
+    """Handles async queries over tabular (timeseries) file records."""
 
     async def query(
-        self, data_source_id: int, sql_query: str, file_type: str = "json"
-    ) -> Dict[str, Any]:
-        """Query timeseries data using SQL asynchronously."""
-        payload = {
-            "query": sql_query,
-            "file_type": file_type,
-        }
+        self,
+        record_id: int,
+        view_name: str = "data",
+        sql_query: Optional[str] = None,
+        *,
+        limit: Optional[int] = None,
+        row_stride: Optional[int] = None,
+        start_row: Optional[int] = None,
+        stop_row: Optional[int] = None,
+        columns: Optional[Sequence[str]] = None,
+    ) -> TimeseriesResult:
+        """Query the rows of a tabular file record asynchronously.
 
+        Takes the same arguments and returns the same result as
+        ``TimeseriesResource.query``; see its documentation for the server's rules.
+        """
         response = await self._client._request(
-            "POST", f"{self._base_path}/datasources/{data_source_id}/timeseries/query", json=payload
+            "POST",
+            f"{self._base_path}/records/{record_id}/olap/query",
+            params={"viewName": view_name},
+            json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )
 
         data = response.json()
-        return data if isinstance(data, dict) else {"result": data}
+        return TimeseriesResult(
+            columns=data.get("columns") or [],
+            data=data.get("data") or [],
+        )

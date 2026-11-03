@@ -17,7 +17,7 @@ from .file import FileMetadata, FileUpload, ChunkedUploadSession
 from .relationship import Relationship, RelationshipCreate, BulkRelationshipCreate
 from .pagination import Page, PageInfo
 from .tag import TagModel
-from .timeseries import TimeseriesQuery, TimeseriesResult
+from .timeseries import TimeseriesResult
 from .metadata import MetadataField
 
 __all__ = [
@@ -41,7 +41,6 @@ __all__ = [
     # Tag models
     "TagModel",
     # Timeseries models
-    "TimeseriesQuery",
     "TimeseriesResult",
     # Metadata models
     "MetadataField",
