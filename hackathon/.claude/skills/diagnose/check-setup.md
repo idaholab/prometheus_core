@@ -35,7 +35,7 @@ order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
 
 - **Item 6**: ask before a platform `make up` (the first build is long). For blank secrets, offer
   `make init-env` (`environment.md`, "Fill the platform .env") after its two traps.
-- **The first fix with a secret** (registry login, an LLM key, DeepLynx, the generator): a 2-line
+- **The first fix with a secret** (registry login, an LLM key, the generator): a 2-line
   primer (deck 03) and the check question `secrets`, once.
 - **After item 6 passes**: the check question `registry-wipe`, once; offer
   `/how explain registration and discovery`.
