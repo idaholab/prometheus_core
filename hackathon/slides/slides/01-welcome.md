@@ -717,13 +717,6 @@ STEP → tetrahedral Exodus mesh with Gmsh. Branch `agentic-hex-meshing`: an LLM
 :::
 
 ::: card
-#### agent-sandbox-mcp
-
-{.small}
-A Python notebook MCP server with per-user session isolation. It is the code-execution sandbox used by agents.
-:::
-
-::: card
 #### bim_agent ("Alchemy")
 
 {.small}
