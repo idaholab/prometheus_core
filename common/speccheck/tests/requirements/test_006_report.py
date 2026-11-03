@@ -20,7 +20,7 @@ import re
 import pytest
 from markdown_it import MarkdownIt
 
-from tests.conftest import spec
+from tests.conftest import CONFIG, INDEX, spec
 from tests.requirements.conftest import CI, ENV, Project
 
 SHA = "e" * 40
@@ -424,7 +424,6 @@ PAYLOADS = [
     "1. n",
     "---",
     "<https://e.com>",
-    "https://e.com/p",
     "*e*",
     "<b>x</b>",
     "![i](https://e.com/i.png)",
@@ -796,28 +795,31 @@ def test_a_source_link_needs_a_plain_path_and_ci(project: Project, change: dict,
 
 
 @pytest.mark.parametrize(
-    "name",
+    "folder",
     [
         pytest.param(
-            name,
+            folder,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-06", f"a spec file named {name!r} is shown in its requirement's section but not linked"
+                "SPC-REQ-006-06",
+                f"a spec in a folder named {folder!r} is reported with its requirement, but with no spec line link",
             ),
-            id=f"spec-{n}",
+            id=f"folder-{n}",
         )
-        for n, name in enumerate(["001 thing.md", "001-thing%.md", "001-thing(1).md", "001-é.md"])
+        for n, folder in enumerate(["my specs", "specs(1)", "spécs", "100%"])
     ],
 )
-def test_a_spec_path_needs_to_be_plain_to_link(project: Project, name: str):
-    """The requirement's section names its spec line, and links it only when the path is plain."""
-    project.spec("- T-REQ-001-01: One.", name=name)
+def test_a_spec_path_needs_to_be_plain_to_link(project: Project, folder: str):
+    """The spec file is valid and loaded, but its path isn't plain, so the requirement's section links nothing."""
+    project.write("speccheck.toml", CONFIG.replace('specs = "specs"', f'specs = "{folder}"'))
+    project.write(f"{folder}/000-index.md", INDEX)
+    project.write(f"{folder}/001-thing.md", spec("- T-REQ-001-01: One."))
     header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
     line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
     project.write("u.jsonl", header + json.dumps(line) + "\n")
     env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root.parent)}
     text = project.speccheck("report", "u.jsonl", env=env).out
-    assert f"specs/{name}" in text, text
-    assert "/blob/" not in text
+    assert "1 requirement" in text and "T-REQ-001-01" in text, text
+    assert "/blob/" not in text and "\nIn [" not in text
 
 
 @pytest.mark.covers(

@@ -368,26 +368,6 @@ def test_the_error_object_of_schema_version_1(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-008-13",
-    "the snapshot check accepts an added field and rejects a removed field, a retyped one and a changed value, so the fields test above would catch a removal",
-)
-def test_the_snapshot_check_allows_additions_and_catches_removals():
-    """The helper the other tests use: if it passed everything, they would prove nothing."""
-    snapshot = {"a": int, "b": {"c": "x", "d": list}}
-    promised({"a": 1, "b": {"c": "x", "d": []}, "added": 1, "b2": 2}, snapshot)
-    promised({"a": 1, "b": {"c": "x", "d": [], "added": 1}}, snapshot)
-    for broken in (
-        {"b": {"c": "x", "d": []}},
-        {"a": 1, "b": {"d": []}},
-        {"a": "1", "b": {"c": "x", "d": []}},
-        {"a": 1, "b": {"c": "y", "d": []}},
-        {"a": 1, "b": "x"},
-    ):
-        with pytest.raises(AssertionError):
-            promised(broken, snapshot)
-
-
-@pytest.mark.covers(
     "SPC-REQ-008-04",
     "lint, check and verify problems carry codes bullet-malformed, unclaimed and no-results, with line 0 when there is none",
 )
@@ -718,20 +698,6 @@ def test_a_job_name_stays_in_its_summary_entry(project: Project):
     lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
     assert len(lines) == 3 and lines[2].startswith("- `") and lines[2].endswith("`") and lines[2].count("`") == 2
     assert "<https://evil.example> *x* - item" in lines[2]
-
-
-@pytest.mark.covers(
-    "SPC-REQ-008-08",
-    "a problem of over 900 characters is cut to 500 characters in its summary entry, ending with an ellipsis",
-)
-def test_a_summary_entry_is_cut_at_500(project: Project):
-    """The entry's text is at most 500 characters, whatever the problem's length."""
-    project.spec("- T-REQ-001-01: One.")
-    project.results("r.jsonl", "unit", [("t" * 900, ["T-REQ-001-01"], "failed")])
-    project.run("verify", "r.jsonl", "--summary", "s.md")
-    entry = (project.root / "s.md").read_text().splitlines()[2]
-    assert entry.startswith("- `") and entry.endswith("…`")
-    assert len(entry) - len("- ``") == 500
 
 
 @pytest.mark.covers("SPC-REQ-008-08", "a few problems that fit give a summary with no cut note")

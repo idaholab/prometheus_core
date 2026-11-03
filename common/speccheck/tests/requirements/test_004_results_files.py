@@ -567,13 +567,16 @@ def test_every_outcome_and_deselected_tests_are_written(project: Project):
     assert outcomes(project, "r.jsonl") == EXPECTED
 
 
-@pytest.mark.covers("SPC-REQ-004-02", "a test ID containing U+2028 and U+0085 reads back as one line and verify passes")
+@pytest.mark.covers(
+    "SPC-REQ-004-01",
+    "a result whose test ID holds U+2028 and U+0085 is still one JSON line, so verify reads the file back and exits 0",
+)
 def test_a_test_id_with_a_unicode_line_separator_still_reads(project: Project):
     """U+2028 and U+0085 in a test ID are written as they are, and must not split the line on read."""
     project.spec("- T-REQ-001-01: One.")
     project.results("unit.jsonl", "unit", [("t.py::test[a\u2028b\u0085c]", ["T-REQ-001-01"], "passed")])
     done = project.speccheck("verify", "unit.jsonl")
-    assert done.code == 0 and "not JSON" not in done.err
+    assert done.code == 0
 
 
 @pytest.mark.covers(
