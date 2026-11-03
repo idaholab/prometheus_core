@@ -234,6 +234,7 @@ def test_one_json_object_on_every_exit_path(project: Project):
         body = json.loads(done.stdout)
         assert done.returncode == code, argv
         assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
+        assert body["ok"] is (code == 0), argv
     check = json.loads(command(project, "check", "--json").stdout)
     # `path` is the spec file from the repository's root; pytester's folder is in none, so null
     assert len(check["requirements"]) == 1
@@ -370,6 +371,35 @@ def test_the_error_object_of_schema_version_1(project: Project):
             {"schema_version": 1, "ok": False, "problems": [], "error": {"code": "usage", "message": str}},
             argv[0],
         )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "--version --json prints one object with command version, ok true, no problems and the package version, and a successful record --json prints one with the job, its claims and the file it wrote",
+)
+def test_json_on_version_and_a_successful_record(ci_project: Project):
+    """The exit paths that are neither a check nor an error are still one object."""
+    version = json.loads(command(ci_project, "--version", "--json").stdout)
+    promised(
+        version,
+        {"schema_version": 1, "command": "version", "ok": True, "problems": [], "version": speccheck.__version__},
+    )
+    done = ci_project.speccheck("record", "--output", "out/publish.jsonl", "--json", env=JOB)
+    assert done.code == 0
+    promised(
+        done.json(),
+        {
+            "schema_version": 1,
+            "command": "record",
+            "ok": True,
+            "problems": [],
+            "job": "publish",
+            "covers": [{"id": "T-REQ-001-01", "how": "the publish job pushes the image"}],
+            "path": str,
+        },
+    )
+    assert done.json()["path"] == str(ci_project.root / "out" / "publish.jsonl")
+    assert (ci_project.root / "out" / "publish.jsonl").is_file()
 
 
 @pytest.mark.covers(
@@ -527,6 +557,52 @@ def test_report_on_stdout_writes_control_characters_out(project: Project):
     assert done.returncode == 0 and not CONTROLS.search(done.stdout + done.stderr)
     # The report collapses whitespace, so the carriage return becomes a space; the escape is written out
     assert "`t\\x1b[31m x`" in done.stdout
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "verify --json for a test named with an escape, a line break, ::error::, ##[, U+0085, U+2028 and a bidi override prints no raw control character, no line starting :: and no ##[, and the name reads back the same",
+)
+def test_json_output_cant_start_a_log_command(project: Project):
+    """The JSON path writes control characters as `\\u` escapes, so the object is safe to print and still exact."""
+    name = "t\x1b[31m\n::error::x ##[error]y\x85\u2028\u202eend"
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [(name, ["T-REQ-001-01"], "failed")])
+    done = project.speccheck("verify", "r.jsonl", "--json")
+    assert done.code == 1
+    assert not CONTROLS.search(done.out) and "##[" not in done.out
+    assert all(not line.lstrip().startswith("::") for line in done.out.splitlines())
+    assert done.json()["requirements"][0]["evidence"][0]["test"] == name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "an unknown option holding a line break and ::error:: exits 2 and is echoed with the break written \\n, so no line of the usage error starts ::",
+)
+def test_an_unknown_option_cant_start_a_log_command(project: Project):
+    """The usage error echoes what the user typed, which argparse quotes as it was."""
+    done = command(project, "lint", "--x\n::error::y")
+    assert done.returncode == 2
+    assert not CONTROLS.search(done.stdout + done.stderr)
+    assert "--x\\n::error::y" in done.stderr
+    assert all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "record --output with a file name holding a line break and ::error:: prints its line with the break written \\n, and lint names a spec file like that the same way",
+)
+def test_file_names_cant_start_a_log_command(ci_project: Project):
+    """The file names speccheck is given or finds are printed on one line each."""
+    done = ci_project.speccheck("record", "--output", "a\n::error::.jsonl", env=JOB)
+    assert done.code == 0
+    assert done.out == "speccheck record: publish recorded T-REQ-001-01 in a\\n::error::.jsonl\n"
+    ci_project.write("specs/a\n::error::.md", "x")
+    lint = ci_project.speccheck("lint")
+    assert lint.code == 1
+    assert "specs/a\\n::error::.md: a spec file must be named NNN-short-name.md" in lint.err
+    assert not CONTROLS.search(lint.out + lint.err)
+    assert all(not line.lstrip().startswith("::") for line in lint.err.splitlines())
 
 
 SUMMARY_ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}

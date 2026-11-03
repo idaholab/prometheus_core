@@ -1180,6 +1180,45 @@ def test_the_override_is_trimmed(project: Project, monkeypatch: pytest.MonkeyPat
     assert project.results_lines("r.jsonl")[0]["root"] == root
 
 
+@pytest.mark.parametrize(
+    "given",
+    [
+        pytest.param(
+            given,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-12",
+                f"SPECCHECK_ROOT={given!r} is empty after trimming, so it counts as not set and root is the project's folder name from GITHUB_WORKSPACE",
+            ),
+            id=label,
+        )
+        for label, given in [("empty", ""), ("spaces", "   "), ("slash", "/"), ("slashes", "///"), ("padded", " / \n")]
+    ],
+)
+def test_an_override_that_trims_to_nothing_falls_back_to_the_found_root(
+    project: Project, monkeypatch: pytest.MonkeyPatch, given: str
+):
+    """Not set means not set: the root that can be worked out is used, not null and not the empty string."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the fallback")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(project.root.parent))
+    monkeypatch.setenv("SPECCHECK_ROOT", given)
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["root"] == project.root.name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-12",
+    "SPECCHECK_ROOT=`//sdk//` is written as root `sdk`, and `a//b` loses nothing but its outer slashes",
+)
+def test_every_outer_slash_is_removed_and_inner_ones_stay(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """Only the ends are trimmed, however many slashes there are."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the slashes")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", "/home/runner/work/r/r")
+    for given, root in (("//sdk//", "sdk"), ("//a//b//", "a//b")):
+        monkeypatch.setenv("SPECCHECK_ROOT", given)
+        project.pytest("--speccheck-results=r.jsonl")
+        assert project.results_lines("r.jsonl")[0]["root"] == root, given
+
+
 @pytest.mark.covers(
     "SPC-REQ-004-12",
     "with GITHUB_WORKSPACE holding the project's parent, so the root could be worked out as the project's folder name, SPECCHECK_ROOT=sdk still wins",
