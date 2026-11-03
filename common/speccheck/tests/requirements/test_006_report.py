@@ -210,7 +210,18 @@ def test_backtick_runs_cant_open_a_link(project: Project, how: str):
     assert re.findall(r'<a href="(?!#)[^"]*"|<img\b', html) == []
 
 
-PAYLOADS = ["# h", "- x", "> q", "1. n", "---", "<https://e.com>", "https://e.com/p", "*e*", "<b>x</b>", "![i](https://e.com/i.png)"]
+PAYLOADS = [
+    "# h",
+    "- x",
+    "> q",
+    "1. n",
+    "---",
+    "<https://e.com>",
+    "https://e.com/p",
+    "*e*",
+    "<b>x</b>",
+    "![i](https://e.com/i.png)",
+]
 """Text that, written raw at the start of a line or in the middle of one, would add an element to the report."""
 STRUCTURE = {
     "heading_open",
