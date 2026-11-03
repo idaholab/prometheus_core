@@ -115,6 +115,11 @@ class TestSourceUrl:
         assert markdown.source_url(self.FILES, "common/x.py", 3) == f"{self.FILES}/common/x.py#L3"
         assert markdown.source_url(self.FILES, "x.md") == f"{self.FILES}/x.md"
 
+    @pytest.mark.parametrize("path", ["a..b.py", "..a/b.py", "a/b..", "a/...", "a/.b/c"])
+    def test_dots_inside_a_segment_are_plain(self, path):
+        """Only a whole `..` segment climbs out; two dots inside a name, or three dots, do not."""
+        assert markdown.source_url(self.FILES, path) == f"{self.FILES}/{path}"
+
     @pytest.mark.parametrize(
         "path", [None, "", "a b.py", "a/../b.py", "../b.py", "/abs.py", "a//b.py", "a/", "x?.py", "a/#b", "é.py"]
     )

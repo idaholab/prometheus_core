@@ -20,7 +20,8 @@ The report says, for every requirement, whether it is proven and by which job, w
   published even when `verify` fails.
 - SPC-REQ-006-06: In CI, each requirement MUST link to its line in its spec file, and each test to
   its line in its test file, at the commit the run tested, as SPC-REQ-007-10 allows. A path MUST be
-  linked only when it is plain: letters, digits, `.`, `_`, `-` and `/`, with no `..`.
+  linked only when it is plain: letters, digits, `.`, `_`, `-` and `/`, with no `..` as a whole
+  segment (`a..b.py` is plain, `a/../b.py` is not).
 - SPC-REQ-006-07: Each spec MUST have a section in the report with its title, its Purpose when it
   has one, and a table of its requirements' IDs and statuses with `failed`, `unclaimed` and
   `not run` first.
