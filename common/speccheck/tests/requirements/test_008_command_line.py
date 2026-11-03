@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,9 @@ import pytest
 
 import speccheck
 from tests.requirements.conftest import CI, CONFIG, ENV, JOB, Project
+
+CONTROLS = re.compile("[\x00-\x09\x0b-\x1f\x7f-\x9f  ‪-‮⁦-⁩]")
+"""Raw characters that end a line or drive a terminal, which nothing printed may hold (the final newline is fine)."""
 
 
 def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
@@ -384,10 +388,82 @@ def test_nothing_printed_can_start_a_log_command(project: Project):
         assert all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            name,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-12", f"a failing test named {name!r} is printed by verify with no raw control character"
+            ),
+            id=label,
+        )
+        for label, name in [
+            ("escape", "t\x1b[31mred"),
+            ("carriage-return", "t\rforged"),
+            ("c1-control", "t\x85next"),
+            ("line-separator", "t next"),
+            ("backspace-and-nul", "t\x08\x00"),
+            ("bidi", "t‮evil"),
+        ]
+    ],
+)
+def test_control_characters_in_a_test_name_are_written_out(project: Project, name: str):
+    """On stderr, and on stdout with --verbose, the name's control characters are escapes and the output is lines."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [(name, ["T-REQ-001-01"], "failed")])
+    for flags in ([], ["--verbose"]):
+        done = command(project, "verify", "r.jsonl", *flags)
+        for stream in (done.stdout, done.stderr):
+            assert not CONTROLS.search(stream), repr(stream)
+        assert "\\x1b" in done.stderr or name != "t\x1b[31mred"
+        assert done.stderr.startswith("specs/001-thing.md") or "failed in unit" in done.stderr
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "a --config file named with a newline and ::error:: is printed in the usage error with the newline written \\n",
+)
+def test_a_config_name_cant_start_a_log_command(project: Project):
+    """The error() path, which prints the name the user gave."""
+    done = command(project, "lint", "--config", "a\n::error::.toml")
+    assert done.returncode == 2
+    assert not CONTROLS.search(done.stdout + done.stderr)
+    assert "a\\n::error::.toml" in done.stderr
+    assert all(not line.lstrip().startswith("::") for line in done.stderr.splitlines())
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "report to stdout for a test named with an escape and a carriage return prints the escape as \\x1b and no raw carriage return",
+)
+def test_report_on_stdout_writes_control_characters_out(project: Project):
+    """The report's stdout path is not the problem list's, so it is tried too."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t\x1b[31m\rx", ["T-REQ-001-01"], "passed")])
+    done = command(project, "report", "r.jsonl")
+    assert done.returncode == 0 and not CONTROLS.search(done.stdout + done.stderr)
+    # The report collapses whitespace, so the carriage return becomes a space; the escape is written out
+    assert "`t\\x1b[31m x`" in done.stdout
+
+
 SUMMARY_ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
 """The run the summary is written in: a report link must be under its server and repository."""
 REPORT_URL = "https://github.com/o/r/actions/runs/7/artifacts/99"
 """An artifact URL of that run, as `actions/upload-artifact` gives it."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-09",
+    "an artifact URL of this run's server and repository is linked as speccheck-report in the summary line",
+)
+def test_this_runs_report_is_linked(project: Project):
+    """The positive case beside the refusals below: the same URL, under the run's own repository."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    run = project.run("verify", "r.jsonl", "--summary", "s.md", "--report-url", REPORT_URL, env=SUMMARY_ENV)
+    assert run.code == 0
+    assert f"Full report: [speccheck-report]({REPORT_URL})" in (project.root / "s.md").read_text()
 
 
 @pytest.mark.covers(
@@ -464,6 +540,93 @@ def test_the_summary_is_escaped(project: Project):
     assert "t[x](https://evil)<img src=x> failed in unit" in entry
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            name,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-08", f"a failing test named {name!r} sits in one code span on one summary line"
+            ),
+            id=label,
+        )
+        for label, name in [
+            ("autolink", "t<https://evil.example>"),
+            ("emphasis", "t*x*_y_"),
+            ("heading", "# t"),
+            ("quote", "> t"),
+            ("newline", "t\n- injected item\n# heading"),
+            ("escape", "t\x1b[31m"),
+            ("pipe", "t|u"),
+        ]
+    ],
+)
+def test_a_test_name_stays_in_its_summary_entry(project: Project, name: str):
+    """Whatever the name holds, the entry is one line holding one code span, and nothing after it adds an element."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [(name, ["T-REQ-001-01"], "failed")])
+    project.run("verify", "r.jsonl", "--summary", "s.md")
+    lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
+    assert len(lines) == 3, lines  # the line, a blank, and the one entry
+    assert lines[2].startswith("- `") and lines[2].endswith("`") and lines[2].count("`") == 2
+    assert "\n" not in lines[2] and "\x1b" not in lines[2]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "a job display name from --job-names, holding a link, emphasis and a newline, stays inside the code span",
+)
+def test_a_job_name_stays_in_its_summary_entry(project: Project):
+    """The display name appears in the problem, so it is inside the entry's one code span."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=JOB_CI)
+    project.write("names.json", json.dumps({"41": "<https://evil.example> *x*\n- item"}))
+    project.run("verify", "r.jsonl", "--job-names", "names.json", "--summary", "s.md")
+    lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
+    assert len(lines) == 3 and lines[2].startswith("- `") and lines[2].endswith("`") and lines[2].count("`") == 2
+    assert "<https://evil.example> *x* - item" in lines[2]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "a problem of over 900 characters is cut to 500 characters in its summary entry, ending with an ellipsis",
+)
+def test_a_summary_entry_is_cut_at_500(project: Project):
+    """The entry's text is at most 500 characters, whatever the problem's length."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t" * 900, ["T-REQ-001-01"], "failed")])
+    project.run("verify", "r.jsonl", "--summary", "s.md")
+    entry = (project.root / "s.md").read_text().splitlines()[2]
+    assert entry.startswith("- `") and entry.endswith("…`")
+    assert len(entry) - len("- ``") == 500
+
+
+@pytest.mark.covers("SPC-REQ-008-08", "a few problems that fit give a summary with no cut note")
+def test_no_cut_note_when_everything_fits(project: Project):
+    """The note is only for a cut summary."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert project.run("verify", "r.jsonl", "nope.jsonl", "--summary", "s.md").code == 1
+    text = (project.root / "s.md").read_text()
+    assert "cut to fit" not in text and "nope.jsonl" in text
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "3000 missing inputs with 3-byte-letter paths, under 1 MiB in characters but over it in bytes, give a summary under 1 MiB",
+)
+def test_the_summary_limit_counts_bytes(project: Project):
+    """The limit is on the size of the file, so characters that take three bytes must count as three."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    # 'あ' is 3 bytes; a part of 80 is 240 bytes, under the 255-byte file name limit
+    missing = [f"missing/{'あ' * 80}/{'あ' * 80}/{n}.jsonl" for n in range(3000)]
+    assert project.run("verify", "r.jsonl", *missing, "--summary", "s.md").code == 1
+    data = (project.root / "s.md").read_bytes()
+    assert len(data) <= 1024 * 1024
+    assert data.decode().rstrip("\n").splitlines()[-1].startswith("- … cut to fit")
+
+
 @pytest.mark.covers(
     "SPC-REQ-008-08",
     "3000 missing inputs with 420-character paths give a summary under 1 MiB, cut after a whole entry with a note",
@@ -518,6 +681,47 @@ def test_the_summary_stays_under_the_limit(project: Project):
                 "outside CI there is no run to compare with, so even a well-formed report URL isn't linked",
             ),
             id="outside-ci",
+        ),
+        pytest.param(
+            "https://github.com/o/r2/actions/runs/7/artifacts/99",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "an artifact URL in repository o/r2, which starts with o/r, leaves the line unlinked"
+            ),
+            id="prefix-repository",
+        ),
+        pytest.param(
+            "http://github.com/o/r/actions/runs/7/artifacts/99",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "an artifact URL using http instead of the run's https leaves the line unlinked"
+            ),
+            id="http-scheme",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/artifacts/99/extra",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "an artifact URL with a further path part leaves the line unlinked"
+            ),
+            id="extra-path",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/artifacts/abc",
+            SUMMARY_ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09", "an artifact URL whose artifact ID isn't digits leaves the line unlinked"
+            ),
+            id="non-digit-id",
+        ),
+        pytest.param(
+            REPORT_URL,
+            {"CI_SERVER_URL": "https://github.com", "CI_PROJECT_PATH": "o/r"},
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "with only GitLab-style variables set, which name no supported provider, the line has no link",
+            ),
+            id="gitlab-style-env",
         ),
     ],
 )

@@ -386,9 +386,7 @@ def test_a_bad_claim_in_a_result_rejects_the_file(project: Project, covers: list
     assert run.json()["requirements"][0]["status"] != "passed"
 
 
-@pytest.mark.covers(
-    "SPC-REQ-004-09", "a result whose how is exactly 1000 characters is accepted and its pass counts"
-)
+@pytest.mark.covers("SPC-REQ-004-09", "a result whose how is exactly 1000 characters is accepted and its pass counts")
 def test_a_how_of_exactly_1000_characters_is_accepted(project: Project):
     """The limit is 1000, so 1000 passes; the over-limit case is the 1001 above."""
     project.spec("- T-REQ-001-01: One.")
