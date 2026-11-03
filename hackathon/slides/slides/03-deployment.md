@@ -97,7 +97,7 @@ make down                      # stop
 :::
 
 ::: callout info
-**`LOCAL_DEEPLYNX=true`**: every `make up` also starts DeepLynx in the platform's compose project and runs `make deeplynx-setup`, which creates a project and API key and writes the `DEEPLYNX_*` lines to `.env` for you. Its UI is at `http://localhost:3000`.
+**`LOCAL_DEEPLYNX=true`** (also after `make init-env`: an `.env` that exists already is not filled from `.env.example`): every `make up` also starts DeepLynx in the platform's compose project and runs `make deeplynx-setup`, which creates a project and API key and writes the `DEEPLYNX_*` lines to `.env` for you. Its UI is at `http://localhost:3000`.
 :::
 
 ::: callout bad
@@ -282,7 +282,8 @@ Note: The template compose forwards LLM_CONFIG_PROFILE, LLM_API_KEY and EMBEDDIN
 
 :::: grid 2 gap=30px
 ```bash {.sm}
-# in prometheus_core/platform, once (deck 03, "Once, then four commands")
+# in prometheus_core/platform, once, after make init-env
+# (deck 03, "Once, then four commands")
 printf '\nLOCAL_DEEPLYNX=true\n' >> .env
 make up
 ```

@@ -110,7 +110,7 @@ make down                      <span class="c"># stop</span></pre>
 <strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>): no registry, no token. Without it, <code>make up</code> tries to pull from <code>containers.github.inl.gov</code> and fails with <code>unauthorized</code>. Put it in <code>.env</code> after <code>make init-env</code>, so every later <code>make up</code> sees it.</div>
 
 <div class="callout info">
-<strong><code>LOCAL_DEEPLYNX=true</code></strong>: every <code>make up</code> also starts DeepLynx in the platform's compose project and runs <code>make deeplynx-setup</code>, which creates a project and API key and writes the <code>DEEPLYNX_*</code> lines to <code>.env</code> for you. Its UI is at <code>http://localhost:3000</code>.</div>
+<strong><code>LOCAL_DEEPLYNX=true</code></strong> (also after <code>make init-env</code>: an <code>.env</code> that exists already is not filled from <code>.env.example</code>): every <code>make up</code> also starts DeepLynx in the platform's compose project and runs <code>make deeplynx-setup</code>, which creates a project and API key and writes the <code>DEEPLYNX_*</code> lines to <code>.env</code> for you. Its UI is at <code>http://localhost:3000</code>.</div>
 
 <div class="callout bad">
 <strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
@@ -320,7 +320,8 @@ LLM_API_KEY=…
   <div class="content">
 <div class="grid g2" style="gap:30px;">
 <div class="col">
-<pre class="sm"><span class="c"># in prometheus_core/platform, once (deck 03, &quot;Once, then four commands&quot;)</span>
+<pre class="sm"><span class="c"># in prometheus_core/platform, once, after make init-env</span>
+<span class="c"># (deck 03, &quot;Once, then four commands&quot;)</span>
 printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env
 make up</pre>
 <p class="small">With that line, <strong>every</strong> <code>make up</code> and <code>make restart</code> first runs <code>make deeplynx-setup</code>:</p>
