@@ -45,7 +45,10 @@ MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_LINE_BYTES = 64 * 1024
 """The longest line read."""
 MAX_TEXT = 1000
-"""The longest string field kept, after which a field is a problem; also the longest explanation."""
+"""The longest string field kept, after which a field is a problem."""
+MAX_RAW_HOW = 16 * 1024
+"""The longest explanation as written, before its whitespace is collapsed. Only a safety limit, well
+under MAX_LINE_BYTES: the explanation's real limit, MAX_HOW, is measured on the collapsed text (SPC-REQ-003-17)."""
 MAX_COVERS = 200
 """The most IDs one result may claim."""
 MAX_NAME = 200
@@ -231,8 +234,8 @@ def _claim(body: Any, seen: set[str]) -> Claim:
         raise Invalid('each `covers` entry must be an object, {"id": ..., "how": ...}')
     body = _known(body, CLAIM_KEYS)
     claimed = _text(body.get("id"), "covers[].id", allow_empty=False)
-    # `_text` caps it at MAX_TEXT, which is MAX_HOW (a unit test keeps them equal)
-    how = _text(body.get("how"), "covers[].how", allow_empty=False)
+    # Only a safety cap here; the 1000-character limit is measured once the whitespace is collapsed, below
+    how = _text(body.get("how"), "covers[].how", allow_empty=False, limit=MAX_RAW_HOW)
     if LINE_BREAK.search(how):
         raise Invalid(f"`covers[].how` for {claimed} has a line break; an explanation is one line")
     # A writer in another language may not have collapsed `how`; check the collapsed text (SPC-REQ-004-09)

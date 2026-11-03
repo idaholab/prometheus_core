@@ -622,7 +622,7 @@ def test_unknown_keys_are_ignored(project: Project):
         ),
         pytest.param(
             [{"id": "T-REQ-001-01", "how": "x" * 1001}],
-            "`covers[].how` is longer than 1000 characters",
+            "the explanation for T-REQ-001-01 is 1001 characters; the limit is 1000",
             marks=pytest.mark.covers("SPC-REQ-004-09", "a result with a 1001-character how rejects the file"),
             id="long-how",
         ),
@@ -721,6 +721,39 @@ def test_a_how_of_exactly_1000_characters_is_accepted(project: Project):
     run = project.speccheck("verify", "r.jsonl", "--json")
     assert run.code == 0 and run.json()["problems"] == []
     assert run.json()["requirements"][0]["status"] == "passed"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-09",
+    "a result whose how is 1400 spaces of padding around 12 characters, over 1000 as written, is accepted and its pass counts",
+)
+def test_a_how_is_measured_after_its_whitespace_is_collapsed(project: Project):
+    """The same rule as the plugin's (003-17): padding is not text, so a writer that doesn't collapse is not penalised."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit"}
+    how = "proves it" + " " * 1400 + "well"
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": how}], "outcome": "passed"}
+    project.write("r.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    assert len(how) > 1000 and run.code == 0 and run.json()["problems"] == []
+    assert run.json()["requirements"][0]["status"] == "passed"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-09",
+    "a result whose how is 1001 characters once collapsed, written with doubled spaces so it is 2000 as written, rejects the file naming the collapsed length",
+)
+def test_a_how_over_the_limit_once_collapsed_is_refused_however_it_is_spaced(project: Project):
+    """The limit is on the collapsed text, so spreading the words out does not get under it."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit"}
+    words = " ".join(["w" * 9] * 100 + ["x"])
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": words.replace(" ", "  ")}], "outcome": "passed"}
+    project.write("r.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    assert run.code == 1
+    assert any("is 1001 characters; the limit is 1000" in p["message"] for p in run.json()["problems"])
+    assert run.json()["requirements"][0]["status"] != "passed"
 
 
 @pytest.mark.covers(

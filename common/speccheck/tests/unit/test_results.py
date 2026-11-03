@@ -106,11 +106,11 @@ class TestFormat:
         assert set(schema["$defs"]["ci"]["properties"]) == results.CI_KEYS
         assert set(schema["$defs"]["claim"]["properties"]) == results.CLAIM_KEYS
 
-    def test_the_explanation_limit_is_the_text_limit(self):
-        """The reader caps `how` with the general text cap, so the two must agree."""
+    def test_the_raw_cap_on_an_explanation_leaves_room_to_collapse(self):
+        """The cap on `how` as written is a safety limit above the real one, which counts collapsed text."""
         from speccheck.claims import MAX_HOW
 
-        assert results.MAX_TEXT == MAX_HOW
+        assert MAX_HOW < results.MAX_RAW_HOW < results.MAX_LINE_BYTES
 
     @pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85"])
     def test_a_line_separator_inside_a_test_id_survives(self, separator: str):
@@ -179,7 +179,7 @@ class TestValidation:
             ),
             (
                 [header(), '{"test": "t", "covers": [{"id": "X", "how": "' + "x" * 1001 + '"}], "outcome": "passed"}'],
-                "`covers[].how` is longer than 1000",
+                "the explanation for X is 1001 characters; the limit is 1000",
             ),
             (
                 [header(), '{"test": "t", "covers": [{"id": "X", "how": "  tBd "}], "outcome": "passed"}'],
@@ -268,6 +268,39 @@ class TestValidation:
         assert results.read(path, "shown.jsonl")[0].source == "shown.jsonl"
         path.write_text("")
         assert results.read(path)[1][0].path == path.as_posix()
+
+
+class TestExplanationLength:
+    """An explanation is limited to MAX_HOW characters once its whitespace is collapsed, not as written."""
+
+    def how_line(self, how: str) -> str:
+        """A result line claiming X with `how`."""
+        return json.dumps({"test": "t", "covers": [{"id": "X", "how": how}], "outcome": "passed"})
+
+    def test_padding_does_not_count(self):
+        """Many spaces between words are one space, so 1400 written characters can be 12 collapsed."""
+        how = "proves it" + " " * 1400 + "ok"
+        parsed, problems = parse_lines(header(), self.how_line(how))
+        assert problems == [] and parsed.results[0].covers[0].how == how
+
+    def test_a_long_collapsed_text_is_refused(self):
+        """1001 characters once collapsed are over the limit however they are spaced."""
+        words = " ".join(["w" * 9] * 100 + ["x"])
+        assert len(words) == 1001
+        parsed, problems = parse_lines(header(), self.how_line(words.replace(" ", "  ")))
+        assert parsed is None and "the explanation for X is 1001 characters; the limit is 1000" in str(problems[0])
+
+    def test_exactly_the_limit_collapsed_is_fine(self):
+        """1000 collapsed characters, written with triple spaces."""
+        words = " ".join(["w" * 9] * 99 + ["x" * 10])
+        assert len(words) == 1000
+        parsed, problems = parse_lines(header(), self.how_line(words.replace(" ", "   ")))
+        assert problems == [] and parsed is not None
+
+    def test_the_raw_cap_still_protects_the_reader(self):
+        """A text over MAX_RAW_HOW as written is refused before it is collapsed."""
+        parsed, problems = parse_lines(header(), self.how_line("a " * results.MAX_RAW_HOW))
+        assert parsed is None and f"is longer than {results.MAX_RAW_HOW} characters" in str(problems[0])
 
 
 class TestNameLimits:
