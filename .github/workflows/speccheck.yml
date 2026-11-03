@@ -364,6 +364,10 @@ jobs:
             --jq '.artifacts[].name' | grep -qx 'speccheck-results-x' \
             || { echo "no artifact speccheck-results-x: the action ignored its name input" >&2; exit 1; }
       - name: 007-06 install speccheck
+        # SPC-REQ-007-06: no setup-python anywhere in this job. The first speccheck-verify step already
+        # ran speccheck-install, so this one repeats it and proves nothing alone; what shows the
+        # requirement is that speccheck-verify (one install step, then `speccheck`) and the
+        # `speccheck` commands below all run with no Python setup of this job's own
         uses: ./.github/actions/speccheck-install
       - name: 005-09 verify on an empty folder fails
         # No results read means nothing is proven, even without --complete (SPC-REQ-005-09)
