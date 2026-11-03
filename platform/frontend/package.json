@@ -21,7 +21,7 @@
     "@fontsource-variable/roboto": "^5.3.0",
     "@kitware/vtk.js": "^36.5.1",
     "@tailwindcss/vite": "^4.2.2",
-    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-table": "^9.3.1",
     "@thatopen/components": "^3.4.0",
     "@thatopen/fragments": "^3.4.0",
     "@xyflow/react": "12.12.0",
