@@ -64,6 +64,14 @@ class TestProse:
             "a-b.c `x[y]*` \\[l\\](u) \\<i\\>\\_e\\_ \\~s\\~ \\|p\\| \\&amp; \\\\"
         )
 
+    def test_what_github_would_autolink_is_escaped(self):
+        """The `:` of `://`, the `.` of a leading `www.` and the `@` of an email are escaped; other dots are not."""
+        assert markdown.prose("see https://e.com/p and http://x") == "see https\\://e.com/p and http\\://x"
+        assert markdown.prose("www.e.com, (WWW.e.com)") == "www\\.e.com, (WWW\\.e.com)"
+        assert markdown.prose("a@b.com") == "a\\@b.com"
+        assert markdown.prose("t.py at e.com, awww.e.com, x:y") == "t.py at e.com, awww.e.com, x:y"
+        assert markdown.prose("`https://e.com` https://e.com") == "`https://e.com` https\\://e.com"
+
     def test_an_unmatched_backtick_escapes_every_backtick(self):
         """No span can open and swallow the rest."""
         assert markdown.prose("a `b` c` [d]") == "a \\`b\\` c\\` \\[d\\]"
