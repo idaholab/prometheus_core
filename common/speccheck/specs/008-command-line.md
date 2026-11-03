@@ -10,6 +10,8 @@ object for scripts and agents.
 ## Requirements
 
 - SPC-REQ-008-01: `--help` MUST list every command by section, each with a one-line description.
+  `--help` prints that text, and exits 0, with or without `--json`: it is the one output that is
+  not a JSON object (SPC-REQ-008-04).
 - SPC-REQ-008-02: `--config`, `--json`, `--quiet` and `--verbose` MUST work before or after the
   command.
 - SPC-REQ-008-03: The exit code MUST be 0 when there are no problems, 1 when there are, and 2 on a
@@ -17,7 +19,8 @@ object for scripts and agents.
   whatever the problems (SPC-REQ-006-05). An output path that can't be written MUST be a usage
   error.
 - SPC-REQ-008-04: With `--json`, stdout MUST be exactly one JSON object with `schema_version`,
-  `command`, `ok` and `problems` on every exit path, usage errors included. `ok` MUST be true
+  `command`, `ok` and `problems` on every exit path, usage errors included (but not `--help`, see
+  SPC-REQ-008-01). `ok` MUST be true
   exactly when the command exits 0, so `report`, which exits 0 whatever is wrong, has `ok` true
   with its problems listed. `check`, `verify` and `report` MUST also give each requirement's ID,
   status and evidence.
