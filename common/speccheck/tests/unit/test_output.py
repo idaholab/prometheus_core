@@ -38,6 +38,26 @@ def test_streams_and_modes():
     assert output.err.getvalue() == "a\\n::error:::1: m\nspeccheck lint: 1 spec; 2 problems\nspeccheck: error: bad\n"
 
 
+def test_quiet_prints_nothing_when_clean():
+    """A clean run with `--quiet` leaves both streams empty: no summary line, no details."""
+    quiet = make(quiet=True)
+    quiet.info("x")
+    quiet.summary("verify", "1 requirement: 1 passed", 0)
+    assert quiet.out.getvalue() == quiet.err.getvalue() == ""
+
+
+def test_quiet_prints_problems_as_without_it():
+    """With problems, `--quiet` writes the same lines to stderr as a normal run, and nothing to stdout."""
+    lines = []
+    for quiet in (False, True):
+        output = make(quiet=quiet)
+        output.problems([Problem("a", 1, "m")])
+        output.summary("lint", "1 spec", 1)
+        assert output.out.getvalue() == ""
+        lines.append(output.err.getvalue())
+    assert lines[0] == lines[1] == "a:1: m\nspeccheck lint: 1 spec; 1 problem\n"
+
+
 def test_quiet_verbose_and_json():
     """`--quiet` keeps problems; `--verbose` adds details; `--json` prints nothing but the object."""
     quiet = make(quiet=True)

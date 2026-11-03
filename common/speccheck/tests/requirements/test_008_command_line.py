@@ -1124,6 +1124,66 @@ def test_a_failing_lint_and_check_end_with_their_summary(project: Project):
     assert done.stderr.splitlines()[-1] == "speccheck check: 1 requirement: 1 unclaimed; reported: unit; 2 problems"
 
 
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "lint, check and verify run with --quiet on a clean project print nothing on stdout or stderr and exit 0",
+)
+def test_quiet_prints_nothing_on_a_clean_run(project: Project):
+    """No summary line either: with `--quiet` a clean run is silent."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    for argv in (["lint"], ["check", "r.jsonl"], ["verify", "r.jsonl"]):
+        done = command(project, *argv, "--quiet")
+        assert (done.returncode, done.stdout, done.stderr) == (0, "", ""), argv
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "lint, check and verify run with --quiet on a project with a problem print the same stderr and stdout as without it, and exit 1",
+)
+def test_quiet_keeps_the_problems_and_the_summary(project: Project):
+    """The problems and the last line are what a failing run is for, so `--quiet` leaves them alone."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n* T-REQ-001-03: Star.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    for argv in (["lint"], ["check", "r.jsonl"], ["verify", "r.jsonl"]):
+        loud = command(project, *argv)
+        quiet = command(project, *argv, "--quiet")
+        assert quiet.returncode == loud.returncode == 1, argv
+        assert (quiet.stdout, quiet.stderr) == (loud.stdout, loud.stderr), argv
+        assert loud.stderr.splitlines()[-1].endswith(" problem") or loud.stderr.splitlines()[-1].endswith(" problems")
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "report on a project with an unclaimed requirement, to stdout and to a file, exits 0 with nothing on stderr and the problem in the report",
+)
+def test_report_never_prints_problems_to_stderr(project: Project):
+    """The report holds the problems (006-05), so stderr stays empty whatever is wrong."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    to_stdout = command(project, "report", "r.jsonl")
+    assert (to_stdout.returncode, to_stdout.stderr) == (0, "")
+    assert "## Problems (1)" in to_stdout.stdout and "T-REQ-001-02 is not claimed" in to_stdout.stdout
+    to_file = command(project, "report", "r.jsonl", "--output", "out.md")
+    assert (to_file.returncode, to_file.stderr) == (0, "")
+    assert "## Problems (1)" in (project.root / "out.md").read_text()
+    assert to_file.stdout == "speccheck report: 2 requirements: 1 unclaimed, 1 passed\n"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "report written to a file with --quiet prints nothing on stdout or stderr, where without it prints its one summary line",
+)
+def test_quiet_report_to_a_file_is_silent(project: Project):
+    """The one line a file report prints is skipped under `--quiet`; the file is still written."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert command(project, "report", "r.jsonl", "--output", "loud.md").stdout.startswith("speccheck report: ")
+    quiet = command(project, "report", "r.jsonl", "--output", "quiet.md", "--quiet")
+    assert (quiet.returncode, quiet.stdout, quiet.stderr) == (0, "", "")
+    assert (project.root / "quiet.md").read_text() == (project.root / "loud.md").read_text()
+
+
 @pytest.mark.covers("SPC-REQ-008-03", "record with an output path under a plain file exits 2 instead of writing")
 @pytest.mark.covers(
     "SPC-REQ-008-04",

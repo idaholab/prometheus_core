@@ -19,8 +19,11 @@ object for scripts and agents.
 - SPC-REQ-008-04: With `--json`, stdout MUST be exactly one JSON object with `schema_version`,
   `command`, `ok` and `problems` on every exit path, usage errors included. `check`, `verify` and
   `report` MUST also give each requirement's ID, status and evidence.
-- SPC-REQ-008-05: Without `--json`, problems MUST go to stderr, and the last line MUST be a summary
-  of the counts. `verify` MUST name the producers that reported and those that are missing.
+- SPC-REQ-008-05: Without `--json`, `lint`, `check` and `verify` MUST print problems to stderr, and
+  the last line MUST be a summary of the counts. `verify` MUST name the producers that reported and
+  those that are missing. With `--quiet`, a run with no problems MUST print nothing, and one with
+  problems MUST print the same as without it. `report` MUST NOT print problems to stderr, since the
+  report holds them (SPC-REQ-006-05).
 - SPC-REQ-008-06: Every problem MUST be printed as `path:line: message`, or `path: message` when
   it has no line.
 - SPC-REQ-008-07: `lint`, `check` and `verify` MUST take `--summary FILE` and append to it one
