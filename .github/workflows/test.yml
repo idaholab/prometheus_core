@@ -591,6 +591,65 @@ jobs:
       - name: Build
         run: npm run build
 
+  platform-frontend-e2e:
+    # Playwright against the built frontend on its own; each test stubs /api
+    # itself, so no backend runs here
+    name: "platform: frontend e2e"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    # About a minute normally; a hung apt-get or browser download fails here
+    # instead of holding a runner for the 6-hour default
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: platform/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Matches the node image in frontend/Dockerfile
+          node-version: "22.19.0"
+          cache: npm
+          cache-dependency-path: platform/frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Playwright version
+        id: playwright
+        # On its own line so a failed lookup stops the step; inside the echo
+        # it would leave the cache key without a version
+        run: |
+          version=$(node -p 'require("./package-lock.json").packages["node_modules/playwright"].version')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      # Skips the download when the cache has this version's browser; the
+      # system libraries it needs aren't cached, so --with-deps runs each time
+      - name: Install browser
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Tests
+        run: npm run test:e2e
+      # The repo is public, so anyone signed in to GitHub can download this.
+      # e2e tests must only use made-up credentials and data
+      - name: Upload report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # The HTML report embeds each failed test's trace and screenshot;
+          # open it with `npx playwright show-report <folder>`
+          name: frontend-e2e-report
+          path: |
+            platform/frontend/playwright-report/
+            platform/frontend/test-results/
+          retention-days: 14
+
   platform-frontend-docker:
     name: "platform: frontend docker ${{ matrix.platform }}"
     needs: gitleaks

@@ -11,6 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { api, ApiError } from "@/lib/api/client";
 import { setCurrentUser } from "@/lib/store/session";
 import { AuthError, AuthField, AuthLayout } from "./AuthLayout";
@@ -95,9 +96,13 @@ export function SetupWizard({ onSuccess }: Props) {
         onChange={(e) => setConfirmPassword(e.target.value)}
       />
 
-      <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-        {loading ? "Creating account..." : "Create admin account"}
-      </button>
+      <Button
+        variant="primary"
+        wide
+        type="submit"
+        loading={loading}
+        label={loading ? "Creating account..." : "Create admin account"}
+      />
     </AuthLayout>
   );
 }
