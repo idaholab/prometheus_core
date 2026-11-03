@@ -118,7 +118,7 @@ with StorageClient(cfg) as c:
     print("OK", cfg.base_url, len(c.items.list(page_size=5).items), "items")
 EOF
 ```
-- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (a stale key: after `make down-v`, a platform `make up` makes a new key; otherwise re-sync the agent, `agent-env-sync`); connection refused to `deeplynx-server` (`docker compose -p prometheus_platform ps deeplynx-server`; `make logs SERVICE=deeplynx-server`); "Invalid required DeepLynx configuration: missing …" (`deeplynx-env`).
+- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (a stale key: after `make down-v`, a platform `make up` makes a new key; otherwise re-sync the agent, `agent-env-sync`); connection refused to `deeplynx-server` (`docker compose -p prometheus_platform ps deeplynx-server`; `docker compose -p prometheus_platform logs --no-log-prefix --tail 100 deeplynx-server 2>&1`); "Invalid required DeepLynx configuration: missing …" (`deeplynx-env`).
 ### deeplynx-agent
 Tags: diagnose. Fix: yes. Run the `deeplynx-backend` command with `docker compose -p <project> exec -T <service>`. Expect `OK` and the same base URL; a `deeplynx://` URI resolves only with the same org and project. Fix: `agent-env-sync`.
 
