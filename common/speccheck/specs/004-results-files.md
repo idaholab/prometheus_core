@@ -37,5 +37,6 @@ runners and the checker, so other languages can write one too.
   the repository's root can't be found, `root` MUST be null.
 - SPC-REQ-004-11: A JSON Schema for the results format MUST ship with the package, and every file
   the plugin writes MUST match it, so a writer in another language can validate its output.
-- SPC-REQ-004-12: When `SPECCHECK_ROOT` is set, the header's `root` MUST be its value, so a run in
-  a container can say where it is.
+- SPC-REQ-004-12: When `SPECCHECK_ROOT` is set, the header's `root` MUST be its value with the
+  whitespace around it and then the slashes around it removed, so a run in a container can say where
+  it is. A value that is empty after that counts as not set.
