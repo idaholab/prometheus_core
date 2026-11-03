@@ -985,6 +985,22 @@ def test_verify_names_jobs_by_the_map(project: Project):
     assert "t failed in unit;" in plain.err
 
 
+@pytest.mark.covers(
+    "SPC-REQ-008-10",
+    "verify without --job-names, as when the job-names lookup failed, writes a summary entry that names the result by its producer unit, where with the map it names unit python 3.12",
+)
+def test_a_summary_without_job_names_names_the_producer(project: Project):
+    """The fallback the final job relies on (007-09): no names file, so the summary names each result by its producer."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=JOB_CI)
+    project.write("names.json", json.dumps({"41": "unit python 3.12"}))
+    project.run("verify", "r.jsonl", "--summary", "without.md")
+    project.run("verify", "r.jsonl", "--job-names", "names.json", "--summary", "with.md")
+    without = (project.root / "without.md").read_text()
+    assert "t failed in unit;" in without and "python 3.12" not in without
+    assert "t failed in unit python 3.12;" in (project.root / "with.md").read_text()
+
+
 @pytest.mark.parametrize(
     ("content", "message"),
     [

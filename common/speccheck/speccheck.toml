@@ -27,7 +27,7 @@ SPC-REQ-007-03 = "speccheck-upload uploads this job's results under speccheck-re
 SPC-REQ-007-04 = "speccheck-verify runs for real on the requirements legs' results, and the job checks its report artifact names each requirements job by its display name, its step summary links that artifact, a failing result's entry in a step summary names its job by display name, and it fails on an unreadable results file yet still uploads its report"
 SPC-REQ-007-06 = "the job sets up no Python of its own, and runs `speccheck verify` and `speccheck record` with the command that its speccheck-install step put on PATH"
 SPC-REQ-007-08 = "the job checks that speccheck.yml grants only actions: read and contents: read, that no job widens them, and that neither the workflow nor the speccheck actions name a secret"
-SPC-REQ-007-09 = "the job runs speccheck-verify with a run ID whose job names can't be looked up, and checks it succeeds and names every result by its producer"
+SPC-REQ-007-09 = "the job runs speccheck-verify with a run ID whose job names can't be looked up, and checks it succeeds and its report names every result by its producer; a step summary naming an entry by producer is proven by a requirements test of the command"
 
 [report]
 title = "speccheck requirements"
