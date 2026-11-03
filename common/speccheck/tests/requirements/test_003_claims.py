@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.requirements.conftest import Project
+from tests.requirements.conftest import EXPECTED, OUTCOMES, Project, outcomes
 
 CHECKED = "speccheck_config = speccheck.toml\nspeccheck_producer = unit\n"
 """Ini options that turn on the collection check."""
@@ -526,3 +526,86 @@ def test_an_explanation_is_given_once(project: Project):
         "test_project.py::test_c gives the same explanation for T-REQ-001-03 as test_project.py::test_c does for T-REQ-001-04"
         in err
     )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-16",
+    "a --collect-only run of the same inner file writes every claiming test as collected",
+)
+def test_collect_only_writes_collected(project: Project):
+    """Nothing runs, so every claim is `collected`."""
+    project.tests(OUTCOMES)
+    project.pytest("--collect-only", "-q", "--speccheck-results=c.jsonl")
+    assert set(outcomes(project, "c.jsonl").values()) == {"collected"}
+    assert len(outcomes(project, "c.jsonl")) == len(EXPECTED)
+
+
+RERUN_CONFTEST = """\
+from _pytest.runner import runtestprotocol
+
+
+def pytest_runtest_protocol(item, nextitem):
+    # What a rerun plugin does: the whole setup, call and teardown again, every report logged
+    item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+    for _ in range(2):
+        for report in runtestprotocol(item, nextitem=nextitem, log=False):
+            item.ihook.pytest_runtest_logreport(report=report)
+    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
+    return True
+"""
+"""A conftest that runs every test twice, the way a rerun plugin does."""
+
+RERUN_TESTS = """\
+import pytest
+
+ATTEMPTS = []
+
+
+@pytest.fixture
+def breaks_on_the_first_attempt():
+    yield
+    ATTEMPTS.append(1)
+    if len(ATTEMPTS) == 1:
+        raise RuntimeError("teardown, first attempt only")
+
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 15 of T-REQ-001-01")
+def test_error_then_clean(breaks_on_the_first_attempt):
+    pass
+
+
+CALLS = []
+
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 17 of T-REQ-001-01")
+def test_fails_then_passes():
+    CALLS.append(1)
+    assert len(CALLS) > 1
+"""
+"""A teardown error on the first attempt only, and a call that fails once."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-15",
+    "a rerun plugin's clean second attempt after a teardown error stays error, and a call that fails then passes is passed",
+)
+def test_an_error_stays_through_a_rerun(project: Project):
+    """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a failed call doesn't stick."""
+    project.write("conftest.py", RERUN_CONFTEST)
+    project.tests(RERUN_TESTS)
+    project.pytest("--speccheck-results=r.jsonl")
+    assert outcomes(project, "r.jsonl") == {
+        "test_error_then_clean": "error",
+        "test_fails_then_passes": "passed",
+    }
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-07",
+    "one inner run with setup and teardown errors, skips in call and setup, xfail and xpass writes each test's merged outcome, and a skip in teardown after a passing call leaves it passed",
+)
+def test_each_test_gets_one_merged_outcome(project: Project):
+    """Setup, call and teardown merged into one outcome per claiming test."""
+    project.tests(OUTCOMES)
+    project.pytest("--speccheck-results=r.jsonl", "-k", "not test_deselected and not claims_nothing")
+    assert outcomes(project, "r.jsonl") == EXPECTED
