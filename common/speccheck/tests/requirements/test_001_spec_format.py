@@ -640,6 +640,15 @@ def test_requirement_text_is_said_once(project: Project):
             id="two-stops",
         ),
         pytest.param(
+            "The file MUST be written .",
+            "The file MUST be written",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-10", "a trailing full stop and the space before it are both dropped when comparing texts"
+            ),
+            id="space-before-the-stop",
+        ),
+        pytest.param(
             "The file MUST be written.",
             "The file MUST. be written",
             False,
