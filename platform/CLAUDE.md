@@ -47,7 +47,7 @@ To temporarily exclude an agent, remove (or rename) its `agents/<name>/docker-co
 
 ## Frontend commands (`frontend/Makefile`)
 
-Run from `frontend/` with Node + npm. The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), so bring up the `backend` (and the stack behind it) first. The root `Makefile` also exposes `make react-dev` / `react-build` / `react-check`.
+Run from `frontend/` with Node + npm. The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), so bring up the `backend` (and the stack behind it) first. The root `Makefile` also exposes `make react-dev` / `react-build` / `react-check` / `react-test-e2e`.
 
 ```bash
 make install     # npm install
@@ -55,8 +55,12 @@ make dev         # npm run dev -- --port 5150   (Vite dev server, hot reload)
 make build       # npm run build                (production bundle → dist/)
 make lint        # npm run lint                 (eslint)
 make typecheck   # npm run typecheck            (tsc)
-make check       # lint + typecheck
+make test        # npm test                     (Vitest unit and component tests)
+make test-e2e    # npm run test:e2e             (Playwright end-to-end tests, headless Chromium)
+make check       # lint + typecheck + test      (not the end-to-end tests)
 ```
+
+The end-to-end tests need a browser first (`npx playwright install chromium`); CI runs them in the `platform: frontend e2e` job.
 
 Config comes from `frontend/config.ts` plus `VITE_*` env vars (e.g. `VITE_BACKEND_URL`); there is no `config.yml`.
 
