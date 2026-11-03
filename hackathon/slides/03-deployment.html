@@ -376,8 +376,12 @@ Already running DeepLynx from its own clone? Stop it (<code>docker compose down<
   <div class="head"><div class="eyebrow">DeepLynx</div><h2>Check that the platform can reach DeepLynx</h2></div>
   <div class="content">
 <div class="col">
-<pre class="sm"><span class="c"># from inside the backend container (has DEEPLYNX_* env)</span>
-docker compose -p prometheus_platform exec -T backend python - &lt;&lt;<span class="s">&#x27;EOF&#x27;</span>
+<ol class="b body">
+<li>Open <code>http://localhost:3000</code>: the DeepLynx UI shows a <strong>Prometheus</strong> project (no login).</li>
+<li>Upload a small file in a fresh chat. It appears in that project, and <code>/artifacts</code> lists it.</li>
+</ol>
+<p class="small">Still nothing? A mentor can run this from inside the backend container, which has the <code>DEEPLYNX_*</code> env:</p>
+<pre class="sm">docker compose -p prometheus_platform exec -T backend python - &lt;&lt;<span class="s">&#x27;EOF&#x27;</span>
 <span class="k">from</span> prometheus_api.storage_client <span class="k">import</span> (
     ConnectionConfig, StorageClient)
 cfg = ConnectionConfig.from_env()
@@ -385,7 +389,6 @@ cfg = ConnectionConfig.from_env()
     page = c.items.list(page_size=<span class="n">5</span>)
     print(<span class="s">&quot;OK&quot;</span>, cfg.base_url, len(page.items), <span class="s">&quot;items&quot;</span>)
 EOF</pre>
-<p class="small">Then upload a file in the chat. It should appear in the DeepLynx UI (<code>http://localhost:3000</code>) under the <strong>Prometheus</strong> project, and <code>/artifacts</code> lists it.</p>
 </div>
 
   </div>

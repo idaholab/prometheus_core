@@ -325,8 +325,14 @@ Already running DeepLynx from its own clone? Stop it (`docker compose down` in t
 ## Check that the platform can reach DeepLynx {eyebrow="DeepLynx"}
 
 ::: col
+{.body}
+1. Open `http://localhost:3000`: the DeepLynx UI shows a **Prometheus** project (no login).
+2. Upload a small file in a fresh chat. It appears in that project, and `/artifacts` lists it.
+
+{.small}
+Still nothing? A mentor can run this from inside the backend container, which has the `DEEPLYNX_*` env:
+
 ```python {.sm}
-# from inside the backend container (has DEEPLYNX_* env)
 docker compose -p prometheus_platform exec -T backend python - <<'EOF'
 from prometheus_api.storage_client import (
     ConnectionConfig, StorageClient)
@@ -336,9 +342,6 @@ with StorageClient(cfg) as c:
     print("OK", cfg.base_url, len(page.items), "items")
 EOF
 ```
-
-{.small}
-Then upload a file in the chat. It should appear in the DeepLynx UI (`http://localhost:3000`) under the **Prometheus** project, and `/artifacts` lists it.
 :::
 
 ---
