@@ -23,6 +23,7 @@ import { Home } from "../components/dashboard/Home";
 import { ComingSoon } from "../components/dashboard/ComingSoon";
 import { navLabel, type NavId } from "../components/dashboard/nav";
 import { PageAgentRegistry } from "../pages/PageAgentRegistry";
+import { PageApprovalQueue } from "../pages/PageApprovalQueue";
 import { PageDataManagement } from "../pages/PageDataManagement";
 import { PageProjectManagement } from "../pages/PageProjectManagement";
 import { PageWorkflows } from "../pages/PageWorkflows";
@@ -82,12 +83,14 @@ export function ProjectView({ onLogout }: Props) {
             {activeNav === "admin" && currentUser?.role === "admin" && <AdminSection />}
             {activeNav === "workflows" && <PageWorkflows />}
             {activeNav === "agent-registry" && <PageAgentRegistry />}
+            {activeNav === "approval-queue" && <PageApprovalQueue />}
             {activeNav === "data-management" && <PageDataManagement />}
             {activeNav === "project-management" && <PageProjectManagement />}
             {activeNav !== "home" &&
               activeNav !== "admin" &&
               activeNav !== "workflows" &&
               activeNav !== "agent-registry" &&
+              activeNav !== "approval-queue" &&
               activeNav !== "data-management" &&
               activeNav !== "project-management" && <ComingSoon label={navLabel(activeNav)} />}
           </main>

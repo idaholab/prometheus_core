@@ -87,6 +87,12 @@ interface ButtonCommonProps {
   wide?: boolean;
   soft?: boolean;
   outline?: boolean;
+  /**
+   * With `outline` and no `variant`: a faint border and dimmed text that
+   * brighten on hover, for secondary actions that shouldn't compete with the
+   * page, e.g. Request Revision and the preview toolbar (Figma E.1).
+   */
+  subtle?: boolean;
   disabled?: boolean;
   /** Swaps the icon (or, with no icon, leads the label) for a spinner. */
   loading?: boolean;
@@ -142,6 +148,7 @@ export function Button(props: ButtonProps) {
     wide = false,
     soft = false,
     outline = false,
+    subtle = false,
     disabled = false,
     loading = false,
     type = "button",
@@ -185,6 +192,12 @@ export function Button(props: ButtonProps) {
     !iconOnly && iconSlot && ICON_SIDE_PADDING_CLASSES[size][props.iconPosition ?? "left"],
     soft && "btn-soft",
     outline && "btn-outline",
+    // Same faint border as cards and Tag. Utilities outrank DaisyUI's layer,
+    // so these win over btn-outline's base-content border.
+    outline &&
+      subtle &&
+      !variant &&
+      "border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:text-base-content",
     wide && "btn-block",
     stateClass,
     className,
