@@ -740,6 +740,37 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
     assert f"#### Test [`test_a`]({blob}/proj/tests/t.py#L12) in `proj/tests/t.py`" in text
 
 
+@pytest.mark.parametrize(
+    "file",
+    [
+        pytest.param(
+            file,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-06",
+                f"a test file named {file!r}, with dots inside a segment but no `..` segment, is linked at the commit",
+            ),
+            id=f"file-{n}",
+        )
+        for n, file in enumerate(["tests/a..b.py", "tests/..a.py", "tests/a.b.c.py", "tests/..."])
+    ],
+)
+def test_dots_inside_a_name_still_link(project: Project, file: str):
+    """Only a whole `..` segment climbs out of the repository, so these paths are plain."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit", "root": "proj"}
+    line = {
+        "test": "x::test_a",
+        "file": file,
+        "line": 3,
+        "covers": [{"id": "T-REQ-001-01", "how": "h"}],
+        "outcome": "passed",
+    }
+    project.write("u.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root.parent)}
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert f"#### Test [`test_a`](https://github.com/o/r/blob/{SHA}/proj/{file}#L3) in `proj/{file}`" in text
+
+
 @pytest.mark.covers(
     "SPC-REQ-006-06",
     "a result with no line number links its test file at the commit with no #L anchor, where one with line 12 gets #L12",
