@@ -77,6 +77,10 @@ services:
       MOOSENGER_LLM_HOST: ${MOOSENGER_LLM_HOST:-https://litellm.inl.gov/}
       MOOSENGER_MODEL: ${MOOSENGER_MODEL:-gpt-5-1-gov-va}
       MOOSENGER_EMBEDDINGS: ${MOOSENGER_EMBEDDINGS:-text-embedding-3-large-gov-va}
+      # MOOSE checkout inside the container (input-example lookup, the example
+      # catalog and pyhit). Empty = none; set it to /moose after binding a
+      # checkout there in docker-compose.override.yml.
+      MOOSENGER_MOOSE_REPO: ${MOOSENGER_MOOSE_REPO:-}
       MOOSE_MCP_URL: ${MOOSE_MCP_URL:-http://moose-mcp:8000/mcp}
       MOOSE_MCP_AUTH_KEY: ${MOOSE_MCP_AUTH_KEY:-}
       # Startup validation always runs; warmup (vector DB pull, syntax data)
@@ -94,10 +98,10 @@ services:
     volumes:
       # Session workspaces, vector DB, knowledge layout, plan/run artifacts.
       - moosenger-workspace:/workspace
-      # MOOSE checkout for syntax data, pyhit, LSP and knowledge
-      # (knowledge.moose.repo: /moose). A named volume here, because agent
+      # Mount point for a MOOSE checkout. A named volume here, because agent
       # compose files may not bind-mount host paths; to use a local MOOSE
-      # tree, bind it in platform/docker-compose.override.yml (README.md).
+      # tree, bind it in platform/docker-compose.override.yml and set
+      # MOOSENGER_MOOSE_REPO=/moose (README.md).
       - moose-src:/moose:ro
     depends_on:
       backend:

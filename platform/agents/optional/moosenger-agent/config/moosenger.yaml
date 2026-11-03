@@ -29,8 +29,10 @@ rag:
 knowledge:
   layout: "$MOOSENGER_PROJECT_DIR/.moosenger_knowledge"
   moose:
-    # Read-only MOOSE checkout at /moose (bind it in docker-compose.override.yml).
-    repo: /moose
+    # MOOSE checkout for the example catalog. Empty (the default) = none.
+    # Set MOOSENGER_MOOSE_REPO=/moose after binding a checkout there in
+    # platform/docker-compose.override.yml.
+    repo: "$MOOSENGER_MOOSE_REPO"
     syntax_json: "$MOOSENGER_PROJECT_DIR/data/syntax.json"
     markdown_lookup: "$MOOSENGER_PROJECT_DIR/data/moose_object_markdown_lookup.json"
     docs:
@@ -67,7 +69,11 @@ domains:
   moose:
     # No local executable in this container: execution goes through MCP.
     local_moose_executable: null
-    moose_python_path: /moose/python
+    # MOOSE checkout for input-example lookup; pyhit comes from its python/
+    # directory (do not also set moose_python_path: it must equal
+    # <moose_repo>/python, and set without a checkout it fails startup).
+    # Empty (the default) = none.
+    moose_repo: "$MOOSENGER_MOOSE_REPO"
     moose_syntax: "$MOOSENGER_PROJECT_DIR/data/syntax.json"
     moose_markdown_lookup: "$MOOSENGER_PROJECT_DIR/data/moose_object_markdown_lookup.json"
     lsp_enabled: true

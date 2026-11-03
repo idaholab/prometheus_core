@@ -77,11 +77,16 @@ submodule is ever required (air-gapped builds), put it outside `agents/`, e.g.
    Without it, Q&A and generation still work (generation's `--check-input`
    smoke step also goes through MCP; set `domains.moose.smoke_required: false`
    in `config/moosenger.yaml` if you have no execution backend at all).
-3. **MOOSE source checkout** (read-only) for syntax data, pyhit, the language
-   server and the knowledge base. Optional but strongly recommended. Agent
-   compose files may not bind-mount host paths (`make test-static` enforces
-   this), so `/moose` is an empty named volume by default; bind your checkout
-   in `platform/docker-compose.override.yml` (below).
+3. **MOOSE source checkout** (read-only, optional) for input-example lookup,
+   the knowledge base's example catalog and pyhit. Agent compose files may not
+   bind-mount host paths (`make test-static` enforces this), so `/moose` is an
+   empty named volume by default and the agent runs without these features.
+   To enable them, bind your checkout in `platform/docker-compose.override.yml`
+   (below) and set `MOOSENGER_MOOSE_REPO=/moose`. Do not set the repo without
+   binding a checkout: MOOSEnger requires `framework/`, `modules/`, `test/` and
+   `python/` there and fails startup otherwise. pyhit additionally needs a
+   `hit` binding built for Linux and Python 3.12; a macOS checkout's `hit.so`
+   does not load in the container, which only degrades input parsing.
 4. **Vector database**: warmup pulls MOOSEnger's pre-built one from its ORAS
    registry when `MOOSENGER_REGISTRY_USERNAME/PASSWORD` are set, otherwise copy
    `vector_data/` into the `moosenger-workspace` volume once.
@@ -123,6 +128,8 @@ services:
       - /abs/path/to/moose:/moose:ro                               # MOOSE checkout
 ```
 
+and, with the checkout bound, `MOOSENGER_MOOSE_REPO=/moose` in `platform/.env`.
+
 Then:
 
 ```bash
@@ -158,6 +165,7 @@ repository under `tests/a2a/`, next to the code.
 | `MOOSENGER_CONFIG` | `/app/config/moosenger.yaml` | Template rendered at startup; or a hand-written file with `MOOSENGER_RENDER_CONFIG=false` |
 | `MOOSENGER_API_KEY` | (empty → `LLM_API_KEY`) | Key for MOOSEnger's LLM endpoint, exported as `OPENAI_API_KEY` |
 | `MOOSENGER_LLM_HOST` / `MOOSENGER_MODEL` / `MOOSENGER_EMBEDDINGS` | INL LiteLLM values | MOOSEnger `core` / `rag` settings |
+| `MOOSENGER_MOOSE_REPO` | (empty = none) | MOOSE checkout in the container (`/moose` once bound): example lookup, example catalog, pyhit |
 | `MOOSE_MCP_URL` | `http://moose-mcp:8000/mcp` | MOOSE execution server |
 | `MOOSE_MCP_AUTH_KEY` | (empty = no auth) | Shared secret with that server |
 | `MOOSENGER_A2A_WARMUP` | `true` | Run warmup at startup (vector DB pull, syntax data, MCP probe) |
