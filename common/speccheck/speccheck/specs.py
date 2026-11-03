@@ -25,8 +25,8 @@ from pathlib import Path
 STATUSES = ("draft", "implemented", "retired")
 """The values a spec's `status:` line may take."""
 
-PREFIX = re.compile(r"^[A-Z][A-Z0-9]*$")
-"""A well-formed ID prefix: capital letters and digits, starting with a letter."""
+PREFIX = re.compile(r"[A-Z][A-Z0-9]*\Z")
+"""A well-formed ID prefix: capital letters and digits, starting with a letter. Use `.match`; `\\Z`, unlike `$`, does not allow a trailing newline."""
 
 SPEC_FILE = re.compile(r"^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 """A numbered spec's file name: `NNN-short-name.md`."""
