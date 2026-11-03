@@ -606,7 +606,7 @@ def test_file_names_cant_start_a_log_command(ci_project: Project):
     assert all(not line.lstrip().startswith("::") for line in lint.err.splitlines())
 
 
-SUMMARY_ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+SUMMARY_ENV = ENV
 """The run the summary is written in: a report link must be under its server and repository."""
 REPORT_URL = "https://github.com/o/r/actions/runs/7/artifacts/99"
 """An artifact URL of that run, as `actions/upload-artifact` gives it."""

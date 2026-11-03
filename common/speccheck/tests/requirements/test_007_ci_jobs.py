@@ -305,7 +305,7 @@ def test_each_kind_of_link_has_its_github_form(project: Project, kind: str, url:
 def test_artifact_links_have_the_github_form(ci_project: Project):
     """`<server>/<owner>/<repo>/actions/runs/<id>/artifacts/<id>` is the one artifact form."""
     ci_project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
-    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+    env = ENV
     for url, linked in (
         ("https://github.com/o/r/actions/runs/11/artifacts/5", True),
         ("https://github.com/o/r/actions/artifacts/5", False),
@@ -488,6 +488,59 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
     assert "evil" not in text and "javascript" not in text
 
 
+@pytest.mark.parametrize(
+    "flag",
+    [
+        pytest.param(
+            flag,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                f"with a good server and repository but GITHUB_ACTIONS {what}, no job, run, source or report link is written",
+            ),
+            id=label,
+        )
+        for label, flag, what in (
+            ("false", "false", "=false"),
+            ("empty", "", "empty"),
+            ("capitalised", "True", "=True rather than true"),
+            ("unset", None, "not set"),
+        )
+    ],
+)
+def test_nothing_is_linked_unless_github_actions_is_true(project: Project, flag: str | None):
+    """The server and repository variables alone don't make a run: `GITHUB_ACTIONS` must be exactly `true`."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=CI)
+    env = {**ENV, "GITHUB_SHA": "a" * 40, "GITHUB_WORKSPACE": str(project.root)}
+    if flag is None:
+        del env["GITHUB_ACTIONS"]
+    else:
+        env["GITHUB_ACTIONS"] = flag
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert "- ✅ passed in unit\n" in text and "- Runs: none" in text and "/blob/" not in text
+    report_url = "https://github.com/o/r/actions/runs/7/artifacts/5"
+    project.speccheck("verify", "u.jsonl", "--summary", "s.md", "--report-url", report_url, env=env)
+    summary = (project.root / "s.md").read_text()
+    assert "Full report" not in summary and "https://" not in summary
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "with GITHUB_ACTIONS=true and the same good server and repository, the same results file links job, run, source and report",
+)
+def test_in_github_actions_the_same_run_is_linked(project: Project):
+    """The control for the test above: only the flag differs."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=CI)
+    env = {**ENV, "GITHUB_SHA": "a" * 40, "GITHUB_WORKSPACE": str(project.root.parent)}
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert f"[unit]({CI['job_url']})" in text and f"[7/attempts/2]({CI['run_url']})" in text
+    assert "/blob/" in text
+    report_url = "https://github.com/o/r/actions/runs/7/artifacts/5"
+    project.speccheck("verify", "u.jsonl", "--summary", "s.md", "--report-url", report_url, env=env)
+    assert f"Full report: [speccheck-report]({report_url})" in (project.root / "s.md").read_text()
+
+
 @pytest.mark.covers(
     "SPC-REQ-007-10",
     "a results file whose run URL is really a job URL gets no link on the Runs line, while its result line links the job URL given as the job's",
@@ -583,6 +636,7 @@ def test_a_malformed_server_or_repository_links_nothing(project: Project, server
     ci = {**CI, "run_url": f"{base}/actions/runs/7/attempts/2", "job_url": f"{base}/actions/runs/7/job/8"}
     project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=ci)
     env = {
+        **ENV,
         "GITHUB_SERVER_URL": server,
         "GITHUB_REPOSITORY": repository,
         "GITHUB_SHA": "a" * 40,

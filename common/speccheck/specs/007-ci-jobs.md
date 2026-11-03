@@ -34,7 +34,7 @@ checks what its jobs proved.
   permissions, and no secrets.
 - SPC-REQ-007-09: When `speccheck-verify` can't look up the run's job names, it MUST go on without
   them, so each result is named by its producer.
-- SPC-REQ-007-10: speccheck MUST write a link to a CI page only when it runs in CI, and only to the
-  server and repository of that run. A link to a run, job or artifact MUST also have that kind's
+- SPC-REQ-007-10: speccheck MUST write a link to a CI page only when it runs in CI (on GitHub
+  Actions, `GITHUB_ACTIONS` is `true`), and only to the server and repository of that run. A link to a run, job or artifact MUST also have that kind's
   form for its provider (see SPC-REQ-007-07). A link that fails either check MUST be left out and
   its text written plainly.

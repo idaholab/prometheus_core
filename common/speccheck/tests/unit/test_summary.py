@@ -21,9 +21,10 @@ import pytest
 
 from speccheck import summary
 from speccheck.specs import Problem
+from tests.conftest import CI_ENV
 from tests.unit.conftest import make_ctx, namespace
 
-ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+ENV = CI_ENV
 """This run's server and repository."""
 REPORT = "https://github.com/o/r/actions/runs/1/artifacts/2"
 """An artifact link of this run."""

@@ -30,7 +30,7 @@ import pytest
 
 from speccheck import cli, results
 from speccheck.claims import Claim
-from tests.conftest import CONFIG, INDEX, spec
+from tests.conftest import CI_ENV, CONFIG, INDEX, spec
 
 OUTCOMES = """\
 import pytest
@@ -119,7 +119,7 @@ CI = {
     "job_url": "https://github.com/o/r/actions/runs/7/job/8",
 }
 """A results file's CI block, from a re-run with a job ID."""
-ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+ENV = CI_ENV
 """The run `report` is in: links must be under its server and repository."""
 
 
