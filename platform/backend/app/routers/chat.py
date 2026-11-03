@@ -13,7 +13,7 @@
 """POST /api/chat/messages — the non-blocking chat turn (decision D1).
 
 Auth-required. Resolves the caller's session (and its ``conversation_id`` +
-artifact catalog), mints a ``turn_id``, and runs one turn via
+artifact catalog), takes the client's ``turn_id`` (or mints one), and runs one turn via
 ``services.chat.handle_turn``. Live status streams through an ``on_status``
 closure that publishes :class:`StatusEvent`s onto the session event bus; the SSE
 endpoint (task 05) drains them keyed by ``sid``.
@@ -29,13 +29,21 @@ import logging
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status as http_status
 
 from app import identity
 from app.a2a_client import A2AClient
 from app.api_responses import AUTH_RESPONSES
 from app.config import settings
-from app.contract import ChatMessageRequest, ChatMessageResponse, ChatStatus, StatusEvent
+from app.contract import (
+    TURN_ID_PATTERN,
+    ChatMessageRequest,
+    ChatMessageResponse,
+    ChatStatus,
+    StatusEvent,
+    TurnDoneEvent,
+    TurnStateResponse,
+)
 from app.openapi import TAG_CHAT
 from app.redis_client import get_redis
 from app.security import TokenClaims, current_claims
@@ -128,7 +136,12 @@ async def post_message(
     if not query and body.upload_ids:
         query = "Please process the uploaded file(s)."
 
-    turn_id = str(uuid.uuid4())
+    turn_id = body.turn_id or str(uuid.uuid4())
+    if not await store.start_turn(claims.sid, turn_id):
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="This turn id was already used; send a new turn with a new id.",
+        )
     event_bus = _get_event_bus(request)
     on_status = _make_on_status(event_bus, claims.sid, turn_id)
     user_token = await identity.mint_for_user(claims.sub)
@@ -153,11 +166,13 @@ async def post_message(
         # Mirror message_handler's inline "Error communicating with agent"; the
         # frontend renders an error-status response rather than handling a 500.
         logger.warning("Chat turn %s failed: %s", turn_id, exc)
-        return ChatMessageResponse(
+        response = ChatMessageResponse(
             turn_id=turn_id,
             status=ChatStatus.ERROR,
             message=f"Error communicating with agent: {exc}",
         )
+        await _deliver(store, event_bus, claims.sid, response)
+        return response
 
     # T-4: a fast-finishing backgrounded task can reach a terminal state before the SSE
     # subscriber sees the event; re-check the node once so its completion isn't lost.
@@ -173,4 +188,44 @@ async def post_message(
             )
         except Exception as exc:  # reconcile is best-effort; never fail the response
             logger.warning("Reconcile of backgrounded task %s failed: %s", response.task_id, exc)
+    await _deliver(store, event_bus, claims.sid, response)
     return response
+
+
+async def _deliver(store, event_bus, sid: str, response: ChatMessageResponse) -> None:
+    """Store the finished turn and announce it with ``turn_done``, besides returning it.
+
+    The POST reply is one of two ways the result reaches the page: a proxy or a network
+    change can drop a long-held request after the turn has finished. The stored state
+    answers ``GET /api/chat/turns/{turn_id}`` for a client whose event stream was down
+    too. Best effort: a Valkey blip must not turn a finished turn into a 500.
+    """
+    try:
+        await store.finish_turn(sid, response.turn_id, response.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to store the result of turn %s: %s", response.turn_id, exc)
+    if event_bus is not None:
+        await event_bus.publish(sid, TurnDoneEvent(turn_id=response.turn_id, response=response))
+
+
+@router.get("/turns/{turn_id}", response_model=TurnStateResponse)
+async def get_turn(
+    request: Request,
+    turn_id: str = Path(pattern=TURN_ID_PATTERN),
+    claims: TokenClaims = Depends(current_claims),
+) -> TurnStateResponse:
+    """A turn's state: ``running``, or ``done`` with the response its POST returned.
+
+    For a client that lost track of a turn: its POST failed at the network level, or its
+    event stream reconnected while the turn was in flight. Read once at those moments;
+    the ``turn_done`` event is the normal path, so don't poll this. 404 when this session
+    has no such turn (never started, expired, or another session's).
+    """
+    state = await get_store(request).get_turn(claims.sid, turn_id)
+    if state is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="No such turn.")
+    if state.get("state") == "done" and isinstance(state.get("response"), dict):
+        return TurnStateResponse(
+            turn_id=turn_id, state="done", response=ChatMessageResponse.model_validate(state["response"])
+        )
+    return TurnStateResponse(turn_id=turn_id, state="running")
