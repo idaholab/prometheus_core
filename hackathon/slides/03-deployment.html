@@ -651,7 +651,7 @@ Never commit <code>.env</code>. Never paste it into chat or a PR. Back it up: lo
 </tr>
 <tr>
 <td><code>make up</code> stops: &quot;DeepLynx didn't answer at http://localhost:5000/api/v1/health&quot; (after up to 5 minutes)</td>
-<td>Something else answers on port 5000 (<code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code>), or the server is slow on its first start. <code>make logs SERVICE=deeplynx-server</code>, free the port, <code>make up</code> again.</td>
+<td>Something else answers on port 5000 (<code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code>), or the server is slow on its first start, or your shell sets <code>http_proxy</code> without <code>localhost</code> in <code>no_proxy</code> (<code>export no_proxy=localhost,127.0.0.1</code>). <code>make logs SERVICE=deeplynx-server</code>, free the port, <code>make up</code> again.</td>
 </tr>
 <tr>
 <td>Backend exits: &quot;jwt_secret is not configured&quot;</td>
