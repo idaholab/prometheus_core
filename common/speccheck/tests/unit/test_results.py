@@ -182,6 +182,18 @@ class TestValidation:
                 "`covers[].how` is longer than 1000",
             ),
             (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "  tBd "}], "outcome": "passed"}'],
+                "the explanation for X is a placeholder ('tBd')",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": " x "}], "outcome": "passed"}'],
+                "the explanation for X is just the ID",
+            ),
+            (
+                [header(), '{"test": "t", "covers": [{"id": "X", "how": "   "}], "outcome": "passed"}'],
+                "the explanation for X is empty",
+            ),
+            (
                 [
                     header(),
                     '{"test": "t", "covers": [{"id": "X", "how": "a"}, {"id": "X", "how": "b"}], "outcome": "passed"}',
