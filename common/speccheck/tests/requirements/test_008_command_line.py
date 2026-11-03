@@ -56,6 +56,31 @@ def test_help_lists_every_command_by_section(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-01",
+    "parsing --help into its sections puts lint, check and verify under Check specs and evidence and report and record under In CI, each with a one-line description",
+)
+def test_help_puts_each_command_under_its_section(project: Project):
+    """Which section each command is under, and a description of one line, from the printed help itself."""
+    sections: dict[str, dict[str, str]] = {}
+    current = ""
+    lines = command(project, "--help").stdout.splitlines()
+    for position, line in enumerate(lines):
+        if line and not line.startswith(" ") and line.endswith(":"):
+            current = line[:-1]
+            sections[current] = {}
+        elif line.startswith("  ") and not line.startswith("   ") and current and line.split()[0][0].isalpha():
+            name, _, description = line.strip().partition("  ")
+            sections[current][name] = description.strip()
+            # A description wrapped onto the next line would be a second line
+            following = lines[position + 1] if position + 1 < len(lines) else ""
+            assert not following.startswith("   "), f"{name}'s description runs over a line: {following!r}"
+    assert set(sections["Check specs and evidence"]) == {"lint", "check", "verify"}
+    assert set(sections["In CI"]) == {"report", "record"}
+    commands = {name: text for group in ("Check specs and evidence", "In CI") for name, text in sections[group].items()}
+    assert all(text and "\n" not in text for text in commands.values()), commands
+
+
+@pytest.mark.covers(
     "SPC-REQ-008-02",
     "each of --config, --json, --quiet and --verbose gives the same output before lint as after it",
 )
@@ -116,6 +141,77 @@ def test_exit_codes(project: Project):
     assert command(project, "lint").returncode == 1
     assert command(project, "nope").returncode == 2
     assert command(project, "lint", "--config", "missing.toml").returncode == 2
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-03",
+    "check and verify exit 0 when every requirement is claimed and passed, and 1 when one is not, and report writes its file and exits 0 on the same inputs that make verify exit 1",
+)
+def test_exit_codes_of_check_verify_and_report(project: Project):
+    """0 without problems and 1 with, for each command that decides; `report` is 0 either way."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("good.jsonl", "unit", [("t1", ["T-REQ-001-01"], "passed"), ("t2", ["T-REQ-001-02"], "passed")])
+    project.results("bad.jsonl", "unit", [("t1", ["T-REQ-001-01"], "passed"), ("t2", ["T-REQ-001-02"], "failed")])
+    for name in ("check", "verify"):
+        assert command(project, name, "good.jsonl").returncode == 0, name
+        assert command(project, name, "nope.jsonl").returncode == 1, name
+    assert command(project, "verify", "bad.jsonl").returncode == 1
+    done = command(project, "report", "bad.jsonl", "--output", "r.md")
+    assert done.returncode == 0 and (project.root / "r.md").is_file()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-03",
+    "an unknown option, a malformed config and a --job-names file that is not JSON each exit 2",
+)
+def test_exit_2_for_a_usage_or_config_error(project: Project):
+    """A usage error, a config error and a bad option value all exit 2, not 1."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert command(project, "lint", "--bogus").returncode == 2
+    project.write("broken.toml", "specs = \n")
+    assert command(project, "lint", "--config", "broken.toml").returncode == 2
+    project.write("names.json", "not json")
+    for name in ("verify", "report"):
+        assert command(project, name, "r.jsonl", "--job-names", "names.json").returncode == 2, name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "verify and report --json of a passing result give ok true and one requirement with its ID, status passed and one evidence entry",
+)
+def test_verify_and_report_json_carry_the_evidence(project: Project):
+    """`ok` is true when nothing is wrong, and each requirement lists what proves it."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")])
+    for name in ("verify", "report"):
+        body = json.loads(command(project, name, "r.jsonl", "--json").stdout)
+        assert body["ok"] is True and body["problems"] == [], name
+        [requirement] = body["requirements"]
+        assert (requirement["id"], requirement["status"]) == ("T-REQ-001-01", "passed"), name
+        [evidence] = requirement["evidence"]
+        assert (evidence["test"], evidence["outcome"], evidence["producer"]) == (
+            "tests/t.py::test_a",
+            "passed",
+            "unit",
+        ), name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "a missing config and an unknown option, each with --json, print one object with ok false and exit 2",
+)
+def test_json_on_a_usage_error_before_any_command_runs(project: Project):
+    """The error paths that fail before the command's own work: still exactly one object."""
+    for argv in (["lint", "--config", "missing.toml", "--json"], ["lint", "--bogus", "--json"]):
+        done = command(project, *argv)
+        body = json.loads(done.stdout)
+        assert done.returncode == 2 and body["ok"] is False, argv
+        assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
+        assert "Traceback" not in done.stderr
+    project.write("broken.toml", "specs = \n")
+    done = command(project, "lint", "--config", "broken.toml", "--json")
+    assert done.returncode == 2 and json.loads(done.stdout)["ok"] is False
 
 
 @pytest.mark.covers(
@@ -527,6 +623,43 @@ def test_lint_and_check_write_the_same_summary(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "a failing verify's summary line gives the problem count and then exactly the counts its terminal summary line gives",
+)
+def test_the_summary_counts_are_the_terminals(project: Project):
+    """Compared with what is printed, not with a copy of it written into the test."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n- T-REQ-001-03: Three.\n- T-REQ-001-04: Four. ⚠ untested")
+    project.results(
+        "r.jsonl",
+        "unit",
+        [("t1", ["T-REQ-001-01"], "passed"), ("t2", ["T-REQ-001-02"], "failed")],
+    )
+    done = project.run("verify", "r.jsonl", "--summary", "s.md")
+    assert done.code == 1
+    terminal = done.err.splitlines()[-1]
+    counts = terminal.removeprefix("speccheck verify: ").split("; ")[0]
+    problems = int(terminal.rsplit("; ", 1)[1].split()[0])
+    line = (project.root / "s.md").read_text().splitlines()[0]
+    assert line == f"**speccheck:** {problems} problems. {counts}"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "check with an unclaimed requirement writes a summary line with its problem count and the counts its terminal line gives, and one entry for it",
+)
+def test_a_failing_check_writes_its_summary(project: Project):
+    """The `check` command's own failing summary, not only `lint`'s and `verify`'s."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("c.jsonl", "unit", [("t", ["T-REQ-001-01"], "collected")])
+    done = project.run("check", "c.jsonl", "--summary", "s.md")
+    assert done.code == 1
+    counts = done.err.splitlines()[-1].removeprefix("speccheck check: ").split("; ")[0]
+    lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
+    assert lines[0] == f"**speccheck:** 1 problem. {counts}"
+    assert len(lines) == 3 and lines[2].startswith("- `specs/001-thing.md:8: T-REQ-001-02 is not claimed")
+
+
+@pytest.mark.covers(
     "SPC-REQ-008-08",
     "a test name holding a link, an img tag and a backtick sits inert in one code span in the summary",
 )
@@ -786,13 +919,35 @@ def test_verify_names_jobs_by_the_map(project: Project):
             marks=pytest.mark.covers("SPC-REQ-008-10", "a --job-names object with a number for a name exits 2"),
             id="not-a-string",
         ),
+        pytest.param(
+            '"unit"',
+            "--job-names names.json: must be a JSON object from job ID to name",
+            marks=pytest.mark.covers("SPC-REQ-008-10", "a --job-names file holding a bare JSON string exits 2"),
+            id="a-string",
+        ),
+        pytest.param(
+            "null",
+            "--job-names names.json: must be a JSON object from job ID to name",
+            marks=pytest.mark.covers("SPC-REQ-008-10", "a --job-names file holding JSON null exits 2"),
+            id="null",
+        ),
+        pytest.param(
+            b"\xff\xfe{}",
+            "--job-names names.json: ",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10", "a --job-names file that is not UTF-8 text exits 2, no traceback"
+            ),
+            id="not-utf-8",
+        ),
     ],
 )
-def test_a_bad_job_names_file_is_a_usage_error(project: Project, content: str | None, message: str):
+def test_a_bad_job_names_file_is_a_usage_error(project: Project, content: str | bytes | None, message: str):
     """For report and verify alike: exit 2 and the message, not a traceback."""
     project.spec("- T-REQ-001-01: One.")
     project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=JOB_CI)
-    if content is not None:
+    if isinstance(content, bytes):
+        (project.root / "names.json").write_bytes(content)
+    elif content is not None:
         project.write("names.json", content)
     for command_name in ("report", "verify"):
         run = project.run(command_name, "r.jsonl", "--job-names", "names.json")
@@ -809,6 +964,93 @@ def test_without_a_name_a_result_is_named_by_its_producer(reported: Project):
     for extra in ([], ["--job-names", "names.json"]):
         text = reported.speccheck("report", "unit.jsonl", *extra, env=ENV).out
         assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)" in text, extra
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-10",
+    "report with a map listing job 8 names the result by that display name, and with a map listing only job 99 names it by its producer",
+)
+def test_report_names_a_job_by_the_map_when_it_lists_it(reported: Project):
+    """The positive case for `report`, beside the unlisted one."""
+    reported.write("listed.json", json.dumps({"8": "unit python 3.12"}))
+    reported.write("unlisted.json", json.dumps({"99": "someone else"}))
+    listed = reported.speccheck("report", "unit.jsonl", "--job-names", "listed.json", env=ENV).out
+    assert "- ✅ passed in [unit python 3.12](https://github.com/o/r/actions/runs/7/job/8)" in listed
+    unlisted = reported.speccheck("report", "unit.jsonl", "--job-names", "unlisted.json", env=ENV).out
+    assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)" in unlisted
+    assert "someone else" not in unlisted
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-10",
+    "verify with a map that doesn't list job 41 names the failing result by its producer in the problem, and its job_name in --json is empty",
+)
+def test_verify_names_an_unlisted_job_by_its_producer(project: Project):
+    """The map is by job ID; one without an entry for this job leaves the producer's name."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=JOB_CI)
+    project.write("names.json", json.dumps({"7": "another job"}))
+    run = project.run("verify", "r.jsonl", "--job-names", "names.json")
+    assert run.code == 1 and "t failed in unit;" in run.err and "another job" not in run.err
+    body = project.run("verify", "r.jsonl", "--job-names", "names.json", "--json").json()
+    assert body["requirements"][0]["evidence"][0]["job_name"] == ""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "a verify of two configured producers where only unit reported prints reported: unit; missing: nightly; and the problem count as its last line",
+)
+def test_the_summary_line_names_missing_producers(project: Project):
+    """The producers that reported, and those that did not, in the last line."""
+    project.write(
+        "speccheck.toml",
+        'specs = "specs"\nid-prefix = "T"\n[producers.unit]\nworkflows = ["ci"]\n[producers.nightly]\nworkflows = ["ci"]\n',
+    )
+    project.spec("- T-REQ-001-01: One.")
+    project.results("unit.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    done = command(project, "verify", "unit.jsonl", "--complete")
+    assert done.returncode == 1 and done.stdout == ""
+    last = done.stderr.splitlines()[-1]
+    assert last.startswith("speccheck verify: 1 requirement: 1 passed; reported: unit; missing: nightly; ")
+    assert last.endswith(" problem") or last.endswith(" problems")
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "a clean lint, check and verify each print their summary as the last line of stdout and nothing on stderr",
+)
+def test_a_clean_run_ends_with_its_summary_on_stdout(project: Project):
+    """The same last-line rule for every command that checks, when nothing is wrong."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    expected = {
+        "lint": "speccheck lint: 1 specs, 1 requirement",
+        "check": "speccheck check: 1 requirement: 1 claimed; reported: unit",
+        "verify": "speccheck verify: 1 requirement: 1 passed; reported: unit",
+    }
+    for name, line in expected.items():
+        argv = [name] if name == "lint" else [name, "r.jsonl"]
+        done = command(project, *argv)
+        assert done.returncode == 0 and done.stderr == "", name
+        assert done.stdout.splitlines()[-1] == line, name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-05",
+    "lint with a malformed bullet and check with an unclaimed requirement print their problems on stderr and end stderr with their summary and the problem count",
+)
+def test_a_failing_lint_and_check_end_with_their_summary(project: Project):
+    """Problems on stderr and the last line there, with the number of problems, for `lint` and `check`."""
+    project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.")
+    done = command(project, "lint")
+    assert done.returncode == 1 and done.stdout == ""
+    assert done.stderr.splitlines()[-1] == "speccheck lint: 1 specs, 1 requirement; 1 problem"
+    project.spec("- T-REQ-001-01: One.")
+    project.results("c.jsonl", "unit", [("t", ["T-REQ-001-02"], "collected")])
+    done = command(project, "check", "c.jsonl")
+    assert done.returncode == 1 and done.stdout == ""
+    # The unknown ID the results claim, and the requirement nothing claims
+    assert done.stderr.splitlines()[-1] == "speccheck check: 1 requirement: 1 unclaimed; reported: unit; 2 problems"
 
 
 @pytest.mark.covers("SPC-REQ-008-03", "record with an output path under a plain file exits 2 instead of writing")
