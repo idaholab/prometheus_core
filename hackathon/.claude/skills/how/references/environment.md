@@ -18,8 +18,8 @@ later `make` sees both. With `LOCAL_DEEPLYNX=true` every start target first star
 deeplynx-setup`, which writes the `DEEPLYNX_*` lines. Keep `REDIS_URL` and
 `BACKEND_PORT=8600` as they are. There are no `LITELLM_*` values any more.
 
-Two traps: `ADMIN_DB_PASSWORD` is fixed at the first start (a change gives `password
-authentication failed for user "admin"`; restore it, or `make down-v`). A new value makes the
+Two traps: `ADMIN_DB_PASSWORD` and `DEEPLYNX_DB_PASSWORD` are fixed at the first start (a change gives
+`password authentication failed for user "admin"`, or DeepLynx's database refuses its server; restore it, or `make down-v`). A new value makes the
 agent copy stale: run `agent-env-sync`, then `make up` in the agent folder.
 
 ## The base image

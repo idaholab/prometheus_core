@@ -589,7 +589,7 @@ printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env 
 </tr>
 <tr>
 <td><code>DEEPLYNX_DB_PASSWORD</code> and the other DeepLynx server secrets</td>
-<td>generated</td>
+<td>generated; like <code>ADMIN_DB_PASSWORD</code>, fixed at the first start (a change breaks the database: restore it, or <code>make down-v</code>)</td>
 </tr>
 <tr>
 <td><code>AGENT_SECRET</code>, <code>REDIS_PASSWORD</code>, <code>ADMIN_DB_PASSWORD</code></td>

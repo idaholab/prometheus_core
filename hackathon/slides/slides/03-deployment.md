@@ -460,7 +460,7 @@ Every Python service (backend, client-agent, all agents) is built `FROM` the `pr
 | `LOCAL_SDK=true` | **you**: build the base image from `../sdk` {.hl} |
 | `LOCAL_DEEPLYNX=true` | **you**: run DeepLynx with the platform {.hl} |
 | `DEEPLYNX_*` (key, secret, org, project, URL) | `make up` (`deeplynx-setup`), from the local DeepLynx |
-| `DEEPLYNX_DB_PASSWORD` and the other DeepLynx server secrets | generated |
+| `DEEPLYNX_DB_PASSWORD` and the other DeepLynx server secrets | generated; like `ADMIN_DB_PASSWORD`, fixed at the first start (a change breaks the database: restore it, or `make down-v`) |
 | `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD` | generated |
 | `BACKEND_JWT_SECRET` | generated (session-cookie signing key) |
 | `ADMIN_DB_ENCRYPTION_KEY` | generated (Fernet key for admin-db) |
