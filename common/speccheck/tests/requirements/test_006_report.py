@@ -514,7 +514,7 @@ def test_a_producer_name_cant_add_markdown(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-09",
-    "a 900-character test name is cut short with an ellipsis, keeping its heading under 200 characters",
+    "a 900-character test name is cut short with an ellipsis, keeping its Test heading under 200 characters",
 )
 def test_names_are_capped(project: Project):
     """A huge test name doesn't make a huge heading."""
@@ -555,7 +555,12 @@ def _shown(project: Project, kind: str, length: int) -> str:
             cut,
             marks=pytest.mark.covers(
                 "SPC-REQ-006-09",
-                f"a {kind} name of {length} characters is {'cut to 200 ending with an ellipsis' if cut else 'shown whole'}",
+                f"a {kind} name of {length} characters is "
+                + (
+                    "cut to exactly 200 characters" + ("" if kind == "display" else ", the last one an ellipsis")
+                    if cut
+                    else "shown whole"
+                ),
             ),
             id=f"{kind}-{length}",
         )

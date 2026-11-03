@@ -112,7 +112,13 @@ def test_a_claim_that_didnt_pass_fails_verify(project: Project, marks: str, body
         f"specs/001-thing.md:7: T-REQ-001-01 has no passing result: test_project.py::test_it {outcome} in unit"
         in run.err
     )
-    assert "; to fix: " in run.err
+    hint = {
+        "failed": "fix the test or the code it checks",
+        "skipped": "make the test run here, or claim the requirement from a job where it runs",
+        "xfailed": "an expected failure proves nothing; fix it and remove the xfail",
+        "xpassed": "an unexpected pass isn't a pass; remove the xfail",
+    }[outcome]
+    assert f"; to fix: {hint}" in run.err
 
 
 @pytest.mark.covers("SPC-REQ-005-02", "a claiming test left out with -k is listed as deselected and verify exits 1")
@@ -148,7 +154,7 @@ def test_unclaimed_fails_check_and_verify_with_the_fix(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-04",
-    "a requirement only producer docker may claim is not run, waiting on docker, and fails verify only with --complete",
+    "a requirement of spec 001, which producer docker may claim and unit may not, with no claim from anyone, is not run waiting on docker, and fails verify only with --complete",
 )
 def test_a_producer_that_didnt_report(project: Project):
     """Its requirements are `not run`: fine for a partial verify, a failure for a complete one."""
@@ -202,10 +208,13 @@ def test_complete_needs_every_expected_producer(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-05",
-    "--complete --workflow typo exits 2 because no producer lists that workflow, while --workflow alone is ignored",
+    "--complete --workflow typo exits 2 saying no producer lists that workflow, so a typo can't switch the missing-producer check off",
 )
 def test_complete_with_a_workflow_nobody_lists_is_an_error(project: Project):
-    """A typo or a renamed workflow must not turn the missing-producer check off."""
+    """A typo or a renamed workflow must not turn the missing-producer check off.
+
+    Without `--complete` the workflow isn't used at all, so the same typo exits 0 (asserted last as a control).
+    """
     project.spec("- T-REQ-001-01: One.")
     project.results("unit.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
     run = project.speccheck("verify", "--complete", "--workflow", "typo", "unit.jsonl")
