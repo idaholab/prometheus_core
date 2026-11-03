@@ -84,6 +84,23 @@ def test_a_section_per_requirement_and_per_claim(reported: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-08",
+    "a requirement of 600 words wrapped over 60 lines, with a code span in it, is quoted in the report whole, to its last word",
+)
+def test_a_long_requirement_is_quoted_in_full(project: Project):
+    """No cut: the reader of the report sees everything the requirement promises, past any cell-sized limit."""
+    words = [f"word{n}" for n in range(600)]
+    words[300] = "`a b`"
+    wrapped = "\n  ".join(" ".join(words[start : start + 10]) for start in range(0, 600, 10))
+    project.spec(f"- T-REQ-001-01: {wrapped}")
+    project.results("u.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")])
+    text = project.speccheck("report", "u.jsonl").out
+    quoted = section(text, "### T-REQ-001-01 ✅ passed").split("\n", 2)[2].split("\n\n", 1)[0]
+    assert quoted == "> " + " ".join(words)
+    assert len(quoted) > 3000 and quoted.endswith("word599") and "…" not in quoted
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-08",
     "a requirement claimed by two tests and a CI job gets one subsection each, the job's headed Job with no file",
 )
 def test_each_claimant_has_its_own_subsection(project: Project):

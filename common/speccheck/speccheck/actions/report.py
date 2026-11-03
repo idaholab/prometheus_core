@@ -155,7 +155,7 @@ def _claims(status: Status, links: Links) -> list[str]:
 def _requirement(status: Status, links: Links) -> list[str]:
     """One requirement's section: heading, full text, its spec line, then its claims or what it lacks."""
     requirement = status.requirement
-    lines = [f"### {_heading(status)}", "", f"> {prose(requirement.text, 2000)}", ""]
+    lines = [f"### {_heading(status)}", "", f"> {prose(requirement.text, None)}", ""]
     path = ci.from_root(requirement.spec.path, links.root)
     url = source_url(links.files, path, requirement.line)
     if url:

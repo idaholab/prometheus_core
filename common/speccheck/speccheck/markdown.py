@@ -54,8 +54,8 @@ BLOCK_START = re.compile(r"^(\s*)([#>+=-]|\d+[.)])")
 """A line start markdown reads as a heading, quote, list or rule."""
 
 
-def prose(text: str, limit: int = MAX_CELL, *, line_start: bool = False) -> str:
-    """Text as markdown that can only be text: one line, capped, code spans kept as written.
+def prose(text: str, limit: int | None = MAX_CELL, *, line_start: bool = False) -> str:
+    """Text as markdown that can only be text: one line, capped (`limit=None` for no cap), code spans kept as written.
 
     Outside code spans only PROSE_SPECIAL is escaped, so `.` and `-` read as they are. Spans are kept
     only when every backtick stands alone and they pair up: markdown matches a span by the length of
@@ -64,7 +64,7 @@ def prose(text: str, limit: int = MAX_CELL, *, line_start: bool = False) -> str:
     With `line_start`, the text starts its own line, so a leading BLOCK_START is escaped too.
     """
     text = " ".join(str(text).split())
-    if len(text) > limit:
+    if limit is not None and len(text) > limit:
         text = text[: limit - 1] + "…"
     if text.count("`") % 2 or "``" in text:
         out = PROSE_SPECIAL.sub(r"\\\1", text).replace("`", "\\`")
