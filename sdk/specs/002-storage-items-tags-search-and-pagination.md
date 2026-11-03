@@ -22,7 +22,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-12: Item/search parsing MUST accept DeepLynx camelCase fields and JSON-string `properties` or `tags`, producing typed `Item` and `Tag` values.
 - REQ-002-13: Sync and async item create/update payloads and search query parsing MUST remain aligned.
 - REQ-002-14: Sync and async advanced query MUST accept a list of structured filters and project IDs, optionally accept text search, validate page numbers and page sizes, POST matching payloads to `/organizations/{org}/query/records/advanced/paginated`, and parse server pagination into `Page[Item]`.
-- REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected or `hasNext` is false; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`. ⚠ untested against a live server
+- REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected or `hasNext` is false; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`.
 
 ## Behavior
 - BEH-002-01: GIVEN a tag list with duplicate and blank names WHEN IDs are resolved THEN each non-empty normalized name is resolved once.
@@ -61,5 +61,5 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - Search result ranking and filtering correctness remain DeepLynx responsibilities.
 
 ## Open questions
-- `remove_tags(...)`, `by_tags(...)`, and `recent(...)` have less unit coverage than create/update/query paths.
+- `remove_tags(...)` and `by_tags(...)` have less unit coverage than create/update/query paths. `by_tags(...)` calls a route that no longer exists in Nexus and is being reworked.
 - Page totals are inferred for some list-shaped responses; callers needing exact totals must rely on backend response support.
