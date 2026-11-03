@@ -630,7 +630,9 @@ is there for runners in other languages.
   collected claims are written too, so `verify` can say "claimed but didn't run".
 - Under pytest-xdist the run writes one file, with every worker's results.
 
-The rest (what a reader rejects, size limits, atomic writes) is in
+A reader checks a result's explanations itself, whoever wrote the file, because a writer in
+another language may not have collapsed them. The rest (what a reader rejects, size limits,
+atomic writes) is in
 [`specs/004-results-files.md`](specs/004-results-files.md).
 
 ### Security

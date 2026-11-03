@@ -19,10 +19,11 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
 - SPC-REQ-003-04: A `covers` mark MUST take exactly two positional strings: the ID, and how the
   test proves it. A mark with any other number of arguments, a non-string, or keyword arguments
   MUST fail collection.
-- SPC-REQ-003-05: Without `speccheck_config`, the plugin MUST NOT check claims against the specs
-  (003-03, 003-09, 003-13 and 003-14), and MUST NOT change any test's outcome. The checks that need no specs
-  (003-02, 003-04, 003-08, 003-10, 003-11, 003-12 and 003-17) MUST run only when the run asks for a results file,
-  so installing the plugin changes nothing for a project that doesn't use it.
+- SPC-REQ-003-05: With neither `speccheck_config` nor a results file asked for, the plugin MUST NOT
+  fail collection or change any test's outcome, so installing it changes nothing for a project
+  that doesn't use it. With a results file but no `speccheck_config`, collection MUST fail on a
+  badly formed or placed mark, a bad explanation, or a repeated claim or explanation, and MUST NOT
+  compare claims with any spec.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
 - SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an

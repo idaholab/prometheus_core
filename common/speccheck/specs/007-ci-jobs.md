@@ -15,20 +15,21 @@ checks what its jobs proved.
 - SPC-REQ-007-02: A CI job's results MUST count only for the IDs its config entry lists.
 - SPC-REQ-007-03: `.github/actions/speccheck-upload` MUST upload a job's results as an artifact
   named `speccheck-results-<name>`, and MUST fail the job when there is nothing to upload.
-- SPC-REQ-007-04: `.github/actions/speccheck-verify` MUST download every `speccheck-results-*`
-  artifact of the run, look up the display name of every job of the run, write the full report
-  with those names and upload it as the `speccheck-report` artifact, then run `verify` with
-  `--summary` (see SPC-REQ-008-07), the artifact's URL and the same names, and fail when `verify`
-  fails.
+- SPC-REQ-007-04: `.github/actions/speccheck-verify` MUST read every `speccheck-results-*` artifact
+  of the run, upload the full report as the `speccheck-report` artifact, and write a step summary
+  as `verify --summary` does (see SPC-REQ-008-07) that links to that artifact. Both MUST name jobs
+  by their display names. The action MUST fail when `verify` fails, and MUST still upload the
+  report.
 - SPC-REQ-007-05: Each result's link MUST open the job that produced it, in the run attempt that
   produced it, re-runs included. When the job can't be identified, the link MUST open that run
   attempt.
 - SPC-REQ-007-06: After one `speccheck-install` step, a job MUST be able to run the `speccheck`
-  command without setting up Python itself, and `speccheck-verify` MUST use that command.
-- SPC-REQ-007-07: GitHub Actions MUST be a supported CI provider: the CI context comes from its
-  `GITHUB_*` variables, and its run and job links have the form
-  `<server>/<owner>/<repo>/actions/runs/<id>`, optionally followed by `/attempts/<n>` or
-  `/job/<id>`, and its artifact links add `/artifacts/<id>` to the run link.
+  command without setting up Python itself.
+- SPC-REQ-007-07: GitHub Actions MUST be a supported CI provider. Its CI context comes from its
+  `GITHUB_*` variables. A run link is `<server>/<owner>/<repo>/actions/runs/<id>`, optionally
+  followed by `/attempts/<n>`; a job link is that run link without the attempt, followed by
+  `/job/<id>`; and an artifact link is that run link without the attempt, followed by
+  `/artifacts/<id>`.
 - SPC-REQ-007-08: `speccheck-verify` MUST need only `contents: read` and `actions: read`
   permissions, and no secrets.
 - SPC-REQ-007-09: When `speccheck-verify` can't look up the run's job names, it MUST go on without

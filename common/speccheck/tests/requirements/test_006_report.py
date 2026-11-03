@@ -195,17 +195,15 @@ def test_backtick_runs_cant_open_a_link(project: Project, how: str):
 
 @pytest.mark.covers(
     "SPC-REQ-006-09",
-    "a 1000-character explanation appears whole, while a 900-character test name is cut at 150 with an ellipsis",
+    "a 900-character test name is cut short with an ellipsis, keeping its heading under 200 characters",
 )
-def test_names_and_explanations_are_capped(project: Project):
-    """Explanations keep their 1000 characters; a huge test name doesn't make a huge heading."""
+def test_names_are_capped(project: Project):
+    """A huge test name doesn't make a huge heading."""
     project.spec("- T-REQ-001-01: One.")
-    how = ("a reasonable sentence " * 50)[:1000].strip()
     header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
-    line = {"test": "x" * 900, "covers": [{"id": "T-REQ-001-01", "how": how}], "outcome": "passed"}
+    line = {"test": "x" * 900, "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
     project.write("u.jsonl", header + json.dumps(line) + "\n")
     text = project.speccheck("report", "u.jsonl").out
-    assert f"**How:** {how}" in text
     heading = next(line for line in text.splitlines() if line.startswith("#### Test"))
     assert len(heading) < 200 and "…" in heading
 

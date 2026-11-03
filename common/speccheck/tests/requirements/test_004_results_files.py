@@ -253,7 +253,7 @@ def test_unknown_keys_are_ignored(project: Project):
             ["T-REQ-001-01"],
             'each `covers` entry must be an object, {"id": ..., "how": ...}',
             marks=pytest.mark.covers(
-                "SPC-REQ-004-09", "a covers list of bare IDs, the old form, rejects the file and shows the object form"
+                "SPC-REQ-004-01", "a covers list of bare IDs, the old form, rejects the file and shows the object form"
             ),
             id="bare-id",
         ),
@@ -392,7 +392,25 @@ def test_xdist_keeps_what_a_crashed_worker_ran(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-004-07",
-    "verify refuses a 70,000-character line and ignores a symlinked file and folder in the results folder, so nothing is reported",
+    "verify refuses a results file of 16 MiB plus one byte, naming the limit, and reports nothing from it",
+)
+def test_a_file_over_16_mib_is_refused(project: Project):
+    """The size is checked before the file is read."""
+    project.spec("- T-REQ-001-01: One.")
+    with (project.root / "big.jsonl").open("wb") as out:
+        out.truncate(16 * 1024 * 1024 + 1)
+    run = project.speccheck("verify", "big.jsonl", "--json")
+    assert run.code == 1
+    assert any(
+        p["path"] == "big.jsonl" and "results file is 16777217 bytes; the limit is 16777216" in p["message"]
+        for p in run.json()["problems"]
+    ), run.json()["problems"]
+    assert run.json()["producers"]["reported"] == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-07",
+    "verify refuses a results line of 70,000 characters, over 64 KiB, and ignores a symlinked file and folder in the results folder, so nothing is reported",
 )
 def test_limits_and_symlinks(project: Project, tmp_path_factory: pytest.TempPathFactory):
     """An over-long line is refused, and a symlink in a results folder is not followed."""
@@ -425,7 +443,7 @@ def test_limits_and_symlinks(project: Project, tmp_path_factory: pytest.TempPath
 
 @pytest.mark.covers(
     "SPC-REQ-004-08",
-    "an inner run outside CI writes `ci: null`, and with GitHub variables set writes the provider, server, repository, workflow, job, job ID, run, attempt and sha",
+    "an inner run outside CI writes `ci: null`, and with GitHub variables set writes the provider, server, repository, workflow, job, run, attempt and sha, all keys the shipped schema lists",
 )
 def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
     """In CI the header says which provider and where the run was; outside it, `ci` is null."""
@@ -458,6 +476,7 @@ def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
     )
     assert (ci["run_id"], ci["run_attempt"], ci["sha"]) == (9, 2, "c" * 40)
     assert ci["provider"] == "github" and "leg" not in ci
+    assert set(ci) <= set(json.loads(SCHEMA.read_text())["$defs"]["ci"]["properties"])
 
 
 @pytest.mark.covers(
