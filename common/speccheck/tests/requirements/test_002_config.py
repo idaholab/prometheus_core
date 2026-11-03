@@ -98,6 +98,27 @@ def test_unknown_keys_name_the_file_and_key(project: Project, extra: str, key: s
 
 
 @pytest.mark.covers(
+    "SPC-REQ-002-02",
+    "a config in sub/ whose specs folder exists only beside it reads that folder's requirement from the parent folder, and a `specs` naming a file exits 2",
+)
+def test_the_specs_folder_is_found_next_to_the_config_not_the_current_folder(project: Project):
+    """The folder run from has its own `specs/` with another requirement; only the one beside the config may be read."""
+    project.spec("- T-REQ-001-01: Beside the run. ⚠ untested\n- T-REQ-001-02: Beside the run too. ⚠ untested")
+    project.write("sub/speccheck.toml", 'specs = "docs"\nid-prefix = "T"\n')
+    project.write("sub/docs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
+    project.write(
+        "sub/docs/001-thing.md",
+        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. ⚠ untested\n",
+    )
+    run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
+    assert run.code == 0 and run.json()["requirement_count"] == 1
+    # `specs` must be a folder, not a file
+    project.write("sub/speccheck.toml", 'specs = "docs/000-index.md"\n')
+    run = project.speccheck("lint", "--config", "sub/speccheck.toml")
+    assert run.code == 2 and "which is not a folder" in run.err
+
+
+@pytest.mark.covers(
     "SPC-REQ-002-03",
     "an unknown key under [tool.speccheck] in pyproject.toml is named by its full dotted path",
 )
