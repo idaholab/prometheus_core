@@ -49,9 +49,9 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
  * pass `size` to the icon. */
 const ICON_SIZE_CLASSES: Record<ButtonSize, string> = {
   xs: "size-3",
-  sm: "size-3.5",
-  md: "size-4",
-  lg: "size-5",
+  sm: "size-4.5",
+  md: "size-5",
+  lg: "size-6",
 };
 
 /** Padding on the icon side of an icon-and-text button, about 3/4 of DaisyUI's
@@ -103,6 +103,7 @@ interface TextButtonProps extends ButtonCommonProps {
   ariaLabel?: never;
   shape?: never;
   tooltipPlacement?: never;
+  muted?: never;
 }
 
 interface IconButtonProps extends ButtonCommonProps {
@@ -113,6 +114,11 @@ interface IconButtonProps extends ButtonCommonProps {
   ariaLabel: string;
   shape?: "square" | "circle";
   tooltipPlacement?: keyof typeof TOOLTIP_PLACEMENT_CLASSES;
+  /**
+   * Ghost only: dim the icon to 60% until hover (default). Pass `false` for a
+   * one-off button outside an icon toolbar, e.g. the header bell.
+   */
+  muted?: boolean;
 }
 
 type ButtonProps = TextButtonProps | IconButtonProps;
@@ -122,8 +128,8 @@ type ButtonProps = TextButtonProps | IconButtonProps;
  * optional `icon`), or `icon` + `ariaLabel` for an icon-only one, which gets
  * a tooltip so its meaning isn't hidden from sighted users.
  *
- * Ghost icon buttons follow the rail style: muted until hovered, primary only
- * when `active`.
+ * Ghost icon buttons follow the rail style: muted until hovered (unless
+ * `muted={false}`), primary only when `active`.
  */
 export function Button(props: ButtonProps) {
   const {
@@ -164,7 +170,9 @@ export function Button(props: ButtonProps) {
   const stateClass = ghostIcon
     ? active
       ? "bg-primary/15 text-primary"
-      : "text-base-content/60 hover:text-base-content"
+      : props.muted === false
+        ? ""
+        : "text-base-content/60 hover:text-base-content"
     : active
       ? "btn-active"
       : "";
