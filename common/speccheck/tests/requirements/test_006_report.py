@@ -210,6 +210,90 @@ def test_backtick_runs_cant_open_a_link(project: Project, how: str):
     assert re.findall(r'<a href="(?!#)[^"]*"|<img\b', html) == []
 
 
+PAYLOADS = ["# h", "- x", "> q", "1. n", "---", "<https://e.com>", "https://e.com/p", "*e*", "<b>x</b>", "![i](https://e.com/i.png)"]
+"""Text that, written raw at the start of a line or in the middle of one, would add an element to the report."""
+STRUCTURE = {
+    "heading_open",
+    "bullet_list_open",
+    "ordered_list_open",
+    "blockquote_open",
+    "hr",
+    "link_open",
+    "image",
+    "html_inline",
+    "html_block",
+    "em_open",
+    "strong_open",
+    "fence",
+    "code_block",
+}
+"""The markdown elements 006-03 says text from outside must not add."""
+
+
+def elements(text: str) -> list[str]:
+    """The element tokens in the report as a CommonMark renderer reads it, raw HTML allowed, sorted."""
+    found = []
+    for token in MarkdownIt("commonmark").parse(text):
+        found += [token.type] + [child.type for child in token.children or []]
+    return sorted(t for t in found if t in STRUCTURE)
+
+
+def hostile_spec(project: Project, text: str, purpose: str, title: str) -> None:
+    """Spec 001 whose requirement text, Purpose and title are the given strings."""
+    project.write(
+        "specs/001-thing.md",
+        f"# 001 - {title}\n\nstatus: draft\n\n## Purpose\n\n{purpose}\n\n## Requirements\n\n- T-REQ-001-01: {text}\n",
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(
+            payload,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-03",
+                f"a spec whose requirement text, Purpose and title are {payload!r} renders through CommonMark "
+                "with the same elements as a spec of plain words",
+            ),
+            id=payload,
+        )
+        for payload in PAYLOADS
+    ],
+)
+def test_spec_text_cant_add_markdown(project: Project, payload: str):
+    """Requirement text, Purpose and title come from a spec a pull request can edit; compared with plain words."""
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+    project.write("u.jsonl", header + json.dumps(line) + "\n")
+    hostile_spec(project, payload, payload, payload)
+    hostile = project.speccheck("report", "u.jsonl").out
+    hostile_spec(project, "plain words", "plain words", "plain words")
+    plain = project.speccheck("report", "u.jsonl").out
+    assert elements(plain), "the plain report has elements of its own (headings, anchors), so the check can fail"
+    assert elements(hostile) == elements(plain), hostile
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-03",
+    "a results file whose producer is a heading, link and HTML, listed in the Inputs, adds no element",
+)
+def test_a_producer_name_cant_add_markdown(project: Project):
+    """A producer name comes from the results file, so it is arbitrary (a configured one is restricted to safe characters)."""
+    project.spec("- T-REQ-001-01: One.")
+
+    def report(producer: str) -> str:
+        """The report of one passing result written by a producer of this name."""
+        header = json.dumps({"schema": "speccheck-results/1", "producer": producer}) + "\n"
+        line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+        project.write("u.jsonl", header + json.dumps(line) + "\n")
+        return project.speccheck("report", "u.jsonl").out
+
+    hostile = report("# [x](https://e.com) <b>*y*</b>")
+    assert "- Producers reported: " in hostile
+    assert elements(hostile) == elements(report("plain"))
+
+
 @pytest.mark.covers(
     "SPC-REQ-006-09",
     "a 900-character test name is cut short with an ellipsis, keeping its heading under 200 characters",
