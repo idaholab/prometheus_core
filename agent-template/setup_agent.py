@@ -282,6 +282,25 @@ def platform_uses_local_sdk(assignments: dict[str, str]) -> bool:
     return assignments.get("LOCAL_SDK", os.environ.get("LOCAL_SDK")) == "true"
 
 
+def warn_if_local_deeplynx_not_set_up(platform_env_path: Path, agent_dir: Path) -> None:
+    """Print a note when the platform runs a local DeepLynx that has no key yet.
+
+    `make deeplynx-setup` writes the key on a platform start, so an agent .env
+    written before that has no DeepLynx credentials, and the agent stops at
+    startup. Same flag precedence as platform_uses_local_sdk.
+    """
+    assignments = read_env_assignments(platform_env_path)
+    if assignments.get("LOCAL_DEEPLYNX", os.environ.get("LOCAL_DEEPLYNX")) != "true":
+        return
+    if any(assignments.get(key, "").strip("\"'") for key in ("DEEPLYNX_KEY", "DEEPLYNX_JWT_TOKEN")):
+        return
+    print(
+        "\nNote: the platform has LOCAL_DEEPLYNX=true but no DeepLynx key yet, so this\n"
+        "agent's .env has none. Run `make up` in platform/ once, then:\n"
+        f"  python3 setup_agent.py --env-only {agent_dir}"
+    )
+
+
 def select_platform_env_values(env_path: Path) -> dict[str, str]:
     """Select the platform env values that are useful to a generated agent."""
     assignments = read_env_assignments(env_path)
@@ -359,6 +378,7 @@ def create_env_from_platform_if_requested(output_dir: Path, assume_defaults: boo
             return
 
     write_agent_env(output_dir, selected_values)
+    warn_if_local_deeplynx_not_set_up(PLATFORM_ENV_PATH, output_dir)
 
 
 ENV_HEADER = (
@@ -453,6 +473,7 @@ def write_env_only(agent_dir: Path) -> None:
         kept = f" (kept your own: {', '.join(own_keys)})" if own_keys else ""
         print(f"\nUpdating '{env_path}'{kept}.")
     write_agent_env(agent_dir, selected_values, own_lines)
+    warn_if_local_deeplynx_not_set_up(PLATFORM_ENV_PATH, agent_dir)
 
 
 def process_file(file_path: Path, replacements: dict[str, str], output_dir: Path) -> None:
