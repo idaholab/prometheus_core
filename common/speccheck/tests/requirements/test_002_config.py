@@ -41,6 +41,33 @@ def test_which_config_is_used(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-002-01",
+    "with speccheck.toml (prefix T) and a pyproject.toml with [tool.speccheck] (prefix OTHER) side by side, lint reads speccheck.toml's requirement, and with only the pyproject it reads the pyproject's",
+)
+def test_speccheck_toml_wins_over_pyproject(project: Project):
+    """Both exist with different prefixes, so the count of requirements says which one was used."""
+    project.spec("- T-REQ-001-01: One. ⚠ untested")
+    project.write("pyproject.toml", '[tool.speccheck]\nspecs = "specs"\nid-prefix = "OTHER"\n')
+    assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
+    (project.root / "speccheck.toml").unlink()
+    # Only the pyproject is left, and its prefix OTHER sees no bullet in a folder written for T
+    assert project.speccheck("lint").out == "speccheck lint: 1 specs, 0 requirements\n"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-002-01",
+    "a pyproject.toml with only [tool.other] and no speccheck.toml exits 2 saying no config was found and to pass --config",
+)
+def test_a_pyproject_without_a_speccheck_table_is_not_a_config(project: Project):
+    """The file exists, but it isn't speccheck's, so it falls through to the error."""
+    (project.root / "speccheck.toml").unlink()
+    project.write("pyproject.toml", '[tool.other]\nspecs = "specs"\n')
+    run = project.speccheck("lint")
+    assert run.code == 2
+    assert "no speccheck.toml, and no [tool.speccheck] in pyproject.toml, here; pass --config PATH" in run.err
+
+
+@pytest.mark.covers(
     "SPC-REQ-002-02",
     "a config in sub/ finds sub/specs when run from the parent folder, and a `specs` naming a missing folder exits 2",
 )
@@ -163,6 +190,58 @@ def test_a_producer_limited_to_some_specs(project: Project):
     assert "may not claim" not in project.speccheck("check", "r.jsonl").err
 
 
+@pytest.mark.parametrize(
+    ("specs", "claimed", "allowed"),
+    [
+        pytest.param(
+            '["001", "002"]',
+            "T-REQ-001-01",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a producer limited to specs 001 and 002 may claim T-REQ-001-01 in spec 001"
+            ),
+            id="first-of-two",
+        ),
+        pytest.param(
+            '["001", "002"]',
+            "T-REQ-002-01",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a producer limited to specs 001 and 002 may claim T-REQ-002-01 in spec 002"
+            ),
+            id="second-of-two",
+        ),
+        pytest.param(
+            '["001", "002"]',
+            "T-REQ-003-01",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a producer limited to specs 001 and 002 may not claim T-REQ-003-01 in spec 003"
+            ),
+            id="outside-the-two",
+        ),
+        pytest.param(
+            '"all"',
+            "T-REQ-003-01",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a producer whose specs is the string all may claim T-REQ-003-01 in spec 003"
+            ),
+            id="explicit-all",
+        ),
+    ],
+)
+def test_a_producers_list_of_specs(project: Project, specs: str, claimed: str, allowed: bool):
+    """The list allows each spec it names and no other; `"all"` allows every spec."""
+    project.write("specs/000-index.md", "# Index\n\n- [001](001-a.md)\n- [002](002-b.md)\n- [003](003-c.md)\n")
+    for number, name in (("001", "001-a.md"), ("002", "002-b.md"), ("003", "003-c.md")):
+        project.spec(f"- T-REQ-{number}-01: Spec {number}'s requirement. ⚠ untested", number=number, name=name)
+    project.write("speccheck.toml", CONFIG.replace('specs = "all"', f"specs = {specs}"))
+    project.results("r.jsonl", "unit", [("t", [claimed], "collected")])
+    run = project.speccheck("check", "r.jsonl")
+    assert ("may not claim" not in run.err) is allowed, run.err
+
+
 @pytest.mark.covers(
     "SPC-REQ-002-06",
     "an empty `covers` table and the old list form each exit 2",
@@ -204,6 +283,57 @@ def test_ci_job_explanations_are_checked_as_a_tests(project: Project):
         assert run.code == 2 and message in run.err, (how, run.err)
 
 
+@pytest.mark.parametrize(
+    ("how", "message"),
+    [
+        pytest.param(
+            '"' + "x" * 1001 + '"',
+            "the explanation for T-REQ-001-01 is 1001 characters; the limit is 1000",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation of 1001 characters exits 2 naming the job's key and the ID"
+            ),
+            id="too-long",
+        ),
+        pytest.param(
+            '"T-REQ-001-01"',
+            "the explanation for T-REQ-001-01 is just the ID",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation that is the claimed ID exits 2 naming the job's key and the ID"
+            ),
+            id="the-id",
+        ),
+        pytest.param(
+            '"Fixme"',
+            "the explanation for T-REQ-001-01 is a placeholder ('Fixme')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation of mixed-case Fixme exits 2 as a placeholder"
+            ),
+            id="mixed-case-placeholder",
+        ),
+        pytest.param(
+            '"..."',
+            "the explanation for T-REQ-001-01 is a placeholder ('...')",
+            marks=pytest.mark.covers("SPC-REQ-002-06", "a CI job explanation of three dots exits 2 as a placeholder"),
+            id="dots",
+        ),
+        pytest.param(
+            '"  tBd \\n"',
+            "the explanation for T-REQ-001-01 is a placeholder ('tBd')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation of tBd padded with spaces and a newline exits 2"
+            ),
+            id="padded",
+        ),
+    ],
+)
+def test_more_ci_job_explanations_that_are_refused(project: Project, how: str, message: str):
+    """The same refusals as a test's explanation, found when the config is loaded, and naming the job and the ID."""
+    project.write("speccheck.toml", CONFIG + f'[ci.publish]\ncovers = {{ "T-REQ-001-01" = {how} }}\n')
+    run = project.speccheck("lint")
+    assert run.code == 2
+    assert f"`ci.publish.covers.T-REQ-001-01`: {message}" in run.err, run.err
+
+
 @pytest.mark.covers(
     "SPC-REQ-002-06",
     "check fails on a CI job explanation that copies a spec bullet, naming the job and the copied requirement",
@@ -229,3 +359,18 @@ def test_invalid_toml_names_the_file(project: Project):
     project.write("speccheck.toml", "specs = \n")
     run = project.speccheck("lint")
     assert run.code == 2 and "speccheck.toml: not valid TOML" in run.err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-002-07",
+    "a broken pyproject.toml found without --config, and a broken file passed with --config bad.toml, each exit 2 naming that file as not valid TOML",
+)
+def test_invalid_toml_names_the_file_however_it_was_found(project: Project):
+    """`find` reads a pyproject to look for its table, and `--config` loads a file directly: both name the file."""
+    (project.root / "speccheck.toml").unlink()
+    project.write("pyproject.toml", "[tool.speccheck\n")
+    run = project.speccheck("lint")
+    assert run.code == 2 and "pyproject.toml: not valid TOML" in run.err
+    project.write("bad.toml", "specs = \n")
+    run = project.speccheck("lint", "--config", "bad.toml")
+    assert run.code == 2 and "bad.toml: not valid TOML" in run.err
