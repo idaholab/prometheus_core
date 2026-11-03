@@ -20,10 +20,23 @@ import re
 import pytest
 from markdown_it import MarkdownIt
 
+from tests.conftest import spec
 from tests.requirements.conftest import CI, ENV, Project
 
 SHA = "e" * 40
 """The commit the run tested, whose files the report links to."""
+CONFIG_WITH_NIGHTLY = (
+    'specs = "specs"\nid-prefix = "T"\n[producers.unit]\nworkflows = ["ci"]\n[producers.nightly]\nworkflows = ["ci"]\n'
+)
+"""A config with a second producer, `nightly`, that never reports in these tests."""
+
+
+def anchor(heading: str) -> str:
+    """The link anchor GitHub makes of a heading: lower case, punctuation dropped, spaces as hyphens.
+
+    Written here from that rule rather than imported, so the report's own anchors are checked against it.
+    """
+    return re.sub(r"[^\w\- ]", "", heading.lower()).replace(" ", "-")
 
 
 def section(text: str, heading: str) -> str:
@@ -48,6 +61,93 @@ def test_the_counts_and_the_specs_table(reported: Project):
     assert text.index("## Specs") < text.index("## 001 The thing")
 
 
+@pytest.fixture
+def two_specs(project: Project) -> Project:
+    """Two specs with every status between them, a `nightly` producer that never reports, and one result.
+
+    Spec 001 (with a Purpose): passed, failed, unclaimed. Spec 002 (no Purpose): planned, untested, retired,
+    and one requirement only `nightly` could prove, so it is `not run`.
+    """
+    project.write(
+        "speccheck.toml",
+        'specs = "specs"\nid-prefix = "T"\n[producers.unit]\nspecs = ["001"]\n[producers.nightly]\nspecs = ["002"]\n',
+    )
+    project.write("specs/000-index.md", "# Index\n\n- [001](001-a.md)\n- [002](002-b.md)\n")
+    project.write(
+        "specs/001-a.md",
+        spec(
+            "- T-REQ-001-01: Passes.\n- T-REQ-001-02: Fails.\n- T-REQ-001-03: Nobody claims it.", title="Alpha"
+        ).replace("## Requirements", "## Purpose\n\nThe first\nspec.\n\n## Requirements"),
+    )
+    project.write(
+        "specs/002-b.md",
+        spec(
+            "- T-REQ-002-01: Later. (planned: step 3)\n"
+            "- T-REQ-002-02: Skipped on purpose. ⚠ untested\n"
+            "- T-REQ-002-03: Retired. Gone.\n"
+            "- T-REQ-002-04: Waits for the nightly run.",
+            number="002",
+            title="Beta",
+        ),
+    )
+    project.results(
+        "unit.jsonl",
+        "unit",
+        [("tests/t.py::test_ok", ["T-REQ-001-01"], "passed"), ("tests/t.py::test_bad", ["T-REQ-001-02"], "failed")],
+        ci=CI,
+    )
+    return project
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-01",
+    "a report of two specs holding every status lists one row per spec with its own count, leaves out statuses with none, and opens with the counts of all eight statuses it has",
+)
+def test_several_specs_and_every_status(two_specs: Project):
+    """Rows per spec, zero counts left out, and the summary line in order from the worst status."""
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    assert text.startswith(
+        "# speccheck requirements\n\n7 requirements: 1 failed, 1 unclaimed, 1 not run, 1 passed, 1 planned, 1 untested, 1 retired\n"
+    )
+    rows = [line for line in section(text, "## Specs").splitlines() if line.startswith("| [")]
+    assert rows == [
+        "| [001 Alpha](#001-alpha) | 3 | ❌ 1 failed, ❌ 1 unclaimed, ✅ 1 passed |",
+        "| [002 Beta](#002-beta) | 4 | ⏸ 1 not run, 🗓 1 planned, ⚠ 1 untested, — 1 retired |",
+    ]
+    counts_line = text.splitlines()[4]
+    assert (
+        counts_line
+        == "❌ failed: 1 · ❌ unclaimed: 1 · ⏸ not run: 1 · ✅ passed: 1 · 🗓 planned: 1 · ⚠ untested: 1 · — retired: 1"
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-01",
+    "a report with exactly one requirement says '1 requirement', not '1 requirements'",
+)
+def test_one_requirement_is_singular(project: Project):
+    """The summary line's noun agrees with the count."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert project.speccheck("report", "u.jsonl").out.startswith(
+        "# speccheck requirements\n\n1 requirement: 1 passed\n"
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-01",
+    "each link in the specs table points at a heading the report has, for two specs and a title with punctuation",
+)
+def test_the_specs_table_links_resolve(two_specs: Project):
+    """GitHub's anchor for each heading is the one the table links to."""
+    two_specs.spec("- T-REQ-002-01: x.", number="002", name="002-b.md", title="Beta: the (second) one")
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    headings = re.findall(r"^## (.+)$", text, re.M)
+    targets = re.findall(r"^\| \[[^\]]+\]\(#([^)]+)\) \| \d+ \|", text, re.M)
+    assert len(targets) == 2
+    assert {anchor(h) for h in headings} >= set(targets), (headings, targets)
+
+
 @pytest.mark.covers(
     "SPC-REQ-006-07",
     "a spec's section gives its Purpose on one line, then a status table with failed and unclaimed first, each ID linking to its section",
@@ -62,6 +162,45 @@ def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
         "| [T-REQ-001-03](#t-req-001-03--unclaimed) | ❌ unclaimed |",
         "| [T-REQ-001-01](#t-req-001-01--passed) | ✅ passed |",
     ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-07",
+    "a spec with a not run requirement, then planned, untested and retired ones, lists failed, unclaimed and not run before the rest, in spec order within a status",
+)
+def test_the_status_table_puts_not_run_before_the_rest(two_specs: Project):
+    """Spec 002's table: `not run` first, then the rest by status."""
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    rows = [line for line in section(text, "## 002 Beta").splitlines() if line.startswith("| [T-")]
+    assert rows == [
+        "| [T-REQ-002-04](#t-req-002-04--not-run) | ⏸ not run |",
+        "| [T-REQ-002-01](#t-req-002-01--planned) | 🗓 planned |",
+        "| [T-REQ-002-02](#t-req-002-02--untested) | ⚠ untested |",
+        "| [T-REQ-002-03](#t-req-002-03--retired) | — retired |",
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-07",
+    "a spec with no Purpose section has a heading, a blank line and the status table, with no stray paragraph between",
+)
+def test_a_spec_without_a_purpose_has_no_paragraph(two_specs: Project):
+    """Nothing is written for a Purpose that isn't there; the Purpose of the other spec is."""
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    assert section(text, "## 002 Beta").startswith("## 002 Beta\n\n| Requirement | Status |\n|---|---|\n")
+    assert section(text, "## 001 Alpha").startswith("## 001 Alpha\n\nThe first spec.\n\n| Requirement | Status |")
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-07",
+    "every ID link in a spec's status table points at the heading of that requirement's own section",
+)
+def test_a_status_table_link_resolves_to_its_requirements_section(two_specs: Project):
+    """The anchor in the table is the one GitHub makes of the requirement's heading."""
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    anchors = {anchor(h) for h in re.findall(r"^### (.+)$", text, re.M)}
+    linked = re.findall(r"^\| \[T-[^\]]+\]\(#([^)]+)\) \|", text, re.M)
+    assert len(linked) == 7 and set(linked) <= anchors, (linked, anchors)
 
 
 @pytest.mark.covers(
@@ -142,6 +281,74 @@ def test_results_name_the_job_and_link_it(project: Project):
         "- ❌ skipped in [unit python 3.13](https://github.com/o/r/actions/runs/7/job/9)",
         "- ✅ passed in [unit python 3.12](https://github.com/o/r/actions/runs/7/job/8)",
     ]
+
+
+@pytest.mark.parametrize(
+    ("names", "ci", "expected"),
+    [
+        pytest.param(
+            None,
+            CI,
+            "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-02", "with no --job-names file a result is named by its producer and linked to its job"
+            ),
+            id="no-names-file",
+        ),
+        pytest.param(
+            {"99": "some other job"},
+            CI,
+            "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-02", "a --job-names file with no entry for job 8 names the result by its producer"
+            ),
+            id="id-not-in-the-names",
+        ),
+        pytest.param(
+            {"8": "unit python 3.12"},
+            {**CI, "job_id": None, "job_url": "https://github.com/o/r/actions/runs/7/attempts/2"},
+            "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/attempts/2)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-02",
+                "a result with no job ID is named by its producer, since the names are by ID, and linked to its run attempt",
+            ),
+            id="no-job-id",
+        ),
+        pytest.param(
+            {"8": "unit python 3.12"},
+            {**CI, "job_url": "https://evil.example/o/r/actions/runs/7/job/8"},
+            "- ✅ passed in unit python 3.12",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-02",
+                "a result whose job URL is on another server keeps its display name and is written plainly, with no link",
+            ),
+            id="foreign-url",
+        ),
+    ],
+)
+def test_the_result_line_without_a_name_or_a_link(project: Project, names: dict | None, ci: dict, expected: str):
+    """A name when the map has one for this job's ID, the producer otherwise; a link only when the URL is this run's."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("a.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")], ci=ci)
+    args = []
+    if names is not None:
+        project.write("names.json", json.dumps(names))
+        args = ["--job-names", "names.json"]
+    text = project.speccheck("report", "a.jsonl", *args, env=ENV).out
+    assert [line for line in text.splitlines() if " passed in " in line] == [expected]
+    assert "evil" not in text
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-02",
+    "a CI job's result line gives its outcome and the job named by its display name, linked to its job",
+)
+def test_a_ci_jobs_result_line_names_and_links_it(ci_project: Project):
+    """The result of a `record` run, not a test's, has the same line."""
+    ci_project.write("names.json", json.dumps({"8": "publish the image"}))
+    ci_project.results("p.jsonl", "publish", [("publish", ["T-REQ-001-01"], "passed")], kind="ci", ci=CI)
+    text = ci_project.speccheck("report", "p.jsonl", "--job-names", "names.json", env=ENV).out
+    assert "- ✅ passed in [publish the image](https://github.com/o/r/actions/runs/7/job/8)" in text
 
 
 @pytest.mark.covers(
@@ -381,12 +588,109 @@ def test_the_inputs(reported: Project):
     assert "- Producers reported: unit" in inputs and "- Producers missing: docker" in inputs
 
 
-@pytest.mark.covers("SPC-REQ-006-05", "inputs that make verify exit 1 still let report write r.md and exit 0")
-def test_report_exits_0_when_verify_fails(reported: Project):
-    """The same inputs fail verify and still give a report, with exit 0."""
-    assert reported.speccheck("verify", "unit.jsonl").code == 1
-    run = reported.speccheck("report", "unit.jsonl", "--output", "r.md")
-    assert run.code == 0 and (reported.root / "r.md").is_file()
+@pytest.mark.covers(
+    "SPC-REQ-006-04",
+    "two results files from different commits and runs list both 12-character commits and both run attempts, in order, and never a full 40-character hash",
+)
+def test_the_inputs_list_every_commit_and_run(project: Project):
+    """Sorted, shortened to 12 characters, and one link per run attempt."""
+    project.spec("- T-REQ-001-01: One.")
+    first = {**CI, "sha": "b" * 40, "run_url": "https://github.com/o/r/actions/runs/5/attempts/1"}
+    second = {**CI, "sha": "a" * 40, "run_url": "https://github.com/o/r/actions/runs/7/attempts/2"}
+    project.results("a.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=first)
+    project.results("b.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=second)
+    inputs = project.speccheck("report", "a.jsonl", "b.jsonl", env=ENV).out.split("## Inputs", 1)[1]
+    assert "- Commit: aaaaaaaaaaaa, bbbbbbbbbbbb\n" in inputs
+    assert "a" * 13 not in inputs and "b" * 13 not in inputs
+    assert (
+        "- Runs: [5/attempts/1](https://github.com/o/r/actions/runs/5/attempts/1), "
+        "[7/attempts/2](https://github.com/o/r/actions/runs/7/attempts/2)\n"
+    ) in inputs
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-04",
+    "a report of a results file written outside CI says the commit is unknown and there are no runs, and lists no missing producers when all reported",
+)
+def test_the_inputs_outside_ci(project: Project):
+    """No commit or run to name, and no `Producers missing` line when nobody is missing."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("a.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    inputs = project.speccheck("report", "a.jsonl").out.split("## Inputs", 1)[1]
+    assert inputs.strip().splitlines() == [
+        "- Commit: unknown (not run in CI)",
+        "- Runs: none",
+        "- Producers reported: unit",
+    ]
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        pytest.param(
+            "failed",
+            marks=pytest.mark.covers("SPC-REQ-006-05", "a failing requirement leaves report exiting 0 and verify 1"),
+            id="failed",
+        ),
+        pytest.param(
+            "not-run",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05",
+                "a requirement a missing producer could prove, under --complete, leaves report exiting 0 and verify 1",
+            ),
+            id="not-run",
+        ),
+        pytest.param(
+            "skipped",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05", "a requirement whose only result is skipped leaves report exiting 0 and verify 1"
+            ),
+            id="skipped",
+        ),
+        pytest.param(
+            "error",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05", "a requirement whose only result is an error leaves report exiting 0 and verify 1"
+            ),
+            id="error",
+        ),
+        pytest.param(
+            "bad-spec",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05", "a spec with a malformed bullet leaves report exiting 0 and verify 1"
+            ),
+            id="bad-spec",
+        ),
+        pytest.param(
+            "bad-results",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05", "a results file that is not JSON leaves report exiting 0 and verify 1"
+            ),
+            id="bad-results",
+        ),
+    ],
+)
+def test_report_exits_0_whatever_makes_verify_fail(project: Project, setup: str):
+    """Each kind of problem fails `verify` and still gives a report, starting with its title, and exit 0."""
+    flags: list[str] = []
+    project.spec("- T-REQ-001-01: One.")
+    outcome = {"failed": "failed", "skipped": "skipped", "error": "error"}.get(setup, "passed")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], outcome)])
+    if setup == "not-run":
+        project.write(
+            "speccheck.toml",
+            CONFIG_WITH_NIGHTLY,
+        )
+        project.write("specs/001-thing.md", spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two."))
+        flags = ["--complete"]
+    if setup == "bad-spec":
+        project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: A bad bullet.")
+    if setup == "bad-results":
+        project.write("r.jsonl", "not json\n")
+    assert project.speccheck("verify", "r.jsonl", *flags).code == 1
+    run = project.speccheck("report", "r.jsonl", *flags, "--output", "r.md")
+    assert run.code == 0
+    assert (project.root / "r.md").read_text().startswith("# speccheck requirements\n")
 
 
 @pytest.mark.covers(
