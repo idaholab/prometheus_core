@@ -721,6 +721,42 @@ def test_a_producer_that_may_not_claim_it_isnt_waited_on(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-005-04",
+    "with test producer docker unreported, a requirement marked untested, one marked planned and one marked retired stay untested, planned and retired, and verify --complete fails only for docker itself",
+)
+def test_marked_requirements_are_never_not_run(project: Project):
+    """The spec's own marker decides these; a producer that might claim them later changes nothing."""
+    project.write("speccheck.toml", CONFIG + "[producers.docker]\n")
+    project.spec(
+        "- T-REQ-001-01: One. ⚠ untested\n- T-REQ-001-02: Two. (planned: step 2)\n- T-REQ-001-03: Retired. Three."
+    )
+    project.results("u.jsonl", "unit", [])
+    run = project.speccheck("verify", "--complete", "u.jsonl", "--json")
+    assert status(run) == {"T-REQ-001-01": "untested", "T-REQ-001-02": "planned", "T-REQ-001-03": "retired"}
+    assert [r["waiting_on"] for r in run.json()["requirements"]] == [[], [], []]
+    assert [p["message"] for p in run.json()["problems"]] == [
+        "producer `docker` didn't report; its job failed before uploading, was skipped, or was renamed "
+        "(see `docker` in speccheck.toml)"
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-04",
+    "a requirement claimed by CI job publish, which hasn't reported, and by a unit test that failed is failed and waits on nothing, and is passed once publish reports",
+)
+def test_a_failing_result_beats_an_unreported_producer(project: Project):
+    """A result with no pass is `failed` even though `publish` could still pass it later; its report then settles it."""
+    project.write("speccheck.toml", ci_config({"T-REQ-001-01": "the job publishes the image"}, docker=False))
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("tests/a.py::test_a", ["T-REQ-001-01"], "failed")])
+    run = project.speccheck("verify", "u.jsonl", "--json")
+    assert run.code == 1 and status(run) == {"T-REQ-001-01": "failed"}
+    assert run.json()["requirements"][0]["waiting_on"] == []
+    project.results("p.jsonl", "publish", [("publish", ["T-REQ-001-01"], "passed")], kind="ci")
+    assert status(project.speccheck("verify", "u.jsonl", "p.jsonl", "--json")) == {"T-REQ-001-01": "passed"}
+
+
+@pytest.mark.covers(
     "SPC-REQ-005-05",
     "with producers docker and nightly both absent, --complete names both, exits 1, and the summary lists both as missing",
 )
