@@ -25,7 +25,17 @@ from speccheck.actions import report
 from speccheck.claims import Claim
 from speccheck.specs import Problem
 from tests.conftest import CI_ENV
-from tests.unit.conftest import ROOT, make_config, make_ctx, make_requirement, make_spec, make_specs, namespace, out
+from tests.unit.conftest import (
+    ROOT,
+    err,
+    make_config,
+    make_ctx,
+    make_requirement,
+    make_spec,
+    make_specs,
+    namespace,
+    out,
+)
 
 JOB_URL = "https://github.com/o/r/actions/runs/7/job/8"
 """A job link."""
@@ -394,6 +404,24 @@ class TestRun:
         ctx = self.ctx(tmp_path)
         assert report.run(ctx, namespace()) == 0
         assert out(ctx).startswith("# speccheck requirements\n")
+
+    def test_problems_are_in_the_report_not_on_stderr(self, tmp_path: Path):
+        """A problem is listed in the report, and nothing is written to stderr, to a file or to stdout."""
+        ctx = make_ctx(tmp_path, loaded=make_config(), specs_set=make_specs("It."))
+        assert report.run(ctx, namespace(output="o.md")) == 0
+        assert err(ctx) == "" and "## Problems (1)" in (tmp_path / "o.md").read_text()
+        ctx = self.ctx(tmp_path)
+        assert report.run(ctx, namespace()) == 0
+        assert err(ctx) == "" and "## Problems (1)" in out(ctx)
+
+    def test_quiet_prints_nothing_when_the_report_goes_to_a_file(self, tmp_path: Path):
+        """The one summary line a file report prints is skipped with `--quiet`."""
+        loud = self.ctx(tmp_path)
+        report.run(loud, namespace(output="o.md"))
+        assert out(loud).startswith("speccheck report: ")
+        quiet = self.ctx(tmp_path, quiet=True)
+        report.run(quiet, namespace(output="o.md"))
+        assert out(quiet) == err(quiet) == ""
 
     def test_stdout_cant_start_a_log_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """On stdout, which may be a CI log, each line is written out (a code span keeps `##[` and `::`)."""
