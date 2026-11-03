@@ -157,14 +157,16 @@ def _stage_user(dockerfile: str, stage: str) -> str | None:
 
 
 def test_frontend_images_run_as_non_root(project_root):
-    """Both frontend targets end on a non-root user (k8s plan P1-11).
+    """Both frontend targets run as a non-root user (k8s plan P1-11).
 
-    dev runs Vite as the node image's `node` user; prod runs nginx-unprivileged as
-    its UID 101.
+    dev runs Vite as the node image's `node` user, by number (hadolint DL3066). prod
+    sets no USER and so keeps nginx-unprivileged's own UID 101: switching to root
+    there, even briefly, is exactly what this image is for avoiding.
     """
     dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
-    assert _stage_user(dockerfile, "dev") == "node"
-    assert _stage_user(dockerfile, "prod") == "101"
+    assert _stage_user(dockerfile, "dev") == "1000:1000"
+    assert _stage_user(dockerfile, "prod") is None
+    assert re.search(r"(?m)^FROM nginxinc/nginx-unprivileged:\S+ AS prod$", dockerfile)
 
 
 def test_frontend_prod_renders_config_outside_conf_d(project_root):
