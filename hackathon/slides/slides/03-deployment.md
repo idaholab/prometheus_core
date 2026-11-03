@@ -570,6 +570,8 @@ Platform not starting yet? Use the **bonus slides** at the end of this deck with
 | `localhost:6379` | Valkey (Redis protocol) | `REDIS_LOCAL_PORT` |
 | `http://localhost:8001` | client-agent (system-test mode only) | `CLIENT_AGENT_PORT` |
 | `http://localhost:8008` | artifact-debug-agent (`DEBUG_AGENTS=true`) | `ARTIFACT_DEBUG_PORT` |
+| `http://localhost:3000` | DeepLynx UI (`LOCAL_DEEPLYNX=true`) | `DEEPLYNX_UI_PORT` |
+| `http://localhost:5000` | DeepLynx API; the UI only works with it on 5000 | `DEEPLYNX_SERVER_PORT` |
 
 |||
 
@@ -605,6 +607,7 @@ A port is already taken, for example by a local Redis on 6379? Change the variab
 | `LOCAL_SDK` | `false` | **Set it to `true`**: build the base image from `../sdk` (`prometheus_api:local`) {.hl} |
 | `LOCAL_DEEPLYNX` | `false` | **Set it to `true`**: run DeepLynx with the platform and fill in `DEEPLYNX_*` {.hl} |
 | `DEEPLYNX_BASE_URL/KEY/SECRET/ORG_ID/PROJECT_ID` | written by `make up` | **Required**: uploads, `deeplynx://`, execution records |
+| `DEEPLYNX_SERVER_PORT` / `_UI_PORT` | 5000 / 3000 | DeepLynx API and UI host ports; keep the API on 5000 for the UI |
 | `PROMETHEUS_MAX_UPLOAD_BYTES` | 104857600 | 100 MiB upload cap |
 | `HTTP(S)_PROXY`, `NO_PROXY` | commented | Build args for Python images only |
 

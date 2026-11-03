@@ -780,6 +780,16 @@ Platform not starting yet? Use the <strong>bonus slides</strong> at the end of t
 <td>artifact-debug-agent (<code>DEBUG_AGENTS=true</code>)</td>
 <td><code>ARTIFACT_DEBUG_PORT</code></td>
 </tr>
+<tr>
+<td><code>http://localhost:3000</code></td>
+<td>DeepLynx UI (<code>LOCAL_DEEPLYNX=true</code>)</td>
+<td><code>DEEPLYNX_UI_PORT</code></td>
+</tr>
+<tr>
+<td><code>http://localhost:5000</code></td>
+<td>DeepLynx API; the UI only works with it on 5000</td>
+<td><code>DEEPLYNX_SERVER_PORT</code></td>
+</tr>
 </tbody>
 </table>
 <div class="col">
@@ -854,6 +864,11 @@ A port is already taken, for example by a local Redis on 6379? Change the variab
 <td><code>DEEPLYNX_BASE_URL/KEY/SECRET/ORG_ID/PROJECT_ID</code></td>
 <td>written by <code>make up</code></td>
 <td><strong>Required</strong>: uploads, <code>deeplynx://</code>, execution records</td>
+</tr>
+<tr>
+<td><code>DEEPLYNX_SERVER_PORT</code> / <code>_UI_PORT</code></td>
+<td>5000 / 3000</td>
+<td>DeepLynx API and UI host ports; keep the API on 5000 for the UI</td>
 </tr>
 <tr>
 <td><code>PROMETHEUS_MAX_UPLOAD_BYTES</code></td>
