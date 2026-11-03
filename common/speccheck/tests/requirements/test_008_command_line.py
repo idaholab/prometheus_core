@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 import speccheck
-from tests.requirements.conftest import CONFIG, ENV, JOB, Project
+from tests.requirements.conftest import CI, CONFIG, ENV, JOB, Project
 
 
 def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
@@ -115,7 +115,9 @@ def test_one_json_object_on_every_exit_path(project: Project):
         assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
     check = json.loads(command(project, "check", "--json").stdout)
     # `path` is the spec file from the repository's root; pytester's folder is in none, so null
-    assert check["requirements"] == [
+    assert len(check["requirements"]) == 1
+    promised(
+        check["requirements"][0],
         {
             "id": "T-REQ-001-01",
             "spec": "001",
@@ -125,23 +127,144 @@ def test_one_json_object_on_every_exit_path(project: Project):
             "line": 7,
             "evidence": [],
             "waiting_on": [],
-        }
-    ]
+        },
+        "check.requirements[0]",
+    )
+
+
+def promised(actual: object, snapshot: object, where: str = "body") -> None:
+    """Fail unless `actual` has everything `snapshot` promises, with the same value or type, and allow extra fields.
+
+    A snapshot value that is a type means "a value of that type"; a dict is checked key by key, so a field
+    added to `actual` passes (008-13 allows it) while a removed or retyped one fails.
+    """
+    if isinstance(snapshot, dict):
+        assert isinstance(actual, dict), f"{where} is not an object"
+        for key, value in snapshot.items():
+            assert key in actual, f"{where}.{key} was removed"
+            promised(actual[key], value, f"{where}.{key}")
+    elif isinstance(snapshot, type):
+        assert isinstance(actual, snapshot), f"{where} is {actual!r}, not a {snapshot.__name__}"
+    else:
+        assert actual == snapshot, f"{where} changed: {actual!r} != {snapshot!r}"
+
+
+COUNTS = dict.fromkeys(("claimed", "failed", "not run", "passed", "planned", "retired", "unclaimed", "untested"), int)
+"""The keys of `counts`, each a count."""
+PROBLEM = {"path": str, "line": int, "message": str, "code": str}
+"""A problem's fields."""
+EVIDENCE = {
+    "producer": str,
+    "test": str,
+    "kind": str,
+    "outcome": str,
+    "how": str,
+    "file": str,
+    "line": int,
+    "job": str,
+    "job_name": str,
+    "url": str,
+    "root": None,
+}
+"""One evidence entry's fields; `root` is null here because the results file gave none."""
+REQUIREMENT = {
+    "id": str,
+    "spec": str,
+    "status": str,
+    "text": str,
+    "path": None,
+    "line": int,
+    "evidence": list,
+    "waiting_on": list,
+}
+"""One requirement's fields; `path` is null because the test project isn't in a repository."""
+CHECKING = {
+    "schema_version": 1,
+    "ok": bool,
+    "problems": list,
+    "counts": COUNTS,
+    "requirements": list,
+    "producers": {"reported": list, "missing": list},
+}
+"""What `check`, `verify` and `report` all promise at the top level."""
 
 
 @pytest.mark.covers(
     "SPC-REQ-008-13",
-    "check --json at schema_version 1 still has every field that version promised, top level and per requirement",
+    "check, verify and report --json at schema_version 1 each still have every promised field, with its type, in the top level, counts, problems, producers, requirements and evidence; extra fields are ignored",
 )
 def test_the_json_fields_of_schema_version_1(project: Project):
-    """Removing or renaming a field fails here until `SCHEMA_VERSION` is bumped and this list is updated."""
+    """Removing or retyping a promised field fails here until `SCHEMA_VERSION` is bumped and the snapshot updated."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("u.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")], ci=CI)
+    project.write("names.json", json.dumps({"8": "unit python 3.12"}))
+    for argv in (
+        ["check", "u.jsonl"],
+        ["verify", "u.jsonl", "--job-names", "names.json"],
+        ["report", "u.jsonl"],
+    ):
+        body = json.loads(command(project, *argv, "--json").stdout)
+        promised(body, {**CHECKING, "command": argv[0]}, argv[0])
+        promised(body["problems"][0], PROBLEM, f"{argv[0]}.problems[0]")
+        first, second = body["requirements"]
+        promised(first, {**REQUIREMENT, "id": "T-REQ-001-01", "status": "claimed" if argv[0] == "check" else "passed"})
+        promised(second, {**REQUIREMENT, "id": "T-REQ-001-02", "status": "unclaimed", "evidence": []})
+        promised(first["evidence"][0], {**EVIDENCE, "outcome": "passed", "kind": "test", "producer": "unit"})
+    # Only `verify` read the job names, so only it names the job
+    verify = json.loads(command(project, "verify", "u.jsonl", "--job-names", "names.json", "--json").stdout)
+    assert verify["requirements"][0]["evidence"][0]["job_name"] == "unit python 3.12"
+    assert json.loads(command(project, "report", "u.jsonl", "--json").stdout)["title"] == "speccheck requirements"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-13",
+    "lint --json at schema_version 1 still has its command, ok, problems, requirement_count and per-spec number, title, status and requirement_count",
+)
+def test_the_lint_json_fields_of_schema_version_1(project: Project):
+    """`lint` has its own envelope, with no counts or requirements list."""
     project.spec("- T-REQ-001-01: One.")
-    body = json.loads(command(project, "check", "--json").stdout)
-    assert body["schema_version"] == 1
-    assert set(body) >= {"schema_version", "command", "ok", "problems", "counts", "requirements", "producers"}
-    assert set(body["problems"][0]) == {"path", "line", "message", "code"}
-    assert set(body["producers"]) == {"reported", "missing"}
-    assert set(body["requirements"][0]) == {"id", "spec", "status", "text", "path", "line", "evidence", "waiting_on"}
+    body = json.loads(command(project, "lint", "--json").stdout)
+    promised(body, {"schema_version": 1, "command": "lint", "ok": True, "problems": [], "requirement_count": 1})
+    promised(
+        body["specs"][0],
+        {"number": "001", "title": "Thing", "status": "draft", "requirement_count": 1},
+        "lint.specs[0]",
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-13",
+    "an unknown command and a missing config under --json at schema_version 1 each still give an error object with code `usage` and a message, and ok false",
+)
+def test_the_error_object_of_schema_version_1(project: Project):
+    """A usage error is still one object, with its `error` field."""
+    for argv in (["nope", "--json"], ["lint", "--config", "missing.toml", "--json"]):
+        body = json.loads(command(project, *argv).stdout)
+        promised(
+            body,
+            {"schema_version": 1, "ok": False, "problems": [], "error": {"code": "usage", "message": str}},
+            argv[0],
+        )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-13",
+    "the snapshot check accepts an added field and rejects a removed field, a retyped one and a changed value, so the fields test above would catch a removal",
+)
+def test_the_snapshot_check_allows_additions_and_catches_removals():
+    """The helper the other tests use: if it passed everything, they would prove nothing."""
+    snapshot = {"a": int, "b": {"c": "x", "d": list}}
+    promised({"a": 1, "b": {"c": "x", "d": []}, "added": 1, "b2": 2}, snapshot)
+    promised({"a": 1, "b": {"c": "x", "d": [], "added": 1}}, snapshot)
+    for broken in (
+        {"b": {"c": "x", "d": []}},
+        {"a": 1, "b": {"d": []}},
+        {"a": "1", "b": {"c": "x", "d": []}},
+        {"a": 1, "b": {"c": "y", "d": []}},
+        {"a": 1, "b": "x"},
+    ):
+        with pytest.raises(AssertionError):
+            promised(broken, snapshot)
 
 
 @pytest.mark.covers(
