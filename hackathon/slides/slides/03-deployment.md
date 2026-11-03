@@ -87,7 +87,8 @@ printf '\nLOCAL_DEEPLYNX=true\n' >> .env # once: DeepLynx next to the platform
 make up                        # build, start, wait, make check
 make restart                   # restart, no rebuild
 make logs SERVICE=client-agent
-make down                      # stop
+make down                      # stop (down-v also deletes uploads,
+                               # DeepLynx data and its key)
 ```
 
 |||

@@ -104,7 +104,8 @@ Platform not starting yet? Work through the bonus slides at the end of this deck
 make up                        <span class="c"># build, start, wait, make check</span>
 make restart                   <span class="c"># restart, no rebuild</span>
 make logs SERVICE=client-agent
-make down                      <span class="c"># stop</span></pre>
+make down                      <span class="c"># stop (down-v also deletes uploads,</span>
+                               <span class="c"># DeepLynx data and its key)</span></pre>
 <div class="col">
 <div class="callout info">
 <strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>): no registry, no token. Without it, <code>make up</code> tries to pull from <code>containers.github.inl.gov</code> and fails with <code>unauthorized</code>. Put it in <code>.env</code> after <code>make init-env</code>, so every later <code>make up</code> sees it.</div>
