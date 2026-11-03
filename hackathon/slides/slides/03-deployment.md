@@ -647,6 +647,8 @@ Documented but unused on `devel`: `FRONTEND_URL`, `LOCAL_CERT_FILE`/`CERT_FILE`.
 - ->  {w=30}
 - [crimson flex=1] **clear-agent-registry** | `compose down` + delete the registrations in Valkey
 - ->  {w=30}
+- [violet dash flex=1] **deeplynx-setup** | if `LOCAL_DEEPLYNX`: start DeepLynx, write `DEEPLYNX_*`
+- ->  {w=30}
 - [green flex=1] **up --build -d --wait**, then **check** | profile `dev`: all services + frontend-dev; waits until all are healthy and registered
 :::
 
@@ -817,7 +819,7 @@ Your agent image adds only your own dependencies. That is why builds are small, 
 | `restart` / `restart-fg` | same without `--build` (still a full down) |
 | `ng-up`, `ng-restart` (+`-fg`) | without regenerating the agents file |
 | `down` | stop everything |
-| `down-v` | stop and **delete volumes** (Valkey incl. sessions, admin-db, mesh cache, model caches) |
+| `down-v` | stop and **delete volumes** (Valkey incl. sessions, admin-db, mesh cache, model caches, DeepLynx data) |
 | `build` | generate + build images |
 | `ps`, `logs` \[`SERVICE=`\] | status, follow logs |
 | `generate`, `regenerate`, `clean-generated` | manage `docker-compose.agents.yml` |
@@ -832,6 +834,7 @@ Your agent image adds only your own dependencies. That is why builds are small, 
 | `clear-admin-users` | truncate users → the setup wizard runs again |
 | `clobber` | asks, then down + delete admin-db and Valkey (keeps caches) |
 | `init-env` | create `.env`, fill blank secrets, check the LLM key |
+| `deeplynx-setup` | `LOCAL_DEEPLYNX=true`: start DeepLynx, write its project and key to `.env` (run by every start) |
 | `check-prerequisites` | Docker checks |
 | `test-static` | infra tests, no Docker |
 | `test-integration`, `test-infra` | against running containers |
@@ -841,7 +844,7 @@ Your agent image adds only your own dependencies. That is why builds are small, 
 :::
 
 {.small}
-Variables: `PROFILE` (dev | prod | empty), `DEBUG_AGENTS`, `OPTIONAL_AGENTS`, `PROMETHEUS_SYSTEM_TESTING`, `LOCAL_SDK`, `SERVICE`, `CHECK=false`, `WAIT_TIMEOUT`, `CHECK_TIMEOUT`, `SKIP_PREREQUISITES=1`. The compose project name is `prometheus_platform`.
+Variables: `PROFILE` (dev | prod | empty), `DEBUG_AGENTS`, `OPTIONAL_AGENTS`, `PROMETHEUS_SYSTEM_TESTING`, `LOCAL_SDK`, `LOCAL_DEEPLYNX`, `SERVICE`, `CHECK=false`, `WAIT_TIMEOUT`, `CHECK_TIMEOUT`, `SKIP_PREREQUISITES=1`. The compose project name is `prometheus_platform`.
 
 ---
 

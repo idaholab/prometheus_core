@@ -968,6 +968,8 @@ A port is already taken, for example by a local Redis on 6379? Change the variab
 <div class="arrow-h" style="width:30px"></div>
 <div class="box crimson" style="flex:1"><strong>clear-agent-registry</strong><span class="small"><code>compose down</code> + delete the registrations in Valkey</span></div>
 <div class="arrow-h" style="width:30px"></div>
+<div class="box violet dash" style="flex:1"><strong>deeplynx-setup</strong><span class="small">if <code>LOCAL_DEEPLYNX</code>: start DeepLynx, write <code>DEEPLYNX_*</code></span></div>
+<div class="arrow-h" style="width:30px"></div>
 <div class="box green" style="flex:1"><strong>up --build -d --wait</strong>, then <strong>check</strong><span class="small">profile <code>dev</code>: all services + frontend-dev; waits until all are healthy and registered</span></div>
 </div>
 
@@ -1167,7 +1169,7 @@ args:
 </tr>
 <tr>
 <td><code>down-v</code></td>
-<td>stop and <strong>delete volumes</strong> (Valkey incl. sessions, admin-db, mesh cache, model caches)</td>
+<td>stop and <strong>delete volumes</strong> (Valkey incl. sessions, admin-db, mesh cache, model caches, DeepLynx data)</td>
 </tr>
 <tr>
 <td><code>build</code></td>
@@ -1212,6 +1214,10 @@ args:
 <td>create <code>.env</code>, fill blank secrets, check the LLM key</td>
 </tr>
 <tr>
+<td><code>deeplynx-setup</code></td>
+<td><code>LOCAL_DEEPLYNX=true</code>: start DeepLynx, write its project and key to <code>.env</code> (run by every start)</td>
+</tr>
+<tr>
 <td><code>check-prerequisites</code></td>
 <td>Docker checks</td>
 </tr>
@@ -1239,7 +1245,7 @@ args:
 </table>
 </div>
 
-<p class="small">Variables: <code>PROFILE</code> (dev | prod | empty), <code>DEBUG_AGENTS</code>, <code>OPTIONAL_AGENTS</code>, <code>PROMETHEUS_SYSTEM_TESTING</code>, <code>LOCAL_SDK</code>, <code>SERVICE</code>, <code>CHECK=false</code>, <code>WAIT_TIMEOUT</code>, <code>CHECK_TIMEOUT</code>, <code>SKIP_PREREQUISITES=1</code>. The compose project name is <code>prometheus_platform</code>.</p>
+<p class="small">Variables: <code>PROFILE</code> (dev | prod | empty), <code>DEBUG_AGENTS</code>, <code>OPTIONAL_AGENTS</code>, <code>PROMETHEUS_SYSTEM_TESTING</code>, <code>LOCAL_SDK</code>, <code>LOCAL_DEEPLYNX</code>, <code>SERVICE</code>, <code>CHECK=false</code>, <code>WAIT_TIMEOUT</code>, <code>CHECK_TIMEOUT</code>, <code>SKIP_PREREQUISITES=1</code>. The compose project name is <code>prometheus_platform</code>.</p>
   </div>
 </section>
 
