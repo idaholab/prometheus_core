@@ -264,6 +264,31 @@ def test_check_on_a_collect_only_run(project: Project):
     )
 
 
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        pytest.param(
+            outcome,
+            marks=pytest.mark.covers(
+                "SPC-REQ-005-08",
+                f"check on a results file that records the claim as {outcome} calls it claimed and fails only on the unclaimed requirement, while verify does not call it claimed",
+            ),
+        )
+        for outcome in ("failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected")
+    ],
+)
+def test_check_ignores_the_outcome_of_a_claim(project: Project, outcome: str):
+    """Results files written with each outcome: `claimed` for every one, so no outcome is looked at."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("r.jsonl", "unit", [("tests/t.py::test_one", ["T-REQ-001-01"], outcome)])
+    run = project.speccheck("check", "r.jsonl", "--json")
+    assert status(run) == {"T-REQ-001-01": "claimed", "T-REQ-001-02": "unclaimed"}
+    assert [p["code"] for p in run.json()["problems"]] == ["unclaimed"]
+    assert run.code == 1
+    # The same file under verify is where the outcome counts
+    assert status(project.speccheck("verify", "r.jsonl", "--json"))["T-REQ-001-01"] != "claimed"
+
+
 @pytest.mark.covers(
     "SPC-REQ-005-02",
     "the same claiming test fails verify --complete when skipped through an environment variable, and passes once it runs",
