@@ -17,8 +17,10 @@ object for scripts and agents.
   whatever the problems (SPC-REQ-006-05). An output path that can't be written MUST be a usage
   error.
 - SPC-REQ-008-04: With `--json`, stdout MUST be exactly one JSON object with `schema_version`,
-  `command`, `ok` and `problems` on every exit path, usage errors included. `check`, `verify` and
-  `report` MUST also give each requirement's ID, status and evidence.
+  `command`, `ok` and `problems` on every exit path, usage errors included. `ok` MUST be true
+  exactly when the command exits 0, so `report`, which exits 0 whatever is wrong, has `ok` true
+  with its problems listed. `check`, `verify` and `report` MUST also give each requirement's ID,
+  status and evidence.
 - SPC-REQ-008-05: Without `--json`, `lint`, `check` and `verify` MUST print problems to stderr, and
   the last line MUST be a summary of the counts. `verify` MUST name the producers that reported and
   those that are missing. With `--quiet`, a run with no problems MUST print nothing, and one with

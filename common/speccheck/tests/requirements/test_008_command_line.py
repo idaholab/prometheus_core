@@ -441,6 +441,22 @@ def test_an_unwritable_output_is_still_one_json_object(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "report --json on a project with an unclaimed requirement exits 0 with ok true and the problem listed, where verify --json on the same project exits 1 with ok false",
+)
+def test_ok_is_the_exit_code_so_report_is_ok_with_problems(project: Project):
+    """`report` exits 0 whatever is wrong (006-05), so its `ok` is true and `problems` carries what is wrong."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    report = command(project, "report", "r.jsonl", "--json")
+    verify = command(project, "verify", "r.jsonl", "--json")
+    assert (report.returncode, verify.returncode) == (0, 1)
+    assert json.loads(report.stdout)["ok"] is True and json.loads(verify.stdout)["ok"] is False
+    assert [p["code"] for p in json.loads(report.stdout)["problems"]] == ["unclaimed"]
+    assert [p["code"] for p in json.loads(verify.stdout)["problems"]] == ["unclaimed"]
+
+
+@pytest.mark.covers(
     "SPC-REQ-008-05",
     "a failing verify leaves stdout empty, starts stderr with the problem and ends it with the counts and producer unit",
 )

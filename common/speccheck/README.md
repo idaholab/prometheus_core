@@ -454,6 +454,8 @@ With `--json`, stdout is exactly one object, on every exit path:
 }
 ```
 
+- `ok` is true exactly when the command exits 0. `report` exits 0 whatever is wrong, so its `ok`
+  is true even with `problems`; read `problems` (or use `verify`) to know whether anything is wrong.
 - A usage or config error has `"error": {"code": "usage", "message": "..."}` instead (a bare
   `speccheck --json` is one).
 - Each problem's `code` is a stable name for its kind, listed below. The `message` wording can
