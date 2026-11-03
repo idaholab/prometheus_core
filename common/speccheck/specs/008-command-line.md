@@ -13,7 +13,9 @@ object for scripts and agents.
 - SPC-REQ-008-02: `--config`, `--json`, `--quiet` and `--verbose` MUST work before or after the
   command.
 - SPC-REQ-008-03: The exit code MUST be 0 when there are no problems, 1 when there are, and 2 on a
-  usage or config error.
+  usage or config error. `report` is the exception: it MUST exit 0 when it has written the report,
+  whatever the problems (SPC-REQ-006-05). An output path that can't be written MUST be a usage
+  error.
 - SPC-REQ-008-04: With `--json`, stdout MUST be exactly one JSON object with `schema_version`,
   `command`, `ok` and `problems` on every exit path, usage errors included. `check`, `verify` and
   `report` MUST also give each requirement's ID, status and evidence.
@@ -27,12 +29,12 @@ object for scripts and agents.
 - SPC-REQ-008-08: What `--summary` writes MUST be escaped as in SPC-REQ-006-03 and MUST stay under
   the step summary's 1 MiB limit. When it doesn't fit, it MUST be cut after a whole entry and say
   that it was cut.
-- SPC-REQ-008-09: With `--report-url URL`, the summary line MUST link to the full report, but only
-  when the URL has the form of an artifact link of a supported CI provider (see SPC-REQ-007-07) on
-  the run's server and repository. Otherwise the line MUST have no link.
+- SPC-REQ-008-09: With `--report-url URL`, the summary line MUST link to the full report when
+  SPC-REQ-007-10 allows a link to that artifact URL. Otherwise the line MUST have no link.
 - SPC-REQ-008-10: `report` and `verify` MUST take `--job-names FILE`, a JSON object from a job's ID
-  to its display name, and name each job that way in what they write. It MUST be optional, and a
-  file that isn't such an object MUST be a usage error.
+  to its display name. They MUST name each job by its display name when the file gives one, and
+  otherwise by its producer. The option MUST be optional, and a file that isn't such an object
+  MUST be a usage error.
 - SPC-REQ-008-11: `--version` MUST print the version.
 - SPC-REQ-008-12: Everything speccheck prints MUST have control characters written out (`\n`,
   `\x1b`), so no file name, spec text or results file can start a CI log command.

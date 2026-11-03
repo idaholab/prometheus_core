@@ -318,6 +318,22 @@ def test_unknown_keys_are_ignored(project: Project):
             id="line-break",
         ),
         pytest.param(
+            [{"id": "T-REQ-001-01", "how": "TBD"}],
+            "the explanation for T-REQ-001-01 is a placeholder ('TBD')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-09", "a result whose how is TBD, written by another writer, rejects the file"
+            ),
+            id="placeholder",
+        ),
+        pytest.param(
+            [{"id": "T-REQ-001-01", "how": "t-req-001-01"}],
+            "the explanation for T-REQ-001-01 is just the ID",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-09", "a result whose how is its own claimed ID in lower case rejects the file"
+            ),
+            id="the-id",
+        ),
+        pytest.param(
             ["T-REQ-001-01"],
             'each `covers` entry must be an object, {"id": ..., "how": ...}',
             marks=pytest.mark.covers(

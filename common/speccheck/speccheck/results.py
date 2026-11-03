@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from speccheck.claims import Claim
-from speccheck.specs import Problem
+from speccheck.claims import Claim, how_problem
+from speccheck.specs import Problem, collapse
 
 SCHEMA = "speccheck-results/1"
 """The format and its version. A reader rejects any other value instead of guessing."""
@@ -231,6 +231,10 @@ def _claim(body: Any, seen: set[str]) -> Claim:
     how = _text(body.get("how"), "covers[].how", allow_empty=False)
     if LINE_BREAK.search(how):
         raise Invalid(f"`covers[].how` for {claimed} has a line break; an explanation is one line")
+    # A writer in another language may not have collapsed `how`; check the collapsed text (SPC-REQ-004-09)
+    why = how_problem(claimed, collapse(how))
+    if why:
+        raise Invalid(why)
     if claimed in seen:
         raise Invalid(f"`covers` claims {claimed} more than once")
     seen.add(claimed)
