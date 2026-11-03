@@ -242,9 +242,15 @@ jobs:
           gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
             --jq '.artifacts[] | "\(.id) \(.name)"' | grep -qx "$ARTIFACT_ID speccheck-report" \
             || { echo "the run has no artifact $ARTIFACT_ID named speccheck-report" >&2; exit 1; }
-      - name: 007-04 add an unreadable results file
-        # download-artifact adds to this folder, so the next speccheck-verify reads this file too
-        run: echo 'not json' > "$RUNNER_TEMP/speccheck-results/bad.jsonl"
+      - name: 007-04 add an unreadable results file and a failing result
+        # download-artifact adds to this folder, so the next speccheck-verify reads these files too.
+        # The failing result borrows the header of a real requirements leg, so its job ID has a
+        # display name to look up, and fails SPC-REQ-007-03, which only this job claims
+        run: |
+          results="$RUNNER_TEMP/speccheck-results"
+          echo 'not json' > "$results/bad.jsonl"
+          leg=$(find "$results" -name 'requirements-*.jsonl' | sort | head -n 1)
+          { head -n 1 "$leg"; echo '{"test": "made-up.py::test_fails", "covers": [{"id": "SPC-REQ-007-03", "how": "a failing result the self-check makes up, to see its job named in the summary"}], "outcome": "failed"}'; } > "$results/failing.jsonl"
       - name: 007-04 verify fails on it
         id: failing-verify
         continue-on-error: true
@@ -255,17 +261,21 @@ jobs:
       - name: 007-04 check it still published its report
         env:
           OUTCOME: ${{ steps.failing-verify.outcome }}
+          SUMMARY: ${{ steps.failing-verify.outputs.summary-path }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
         run: |
           test "$OUTCOME" = failure || { echo "speccheck-verify was $OUTCOME on a bad results file" >&2; exit 1; }
           test -s "$RUNNER_TEMP/speccheck-report/report.md"
+          # The summary lists the failing result, naming its job by display name like the report does
+          grep -qE '^- `.*SPC-REQ-007-03 has no passing result: made-up\.py::test_fails failed in speccheck: requirements python [0-9.]+;' "$SUMMARY" \
+            || { echo "the summary doesn't name the failing result's job by its display name" >&2; cat "$SUMMARY" >&2; exit 1; }
           # Not only a local file: the run has the artifact, so the upload step ran after the failure
           gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
             --jq '.artifacts[].name' | grep -qx 'speccheck-report-self-check-failing' \
             || { echo "the failed verify uploaded no report artifact" >&2; exit 1; }
-          rm "$RUNNER_TEMP/speccheck-results/bad.jsonl"
+          rm "$RUNNER_TEMP/speccheck-results/bad.jsonl" "$RUNNER_TEMP/speccheck-results/failing.jsonl"
       - name: 007-09 verify without job names
         # SPC-REQ-007-09: a lookup that fails warns and goes on. Run 1 isn't in this repository,
         # so the lookup fails the way a missing `actions: read` would
