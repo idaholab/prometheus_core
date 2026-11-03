@@ -412,6 +412,65 @@ def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project)
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
+    "a passing claim of a retired, unknown, malformed or disallowed ID leaves its real target unclaimed or retired with no evidence, and each problem carries the 003-13 fix",
+)
+def test_a_refused_claim_has_no_evidence_and_says_how_to_fix_it(project: Project):
+    """The claim passed, so any evidence or `passed` status would show the claim counted."""
+    project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["001"]'))
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.spec("- T-REQ-001-01: Retired.\n- T-REQ-001-02: Live.")
+    project.write("specs/002-other.md", spec("- T-REQ-002-01: Other.", number="002", title="Other"))
+    project.results(
+        "u.jsonl",
+        "unit",
+        [
+            ("t0", ["T-REQ-1-1"], "passed"),
+            ("t1", ["T-REQ-001-09"], "passed"),
+            ("t2", ["T-REQ-001-01"], "passed"),
+            ("t3", ["T-REQ-002-01"], "passed"),
+        ],
+    )
+    fixes = {
+        "T-REQ-1-1": "is not an ID of this folder; IDs read like `T-REQ-",
+        "T-REQ-001-09": "isn't in any spec; check the number, or add it to spec 001",
+        "T-REQ-001-01": "is retired; claim what replaced it",
+        "T-REQ-002-01": "which producer `unit` may not claim; add it to `producers.unit.specs`",
+    }
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        by_id = {r["id"]: r for r in run.json()["requirements"]}
+        assert by_id["T-REQ-001-01"]["status"] == "retired" and by_id["T-REQ-001-01"]["evidence"] == []
+        assert by_id["T-REQ-002-01"]["status"] == "unclaimed" and by_id["T-REQ-002-01"]["evidence"] == []
+        assert by_id["T-REQ-001-02"]["status"] == "unclaimed"
+        assert set(by_id) == {"T-REQ-001-01", "T-REQ-001-02", "T-REQ-002-01"}
+        messages = [p["message"] for p in run.json()["problems"] if p["code"] == "claim-invalid"]
+        assert len(messages) == 4, messages
+        for id_, fix in fixes.items():
+            assert any(id_ in m and fix in m for m in messages), (command, id_, messages)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
+    "a claim by a producer that may not claim spec 002, the only claim on its requirement and a passing one, leaves that requirement unclaimed",
+)
+def test_a_disallowed_claim_is_not_the_requirements_proof(project: Project):
+    """If the claim counted, the requirement would be `passed`; the only evidence is the refused claim."""
+    project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["001"]'))
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.spec("- T-REQ-001-01: One.")
+    project.write("specs/002-other.md", spec("- T-REQ-002-01: Other.", number="002", title="Other"))
+    project.results("u.jsonl", "unit", [("a", ["T-REQ-001-01"], "passed"), ("b", ["T-REQ-002-01"], "passed")])
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        assert status(run) == {
+            "T-REQ-001-01": "claimed" if command == "check" else "passed",
+            "T-REQ-002-01": "unclaimed",
+        }
+        assert run.code == 1
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
     "a [ci.publish] entry claiming an ID that no spec has gets a config-claim-invalid problem from check and verify",
 )
 def test_a_ci_job_claiming_an_unknown_id_counts_for_nothing(project: Project):
