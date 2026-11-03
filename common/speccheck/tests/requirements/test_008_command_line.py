@@ -110,7 +110,7 @@ def test_config_option_is_what_finds_the_config(project: Project):
     project.write("alt.toml", CONFIG)
     project.spec("- T-REQ-001-01: One.")
     project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
-    for argv in (["lint"], ["check", "r.jsonl"], ["report", "out.md", "r.jsonl"]):
+    for argv in (["lint"], ["check", "r.jsonl"], ["report", "--output", "out.md", "r.jsonl"]):
         assert command(project, *argv).returncode == 2, argv  # no config to find
         before = command(project, "--config", "alt.toml", *argv)
         after = command(project, *argv, "--config", "alt.toml")
@@ -126,7 +126,8 @@ def test_config_option_is_what_finds_the_config(project: Project):
 )
 def test_version_prints_the_version(project: Project):
     """`--version` prints the name and version."""
-    assert command(project, "--version").stdout == f"speccheck {speccheck.__version__}\n"
+    done = command(project, "--version")
+    assert done.returncode == 0 and done.stdout == f"speccheck {speccheck.__version__}\n"
 
 
 @pytest.mark.covers(
@@ -310,6 +311,10 @@ CHECKING = {
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "check, verify and report --json each give both requirements an id, a status and an evidence list, whose entry for the passing one holds its producer, test and outcome",
+)
+@pytest.mark.covers(
     "SPC-REQ-008-13",
     "check, verify and report --json at schema_version 1 each still have every promised field, with its type, in the top level, counts, problems, producers, requirements and evidence; extra fields are ignored",
 )
@@ -381,7 +386,7 @@ def test_each_problem_has_a_stable_code(project: Project):
     ):
         problems = json.loads(command(project, *argv).stdout)["problems"]
         assert code in {p["code"] for p in problems}, argv
-        assert all(set(p) == {"path", "line", "message", "code"} for p in problems), argv
+        assert all({"path", "line", "message", "code"} <= set(p) for p in problems), argv
     verify = json.loads(command(project, "verify", "--json").stdout)["problems"]
     assert [p["line"] for p in verify if p["code"] == "no-results"] == [0]
 
@@ -465,35 +470,36 @@ def test_nothing_printed_can_start_a_log_command(project: Project):
 
 
 @pytest.mark.parametrize(
-    "name",
+    ("name", "written"),
     [
         pytest.param(
             name,
+            written,
             marks=pytest.mark.covers(
-                "SPC-REQ-008-12", f"a failing test named {name!r} is printed by verify with no raw control character"
+                "SPC-REQ-008-12",
+                f"a failing test named {name!r} is printed by verify as {written!r}, with no raw control character on stdout or stderr",
             ),
             id=label,
         )
-        for label, name in [
-            ("escape", "t\x1b[31mred"),
-            ("carriage-return", "t\rforged"),
-            ("c1-control", "t\x85next"),
-            ("line-separator", "t next"),
-            ("backspace-and-nul", "t\x08\x00"),
-            ("bidi", "t‮evil"),
+        for label, name, written in [
+            ("escape", "t\x1b[31mred", "t\\x1b[31mred"),
+            ("carriage-return", "t\rforged", "t\\rforged"),
+            ("c1-control", "t\x85next", "t\\x85next"),
+            ("line-separator", "t\u2028next", "t\\u2028next"),
+            ("backspace-and-nul", "t\x08\x00", "t\\x08\\x00"),
+            ("bidi", "t\u202eevil", "t\\u202eevil"),
         ]
     ],
 )
-def test_control_characters_in_a_test_name_are_written_out(project: Project, name: str):
-    """On stderr, and on stdout with --verbose, the name's control characters are escapes and the output is lines."""
+def test_control_characters_in_a_test_name_are_written_out(project: Project, name: str, written: str):
+    """The name's control characters are written as escapes on stderr, and no raw one reaches either stream."""
     project.spec("- T-REQ-001-01: One.")
     project.results("r.jsonl", "unit", [(name, ["T-REQ-001-01"], "failed")])
     for flags in ([], ["--verbose"]):
         done = command(project, "verify", "r.jsonl", *flags)
         for stream in (done.stdout, done.stderr):
             assert not CONTROLS.search(stream), repr(stream)
-        assert "\\x1b" in done.stderr or name != "t\x1b[31mred"
-        assert done.stderr.startswith("specs/001-thing.md") or "failed in unit" in done.stderr
+        assert f"{written} failed in unit" in done.stderr, repr(done.stderr)
 
 
 @pytest.mark.covers(

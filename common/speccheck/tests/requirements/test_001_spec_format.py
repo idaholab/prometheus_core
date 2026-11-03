@@ -210,7 +210,7 @@ def test_a_draft_specs_requirements_are_checked_like_an_implemented_ones(project
 
 @pytest.mark.covers(
     "SPC-REQ-001-03",
-    "lint reports an unknown status value, a second status line, a missing one, and an implemented spec with no requirements, each at its line",
+    "lint reports an unknown status value and a second status line each at its line, and a missing status line and an implemented spec with no requirements each with no line",
 )
 def test_the_status_line(project: Project):
     """Missing, unknown, repeated, and implemented with nothing in it, are all problems."""
@@ -324,8 +324,7 @@ def test_ids_are_unique(project: Project):
     project.spec("- T-REQ-001-01: One. ⚠ untested")
     project.write("specs/002-other.md", spec("- T-REQ-001-01: Again. ⚠ untested", number="002"))
     run = project.speccheck("lint")
-    assert "T-REQ-001-01 is also at specs/001-thing.md:7; IDs are unique" in run.err
-    assert "specs/002-other.md:7:" in run.err
+    assert "specs/002-other.md:7: T-REQ-001-01 is also at specs/001-thing.md:7; IDs are unique" in run.err.splitlines()
 
 
 @pytest.mark.covers(
