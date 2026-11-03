@@ -65,7 +65,10 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c
 ENV BACKEND_UPSTREAM=http://backend:8000 \
     NGINX_ENVSUBST_OUTPUT_DIR=/tmp
 COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-# The image already runs as 101, which owns conf.d/
+# Pin the user rather than inheriting the base image's, so a base bump can't
+# change the UID the chart's runAsUser expects. 101 owns conf.d/, so the next
+# step needs no root; if a base bump changes that, the build fails here.
+USER 101:101
 RUN echo 'include /tmp/default.conf;' > /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
