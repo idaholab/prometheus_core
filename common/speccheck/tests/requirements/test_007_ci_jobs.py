@@ -108,6 +108,58 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
         (ci_project.root / "s.md").unlink()
 
 
+@pytest.mark.parametrize(
+    ("url", "env"),
+    [
+        pytest.param(
+            "https://evil.example/o/r/actions/runs/11/artifacts/5",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "an artifact URL on another server is written as plain speccheck-report text"
+            ),
+            id="other-server",
+        ),
+        pytest.param(
+            "https://github.com/evil/r/actions/runs/11/artifacts/5",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "an artifact URL in another repository is written as plain speccheck-report text"
+            ),
+            id="other-repository",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/11/artifacts/5",
+            {},
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "outside CI an artifact URL is written as plain speccheck-report text"
+            ),
+            id="outside-ci",
+        ),
+    ],
+)
+def test_an_artifact_link_to_elsewhere_is_plain_text(ci_project: Project, url: str, env: dict):
+    """The summary line still names the report, as text, with no URL in it."""
+    ci_project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    ci_project.speccheck("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env)
+    summary = (ci_project.root / "s.md").read_text()
+    assert "evil" not in summary and "](" not in summary and "https://" not in summary
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "a failing result whose job URL is on another server leaves that host out of both the verify --summary file and the report",
+)
+def test_the_summary_and_report_leave_out_a_foreign_job_url(project: Project):
+    """Both markdown outputs, not only the report, leave the foreign URL out."""
+    project.spec("- T-REQ-001-01: One.")
+    foreign = "https://evil.example/o/r/actions/runs/7/job/8"
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci={**CI, "job_url": foreign})
+    project.speccheck("verify", "r.jsonl", "--summary", "s.md", env=ENV)
+    assert "evil" not in (project.root / "s.md").read_text()
+    text = project.speccheck("report", "r.jsonl", env=ENV).out
+    assert "evil" not in text
+
+
 @pytest.mark.covers("SPC-REQ-007-05", "a result whose job URL is the run attempt's links runs/7/attempts/2")
 def test_without_a_job_id_it_links_the_run(project: Project):
     """The fallback link is the run attempt."""
@@ -152,6 +204,26 @@ def test_without_a_job_id_it_links_the_run(project: Project):
                 "SPC-REQ-007-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
             ),
             id="outside-ci",
+        ),
+        *(
+            pytest.param(
+                url,
+                ENV,
+                marks=pytest.mark.covers(
+                    "SPC-REQ-007-10", f"the job URL {url!r}, not of the run, job or attempt form, isn't linked"
+                ),
+                id=label,
+            )
+            for label, url in [
+                ("extra-segment", "https://github.com/o/r/actions/runs/7/job/8/extra"),
+                ("non-digit-job", "https://github.com/o/r/actions/runs/7/job/x"),
+                ("zero-job", "https://github.com/o/r/actions/runs/7/job/0"),
+                ("non-digit-run", "https://github.com/o/r/actions/runs/seven/job/8"),
+                ("prefix-repository", "https://github.com/o/r2/actions/runs/7/job/8"),
+                ("http", "http://github.com/o/r/actions/runs/7/job/8"),
+                ("query", "https://github.com/o/r/actions/runs/7/job/8?x=1"),
+                ("fragment", "https://github.com/o/r/actions/runs/7/job/8#x"),
+            ]
         ),
         pytest.param(
             "javascript:x",
