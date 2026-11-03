@@ -301,7 +301,7 @@ results = client.search.advanced_query(
 results = client.search.by_tags(["important", "urgent"])
 results = client.search.by_tags(["tag1", "tag2"], match_all=True)
 
-# Get recent items
+# Get the 50 most recently updated items, newest first
 recent = client.search.recent(limit=50)
 ```
 

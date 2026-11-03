@@ -18,6 +18,12 @@ from ..models.pagination import Page, PageInfo
 from .base import BaseResource
 
 
+# GET /organizations/{org}/query/records/paginated: the server caps PageSize at 500, and
+# ``sortBy`` is an enum (0 NameAZ, 1 NameZA, 2 DateNew, 3 DateOld).
+_MAX_PAGE_SIZE = 500
+_SORT_DATE_NEW = 2
+
+
 class SearchResource(BaseResource):
     """Handles search and query operations."""
 
@@ -141,36 +147,50 @@ class SearchResource(BaseResource):
         return self._parse_search_results(response.json(), page, page_size)
 
     def recent(self, limit: int = 100) -> List[Item]:
-        """Get recently created or updated items.
+        """Get the most recently updated items in the active project, newest first.
+
+        Pages through ``GET /organizations/{org}/query/records/paginated`` sorted by date,
+        ``_MAX_PAGE_SIZE`` items at a time, until ``limit`` items are collected or the server
+        has no further page.
 
         Args:
-            limit: Maximum number of items to return
+            limit: Maximum number of items to return (at least 1)
 
         Returns:
-            List of recent items
+            List of recent items, most recently updated first
+
+        Raises:
+            ValueError: If ``limit`` is less than 1
 
         Example:
             ```python
             recent_items = client.search.recent(limit=50)
             ```
         """
-        params = {
-            "limit": limit,
-            "sort_by": "updated_at",
-            "sort_order": "desc",
-        }
+        if limit < 1:
+            raise ValueError("limit must be 1 or greater")
 
-        response = self._client._request("GET", f"{self._base_path}/records", params=params)
+        page_size = min(limit, _MAX_PAGE_SIZE)
+        items: List[Item] = []
+        page = 1
+        while len(items) < limit:
+            response = self._client._request(
+                "GET",
+                f"/organizations/{self._client.config.organization_id}/query/records/paginated",
+                params={
+                    "projectIds": [self._client.config.project_id],
+                    "sortBy": _SORT_DATE_NEW,
+                    "PageNumber": page,
+                    "PageSize": page_size,
+                },
+            )
+            result = self._parse_paginated_results(response.json())
+            items.extend(result.items)
+            if not result.page_info.has_next:
+                break
+            page += 1
 
-        data = response.json()
-
-        # API may return list directly or wrapped in dict
-        if isinstance(data, list):
-            items = data
-        else:
-            items = data.get("records", [])
-
-        return [self._parse_item(item_data) for item_data in items]
+        return items[:limit]
 
     def _parse_search_results(self, data: Any, page: int, page_size: int) -> Page[Item]:
         """Parse search results into a Page object.
@@ -215,7 +235,7 @@ class SearchResource(BaseResource):
         Returns:
             Paginated results
         """
-        items = [self._parse_item(item_data) for item_data in data["items"]]
+        items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
 
         page_info = PageInfo(
             page_number=data["pageNumber"],

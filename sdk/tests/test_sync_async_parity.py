@@ -247,6 +247,130 @@ async def test_item_iter_all_follows_has_next_across_pages_in_sync_and_async():
     assert len(sync_client.calls) == len(async_client.calls) == 2
 
 
+def recent_page(items, *, page, has_next):
+    """A ``PaginatedResponse<QueryRecordViewResponseDto>`` page for the recent-items route."""
+    return {
+        "items": items,
+        "pageNumber": page,
+        "pageSize": 2,
+        "totalCount": 99,
+        "totalCountIsApproximate": False,
+        "totalPages": 50,
+        "hasPrevious": page > 1,
+        "hasNext": has_next,
+    }
+
+
+class PagedSearchSync(SyncClient):
+    """Serves a canned page per ``PageNumber`` and records every request."""
+
+    def __init__(self, pages):
+        super().__init__(None)
+        self._pages = pages
+
+    def _request(self, method, path, **kwargs):
+        self.calls.append((method, path, kwargs))
+        return Response(self._pages[kwargs["params"]["PageNumber"]])
+
+
+class PagedSearchAsync(AsyncClient):
+    def __init__(self, pages):
+        super().__init__(None)
+        self._pages = pages
+
+    async def _request(self, method, path, **kwargs):
+        self.calls.append((method, path, kwargs))
+        return Response(self._pages[kwargs["params"]["PageNumber"]])
+
+
+async def test_search_recent_uses_sorted_paginated_query_route_in_sync_and_async():
+    """Covers REQ-002-15: recent asks for the newest records, sorted by date, newest first."""
+    pages = {1: recent_page([item_payload(id=9), item_payload(id=8)], page=1, has_next=False)}
+    sync_client = PagedSearchSync(pages)
+    async_client = PagedSearchAsync(pages)
+
+    sync_items = SearchResource(sync_client).recent(limit=2)
+    async_items = await AsyncSearchResource(async_client).recent(limit=2)
+
+    assert sync_client.calls == async_client.calls
+    method, path, kwargs = sync_client.calls[0]
+    assert method == "GET"
+    assert path == "/organizations/1/query/records/paginated"
+    assert kwargs["params"] == {
+        "projectIds": [2],
+        "sortBy": 2,
+        "PageNumber": 1,
+        "PageSize": 2,
+    }
+    assert [item.id for item in sync_items] == [9, 8] == [item.id for item in async_items]
+
+
+async def test_search_recent_pages_until_limit_and_truncates_in_sync_and_async(monkeypatch):
+    """Covers REQ-002-15: recent follows hasNext and returns exactly ``limit`` items."""
+    import prometheus_api.storage_client.async_resources.search as async_search
+    import prometheus_api.storage_client.resources.search as sync_search
+
+    monkeypatch.setattr(sync_search, "_MAX_PAGE_SIZE", 2)
+    monkeypatch.setattr(async_search, "_MAX_PAGE_SIZE", 2)
+    pages = {
+        1: recent_page([item_payload(id=5), item_payload(id=4)], page=1, has_next=True),
+        2: recent_page([item_payload(id=3), item_payload(id=2)], page=2, has_next=True),
+        3: recent_page([item_payload(id=1)], page=3, has_next=False),
+    }
+    sync_client = PagedSearchSync(pages)
+    async_client = PagedSearchAsync(pages)
+
+    sync_items = SearchResource(sync_client).recent(limit=3)
+    async_items = await AsyncSearchResource(async_client).recent(limit=3)
+
+    assert [item.id for item in sync_items] == [5, 4, 3] == [item.id for item in async_items]
+    assert [call[2]["params"]["PageNumber"] for call in sync_client.calls] == [1, 2]
+    assert sync_client.calls == async_client.calls
+    assert sync_client.calls[0][2]["params"]["PageSize"] == 2
+
+
+async def test_search_recent_stops_when_server_has_no_next_page(monkeypatch):
+    """Covers REQ-002-15: fewer records than ``limit`` is not an error and ends paging."""
+    import prometheus_api.storage_client.async_resources.search as async_search
+    import prometheus_api.storage_client.resources.search as sync_search
+
+    monkeypatch.setattr(sync_search, "_MAX_PAGE_SIZE", 2)
+    monkeypatch.setattr(async_search, "_MAX_PAGE_SIZE", 2)
+    pages = {1: recent_page([item_payload(id=7)], page=1, has_next=False)}
+    sync_client = PagedSearchSync(pages)
+    async_client = PagedSearchAsync(pages)
+
+    sync_items = SearchResource(sync_client).recent(limit=50)
+    async_items = await AsyncSearchResource(async_client).recent(limit=50)
+
+    assert [item.id for item in sync_items] == [7] == [item.id for item in async_items]
+    assert len(sync_client.calls) == len(async_client.calls) == 1
+
+
+async def test_search_recent_treats_null_items_as_empty_in_sync_and_async():
+    """Covers REQ-002-15: the server returns ``items: null`` for an empty project."""
+    pages = {1: recent_page(None, page=1, has_next=False)}
+
+    sync_items = SearchResource(PagedSearchSync(pages)).recent()
+    async_items = await AsyncSearchResource(PagedSearchAsync(pages)).recent()
+
+    assert sync_items == [] and async_items == []
+
+
+@pytest.mark.parametrize("limit", [0, -1])
+async def test_search_recent_rejects_non_positive_limit_in_sync_and_async(limit):
+    """Covers REQ-002-15: a limit below 1 is rejected before any request is made."""
+    sync_client = PagedSearchSync({})
+    async_client = PagedSearchAsync({})
+
+    with pytest.raises(ValueError, match="limit must be 1 or greater"):
+        SearchResource(sync_client).recent(limit=limit)
+    with pytest.raises(ValueError, match="limit must be 1 or greater"):
+        await AsyncSearchResource(async_client).recent(limit=limit)
+
+    assert sync_client.calls == [] and async_client.calls == []
+
+
 async def test_item_update_payloads_match_between_sync_and_async():
     sync_client = SyncClient(item_payload(name="Updated"))
     async_client = AsyncClient(item_payload(name="Updated"))
