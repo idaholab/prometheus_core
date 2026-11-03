@@ -156,6 +156,13 @@ What differs from the plan above, or settles something it left open:
     003-11) ran on every run, so installing speccheck broke a project with a `covers` marker of its
     own. They now run only when `speccheck_config` is set or the run asks for a results file.
     003-05 says so.
+- **Job links on a re-run (CI-1, 2026-11-02):** run 41549021253 re-ran one job, `speccheck:
+  requirements python 3.12`, as attempt 2. The `speccheck-report` of attempt 2 links that leg's
+  155 results to its attempt-2 job (125632493599), the other four legs' to their attempt-1 jobs,
+  and the self-check's to its attempt-2 job. Each ID is the job that wrote those results, per
+  the run's jobs API with `filter=all`, and the report lists both attempts under its inputs.
+  SPC-REQ-007-05 is now shown by a real re-run, not only by a test that sets
+  `GITHUB_RUN_ATTEMPT`.
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
