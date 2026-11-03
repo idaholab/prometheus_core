@@ -43,7 +43,7 @@ class Claim:
 
 
 def how_problem(claimed: str, how: str) -> str:
-    """Why an explanation (already collapsed) can't be used, or "". Needs no specs (SPC-REQ-003-08)."""
+    """Why an explanation (already collapsed) can't be used, or "". Needs no specs (SPC-REQ-003-17)."""
     if not how:
         return f"the explanation for {claimed} is empty; say how the test proves it"
     if len(how) > MAX_HOW:

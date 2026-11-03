@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 import speccheck
 from tests.requirements.conftest import Project
@@ -33,6 +34,11 @@ def broken_teardown():
 @pytest.fixture
 def broken_setup():
     raise RuntimeError("setup")
+
+@pytest.fixture
+def skips_in_teardown():
+    yield
+    pytest.skip("teardown")
 
 @pytest.mark.covers("T-REQ-001-01", "inner claim 1 of T-REQ-001-01")
 def test_passes():
@@ -73,6 +79,10 @@ def test_teardown_errors(broken_teardown):
 def test_deselected():
     pass
 
+@pytest.mark.covers("T-REQ-001-01", "inner claim 18 of T-REQ-001-01")
+def test_teardown_skip_keeps_the_call(skips_in_teardown):
+    pass
+
 def test_claims_nothing():
     pass
 """
@@ -88,6 +98,7 @@ EXPECTED = {
     "test_setup_errors": "error",
     "test_teardown_errors": "error",
     "test_deselected": "deselected",
+    "test_teardown_skip_keeps_the_call": "passed",
 }
 """The outcome each claiming test must be written with."""
 
@@ -102,22 +113,17 @@ def outcomes(project: Project, name: str) -> dict[str, str]:
 
 @pytest.mark.covers(
     "SPC-REQ-004-01",
-    "an inner run writes a header and one result line whose keys match the JSON Schema shipped in the package",
+    "an inner run writes a speccheck-results/1 header and one result line with a covers list of id and how objects",
 )
 def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
-    """A header, then one line per claiming test, each matching the schema shipped in the package."""
+    """A header, then one line per claiming test."""
     project.tests(
         'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 10 of T-REQ-001-01")\ndef test_a():\n    pass\n'
     )
     project.pytest("--speccheck-results=r.jsonl")
     header, result = project.results_lines("r.jsonl")
-    schema = json.loads(SCHEMA.read_text())
-    assert header["schema"] == schema["$defs"]["header"]["properties"]["schema"]["const"] == "speccheck-results/1"
+    assert header["schema"] == "speccheck-results/1"
     assert header["runner"].startswith("pytest ") and header["producer"] == "local"
-    assert set(header) <= set(schema["$defs"]["header"]["properties"])
-    assert set(result) <= set(schema["$defs"]["result"]["properties"])
-    assert set(schema["$defs"]["result"]["required"]) <= set(result)
-    assert set(result["covers"][0]) == set(schema["$defs"]["claim"]["required"]) == {"id", "how"}
     assert result == {
         "test": "test_project.py::test_a",
         "file": "test_project.py",
@@ -125,6 +131,28 @@ def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
         "covers": [{"id": "T-REQ-001-01", "how": "inner claim 10 of T-REQ-001-01"}],
         "outcome": "passed",
     }
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-11",
+    "the JSON Schema in the installed package is itself valid, accepts the header and result line an inner run "
+    "wrote, and rejects the same result line with its outcome removed",
+)
+def test_the_package_ships_a_schema_the_plugin_matches(project: Project):
+    """The schema file is in the installed package, and each line the plugin writes validates against it."""
+    assert SCHEMA.is_file()
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 19 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
+    project.pytest("--speccheck-results=r.jsonl")
+    header, result = project.results_lines("r.jsonl")
+    schema = json.loads(SCHEMA.read_text())
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    validator.validate(header)
+    validator.validate(result)
+    # The negative control: the schema isn't empty, so a line that breaks it is refused
+    assert not validator.is_valid({k: v for k, v in result.items() if k != "outcome"})
 
 
 @pytest.mark.parametrize(
@@ -313,7 +341,7 @@ def test_a_bad_claim_in_a_result_rejects_the_file(project: Project, covers: list
 
 @pytest.mark.covers(
     "SPC-REQ-003-07",
-    "one inner run with setup and teardown errors, skips in call and setup, xfail and xpass writes each test's merged outcome",
+    "one inner run with setup and teardown errors, skips in call and setup, xfail and xpass writes each test's merged outcome, and a skip in teardown after a passing call leaves it passed",
 )
 @pytest.mark.covers(
     "SPC-REQ-004-03",
@@ -331,7 +359,7 @@ def test_every_outcome_and_deselected_tests_are_written(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-07",
+    "SPC-REQ-003-16",
     "a --collect-only run of the same inner file writes every claiming test as collected",
 )
 def test_collect_only_writes_collected(project: Project):
@@ -537,7 +565,7 @@ def test_the_header_says_where_file_paths_start(project: Project, monkeypatch: p
 
 
 @pytest.mark.covers(
-    "SPC-REQ-004-10",
+    "SPC-REQ-004-12",
     "an inner run whose GITHUB_WORKSPACE doesn't hold pytest's root, as in a container, writes the SPECCHECK_ROOT it was given as root",
 )
 def test_an_override_gives_root_when_it_cant_be_found(project: Project, monkeypatch: pytest.MonkeyPatch):
@@ -580,19 +608,8 @@ def breaks_on_the_first_attempt():
         raise RuntimeError("teardown, first attempt only")
 
 
-@pytest.fixture
-def skips_in_teardown():
-    yield
-    pytest.skip("teardown")
-
-
 @pytest.mark.covers("T-REQ-001-01", "inner claim 15 of T-REQ-001-01")
 def test_error_then_clean(breaks_on_the_first_attempt):
-    pass
-
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 16 of T-REQ-001-01")
-def test_teardown_skip_keeps_the_call(skips_in_teardown):
     pass
 
 
@@ -604,20 +621,19 @@ def test_fails_then_passes():
     CALLS.append(1)
     assert len(CALLS) > 1
 """
-"""A teardown error on the first attempt only, a skip in teardown, and a call that fails once."""
+"""A teardown error on the first attempt only, and a call that fails once."""
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-07",
-    "a rerun plugin's clean second attempt after a teardown error stays error, a call that fails then passes is passed, and a skip in teardown keeps passed",
+    "SPC-REQ-003-15",
+    "a rerun plugin's clean second attempt after a teardown error stays error, and a call that fails then passes is passed",
 )
-def test_an_error_stays_through_a_rerun_and_a_teardown_skip_changes_nothing(project: Project):
+def test_an_error_stays_through_a_rerun(project: Project):
     """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a failed call doesn't stick."""
     project.write("conftest.py", RERUN_CONFTEST)
     project.tests(RERUN_TESTS)
     project.pytest("--speccheck-results=r.jsonl")
     assert outcomes(project, "r.jsonl") == {
         "test_error_then_clean": "error",
-        "test_teardown_skip_keeps_the_call": "passed",
         "test_fails_then_passes": "passed",
     }

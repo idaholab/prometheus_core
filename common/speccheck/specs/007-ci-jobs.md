@@ -19,8 +19,7 @@ checks what its jobs proved.
   artifact of the run, look up the display name of every job of the run, write the full report
   with those names and upload it as the `speccheck-report` artifact, then run `verify` with
   `--summary` (see SPC-REQ-008-07), the artifact's URL and the same names, and fail when `verify`
-  fails. It MUST need only `contents: read` and `actions: read`, and no secrets. When the names
-  can't be looked up, it MUST warn and go on without them.
+  fails.
 - SPC-REQ-007-05: Each result's link MUST open the job that produced it, in the run attempt that
   produced it, re-runs included. When the job can't be identified, the link MUST open that run
   attempt.
@@ -30,3 +29,7 @@ checks what its jobs proved.
   `GITHUB_*` variables, and its run and job links have the form
   `<server>/<owner>/<repo>/actions/runs/<id>`, optionally followed by `/attempts/<n>` or
   `/job/<id>`, and its artifact links add `/artifacts/<id>` to the run link.
+- SPC-REQ-007-08: `speccheck-verify` MUST need only `contents: read` and `actions: read`
+  permissions, and no secrets.
+- SPC-REQ-007-09: When `speccheck-verify` can't look up the run's job names, it MUST go on without
+  them, so each result is named by its producer.

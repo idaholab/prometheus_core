@@ -95,21 +95,21 @@ def test_a_mark_lands_on_one_test(project: Project):
             'pytestmark = pytest.mark.covers("T-REQ-001-01", "m")\ndef test_a():\n    pass\n',
             "`covers` is on the module (`pytestmark`); move it onto each test",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-02", "a module-level pytestmark claim stops collection and says to move it onto each test"
+                "SPC-REQ-003-12", "a module-level pytestmark claim stops collection and says to move it onto each test"
             ),
             id="module",
         ),
         pytest.param(
             '@pytest.mark.covers("T-REQ-001-01", "c")\nclass TestThing:\n    def test_a(self):\n        pass\n',
             "`covers` is on class `TestThing`; move it onto each test",
-            marks=pytest.mark.covers("SPC-REQ-003-02", "a claim on a test class stops collection, naming the class"),
+            marks=pytest.mark.covers("SPC-REQ-003-12", "a claim on a test class stops collection, naming the class"),
             id="class",
         ),
         pytest.param(
             '@pytest.mark.covers("T-REQ-001-01", "f")\n@pytest.mark.parametrize("n", [1, 2])\ndef test_a(n):\n    pass\n',
             "`covers` is on the function of a parametrized test; put the claim on each pytest.param",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-02",
+                "SPC-REQ-003-12",
                 "a function claim on a test with two parameters stops collection once, saying to claim per pytest.param",
             ),
             id="parametrized-function",
@@ -120,7 +120,7 @@ def test_a_mark_lands_on_one_test(project: Project):
             "def test_a(n, x):\n    pass\n",
             "a claiming test has 2 `parametrize` marks",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-02", "a claim in one of two stacked parametrize decorators stops collection"
+                "SPC-REQ-003-12", "a claim in one of two stacked parametrize decorators stops collection"
             ),
             id="two-parametrizes",
         ),
@@ -130,7 +130,7 @@ def test_a_mark_lands_on_one_test(project: Project):
             "def test_a(n, kind):\n    pass\n",
             "a claiming test uses the parametrized fixture `kind`",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-02",
+                "SPC-REQ-003-12",
                 "a claiming test that takes a fixture with params= stops collection, naming the fixture",
             ),
             id="parametrized-fixture",
@@ -145,12 +145,8 @@ def test_a_mark_that_would_stand_for_several_tests_fails(project: Project, sourc
     assert "speccheck: 1 claim(s)" in err
 
 
-@pytest.mark.covers(
-    "SPC-REQ-003-03",
-    "four inner tests claiming malformed, unknown, retired and disallowed IDs stop collection with one message each, naming the test and the fix",
-)
-def test_a_bad_claim_fails_collection_with_what_to_do(project: Project):
-    """Malformed, unknown, retired and disallowed IDs each stop the session, naming the test."""
+def refused_claims(project: Project) -> str:
+    """Four inner tests claiming a malformed, an unknown, a retired and a disallowed ID; return the error."""
     project.write("speccheck.toml", "specs = 'specs'\nid-prefix = 'T'\n[producers.unit]\nspecs = ['002']\n")
     project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired. Gone.")
     project.ini(CHECKED)
@@ -175,12 +171,34 @@ def test_a_bad_claim_fails_collection_with_what_to_do(project: Project):
             pass
         """
     )
-    err = usage_error(project)
+    return usage_error(project)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-03",
+    "four inner tests claiming malformed, unknown, retired and disallowed IDs stop collection with one message each, naming the test and the ID",
+)
+def test_a_bad_claim_fails_collection(project: Project):
+    """Malformed, unknown, retired and disallowed IDs each stop the session, naming the test and the ID."""
+    err = refused_claims(project)
     assert "speccheck: 4 claim(s) the spec folder doesn't allow" in err
-    assert "test_project.py:3: test_project.py::test_malformed: `T-REQ-1-1` is not an ID of this folder" in err
-    assert "test_project.py::test_unknown: T-REQ-001-09 isn't in any spec; check the number" in err
-    assert "test_project.py::test_retired: T-REQ-001-02 is retired; claim what replaced it" in err
-    assert "test_project.py::test_not_allowed: T-REQ-001-01 is in spec 001, which producer `unit` may not claim" in err
+    assert "test_project.py:3: test_project.py::test_malformed: `T-REQ-1-1`" in err
+    assert "test_project.py::test_unknown: T-REQ-001-09" in err
+    assert "test_project.py::test_retired: T-REQ-001-02" in err
+    assert "test_project.py::test_not_allowed: T-REQ-001-01" in err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-13",
+    "the four refusal messages show the ID form, the spec to add to, to claim the replacement, and the producers specs key",
+)
+def test_a_refused_claim_says_how_to_fix_it(project: Project):
+    """Each message ends with what to do about that kind of ID."""
+    err = refused_claims(project)
+    assert "`T-REQ-1-1` is not an ID of this folder; IDs read like `T-REQ-" in err
+    assert "T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001" in err
+    assert "T-REQ-001-02 is retired; claim what replaced it" in err
+    assert "which producer `unit` may not claim; add it to `producers.unit.specs`" in err
 
 
 @pytest.mark.covers(
@@ -196,7 +214,7 @@ def test_a_good_claim_passes_collection(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-03",
+    "SPC-REQ-003-14",
     "with speccheck_config set and no producer, collection fails naming the ini option and the variable, and setting SPECCHECK_PRODUCER fixes it",
 )
 def test_a_configured_run_needs_a_producer(project: Project, monkeypatch: pytest.MonkeyPatch):
@@ -338,16 +356,22 @@ def test_whitespace_in_an_explanation_is_collapsed(project: Project):
         pytest.param(
             "   \n\t ",
             "the explanation for T-REQ-001-01 is empty",
-            marks=pytest.mark.covers(
-                "SPC-REQ-003-08", "an explanation of only spaces, a newline and a tab is empty once collapsed"
-            ),
+            marks=[
+                pytest.mark.covers(
+                    "SPC-REQ-003-17", "an explanation of only spaces, a newline and a tab is empty once collapsed"
+                ),
+                pytest.mark.covers(
+                    "SPC-REQ-003-08",
+                    "a whitespace-only explanation collapses to nothing before it is checked, so it is refused as empty",
+                ),
+            ],
             id="empty",
         ),
         pytest.param(
             "x " * 500 + "y",
             "the explanation for T-REQ-001-01 is 1001 characters; the limit is 1000",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-08", "a 1001-character explanation stops collection, giving its length and the limit"
+                "SPC-REQ-003-17", "a 1001-character explanation stops collection, giving its length and the limit"
             ),
             id="too-long",
         ),
@@ -355,7 +379,7 @@ def test_whitespace_in_an_explanation_is_collapsed(project: Project):
             "  t-req-001-01 ",
             "the explanation for T-REQ-001-01 is just the ID",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-08", "an explanation that is the claimed ID in lower case, padded with spaces, is refused"
+                "SPC-REQ-003-17", "an explanation that is the claimed ID in lower case, padded with spaces, is refused"
             ),
             id="the-id",
         ),
@@ -363,7 +387,7 @@ def test_whitespace_in_an_explanation_is_collapsed(project: Project):
             "tbd",
             "the explanation for T-REQ-001-01 is a placeholder ('tbd')",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-08", "a lower-case tbd is refused as a placeholder, quoted in the message"
+                "SPC-REQ-003-17", "a lower-case tbd is refused as a placeholder, quoted in the message"
             ),
             id="placeholder-tbd",
         ),
@@ -371,7 +395,7 @@ def test_whitespace_in_an_explanation_is_collapsed(project: Project):
             "...",
             "the explanation for T-REQ-001-01 is a placeholder ('...')",
             marks=pytest.mark.covers(
-                "SPC-REQ-003-08", "three dots as the whole explanation are refused as a placeholder"
+                "SPC-REQ-003-17", "three dots as the whole explanation are refused as a placeholder"
             ),
             id="placeholder-dots",
         ),
@@ -385,7 +409,7 @@ def test_an_unusable_explanation_fails_collection(project: Project, how: str, me
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-08",
+    "SPC-REQ-003-17",
     "an explanation that only contains a placeholder word, like 'TODO list is cleared', is accepted",
 )
 def test_a_placeholder_word_inside_an_explanation_is_fine(project: Project):
