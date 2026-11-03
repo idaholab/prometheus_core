@@ -15,6 +15,10 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -50,6 +54,81 @@ def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-004-01",
+    "an inner run of two claiming tests, one with two marks, writes a header and exactly two result lines, "
+    "each with one covers entry per claimed ID, and a header whose ci is null and root is null",
+)
+def test_a_run_writes_one_line_per_claiming_test_and_one_claim_per_id(project: Project):
+    """The line count, the covers lists, and the header's `ci` and `root`, outside CI and outside a repository."""
+    project.tests(
+        """\
+        import pytest
+
+        @pytest.mark.covers("T-REQ-001-01", "inner claim 22 of T-REQ-001-01")
+        @pytest.mark.covers("T-REQ-001-02", "inner claim 23 of T-REQ-001-02")
+        def test_two_ids():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-03", "inner claim 24 of T-REQ-001-03")
+        def test_one_id():
+            pass
+
+        def test_no_claim():
+            pass
+        """
+    )
+    project.pytest("--speccheck-results=r.jsonl")
+    header, *lines = project.results_lines("r.jsonl")
+    assert header["ci"] is None and header["root"] is None
+    assert {line["test"].split("::", 1)[1]: line["covers"] for line in lines} == {
+        "test_two_ids": [
+            {"id": "T-REQ-001-02", "how": "inner claim 23 of T-REQ-001-02"},
+            {"id": "T-REQ-001-01", "how": "inner claim 22 of T-REQ-001-01"},
+        ],
+        "test_one_id": [{"id": "T-REQ-001-03", "how": "inner claim 24 of T-REQ-001-03"}],
+    }
+
+
+ALL_OUTCOMES = ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected")
+"""Every outcome a result may have; only the first is evidence."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-03",
+    "a results file holding one result for each of the eight outcome names is read by verify with no problem, "
+    "and of the eight requirements only the one whose result is passed is proven",
+)
+def test_every_outcome_is_read_and_only_passed_is_evidence(project: Project):
+    """Each outcome name is accepted; none but `passed` makes its requirement pass."""
+    ids = [f"T-REQ-001-0{n}" for n in range(1, 9)]
+    project.spec("\n".join(f"- {id_}: Requirement {n}." for n, id_ in enumerate(ids, 1)))
+    project.results("r.jsonl", "unit", [(f"t_{o}", [i], o) for o, i in zip(ALL_OUTCOMES, ids, strict=True)])
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    statuses = {r["id"]: r["status"] for r in run.json()["requirements"]}
+    assert statuses[ids[0]] == "passed"
+    assert all(statuses[i] != "passed" for i in ids[1:]), statuses
+    assert not [p for p in run.json()["problems"] if p["code"].startswith("results-")], run.json()["problems"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-03",
+    "an inner --collect-only run writes every claiming test as collected, a word verify accepts but does not count as a pass",
+)
+def test_collected_is_written_and_is_not_a_pass(project: Project):
+    """Only collected, not run: written under that name, and not evidence."""
+    project.spec("- T-REQ-001-01: One.")
+    project.ini("speccheck_producer = unit\n")
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 25 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
+    project.pytest("--collect-only", "-q", "--speccheck-results=c.jsonl")
+    assert outcomes(project, "c.jsonl") == {"test_a": "collected"}
+    # `check` accepts the claim (it asks only whether one exists); `verify` wants a pass
+    assert project.speccheck("check", "c.jsonl", "--json").json()["requirements"][0]["status"] == "claimed"
+    assert project.speccheck("verify", "c.jsonl", "--json").json()["requirements"][0]["status"] != "passed"
+
+
+@pytest.mark.covers(
     "SPC-REQ-004-11",
     "the JSON Schema in the installed package is itself valid, accepts the header and result line an inner run "
     "wrote, and rejects the same result line with its outcome removed",
@@ -69,6 +148,81 @@ def test_the_package_ships_a_schema_the_plugin_matches(project: Project):
     validator.validate(result)
     # The negative control: the schema isn't empty, so a line that breaks it is refused
     assert not validator.is_valid({k: v for k, v in result.items() if k != "outcome"})
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-11",
+    "every line of an inner run in a fake GitHub job with SPECCHECK_ROOT set, over all the outcomes, a deselected test and a test claiming two IDs, validates against the shipped schema",
+)
+def test_every_line_a_run_writes_matches_the_schema(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """The header with a CI block and a root, and results of every outcome including a multi-ID claim."""
+    env = {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_SERVER_URL": "https://github.com",
+        "GITHUB_REPOSITORY": "o/r",
+        "GITHUB_WORKFLOW": "ci",
+        "GITHUB_JOB": "unit",
+        "GITHUB_RUN_ID": "9",
+        "GITHUB_RUN_ATTEMPT": "2",
+        "GITHUB_SHA": "c" * 40,
+        "GITHUB_REF": "refs/heads/devel",
+        "GITHUB_EVENT_NAME": "push",
+        "SPECCHECK_JOB_ID": "77",
+        "SPECCHECK_ROOT": "sdk",
+    }
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    project.tests(
+        OUTCOMES
+        + """
+@pytest.mark.covers("T-REQ-001-02", "inner claim 26 of T-REQ-001-02")
+@pytest.mark.covers("T-REQ-001-03", "inner claim 27 of T-REQ-001-03")
+def test_two_ids():
+    pass
+"""
+    )
+    project.pytest("--speccheck-results=r.jsonl", "-k", "not test_deselected and not claims_nothing")
+    lines = project.results_lines("r.jsonl")
+    validator = Draft202012Validator(json.loads(SCHEMA.read_text()))
+    for line in lines:
+        validator.validate(line)
+    header, results = lines[0], lines[1:]
+    assert header["ci"]["job_id"] == 77 and header["root"] == "sdk"
+    assert {r["outcome"] for r in results} >= {"passed", "failed", "skipped", "xfailed", "xpassed", "error"}
+    assert any(len(r["covers"]) == 2 for r in results)
+    project.pytest("--speccheck-results=d.jsonl", "-k", "test_passes")
+    deselected = [r for r in project.results_lines("d.jsonl")[1:] if r["outcome"] == "deselected"]
+    assert deselected, "a claiming test left out with -k is written as deselected"
+    for line in project.results_lines("d.jsonl"):
+        validator.validate(line)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-11",
+    "the schema is built into a wheel from this source and the wheel's copy equals the source file, so the package ships the schema a writer in another language would use",
+)
+def test_the_built_wheel_contains_the_schema(tmp_path: Path):
+    """The test above finds the schema through the source tree; this one builds the package and looks inside it."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is needed to build the wheel")
+    project_dir = SCHEMA.parents[2]
+    # Build from a clean copy: the source folder's own `build/` and egg-info (both ignored by git) list the
+    # schema from an earlier build, so a build there would include it even with the package-data entry gone
+    source = tmp_path / "source"
+    source.mkdir()
+    shutil.copy(project_dir / "pyproject.toml", source)
+    shutil.copy(project_dir / "README.md", source)
+    shutil.copytree(project_dir / "speccheck", source / "speccheck", ignore=shutil.ignore_patterns("__pycache__"))
+    out = tmp_path / "dist"
+    build = subprocess.run(
+        [uv, "build", "--wheel", "--out-dir", str(out), str(source)], capture_output=True, text=True, check=False
+    )
+    assert build.returncode == 0, build.stderr
+    [wheel] = out.glob("prometheus_speccheck-*.whl")
+    with zipfile.ZipFile(wheel) as archive:
+        inside = archive.read("speccheck/schema/speccheck-results-1.schema.json")
+    assert inside == SCHEMA.read_bytes()
 
 
 GOOD_LINE = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
@@ -470,6 +624,56 @@ def test_an_interrupted_session_leaves_no_file(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "from inside the last of three inner tests neither r.jsonl nor a temporary file exists yet, and after the session r.jsonl does, so the file is written when the session ends",
+)
+def test_the_file_is_written_when_the_session_ends(project: Project):
+    """Checked from inside the run, so a file written per test, or at the start, would be seen."""
+    project.tests(
+        """\
+        import pathlib
+        import pytest
+
+        def written():
+            return [p.name for p in pathlib.Path(".").iterdir() if p.name.startswith(("r.jsonl", ".r.jsonl"))]
+
+        @pytest.mark.covers("T-REQ-001-01", "inner claim 30 of T-REQ-001-01")
+        def test_first():
+            assert written() == []
+
+        @pytest.mark.covers("T-REQ-001-02", "inner claim 31 of T-REQ-001-02")
+        def test_second():
+            assert written() == []
+
+        @pytest.mark.covers("T-REQ-001-03", "inner claim 32 of T-REQ-001-03")
+        def test_last():
+            assert written() == []
+        """
+    )
+    run = project.pytest("--speccheck-results=r.jsonl", subprocess=True)
+    run.assert_outcomes(passed=3)
+    assert (project.root / "r.jsonl").is_file()
+    assert [p.name for p in project.root.iterdir() if p.name.startswith(".r.jsonl")] == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "a results path under a plain file ends the inner run as a usage error whose message gives the operating system's own error, with its errno and the path",
+)
+def test_an_unwritable_path_says_why(project: Project):
+    """The message carries the system's own error, whatever its wording on this system, not only that the write failed."""
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 33 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
+    (project.root / "blocker").write_text("a file, not a folder")
+    run = project.pytest("--speccheck-results=blocker/r.jsonl")
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    message = "\n".join(run.stderr.lines + run.stdout.lines)
+    # The wording is the system's (`File exists` where mkdir fails, `Not a directory` elsewhere), so check its shape
+    assert re.search(r"speccheck: can't write the results file: \[Errno \d+\] .+: '.*blocker", message), message
+
+
+@pytest.mark.covers(
     "SPC-REQ-004-06",
     "an inner run with -n 2 writes a single x.jsonl holding every test's real outcome from both workers",
 )
@@ -704,6 +908,84 @@ def test_the_ci_context(project: Project, monkeypatch: pytest.MonkeyPatch):
     assert set(ci) <= set(json.loads(SCHEMA.read_text())["$defs"]["ci"]["properties"])
 
 
+@pytest.mark.parametrize(
+    "flag",
+    [
+        pytest.param(
+            "false",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-08", "an inner run with GITHUB_ACTIONS=false and other GITHUB_* set writes ci null"
+            ),
+            id="false",
+        ),
+        pytest.param(
+            "",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-08", "an inner run with GITHUB_ACTIONS empty and other GITHUB_* set writes ci null"
+            ),
+            id="empty",
+        ),
+        pytest.param(
+            "True",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-08", "an inner run with GITHUB_ACTIONS=True, not the exact word true, writes ci null"
+            ),
+            id="wrong-case",
+        ),
+    ],
+)
+def test_ci_is_null_unless_github_actions_is_true(project: Project, monkeypatch: pytest.MonkeyPatch, flag: str):
+    """Other GITHUB_* variables alone (as in a developer's shell) don't make a run a CI run."""
+    for name, value in {
+        "GITHUB_ACTIONS": flag,
+        "GITHUB_SERVER_URL": "https://github.com",
+        "GITHUB_REPOSITORY": "o/r",
+        "GITHUB_RUN_ID": "9",
+    }.items():
+        monkeypatch.setenv(name, value)
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 28 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["ci"] is None
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-08",
+    "an inner run in a fake GitHub job writes a header whose ci block has the server, repository, workflow, job, run, attempt, job ID and commit it was given, and validates against the shipped schema",
+)
+def test_the_ci_values_are_the_ones_given(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """The values, not only the key names, and the header validates against the schema."""
+    env = {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_SERVER_URL": "https://ghe.example.com",
+        "GITHUB_REPOSITORY": "acme/widgets",
+        "GITHUB_WORKFLOW": "release",
+        "GITHUB_JOB": "package",
+        "GITHUB_RUN_ID": "123456",
+        "GITHUB_RUN_ATTEMPT": "4",
+        "GITHUB_SHA": "f" * 40,
+        "SPECCHECK_JOB_ID": "987",
+    }
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 29 of T-REQ-001-01")\ndef test_a():\n    pass\n'
+    )
+    project.pytest("--speccheck-results=r.jsonl")
+    header = project.results_lines("r.jsonl")[0]
+    Draft202012Validator(json.loads(SCHEMA.read_text())).validate(header)
+    ci = header["ci"]
+    assert (ci["provider"], ci["server"], ci["repository"], ci["workflow"], ci["job"]) == (
+        "github",
+        "https://ghe.example.com",
+        "acme/widgets",
+        "release",
+        "package",
+    )
+    assert (ci["run_id"], ci["run_attempt"], ci["job_id"], ci["sha"]) == (123456, 4, 987, "f" * 40)
+
+
 @pytest.mark.covers(
     "SPC-REQ-004-10",
     "an inner run in a sub folder of a GITHUB_WORKSPACE writes that folder as root, a run at the workspace writes `.`, and one in no repository writes null",
@@ -722,6 +1004,61 @@ def test_the_header_says_where_file_paths_start(project: Project, monkeypatch: p
     # pytester's folder is under the system temp folder, which isn't in any repository
     project.pytest("--speccheck-results=none.jsonl")
     assert project.results_lines("none.jsonl")[0]["root"] is None
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-10",
+    "with no GITHUB_WORKSPACE, an inner run in a folder under one holding a .git writes the path down from that folder as root",
+)
+def test_root_is_found_by_walking_up_to_a_git_folder(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """Locally there is no workspace variable, so the repository's root is the nearest folder above with a `.git`."""
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    nested = project.root / "pkg" / "inner"
+    nested.mkdir(parents=True)
+    (project.root / ".git").mkdir()
+    (nested / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
+    (nested / "test_inner.py").write_text(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "the walk up")\ndef test_a():\n    pass\n'
+    )
+    project.pytest("--speccheck-results=r.jsonl", str(nested))
+    header, result = project.results_lines("r.jsonl")
+    assert (header["root"], result["file"]) == ("pkg/inner", "test_inner.py")
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-10",
+    "an inner run two folders below a GITHUB_WORKSPACE writes the two-part path a/b as root, and the repository's .git file counts as well as a .git folder",
+)
+def test_root_can_be_nested(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """A root of more than one folder, and a `.git` that is a file (as in a worktree or submodule)."""
+    nested = project.root / "a" / "b"
+    nested.mkdir(parents=True)
+    (nested / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
+    (nested / "test_nested.py").write_text(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "the nested root")\ndef test_a():\n    pass\n'
+    )
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(project.root))
+    project.pytest("--speccheck-results=with-workspace.jsonl", str(nested))
+    assert project.results_lines("with-workspace.jsonl")[0]["root"] == "a/b"
+    monkeypatch.delenv("GITHUB_WORKSPACE")
+    (project.root / ".git").write_text("gitdir: /elsewhere\n")
+    project.pytest("--speccheck-results=with-git-file.jsonl", str(nested))
+    assert project.results_lines("with-git-file.jsonl")[0]["root"] == "a/b"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-10",
+    "an inner run with no GITHUB_WORKSPACE and no .git above it writes a null root",
+)
+def test_root_is_null_when_no_repository_is_found(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """Planted so it doesn't depend on where the system's temp folder is: no `.git` anywhere above, or the test skips."""
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    above = [project.root, *project.root.parents]
+    if any((folder / ".git").exists() for folder in above):
+        pytest.skip("the temp folder is inside a repository, so there is no folder without one to test")
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "no repository")\ndef test_a():\n    pass\n')
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["root"] is None
 
 
 @pytest.mark.covers(
