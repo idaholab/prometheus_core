@@ -78,5 +78,8 @@ manual `.env` steps (`prometheus.host.internal:5000`) are not the hackathon path
 3. Check: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000` prints `200` (the UI, no login).
 4. Copy the values into the agent: `python3 setup_agent.py --env-only <agent>` in `agent-template/`
    (`agent-env-sync`), then `make up` in the agent folder. Again after every `make down-v`: it deletes
-   DeepLynx's data, and the next platform start makes a new key.
+   DeepLynx's data, and the next platform start makes a new key. In this order (deck 03, "Local
+   DeepLynx"): `make down` in the agent folder first (the agent holds the platform network), then
+   `make down-v && make up` in the platform, then the re-sync, then `make up` in the agent folder.
+   A re-sync before the platform is up copies the old key, and the 401 stays.
 5. Upload a small file in a fresh chat; `/artifacts` lists it, and it shows in the UI under "Prometheus".

@@ -314,7 +314,14 @@ A key that still works is kept, so later starts change nothing. `setup_agent.py`
 :::
 
 {.small}
-`make down-v` deletes DeepLynx's data with the platform's; the next `make up` creates a new key, so run `setup_agent.py --env-only` for your agent again.
+`make down-v` deletes DeepLynx's data with the platform's; the next `make up` makes a new key, and your agent needs it:
+
+```bash {.xs}
+cd ~/prometheus/<agent> && make down   # first: it holds the network
+cd ../prometheus_core/platform && make down-v && make up
+cd ../agent-template && python3 setup_agent.py --env-only ../../<agent>
+cd ../../<agent> && make up            # starts with the new key
+```
 ::::
 
 ---
@@ -348,7 +355,7 @@ EOF
 {.sm widths="470px|"}
 | Symptom | Fix |
 |---|---|
-| Agent exits: "Invalid required DeepLynx configuration: …" | its `.env` lacks the `DEEPLYNX_*` lines: `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder |
+| Agent exits: "Invalid required DeepLynx configuration: …" | its `.env` lacks the `DEEPLYNX_*` lines: in `agent-template/`, `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder |
 | Your agent disappeared from `/agents` | the platform restarted: `docker compose -p <agent-folder> restart` |
 | LLM call gets HTTP 401 | the key for your `LLM_CONFIG_PROFILE` is missing or wrong in the agent's `.env` |
 | `LLMConfigError` / "set LLM_CONFIG_PROFILE in .env" | the profile is empty or misspelled; the message lists the installed ones |
@@ -1102,9 +1109,9 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 | Symptom | Fix |
 |---|---|
 | `make up` stops at `deeplynx-setup`: "port is already allocated", or "DeepLynx didn't answer…" after up to 5 minutes | Port 5000 is taken (macOS: AirPlay Receiver): `lsof -nP -iTCP:5000 -sTCP:LISTEN` (Linux/WSL: `ss -ltnp 'sport = :5000'`) names the process. Or `deeplynx-server` failed: `make logs SERVICE=deeplynx-server`. |
-| `AuthenticationError` / 401 in your agent | Its `.env` has an old key: after `make down-v` the platform made a new one. `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder. |
+| `AuthenticationError` / 401 in your agent | Its `.env` has an old key: after `make down-v` the platform made a new one. Re-sync it with the `make down-v` steps on the "Local DeepLynx" slide (platform up first, then `setup_agent.py --env-only` in `agent-template/`, then `make up` in the agent folder). |
 | Every call fails: "Failed to get data source ID… Token refresh failed: All connection attempts failed" (or "Name or service not known"; macOS: "nodename nor servname provided") | The agent can't reach DeepLynx; `DEEPLYNX_DATA_SOURCE_ID` isn't the cause. DeepLynx isn't running: `LOCAL_DEEPLYNX=true` and `make up` in the platform. An agent run on the host (`python agent.py`) uses `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1` (deck 04). |
-| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | The agent's `.env` has no `DEEPLYNX_*` lines: run `setup_agent.py --env-only` after a platform `make up`. |
+| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | The agent's `.env` has no `DEEPLYNX_*` lines: after a platform `make up`, run `setup_agent.py --env-only <agent-folder>` in `agent-template/`. |
 | `deeplynx://` URI won't resolve in your agent | The agent needs the **same org and project** in its `ConnectionConfig` as the URI. |
 | UI at :3000 shows no data or errors | The UI calls the API from your browser at `localhost:5000`; it only works with `DEEPLYNX_SERVER_PORT=5000`. |
 

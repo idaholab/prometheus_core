@@ -363,7 +363,11 @@ make up</pre>
 <div class="callout warn">
 <strong>macOS: port 5000</strong> is often taken by the AirPlay Receiver (System Settings › General › AirDrop &amp; Handoff). Turn it off: the UI only works with the API on 5000.</div>
 
-<p class="small"><code>make down-v</code> deletes DeepLynx's data with the platform's; the next <code>make up</code> creates a new key, so run <code>setup_agent.py --env-only</code> for your agent again.</p>
+<p class="small"><code>make down-v</code> deletes DeepLynx's data with the platform's; the next <code>make up</code> makes a new key, and your agent needs it:</p>
+<pre class="xs">cd ~/prometheus/<span class="p">&lt;agent&gt;</span> &amp;&amp; make down   <span class="c"># first: it holds the network</span>
+cd ../prometheus_core/platform &amp;&amp; make down-v &amp;&amp; make up
+cd ../agent-template &amp;&amp; python3 setup_agent.py --env-only ../../<span class="p">&lt;agent&gt;</span>
+cd ../../<span class="p">&lt;agent&gt;</span> &amp;&amp; make up            <span class="c"># starts with the new key</span></pre>
 </div>
 </div>
 
@@ -405,7 +409,7 @@ EOF</pre>
 <tbody>
 <tr>
 <td>Agent exits: &quot;Invalid required DeepLynx configuration: …&quot;</td>
-<td>its <code>.env</code> lacks the <code>DEEPLYNX_*</code> lines: <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder</td>
+<td>its <code>.env</code> lacks the <code>DEEPLYNX_*</code> lines: in <code>agent-template/</code>, <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder</td>
 </tr>
 <tr>
 <td>Your agent disappeared from <code>/agents</code></td>
@@ -1615,7 +1619,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </tr>
 <tr>
 <td><code>AuthenticationError</code> / 401 in your agent</td>
-<td>Its <code>.env</code> has an old key: after <code>make down-v</code> the platform made a new one. <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder.</td>
+<td>Its <code>.env</code> has an old key: after <code>make down-v</code> the platform made a new one. Re-sync it with the <code>make down-v</code> steps on the &quot;Local DeepLynx&quot; slide (platform up first, then <code>setup_agent.py --env-only</code> in <code>agent-template/</code>, then <code>make up</code> in the agent folder).</td>
 </tr>
 <tr>
 <td>Every call fails: &quot;Failed to get data source ID… Token refresh failed: All connection attempts failed&quot; (or &quot;Name or service not known&quot;; macOS: &quot;nodename nor servname provided&quot;)</td>
@@ -1623,7 +1627,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </tr>
 <tr>
 <td>&quot;Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…&quot;</td>
-<td>The agent's <code>.env</code> has no <code>DEEPLYNX_*</code> lines: run <code>setup_agent.py --env-only</code> after a platform <code>make up</code>.</td>
+<td>The agent's <code>.env</code> has no <code>DEEPLYNX_*</code> lines: after a platform <code>make up</code>, run <code>setup_agent.py --env-only &lt;agent-folder&gt;</code> in <code>agent-template/</code>.</td>
 </tr>
 <tr>
 <td><code>deeplynx://</code> URI won't resolve in your agent</td>
