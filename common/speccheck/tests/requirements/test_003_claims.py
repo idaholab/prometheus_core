@@ -93,7 +93,7 @@ def test_a_mark_lands_on_one_test(project: Project):
     [
         pytest.param(
             'pytestmark = pytest.mark.covers("T-REQ-001-01", "m")\ndef test_a():\n    pass\n',
-            "`covers` is on the module (`pytestmark`); move it onto each test",
+            "`covers` is on the module (`pytestmark`); move it onto each test, each with its own explanation",
             marks=pytest.mark.covers(
                 "SPC-REQ-003-12", "a module-level pytestmark claim stops collection and says to move it onto each test"
             ),
@@ -101,13 +101,13 @@ def test_a_mark_lands_on_one_test(project: Project):
         ),
         pytest.param(
             '@pytest.mark.covers("T-REQ-001-01", "c")\nclass TestThing:\n    def test_a(self):\n        pass\n',
-            "`covers` is on class `TestThing`; move it onto each test",
+            "`covers` is on class `TestThing`; move it onto each test, each with its own explanation",
             marks=pytest.mark.covers("SPC-REQ-003-12", "a claim on a test class stops collection, naming the class"),
             id="class",
         ),
         pytest.param(
             '@pytest.mark.covers("T-REQ-001-01", "f")\n@pytest.mark.parametrize("n", [1, 2])\ndef test_a(n):\n    pass\n',
-            "`covers` is on the function of a parametrized test; put the claim on each pytest.param",
+            "`covers` is on the function of a parametrized test; put the claim on each pytest.param(..., marks=...) of one @pytest.mark.parametrize, each with its own explanation",
             marks=pytest.mark.covers(
                 "SPC-REQ-003-12",
                 "a function claim on a test with two parameters stops collection once, saying to claim per pytest.param",
@@ -118,7 +118,7 @@ def test_a_mark_lands_on_one_test(project: Project):
             '@pytest.mark.parametrize("x", [1])\n'
             '@pytest.mark.parametrize("n", [pytest.param(1, marks=pytest.mark.covers("T-REQ-001-01", "p"))])\n'
             "def test_a(n, x):\n    pass\n",
-            "a claiming test has 2 `parametrize` marks",
+            "a claiming test has 2 `parametrize` marks; put the claim on each pytest.param(..., marks=...) of one @pytest.mark.parametrize, each with its own explanation",
             marks=pytest.mark.covers(
                 "SPC-REQ-003-12", "a claim in one of two stacked parametrize decorators stops collection"
             ),
@@ -128,7 +128,7 @@ def test_a_mark_lands_on_one_test(project: Project):
             '@pytest.fixture(params=["a", "b"])\ndef kind(request):\n    return request.param\n'
             '@pytest.mark.parametrize("n", [pytest.param(1, marks=pytest.mark.covers("T-REQ-001-01", "p"))])\n'
             "def test_a(n, kind):\n    pass\n",
-            "a claiming test uses the parametrized fixture `kind`",
+            "a claiming test uses the parametrized fixture `kind`; put the claim on each pytest.param(..., marks=...) of one @pytest.mark.parametrize, each with its own explanation",
             marks=pytest.mark.covers(
                 "SPC-REQ-003-12",
                 "a claiming test that takes a fixture with params= stops collection, naming the fixture",
@@ -141,7 +141,7 @@ def test_a_mark_that_would_stand_for_several_tests_fails(project: Project, sourc
     """Even with no speccheck settings, and reported once per test function, not per parameter."""
     project.tests("import pytest\n" + source)
     err = usage_error(project)
-    assert message in err and "each with its own explanation" in err
+    assert message in err
     assert "speccheck: 1 claim(s)" in err
 
 
