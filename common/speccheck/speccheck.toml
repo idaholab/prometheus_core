@@ -14,17 +14,18 @@ workflows = ["speccheck"]
 # results (which installs speccheck with speccheck-install), runs it again with the default report
 # name, checks that it fails on a results file that can't be read and still publishes its report,
 # runs it with a job-names lookup that fails and checks that results fall back to the producer,
-# checks that the workflow grants only `contents: read` and names no secret, checks that
-# speccheck-upload refuses an empty folder, then records with the installed `speccheck` and uploads
-# with speccheck-upload. `record` is its last step before the upload, so it runs only when all of
-# that passed
+# checks that the workflow grants only `actions: read` and `contents: read` and names no secret,
+# checks that speccheck-upload refuses an empty folder and names its artifact as asked, then runs its
+# own speccheck-install step, and records and verifies with the `speccheck` command that put on PATH
+# (the job sets up no Python itself), and uploads with speccheck-upload. `record` is its last step
+# before the upload, so it runs only when all of that passed
 [ci.speccheck-self-check]
 workflows = ["speccheck"]
 
 [ci.speccheck-self-check.covers]
 SPC-REQ-007-03 = "speccheck-upload uploads this job's results under speccheck-results-self-check, and the job checks that it fails on an empty folder"
 SPC-REQ-007-04 = "speccheck-verify runs for real on the requirements legs' results, and the job checks its report artifact names each requirements job by its display name, its step summary links that artifact, and it fails on an unreadable results file yet still uploads its report"
-SPC-REQ-007-06 = "the job sets up no Python of its own, installs speccheck once with speccheck-install, and runs `speccheck verify` and `speccheck record` with that command"
+SPC-REQ-007-06 = "the job sets up no Python of its own, and runs `speccheck verify` and `speccheck record` with the command that its speccheck-install step put on PATH"
 SPC-REQ-007-08 = "the job checks that speccheck.yml grants only actions: read and contents: read, that no job widens them, and that neither the workflow nor the speccheck actions name a secret"
 SPC-REQ-007-09 = "the job runs speccheck-verify with a run ID whose job names can't be looked up, and checks it succeeds and names every result by its producer"
 
