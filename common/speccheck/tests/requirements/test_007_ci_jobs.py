@@ -488,6 +488,34 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
     assert "evil" not in text and "javascript" not in text
 
 
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "a results file whose run URL is really a job URL gets no link on the Runs line, while its result line links the job URL given as the job's",
+)
+def test_a_job_url_is_not_a_run_link(project: Project):
+    """The run position needs the run form (or an attempt); a job-form URL there is left out, though a job may be linked."""
+    project.spec("- T-REQ-001-01: One.")
+    job = "https://github.com/o/r/actions/runs/7/job/8"
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "run_url": job, "job_url": job})
+    text = project.speccheck("report", "u.jsonl", env=ENV).out
+    assert "- Runs: none" in text
+    assert f"- ✅ passed in [unit]({job})" in text
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "a result whose job URL is the run attempt's own URL is linked there, and a run attempt URL in the run position is listed",
+)
+def test_a_run_url_is_a_run_link_and_may_stand_for_a_job(project: Project):
+    """Where the job is unknown, the run attempt is the link (007-05), and the Runs line lists it."""
+    project.spec("- T-REQ-001-01: One.")
+    run = "https://github.com/o/r/actions/runs/7/attempts/2"
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "run_url": run, "job_url": run})
+    text = project.speccheck("report", "u.jsonl", env=ENV).out
+    assert f"- Runs: [7/attempts/2]({run})" in text
+    assert f"- ✅ passed in [unit]({run})" in text
+
+
 @pytest.mark.parametrize(
     ("server", "repository", "linked"),
     [
