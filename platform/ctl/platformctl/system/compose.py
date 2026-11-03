@@ -49,18 +49,41 @@ class Compose:
     """The profiles to enable, such as `dev`."""
     env: Mapping[str, str] | None = None
     """The environment for Compose, which pins the project's settings."""
+    project: str | None = None
+    """The project name for `-p`, given only to a run that names its own `files` (the entry file pins it)."""
 
-    def argv(self, *args: str) -> list[str]:
-        """`docker compose -f <entry> [--profile p]... <args>`."""
+    def argv(self, *args: str, files: Sequence[str] = ()) -> list[str]:
+        """`docker compose -f <entry> [--profile p]... <args>`.
+
+        With `files`, those replace the entry file (`docker compose -p <project> -f a -f b <args>`), for a
+        run that needs just a few services from a few files and none of the generated ones (so no profiles).
+        """
+        if files:
+            argv = ["docker", "compose", *(["-p", self.project] if self.project else [])]
+            for name in files:
+                argv += ["-f", name]
+            return [*argv, *args]
         argv = ["docker", "compose", "-f", self.entry_file.name]
         for profile in self.profiles:
             argv += ["--profile", profile]
         return [*argv, *args]
 
-    def run(self, *args: str, capture: bool = True, interactive: bool = False, timeout: float | None = None) -> Result:
+    def run(
+        self,
+        *args: str,
+        capture: bool = True,
+        interactive: bool = False,
+        timeout: float | None = None,
+        files: Sequence[str] = (),
+    ) -> Result:
         """Run a Compose command and return its result."""
         return self.runner.run(
-            self.argv(*args), env=self.env, cwd=self.cwd, capture=capture, interactive=interactive, timeout=timeout
+            self.argv(*args, files=files),
+            env=self.env,
+            cwd=self.cwd,
+            capture=capture,
+            interactive=interactive,
+            timeout=timeout,
         )
 
     def config(self) -> dict | None:
@@ -99,8 +122,9 @@ class Compose:
         wait: int | None = None,
         extra: Sequence[str] = (),
         capture: bool = False,
+        files: Sequence[str] = (),
     ) -> Result:
-        """Run `up`, optionally building, detached and waiting for health."""
+        """Run `up`, optionally building, detached and waiting for health; `files` as in `argv`."""
         args = ["up"]
         if build:
             args.append("--build")
@@ -108,7 +132,7 @@ class Compose:
             args.append("-d")
         if wait is not None:
             args += ["--wait", "--wait-timeout", str(wait)]
-        return self.run(*args, *extra, *services, capture=capture, interactive=not detach)
+        return self.run(*args, *extra, *services, capture=capture, interactive=not detach, files=files)
 
     def down(self, *, volumes: bool = False, remove_orphans: bool = False) -> Result:
         """Run `down`, optionally removing volumes and orphans."""

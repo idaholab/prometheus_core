@@ -17,6 +17,7 @@ Never prints request headers or bodies.
 
 from __future__ import annotations
 
+import json
 import time
 import urllib.error
 import urllib.request
@@ -45,6 +46,36 @@ def status(url: str, timeout: float = 5.0, headers: dict[str, str] | None = None
         return int(exc.code)
     except (urllib.error.URLError, OSError, ValueError):
         return None
+
+
+def request_json(
+    method: str,
+    url: str,
+    body: dict | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: float = 30.0,
+) -> tuple[int | None, object]:
+    """Send a request with an optional JSON body; return the status and the decoded body.
+
+    The status is None when nothing answers. The body is None when it is empty or not JSON. Neither
+    the headers nor the body are ever printed, here or in an error.
+    """
+    data = json.dumps(body).encode() if body is not None else None
+    try:
+        request = urllib.request.Request(
+            url, data=data, method=method, headers={"Content-Type": "application/json", **(headers or {})}
+        )
+        with _opener(url).open(request, timeout=timeout) as response:
+            code, raw = int(response.status), response.read()
+    except urllib.error.HTTPError as exc:
+        code, raw = int(exc.code), exc.read()
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, None
+    try:
+        return code, json.loads(raw) if raw else None
+    except ValueError:
+        return code, None
 
 
 def wait(

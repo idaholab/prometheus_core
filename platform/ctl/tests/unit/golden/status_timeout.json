@@ -1,0 +1,28 @@
+{
+  "command": "status",
+  "error": {
+    "check": "",
+    "code": "timeout",
+    "hint": "./platformctl doctor",
+    "message": "Not ready after 0s: backend: HTTP 404; 1 agent(s) registered: not registered: client-agent"
+  },
+  "ok": false,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1,
+  "waiting_for": [
+    {
+      "doctor_check": "ports-free",
+      "name": "backend",
+      "reason": "HTTP 404"
+    },
+    {
+      "doctor_check": "platform-env",
+      "name": "1 agent(s) registered",
+      "reason": "not registered: client-agent"
+    }
+  ]
+}

@@ -106,7 +106,8 @@ def make_context(
     config = PlatformConfig(root, env, sets)
     scrubber = Scrubber()
     scrubber.add_all(config.secret_values())
-    output = Output(scrubber, out=out, err=err, env=env)
+    # `cli.main` sets this from `--json`: stdout is then reserved for the one JSON object.
+    output = Output(scrubber, out=out, err=err, env=env, json_mode=bool(kw.get("json_mode")))
     ctx = build(Paths(root), config, output, runner, **kw)  # type: ignore[arg-type]
     return ctx, out, err
 

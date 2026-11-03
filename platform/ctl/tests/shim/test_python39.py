@@ -92,9 +92,40 @@ def tool_dir(tmp_path: Path) -> Path:
 
 def run_shim(shim_shell: list[str], path: Path, cwd: Path, *args: str, env_extra: dict | None = None):
     """Run the real shim with `path` as the whole PATH, so only what is in it can be found."""
-    env = {"PATH": str(path), "HOME": str(cwd), **(env_extra or {})}
+    # PLATFORMCTL_NO_HOMEBREW: a Mac's Homebrew Python is not part of this PATH, so the shim must not try it
+    env = {"PATH": str(path), "HOME": str(cwd), "PLATFORMCTL_NO_HOMEBREW": "1", **(env_extra or {})}
     shell = [shutil.which(shim_shell[0]), *shim_shell[1:]]  # absolute: the bare PATH can't find `sh`
     return subprocess.run([*shell, str(SHIM), *args], capture_output=True, text=True, env=env, cwd=cwd, timeout=120)
+
+
+def test_the_shim_ignores_homebrew_when_asked(tmp_path, tool_dir, shim_shell):
+    """`PLATFORMCTL_NO_HOMEBREW=1` is what makes "no usable Python" testable on a Mac that has Homebrew's.
+
+    Without a Python on the PATH the shim says none was found, even where `/opt/homebrew/bin/python3`
+    exists. This is the assertion that the macOS CI leg runs the shim on the interpreters the tests
+    gave it, not on the runner's own.
+    """
+    done = run_shim(shim_shell, tool_dir, tmp_path, "--version")
+    assert done.returncode == 1 and "needs Python 3.10 or newer, and none was found" in done.stderr
+    assert done.stdout == ""
+
+
+def test_the_interpreter_under_test_is_the_3_9_and_not_a_newer_one(python39):
+    """CI sets `PLATFORMCTL_REQUIRE_PY39`, so `python39` really is a 3.9, whichever Python the runner has."""
+    assert minor_version(python39) == "3.9"
+
+
+def test_the_entry_point_refuses_with_json_on_3_9(python39, tmp_path):
+    """On a real 3.9, `--json` gets the error object: `json` is in the standard library of 3.9 too."""
+    import json
+
+    done = subprocess.run(
+        [python39, "-I", str(RUN_PY), "--version", "--json"], capture_output=True, text=True, cwd=tmp_path, timeout=60
+    )
+    body = json.loads(done.stdout)
+    assert done.returncode == 1 and done.stderr == ""
+    assert (body["ok"], body["error"]["code"]) == (False, "config_invalid")
+    assert "this is Python 3.9" in body["error"]["message"]
 
 
 def test_the_entry_point_explains_itself_instead_of_crashing(python39, tmp_path):
@@ -120,8 +151,6 @@ def test_a_python3_that_is_3_9_is_skipped_for_a_newer_python(python39, shim_shel
 
 def test_a_lone_python_3_9_gets_the_install_message(python39, shim_shell, tool_dir, tmp_path):
     """With only a 3.9 (and no uv), the shim suggests installing uv, not a traceback."""
-    if sys.platform == "darwin" and any(Path(p).exists() for p in HOMEBREW_PYTHONS):
-        pytest.skip("this Mac has a Homebrew Python, which the shim would use")
     (tool_dir / "python3").symlink_to(python39)
     done = run_shim(shim_shell, tool_dir, tmp_path, "--version")
     assert done.returncode == 1

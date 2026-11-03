@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -55,6 +56,78 @@ def test_status_nothing_listening_and_bad_url():
     """Status nothing listening and bad url."""
     assert http.status("http://127.0.0.1:1/") is None
     assert http.status("not a url") is None
+
+
+class JsonHandler(BaseHTTPRequestHandler):
+    """A server that echoes the request body and headers it was sent, as JSON, or answers oddly by path."""
+
+    def _answer(self):
+        """Answer by path: `/empty` has no body, `/text` is not JSON, `/missing` is a 404, else an echo."""
+        length = int(self.headers.get("Content-Length") or 0)
+        sent = self.rfile.read(length).decode() if length else ""
+        if self.path == "/empty":
+            self.send_response(204)
+            self.end_headers()
+            return
+        if self.path == "/text":
+            body = b"not json"
+        else:
+            body = json.dumps(
+                {"method": self.command, "sent": sent, "auth": self.headers.get("Authorization")}
+            ).encode()
+        self.send_response(404 if self.path == "/missing" else 200)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):  # noqa: N802
+        """Answer a GET."""
+        self._answer()
+
+    def do_POST(self):  # noqa: N802
+        """Answer a POST."""
+        self._answer()
+
+    def log_message(self, *_):
+        """Stay quiet."""
+
+
+@pytest.fixture
+def json_server():
+    """A local server for the JSON helper, stopped afterwards."""
+    srv = HTTPServer(("127.0.0.1", 0), JsonHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}"
+    srv.shutdown()
+
+
+def test_request_json_sends_the_body_and_headers_and_decodes_the_reply(json_server):
+    """The JSON body goes out, the headers go with it, and the reply is decoded."""
+    code, body = http.request_json("POST", json_server + "/x", {"a": 1}, headers={"Authorization": "Bearer t"})
+    assert code == 200
+    assert body == {"method": "POST", "sent": '{"a": 1}', "auth": "Bearer t"}
+
+
+def test_request_json_with_no_body_sends_none(json_server):
+    """A GET has no body."""
+    assert http.request_json("GET", json_server + "/x") == (200, {"method": "GET", "sent": "", "auth": None})
+
+
+def test_request_json_returns_error_statuses_with_their_body(json_server):
+    """An HTTP error is a status, not an exception."""
+    code, body = http.request_json("GET", json_server + "/missing")
+    assert code == 404 and body["method"] == "GET"
+
+
+def test_request_json_empty_and_non_json_bodies_are_none(json_server):
+    """An empty reply and one that isn't JSON both decode to None, keeping the status."""
+    assert http.request_json("GET", json_server + "/empty") == (204, None)
+    assert http.request_json("GET", json_server + "/text") == (200, None)
+
+
+def test_request_json_with_nothing_listening_has_no_status():
+    """No answer is `(None, None)`, not an exception."""
+    assert http.request_json("GET", "http://127.0.0.1:1/") == (None, None)
+    assert http.request_json("GET", "not a url") == (None, None)
 
 
 def test_loopback_bypasses_the_proxy(server, monkeypatch):

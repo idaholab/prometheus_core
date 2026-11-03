@@ -20,9 +20,29 @@ and print a deprecation notice. See plans/platformctl/design.md, "Actions".
 
 from __future__ import annotations
 
+import argparse
 import importlib
 import pkgutil
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from types import ModuleType
+
+
+@dataclass(frozen=True)
+class Subcommand:
+    """One subcommand of a group that lives in the group's module, with what a command module exports."""
+
+    NAME: str
+    """The subcommand's name."""
+    HELP: str
+    """Its one-line description in `--help`."""
+    add_arguments: Callable[[argparse.ArgumentParser], None]
+    """Adds its options to its parser."""
+    run: Callable[..., int]
+    """Runs it with the context and parsed arguments; returns the exit code."""
+    ALIASES: tuple[str, ...] = field(default=())
+    """Old names that still work."""
+
 
 SECTIONS = (
     ("run", "Run the platform"),

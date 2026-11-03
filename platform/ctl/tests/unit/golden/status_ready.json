@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "backend",
+    "1 agent(s) registered"
+  ],
+  "command": "status",
+  "ok": true,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "ready": true,
+  "schema_version": 1
+}

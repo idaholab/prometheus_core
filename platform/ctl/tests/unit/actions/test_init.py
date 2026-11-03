@@ -17,11 +17,18 @@ import types
 from platformctl import actions
 
 
-def test_discover_finds_doctor_in_the_right_section():
-    """Discover finds doctor in the right section."""
+def test_discover_finds_every_command_in_a_known_section():
+    """Every command is listed, and each is in a section `--help` knows."""
     modules = actions.discover()
-    assert [m.NAME for m in modules] == ["doctor"]
-    assert modules[0].SECTION in dict(actions.SECTIONS)
+    assert {m.NAME for m in modules} >= {"doctor"}
+    assert all(m.SECTION in dict(actions.SECTIONS) for m in modules)
+
+
+def test_a_subcommand_carries_what_the_parser_reads():
+    """A `Subcommand` has the same attributes a command module exports, and no aliases by default."""
+    sub = actions.Subcommand("x", "does x", lambda parser: None, lambda ctx, args: 0)
+    assert (sub.NAME, sub.HELP, sub.ALIASES) == ("x", "does x", ())
+    assert sub.run(None, None) == 0
 
 
 def test_discover_orders_by_section_then_order_then_name(monkeypatch):

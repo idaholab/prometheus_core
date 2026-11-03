@@ -136,6 +136,72 @@ def test_update_text_sets_in_place_and_appends():
     assert updated == "# head\nA=9\nB=8\n#C=old\nA_OTHER=x\nC=new\n"
 
 
+EXAMPLE = (
+    "# header\n"
+    "# A key.\n"
+    '#   python3 -c "import secrets; print(secrets.token_hex(32))"\n'
+    "AGENT_SECRET=\n"
+    "\n"
+    "# Not a secret.\n"
+    "PORT=1\n"
+    '# python3 -c "print(1)"\n'
+    "\n"
+    "STRAY=\n"
+    '# python3 -c "print(2)"\n'
+    "#COMMENTED=1\n"
+    "LATER=\n"
+)
+"""A `.env.example` with a generator, a blank line that detaches one, and a commented-out default."""
+
+
+def test_generators_attach_a_one_liner_to_the_next_assignment_only():
+    """A blank line or a non-comment line between the one-liner and the key drops it."""
+    assert envfile.generators(EXAMPLE) == {
+        "AGENT_SECRET": "import secrets; print(secrets.token_hex(32))",
+        "LATER": "print(2)",
+    }
+
+
+def test_example_keys_skip_commented_out_defaults():
+    """Only active `KEY=` lines count."""
+    assert envfile.example_keys(EXAMPLE) == ["AGENT_SECRET", "PORT", "STRAY", "LATER"]
+
+
+def test_missing_keys_are_the_example_keys_the_env_lacks():
+    """A blank value is present; only an absent key is reported."""
+    assert envfile.missing_keys(EXAMPLE, {"AGENT_SECRET": "", "PORT": "9"}) == ["STRAY", "LATER"]
+    assert envfile.missing_keys(EXAMPLE, dict.fromkeys(envfile.example_keys(EXAMPLE), "")) == []
+
+
+def test_update_text_replaces_every_line_of_a_multiline_value():
+    """A quoted value that spans lines is replaced whole, not just its first line."""
+    text = 'A=1\nK="line1\nline2"\nB=2\n'
+    updated = envfile.update_text(text, {"K": "x"})
+    assert updated == "A=1\nK=x\nB=2\n"
+    assert envfile.parse(updated) == {"A": "1", "K": "x", "B": "2"}
+
+
+def test_update_text_replaces_the_last_duplicate_the_way_parse_reads_it():
+    """With a repeated key, the assignment `parse` uses is the one that changes."""
+    text = "K=first\nA=1\nK=last\n"
+    updated = envfile.update_text(text, {"K": "new"})
+    assert updated == "K=first\nA=1\nK=new\n"
+    assert envfile.parse(updated)["K"] == "new"
+
+
+def test_update_text_edits_several_multiline_values_bottom_up():
+    """Replacing one multi-line value doesn't shift the line numbers of the others."""
+    text = 'P="a\nb"\nQ="c\nd"\nR=3\n'
+    updated = envfile.update_text(text, {"P": "1", "Q": "2"})
+    assert updated == "P=1\nQ=2\nR=3\n"
+
+
+def test_update_text_refuses_a_malformed_file():
+    """A file `parse` rejects is not written over."""
+    with pytest.raises(envfile.EnvFileError):
+        envfile.update_text("not a pair\n", {"A": "1"})
+
+
 def test_update_text_without_trailing_newline():
     """Update text without trailing newline."""
     assert envfile.update_text("A=1", {"B": "2"}) == "A=1\nB=2\n"
@@ -189,12 +255,89 @@ def test_write_atomic_cleans_up_when_the_replace_fails(tmp_path: Path, monkeypat
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize(("mode", "private"), [(0o644, 0o600), (0o640, 0o600), (0o666, 0o600), (0o755, 0o700)])
+def test_make_private_drops_the_group_and_other_bits_and_returns_the_old_mode(tmp_path: Path, mode, private):
+    """A file others can read becomes owner-only, keeping the owner's bits; the old mode is returned for the warning."""
+    env = tmp_path / ".env"
+    env.write_text("A=1\n")
+    env.chmod(mode)
+    assert envfile.make_private(env) == mode
+    assert stat.S_IMODE(env.stat().st_mode) == private
+
+
+@pytest.mark.parametrize("mode", [0o600, 0o400, 0o700])
+def test_make_private_leaves_an_owner_only_file_alone(tmp_path: Path, mode):
+    """Nothing to do, nothing to report."""
+    env = tmp_path / ".env"
+    env.write_text("A=1\n")
+    env.chmod(mode)
+    assert envfile.make_private(env) is None
+    assert stat.S_IMODE(env.stat().st_mode) == mode
+
+
+def test_make_private_ignores_a_missing_file(tmp_path: Path):
+    """A `.env` that does not exist yet is created 0600 by the write, so there is nothing to tighten."""
+    assert envfile.make_private(tmp_path / ".env") is None
+    assert not (tmp_path / ".env").exists()
+
+
+def test_make_private_follows_a_symlink_to_the_real_file(tmp_path: Path):
+    """`write_atomic` writes through a symlink, so the mode that matters is the target's."""
+    real = tmp_path / "real.env"
+    real.write_text("A=1\n")
+    real.chmod(0o644)
+    link = tmp_path / ".env"
+    link.symlink_to(real)
+    assert envfile.make_private(link) == 0o644
+    assert stat.S_IMODE(real.stat().st_mode) == 0o600
+
+
 def test_update_creates_then_edits(tmp_path: Path):
     """`update` creates the file, then edits it in place."""
     path = tmp_path / ".env"
     envfile.update(path, {"A": "1"})
     envfile.update(path, {"A": "2", "B": "3"})
     assert envfile.read(path) == {"A": "2", "B": "3"}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "it's a\\b",  # an apostrophe forces double quotes, and the backslash is doubled
+        "back\\\\slash 'q'",
+        'say "hi"\\',
+        "a\\nb",  # a backslash and an n, not a newline
+        "line1\nline2 'x'",
+        "a#b c",
+        "$HOME and ${X}",
+        "tab\there",
+        "",
+        "plain",
+    ],
+)
+def test_a_written_value_reads_back_the_same(value):
+    """`config init`, `config set` and `deeplynx setup` write LLM keys and URLs through this: nothing may change."""
+    assert envfile.parse(envfile.update_text("", {"K": value}))["K"] == value
+
+
+def test_a_written_value_reads_back_the_same_after_a_second_write():
+    """Writing over an existing awkward value keeps the other lines and round-trips the new one."""
+    text = envfile.update_text("A=1\n", {"K": "it's a\\b"})
+    text = envfile.update_text(text, {"K": 'say "hi"\\', "B": "2"})
+    assert envfile.parse(text) == {"A": "1", "K": 'say "hi"\\', "B": "2"}
+
+
+def test_a_double_quoted_value_ends_at_the_first_unescaped_quote():
+    """`\\\\` is an escaped backslash, so the quote after it closes the value (a hand-written `.env`, as Compose reads it)."""
+    assert envfile.parse('K="a\\\\"\nL=1\n') == {"K": "a\\", "L": "1"}
+    assert envfile.parse('K="a\\"b"\n') == {"K": 'a"b'}
+
+
+@pytest.mark.parametrize("key", ["1ABC", "has space", "A=B", ""])
+def test_update_text_refuses_a_key_parse_would_reject(key):
+    """Writing `1ABC=x` would leave a file no command can read, so the key is refused before anything is written."""
+    with pytest.raises(envfile.EnvFileError, match="not a valid variable name"):
+        envfile.update_text("A=1\n", {key: "x"})
 
 
 def test_update_text_with_every_key_already_present_appends_nothing():

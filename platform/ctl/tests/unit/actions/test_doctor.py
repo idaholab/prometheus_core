@@ -71,7 +71,7 @@ def test_text_output_lists_the_fix_under_each_failure_and_counts_problems(platfo
     code = doctor.run(ctx, args("platform-env", "env-derived-keys"))
     text = out.getvalue()
     assert code == 1
-    assert "FAIL  platform-env" in text and "      fix: Run `make init-env`" in text
+    assert "FAIL  platform-env" in text and "      fix: Run `./platformctl config init`" in text
     assert "1 problem: run the fixes above, then ./platformctl doctor again" in text
 
 

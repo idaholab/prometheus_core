@@ -167,6 +167,30 @@ def test_crlf_in_the_shim(platform_root, runner):
     assert "git add --renormalize ." in result.fix and "core.autocrlf input" in result.fix
 
 
+@pytest.mark.parametrize("name", ["Makefile", ".env.example", ".env"])
+def test_crlf_in_a_file_make_or_the_tool_reads(platform_root, runner, name):
+    """Make reads `LOCAL_SDK=true\\r` as another value, so a CRLF Makefile, example or `.env` warns by name."""
+    (platform_root / name).write_bytes(b"A=1\r\nB=2\r\n")
+    result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner))
+    assert result.status == WARN and f"{name} has CRLF line endings" in result.evidence
+    assert "git add --renormalize ." in result.fix and "carriage returns" in result.fix
+
+
+def test_crlf_in_several_files_names_them_all(platform_root, runner):
+    """More than one file is listed together."""
+    (platform_root / "Makefile").write_bytes(b"all:\r\n")
+    (platform_root / ".env").write_bytes(b"A=1\r\n")
+    result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner))
+    assert "Makefile, .env have CRLF line endings" in result.evidence
+
+
+def test_lf_files_do_not_warn(platform_root, runner):
+    """A Makefile, example and `.env` with LF endings pass."""
+    for name in ("Makefile", ".env.example", ".env"):
+        (platform_root / name).write_bytes(b"A=1\nB=2\n")
+    assert hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner)).status == PASS
+
+
 def test_wsl1(platform_root, runner):
     """WSL 1 warns, because it can't run Docker."""
     result = hc.CHECKOUT_PATH.run(ctx_for(platform_root, runner, system="linux", release="4.4.0-19041-Microsoft"))

@@ -102,6 +102,18 @@ def check_checkout_path(ctx: Context) -> Result:
     if shim.exists() and b"\r" in shim.read_bytes():
         problems.append("the platformctl shim has CRLF line endings")
         fixes.append("Run `git add --renormalize .`, or re-clone with `git config --global core.autocrlf input`.")
+    # Make reads `LOCAL_SDK=true\r` as a different value, and an `.env` copied from a CRLF example inherits it.
+    crlf = [
+        path.name
+        for path in (ctx.paths.root / "Makefile", ctx.paths.env_example, ctx.paths.env)
+        if path.is_file() and b"\r\n" in path.read_bytes()
+    ]
+    if crlf:
+        problems.append(f"{', '.join(crlf)} {'has' if len(crlf) == 1 else 'have'} CRLF line endings")
+        fixes.append(
+            "Run `git add --renormalize .` and check out the files again; in `.env`, remove the carriage returns "
+            "(for example `sed -i 's/\\r$//' .env`)."
+        )
     if ctx.host.on_windows_drive(ctx.paths.root):
         problems.append("the checkout is on a Windows drive (/mnt/<drive>), where file modes and watching misbehave")
         fixes.append("Clone it inside the Linux filesystem (for example ~/projects) instead.")

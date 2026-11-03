@@ -38,7 +38,7 @@ for the schema, ownership model, and authoring rules.
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12+ for development, and Python 3.10+ to run `./platformctl` (it finds one itself)
 - [uv](https://docs.astral.sh/uv/) package manager
 - Docker and Docker Compose (for multi-agent deployment)
 
@@ -46,10 +46,13 @@ for the schema, ownership model, and authoring rules.
 
 ```bash
 cd platform
-python3 scripts/init_env.py   # creates .env, generates all secrets
-# Set LLM_CONFIG_PROFILE (required, no default) and LLM_API_KEY for that provider
+./platformctl config init     # creates .env, generates all secrets, asks for the LLM provider and key
 make up
 ```
+
+`config init` asks for `LLM_CONFIG_PROFILE` (required, no default) and the `LLM_API_KEY` for that provider. If the
+platform does not come up, run `./platformctl doctor`. See the [platformctl guide](platformctl/index.md) for setup,
+checking that the platform is ready, and troubleshooting.
 
 ### Local development
 

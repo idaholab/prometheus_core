@@ -87,7 +87,7 @@ def build(
     env = config.child_env()
     docker = Docker(runner, env)
     profiles = [p for p in [config.frontend_profile()] if p]
-    compose = Compose(runner, paths.entry_file, paths.root, profiles, env)
+    compose = Compose(runner, paths.entry_file, paths.root, profiles, env, config.project)
     return Context(
         paths=paths,
         config=config,

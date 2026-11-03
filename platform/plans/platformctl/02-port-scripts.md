@@ -1,8 +1,41 @@
 # 2: Port the scripts and remove them
 
-> **Status: Not started**
+> **Status: In review** (PR #337, branch `platformctl-step2`; the review panel's findings are fixed in follow-up commits)
 
 Lands after the hackathon (Day 2).
+
+**Done so far:** `config init`/`set`/`show`, `status [--wait]`, `deeplynx setup`; the three scripts as stubs; the
+Makefile forwards `init-env`, `check`, `deeplynx-setup` and has `make doctor`; `PLATFORMCTL_MAKE_VARS` (tested
+with a real Make 3.81); `--json` on the shim and `__main__` refusals; `allow_abbrev=False`; `envfile.update_text`
+by parsed span; the moved tests; CI's `sed` blocks; the wider `.gitattributes` and path filter; the user guide,
+docs and `platform/README.md`; `--live` selects `tests/live`; the flaky port test; the canary for the new commands.
+
+**Differs from the plan:**
+
+- `config init` prints `Next: make up` (not `./platformctl up`, which does not exist until step 3a).
+- The base-image "test pull" is `docker manifest inspect` with a 15 s timeout: same registry path and login,
+  nothing downloaded.
+- Under `make`, an answer that changes `LOCAL_SDK` or `LOCAL_DEEPLYNX` is saved and `config init` stops (exit 1,
+  "Run the same make command again"), because make read `.env` before this run and chose the base image and the
+  DeepLynx targets from the old one; carrying on would build the wrong way. It also prints no `Next:` line under
+  make. (The review panel found the first version, a warning only, left a first `make up` pulling from the registry.)
+- `config init`'s error for a missing profile or key ends "run ./platformctl config init again" where the script said
+  "run make again". The "[ERROR]" block and every other quoted line are unchanged.
+- `make test-system` is unchanged: its recipe never called `scripts/check_platform.py` (only the plan said so).
+- `config set` checks a value against its setting's type (`BACKEND_PORT` digits, `LOCAL_SDK` true/false), refuses
+  a key name `.env` could not parse, and makes a group- or world-readable `.env` owner-only before adding secrets.
+- `--json` prints one object on every path of `config init`, `config set` and `deeplynx setup`, not only on failure.
+- `check-prerequisites` is not forwarded to `doctor` (that is step 3a's C9), so `from-make.md` has no such row.
+- The workflow starts on every pull request and merge group, with a `changes` job that decides whether the platformctl
+  paths were touched, and a `platformctl: gate` job that always reports. Require only the gate: a required job skipped
+  by a `paths:` filter stays pending. This also gates `merge_group`, which ignores `paths:`.
+- The canary runs `status` and `deeplynx setup` against a loopback server that answers with sentinels, and captures
+  stray `print()` output; the `.env` write case and distinct sentinels for the new secrets are in.
+
+**Not done yet:** the scrubber's URL-encoded/base64 forms and URL passwords (and distinct canary sentinels);
+the canary's `CI=1`/real `_streamed` cases; the repository setting that makes `platformctl: gate` a required check
+(branch protection and the merge queue; the workflow side is done); the macOS Python 3.9 leg asserting which interpreter ran; the
+WSL and arm64 legs; the `make -n` fixtures for step 3a; the hackathon-freeze check (the PR is held until after Day 2).
 
 ## Goal
 
@@ -64,10 +97,9 @@ deprecation stub until step 3c deletes them.
 - **Makefile:** `init-env` → `config init`, `check` → `status --wait`,
   `deeplynx-setup` → `deeplynx setup`, each setting `PLATFORMCTL_VIA_MAKE=1`
   (so the tool reads Make's command-line variables) and printing the new
-  command. **`test-system`** calls
-  `scripts/check_platform.py` directly (`Makefile:259`); its recipe switches
-  to `./platformctl status --wait`. `test_compose_static.py` parses that
-  recipe; update it with it.
+  command. **`test-system`**: the plan
+  said its recipe calls `scripts/check_platform.py` (`Makefile:259`), but it only runs the system tests, so nothing
+  switches. `test_compose_static.py` parses that recipe and still passes.
 - **Replace** the three scripts with stubs that print one line ("moved:
   run `./platformctl config init`") and exec the new command. The hackathon
   knowledge base and deck 03 (`checks.md`, `environment.md`,
@@ -111,8 +143,7 @@ deprecation stub until step 3c deletes them.
 - `scripts/init_env.py`, `scripts/check_platform.py`,
   `scripts/deeplynx_setup.py`: stubs that forward to the new commands,
   removed in step 3c.
-- `make init-env`, `make check`, `make deeplynx-setup` and `test-system`'s
-  check forward to the new commands, and the start targets call
+- `make init-env`, `make check` and `make deeplynx-setup` forward to the new commands, and the start targets call
   `config init` and `status --wait` through the tool.
 - CI's `sed` blocks after `make init-env`: `config set --from-env`.
 - The manual `echo "LOCAL_SDK=true" >> .env` step (deck 03) and the manual
@@ -170,7 +201,7 @@ together in step 3c, with no mixed `make`/`./platformctl` blocks
 ## Breaking changes
 
 - **B1:** the three scripts become forwarding stubs (removed in 3c);
-  `make test-system` keeps working through its updated recipe.
+  `make test-system` is unchanged.
 - **B2:** `make init-env`, `make check`, `make deeplynx-setup` and every
   start target (which run `init-env`) now need Python 3.10+, which the shim
   finds.

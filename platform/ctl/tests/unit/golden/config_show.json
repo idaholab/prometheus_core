@@ -1,0 +1,216 @@
+{
+  "command": "config show",
+  "ok": true,
+  "platform": {
+    "project": "prometheus_platform",
+    "root": "<root>",
+    "version": "<version>"
+  },
+  "schema_version": 1,
+  "settings": [
+    {
+      "description": "Compose project name",
+      "name": "COMPOSE_PROJECT_NAME",
+      "source": "default",
+      "value": "prometheus_platform"
+    },
+    {
+      "description": "LLM provider profile the agents use (no default)",
+      "name": "LLM_CONFIG_PROFILE",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Custom LLM config YAML (a path) that wins over LLM_CONFIG_PROFILE",
+      "name": "LLM_CONFIG_FILE",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Build the prometheus_api base image from ../sdk",
+      "name": "LOCAL_SDK",
+      "source": "default",
+      "value": "false"
+    },
+    {
+      "description": "Registry repo of the prometheus_api base image",
+      "name": "PROMETHEUS_API_BASE_IMAGE_REPO",
+      "source": "default",
+      "value": "containers.github.inl.gov/genesis/prometheus_api"
+    },
+    {
+      "description": "Tag of the prometheus_api base image",
+      "name": "PROMETHEUS_API_BASE_IMAGE_HASH",
+      "source": "default",
+      "value": "1914b55"
+    },
+    {
+      "description": "Also include agents/debug-agents/*",
+      "name": "DEBUG_AGENTS",
+      "source": "default",
+      "value": "false"
+    },
+    {
+      "description": "Also include agents/optional/*",
+      "name": "OPTIONAL_AGENTS",
+      "source": "default",
+      "value": "false"
+    },
+    {
+      "description": "Run DeepLynx next to the platform",
+      "name": "LOCAL_DEEPLYNX",
+      "source": "default",
+      "value": "false"
+    },
+    {
+      "description": "DeepLynx API URL the agents use (set by `deeplynx setup` for a local DeepLynx)",
+      "name": "DEEPLYNX_BASE_URL",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Host port of the local DeepLynx API",
+      "name": "DEEPLYNX_SERVER_PORT",
+      "source": "default",
+      "value": "5000"
+    },
+    {
+      "description": "Host port of the local DeepLynx UI",
+      "name": "DEEPLYNX_UI_PORT",
+      "source": "default",
+      "value": "3000"
+    },
+    {
+      "description": "Publish the client-agent port for system tests",
+      "name": "PROMETHEUS_SYSTEM_TESTING",
+      "source": "default",
+      "value": "false"
+    },
+    {
+      "description": "URL the system tests use (default: the client-agent port)",
+      "name": "PROMETHEUS_SYSTEM_TEST_URL",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Host port of the client agent",
+      "name": "CLIENT_AGENT_PORT",
+      "source": "default",
+      "value": "8001"
+    },
+    {
+      "description": "React frontend: dev, prod, or blank for none",
+      "name": "PROFILE",
+      "source": "default",
+      "value": "dev"
+    },
+    {
+      "description": "Extra arguments for `docker compose up`",
+      "name": "UP_ARGS",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Wait for health and registration after starting",
+      "name": "CHECK",
+      "source": "default",
+      "value": "true"
+    },
+    {
+      "description": "Restart your agents after the platform restarts",
+      "name": "RESTART_AGENTS",
+      "source": "default",
+      "value": "true"
+    },
+    {
+      "description": "Seconds to wait for healthchecks",
+      "name": "WAIT_TIMEOUT",
+      "source": "default",
+      "value": "600"
+    },
+    {
+      "description": "Seconds to wait for the registration check",
+      "name": "CHECK_TIMEOUT",
+      "source": "default",
+      "value": "300"
+    },
+    {
+      "description": "Host port of the backend",
+      "name": "BACKEND_PORT",
+      "source": ".env",
+      "value": "9000"
+    },
+    {
+      "description": "Host port of the dev frontend",
+      "name": "FRONTEND_DEV_PORT",
+      "source": "default",
+      "value": "5150"
+    },
+    {
+      "description": "Host port of the prod frontend",
+      "name": "FRONTEND_PROD_PORT",
+      "source": "default",
+      "value": "8080"
+    },
+    {
+      "description": "Host port of Valkey",
+      "name": "REDIS_LOCAL_PORT",
+      "source": "default",
+      "value": "6379"
+    },
+    {
+      "description": "Import the registry build cache (needs the containerd image store)",
+      "name": "USE_BUILD_CACHE",
+      "source": "default",
+      "value": "true"
+    },
+    {
+      "description": "Prefix of the registry build cache",
+      "name": "BUILD_CACHE",
+      "source": "default",
+      "value": "ghcr.io/idaholab/prometheus_core/buildcache-prometheus"
+    },
+    {
+      "description": "Build cache tag (default: the Docker daemon's architecture)",
+      "name": "BUILD_CACHE_PLATFORM",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Skip the prerequisite checks (CI)",
+      "name": "SKIP_PREREQUISITES",
+      "source": "default",
+      "value": ""
+    },
+    {
+      "description": "Where the platform runs: compose (k3d: not supported yet)",
+      "name": "PLATFORM_TARGET",
+      "source": "default",
+      "value": "compose"
+    },
+    {
+      "description": "Where the code comes from: build (image: not supported yet)",
+      "name": "PLATFORM_SOURCE",
+      "source": "default",
+      "value": "build"
+    },
+    {
+      "description": "",
+      "name": "CUSTOM_FLAG",
+      "source": ".env",
+      "value": "set"
+    },
+    {
+      "description": "",
+      "name": "EMPTY_SECRET",
+      "source": ".env",
+      "value": "blank"
+    },
+    {
+      "description": "",
+      "name": "LLM_API_KEY",
+      "source": ".env",
+      "value": "set"
+    }
+  ]
+}

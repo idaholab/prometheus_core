@@ -392,7 +392,7 @@ def write_env_only(agent_dir: Path) -> None:
         print(f"\nError: '{agent_dir}' has no agent_card.json; is it an agent directory?")
         sys.exit(1)
     if not PLATFORM_ENV_PATH.exists():
-        print(f"\nError: '{PLATFORM_ENV_PATH}' not found. Run `make init-env` in platform/ first.")
+        print(f"\nError: '{PLATFORM_ENV_PATH}' not found. Run `./platformctl config init` in platform/ first.")
         sys.exit(1)
     selected_values = select_platform_env_values(PLATFORM_ENV_PATH)
     if not selected_values:
