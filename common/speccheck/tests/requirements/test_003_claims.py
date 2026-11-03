@@ -243,7 +243,7 @@ def test_a_refused_claim_says_how_to_fix_it(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-003-03",
-    "with the collection check on and no results path, an inner test claiming a known, allowed ID runs and passes",
+    "with the collection check on and no results path, an inner test claiming a known, allowed ID runs and passes, so a correct claim is let through where the bad ones above are refused",
 )
 def test_a_good_claim_passes_collection(project: Project):
     """The same check lets a correct claim through, locally, with no results file asked for."""

@@ -70,7 +70,7 @@ def test_record_claims_each_id_in_one_result(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-007-05",
-    "record in job publish on attempt 3 with check run ID 22 writes a header linking job 22 and run attempt 3",
+    "record in job publish on attempt 3 with check run ID 22 writes a header linking job 22 and run attempt 3, and without the ID links run attempt 3 as the job",
 )
 def test_record_writes_the_job_and_run_links(ci_project: Project):
     """The header `record` writes carries the same links a test run's does."""
@@ -291,7 +291,7 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
             "https://evil.example/o/r/actions/runs/11/artifacts/5",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "an artifact URL on another server is written as plain speccheck-report text"
+                "SPC-REQ-007-10", "an artifact URL on another server leaves the summary with no report link and no URL"
             ),
             id="other-server",
         ),
@@ -299,7 +299,8 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
             "https://github.com/evil/r/actions/runs/11/artifacts/5",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "an artifact URL in another repository is written as plain speccheck-report text"
+                "SPC-REQ-007-10",
+                "an artifact URL in another repository leaves the summary with no report link and no URL",
             ),
             id="other-repository",
         ),
@@ -307,18 +308,19 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
             "https://github.com/o/r/actions/runs/11/artifacts/5",
             {},
             marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "outside CI an artifact URL is written as plain speccheck-report text"
+                "SPC-REQ-007-10", "outside CI an artifact URL leaves the summary with no report link and no URL"
             ),
             id="outside-ci",
         ),
     ],
 )
 def test_an_artifact_link_to_elsewhere_is_plain_text(ci_project: Project, url: str, env: dict):
-    """The summary line still names the report, as text, with no URL in it."""
+    """The summary line is just the counts: no "Full report" clause, no link, no URL."""
     ci_project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
     ci_project.speccheck("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env)
     summary = (ci_project.root / "s.md").read_text()
     assert "evil" not in summary and "](" not in summary and "https://" not in summary
+    assert "Full report" not in summary
 
 
 @pytest.mark.covers(

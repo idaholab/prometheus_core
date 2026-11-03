@@ -218,7 +218,8 @@ def test_complete_with_a_workflow_nobody_lists_is_an_error(project: Project):
     project.spec("- T-REQ-001-01: One.")
     project.results("unit.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
     run = project.speccheck("verify", "--complete", "--workflow", "typo", "unit.jsonl")
-    assert run.code == 2 and "no producer" in run.err and "typo" in run.err
+    assert run.code == 2
+    assert "--workflow typo: no producer in speccheck.toml lists that workflow (workflows listed: ci)" in run.err
     assert project.speccheck("verify", "--workflow", "typo", "unit.jsonl").code == 0
 
 
@@ -258,10 +259,10 @@ def test_a_stale_marker_must_go(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-08",
-    "check on a collect-only run of a failing claim counts it as claimed, and fails only on the unclaimed requirement",
+    "check on a collect-only run (outcome collected) of a test whose body would fail counts its claim as claimed, and fails only on the unclaimed requirement",
 )
 def test_check_on_a_collect_only_run(project: Project):
-    """Outcomes don't matter to check: a failing test's claim counts, an unclaimed requirement doesn't."""
+    """Outcomes don't matter to check: a collected test's claim counts (its body never runs), an unclaimed requirement doesn't."""
     project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
     project.tests(CLAIM.format(marks="", body="assert False"))
     project.ini("speccheck_producer = unit\n")
@@ -280,10 +281,10 @@ def test_check_on_a_collect_only_run(project: Project):
             outcome,
             marks=pytest.mark.covers(
                 "SPC-REQ-005-08",
-                f"check on a results file that records the claim as {outcome} calls it claimed and fails only on the unclaimed requirement, while verify does not call it claimed",
+                f"check on a results file that records the claim as {outcome} calls it claimed and fails only on the unclaimed requirement, while verify calls it passed only for a passed outcome",
             ),
         )
-        for outcome in ("failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected")
+        for outcome in ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected")
     ],
 )
 def test_check_ignores_the_outcome_of_a_claim(project: Project, outcome: str):
@@ -295,7 +296,8 @@ def test_check_ignores_the_outcome_of_a_claim(project: Project, outcome: str):
     assert [p["code"] for p in run.json()["problems"]] == ["unclaimed"]
     assert run.code == 1
     # The same file under verify is where the outcome counts
-    assert status(project.speccheck("verify", "r.jsonl", "--json"))["T-REQ-001-01"] != "claimed"
+    verified = status(project.speccheck("verify", "r.jsonl", "--json"))["T-REQ-001-01"]
+    assert (verified == "passed") is (outcome == "passed"), verified
 
 
 @pytest.mark.covers(
@@ -396,7 +398,7 @@ def test_a_test_cant_repeat_a_ci_jobs_explanation(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
-    "a results file claiming malformed, unknown, retired and disallowed IDs gets four claim-invalid problems from check and verify, and none of them counts",
+    "a results file claiming malformed, unknown, retired and disallowed IDs gets four claim-invalid problems from check and verify, and none of them counts: every requirement is left with no evidence",
 )
 def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project):
     """Written by `record` or another language, so pytest never checked the IDs."""
@@ -417,6 +419,7 @@ def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project)
         invalid = [p for p in run.json()["problems"] if p["code"] == "claim-invalid"]
         assert len(invalid) == 4, run.json()["problems"]
         assert status(run)["T-REQ-001-01"] == "unclaimed"
+        assert [r["id"] for r in run.json()["requirements"] if r["evidence"]] == [], command
 
 
 @pytest.mark.covers(

@@ -69,13 +69,19 @@ def test_a_pyproject_without_a_speccheck_table_is_not_a_config(project: Project)
 
 @pytest.mark.covers(
     "SPC-REQ-002-02",
-    "a config in sub/ finds sub/specs when run from the parent folder, and a `specs` naming a missing folder exits 2",
+    'a config in sub/ with specs = "specs" reads sub/specs and not the parent folder\'s own specs when run from the parent, and a `specs` naming a missing folder exits 2',
 )
 def test_paths_are_relative_to_the_config(project: Project):
     """A config in a subfolder finds its spec folder next to it, from anywhere; a missing folder is exit 2."""
+    project.spec("- T-REQ-001-01: Beside the run. ⚠ untested\n- T-REQ-001-02: Beside the run too. ⚠ untested")
     project.write("sub/speccheck.toml", 'specs = "specs"\nid-prefix = "T"\n')
-    project.write("sub/specs/000-index.md", "")
-    assert project.speccheck("lint", "--config", "sub/speccheck.toml").code == 0
+    project.write("sub/specs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
+    project.write(
+        "sub/specs/001-thing.md",
+        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. ⚠ untested\n",
+    )
+    run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
+    assert run.code == 0 and run.json()["requirement_count"] == 1
     project.write("sub/speccheck.toml", 'specs = "gone"\n')
     run = project.speccheck("lint", "--config", "sub/speccheck.toml")
     assert run.code == 2 and "`specs` is 'gone', which is not a folder" in run.err

@@ -101,7 +101,7 @@ def two_specs(project: Project) -> Project:
 
 @pytest.mark.covers(
     "SPC-REQ-006-01",
-    "a report of two specs holding every status lists one row per spec with its own count, leaves out statuses with none, and opens with the counts of all eight statuses it has",
+    "a report of two specs holding every status lists one row per spec with its own count, leaves out statuses with none, and opens with the counts of the seven statuses it has",
 )
 def test_several_specs_and_every_status(two_specs: Project):
     """Rows per spec, zero counts left out, and the summary line in order from the worst status."""
@@ -166,7 +166,7 @@ def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-07",
-    "a spec with a not run requirement, then planned, untested and retired ones, lists failed, unclaimed and not run before the rest, in spec order within a status",
+    "a spec with a not run requirement, then planned, untested and retired ones, lists failed, unclaimed and not run before the rest",
 )
 def test_the_status_table_puts_not_run_before_the_rest(two_specs: Project):
     """Spec 002's table: `not run` first, then the rest by status."""

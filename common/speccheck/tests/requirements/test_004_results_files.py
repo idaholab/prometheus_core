@@ -152,7 +152,7 @@ def test_the_package_ships_a_schema_the_plugin_matches(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-004-11",
-    "every line of an inner run in a fake GitHub job with SPECCHECK_ROOT set, over all the outcomes, a deselected test and a test claiming two IDs, validates against the shipped schema",
+    "every line of inner runs in a fake GitHub job with SPECCHECK_ROOT set, over passed, failed, skipped, xfailed, xpassed, error, deselected, collected and a test claiming two IDs, validates against the shipped schema",
 )
 def test_every_line_a_run_writes_matches_the_schema(project: Project, monkeypatch: pytest.MonkeyPatch):
     """The header with a CI block and a root, and results of every outcome including a multi-ID claim."""
@@ -194,6 +194,11 @@ def test_two_ids():
     deselected = [r for r in project.results_lines("d.jsonl")[1:] if r["outcome"] == "deselected"]
     assert deselected, "a claiming test left out with -k is written as deselected"
     for line in project.results_lines("d.jsonl"):
+        validator.validate(line)
+    project.pytest("--speccheck-results=c.jsonl", "--collect-only", "-q")
+    collected = project.results_lines("c.jsonl")
+    assert {r["outcome"] for r in collected[1:]} == {"collected"}
+    for line in collected:
         validator.validate(line)
 
 
@@ -377,7 +382,7 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
             "not JSON",
             marks=pytest.mark.covers(
                 "SPC-REQ-004-02",
-                "30,000 nested brackets reject the file as not JSON, and verify and report still print one object",
+                "30,000 nested brackets reject the file as not JSON, and verify and report still print one object and report writes r.md",
             ),
             id="deep-nesting",
         ),
@@ -387,7 +392,8 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
             + "}",
             "digits",
             marks=pytest.mark.covers(
-                "SPC-REQ-004-02", "a 5000-digit line number rejects the file instead of crashing the integer parser"
+                "SPC-REQ-004-02",
+                "a 5000-digit line number rejects the file instead of crashing the integer parser, and report still writes r.md",
             ),
             id="huge-number",
         ),
@@ -396,7 +402,7 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
             "lone surrogate",
             marks=pytest.mark.covers(
                 "SPC-REQ-004-02",
-                "a test name with a lone surrogate escape rejects the file, and report still writes r.md",
+                "a test name with a lone surrogate escape rejects the file, and verify and report still print one object and report writes r.md",
             ),
             id="lone-surrogate",
         ),
@@ -415,6 +421,7 @@ def test_a_hostile_line_is_a_problem_not_a_crash(project: Project, line: str, me
         assert any(p["path"] == "r.jsonl" and p["line"] == 3 and message in p["message"] for p in problems)
         assert run.json()["requirements"][0]["status"] != "passed"
     assert project.speccheck("report", "r.jsonl", "--output", "r.md").code == 0
+    assert (project.root / "r.md").is_file()
 
 
 @pytest.mark.covers(
@@ -581,10 +588,10 @@ def test_a_test_id_with_a_unicode_line_separator_still_reads(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-004-05",
-    "a plain inner run writes no .jsonl, and SPECCHECK_RESULTS=out/env.jsonl writes it relative to where pytest started",
+    "a plain inner run writes no .jsonl, and SPECCHECK_RESULTS=out/env.jsonl writes out/env.jsonl under the project folder",
 )
 def test_a_file_only_when_asked(project: Project, monkeypatch: pytest.MonkeyPatch):
-    """Nothing by default; the option or SPECCHECK_RESULTS (relative to where pytest started) asks for one."""
+    """Nothing by default; the option or SPECCHECK_RESULTS (a path under the project folder) asks for one."""
     project.tests(
         'import pytest\n@pytest.mark.covers("T-REQ-001-01", "inner claim 11 of T-REQ-001-01")\ndef test_a():\n    pass\n'
     )
@@ -678,7 +685,7 @@ def test_an_unwritable_path_says_why(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-004-06",
-    "an inner run with -n 2 writes a single x.jsonl holding every test's real outcome from both workers",
+    "an inner run with -n 2 writes a single x.jsonl holding every claiming test's real outcome",
 )
 def test_xdist_writes_one_file_with_every_workers_results(project: Project):
     """Two workers: one file, with each test's real outcome."""
@@ -695,6 +702,41 @@ def test_xdist_writes_one_file_with_every_workers_results(project: Project):
     )
     assert outcomes(project, "x.jsonl") == EXPECTED
     assert [p.name for p in project.root.glob("*.jsonl")] == ["x.jsonl"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-06",
+    "two inner tests that each wait for the other's file run on two different workers, and the one x.jsonl holds both, passed",
+)
+def test_xdist_file_holds_what_each_worker_ran(project: Project):
+    """Each test needs the other to be running, so the two workers must both run one; the file has both."""
+    project.tests(
+        """\
+        import os
+        import time
+        import pytest
+
+        def meet(mine, theirs):
+            with open(mine, "w") as flag:
+                flag.write(os.environ["PYTEST_XDIST_WORKER"])
+            deadline = time.time() + 30
+            while not os.path.exists(theirs):
+                assert time.time() < deadline, "the other worker never ran its test"
+                time.sleep(0.05)
+
+        @pytest.mark.covers("T-REQ-001-01", "inner claim run by the first worker")
+        def test_first():
+            meet("first.worker", "second.worker")
+
+        @pytest.mark.covers("T-REQ-001-02", "inner claim run by the second worker")
+        def test_second():
+            meet("second.worker", "first.worker")
+        """
+    )
+    project.pytest("-p", "xdist", "-n", "2", "--speccheck-results=x.jsonl", subprocess=True)
+    assert outcomes(project, "x.jsonl") == {"test_first": "passed", "test_second": "passed"}
+    workers = {(project.root / name).read_text() for name in ("first.worker", "second.worker")}
+    assert len(workers) == 2, workers
 
 
 @pytest.mark.covers(
