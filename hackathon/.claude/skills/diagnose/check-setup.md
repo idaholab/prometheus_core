@@ -43,7 +43,6 @@ order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
   `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Add the line to the platform
   `.env` (yes), a platform `make restart` (yes; it writes the `DEEPLYNX_*` lines, no secret goes into
   the chat), then `deeplynx-env`, `deeplynx-backend`, `agent-env-sync`, and `make up` in the agent folder.
-  A DeepLynx started from its own clone: stop it first (`docker compose down` there; ports 3000, 5000).
 - **Personal skills** (10): WARN; give the rename command for the user's own terminal.
 - **No LLM key** (8) or **no access** (2): name the mentor (`mentors.md`).
 

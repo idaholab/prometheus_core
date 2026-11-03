@@ -63,7 +63,7 @@ docker compose -p prometheus_platform exec -T backend python -c "from prometheus
 
 Deck 03, slide 11. The platform runs it: nothing to clone, build, or click through
 (`platform/docker-compose.deeplynx.yml`, set up by `make deeplynx-setup`). Free port 5000 first
-(macOS: the AirPlay Receiver), and stop any DeepLynx started from its own clone (ports 3000, 5000).
+(macOS: the AirPlay Receiver).
 Don't use `platform/docs/docs/local-deeplynx.md` for the hackathon: its clone, build-from-source and
 manual `.env` steps (`prometheus.host.internal:5000`) are not the hackathon path. Follow only the steps below.
 
