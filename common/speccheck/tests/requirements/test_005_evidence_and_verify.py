@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.requirements.conftest import CONFIG, Project
+from tests.requirements.conftest import CONFIG, INDEX, Project, spec
 
 CLAIM = 'import pytest\n\n@pytest.mark.covers("T-REQ-001-01", "the inner test")\n{marks}def test_it():\n    {body}\n'
 """A project test that claims T-REQ-001-01, carries `marks` (whole decorator lines), and does `body`."""
@@ -358,3 +358,44 @@ def test_a_test_cant_repeat_a_ci_jobs_explanation(project: Project):
     run = project.speccheck("check", "u.jsonl")
     assert run.code == 1
     assert "t gives the same explanation for T-REQ-001-01 as `ci.publish` does for T-REQ-001-02" in run.err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
+    "a results file claiming malformed, unknown, retired and disallowed IDs gets four claim-invalid problems from check and verify, and none of them counts",
+)
+def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project):
+    """Written by `record` or another language, so pytest never checked the IDs."""
+    project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["001"]'))
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired.")
+    project.write("specs/002-other.md", spec("- T-REQ-002-01: Other.", number="002", title="Other"))
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    ids = ["T-REQ-1-1", "T-REQ-001-09", "T-REQ-001-02", "T-REQ-002-01"]
+    lines = "".join(
+        f'{{"test": "t{n}", "covers": [{{"id": "{id_}", "how": "test t{n} proves it"}}], "outcome": "passed"}}\n'
+        for n, id_ in enumerate(ids)
+    )
+    project.write("u.jsonl", header + lines)
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        assert run.code == 1
+        invalid = [p for p in run.json()["problems"] if p["code"] == "claim-invalid"]
+        assert len(invalid) == 4, run.json()["problems"]
+        assert status(run)["T-REQ-001-01"] == "unclaimed"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
+    "a [ci.publish] entry claiming an ID that no spec has gets a config-claim-invalid problem from check and verify",
+)
+def test_a_ci_job_claiming_an_unknown_id_counts_for_nothing(project: Project):
+    """The job's claims are in the config, so they are checked there, whether or not the job reported."""
+    project.write("speccheck.toml", CONFIG + '[ci.publish]\ncovers = { "T-REQ-001-09" = "the image is published" }\n')
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        assert run.code == 1
+        invalid = [p for p in run.json()["problems"] if p["code"] == "config-claim-invalid"]
+        assert len(invalid) == 1 and "T-REQ-001-09" in invalid[0]["message"], run.json()["problems"]

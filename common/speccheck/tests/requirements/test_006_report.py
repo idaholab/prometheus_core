@@ -156,7 +156,7 @@ def test_results_name_the_job_and_link_it(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-02",
+    "SPC-REQ-008-10",
     "without --job-names, or for a job ID the names don't list, a result is named by its producer, and still linked",
 )
 def test_without_a_name_a_result_is_named_by_its_producer(reported: Project):
@@ -167,7 +167,7 @@ def test_without_a_name_a_result_is_named_by_its_producer(reported: Project):
         assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)" in text, extra
 
 
-@pytest.mark.covers("SPC-REQ-006-02", "a result whose job URL is the run attempt's links runs/7/attempts/2")
+@pytest.mark.covers("SPC-REQ-007-05", "a result whose job URL is the run attempt's links runs/7/attempts/2")
 def test_without_a_job_id_it_links_the_run(project: Project):
     """The fallback link is the run attempt."""
     project.spec("- T-REQ-001-01: One.")
@@ -266,7 +266,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://evil.example/o/r/actions/runs/7/job/8",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-10",
+                "SPC-REQ-007-10",
                 "a job URL on another server than the run's isn't linked, and its host never appears in the report",
             ),
             id="other-server",
@@ -275,7 +275,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/evil/r/actions/runs/7/job/8",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-10", "a job URL on the run's server but in another repository isn't linked"
+                "SPC-REQ-007-10", "a job URL on the run's server but in another repository isn't linked"
             ),
             id="other-repository",
         ),
@@ -283,7 +283,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/o/r/actions/runs/7/job/8\n",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-10", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
+                "SPC-REQ-007-10", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
             ),
             id="trailing-newline",
         ),
@@ -291,7 +291,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/o/r/actions/runs/7/job/8",
             {},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
+                "SPC-REQ-007-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
             ),
             id="outside-ci",
         ),
@@ -299,7 +299,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "javascript:x",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-10", "a job URL using the javascript: scheme isn't linked, and the scheme never appears"
+                "SPC-REQ-007-10", "a job URL using the javascript: scheme isn't linked, and the scheme never appears"
             ),
             id="javascript-scheme",
         ),

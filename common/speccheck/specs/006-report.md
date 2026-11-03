@@ -10,9 +10,8 @@ The report says, for every requirement, whether it is proven and by which job, w
 
 - SPC-REQ-006-01: The report MUST start with a summary line, a count per status, and a table of
   the specs with a link to each, its number of requirements and its count per status.
-- SPC-REQ-006-02: Each result MUST give its outcome and the job that produced it, named by its
-  display name from `--job-names` when that is known and otherwise by its producer, and link to
-  the job, or to the run when the job's ID isn't known.
+- SPC-REQ-006-02: Each result MUST give its outcome and the job that produced it, named as
+  SPC-REQ-008-10 says, and linked as SPC-REQ-007-05 says.
 - SPC-REQ-006-03: Every string taken from a results file, a spec or `--job-names` MUST be written
   so it can't add a heading, list, quote, link, image, autolink, HTML or emphasis to the report.
 - SPC-REQ-006-04: The report MUST list its inputs: the commits, the runs, and which producers
@@ -20,9 +19,8 @@ The report says, for every requirement, whether it is proven and by which job, w
 - SPC-REQ-006-05: `report` MUST exit 0 whatever the requirements' statuses are, so the report is
   published even when `verify` fails.
 - SPC-REQ-006-06: In CI, each requirement MUST link to its line in its spec file, and each test to
-  its line in its test file, at the commit the run tested, on the server and repository of the run
-  that `report` is in. A path MUST be linked only when it is plain: letters, digits, `.`, `_`, `-`
-  and `/`, with no `..`. Outside CI, nothing is linked.
+  its line in its test file, at the commit the run tested, as SPC-REQ-007-10 allows. A path MUST be
+  linked only when it is plain: letters, digits, `.`, `_`, `-` and `/`, with no `..`.
 - SPC-REQ-006-07: Each spec MUST have a section in the report with its title, its Purpose when it
   has one, and a table of its requirements' IDs and statuses with `failed`, `unclaimed` and
   `not run` first.
@@ -31,6 +29,3 @@ The report says, for every requirement, whether it is proven and by which job, w
   proves the requirement.
 - SPC-REQ-006-09: Every string taken from a results file, a spec or `--job-names` MUST be capped in
   the report: at most 200 characters for a name, and 1000 for an explanation.
-- SPC-REQ-006-10: A link to a job or run MUST be used only if it has the form of a run or job URL
-  of a supported CI provider (see SPC-REQ-007-07) and is on the server and repository of the run
-  that `report` is in, so outside CI nothing is linked.

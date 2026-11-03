@@ -10,8 +10,8 @@ checks what its jobs proved.
 ## Requirements
 
 - SPC-REQ-007-01: `record` MUST write a results file with one `passed` result of kind `ci` that
-  claims each ID in the job's `[ci.<job>] covers` with its explanation, and MUST fail with exit 2
-  when the job has no entry.
+  claims each ID in the job's `[ci.<job>] covers` with its explanation. A job with no entry MUST be
+  a config error.
 - SPC-REQ-007-02: A CI job's results MUST count only for the IDs its config entry lists.
 - SPC-REQ-007-03: `.github/actions/speccheck-upload` MUST upload a job's results as an artifact
   named `speccheck-results-<name>`, and MUST fail the job when there is nothing to upload.
@@ -33,3 +33,7 @@ checks what its jobs proved.
   permissions, and no secrets.
 - SPC-REQ-007-09: When `speccheck-verify` can't look up the run's job names, it MUST go on without
   them, so each result is named by its producer.
+- SPC-REQ-007-10: speccheck MUST write a link to a CI page only when it runs in CI, and only to the
+  server and repository of that run. A link to a run, job or artifact MUST also have that kind's
+  form for its provider (see SPC-REQ-007-07). A link that fails either check MUST be left out and
+  its text written plainly.
