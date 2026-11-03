@@ -89,11 +89,19 @@ def one_status(status: str = "passed", **ci) -> evidence.Evaluation:
     return evidence.Evaluation([evidence.Status(requirement, status, found)], [], ["unit"], [])
 
 
+REPOSITORY = "https://github.com/o/r"
+"""This run's repository URL, the only one a result's link may be under."""
+JOB = f"{REPOSITORY}/actions/runs/7/job/8"
+"""A job's page."""
+RUN = f"{REPOSITORY}/actions/runs/7/attempts/2"
+"""A run attempt's page."""
+
+
 @pytest.mark.parametrize(
     ("ci", "url"),
     [
-        ({"job_url": "https://j", "run_url": "https://r"}, "https://j"),
-        ({"run_url": "https://r"}, "https://r"),
+        ({"job_url": JOB, "run_url": RUN}, JOB),
+        ({"run_url": RUN}, RUN),
         ({"job": "unit"}, ""),
         ({}, ""),
     ],
@@ -101,7 +109,38 @@ def one_status(status: str = "passed", **ci) -> evidence.Evaluation:
 def test_evidence_json_links_the_job_then_the_run(ci, url):
     """The job's link, else the run's, else none."""
     item = one_status(**ci).statuses[0].evidence[0]
-    assert _common.evidence_json(item)["url"] == url
+    assert _common.evidence_json(item, REPOSITORY)["url"] == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example/o/r/actions/runs/7/job/8",
+        "https://github.com/o/other/actions/runs/7/job/8",
+        "http://github.com/o/r/actions/runs/7/job/8",
+        f"{REPOSITORY}/pulls/7",
+        f"{JOB}\n",
+        "javascript:alert(1)",
+    ],
+)
+def test_evidence_json_leaves_out_a_link_that_is_not_this_runs(url):
+    """Another server or repository, another shape, or no link at all: the field is empty, not the file's text."""
+    item = one_status(job_url=url).statuses[0].evidence[0]
+    assert _common.evidence_json(item, REPOSITORY)["url"] == ""
+
+
+def test_evidence_json_has_no_link_without_a_repository():
+    """Outside CI there is no repository to trust, so even a well-formed link is left out."""
+    item = one_status(job_url=JOB).statuses[0].evidence[0]
+    assert _common.evidence_json(item)["url"] == ""
+    assert _common.evidence_json(item, "")["url"] == ""
+
+
+def test_statuses_json_passes_the_repository_to_each_result():
+    """The repository reaches every result, not only the first."""
+    evaluation = one_status(job_url=JOB)
+    assert _common.statuses_json(evaluation, None, REPOSITORY)[0]["evidence"][0]["url"] == JOB
+    assert _common.statuses_json(evaluation)[0]["evidence"][0]["url"] == ""
 
 
 def test_statuses_json():

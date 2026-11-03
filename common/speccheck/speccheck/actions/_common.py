@@ -26,6 +26,7 @@ from speccheck import ci, evidence, jsonout, results, summary
 from speccheck.config import ConfigError
 from speccheck.context import Context
 from speccheck.evidence import Evaluation
+from speccheck.markdown import safe_url
 from speccheck.results import MAX_NAME
 from speccheck.specs import Problem
 
@@ -126,8 +127,12 @@ def _relocate(problem: Problem, cwd: Path) -> Problem:
     return Problem(_relative(problem.path, cwd), problem.line, problem.message, problem.code)
 
 
-def evidence_json(item: evidence.Evidence) -> dict[str, Any]:
-    """One claiming result, for `--json` and the report."""
+def evidence_json(item: evidence.Evidence, repository: str = "") -> dict[str, Any]:
+    """One claiming result, for `--json` and the report.
+
+    `url` is the job's page, else the run's, only when it is under `repository`, this run's repository URL
+    (`ci.repository_url`) and has its kind's form; otherwise "" (SPC-REQ-007-10).
+    """
     ci = item.source.ci or {}
     return {
         "test": item.result.test,
@@ -140,12 +145,13 @@ def evidence_json(item: evidence.Evidence) -> dict[str, Any]:
         "producer": item.source.producer,
         "job": ci.get("job") or "",
         "job_name": item.job_name,
-        "url": ci.get("job_url") or ci.get("run_url") or "",
+        "url": safe_url(ci.get("job_url") or ci.get("run_url") or "", repository),
     }
 
 
-def statuses_json(evaluation: Evaluation, root: Path | None = None) -> list[dict[str, Any]]:
-    """Every requirement's status, for `--json`; with the repository's `root`, each one's spec file from it."""
+def statuses_json(evaluation: Evaluation, root: Path | None = None, repository: str = "") -> list[dict[str, Any]]:
+    """Every requirement's status, for `--json`; with the repository's `root`, each one's spec file from it,
+    and with this run's `repository` URL, the result links that are under it."""
     return [
         {
             "id": status.requirement.id,
@@ -154,7 +160,7 @@ def statuses_json(evaluation: Evaluation, root: Path | None = None) -> list[dict
             "text": status.requirement.text,
             "path": ci.from_root(status.requirement.spec.path, root),
             "line": status.requirement.line,
-            "evidence": [evidence_json(item) for item in status.evidence],
+            "evidence": [evidence_json(item, repository) for item in status.evidence],
             "waiting_on": status.waiting_on,
         }
         for status in evaluation.statuses
@@ -177,7 +183,7 @@ def finish(ctx: Context, args: argparse.Namespace, command: str, evaluation: Eva
             ok,
             evaluation.problems,
             counts=evaluation.counts(),
-            requirements=statuses_json(evaluation, ci.repository_root(ctx.cwd, ctx.env)),
+            requirements=statuses_json(evaluation, ci.repository_root(ctx.cwd, ctx.env), ci.repository_url(ctx.env)),
             producers={"reported": evaluation.reported, "missing": evaluation.missing},
         )
         jsonout.emit(body, ctx.output.out)
