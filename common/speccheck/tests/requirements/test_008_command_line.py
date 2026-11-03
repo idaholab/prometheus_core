@@ -56,6 +56,35 @@ def test_help_lists_every_command_by_section(project: Project):
     assert all(listed[name] for name in ("lint", "check", "verify", "report", "record"))
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(
+            ["--help", "--json"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-01", "--help with --json prints the same help text as --help alone and exits 0"
+            ),
+            id="program",
+        ),
+        pytest.param(
+            ["lint", "--help", "--json"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-01", "lint --help with --json prints the same text as lint --help alone and exits 0"
+            ),
+            id="command",
+        ),
+    ],
+)
+def test_help_is_text_even_with_json(project: Project, argv: list[str]):
+    """`--help` is the one output that is not a JSON object (008-04): it is for a person."""
+    plain = command(project, *[a for a in argv if a != "--json"])
+    done = command(project, *argv)
+    assert (done.returncode, done.stdout, done.stderr) == (0, plain.stdout, "")
+    assert done.stdout.startswith("usage: speccheck")
+    with pytest.raises(ValueError):
+        json.loads(done.stdout)
+
+
 @pytest.mark.covers(
     "SPC-REQ-008-01",
     "parsing --help into its sections puts lint, check and verify under Check specs and evidence and report and record under In CI, each with a one-line description",

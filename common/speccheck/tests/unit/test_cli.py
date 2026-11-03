@@ -120,6 +120,14 @@ class TestMain:
         assert code == 0 and "Check specs and evidence:\n  one       one help" in out and "In CI:\n  two" in out
         assert main("one", "--help")[1].startswith("usage: speccheck one")
 
+    def test_help_with_json_is_still_the_help_text(self, modules):
+        """`--help` is for a person, so `--json` does not turn it into an object, for the program or a command."""
+        for argv in (("--help", "--json"), ("--json", "--help"), ("one", "--help", "--json")):
+            code, out, _ = main(*argv)
+            assert code == 0 and out.startswith("usage: speccheck"), argv
+            with pytest.raises(ValueError):
+                json.loads(out)
+
     def test_version(self, modules):
         """Text and JSON."""
         assert main("--version")[:2] == (0, f"speccheck {__version__}\n")
