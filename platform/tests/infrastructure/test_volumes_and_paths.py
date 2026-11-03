@@ -12,6 +12,8 @@
 
 """Validate volume mounts and filesystem paths."""
 
+import re
+
 
 def _get_volumes(svc: dict) -> list[str]:
     """Get volume strings from a service definition."""
@@ -143,3 +145,70 @@ def test_backend_mesh_cache_owned_by_app_user(project_root):
     """
     dockerfile = (project_root / "backend" / "Dockerfile").read_text()
     assert "mkdir -p /cache/prometheus-mesh && chown -R 10001:10001 /cache" in dockerfile
+
+
+def _stage_user(dockerfile: str, stage: str) -> str | None:
+    """The last USER in one stage of a multi-stage Dockerfile."""
+    stages = re.split(r"(?im)^FROM\s", dockerfile)
+    for body in stages[1:]:
+        if re.match(rf"\S+\s+AS\s+{stage}\s*$", body.splitlines()[0], re.IGNORECASE):
+            return _final_user(body)
+    raise AssertionError(f"no '{stage}' stage in Dockerfile")
+
+
+def test_frontend_images_run_as_non_root(project_root):
+    """Both frontend targets end on a non-root user (k8s plan P1-11).
+
+    dev runs Vite as the node image's `node` user; prod runs nginx-unprivileged as
+    its UID 101.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    assert _stage_user(dockerfile, "dev") == "node"
+    assert _stage_user(dockerfile, "prod") == "101"
+
+
+def test_frontend_prod_renders_config_outside_conf_d(project_root):
+    """nginx's rendered config goes to /tmp, so a read-only root still gets it.
+
+    With a read-only root and the default output dir, the template step fails to
+    write conf.d/ and nginx starts on the stock config: no /api proxy, no /healthz.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    assert "NGINX_ENVSUBST_OUTPUT_DIR=/tmp" in dockerfile
+    assert "include /tmp/default.conf;" in dockerfile
+
+
+def test_frontend_dev_runs_as_host_user(compose_data, project_root):
+    """frontend-dev runs as the developer's UID, which the Makefile exports.
+
+    Vite writes into the bind-mounted ./frontend, owned by whoever checked it out,
+    so a fixed UID breaks the dev server for anyone who isn't UID 1000.
+    """
+    assert compose_data["services"]["frontend-dev"]["user"] == "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    makefile = (project_root / "Makefile").read_text()
+    assert "export HOST_UID HOST_GID" in makefile
+
+
+def test_start_targets_drop_frontend_dev_node_modules(project_root):
+    """down and clear-agent-registry remove frontend-dev with its volume, before stopping.
+
+    Its node_modules is an anonymous volume: compose would otherwise keep an old one
+    (stale dependencies, or root-owned from an older image) and leave ~550 MB behind
+    each time the container is recreated. Every start target runs clear-agent-registry
+    first, so that one removal covers all of them.
+    """
+    makefile = (project_root / "Makefile").read_text()
+    # target -> (prerequisites, recipe lines); the target-specific variable lines
+    # (`up: VAR := ...`) have no recipe and are skipped.
+    rules = {
+        name: (prereqs.split(), recipe.splitlines())
+        for name, prereqs, recipe in re.findall(
+            r"(?m)^([a-z-]+):(?! [A-Z_]+ :?=)([^\n#]*)(?:#[^\n]*)?\n((?:\t[^\n]*\n)+)", makefile
+        )
+    }
+    for name in ("down", "clear-agent-registry"):
+        assert name in rules, f"no {name} recipe in Makefile"
+        assert rules[name][1][0].strip() == "$(RM_FRONTEND_DEV)", f"{name} must remove frontend-dev first"
+    for name in ("up", "up-fg", "restart", "restart-fg", "ng-up", "ng-up-fg", "ng-restart", "ng-restart-fg"):
+        assert name in rules, f"no {name} recipe in Makefile"
+        assert "clear-agent-registry" in rules[name][0], f"{name} must depend on clear-agent-registry"
