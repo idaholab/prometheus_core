@@ -172,6 +172,30 @@ def test_fenced_examples_are_ignored(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-001-08",
+    "a status line and a `## ` header inside ``` and ~~~ fences ahead of the real ones change nothing: lint is clean, with the real status and one requirement",
+)
+def test_fences_in_the_header_are_ignored(project: Project):
+    """The fenced lines sit where they would matter, before `## Requirements`, so ignoring them is what keeps lint clean."""
+    project.write(
+        "specs/001-thing.md",
+        "# 001 - Thing\n\n```markdown\n## Example\nstatus: bogus\n```\n\nstatus: draft\n\n"
+        "~~~\nstatus: again\n~~~\n\n## Requirements\n\n- T-REQ-001-01: Real. ⚠ untested\n",
+    )
+    run = project.speccheck("lint", "--json")
+    assert run.code == 0, run.err
+    assert run.json()["requirement_count"] == 1
+    assert [s["status"] for s in run.json()["specs"]] == ["draft"]
+    # An unfenced second status line is still reported, at its own line, so the fenced ones above really were skipped
+    project.write(
+        "specs/001-thing.md",
+        "# 001 - Thing\n\n```\nstatus: bogus\n```\n\nstatus: draft\nstatus: draft\n\n## Requirements\n\n"
+        "- T-REQ-001-01: Real. ⚠ untested\n",
+    )
+    assert "specs/001-thing.md:8: a second `status:` line; a spec has one" in project.speccheck("lint").err
+
+
+@pytest.mark.covers(
     "SPC-REQ-001-09",
     "lint points an index's `id-prefix:` line and a spec's `tests:` line at the config, each at its line",
 )
