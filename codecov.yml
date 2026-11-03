@@ -61,9 +61,6 @@ flags:
   thermal-agent:
     paths:
       - platform/agents/debug-agents/thermal-agent/
-  form-filler-agent:
-    paths:
-      - platform/agents/form-filler-agent/
   synthesis-agent:
     paths:
       - platform/agents/synthesis-agent/

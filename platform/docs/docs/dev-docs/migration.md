@@ -31,7 +31,7 @@ The contents of `multi_agent_testbed/` were moved into `prometheus_platform/`, c
 | Client-agent orchestrator | `agents/client-agent/` | LangGraph-based query routing, planning, and multi-agent dispatch |
 | Agent registry | `registry/` | Lightweight FastAPI service for agent discovery and capability search |
 | PrometheusAgent SDK | `prometheus_api/` | Base class for building A2A agents with auth, health checks, artifact handling |
-| Specialist agents | `agents/*/` | Corrosion, radiation, thermal, data, synthesis, OSTI, form-filler, requirements agents |
+| Specialist agents | `agents/*/` | Corrosion, radiation, thermal, data, synthesis, OSTI, requirements agents |
 | Artifact registry | `prometheus_api/agent/artifacts.py` | Conversation-scoped artifact tracking in Redis |
 | Docker Compose stack | `docker-compose.yml` | Full-stack deployment with all services |
 
@@ -161,7 +161,6 @@ The deployment moved from a frontend-only Docker setup to a full multi-agent sta
 | Radiation Agent | 8003 | Specialist |
 | Thermal Agent | 8004 | Specialist |
 | Data Agent | 8005 | Specialist |
-| Form Filler | 8006 | Specialist |
 | OSTI Research | 8007 | Specialist |
 | Artifact Debug | 8008 | Testing |
 | Synthesis Agent | 8009 | Specialist |

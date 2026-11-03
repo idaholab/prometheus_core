@@ -784,7 +784,6 @@ platform/  (prometheus_core, devel)
 ├── backend/             # FastAPI + registry
 ├── agents/
 │   ├── client-agent/    # orchestrator
-│   ├── form-filler-agent/
 │   ├── synthesis-agent/
 │   ├── debug-agents/*/
 │   └── optional/osti-research-agent/

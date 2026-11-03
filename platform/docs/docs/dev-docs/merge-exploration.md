@@ -650,7 +650,6 @@ All agents extend `PrometheusAgent` (from `prometheus_api/agent/base.py`):
 | **Thermal Agent** | thermal-agent | 8004 | Thermal/heat transfer analysis | Conduction/convection modeling, temperature distribution |
 | **Data Agent** | data-agent | 8005 | Material database retrieval | Property lookup, experimental data, reference values |
 | **Synthesis Agent** | synthesis-agent | 8009 | Report/summary generation | Multi-source synthesis, confidence aggregation |
-| **Form Filler Agent** | form-filler-agent | 8006 | Dynamic form completion | Schema parsing, intelligent defaults, validation |
 | **OSTI Research Agent** | osti-research-agent | 8007 | Literature search | OSTI.gov integration, abstract retrieval, citation management |
 | **Artifact Debug Agent** | artifact-debug-agent | 8008 | Test artifact generation | Exodus/IFC generation, format validation (testing only) |
 
@@ -792,7 +791,6 @@ services:
   thermal-agent:
   data-agent:
   synthesis-agent:
-  form-filler-agent:
   osti-research-agent:
   artifact-debug-agent:
     # All follow same pattern: depend on registry

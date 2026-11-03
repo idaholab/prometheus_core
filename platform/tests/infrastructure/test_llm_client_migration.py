@@ -35,7 +35,6 @@ LLM_AGENT_COMPOSE_FILES = (
     "agents/debug-agents/material-data-agent/docker-compose.yml",
     "agents/debug-agents/radiation-agent/docker-compose.yml",
     "agents/debug-agents/thermal-agent/docker-compose.yml",
-    "agents/form-filler-agent/docker-compose.yml",
     "agents/optional/osti-research-agent/docker-compose.yml",
     "agents/synthesis-agent/docker-compose.yml",
 )

@@ -956,7 +956,7 @@ jobs:
       # CI only: build the prometheus_api base image from ../sdk, so the PR's
       # SDK is tested, instead of pulling the pinned registry image
       LOCAL_SDK: "true"
-      # The default agents (client-agent, form-filler, synthesis) start with the
+      # The default agents (client-agent, synthesis) start with the
       # scaffolded one. No debug or optional agents, and no frontend
       DEBUG_AGENTS: "false"
       OPTIONAL_AGENTS: "false"
@@ -1366,9 +1366,6 @@ jobs:
           - agent: thermal-agent
             path: platform/agents/debug-agents/thermal-agent
             flag: thermal-agent
-          - agent: form-filler-agent
-            path: platform/agents/form-filler-agent
-            flag: form-filler-agent
           - agent: synthesis-agent
             path: platform/agents/synthesis-agent
             flag: synthesis-agent

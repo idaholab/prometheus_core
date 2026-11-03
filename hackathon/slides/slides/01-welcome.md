@@ -189,7 +189,7 @@ Write **one agent**: a Python class with a method that does the work, and a card
 <div class="arrow-h" style="width:50px"></div>
 <div class="box navy" style="flex:1.3"><b>Orchestrator</b><span class="small">an LLM that calls agents' skills step by step, reading each result</span></div>
 <div class="arrow-h" style="width:50px"></div>
-<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">form-filler, OSTI research, synthesis… and <b>yours</b></span></div>
+<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">synthesis, OSTI research… and <b>yours</b></span></div>
 </div>
 <div class="arrow-v"><span>supporting services</span></div>
 <div class="row" style="gap:20px; align-items:stretch">
@@ -472,7 +472,6 @@ Any service that speaks A2A and publishes a card can join. It can live in the pl
 </div>
 <div class="arrow-v"><span>POST /a2a/{agent_name} → the agent's registered URL</span></div>
 <div class="row" style="gap:14px">
-<div class="box green" style="flex:1"><b>form-filler-agent</b></div>
 <div class="box green dash" style="flex:1"><b>osti-research-agent</b><span class="mono">OPTIONAL_AGENTS=true</span></div>
 <div class="box green" style="flex:1"><b>synthesis-agent</b></div>
 <div class="box green dash" style="flex:1"><b>debug agents</b><span class="mono">DEBUG_AGENTS=true</span></div>
@@ -693,7 +692,6 @@ DeepLynx is **required**. Every skill call writes an execution record there (`se
 | Directory | Card name → route key | Skills | Default? |
 |---|---|---|---|
 | `agents/client-agent` | nuclear-analysis-client-agent | The orchestrator; excludes itself from discovery | always |
-| `agents/form-filler-agent` | form-filler-agent | `fill_form`: extract structured data per a JSON schema | yes |
 | `agents/optional/osti-research-agent` | osti-research-agent | `search_literature`: OSTI search, PDF download, synthesis. Heavy PDF/ML build | `OPTIONAL_AGENTS` {.hl} |
 | `agents/synthesis-agent` | synthesis-agent | `synthesize_material_analysis`. **About 100 lines: the best small example.** | yes |
 | `agents/debug-agents/artifact-debug-agent` | artifact-debug-agent | `create_svg_artifact`, `convert_svg_to_png`, `create_json_artifact`, plus a workflow | `DEBUG_AGENTS` {.hl} |

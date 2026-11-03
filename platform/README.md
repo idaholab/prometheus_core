@@ -17,7 +17,6 @@ graph TD
   GW -->|A2A| DATA[Data Agent]
   GW -->|A2A| SYNTH[Synthesis Agent]
   GW -->|A2A| OSTI[OSTI Research Agent]
-  GW -->|A2A| FF[Form Filler Agent]
   FE -->|renders| VIZ[MeshViewer / IFCViewer / MermaidViewer]
 ```
 
@@ -150,7 +149,6 @@ NAME                                    IMAGE                                   
 prometheus_platform-admin-db-1          postgres:16-alpine                        admin-db              Up (healthy)
 prometheus_platform-backend-1           prometheus_platform-backend               backend               Up (healthy)
 prometheus_platform-client-agent-1      prometheus_platform-client-agent          client-agent          Up (healthy)
-prometheus_platform-form-filler-agent-1 prometheus_platform-form-filler-agent     form-filler-agent     Up (healthy)
 prometheus_platform-frontend-dev-1      prometheus_platform-frontend-dev          frontend-dev          Up
 prometheus_platform-redis-1             valkey/valkey-bundle:9.1.3                redis                 Up
 prometheus_platform-synthesis-agent-1   prometheus_platform-synthesis-agent       synthesis-agent       Up (healthy)
@@ -311,7 +309,6 @@ platform/
     client-agent/           # A2A orchestrator
     optional/               # heavy agents, only with OPTIONAL_AGENTS=true
       osti-research-agent/  # OSTI literature search (PDF/ML deps, slow build)
-    form-filler-agent/      # Dynamic form completion
     artifact-debug-agent/   # Artifact handling test agent
     (debug) corrosion-agent/        # Corrosion analysis specialist
     (debug) radiation-agent/        # Radiation damage specialist

@@ -173,7 +173,7 @@ Saved LLM_CONFIG_PROFILE=anthropic in .env.</pre>
 <p class="small">The backend creates and activates one on first start. It signs every chat turn, so agents know which user is asking. Admin › Signing Keys is only for rotating it.</p>
 </div></div>
 <div class="step"><div><h4>Type <code>/agents</code> in the chat</h4>
-<p class="small">You should see form-filler and synthesis (OSTI research only with <code>OPTIONAL_AGENTS=true</code>).</p>
+<p class="small">You should see synthesis (OSTI research only with <code>OPTIONAL_AGENTS=true</code>).</p>
 </div></div>
 </div>
 
@@ -195,7 +195,7 @@ curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span
      localhost:8600/v1/agents | python3 -m json.tool     <span class="c"># registered agents</span></pre>
 <div class="grid g2">
 <div class="callout">
-Then ask the chat something real, e.g. &quot;Extract the material, temperature and pressure from: SS316 pipe at 320 °C and 15 MPa&quot; (form-filler). Watch it with <code>make logs SERVICE=client-agent</code>.</div>
+Then ask the chat something real, e.g. &quot;Summarize the corrosion, radiation and thermal findings for SS316 at 320 °C into one report&quot; (synthesis). Watch it with <code>make logs SERVICE=client-agent</code>.</div>
 
 <div class="callout warn">
 A 401 from <code>/v1/agents</code> means a missing or wrong <code>AGENT_SECRET</code> header.</div>
@@ -1345,7 +1345,7 @@ docker compose -p prometheus_platform exec -T client-agent python -c <span class
 </tr>
 <tr>
 <td><code>/agents</code></td>
-<td>form-filler, synthesis (plus debug / optional agents if enabled)</td>
+<td>synthesis (plus debug / optional agents if enabled)</td>
 </tr>
 <tr>
 <td><code>/workflows</code></td>
@@ -1370,7 +1370,7 @@ docker compose -p prometheus_platform exec -T client-agent python -c <span class
 <div class="col">
 <h4 class="acc">Watch it happen</h4>
 <pre class="sm">make logs SERVICE=client-agent
-make logs SERVICE=form-filler-agent
+make logs SERVICE=synthesis-agent
 make logs SERVICE=backend</pre>
 <p class="small">In the client-agent log you see discovery (<code>GET backend:8000/v1/agents</code>), each tool call the loop makes (status &quot;Next step: …&quot;), and the <code>/a2a/{agent}</code> call through the backend.</p>
 <div class="callout">
