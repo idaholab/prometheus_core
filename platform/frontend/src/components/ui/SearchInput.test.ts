@@ -23,8 +23,9 @@ const inputOf = (label: Element) => (label.props.children as Element[])[1];
 test("SearchInput renders the icon, placeholder and aria-label, uncontrolled without value", () => {
   const html = renderToStaticMarkup(SearchInput({ placeholder: "Search files", label: "Search the files" }));
 
-  // lucide-react 0.292 marks no icon name, so match the Search glyph: a lens circle and its handle.
-  assert.match(html, /<svg[^>]*aria-hidden="true"><circle cx="11" cy="11" r="8"><\/circle><path d="m21 21-4.3-4.3">/);
+  // lucide-react names each icon in its class, so this doesn't break when an icon's paths are redrawn.
+  // aria-hidden checks the icon is hidden from screen readers; lucide adds it to any unlabelled icon.
+  assert.match(html, /<svg[^>]*class="(?:[^"]* )?lucide-search(?: [^"]*)?"[^>]*aria-hidden="true"/);
   assert.match(html, /placeholder="Search files"/);
   assert.match(html, /aria-label="Search the files"/);
   assert.doesNotMatch(html, /value=/);
