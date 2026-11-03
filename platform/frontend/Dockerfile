@@ -41,7 +41,8 @@ EXPOSE 5150
 # $HOME/.cache and loads it from there, and refuses a noexec mount.
 ENV HOST=0.0.0.0 \
     HOME=/tmp
-USER node
+# The node image's `node` user, by number (hadolint DL3066)
+USER 1000:1000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5150"]
 
 # ---- build (prod) ----
@@ -64,9 +65,8 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c
 ENV BACKEND_UPSTREAM=http://backend:8000 \
     NGINX_ENVSUBST_OUTPUT_DIR=/tmp
 COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-USER root
+# The image already runs as 101, which owns conf.d/
 RUN echo 'include /tmp/default.conf;' > /etc/nginx/conf.d/default.conf
-USER 101
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
