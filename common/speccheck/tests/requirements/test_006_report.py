@@ -308,7 +308,7 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-05",
+    "SPC-REQ-006-04",
     "the report's Inputs section lists the commit, the linked run attempt, producer unit as reported and docker as missing",
 )
 def test_the_inputs(reported: Project):
@@ -322,7 +322,7 @@ def test_the_inputs(reported: Project):
     assert "- Producers reported: unit" in inputs and "- Producers missing: docker" in inputs
 
 
-@pytest.mark.covers("SPC-REQ-006-06", "inputs that make verify exit 1 still let report write r.md and exit 0")
+@pytest.mark.covers("SPC-REQ-006-05", "inputs that make verify exit 1 still let report write r.md and exit 0")
 def test_report_exits_0_when_verify_fails(reported: Project):
     """The same inputs fail verify and still give a report, with exit 0."""
     assert reported.speccheck("verify", "unit.jsonl").code == 1
@@ -331,7 +331,7 @@ def test_report_exits_0_when_verify_fails(reported: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-07",
+    "SPC-REQ-006-06",
     "in CI, a requirement links its spec line and a test its file line at GITHUB_SHA, both as paths from the repository's root",
 )
 def test_requirements_and_tests_link_to_their_lines(project: Project):
@@ -361,7 +361,7 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
             {"root": "proj", "file": "../outside.py"},
             {**ENV, "GITHUB_SHA": SHA},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-07", "a test file path that climbs out with .. is shown but not linked"
+                "SPC-REQ-006-06", "a test file path that climbs out with .. is shown but not linked"
             ),
             id="dot-dot",
         ),
@@ -369,7 +369,7 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
             {"root": "proj", "file": "tests/t.py?x=1#frag"},
             {**ENV, "GITHUB_SHA": SHA},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-07", "a test file path holding URL characters like ? and # is shown but not linked"
+                "SPC-REQ-006-06", "a test file path holding URL characters like ? and # is shown but not linked"
             ),
             id="url-characters",
         ),
@@ -377,7 +377,7 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
             {"root": None, "file": "tests/t.py"},
             {**ENV, "GITHUB_SHA": SHA},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-07", "a results file that doesn't know its repository root gets no test link"
+                "SPC-REQ-006-06", "a results file that doesn't know its repository root gets no test link"
             ),
             id="no-root",
         ),
@@ -385,14 +385,14 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
             {"root": "proj", "file": "tests/t.py"},
             {**ENV, "GITHUB_SHA": "not-a-sha"},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-07", "a GITHUB_SHA that isn't a full commit hash links no spec or test line"
+                "SPC-REQ-006-06", "a GITHUB_SHA that isn't a full commit hash links no spec or test line"
             ),
             id="bad-sha",
         ),
         pytest.param(
             {"root": "proj", "file": "tests/t.py"},
             {},
-            marks=pytest.mark.covers("SPC-REQ-006-07", "outside CI no spec or test line is linked"),
+            marks=pytest.mark.covers("SPC-REQ-006-06", "outside CI no spec or test line is linked"),
             id="outside-ci",
         ),
     ],

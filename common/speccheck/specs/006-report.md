@@ -23,11 +23,11 @@ The report says, for every requirement, whether it is proven and by which job, w
   MUST be used only if it has the form of a run or job URL of a supported CI provider (see
   SPC-REQ-007-07) and is on the server and repository of the run that `report` is in, so outside
   CI nothing is linked.
-- SPC-REQ-006-05: The report MUST list its inputs: the commits, the runs, and which producers
+- SPC-REQ-006-04: The report MUST list its inputs: the commits, the runs, and which producers
   reported or were missing.
-- SPC-REQ-006-06: `report` MUST exit 0 whatever the requirements' statuses are, so the report is
+- SPC-REQ-006-05: `report` MUST exit 0 whatever the requirements' statuses are, so the report is
   published even when `verify` fails.
-- SPC-REQ-006-07: In CI, each requirement MUST link to its line in its spec file, and each test to
+- SPC-REQ-006-06: In CI, each requirement MUST link to its line in its spec file, and each test to
   its line in its test file, at the commit the run tested, on the server and repository of the run
   that `report` is in. A path MUST be linked only when it is plain: letters, digits, `.`, `_`, `-`
   and `/`, with no `..`. Outside CI, nothing is linked.
