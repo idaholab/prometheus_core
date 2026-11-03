@@ -236,7 +236,7 @@ jobs:
           test -s "$RUNNER_TEMP/speccheck-report/report.md"
           rm "$RUNNER_TEMP/speccheck-results/bad.jsonl"
       - name: speccheck-verify when the job names can't be looked up
-        # SPC-REQ-007-04: a lookup that fails warns and goes on. Run 1 isn't in this repository,
+        # SPC-REQ-007-09: a lookup that fails warns and goes on. Run 1 isn't in this repository,
         # so the lookup fails the way a missing `actions: read` would
         id: no-names
         uses: ./.github/actions/speccheck-verify
@@ -254,7 +254,7 @@ jobs:
             "$RUNNER_TEMP/speccheck-report/report.md" \
             || { echo "the report doesn't fall back to the producer's name" >&2; exit 1; }
       - name: Read-only permissions and no secrets
-        # SPC-REQ-007-04: the workflow grants actions: read and contents: read and nothing else,
+        # SPC-REQ-007-08: the workflow grants actions: read and contents: read and nothing else,
         # no job widens it, and neither the workflow nor the actions it runs name a secret
         run: |
           workflow=.github/workflows/speccheck.yml

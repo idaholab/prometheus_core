@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 import speccheck
-from tests.requirements.conftest import Project
+from tests.requirements.conftest import CONFIG, Project
 
 
 def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
@@ -53,15 +53,30 @@ def test_help_lists_every_command_by_section(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-008-02",
-    "--config and --json before and after lint give the same JSON, --quiet prints nothing, and --version prints the version",
+    "each of --config, --json, --quiet and --verbose gives the same output before lint as after it",
 )
-def test_global_options_before_or_after_and_version(project: Project):
-    """`--config` and `--json` work either side of the command; `--version` prints the version."""
-    project.write("sub/c.toml", 'specs = "../specs"\nid-prefix = "T"\n')
-    for argv in (["--config", "sub/c.toml", "--json", "lint"], ["lint", "--config", "sub/c.toml", "--json"]):
-        done = command(project, *argv)
-        assert done.returncode == 0 and json.loads(done.stdout)["command"] == "lint"
-    assert command(project, "lint", "--quiet").stdout == ""
+def test_global_options_before_or_after(project: Project):
+    """Each global option works either side of the command, and --quiet and --verbose change the output."""
+    project.write("sub/c.toml", CONFIG.replace('specs = "specs"', 'specs = "../specs"'))
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    for options in (["--config", "sub/c.toml"], ["--json"], ["--quiet"], ["--verbose"]):
+        before = command(project, *options, "verify", "r.jsonl")
+        after = command(project, "verify", "r.jsonl", *options)
+        assert before.returncode == after.returncode == 0, options
+        assert (before.stdout, before.stderr) == (after.stdout, after.stderr), options
+    assert json.loads(command(project, "verify", "r.jsonl", "--json").stdout)["command"] == "verify"
+    plain = command(project, "verify", "r.jsonl").stdout
+    assert command(project, "verify", "r.jsonl", "--quiet").stdout == "" != plain
+    assert "T-REQ-001-01  passed" in command(project, "verify", "r.jsonl", "--verbose").stdout
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-11",
+    "the installed command's --version prints speccheck and the package version",
+)
+def test_version_prints_the_version(project: Project):
+    """`--version` prints the name and version."""
     assert command(project, "--version").stdout == f"speccheck {speccheck.__version__}\n"
 
 
@@ -115,6 +130,21 @@ def test_one_json_object_on_every_exit_path(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-13",
+    "check --json at schema_version 1 still has every field that version promised, top level and per requirement",
+)
+def test_the_json_fields_of_schema_version_1(project: Project):
+    """Removing or renaming a field fails here until `SCHEMA_VERSION` is bumped and this list is updated."""
+    project.spec("- T-REQ-001-01: One.")
+    body = json.loads(command(project, "check", "--json").stdout)
+    assert body["schema_version"] == 1
+    assert set(body) >= {"schema_version", "command", "ok", "problems", "counts", "requirements", "producers"}
+    assert set(body["problems"][0]) == {"path", "line", "message", "code"}
+    assert set(body["producers"]) == {"reported", "missing"}
+    assert set(body["requirements"][0]) == {"id", "spec", "status", "text", "path", "line", "evidence", "waiting_on"}
+
+
+@pytest.mark.covers(
     "SPC-REQ-008-04",
     "lint, check and verify problems carry codes bullet-malformed, unclaimed and no-results, with line 0 when there is none",
 )
@@ -165,18 +195,29 @@ def test_problems_on_stderr_and_a_summary_last(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-008-06",
-    "a file name and test names with newlines and `::error::`, and forged `::` and `##[` paths, print escaped as path:line: message",
+    "a malformed bullet prints as specs/001-thing.md:7: message, and a problem with no line as path: message",
 )
-def test_problems_are_path_line_message_and_cant_start_a_log_command(project: Project):
-    """Every problem line is `path:line: message` or `path: message`, and nothing printed can begin `::`.
+def test_problems_are_path_line_message(project: Project):
+    """A problem with a line prints `path:line: message`; one without prints `path: message`."""
+    project.spec("- T-REQ-1-1: Bad.")
+    done = command(project, "lint")
+    assert "specs/001-thing.md:7: a bullet must read" in done.stderr
+    project.spec("- T-REQ-001-01: One.")
+    done = command(project, "verify")  # no results given: a problem about the config, with no line
+    assert done.returncode == 1
+    assert done.stderr.splitlines()[0].startswith("speccheck.toml: no results files were read")
 
-    Control characters are written out whether they come from a file name or from a results file.
-    """
+
+@pytest.mark.covers(
+    "SPC-REQ-008-12",
+    "a file name and test names with newlines and `::error::`, and forged `::` and `##[` paths, are printed with their control characters written out",
+)
+def test_nothing_printed_can_start_a_log_command(project: Project):
+    """Control characters are written out whether they come from a file name or from a results file."""
     project.spec("- T-REQ-1-1: Bad.")
     project.write("specs/x\n::error::evil.md", "")
     done = command(project, "lint")
     assert done.stderr.splitlines()[:-1] and all(not line.startswith("::") for line in done.stderr.splitlines())
-    assert "specs/001-thing.md:7: a bullet must read" in done.stderr
     assert "specs/x\\n::error::evil.md: a spec file must be named" in done.stderr
     (project.root / "specs" / "x\n::error::evil.md").unlink()
     project.spec("- T-REQ-001-01: One.")

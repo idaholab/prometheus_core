@@ -143,16 +143,24 @@ def test_a_producer_limited_to_some_specs(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-002-06",
-    "an empty `covers` table, the old list form, and a [ci.unit] entry clashing with producer unit each exit 2",
+    "an empty `covers` table and the old list form each exit 2",
 )
 def test_ci_job_entries(project: Project):
-    """`covers` is a table that claims an ID, and a job can't share a producer's name."""
+    """`covers` is a table that claims an ID."""
     project.write("speccheck.toml", CONFIG + "[ci.publish]\ncovers = {}\n")
     run = project.speccheck("lint")
     assert run.code == 2 and "`ci.publish.covers` must claim at least one ID" in run.err
     project.write("speccheck.toml", CONFIG + '[ci.publish]\ncovers = ["T-REQ-001-01"]\n')
     run = project.speccheck("lint")
     assert run.code == 2 and "`ci.publish.covers` must be a table from ID to how the job proves it" in run.err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-002-08",
+    "a [ci.unit] entry beside producer unit exits 2 saying it has the same name as a producer",
+)
+def test_a_ci_job_cant_share_a_producers_name(project: Project):
+    """A job and a producer are told apart by name, so they can't have the same one."""
     project.write("speccheck.toml", CONFIG + '[ci.unit]\ncovers = { "T-REQ-001-01" = "the job" }\n')
     run = project.speccheck("lint")
     assert run.code == 2 and "`ci.unit` has the same name as a producer" in run.err

@@ -90,7 +90,7 @@ def _argnames(mark: pytest.Mark) -> list[str]:
 
 
 def placement_problem(item: pytest.Item) -> str:
-    """Why the test's `covers` marks are where a claim can't be, or "" (SPC-REQ-003-02).
+    """Why the test's `covers` marks are where a claim can't be, or "" (SPC-REQ-003-02, 003-12).
 
     A mark must land on exactly one test: a function that isn't parametrized, or one parameter of
     the test's single `parametrize`. Anywhere else, one explanation would stand for several tests.
@@ -132,7 +132,7 @@ def shape_problem(mark: pytest.Mark) -> str:
 def claims_of(item: pytest.Item) -> tuple[list[claims.Claim], list[str]]:
     """The test's claims in mark order, each explanation collapsed, and the problems with them.
 
-    A claim with a problem is left out. Checks only what needs no specs: 003-04, 003-08 and 003-10.
+    A claim with a problem is left out. Checks only what needs no specs: 003-04, 003-08, 003-10 and 003-17.
     """
     found: list[claims.Claim] = []
     problems: list[str] = []
@@ -266,7 +266,7 @@ def merge(current: str, report: pytest.TestReport) -> str:
     """The outcome after one more phase: an error in setup or teardown wins over everything else.
 
     Only `error` sticks. A failed call is replaced by a later attempt's outcome, so with a rerun
-    plugin a test that fails and then passes is `passed` (SPC-REQ-003-07).
+    plugin a test that fails and then passes is `passed` (SPC-REQ-003-15).
     """
     new = phase_outcome(report)
     if new is None or current == "error":

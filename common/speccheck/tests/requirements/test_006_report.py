@@ -77,7 +77,7 @@ def test_the_counts_and_the_specs_table(reported: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-01",
+    "SPC-REQ-006-07",
     "a spec's section gives its Purpose on one line, then a status table with failed and unclaimed first, each ID linking to its section",
 )
 def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
@@ -93,7 +93,7 @@ def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-01",
+    "SPC-REQ-006-08",
     "each requirement gets a section in spec order with its full text quoted, its test as a subsection with How:, and an unclaimed one says what to add",
 )
 def test_a_section_per_requirement_and_per_claim(reported: Project):
@@ -111,7 +111,7 @@ def test_a_section_per_requirement_and_per_claim(reported: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-01",
+    "SPC-REQ-006-08",
     "a requirement claimed by two tests and a CI job gets one subsection each, the job's headed Job with no file",
 )
 def test_each_claimant_has_its_own_subsection(project: Project):
@@ -178,14 +178,14 @@ def test_without_a_job_id_it_links_the_run(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-03",
-    "a test name, explanation and job name holding a link, an img tag, emphasis and a heading stay text, and a javascript: URL isn't linked",
+    "a test name, explanation and job name holding a link, an img tag, emphasis and a heading stay text",
 )
 def test_untrusted_text_cant_add_markdown(project: Project):
     """Code spans hold names; outside them, what could make a link, HTML or emphasis is escaped."""
     project.spec("- T-REQ-001-01: One.")
     project.write("names.json", json.dumps({"8": "# [x](https://evil) <b>*bold*</b>"}))
     evil = "t[click](https://evil)<img src=x onerror=1>`"
-    ci = {**CI, "job_url": "javascript:x", "run_url": "javascript:x"}
+    ci = {"job": "unit", "job_id": 8}  # a job ID to name, but no URL, so the name is plain text
     header = json.dumps({"schema": "speccheck-results/1", "producer": "unit", "ci": ci}) + "\n"
     line = {
         "test": evil,
@@ -197,7 +197,6 @@ def test_untrusted_text_cant_add_markdown(project: Project):
     assert "#### Test `t[click](https://evil)<img src=x onerror=1>`" in text
     assert "**How:** # see \\[here\\](https://evil) \\<i\\>\\_x\\_\\</i\\>" in text
     assert "- ✅ passed in # \\[x\\](https://evil) \\<b\\>\\*bold\\*\\</b\\>" in text
-    assert "javascript" not in text
     # Outside code spans, no bracket or angle bracket is left unescaped
     prose = re.sub(r"`[^`]*`", "", text)
     assert re.search(r"(?<!\\)\]\(https://evil", prose) is None and re.search(r"(?<!\\)<(?:img|b|i)", prose) is None
@@ -244,7 +243,7 @@ def test_backtick_runs_cant_open_a_link(project: Project, how: str):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-006-03",
+    "SPC-REQ-006-09",
     "a 1000-character explanation appears whole, while a 900-character test name is cut at 150 with an ellipsis",
 )
 def test_names_and_explanations_are_capped(project: Project):
@@ -267,7 +266,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://evil.example/o/r/actions/runs/7/job/8",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-03",
+                "SPC-REQ-006-10",
                 "a job URL on another server than the run's isn't linked, and its host never appears in the report",
             ),
             id="other-server",
@@ -276,7 +275,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/evil/r/actions/runs/7/job/8",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-03", "a job URL on the run's server but in another repository isn't linked"
+                "SPC-REQ-006-10", "a job URL on the run's server but in another repository isn't linked"
             ),
             id="other-repository",
         ),
@@ -284,7 +283,7 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/o/r/actions/runs/7/job/8\n",
             ENV,
             marks=pytest.mark.covers(
-                "SPC-REQ-006-03", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
+                "SPC-REQ-006-10", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
             ),
             id="trailing-newline",
         ),
@@ -292,9 +291,17 @@ def test_names_and_explanations_are_capped(project: Project):
             "https://github.com/o/r/actions/runs/7/job/8",
             {},
             marks=pytest.mark.covers(
-                "SPC-REQ-006-03", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
+                "SPC-REQ-006-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
             ),
             id="outside-ci",
+        ),
+        pytest.param(
+            "javascript:x",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-10", "a job URL using the javascript: scheme isn't linked, and the scheme never appears"
+            ),
+            id="javascript-scheme",
         ),
     ],
 )
@@ -304,7 +311,7 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
     project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": url, "run_url": url})
     text = project.speccheck("report", "u.jsonl", env=env).out
     assert "- ✅ passed in unit\n" in text and "- Runs: none" in text
-    assert "evil" not in text
+    assert "evil" not in text and "javascript" not in text
 
 
 @pytest.mark.covers(
