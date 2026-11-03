@@ -119,6 +119,8 @@ export interface ChatMessageRequest {
   plan_rejected?: boolean;
   workflow_id?: string | null;
   upload_ids?: UploadDescriptor[] | null;
+  /** Client-made id for this turn (see `backend/CONTRACT.md`, "Delivery"). */
+  turn_id?: string | null;
 }
 
 export interface ChatMessageResponse {
@@ -163,7 +165,21 @@ export interface TaskDoneEvent {
   response?: ChatMessageResponse | null;
 }
 
-export type ServerEvent = StatusEvent | TaskProgressEvent | TaskDoneEvent;
+/** A chat turn finished; `response` is the body its POST returned. */
+export interface TurnDoneEvent {
+  type: "turn_done";
+  turn_id: string;
+  response: ChatMessageResponse;
+}
+
+export type ServerEvent = StatusEvent | TaskProgressEvent | TaskDoneEvent | TurnDoneEvent;
+
+/** `GET /api/chat/turns/{turn_id}`. */
+export interface TurnStateResponse {
+  turn_id: string;
+  state: "running" | "done";
+  response?: ChatMessageResponse | null;
+}
 
 // --- auth / session / config ------------------------------------------------
 

@@ -39,6 +39,7 @@ import type {
   SigningKey,
   UploadDescriptor,
   User,
+  TurnStateResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -145,6 +146,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  },
+
+  /** A turn's state, for a client that lost track of it (stream reconnect, POST network
+   * failure). Read once at those moments; `turn_done` is the normal path. */
+  getTurn(turnId: string): Promise<TurnStateResponse> {
+    return request<TurnStateResponse>(`/chat/turns/${encodeURIComponent(turnId)}`);
   },
 
   // --- uploads ---
