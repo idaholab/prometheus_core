@@ -115,8 +115,8 @@ def _specs_table(by_spec: dict[str, list[Status]]) -> list[str]:
 
 def _result_line(item: Evidence, links: Links) -> str:
     """One result: its outcome and the job that produced it, linked."""
-    data = _common.evidence_json(item)
-    url = safe_url(data["url"], links.repository)
+    data = _common.evidence_json(item, links.repository)
+    url = data["url"]
     name = prose(item.where)
     mark = OUTCOME_ICONS.get(data["outcome"], "❌")
     return f"- {mark} {prose(data['outcome'])} in {f'[{name}]({url})' if url else name}"
@@ -246,7 +246,7 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             evaluation.problems,
             title=title,
             counts=evaluation.counts(),
-            requirements=_common.statuses_json(evaluation, links.root),
+            requirements=_common.statuses_json(evaluation, links.root, links.repository),
             producers={"reported": evaluation.reported, "missing": evaluation.missing},
         )
         jsonout.emit(body, ctx.output.out)

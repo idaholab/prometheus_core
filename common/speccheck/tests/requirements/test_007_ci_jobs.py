@@ -541,6 +541,92 @@ def test_in_github_actions_the_same_run_is_linked(project: Project):
     assert f"Full report: [speccheck-report]({report_url})" in (project.root / "s.md").read_text()
 
 
+def json_urls(project: Project, command: str, ci: dict, env: dict) -> list[str]:
+    """The `url` of each result in `<command> --json` for a results file with the given CI block."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=ci)
+    run = project.speccheck(command, "u.jsonl", "--json", env=env)
+    return [e["url"] for r in run.json()["requirements"] for e in r["evidence"]]
+
+
+@pytest.mark.parametrize(
+    ("job_url", "run_url", "env"),
+    [
+        pytest.param(
+            "https://evil.example/o/r/actions/runs/7/job/8",
+            "https://evil.example/o/r/actions/runs/7/attempts/2",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a job and run URL on another server give an empty url in --json"
+            ),
+            id="other-server",
+        ),
+        pytest.param(
+            "https://github.com/evil/r/actions/runs/7/job/8",
+            "https://github.com/evil/r/actions/runs/7/attempts/2",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a job and run URL in another repository give an empty url in --json"
+            ),
+            id="other-repository",
+        ),
+        pytest.param(
+            "https://github.com/o/r/pulls/7",
+            "",
+            ENV,
+            marks=pytest.mark.covers("SPC-REQ-007-10", "a job URL of the wrong form gives an empty url in --json"),
+            id="wrong-form",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8",
+            "https://github.com/o/r/actions/runs/7/attempts/2",
+            {},
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "outside CI a well-formed job and run URL give an empty url in --json"
+            ),
+            id="outside-ci",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8",
+            "https://github.com/o/r/actions/runs/7/attempts/2",
+            {**ENV, "GITHUB_ACTIONS": "false"},
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "with GITHUB_ACTIONS=false a well-formed job and run URL give an empty url in --json"
+            ),
+            id="actions-false",
+        ),
+    ],
+)
+def test_json_leaves_out_a_url_that_is_not_this_runs(project: Project, job_url: str, run_url: str, env: dict):
+    """The same checks as a link in markdown: the `url` of a result is empty, not the results file's text."""
+    for command in ("verify", "report"):
+        urls = json_urls(project, command, {**CI, "job_url": job_url, "run_url": run_url}, env)
+        assert urls == [""], command
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "in a GitHub Actions run of the same server and repository, verify and report keep the job URL in --json, and the run attempt URL when no job URL is given",
+)
+def test_json_keeps_a_url_that_is_this_runs(project: Project):
+    """The control for the test above: only the server, repository and flag differ."""
+    job = "https://github.com/o/r/actions/runs/7/job/8"
+    run = "https://github.com/o/r/actions/runs/7/attempts/2"
+    for command in ("verify", "report"):
+        assert json_urls(project, command, {**CI, "job_url": job, "run_url": run}, ENV) == [job], command
+        assert json_urls(project, command, {**CI, "job_url": "", "run_url": run}, ENV) == [run], command
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-10",
+    "a job URL in the run position of a results file's CI block is not a run link, but --json keeps a job URL given as the job's",
+)
+def test_json_url_takes_the_job_form_only_as_the_job(project: Project):
+    """The job's own URL is the job form; a job URL where only a run URL is given is the job's page too."""
+    job = "https://github.com/o/r/actions/runs/7/job/8"
+    assert json_urls(project, "verify", {**CI, "job_url": "", "run_url": job}, ENV) == [job]
+
+
 @pytest.mark.covers(
     "SPC-REQ-007-10",
     "a results file whose run URL is really a job URL gets no link on the Runs line, while its result line links the job URL given as the job's",
