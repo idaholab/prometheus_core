@@ -20,18 +20,8 @@ import re
 import pytest
 from markdown_it import MarkdownIt
 
-from tests.requirements.conftest import Project, spec
+from tests.requirements.conftest import CI, ENV, Project
 
-CI = {
-    "job": "unit",
-    "job_id": 8,
-    "sha": "d" * 40,
-    "run_url": "https://github.com/o/r/actions/runs/7/attempts/2",
-    "job_url": "https://github.com/o/r/actions/runs/7/job/8",
-}
-"""A results file's CI block, from a re-run with a job ID."""
-ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
-"""The run `report` is in: links must be under its server and repository."""
 SHA = "e" * 40
 """The commit the run tested, whose files the report links to."""
 
@@ -43,24 +33,6 @@ def section(text: str, heading: str) -> str:
     rest = text[start + len(heading) + 1 :]
     ends = [m.start() for m in re.finditer(rf"^#{{1,{len(level)}}} ", rest, re.M)]
     return text[start : start + len(heading) + 1 + (ends[0] if ends else len(rest))]
-
-
-@pytest.fixture
-def reported(project: Project) -> Project:
-    """A project with one passing, one failing and one unclaimed requirement, a Purpose, and a results file."""
-    project.write(
-        "specs/001-thing.md",
-        spec(
-            "- T-REQ-001-01: Passes.\n- T-REQ-001-02: Fails.\n- T-REQ-001-03: Nobody claims it.", title="The thing"
-        ).replace("## Requirements", "## Purpose\n\nWhat the thing\npromises.\n\n## Requirements"),
-    )
-    project.results(
-        "unit.jsonl",
-        "unit",
-        [("tests/t.py::test_ok", ["T-REQ-001-01"], "passed"), ("tests/t.py::test_bad", ["T-REQ-001-02"], "failed")],
-        ci=CI,
-    )
-    return project
 
 
 @pytest.mark.covers(
@@ -156,27 +128,6 @@ def test_results_name_the_job_and_link_it(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-008-10",
-    "without --job-names, or for a job ID the names don't list, a result is named by its producer, and still linked",
-)
-def test_without_a_name_a_result_is_named_by_its_producer(reported: Project):
-    """The names are optional: a plain list of results files still gives a readable report."""
-    reported.write("names.json", json.dumps({"999": "someone else"}))
-    for extra in ([], ["--job-names", "names.json"]):
-        text = reported.speccheck("report", "unit.jsonl", *extra, env=ENV).out
-        assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)" in text, extra
-
-
-@pytest.mark.covers("SPC-REQ-007-05", "a result whose job URL is the run attempt's links runs/7/attempts/2")
-def test_without_a_job_id_it_links_the_run(project: Project):
-    """The fallback link is the run attempt."""
-    project.spec("- T-REQ-001-01: One.")
-    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": CI["run_url"]})
-    text = project.speccheck("report", "u.jsonl", env=ENV).out
-    assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/attempts/2)" in text
-
-
-@pytest.mark.covers(
     "SPC-REQ-006-03",
     "a test name, explanation and job name holding a link, an img tag, emphasis and a heading stay text",
 )
@@ -257,61 +208,6 @@ def test_names_and_explanations_are_capped(project: Project):
     assert f"**How:** {how}" in text
     heading = next(line for line in text.splitlines() if line.startswith("#### Test"))
     assert len(heading) < 200 and "…" in heading
-
-
-@pytest.mark.parametrize(
-    ("url", "env"),
-    [
-        pytest.param(
-            "https://evil.example/o/r/actions/runs/7/job/8",
-            ENV,
-            marks=pytest.mark.covers(
-                "SPC-REQ-007-10",
-                "a job URL on another server than the run's isn't linked, and its host never appears in the report",
-            ),
-            id="other-server",
-        ),
-        pytest.param(
-            "https://github.com/evil/r/actions/runs/7/job/8",
-            ENV,
-            marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "a job URL on the run's server but in another repository isn't linked"
-            ),
-            id="other-repository",
-        ),
-        pytest.param(
-            "https://github.com/o/r/actions/runs/7/job/8\n",
-            ENV,
-            marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
-            ),
-            id="trailing-newline",
-        ),
-        pytest.param(
-            "https://github.com/o/r/actions/runs/7/job/8",
-            {},
-            marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
-            ),
-            id="outside-ci",
-        ),
-        pytest.param(
-            "javascript:x",
-            ENV,
-            marks=pytest.mark.covers(
-                "SPC-REQ-007-10", "a job URL using the javascript: scheme isn't linked, and the scheme never appears"
-            ),
-            id="javascript-scheme",
-        ),
-    ],
-)
-def test_only_this_runs_repository_is_linked(project: Project, url: str, env: dict):
-    """A run or job URL on another host or repository isn't linked, and outside CI nothing is."""
-    project.spec("- T-REQ-001-01: One.")
-    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": url, "run_url": url})
-    text = project.speccheck("report", "u.jsonl", env=env).out
-    assert "- ✅ passed in unit\n" in text and "- Runs: none" in text
-    assert "evil" not in text and "javascript" not in text
 
 
 @pytest.mark.covers(

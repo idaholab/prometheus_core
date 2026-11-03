@@ -21,94 +21,10 @@ import pytest
 from jsonschema import Draft202012Validator
 
 import speccheck
-from tests.requirements.conftest import Project
-
-OUTCOMES = """\
-import pytest
-
-@pytest.fixture
-def broken_teardown():
-    yield
-    raise RuntimeError("teardown")
-
-@pytest.fixture
-def broken_setup():
-    raise RuntimeError("setup")
-
-@pytest.fixture
-def skips_in_teardown():
-    yield
-    pytest.skip("teardown")
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 1 of T-REQ-001-01")
-def test_passes():
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 2 of T-REQ-001-01")
-def test_fails():
-    assert False
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 3 of T-REQ-001-01")
-def test_skipped():
-    pytest.skip("no")
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 4 of T-REQ-001-01")
-@pytest.mark.skipif(True, reason="never")
-def test_skipped_in_setup():
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 5 of T-REQ-001-01")
-@pytest.mark.xfail(reason="known")
-def test_xfailed():
-    assert False
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 6 of T-REQ-001-01")
-@pytest.mark.xfail(reason="known")
-def test_xpassed():
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 7 of T-REQ-001-01")
-def test_setup_errors(broken_setup):
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 8 of T-REQ-001-01")
-def test_teardown_errors(broken_teardown):
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 9 of T-REQ-001-01")
-def test_deselected():
-    pass
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 18 of T-REQ-001-01")
-def test_teardown_skip_keeps_the_call(skips_in_teardown):
-    pass
-
-def test_claims_nothing():
-    pass
-"""
-"""A project test file with one claiming test of every outcome."""
-
-EXPECTED = {
-    "test_passes": "passed",
-    "test_fails": "failed",
-    "test_skipped": "skipped",
-    "test_skipped_in_setup": "skipped",
-    "test_xfailed": "xfailed",
-    "test_xpassed": "xpassed",
-    "test_setup_errors": "error",
-    "test_teardown_errors": "error",
-    "test_deselected": "deselected",
-    "test_teardown_skip_keeps_the_call": "passed",
-}
-"""The outcome each claiming test must be written with."""
+from tests.requirements.conftest import EXPECTED, OUTCOMES, Project, outcomes
 
 SCHEMA = Path(speccheck.__file__).parent / "schema" / "speccheck-results-1.schema.json"
 """The JSON Schema shipped with the package."""
-
-
-def outcomes(project: Project, name: str) -> dict[str, str]:
-    """Test name -> outcome, from a results file the run wrote."""
-    return {line["test"].split("::", 1)[1]: line["outcome"] for line in project.results_lines(name)[1:]}
 
 
 @pytest.mark.covers(
@@ -356,10 +272,6 @@ def test_a_bad_claim_in_a_result_rejects_the_file(project: Project, covers: list
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-07",
-    "one inner run with setup and teardown errors, skips in call and setup, xfail and xpass writes each test's merged outcome, and a skip in teardown after a passing call leaves it passed",
-)
-@pytest.mark.covers(
     "SPC-REQ-004-03",
     "the inner run's results file uses the outcome names failed, error, skipped, xfailed, xpassed and passed for those tests",
 )
@@ -372,18 +284,6 @@ def test_every_outcome_and_deselected_tests_are_written(project: Project):
     project.tests(OUTCOMES)
     project.pytest("--speccheck-results=r.jsonl", "-k", "not test_deselected and not claims_nothing")
     assert outcomes(project, "r.jsonl") == EXPECTED
-
-
-@pytest.mark.covers(
-    "SPC-REQ-003-16",
-    "a --collect-only run of the same inner file writes every claiming test as collected",
-)
-def test_collect_only_writes_collected(project: Project):
-    """Nothing runs, so every claim is `collected`."""
-    project.tests(OUTCOMES)
-    project.pytest("--collect-only", "-q", "--speccheck-results=c.jsonl")
-    assert set(outcomes(project, "c.jsonl").values()) == {"collected"}
-    assert len(outcomes(project, "c.jsonl")) == len(EXPECTED)
 
 
 @pytest.mark.covers("SPC-REQ-004-02", "a test ID containing U+2028 and U+0085 reads back as one line and verify passes")
@@ -593,63 +493,3 @@ def test_an_override_gives_root_when_it_cant_be_found(project: Project, monkeypa
     monkeypatch.setenv("SPECCHECK_ROOT", "sdk/")
     project.pytest("--speccheck-results=given.jsonl")
     assert project.results_lines("given.jsonl")[0]["root"] == "sdk"
-
-
-RERUN_CONFTEST = """\
-from _pytest.runner import runtestprotocol
-
-
-def pytest_runtest_protocol(item, nextitem):
-    # What a rerun plugin does: the whole setup, call and teardown again, every report logged
-    item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
-    for _ in range(2):
-        for report in runtestprotocol(item, nextitem=nextitem, log=False):
-            item.ihook.pytest_runtest_logreport(report=report)
-    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
-    return True
-"""
-"""A conftest that runs every test twice, the way a rerun plugin does."""
-
-RERUN_TESTS = """\
-import pytest
-
-ATTEMPTS = []
-
-
-@pytest.fixture
-def breaks_on_the_first_attempt():
-    yield
-    ATTEMPTS.append(1)
-    if len(ATTEMPTS) == 1:
-        raise RuntimeError("teardown, first attempt only")
-
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 15 of T-REQ-001-01")
-def test_error_then_clean(breaks_on_the_first_attempt):
-    pass
-
-
-CALLS = []
-
-
-@pytest.mark.covers("T-REQ-001-01", "inner claim 17 of T-REQ-001-01")
-def test_fails_then_passes():
-    CALLS.append(1)
-    assert len(CALLS) > 1
-"""
-"""A teardown error on the first attempt only, and a call that fails once."""
-
-
-@pytest.mark.covers(
-    "SPC-REQ-003-15",
-    "a rerun plugin's clean second attempt after a teardown error stays error, and a call that fails then passes is passed",
-)
-def test_an_error_stays_through_a_rerun(project: Project):
-    """A teardown error on attempt 1 stays `error` though attempt 2 is clean; a failed call doesn't stick."""
-    project.write("conftest.py", RERUN_CONFTEST)
-    project.tests(RERUN_TESTS)
-    project.pytest("--speccheck-results=r.jsonl")
-    assert outcomes(project, "r.jsonl") == {
-        "test_error_then_clean": "error",
-        "test_fails_then_passes": "passed",
-    }

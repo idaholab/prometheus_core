@@ -20,31 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.requirements.conftest import CONFIG, Project
-
-JOB = {
-    "GITHUB_ACTIONS": "true",
-    "GITHUB_SERVER_URL": "https://github.com",
-    "GITHUB_REPOSITORY": "o/r",
-    "GITHUB_WORKFLOW": "ci",
-    "GITHUB_JOB": "publish",
-    "GITHUB_RUN_ID": "11",
-    "GITHUB_RUN_ATTEMPT": "3",
-    "SPECCHECK_JOB_ID": "22",
-}
-"""A fake GitHub Actions job named `publish`, on its third attempt."""
-
-
-@pytest.fixture
-def ci_project(project: Project) -> Project:
-    """A project whose `publish` CI job claims T-REQ-001-01."""
-    project.write(
-        "speccheck.toml",
-        CONFIG
-        + '[ci.publish]\nworkflows = ["ci"]\n[ci.publish.covers]\n"T-REQ-001-01" = "the publish job pushes the image"\n',
-    )
-    project.spec("- T-REQ-001-01: It publishes.\n- T-REQ-001-02: It is tested. ⚠ untested")
-    return project
+from tests.requirements.conftest import CI, ENV, JOB, Project
 
 
 @pytest.mark.covers(
@@ -74,20 +50,6 @@ def test_record_without_an_entry_is_exit_2(ci_project: Project):
     assert run.code == 2 and "no [ci.build] entry for this job (CI jobs: publish)" in run.err
     assert ci_project.speccheck("record").code == 2
     assert not (ci_project.root / ".speccheck").exists()
-
-
-@pytest.mark.covers("SPC-REQ-007-01", "record with an output path under a plain file exits 2 instead of writing")
-@pytest.mark.covers(
-    "SPC-REQ-008-04",
-    "record --json with an unwritable output prints one object with ok false and a usage error, not a traceback",
-)
-def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
-    """A file where the output folder should be: exit 2 and one JSON object, not a traceback."""
-    ci_project.write("blocker", "a file, not a folder")
-    run = ci_project.speccheck("record", "--output", "blocker/publish.jsonl", "--json", env=JOB)
-    body = run.json()
-    assert run.code == 2 and body["ok"] is False and body["error"]["code"] == "usage"
-    assert "blocker" in body["error"]["message"] and "Traceback" not in run.err
 
 
 @pytest.mark.covers(
@@ -144,3 +106,67 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
         ci_project.speccheck("verify", "r.jsonl", "--summary", "s.md", "--report-url", url, env=env)
         assert (f"[speccheck-report]({url})" in (ci_project.root / "s.md").read_text()) is linked, url
         (ci_project.root / "s.md").unlink()
+
+
+@pytest.mark.covers("SPC-REQ-007-05", "a result whose job URL is the run attempt's links runs/7/attempts/2")
+def test_without_a_job_id_it_links_the_run(project: Project):
+    """The fallback link is the run attempt."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": CI["run_url"]})
+    text = project.speccheck("report", "u.jsonl", env=ENV).out
+    assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/attempts/2)" in text
+
+
+@pytest.mark.parametrize(
+    ("url", "env"),
+    [
+        pytest.param(
+            "https://evil.example/o/r/actions/runs/7/job/8",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "a job URL on another server than the run's isn't linked, and its host never appears in the report",
+            ),
+            id="other-server",
+        ),
+        pytest.param(
+            "https://github.com/evil/r/actions/runs/7/job/8",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a job URL on the run's server but in another repository isn't linked"
+            ),
+            id="other-repository",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8\n",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a job URL with a trailing newline isn't exactly a job link, so it isn't linked"
+            ),
+            id="trailing-newline",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/7/job/8",
+            {},
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "outside CI there is no run to compare with, so a well-formed job URL isn't linked"
+            ),
+            id="outside-ci",
+        ),
+        pytest.param(
+            "javascript:x",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a job URL using the javascript: scheme isn't linked, and the scheme never appears"
+            ),
+            id="javascript-scheme",
+        ),
+    ],
+)
+def test_only_this_runs_repository_is_linked(project: Project, url: str, env: dict):
+    """A run or job URL on another host or repository isn't linked, and outside CI nothing is."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": url, "run_url": url})
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert "- ✅ passed in unit\n" in text and "- Runs: none" in text
+    assert "evil" not in text and "javascript" not in text

@@ -32,6 +32,109 @@ from speccheck import cli, results
 from speccheck.claims import Claim
 from tests.conftest import CONFIG, INDEX, spec
 
+OUTCOMES = """\
+import pytest
+
+@pytest.fixture
+def broken_teardown():
+    yield
+    raise RuntimeError("teardown")
+
+@pytest.fixture
+def broken_setup():
+    raise RuntimeError("setup")
+
+@pytest.fixture
+def skips_in_teardown():
+    yield
+    pytest.skip("teardown")
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 1 of T-REQ-001-01")
+def test_passes():
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 2 of T-REQ-001-01")
+def test_fails():
+    assert False
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 3 of T-REQ-001-01")
+def test_skipped():
+    pytest.skip("no")
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 4 of T-REQ-001-01")
+@pytest.mark.skipif(True, reason="never")
+def test_skipped_in_setup():
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 5 of T-REQ-001-01")
+@pytest.mark.xfail(reason="known")
+def test_xfailed():
+    assert False
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 6 of T-REQ-001-01")
+@pytest.mark.xfail(reason="known")
+def test_xpassed():
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 7 of T-REQ-001-01")
+def test_setup_errors(broken_setup):
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 8 of T-REQ-001-01")
+def test_teardown_errors(broken_teardown):
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 9 of T-REQ-001-01")
+def test_deselected():
+    pass
+
+@pytest.mark.covers("T-REQ-001-01", "inner claim 18 of T-REQ-001-01")
+def test_teardown_skip_keeps_the_call(skips_in_teardown):
+    pass
+
+def test_claims_nothing():
+    pass
+"""
+"""A project test file with one claiming test of every outcome."""
+
+EXPECTED = {
+    "test_passes": "passed",
+    "test_fails": "failed",
+    "test_skipped": "skipped",
+    "test_skipped_in_setup": "skipped",
+    "test_xfailed": "xfailed",
+    "test_xpassed": "xpassed",
+    "test_setup_errors": "error",
+    "test_teardown_errors": "error",
+    "test_deselected": "deselected",
+    "test_teardown_skip_keeps_the_call": "passed",
+}
+"""The outcome each claiming test must be written with."""
+
+CI = {
+    "job": "unit",
+    "job_id": 8,
+    "sha": "d" * 40,
+    "run_url": "https://github.com/o/r/actions/runs/7/attempts/2",
+    "job_url": "https://github.com/o/r/actions/runs/7/job/8",
+}
+"""A results file's CI block, from a re-run with a job ID."""
+ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+"""The run `report` is in: links must be under its server and repository."""
+
+
+JOB = {
+    "GITHUB_ACTIONS": "true",
+    "GITHUB_SERVER_URL": "https://github.com",
+    "GITHUB_REPOSITORY": "o/r",
+    "GITHUB_WORKFLOW": "ci",
+    "GITHUB_JOB": "publish",
+    "GITHUB_RUN_ID": "11",
+    "GITHUB_RUN_ATTEMPT": "3",
+    "SPECCHECK_JOB_ID": "22",
+}
+"""A fake GitHub Actions job named `publish`, on its third attempt."""
+
 
 @dataclass
 class Run:
@@ -135,10 +238,45 @@ class Project(Repo):
         return [json.loads(line) for line in (self.root / name).read_text().splitlines()]
 
 
+def outcomes(project: Project, name: str) -> dict[str, str]:
+    """Test name -> outcome, from a results file the run wrote."""
+    return {line["test"].split("::", 1)[1]: line["outcome"] for line in project.results_lines(name)[1:]}
+
+
+@pytest.fixture
+def reported(project: Project) -> Project:
+    """A project with one passing, one failing and one unclaimed requirement, a Purpose, and a results file."""
+    project.write(
+        "specs/001-thing.md",
+        spec(
+            "- T-REQ-001-01: Passes.\n- T-REQ-001-02: Fails.\n- T-REQ-001-03: Nobody claims it.", title="The thing"
+        ).replace("## Requirements", "## Purpose\n\nWhat the thing\npromises.\n\n## Requirements"),
+    )
+    project.results(
+        "unit.jsonl",
+        "unit",
+        [("tests/t.py::test_ok", ["T-REQ-001-01"], "passed"), ("tests/t.py::test_bad", ["T-REQ-001-02"], "failed")],
+        ci=CI,
+    )
+    return project
+
+
+@pytest.fixture
+def ci_project(project: Project) -> Project:
+    """A project whose `publish` CI job claims T-REQ-001-01."""
+    project.write(
+        "speccheck.toml",
+        CONFIG
+        + '[ci.publish]\nworkflows = ["ci"]\n[ci.publish.covers]\n"T-REQ-001-01" = "the publish job pushes the image"\n',
+    )
+    project.spec("- T-REQ-001-01: It publishes.\n- T-REQ-001-02: It is tested. ⚠ untested")
+    return project
+
+
 @pytest.fixture
 def project(pytester: pytest.Pytester) -> Project:
     """A fresh project."""
     return Project(pytester)
 
 
-__all__ = ["CONFIG", "INDEX", "Project", "spec"]
+__all__ = ["CI", "CONFIG", "JOB", "ENV", "EXPECTED", "INDEX", "OUTCOMES", "Project", "outcomes", "spec"]

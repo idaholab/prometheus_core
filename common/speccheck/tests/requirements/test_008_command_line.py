@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 import speccheck
-from tests.requirements.conftest import CONFIG, Project
+from tests.requirements.conftest import CONFIG, ENV, JOB, Project
 
 
 def command(project: Project, *argv: str) -> subprocess.CompletedProcess:
@@ -163,6 +163,10 @@ def test_each_problem_has_a_stable_code(project: Project):
     assert [p["line"] for p in verify if p["code"] == "no-results"] == [0]
 
 
+@pytest.mark.covers(
+    "SPC-REQ-008-03",
+    "report with an output path under a plain file exits 2",
+)
 @pytest.mark.covers(
     "SPC-REQ-008-04",
     "report --json with an output path under a plain file prints one usage-error object and no traceback",
@@ -446,3 +450,29 @@ def test_a_bad_job_names_file_is_a_usage_error(project: Project, content: str | 
     for command_name in ("report", "verify"):
         run = project.run(command_name, "r.jsonl", "--job-names", "names.json")
         assert run.code == 2 and message in run.err and "Traceback" not in run.err, command_name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-10",
+    "without --job-names, or for a job ID the names don't list, a result is named by its producer, and still linked",
+)
+def test_without_a_name_a_result_is_named_by_its_producer(reported: Project):
+    """The names are optional: a plain list of results files still gives a readable report."""
+    reported.write("names.json", json.dumps({"999": "someone else"}))
+    for extra in ([], ["--job-names", "names.json"]):
+        text = reported.speccheck("report", "unit.jsonl", *extra, env=ENV).out
+        assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/job/8)" in text, extra
+
+
+@pytest.mark.covers("SPC-REQ-008-03", "record with an output path under a plain file exits 2 instead of writing")
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "record --json with an unwritable output prints one object with ok false and a usage error, not a traceback",
+)
+def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
+    """A file where the output folder should be: exit 2 and one JSON object, not a traceback."""
+    ci_project.write("blocker", "a file, not a folder")
+    run = ci_project.speccheck("record", "--output", "blocker/publish.jsonl", "--json", env=JOB)
+    body = run.json()
+    assert run.code == 2 and body["ok"] is False and body["error"]["code"] == "usage"
+    assert "blocker" in body["error"]["message"] and "Traceback" not in run.err
