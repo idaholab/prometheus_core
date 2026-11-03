@@ -1103,7 +1103,7 @@ No DeepLynx configured → agents exit at startup with "Invalid required DeepLyn
 |---|---|
 | `make up` stops at `deeplynx-setup`: "port is already allocated", or "DeepLynx didn't answer…" after up to 5 minutes | Port 5000 is taken (macOS: AirPlay Receiver): `lsof -nP -iTCP:5000 -sTCP:LISTEN` (Linux/WSL: `ss -ltnp 'sport = :5000'`) names the process. Or `deeplynx-server` failed: `make logs SERVICE=deeplynx-server`. |
 | `AuthenticationError` / 401 in your agent | Its `.env` has an old key: after `make down-v` the platform made a new one. `python3 setup_agent.py --env-only <agent-folder>`, then `make up` in the agent folder. |
-| Connection refused to `deeplynx-server` | The agent is not on `prometheus_platform_agent-network`, or runs on the host: then use `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1`. |
+| Every call fails: "Failed to get data source ID… Token refresh failed: All connection attempts failed" (or "Name or service not known"; macOS: "nodename nor servname provided") | The agent can't reach DeepLynx; `DEEPLYNX_DATA_SOURCE_ID` isn't the cause. DeepLynx isn't running: `LOCAL_DEEPLYNX=true` and `make up` in the platform. An agent run on the host (`python agent.py`) uses `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1` (deck 04). |
 | "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | The agent's `.env` has no `DEEPLYNX_*` lines: run `setup_agent.py --env-only` after a platform `make up`. |
 | `deeplynx://` URI won't resolve in your agent | The agent needs the **same org and project** in its `ConnectionConfig` as the URI. |
 | UI at :3000 shows no data or errors | The UI calls the API from your browser at `localhost:5000`; it only works with `DEEPLYNX_SERVER_PORT=5000`. |

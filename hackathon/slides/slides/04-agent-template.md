@@ -982,8 +982,8 @@ Restart the agent (re-registers), then refresh discovery or restart the client-a
 | Mode | How | Registered URL / notes |
 |---|---|---|
 | **Docker, internal network**<br><span class="small">(recommended)</span> | `make up` in the agent dir. It joins `prometheus_platform_agent-network` via `docker-compose.net_internal.yml`. | `http://<service>:8000`. `REGISTRY_URL`, `REDIS_URL`, and `JWKS_URL` resolve by service name. Start the platform first. {.hl} |
-| **Docker, external port** | `EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `prometheus.host.internal:8600/6379/8600`. |
-| **Host Python**<br><span class="small">(fastest edit loop)</span> | `python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:8600`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000` |
+| **Docker, external port** | `EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `prometheus.host.internal:8600/6379/8600`, and `DEEPLYNX_BASE_URL` at `http://prometheus.host.internal:5000/api/v1`. |
+| **Host Python**<br><span class="small">(fastest edit loop)</span> | `uv run --no-sync --env-file .env python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:8600`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1`, `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000` |
 | **In-tree** | Copy into `prometheus_core/platform/agents/<name>/`, then `make generate && make up` in `platform/` | Auto-included (one directory level). Uses the platform's `prometheus_api:local`. Copy `agents/synthesis-agent/docker-compose.yml` as the model. |
 
 :::: grid 2
@@ -1009,7 +1009,8 @@ uv pip install -e \
 
 AGENT_SECRET=dev AGENT_SECRET_REQUIRED=false \
 USER_IDENTITY_REQUIRED=false PROMETHEUS_TASK_STORE=memory \
-AGENT_PORT=8000 python agent.py    # DEEPLYNX_* from .env
+DEEPLYNX_BASE_URL=http://localhost:5000/api/v1 AGENT_PORT=8000 \
+uv run --no-sync --env-file .env python agent.py   # DEEPLYNX_* from .env
 # "Loaded agent card…"  "Starting HTTP server on 0.0.0.0:8000"
 # registration retries, then "Continuing without registration"
 ```
@@ -1024,7 +1025,7 @@ curl -s -X POST localhost:8000/api/chat \
 ```
 
 {.tiny}
-The agent refuses to start without DeepLynx (`DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID`, and key + secret or `DEEPLYNX_JWT_TOKEN`); a `.env` in the folder is read. With `AGENT_SECRET_REQUIRED=true`, add `-H "Authorization: Bearer $AGENT_SECRET"` to every call except `/healthz` and the card routes.
+The agent refuses to start without DeepLynx (`DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID`, and key + secret or `DEEPLYNX_JWT_TOKEN`). `python agent.py` alone doesn't read `.env`: `--env-file .env` loads it, and a variable set on the command line wins over the file. On the host, `deeplynx-server` doesn't resolve, so `DEEPLYNX_BASE_URL` points at `localhost:5000`. With `AGENT_SECRET_REQUIRED=true`, add `-H "Authorization: Bearer $AGENT_SECRET"` to every call except `/healthz` and the card routes.
 :::
 
 ---

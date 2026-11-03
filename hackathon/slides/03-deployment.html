@@ -1618,8 +1618,8 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 <td>Its <code>.env</code> has an old key: after <code>make down-v</code> the platform made a new one. <code>python3 setup_agent.py --env-only &lt;agent-folder&gt;</code>, then <code>make up</code> in the agent folder.</td>
 </tr>
 <tr>
-<td>Connection refused to <code>deeplynx-server</code></td>
-<td>The agent is not on <code>prometheus_platform_agent-network</code>, or runs on the host: then use <code>DEEPLYNX_BASE_URL=http://localhost:5000/api/v1</code>.</td>
+<td>Every call fails: &quot;Failed to get data source ID… Token refresh failed: All connection attempts failed&quot; (or &quot;Name or service not known&quot;; macOS: &quot;nodename nor servname provided&quot;)</td>
+<td>The agent can't reach DeepLynx; <code>DEEPLYNX_DATA_SOURCE_ID</code> isn't the cause. DeepLynx isn't running: <code>LOCAL_DEEPLYNX=true</code> and <code>make up</code> in the platform. An agent run on the host (<code>python agent.py</code>) uses <code>DEEPLYNX_BASE_URL=http://localhost:5000/api/v1</code> (deck 04).</td>
 </tr>
 <tr>
 <td>&quot;Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…&quot;</td>
