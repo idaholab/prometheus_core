@@ -71,6 +71,10 @@ def test_the_package_ships_a_schema_the_plugin_matches(project: Project):
     assert not validator.is_valid({k: v for k, v in result.items() if k != "outcome"})
 
 
+GOOD_LINE = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+"""A valid result line, which a test then breaks one field of."""
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -90,6 +94,38 @@ def test_the_package_ships_a_schema_the_plugin_matches(project: Project):
                 "SPC-REQ-004-02", "a header whose producer is a number rejects the file and its passing result"
             ),
             id="wrong-type",
+        ),
+        pytest.param(
+            {"schema": None},
+            "`schema` is None; this speccheck reads only 'speccheck-results/1'",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose schema is null rejects the file and its passing result"
+            ),
+            id="schema-null",
+        ),
+        pytest.param(
+            {"schema": 1},
+            "`schema` is 1; this speccheck reads only 'speccheck-results/1'",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose schema is the number 1 rejects the file and its passing result"
+            ),
+            id="schema-number",
+        ),
+        pytest.param(
+            {"ci": "github"},
+            "`ci` must be an object or null",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose ci is a string, not an object, rejects the file and its pass"
+            ),
+            id="ci-string",
+        ),
+        pytest.param(
+            {"root": 5},
+            "`root` must be a string",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose root is a number rejects the file and its passing result"
+            ),
+            id="root-number",
         ),
     ],
 )
@@ -124,6 +160,40 @@ def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, mes
             ),
             id="covers-not-a-list",
         ),
+        *(
+            pytest.param(
+                {**GOOD_LINE, key: value},
+                message,
+                marks=pytest.mark.covers(
+                    "SPC-REQ-004-02", f"a third line whose {key} is {value!r} rejects the file and its good second line"
+                ),
+                id=f"{key}-{type(value).__name__}",
+            )
+            for key, value, message in [
+                ("test", 3, "`test` must be a string"),
+                ("test", None, "`test` must be a string"),
+                ("file", 3, "`file` must be a string"),
+                ("line", "3", "`line` must be a whole number"),
+                ("line", 1.5, "`line` must be a whole number"),
+                ("line", True, "`line` must be a whole number"),
+                ("line", -1, "`line` must be a whole number"),
+                ("kind", "other", "`kind` must be one of test, ci"),
+                ("outcome", None, "`outcome` is None"),
+                ("outcome", 1, "`outcome` is 1"),
+            ]
+        ),
+        pytest.param(
+            {k: v for k, v in GOOD_LINE.items() if k != "outcome"},
+            "`outcome` is None",
+            marks=pytest.mark.covers("SPC-REQ-004-02", "a third line with no outcome rejects the whole file"),
+            id="outcome-missing",
+        ),
+        pytest.param(
+            [1, 2],
+            "a result must be an object",
+            marks=pytest.mark.covers("SPC-REQ-004-02", "a third line that is a JSON list rejects the whole file"),
+            id="line-is-a-list",
+        ),
     ],
 )
 def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, message: str):
@@ -132,9 +202,16 @@ def test_a_bad_result_line_rejects_the_whole_file(project: Project, line: dict, 
     good = {"test": "good", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
     header = {"schema": "speccheck-results/1", "producer": "unit"}
     project.write("r.jsonl", "\n".join(json.dumps(x) for x in (header, good, line)) + "\n")
-    run = project.speccheck("verify", "r.jsonl")
+    run = project.speccheck("verify", "r.jsonl", "--json")
     assert run.code == 1
-    assert f"r.jsonl:3: not a valid speccheck-results/1 line: {message}" in run.err
+    assert any(
+        p["path"] == "r.jsonl"
+        and p["line"] == 3
+        and p["message"].startswith(f"not a valid speccheck-results/1 line: {message}")
+        for p in run.json()["problems"]
+    ), run.json()["problems"]
+    # The good second line is dropped with the rest of the file
+    assert run.json()["requirements"][0]["status"] != "passed"
 
 
 @pytest.mark.parametrize(
@@ -233,6 +310,44 @@ def test_unknown_keys_are_ignored(project: Project):
             ),
             id="line-break",
         ),
+        *(
+            pytest.param(
+                [{"id": "T-REQ-001-01", "how": f"one{char}two"}],
+                "`covers[].how` for T-REQ-001-01 has a line break",
+                marks=pytest.mark.covers(
+                    "SPC-REQ-004-09", f"a how holding the character {char!r} between two words rejects the file"
+                ),
+                id=f"break-{ord(char):#04x}",
+            )
+            for char in ("\n", "\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", " ")
+        ),
+        pytest.param(
+            [{"id": "T-REQ-001-01", "how": " \t "}],
+            "the explanation for T-REQ-001-01 is empty",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-09", "a how of only spaces and a tab collapses to empty and rejects the file"
+            ),
+            id="blank-how",
+        ),
+        *(
+            pytest.param(
+                [{"id": "T-REQ-001-01", "how": how}],
+                f"the explanation for T-REQ-001-01 is a placeholder ({how!r})",
+                marks=pytest.mark.covers(
+                    "SPC-REQ-004-09", f"a result whose how is the placeholder {how!r} rejects the file"
+                ),
+                id=f"placeholder-{how.lower()}",
+            )
+            for how in ("TODO", "fixme", "...", "-")
+        ),
+        pytest.param(
+            [{"id": "T-REQ-001-01", "how": "  tbd  "}],
+            "the explanation for T-REQ-001-01 is a placeholder ('tbd')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-09", "a how of tbd padded with spaces collapses to the placeholder and rejects the file"
+            ),
+            id="placeholder-padded",
+        ),
         pytest.param(
             [{"id": "T-REQ-001-01", "how": "TBD"}],
             "the explanation for T-REQ-001-01 is a placeholder ('TBD')",
@@ -269,6 +384,20 @@ def test_a_bad_claim_in_a_result_rejects_the_file(project: Project, covers: list
     assert run.code == 1
     assert any(message in p["message"] for p in run.json()["problems"]), run.json()["problems"]
     assert run.json()["requirements"][0]["status"] != "passed"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-09", "a result whose how is exactly 1000 characters is accepted and its pass counts"
+)
+def test_a_how_of_exactly_1000_characters_is_accepted(project: Project):
+    """The limit is 1000, so 1000 passes; the over-limit case is the 1001 above."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit"}
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "x" * 1000}], "outcome": "passed"}
+    project.write("r.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    assert run.code == 0 and run.json()["problems"] == []
+    assert run.json()["requirements"][0]["status"] == "passed"
 
 
 @pytest.mark.covers(
@@ -406,6 +535,104 @@ def test_a_file_over_16_mib_is_refused(project: Project):
         for p in run.json()["problems"]
     ), run.json()["problems"]
     assert run.json()["producers"]["reported"] == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-07",
+    "verify on a results file of exactly 16 MiB gives a problem other than results-too-large, so it was read",
+)
+def test_a_file_of_exactly_16_mib_is_read(project: Project):
+    """The limit is on bytes over 16 MiB: a file of exactly 16 MiB is read, and fails as something else."""
+    project.spec("- T-REQ-001-01: One.")
+    with (project.root / "edge.jsonl").open("wb") as out:
+        out.truncate(16 * 1024 * 1024)
+    run = project.speccheck("verify", "edge.jsonl", "--json")
+    codes = {p["code"] for p in run.json()["problems"] if p["path"] == "edge.jsonl"}
+    assert codes and "results-too-large" not in codes, run.json()["problems"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-07", "verify refuses a 16 MiB plus one byte file found by searching a folder, and reads no results"
+)
+def test_a_big_file_in_a_folder_is_refused(project: Project):
+    """The size check applies to a file found in a folder, not only to one named on the command line."""
+    project.spec("- T-REQ-001-01: One.")
+    (project.root / "r").mkdir()
+    with (project.root / "r" / "big.jsonl").open("wb") as out:
+        out.truncate(16 * 1024 * 1024 + 1)
+    run = project.speccheck("verify", "r", "--json")
+    assert any(p["path"] == "r/big.jsonl" and p["code"] == "results-too-large" for p in run.json()["problems"])
+    assert run.json()["producers"]["reported"] == []
+
+
+def _line_of_bytes(size: int, pad: str) -> str:
+    """A valid result line of exactly `size` bytes, padded with an unknown key that the reader ignores."""
+    base = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed", "pad": ""}
+    empty = len(json.dumps(base, ensure_ascii=False).encode())
+    count, rest = divmod(size - empty, len(pad.encode()))
+    # The remainder (when `pad` is wider than a byte) is filled with ASCII
+    base["pad"] = pad * count + "x" * rest
+    line = json.dumps(base, ensure_ascii=False)
+    assert len(line.encode()) == size
+    return line
+
+
+@pytest.mark.parametrize(
+    ("size", "pad", "accepted"),
+    [
+        pytest.param(
+            65536,
+            "x",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-07", "a result line of exactly 65536 ASCII bytes is read and its pass counts"
+            ),
+            id="at-the-limit",
+        ),
+        pytest.param(
+            65537,
+            "x",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-07", "a result line of 65537 ASCII bytes is refused as a line too long"
+            ),
+            id="one-over",
+        ),
+        pytest.param(
+            65538,
+            "é",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-07",
+                "a result line of 65538 bytes but only about 32,800 characters, in two-byte letters, is refused",
+            ),
+            id="bytes-not-characters",
+        ),
+        pytest.param(
+            65536,
+            "é",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-07",
+                "a result line of exactly 65536 bytes in two-byte letters is read, so bytes are counted",
+            ),
+            id="multibyte-at-the-limit",
+        ),
+    ],
+)
+def test_the_line_limit_is_in_bytes(project: Project, size: int, pad: str, accepted: bool):
+    """64 KiB of bytes, not of characters: the boundary is exact either side."""
+    project.spec("- T-REQ-001-01: One.")
+    header = json.dumps({"schema": "speccheck-results/1", "producer": "unit"})
+    project.write("r.jsonl", header + "\n" + _line_of_bytes(size, pad) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    codes = {p["code"] for p in run.json()["problems"]}
+    if accepted:
+        assert run.code == 0 and run.json()["problems"] == []
+        assert run.json()["requirements"][0]["status"] == "passed"
+    else:
+        assert "results-line-too-long" in codes
+        assert run.json()["requirements"][0]["status"] != "passed"
 
 
 @pytest.mark.covers(
