@@ -14,7 +14,8 @@ runners and the checker, so other languages can write one too.
   `covers` MUST be a list of `{"id": ..., "how": ...}` objects, one per claimed ID.
 - SPC-REQ-004-02: A reader MUST reject a file with any other `schema` value, a wrong type, or an
   unknown outcome, and MUST NOT use any of that file's results. A reader MUST ignore keys it doesn't
-  know, so fields can be added without changing `schema`.
+  know, so fields can be added without changing `schema`. A result's `covers` MUST list at least one
+  claim.
 - SPC-REQ-004-03: Each result MUST have one outcome: `passed`, `failed`, `error` (it couldn't run),
   `skipped`, `xfailed` (an expected failure), `xpassed` (an unexpected pass), `deselected` or
   `collected` (only collected, not run). Only `passed` is evidence.

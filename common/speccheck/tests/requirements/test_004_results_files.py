@@ -454,7 +454,8 @@ def test_a_header_that_is_not_an_object_rejects_the_whole_file(project: Project,
             {**GOOD_LINE, "covers": []},
             "`covers` must be a list of 1 to 200 claims",
             marks=pytest.mark.covers(
-                "SPC-REQ-004-02", "a third line whose covers is an empty list, claiming nothing, rejects the file"
+                "SPC-REQ-004-02",
+                "a third line whose covers is an empty list, claiming nothing, rejects the file: a result must claim at least one ID",
             ),
             id="covers-empty",
         ),
