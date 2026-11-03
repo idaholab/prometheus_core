@@ -180,6 +180,28 @@ def test_each_status_value_is_accepted(project: Project, status: str):
     assert run.code == 0 and run.err == "", run.err
 
 
+@pytest.mark.parametrize(
+    "status",
+    [
+        pytest.param(
+            status,
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-03",
+                f"a {status} spec with an empty Requirements section lints clean, exit 0 and no output",
+            ),
+            id=status,
+        )
+        for status in ("draft", "retired")
+    ],
+)
+def test_only_an_implemented_spec_needs_a_requirement(project: Project, status: str):
+    """The "at least one requirement" rule is for `implemented` alone."""
+    project.spec("", status=status)
+    run = project.speccheck("lint", "--json")
+    assert run.code == 0 and run.json()["problems"] == []
+    assert project.speccheck("lint").err == ""
+
+
 @pytest.mark.covers(
     "SPC-REQ-001-03",
     "a status line placed under ## Requirements does not count, so lint reports the status missing",
@@ -238,6 +260,48 @@ def test_bullets_in_any_other_form_are_reported(project: Project):
     assert run.err.count("a bullet must read `- T-REQ-NNN-XX: text` (or BEH)") == 4
     assert "T-REQ-002-01 belongs in spec 002" in run.err
     assert run.err.splitlines()[-1] == "speccheck lint: 1 specs, 2 requirements; 5 problems"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-04",
+    "with --json, a bullet numbered for another spec is one `bullet-wrong-spec` problem at its own line, naming the spec it belongs in",
+)
+def test_a_wrong_spec_number_is_one_coded_problem_at_its_line(project: Project):
+    """The ID of spec 002 on line 8 of spec 001: the code, the line and the message are all pinned."""
+    project.spec("- T-REQ-001-01: Good. ⚠ untested\n- T-REQ-002-01: Wrong spec. ⚠ untested")
+    run = project.speccheck("lint", "--json")
+    [problem] = run.json()["problems"]
+    assert run.code == 1
+    assert (problem["code"], problem["line"]) == ("bullet-wrong-spec", 8)
+    assert problem["message"] == "T-REQ-002-01 belongs in spec 002"
+
+
+@pytest.mark.parametrize(
+    "bullet",
+    [
+        pytest.param(
+            "+ T-REQ-001-02: Plus.",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-04", "a `+` list marker is reported as a malformed bullet at its own line"
+            ),
+            id="plus",
+        ),
+        pytest.param(
+            "- T-REQ-001-02:",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-04",
+                "a well-formed ID followed by a colon and no text is reported as malformed at its line",
+            ),
+            id="empty-text",
+        ),
+    ],
+)
+def test_a_plus_bullet_and_an_empty_one_are_malformed(project: Project, bullet: str):
+    """Both are close to `- T-REQ-NNN-XX: text` but are not it, so each is a coded problem on line 8."""
+    project.spec(f"- T-REQ-001-01: Good. ⚠ untested\n{bullet}")
+    run = project.speccheck("lint", "--json")
+    [problem] = run.json()["problems"]
+    assert (problem["code"], problem["line"]) == ("bullet-malformed", 8)
 
 
 @pytest.mark.covers(

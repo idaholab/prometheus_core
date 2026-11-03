@@ -106,13 +106,26 @@ def test_a_report_links_each_attempts_own_job(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-007-01",
-    "record in job build, which has no entry, and record outside any job both exit 2 and write nothing",
+    "record in job build, which has no entry, and record outside any job both exit 2 with their own message and write nothing",
 )
 def test_record_without_an_entry_is_exit_2(ci_project: Project):
     """A job the config doesn't list, or no job at all, writes nothing."""
     run = ci_project.speccheck("record", env={**JOB, "GITHUB_JOB": "build"})
     assert run.code == 2 and "no [ci.build] entry for this job (CI jobs: publish)" in run.err
-    assert ci_project.speccheck("record").code == 2
+    run = ci_project.speccheck("record")
+    assert run.code == 2 and "no job name: pass --job NAME, or run inside a GitHub Actions job" in run.err
+    assert not (ci_project.root / ".speccheck").exists()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-01",
+    "record in job unit, a test producer that does exist in the config but is no CI job, exits 2 naming publish as the only CI job",
+)
+def test_record_for_a_test_producer_is_exit_2(ci_project: Project):
+    """A name in the config isn't enough: only a `[ci.<job>]` entry makes a job one `record` can speak for."""
+    run = ci_project.speccheck("record", env={**JOB, "GITHUB_JOB": "unit"})
+    assert run.code == 2 and run.out == ""
+    assert "no [ci.unit] entry for this job (CI jobs: publish)" in run.err
     assert not (ci_project.root / ".speccheck").exists()
 
 
@@ -126,6 +139,24 @@ def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     run = ci_project.speccheck("verify", "p.jsonl", "--json")
     statuses = {r["id"]: r["status"] for r in run.json()["requirements"]}
     assert statuses == {"T-REQ-001-01": "passed", "T-REQ-001-02": "untested"}
+    assert "T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it" in [
+        p["message"] for p in run.json()["problems"]
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-007-02",
+    "a results file from publish whose results are of kind test, not ci, still counts only T-REQ-001-01 and flags its claim of T-REQ-001-02",
+)
+def test_a_ci_job_counts_only_for_its_own_ids_whatever_the_kind(ci_project: Project):
+    """The entry limits the job, not the kind its results are written with."""
+    ci_project.results("p.jsonl", "publish", [("t", ["T-REQ-001-01", "T-REQ-001-02"], "passed")], kind="test")
+    run = ci_project.speccheck("verify", "p.jsonl", "--json")
+    requirements = {r["id"]: r for r in run.json()["requirements"]}
+    assert requirements["T-REQ-001-01"]["status"] == "passed"
+    assert requirements["T-REQ-001-01"]["evidence"][0]["kind"] == "test"
+    assert requirements["T-REQ-001-02"]["status"] == "untested"
+    assert requirements["T-REQ-001-02"]["evidence"] == []
     assert "T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it" in [
         p["message"] for p in run.json()["problems"]
     ]
@@ -312,6 +343,51 @@ def test_artifact_links_have_the_github_form(ci_project: Project):
             ),
             id="outside-ci",
         ),
+        pytest.param(
+            "http://github.com/o/r/actions/runs/11/artifacts/5",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "an artifact URL using http rather than https leaves the summary with no report link and no URL",
+            ),
+            id="http-scheme",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/11/artifacts/5?x=1",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "an artifact URL followed by a query string leaves the summary with no report link and no URL",
+            ),
+            id="query-string",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/11/artifacts/5\n",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "an artifact URL followed by a newline leaves the summary with no report link and no URL",
+            ),
+            id="trailing-newline",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/11/artifacts/5/extra",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "an artifact URL with a further path segment leaves the summary with no report link and no URL",
+            ),
+            id="extra-segment",
+        ),
+        pytest.param(
+            "https://github.com/o/r/actions/runs/11/artifacts/0",
+            ENV,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "an artifact URL whose artifact ID is zero leaves the summary with no report link and no URL",
+            ),
+            id="zero-id",
+        ),
     ],
 )
 def test_an_artifact_link_to_elsewhere_is_plain_text(ci_project: Project, url: str, env: dict):
@@ -410,3 +486,90 @@ def test_only_this_runs_repository_is_linked(project: Project, url: str, env: di
     text = project.speccheck("report", "u.jsonl", env=env).out
     assert "- ✅ passed in unit\n" in text and "- Runs: none" in text
     assert "evil" not in text and "javascript" not in text
+
+
+@pytest.mark.parametrize(
+    ("server", "repository", "linked"),
+    [
+        pytest.param(
+            "https://github.com",
+            "o/r",
+            True,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "with a well-formed https server and owner/name repository, the same run has job, run, report and source links",
+            ),
+            id="well-formed",
+        ),
+        pytest.param(
+            "http://github.com",
+            "o/r",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10",
+                "a server given as http:// is not a base to link under, so the run has no links at all",
+            ),
+            id="http-server",
+        ),
+        pytest.param(
+            "https://github.com/",
+            "o/r",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a server with a trailing slash is not a base to link under, so the run has no links"
+            ),
+            id="server-trailing-slash",
+        ),
+        pytest.param(
+            "https://github.com/enterprise",
+            "o/r",
+            False,
+            marks=pytest.mark.covers(
+                "SPC-REQ-007-10", "a server carrying a path is not a base to link under, so the run has no links"
+            ),
+            id="server-with-path",
+        ),
+        *(
+            pytest.param(
+                "https://github.com",
+                repository,
+                False,
+                marks=pytest.mark.covers(
+                    "SPC-REQ-007-10", f"the repository {repository!r}, not of the form owner/name, gets no links"
+                ),
+                id=label,
+            )
+            for label, repository in [
+                ("owner-only", "o"),
+                ("three-parts", "o/r/x"),
+                ("space", "o r"),
+                ("empty-repository", ""),
+            ]
+        ),
+    ],
+)
+def test_a_malformed_server_or_repository_links_nothing(project: Project, server: str, repository: str, linked: bool):
+    """URLs built from the same bad variables the run has: nothing links, and the text is still written."""
+    project.spec("- T-REQ-001-01: One.")
+    base = f"{server}/{repository}"
+    ci = {**CI, "run_url": f"{base}/actions/runs/7/attempts/2", "job_url": f"{base}/actions/runs/7/job/8"}
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=ci)
+    env = {
+        "GITHUB_SERVER_URL": server,
+        "GITHUB_REPOSITORY": repository,
+        "GITHUB_SHA": "a" * 40,
+        "GITHUB_WORKSPACE": str(project.root),
+    }
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    report_url = f"{base}/actions/runs/7/artifacts/5"
+    project.speccheck("verify", "u.jsonl", "--summary", "s.md", "--report-url", report_url, env=env)
+    summary = (project.root / "s.md").read_text()
+    if linked:
+        assert f"[unit]({ci['job_url']})" in text and f"[7/attempts/2]({ci['run_url']})" in text, text
+        assert f"]({base}/blob/{'a' * 40}/specs/001-thing.md#L" in text, text
+        assert f"[speccheck-report]({report_url})" in summary, summary
+        return
+    assert "- ✅ passed in unit\n" in text and "- Runs: none" in text, text
+    assert "http" not in text and "\nIn [" not in text, text
+    assert summary.startswith("**speccheck:**") and "Full report" not in summary, summary
+    assert "](" not in summary and "http" not in summary, summary

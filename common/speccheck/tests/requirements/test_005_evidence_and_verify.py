@@ -121,7 +121,10 @@ def test_a_claim_that_didnt_pass_fails_verify(project: Project, marks: str, body
     assert f"; to fix: {hint}" in run.err
 
 
-@pytest.mark.covers("SPC-REQ-005-02", "a claiming test left out with -k is listed as deselected and verify exits 1")
+@pytest.mark.covers(
+    "SPC-REQ-005-02",
+    "a claiming test left out with -k is listed as deselected with the hint to drop the filter, and verify exits 1",
+)
 def test_a_deselected_claim_fails_verify(project: Project):
     """A claim filtered out with -k didn't run, so it proves nothing."""
     project.spec("- T-REQ-001-01: One.")
@@ -130,6 +133,7 @@ def test_a_deselected_claim_fails_verify(project: Project):
     project.pytest("--speccheck-results=r.jsonl", "-k", "test_other")
     run = project.speccheck("verify", "r.jsonl")
     assert run.code == 1 and "test_project.py::test_it deselected in unit" in run.err
+    assert "; to fix: run it: drop the `-k`/`-m` filter or the test's path argument that left it out" in run.err
 
 
 @pytest.mark.covers(
