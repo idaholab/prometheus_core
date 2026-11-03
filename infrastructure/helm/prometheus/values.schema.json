@@ -215,6 +215,7 @@
       "required": ["enabled"],
       "properties": {
         "enabled": { "type": "boolean" },
+        "dev": { "type": "boolean" },
         "image": { "$ref": "#/definitions/image" },
         "replicas": { "type": "integer", "minimum": 0 },
         "resources": { "$ref": "#/definitions/resources" }

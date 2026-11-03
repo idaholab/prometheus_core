@@ -39,40 +39,36 @@ graph TD
 
 ```bash
 cp .env.example .env
+echo "LOCAL_SDK=true" >> .env
 ```
 
 In `.env`, set `LLM_CONFIG_PROFILE` and `LLM_API_KEY`. The comments in `.env.example` list the
 providers.
 
+On Kubernetes behind a TLS-inspecting proxy, also set `EXTRA_CA_CERT` in `.env` to your proxy's CA
+certificate file. On the INL network, use `EXTRA_CA_CERT=../common/certs/INL.pem`.
+
 ### 2a. Run with Docker Compose
 
 ```bash
-echo "LOCAL_SDK=true" >> .env
 make up
 ```
 
 The first run builds every image and takes 5 to 15 minutes. Open http://localhost:5150 and create
-your login. Stop the stack with `make down`.
+your login.
 
 ### 2b. Run on a local Kubernetes cluster
 
 ```bash
-make cluster-up
-make build LOCAL_SDK=true PROFILE=prod
-make cluster-push
-make cluster-deploy PROMETHEUS_IMAGE_REGISTRY=k3d-prometheus-registry.localhost:5001 PROMETHEUS_IMAGE_TAG=local
+make cluster-up    # create the k3d cluster; safe to run again
+make cluster-dev   # build the images, deploy, and reload on every code change
 ```
 
-This creates a one-node k3d cluster and installs the stack with the Helm chart in
-`../infrastructure/helm/prometheus/`. Open http://localhost:8080 and create your login.
-
-Behind a TLS-inspecting proxy, add `EXTRA_CA_CERT=/path/to/ca.pem` to `make cluster-deploy`.
-
-```bash
-make cluster-status             # list the pods
-make cluster-logs SVC=backend   # follow one service's logs
-make cluster-down               # delete the cluster
-```
+`make cluster-dev` installs the stack with the Helm chart in
+[`infrastructure/helm/prometheus/`](../infrastructure/helm/prometheus/) and keeps running. When you
+edit backend, agent or frontend code, the change is copied into the running pod and the service
+reloads. Once the pods are ready, open http://localhost:8080 and create your login. Tilt's dashboard,
+with every service's status and logs, is at http://localhost:10350.
 
 ## Setup details
 
@@ -107,11 +103,24 @@ with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`.
 
 ### Everyday commands
 
+With Docker Compose:
+
 ```bash
 make up      # start the stack
 make logs    # follow the logs
 make down    # stop the stack
 ```
+
+On the Kubernetes cluster:
+
+| Command | What it does |
+|---|---|
+| `make cluster-status` | Lists the pods |
+| `make cluster-logs SVC=backend` | Follows one service's logs |
+| `make cluster-down` | Deletes the cluster and everything in it |
+| `make cluster-reset` | Deletes the cluster and creates a new one, for a clean start. This erases users and chat history |
+
+Press Ctrl+C to stop `make cluster-dev`. The pods keep running until `make cluster-down`.
 
 ## Local frontend development (hot reload)
 
@@ -145,13 +154,16 @@ make test-system
 
 ### Services and ports
 
-| Service           | URL / Port                                               | Role                                                                                              |
-| ----------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| React frontend    | http://localhost:5150, or 8080 with `PROFILE=prod`       | Entry point                                                                                       |
+These are the Docker Compose ports. On Kubernetes, `make cluster-dev` serves the app and the API
+through one address, http://localhost:8080, and nothing else is published.
+
+| Service           | URL / Port                                               | Role                                                                                            |
+| ----------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| React frontend    | http://localhost:5150, or 8080 with `PROFILE=prod`       | Entry point                                                                                     |
 | Backend (FastAPI) | http://localhost:8600 (`BACKEND_PORT`)                   | JSON/SSE API + auth/sessions; agent registry (`/v1/agents`) + A2A gateway (`/a2a/{agent_name}`) |
-| Client agent      | internal only; http://localhost:8001 in system-test mode | Orchestrator                                                                                      |
-| Valkey            | localhost:6379                                           | Redis-compatible state, status, artifact metadata, agent registrations                            |
-| Postgres          | internal only                                            | `admin-db`: users, OIDC config, signing keys                                                      |
+| Client agent      | internal only; http://localhost:8001 in system-test mode | Orchestrator                                                                                    |
+| Valkey            | localhost:6379                                           | Redis-compatible state, status, artifact metadata, agent registrations                          |
+| Postgres          | internal only                                            | `admin-db`: users, OIDC config, signing keys                                                    |
 
 ### Backend settings
 
@@ -171,18 +183,18 @@ The React app itself is configured through `frontend/config.ts` and `VITE_*` env
 
 Notable environment variables (see `.env.example` for the full list):
 
-| Variable                                  | Purpose                                                                                                                                              |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LLM_CONFIG_PROFILE`                      | LLM provider; `.env.example` lists the values                                                                                                        |
-| `LLM_CONFIG_FILE`                         | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE`                                                                 |
-| `DEBUG_AGENTS`                            | When `true`, also build and start the mock agents in `agents/debug-agents/`                                                                          |
-| `OPTIONAL_AGENTS`                         | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build) |
+| Variable                                  | Purpose                                                                                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LLM_CONFIG_PROFILE`                      | LLM provider; `.env.example` lists the values                                                                                                                |
+| `LLM_CONFIG_FILE`                         | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE`                                                                         |
+| `DEBUG_AGENTS`                            | When `true`, also build and start the mock agents in `agents/debug-agents/`                                                                                  |
+| `OPTIONAL_AGENTS`                         | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build)         |
 | `LOCAL_DEEPLYNX`                          | When `true`, also start DeepLynx from its published images and point the `DEEPLYNX_*` settings at it ([Local DeepLynx install](docs/docs/local-deeplynx.md)) |
-| `PROMETHEUS_SYSTEM_TESTING`               | When `true`, Make includes the Compose override that publishes the client-agent on `CLIENT_AGENT_PORT`                                               |
-| Provider API keys                         | Credentials referenced by the selected profile; see `.env.example`                                                                                   |
-| `AGENT_SECRET_REQUIRED`                   | Enforce Bearer auth on specialist agents (default `true`)                                                                                            |
-| `LOCAL_CERT_FILE` / `CERT_FILE`           | CA bundle path on host / inside containers                                                                                                           |
-| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Corporate proxy settings                                                                                                                             |
+| `PROMETHEUS_SYSTEM_TESTING`               | When `true`, Make includes the Compose override that publishes the client-agent on `CLIENT_AGENT_PORT`                                                       |
+| Provider API keys                         | Credentials referenced by the selected profile; see `.env.example`                                                                                           |
+| `AGENT_SECRET_REQUIRED`                   | Enforce Bearer auth on specialist agents (default `true`)                                                                                                    |
+| `LOCAL_CERT_FILE` / `CERT_FILE`           | CA bundle path on host / inside containers                                                                                                                   |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Corporate proxy settings                                                                                                                                     |
 
 ### DeepLynx storage
 
@@ -281,16 +293,20 @@ A healthy agent shows only that it serves HTTP. Registration with the backend ru
 
 ## Troubleshooting
 
-**Forgot your password.** With the platform running, delete the local user accounts and refresh
-the app. You are prompted to create a new username and password.
+**Forgot your password (Docker Compose).** With the platform running, delete the local user
+accounts and refresh the app. You are prompted to create a new username and password.
 
 ```bash
 make clear-admin-users
 ```
 
-**Reinstalled, or lost `.env`.** The old volumes still use the old database passwords, and their
-rows are encrypted with the old key, so the backend can't connect. `make clobber` deletes those
-volumes, including all users, keys and history, so the next `make up` starts fresh.
+**Reinstalled, or lost `.env` (Docker Compose).** The old volumes still use the old database
+passwords, and their rows are encrypted with the old key, so the backend can't connect.
+`make clobber` deletes those volumes, including all users, keys and history, so the next `make up`
+starts fresh.
+
+**Either of those, on Kubernetes.** `make cluster-reset` deletes the cluster and creates a new one,
+which erases every user, key and conversation.
 
 ## Documentation
 

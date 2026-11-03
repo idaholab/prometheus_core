@@ -140,6 +140,10 @@ clientAgent:
 
 frontend:
   enabled: true
+  # Run the Vite dev server (hot reload) instead of nginx. The image must be
+  # built from the Dockerfile's dev-src stage; make cluster-dev does that. It
+  # needs a writable root filesystem, so leave podSecurity off with it.
+  dev: false
   image:
     repository: prometheus_frontend-devel
   replicas: 1

@@ -1,0 +1,170 @@
+# -*- mode: python -*-
+# Prometheus on the local k3d cluster with hot reload. Run it with
+# `make cluster-dev` (after `make cluster-up`).
+#
+# - Tilt builds the backend and agent images from their Dockerfiles, pushes them
+#   to the cluster registry and installs the Helm chart with them.
+# - A change to Python source is synced into the running pod and the process
+#   restarts: uvicorn --reload for the backend, watchfiles for the agents (the
+#   SDK base image ships it). A change to pyproject.toml or uv.lock rebuilds.
+# - The frontend pod runs the Vite dev server (chart value frontend.dev) from the
+#   Dockerfile's dev-src stage. Edits under frontend/ are synced into the pod and
+#   Vite's HMR updates the browser. Everything is reached through the ingress at
+#   http://localhost:8080, as in a real deployment.
+#
+# Settings come from the environment, which `make cluster-dev` fills in:
+# DEBUG_AGENTS, OPTIONAL_AGENTS, EXTRA_CA_CERT, PROMETHEUS_API_BASE_IMAGE_REPO,
+# PROMETHEUS_API_BASE_IMAGE_HASH and the proxy variables.
+
+CONTEXT = 'k3d-prometheus'
+NAMESPACE = 'prometheus'
+CHART = '../infrastructure/helm/prometheus'
+REGISTRY = 'localhost:5001'
+REGISTRY_IN_CLUSTER = 'k3d-prometheus-registry.localhost:5001'
+
+allow_k8s_contexts(CONTEXT)
+default_registry(REGISTRY, host_from_cluster=REGISTRY_IN_CLUSTER)
+
+debug_agents = os.getenv('DEBUG_AGENTS', 'false') == 'true'
+optional_agents = os.getenv('OPTIONAL_AGENTS', 'false') == 'true'
+extra_ca_cert = os.getenv('EXTRA_CA_CERT', '')
+
+proxy_args = {
+    'HTTP_PROXY': os.getenv('HTTP_PROXY', ''),
+    'HTTPS_PROXY': os.getenv('HTTPS_PROXY', ''),
+    'NO_PROXY': os.getenv('NO_PROXY', ''),
+}
+agent_build_args = dict(proxy_args)
+agent_build_args['PROMETHEUS_API_BASE_IMAGE_REPO'] = os.getenv('PROMETHEUS_API_BASE_IMAGE_REPO', '')
+agent_build_args['PROMETHEUS_API_BASE_IMAGE_HASH'] = os.getenv('PROMETHEUS_API_BASE_IMAGE_HASH', '')
+
+# .env is the one source of secrets, as for Compose. The chart never holds them.
+watch_file('.env')
+secrets_cmd = (
+    'kubectl --context %s create namespace %s --dry-run=client -o yaml | kubectl --context %s apply -f - && '
+    % (CONTEXT, NAMESPACE, CONTEXT))
+if extra_ca_cert:
+    secrets_cmd += (
+        ('kubectl --context %s -n %s create configmap prometheus-extra-ca --from-file=ca.crt=%s ' +
+         '--dry-run=client -o yaml | kubectl --context %s -n %s apply -f - && ')
+        % (CONTEXT, NAMESPACE, extra_ca_cert, CONTEXT, NAMESPACE)
+    )
+secrets_cmd += '../infrastructure/scripts/sync-env-secrets.sh .env %s %s' % (CONTEXT, NAMESPACE)
+local_resource('secrets', cmd=secrets_cmd, deps=['.env'], labels=['setup'])
+
+# ---- backend --------------------------------------------------------------
+# Built from the checked-out SDK, with the same two named contexts as Compose.
+proxy_flags = ' '.join(['--build-arg %s=%s' % (k, "'" + v + "'") for k, v in proxy_args.items() if v])
+custom_build(
+    'prometheus_backend-devel',
+    ('docker build -t $EXPECTED_REF -f backend/Dockerfile %s ' % proxy_flags +
+     '--build-context sdk=../sdk --build-context certs=../common/certs backend'),
+    deps=['backend'],
+    # Patterns are relative to the build directory; its .dockerignore is honored too
+    ignore=['tests', '**/__pycache__'],
+    # Migrate, then serve with reload, instead of docker-entrypoint.sh
+    entrypoint=[
+        'sh', '-c',
+        'alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 ' +
+        '--reload --reload-dir /app/app',
+    ],
+    live_update=[
+        fall_back_on(['backend/pyproject.toml']),
+        sync('backend/app', '/app/app'),
+        sync('backend/alembic', '/app/alembic'),
+    ],
+)
+
+# ---- agents ---------------------------------------------------------------
+# client-agent, plus every agent with a helm-values.yaml: the ones the file
+# enables, the debug agents with DEBUG_AGENTS=true and the optional agents with
+# OPTIONAL_AGENTS=true, as with Compose.
+agent_dirs = ['agents/client-agent']
+agent_dirs += str(local('find agents -name helm-values.yaml | sort', quiet=True)).strip().splitlines()
+
+values_files = []
+set_args = [
+    # Pods use the bare image names below, and Tilt rewrites them to the registry
+    'global.image.registry=',
+    # Vite dev server instead of nginx
+    'frontend.dev=true',
+    # Restart pods when .env changes. The prefix keeps helm from reading it as a number.
+    'envChecksum=h' + str(local('sha256sum .env | cut -c1-16', quiet=True)).strip(),
+]
+if extra_ca_cert:
+    set_args.append('extraCaCert.configMap=prometheus-extra-ca')
+if debug_agents:
+    values_files.append(CHART + '/values-debug.yaml')
+
+agent_images = {'prometheus_client-agent-devel': 'agents/client-agent'}
+for entry in agent_dirs:
+    if entry == 'agents/client-agent':
+        continue
+    directory = os.path.dirname(entry)
+    values_files.append(entry)
+    for name, agent in read_yaml(entry)['agents'].items():
+        if '/optional/' in directory:
+            wanted = optional_agents
+            if wanted:
+                set_args.append('agents.%s.enabled=true' % name)
+        elif '/debug-agents/' in directory:
+            wanted = debug_agents
+        else:
+            wanted = agent.get('enabled', False)
+        if wanted:
+            agent_images[agent['image']['repository']] = directory
+
+# helm-values.yaml files must come before values-debug.yaml, which overrides them
+values_files = sorted(values_files, key=lambda f: 1 if f.endswith('values-debug.yaml') else 0)
+values_files = [CHART + '/values-dev.yaml'] + values_files
+
+for image, directory in agent_images.items():
+    docker_build(
+        image,
+        directory,
+        dockerfile=directory + '/Dockerfile',
+        build_args=agent_build_args,
+        # Restart the agent whenever a file under /app changes
+        entrypoint=['watchfiles', 'python agent.py', '/app'],
+        ignore=['tests', '**/__pycache__', 'helm-values.yaml', 'docker-compose.yml'],
+        live_update=[
+            fall_back_on([directory + '/pyproject.toml', directory + '/uv.lock']),
+            sync(directory, '/app'),
+        ],
+    )
+
+# ---- the chart --------------------------------------------------------------
+docs = decode_yaml_stream(helm(CHART, name='prometheus', namespace=NAMESPACE, values=values_files, set=set_args))
+
+for doc in docs:
+    # The image's backend user (10001) can't write to the root-owned /app, which
+    # live updates need to do. Dev only.
+    if doc['kind'] == 'Deployment' and doc['metadata']['name'] == 'backend':
+        doc['spec']['template']['spec']['securityContext'] = {'runAsUser': 0}
+
+k8s_yaml(encode_yaml_stream(docs))
+
+for doc in docs:
+    if doc['kind'] in ('Deployment', 'StatefulSet'):
+        name = doc['metadata']['name']
+        label = 'agents' if name.endswith('-agent') else 'platform'
+        links = ['http://localhost:8080'] if name == 'frontend' else []
+        k8s_resource(name, resource_deps=['secrets'], links=links, labels=[label])
+
+# ---- frontend ---------------------------------------------------------------
+# The Dockerfile's dev-src stage: the Vite dev server with the source copied in.
+# Source edits are synced; a change to the dependencies rebuilds the image.
+custom_build(
+    'prometheus_frontend-devel',
+    ('docker build -t $EXPECTED_REF -f frontend/Dockerfile --target dev-src ' +
+     '--build-context certs=../common/certs .'),
+    deps=['frontend'],
+    ignore=['frontend/node_modules', 'frontend/dist'],
+    live_update=[
+        fall_back_on(['frontend/package.json', 'frontend/package-lock.json']),
+        sync('frontend/src', '/app/src'),
+        sync('frontend/public', '/app/public'),
+        sync('frontend/index.html', '/app/index.html'),
+        sync('frontend/vite.config.ts', '/app/vite.config.ts'),
+    ],
+)

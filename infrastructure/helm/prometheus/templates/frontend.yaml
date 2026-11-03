@@ -1,6 +1,11 @@
-{{- /* Production frontend: nginx serves the built app on 8080 */ -}}
+{{- /*
+Production frontend: nginx serves the built app on 8080. With frontend.dev, the
+image runs the Vite dev server on 5150 instead (HMR for make cluster-dev). The
+Service stays on 8080 either way, so the ingress doesn't change.
+*/ -}}
 {{- if .Values.frontend.enabled }}
 {{- $ctx := dict "root" . "name" "frontend" -}}
+{{- $dev := .Values.frontend.dev -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,13 +30,19 @@ spec:
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ ternary 5150 8080 $dev }}
           env:
-            # nginx still proxies /api/ for clients that bypass the ingress
+            # The server still proxies /api/ for clients that bypass the ingress
             # (kubectl port-forward svc/frontend)
+            {{- if $dev }}
+            - name: VITE_BACKEND_URL
+              value: http://backend:8000
+            {{- else }}
             - name: BACKEND_UPSTREAM
               value: http://backend:8000
-          {{- include "prometheus.probes" (dict "path" "/healthz" "port" "http" "startupSeconds" 60) | trim | nindent 10 }}
+            {{- end }}
+          {{- /* Vite has no /healthz; it serves the app at / once it is up */}}
+          {{- include "prometheus.probes" (dict "path" (ternary "/" "/healthz" $dev) "port" "http" "startupSeconds" (ternary 180 60 $dev)) | trim | nindent 10 }}
           {{- include "prometheus.containerSecurity" . | trim | nindent 10 }}
           {{- with .Values.frontend.resources }}
           resources:

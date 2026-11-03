@@ -1,4 +1,4 @@
-# Local k3d cluster (make cluster-up, then make cluster-deploy).
+# Local k3d cluster (make cluster-up, then make cluster-dev, or make cluster-deploy).
 #
 # The datastores run in the chart. Secrets come from platform/.env, which
 # make cluster-deploy copies into the prometheus-env Secrets. Images come from

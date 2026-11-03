@@ -412,7 +412,7 @@ regenerate: clean-generated generate
 ##@ Local Kubernetes cluster (k3d)
 ##@
 
-.PHONY: cluster-up cluster-down cluster-reset cluster-push cluster-deploy cluster-undeploy cluster-status cluster-logs cluster-clobber
+.PHONY: cluster-up cluster-dev cluster-down cluster-reset cluster-push cluster-deploy cluster-status cluster-logs
 
 # Images cluster-deploy pulls: $(PROMETHEUS_IMAGE_REGISTRY)/prometheus_<name>-devel:$(PROMETHEUS_IMAGE_TAG),
 # as published by .github/workflows/publish.yml. Bump the tag deliberately.
@@ -437,10 +437,18 @@ cluster-up: ##@ Create (or start) the local k3d cluster with its image registry 
 	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --cluster
 	@$(INFRA_SCRIPTS)/cluster-up.sh
 
+cluster-dev: ##@ Run the stack on the k3d cluster with hot reload, through Tilt (after cluster-up)
+cluster-dev: init-env $(BASE_IMAGE_DEP)
+	@SKIP_PREREQUISITES=$(SKIP_PREREQUISITES) $(INFRA_SCRIPTS)/check-local-prereqs.sh --cluster
+	@k3d cluster get prometheus >/dev/null 2>&1 || { echo "[ERROR] No k3d cluster. Run make cluster-up first." >&2; exit 1; }
+	DEBUG_AGENTS=$(DEBUG_AGENTS) OPTIONAL_AGENTS=$(OPTIONAL_AGENTS) EXTRA_CA_CERT=$(EXTRA_CA_CERT) \
+		HTTP_PROXY='$(HTTP_PROXY)' HTTPS_PROXY='$(HTTPS_PROXY)' NO_PROXY='$(NO_PROXY)' \
+		tilt up --context $(KUBE_CONTEXT)
+
 cluster-down: ##@ Delete the local k3d cluster and its registry (pushed images are lost)
 	k3d cluster delete prometheus
 
-cluster-reset: ##@ Delete and recreate the local k3d cluster
+cluster-reset: ##@ Delete and recreate the local k3d cluster, for a clean start
 	@$(MAKE) --no-print-directory cluster-down
 	@$(MAKE) --no-print-directory cluster-up
 
@@ -472,22 +480,11 @@ ifeq ($(CHECK),true)
 		agents/client-agent $$(find agents -name helm-values.yaml -exec dirname {} \; | sort)
 endif
 
-cluster-undeploy: ##@ Remove the stack from the k3d cluster, keeping its data (PVCs)
-	helm uninstall prometheus --kube-context k3d-prometheus --namespace $(CLUSTER_NAMESPACE)
-
 cluster-status: ##@ Show the stack's pods, services and ingress in the k3d cluster
 	$(KUBECTL) get pods,svc,ingress,pvc
 
 cluster-logs: ##@ Follow one service's logs in the k3d cluster (SVC=backend)
 	$(KUBECTL) logs -f deploy/$(or $(SVC),backend) --all-containers
-
-cluster-clobber: ##@ Remove the stack and delete its data (users, keys, history) from the k3d cluster
-	@printf "This deletes ALL users, signing keys, OIDC config, and chat history in\n"
-	@printf "namespace '%s' of the k3d cluster. Type 'clobber' to confirm: " "$(CLUSTER_NAMESPACE)"; \
-	read answer; \
-	if [ "$$answer" != "clobber" ]; then printf "Aborted.\n"; exit 1; fi
-	-helm uninstall prometheus --kube-context k3d-prometheus --namespace $(CLUSTER_NAMESPACE) --wait
-	$(KUBECTL) delete pvc --all
 
 ##@
 ##@ Frontend (React)

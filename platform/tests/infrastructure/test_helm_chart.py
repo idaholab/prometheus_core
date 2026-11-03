@@ -258,6 +258,17 @@ def test_probes(rendered):
         assert "startupProbe" in container, name
 
 
+def test_frontend_dev_mode_runs_vite_behind_the_same_service(project_root, chart_path):
+    docs = _render(project_root, chart_path, "--set", "frontend.dev=true")
+    container = _container(_objects(docs, "Deployment")["frontend"])
+    assert container["ports"][0]["containerPort"] == 5150
+    assert container["readinessProbe"]["httpGet"]["path"] == "/"
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env == {"VITE_BACKEND_URL": "http://backend:8000"}
+    # The ingress keeps pointing at the Service's port 8080
+    assert _objects(docs, "Service")["frontend"]["spec"]["ports"][0]["port"] == 8080
+
+
 def test_backend_memory_limit_matches_compose(rendered):
     limits = _container(_objects(rendered, "Deployment")["backend"])["resources"]["limits"]
     assert limits["memory"] == "4Gi"

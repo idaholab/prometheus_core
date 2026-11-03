@@ -31,6 +31,12 @@ EXPOSE 5150
 ENV HOST=0.0.0.0
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5150"]
 
+# ---- dev-src (make cluster-dev) ----
+# The dev stage plus the source, for a pod: it can't bind-mount ./frontend the way
+# Compose does. Tilt then syncs edits into /app and Vite's HMR picks them up.
+FROM dev AS dev-src
+COPY frontend/ ./
+
 # ---- build (prod) ----
 FROM deps AS build
 # Only what `tsc && vite build` reads, so the README, nginx config and the like
