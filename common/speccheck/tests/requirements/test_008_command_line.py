@@ -72,6 +72,26 @@ def test_global_options_before_or_after(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-008-02",
+    "with no default config at all, lint, check and report succeed only when --config alt.toml is given, before or after the command, and a missing --config path exits 2 in both places",
+)
+def test_config_option_is_what_finds_the_config(project: Project):
+    """Nothing but `alt.toml` can configure the run, so a `--config` that was ignored would exit 2."""
+    (project.root / "speccheck.toml").unlink()
+    project.write("alt.toml", CONFIG)
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    for argv in (["lint"], ["check", "r.jsonl"], ["report", "out.md", "r.jsonl"]):
+        assert command(project, *argv).returncode == 2, argv  # no config to find
+        before = command(project, "--config", "alt.toml", *argv)
+        after = command(project, *argv, "--config", "alt.toml")
+        assert before.returncode == after.returncode == 0, (argv, before.stderr, after.stderr)
+        assert (before.stdout, before.stderr) == (after.stdout, after.stderr), argv
+    for argv in (["--config", "nope.toml", "lint"], ["lint", "--config", "nope.toml"]):
+        assert command(project, *argv).returncode == 2, argv
+
+
+@pytest.mark.covers(
     "SPC-REQ-008-11",
     "the installed command's --version prints speccheck and the package version",
 )
