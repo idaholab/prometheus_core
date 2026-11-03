@@ -211,3 +211,51 @@ async def test_turn_state_expires(session_store, fake_redis):
     await session_store.start_turn("sid-ttl", TURN)
     ttl = await fake_redis.ttl(f"session:sid-ttl:turn:{TURN}")
     assert 0 < ttl <= TURN_TTL_SECONDS
+
+
+def test_a_turn_whose_result_cannot_be_stored_still_answers_and_announces(monkeypatch, session_store, event_bus):
+    """Storing the result is best effort: a Valkey blip must not turn a finished turn
+    into a 500, and the POST reply and turn_done still carry it."""
+    client = _authed_client(monkeypatch)
+    published = _capture_published(monkeypatch, event_bus)
+    monkeypatch.setattr(chat_service, "handle_turn", _answer([]))
+
+    async def broken(*args, **kwargs):
+        raise ConnectionError("valkey down")
+
+    monkeypatch.setattr(session_store, "finish_turn", broken)
+
+    resp = client.post("/api/chat/messages", json={"query": "hi", "turn_id": TURN})
+
+    assert resp.status_code == 200
+    assert resp.json()["response_text"] == "42"
+    assert [e.turn_id for _sid, e in published if isinstance(e, TurnDoneEvent)] == [TURN]
+
+
+def test_a_turn_with_no_event_bus_is_still_stored(monkeypatch):
+    from app.main import app
+
+    client = _authed_client(monkeypatch)
+    monkeypatch.setattr(chat_service, "handle_turn", _answer([]))
+    monkeypatch.setattr(app.state, "event_bus", None)
+
+    resp = client.post("/api/chat/messages", json={"query": "hi", "turn_id": TURN})
+
+    assert client.get(f"/api/chat/turns/{TURN}").json()["response"] == resp.json()
+
+
+async def test_unreadable_turn_state_reads_as_no_turn(session_store, fake_redis):
+    """A corrupt value (hand-edited, half-written) must not 500 the lookup."""
+    await fake_redis.set(f"session:sid-bad:turn:{TURN}", "{not json")
+    assert await session_store.get_turn("sid-bad", TURN) is None
+
+    await fake_redis.set(f"session:sid-bad:turn:{TURN}", '["a list"]')
+    assert await session_store.get_turn("sid-bad", TURN) is None
+
+
+def test_unreadable_turn_state_is_a_404(monkeypatch, fake_redis):
+    import asyncio
+
+    client = _authed_client(monkeypatch)
+    asyncio.run(fake_redis.set(f"session:sid-turns:turn:{TURN}", "{not json"))
+    assert client.get(f"/api/chat/turns/{TURN}").status_code == 404
