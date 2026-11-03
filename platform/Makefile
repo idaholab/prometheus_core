@@ -35,6 +35,14 @@ endif
 export PROMETHEUS_API_BASE_IMAGE_REPO
 export PROMETHEUS_API_BASE_IMAGE_HASH
 
+# Path to the platform's common/certs/ directory, passed to embedded agent
+# builds that install their own CAs (those building FROM a non-prometheus_api
+# base). Default assumes the agent compose lives under platform/agents/<name>/,
+# i.e. three levels below the platform root. Override in .env or on the make
+# command line if your layout differs.
+CERTS_CONTEXT ?= $(CURDIR)/../common/certs
+export CERTS_CONTEXT
+
 # Set DEBUG_AGENTS=true (in .env or on the command line) to also include
 # agents/debug-agents/*/docker-compose.yml (one extra directory level deep).
 # Default: false.
