@@ -1054,6 +1054,43 @@ def test_a_test_file_path_cant_add_markdown(project: Project, payload: str):
 
 
 @pytest.mark.parametrize(
+    ("root", "file"),
+    [
+        pytest.param(
+            None,
+            "tests/" + "d" * 394,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-09",
+                "a results file whose file path is 400 characters gets a Test heading showing at most 150 characters of it, the last an ellipsis",
+            ),
+            id="long-file",
+        ),
+        pytest.param(
+            "r" * 300,
+            "tests/t.py",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-09",
+                "a results file whose root is 300 characters gets a Test heading showing at most 150 characters of root and file together, the last an ellipsis",
+            ),
+            id="long-root",
+        ),
+    ],
+)
+def test_a_long_path_is_shortened_in_the_heading(project: Project, root: str | None, file: str):
+    """A heading may shorten a long test name or path to stay on one line (006-09); the full text is in `--json`."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit", "root": root}
+    line = {"test": "t.py::test_a", "file": file, "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+    project.write("u.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+    text = project.speccheck("report", "u.jsonl").out
+    heading = next(x for x in text.splitlines() if x.startswith("#### Test "))
+    shown = heading.split(" in `", 1)[1].rstrip("`")
+    assert len(shown) == 150 and shown.endswith("…")
+    body = project.speccheck("report", "u.jsonl", "--json").json()
+    assert body["requirements"][0]["evidence"][0]["file"] == file
+
+
+@pytest.mark.parametrize(
     "payload",
     [pytest.param(payload, marks=payload_claim("CI job name", payload), id=payload) for payload in PAYLOADS],
 )
