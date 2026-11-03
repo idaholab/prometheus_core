@@ -1,10 +1,28 @@
 {
   "compilerOptions": {
-    "composite": true,
-    "skipLibCheck": true,
+    /* vite.config.ts runs in Node, so Node's types and no DOM */
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+
+    /* Referenced from tsconfig.json, so editors check vite.config.ts with
+     * these settings. A referenced project must be composite and able to
+     * emit, so it writes only declarations, and they and its build info go
+     * under node_modules rather than the frontend folder */
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./node_modules/.tmp/tsconfig.node",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+
+    /* Linting, as in tsconfig.json */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["vite.config.ts"]
 }
