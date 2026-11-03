@@ -1,11 +1,11 @@
 # 003 — Storage files, relationships, and timeseries
 
 status: implemented
-sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/file.py, prometheus_api/storage_client/models/relationship.py, prometheus_api/storage_client/models/timeseries.py, prometheus_api/storage_client/resources/files.py, prometheus_api/storage_client/resources/relationships.py, prometheus_api/storage_client/resources/timeseries.py, prometheus_api/storage_client/utils/streaming.py, prometheus_api/storage_client/async_resources/files.py, prometheus_api/storage_client/async_resources/relationships.py, prometheus_api/storage_client/async_resources/timeseries.py, tests/test_models.py, tests/test_relationships.py, tests/test_integration.py
+sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/file.py, prometheus_api/storage_client/models/relationship.py, prometheus_api/storage_client/models/timeseries.py, prometheus_api/storage_client/resources/files.py, prometheus_api/storage_client/resources/relationships.py, prometheus_api/storage_client/resources/timeseries.py, prometheus_api/storage_client/utils/streaming.py, prometheus_api/storage_client/async_resources/files.py, prometheus_api/storage_client/async_resources/relationships.py, prometheus_api/storage_client/async_resources/timeseries.py, tests/test_models.py, tests/test_relationships.py, tests/test_timeseries.py, tests/test_integration.py
 depends-on: 001, 002
 
 ## Purpose
-Support non-record storage workflows: binary files, large chunked uploads, relationships between items, and timeseries data upload/query.
+Support non-record storage workflows: binary files, large chunked uploads, relationships between items, and queries over tabular (timeseries) file records.
 
 ## Requirements
 - REQ-003-01: File upload MUST reject missing local paths, default the remote name to `Path.name`, include optional description, and return `FileMetadata`.
@@ -19,7 +19,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - REQ-003-09: `get_item_relationships(item_id, direction=None)` MUST combine outgoing and incoming relationships; explicit `outgoing`/`incoming` MUST map to `isOrigin=true/false`.
 - REQ-003-10: Relationship parsing MUST accept wrapped DeepLynx responses and MUST raise `ValueError` if required origin/destination IDs are absent. ⚠ untested
 - REQ-003-11: `get_item_graph(item_id, depth=1)` MUST return a dict response, wrapping non-dict backend responses under `{"result": ...}`. ⚠ untested
-- REQ-003-12: Timeseries upload MUST reject missing files and send multipart content to `/datasources/{data_source_id}/timeseries`; timeseries query MUST POST `{query, file_type}` to the query endpoint. ⚠ untested
+- REQ-003-12: Timeseries query MUST `POST /organizations/{org}/projects/{project}/records/{record_id}/olap/query` with `viewName` as a query parameter and a JSON body holding only the options the caller provided (`query`, `limit`, `rowStride`, `startRow`, `stopRow`, `columns`), and MUST return a `TimeseriesResult` of `columns` and `data` with cells uncoerced (a missing value can arrive as `{}`). A missing or null `columns` or `data`, as for a window past the end of the data, MUST be an empty result and not an error. There is no timeseries upload: tabular files are uploaded through the file API.
 - REQ-003-13: Sync and async file, chunked upload, relationship, and timeseries resource pairs SHOULD remain behaviorally aligned. ⚠ untested
 - REQ-003-14: `Relationship` MUST accept `properties` as the JSON-encoded string (or `null`) that DeepLynx edge endpoints return, decoding it to a dict; a string that is not valid JSON or does not decode to an object MUST become an empty dict.
 
@@ -43,21 +43,20 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - `BulkRelationshipCreate(relationships: list[RelationshipCreate])`
 - `RelationshipsResource.create/get/delete/bulk_create/get_item_relationships/get_item_graph`
 - `AsyncRelationshipsResource.create/get/delete/bulk_create/get_item_relationships/get_item_graph`
-- `TimeseriesResource.upload(file_path: Path, data_source_id: int, description: str | None = None) -> dict`
-- `TimeseriesResource.query(data_source_id: int, sql_query: str, file_type: str = "json") -> dict`
-- `TimeseriesQuery(data_source_id: int, sql_query: str, file_type: str | None = "json")`
-- `TimeseriesResult(data: Any, metadata: dict[str, Any] = {})`
-- `AsyncTimeseriesResource.upload/query`
+- `TimeseriesResource.query(record_id: int, view_name: str = "data", sql_query: str | None = None, *, limit: int | None = None, row_stride: int | None = None, start_row: int | None = None, stop_row: int | None = None, columns: Sequence[str] | None = None) -> TimeseriesResult`
+- `TimeseriesResult(columns: list[str] = [], data: list[list[Any]] = [])`
+- `AsyncTimeseriesResource.query` with the same signature
 
 ## Constraints
 - File APIs expose file IDs as DeepLynx record IDs; downstream code must not assume a separate file-record ID namespace.
 - Chunked upload does not define resumability; cancellation is best-effort cleanup only.
-- Timeseries SQL validation and execution are backend responsibilities.
+- Timeseries SQL validation and execution are backend responsibilities. The server accepts one statement that mentions the view name, rejects a list of keywords (`COPY`, `UPDATE`, `ATTACH` and others) as substrings, and opens a fresh query engine per request, so large files can take many seconds.
 
 ## Out of scope / Non-goals
 - This package does not implement local file locking, checksum verification, or automatic MIME detection.
 - Relationship graph traversal semantics beyond forwarding `depth` are not defined here.
 
 ## Open questions
-- Chunked upload, relationship parser error paths, graph wrapping, and timeseries operations need focused unit tests.
+- Chunked upload, relationship parser error paths and graph wrapping need focused unit tests.
+- The timeseries tests use a fake transport shaped like a recorded `olap/query` response (from a 0.7.2 server); the route has not been called from this repository against 0.8.0 or a newer server.
 - The sync/async parity suite currently covers item and search behavior more directly than file/relationship/timeseries behavior.

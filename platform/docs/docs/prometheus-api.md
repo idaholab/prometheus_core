@@ -145,10 +145,11 @@ with StorageClient(config) as client:
         "properties.status": "active"
     })
 
-    # Timeseries
-    client.timeseries.upload(Path("sensor.csv"), data_source_id=456)
+    # Timeseries: upload the file, then query its record by ID
+    stored = client.files.upload(Path("sensor.csv"))
     client.timeseries.query(
-        data_source_id=456,
+        record_id=stored.id,
+        view_name="sensor_data",
         sql_query="SELECT * FROM sensor_data WHERE timestamp > '2024-01-01'"
     )
 ```

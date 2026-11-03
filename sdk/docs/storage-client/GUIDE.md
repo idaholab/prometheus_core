@@ -307,22 +307,31 @@ recent = client.search.recent(limit=50)
 
 ### Timeseries Operations
 
+Tabular files (csv or parquet) are uploaded like any other file with `client.files.upload(...)`.
+Query one by the ID of its record. The server exposes the file as a temporary SQL view named
+`view_name`, and your query must mention that name:
+
 ```python
-from pathlib import Path
+stored = client.files.upload(Path("sensor_data.csv"))
 
-# Upload timeseries data
-result = client.timeseries.upload(
-    Path("sensor_data.csv"),
-    data_source_id=456
+result = client.timeseries.query(
+    record_id=stored.id,
+    view_name="data",
+    sql_query="SELECT * FROM data WHERE Timestamp > '2024-01-01'",
+    limit=1000,
 )
-
-# Query timeseries data
-results = client.timeseries.query(
-    data_source_id=456,
-    sql_query="SELECT * FROM data WHERE timestamp > '2024-01-01'",
-    file_type="json"
-)
+print(result.columns)   # ["Timestamp", ...]
+print(result.data[:3])  # rows as lists, in column order
 ```
+
+- Without `sql_query` you get the view's rows limited by `limit` (the server's default is 20).
+- A missing value can arrive as `{}`, and one column can mix numbers and `{}`; cells are not
+  converted.
+- Quote column names that contain dots (`"a.b"`) inside `sql_query`. The `columns=` option
+  rejects them.
+- The server rejects statements containing words such as `UPDATE`, `COPY` or `ATTACH` anywhere,
+  including inside a column name.
+- Each call can take many seconds on a large file; raise `ConnectionConfig.timeout` if needed.
 
 ## Error Handling
 

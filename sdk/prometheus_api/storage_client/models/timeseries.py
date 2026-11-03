@@ -12,24 +12,19 @@
 
 """Timeseries models for the storage client."""
 
-from typing import Any, Dict, Optional
+from typing import Any, List
 from pydantic import BaseModel, Field
 
 
-class TimeseriesQuery(BaseModel):
-    """Represents a timeseries query request."""
-
-    data_source_id: int = Field(..., description="Data source identifier")
-    sql_query: str = Field(..., description="SQL query to execute")
-    file_type: Optional[str] = Field(default="json", description="Output format (json, csv, etc.)")
-
-    model_config = {"from_attributes": True}
-
-
 class TimeseriesResult(BaseModel):
-    """Represents the result of a timeseries query."""
+    """The rows a timeseries (tabular file) query returns.
 
-    data: Any = Field(..., description="Query result data")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Query metadata")
+    ``data`` holds one list per row, in the order of ``columns``. Cells are returned as the
+    server sent them: a missing value can arrive as an empty object (``{}``) and one column can
+    mix numbers and empty objects, so cells are not coerced to a type.
+    """
+
+    columns: List[str] = Field(default_factory=list, description="Column names, in row order")
+    data: List[List[Any]] = Field(default_factory=list, description="Rows, as lists of cells")
 
     model_config = {"from_attributes": True}
