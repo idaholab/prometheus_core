@@ -54,6 +54,12 @@ workflows = ["ci"]
 """
 """The config most tests start from: prefix `T`, one producer `unit` that may claim everything."""
 
+CI_ENV = {"GITHUB_ACTIONS": "true", "GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+"""A GitHub Actions run of repository `o/r`: the least a report or summary needs to link anything.
+
+Links are written only inside CI (SPC-REQ-007-10), which is `GITHUB_ACTIONS=true` and a safe server and
+repository, so a test that expects a link starts from this and adds what else it needs."""
+
 INDEX = "# Index\n\n- [001](001-thing.md)\n"
 """An index that links the one spec most tests write."""
 

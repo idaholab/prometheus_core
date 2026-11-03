@@ -24,6 +24,7 @@ from speccheck import evidence, results
 from speccheck.actions import report
 from speccheck.claims import Claim
 from speccheck.specs import Problem
+from tests.conftest import CI_ENV
 from tests.unit.conftest import ROOT, make_config, make_ctx, make_requirement, make_spec, make_specs, namespace, out
 
 JOB_URL = "https://github.com/o/r/actions/runs/7/job/8"
@@ -38,7 +39,7 @@ FILES = BASE + "/blob/" + "c" * 40
 """Where this run's files are browsed."""
 LINKS = report.Links(repository=BASE, files=FILES, root=ROOT)
 """The links a CI run allows, with the specs under ROOT."""
-ENV = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r", "GITHUB_SHA": "c" * 40}
+ENV = {**CI_ENV, "GITHUB_SHA": "c" * 40}
 """The variables `LINKS` comes from."""
 
 

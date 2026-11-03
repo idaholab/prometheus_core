@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from speccheck import ci
+from tests.conftest import CI_ENV
 
 GITHUB = {
     "GITHUB_ACTIONS": "true",
@@ -87,8 +88,18 @@ class TestLinks:
     )
     def test_repository_url(self, server: str, repository: str, url: str):
         """The base a report links under, only from a safe server and an `owner/name`."""
-        env = {"GITHUB_SERVER_URL": server, "GITHUB_REPOSITORY": repository}
+        env = {**CI_ENV, "GITHUB_SERVER_URL": server, "GITHUB_REPOSITORY": repository}
         assert ci.repository_url(env) == url
+
+    @pytest.mark.parametrize("actions", ["false", "", "True", "1"])
+    def test_repository_url_needs_github_actions(self, actions: str):
+        """A well-formed server and repository link nothing unless `GITHUB_ACTIONS` is exactly `true`."""
+        assert ci.repository_url({**CI_ENV, "GITHUB_ACTIONS": actions}) == ""
+
+    def test_repository_url_without_the_variable(self):
+        """A missing `GITHUB_ACTIONS` is not CI either."""
+        env = {k: v for k, v in CI_ENV.items() if k != "GITHUB_ACTIONS"}
+        assert ci.repository_url(env) == ""
 
     def test_without_a_job_id_the_job_link_is_the_run(self):
         """The fallback when the workflow doesn't pass SPECCHECK_JOB_ID."""
@@ -154,8 +165,9 @@ def test_in_github_actions():
 
 def test_commit_url():
     """This run's repository and a full commit hash; nothing outside CI or with a bad hash."""
-    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r", "GITHUB_SHA": "a" * 40}
+    env = {**CI_ENV, "GITHUB_SHA": "a" * 40}
     assert ci.commit_url(env) == "https://github.com/o/r/blob/" + "a" * 40
+    assert ci.commit_url({**env, "GITHUB_ACTIONS": "false"}) == ""
     assert ci.commit_url({**env, "GITHUB_SHA": "a" * 39}) == ""
     assert ci.commit_url({**env, "GITHUB_SHA": "../x"}) == ""
     assert ci.commit_url({"GITHUB_SHA": "a" * 40}) == ""

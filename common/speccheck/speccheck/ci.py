@@ -101,8 +101,11 @@ def run_url(ci: Mapping[str, Any]) -> str:
 def repository_url(env: Mapping[str, str]) -> str:
     """`<server>/<owner>/<repo>` from this run's `GITHUB_SERVER_URL` and `GITHUB_REPOSITORY`, or "".
 
-    The only base a report links to: a results file's own URLs are not trusted to name the host.
+    The only base a report links to: a results file's own URLs are not trusted to name the host. Only
+    inside CI (`GITHUB_ACTIONS=true`), so a stray `GITHUB_SERVER_URL` on a developer's machine links nothing.
     """
+    if not in_github_actions(env):
+        return ""
     server, repository = env.get("GITHUB_SERVER_URL", ""), env.get("GITHUB_REPOSITORY", "")
     if not (SERVER.fullmatch(server) and REPOSITORY.fullmatch(repository)):
         return ""

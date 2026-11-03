@@ -20,6 +20,7 @@ from pathlib import Path
 from speccheck import results
 from speccheck.actions import verify
 from speccheck.claims import Claim
+from tests.conftest import CI_ENV
 from tests.unit.conftest import err, make_config, make_ctx, make_specs, namespace, out, producer
 
 
@@ -86,7 +87,7 @@ def test_no_results_files_fail(tmp_path: Path):
 def test_the_summary_links_the_report(tmp_path: Path):
     """`--report-url` is linked when it is an artifact of this run's repository."""
     write(tmp_path, "passed")
-    env = {"GITHUB_SERVER_URL": "https://github.com", "GITHUB_REPOSITORY": "o/r"}
+    env = CI_ENV
     url = "https://github.com/o/r/actions/runs/1/artifacts/2"
     ctx = make_ctx(tmp_path, specs_set=make_specs("It."), env=env)
     assert verify.run(ctx, namespace(inputs=["unit.jsonl"], summary="s.md", report_url=url)) == 0
