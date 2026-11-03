@@ -13,6 +13,13 @@ export COMPOSE_PROJECT_NAME
 
 COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
+# frontend-dev runs as the developer's UID/GID so the Vite dev server can write
+# into the bind-mounted ./frontend (see docker-compose.yml). Not UID/GID: bash
+# has a read-only, unexported UID.
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
+export HOST_UID HOST_GID
+
 COMPOSE_BASE   := docker-compose.yml
 COMPOSE_AGENTS := docker-compose.agents.yml
 
@@ -76,6 +83,16 @@ PROFILE_FLAGS := $(if $(PROFILE),--profile $(PROFILE),)
 
 # Extra flags for `docker compose up` in `make up`.
 UP_ARGS ?=
+
+# frontend-dev's node_modules is an anonymous volume, filled from the image when it
+# is created. Compose keeps it across `up` (it only ever has the dependencies from
+# the first image), and neither `up --renew-anon-volumes` nor `down` delete it, so
+# each recreation leaves ~550 MB behind. clear-agent-registry (which every start
+# target runs first) and down remove the container together with its volume, so it is
+# refilled on every start (a few seconds): a rebuilt image's dependencies always
+# show up and a root-owned copy from an older image can't break the dev server.
+# A no-op when frontend-dev isn't running (e.g. PROFILE=prod).
+RM_FRONTEND_DEV = $(COMPOSE) $(COMPOSE_FILES_NG) --profile dev rm -fsv frontend-dev
 
 # The detached start targets (up, restart, ng-up, ng-restart) wait for every
 # service with a healthcheck to report healthy (`docker compose up --wait`),
@@ -322,6 +339,7 @@ init-env: ##@ Create .env from .env.example if missing, generate blank secrets, 
 # was removed (or renamed) from lingering as a tool. Valkey must be up to clear
 # it, so this starts only redis; the start target that follows reuses it.
 clear-agent-registry: ##@ Stop services and delete only the agent registrations from Valkey
+	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) down --remove-orphans
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) up -d redis
 	@$(COMPOSE) $(CLEAR_COMPOSE_FILES) exec -T redis sh -c '\
@@ -376,6 +394,7 @@ clobber: ##@ Stop services and delete the DB and Valkey volumes (users, keys, hi
 	done
 
 down: ##@ Stop all services
+	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down
 
 down-v: ##@ Stop all services and remove volumes
