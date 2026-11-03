@@ -144,7 +144,7 @@ def repository_root(start: Path, env: Mapping[str, str]) -> Path | None:
 def results_root(rootpath: Path, env: Mapping[str, str]) -> str | None:
     """A results file's `root`: `SPECCHECK_ROOT` when set, else pytest's root from the repository's root.
 
-    The value is written as given; the report links a path only when it is plain (SPC-REQ-006-07).
+    The value is written as given; the report links a path only when it is plain (SPC-REQ-006-06).
     """
     override = env.get(ROOT_VAR, "").strip().strip("/")
     if override:

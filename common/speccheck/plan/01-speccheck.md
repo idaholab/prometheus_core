@@ -131,8 +131,9 @@ What differs from the plan above, or settles something it left open:
   - **Results format:** `covers` became a list of `{"id", "how"}` objects within
     `speccheck-results/1`, since nothing outside speccheck reads it yet. `[ci.<job>] covers`
     became a table from ID to explanation.
-  - **Step summary shows only failures:** `report --summary` (and SPC-REQ-006-04) are gone. `lint`,
-    `check` and `verify` take `--summary`, writing one counts line with a `--report-url` link to
+  - **Step summary shows only failures:** `report --summary` (and the old SPC-REQ-006-04) are
+    gone, and 006-05 to 006-07 moved up to 006-04 to 006-06. `lint`, `check` and `verify` take
+    `--summary`, writing one counts line with a `--report-url` link to
     the artifact, then the problems. `speccheck-verify` uploads the report before `verify` runs,
     so it has the link.
   - New and changed requirements: 001-10, 002-06, 003-02, 003-04, 003-05, 003-08 to 003-11,
@@ -149,7 +150,7 @@ What differs from the plan above, or settles something it left open:
     tested commit. The results header gained `root`, so a test's file is known from the
     repository's root.
   - **Lighter escaping** outside code spans.
-  - New and changed requirements: 004-08, 004-10, 006-01, 006-02, 006-03, 006-07, 007-04, 008-10.
+  - New and changed requirements: 004-08, 004-10, 006-01, 006-02, 006-03, 006-06, 007-04, 008-10.
 - **The second review panel (2026-11-02):** fixes are the `review-panel <ID>:` commits after the
   per-requirement report. One changes a requirement:
   - **An unconfigured plugin is inert (TECH-3):** the shape checks (003-02, 003-04, 003-08, 003-10,
