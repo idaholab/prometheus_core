@@ -12,7 +12,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-02: Item create and bulk create MUST default a missing or empty `description` to the item's `name` (DeepLynx rejects an empty description with `400 The Description field is required`), and a missing `original_id` to a client-generated value.
 - REQ-002-03: Item create with tag names MUST resolve/add those tags and refetch the created item.
 - REQ-002-04: Item update MUST use `PUT /records/{item_id}` and include only fields explicitly provided on `ItemUpdate`.
-- REQ-002-05: Item list MUST return `Page[Item]` and compute `has_next`/`has_previous` for both list-shaped and wrapped DeepLynx responses.
+- REQ-002-05: Item list MUST GET `/organizations/{org}/projects/{project}/records/paginated` with `PageNumber` and `PageSize` (plus any caller filters), return `Page[Item]`, and take `total_count`, `has_next` and `has_previous` from the server's `PaginatedResponse` (`totalCount`, `hasNext`, `hasPrevious`). A null or missing `items` MUST be treated as an empty page.
 - REQ-002-06: `iter_all(...)` MUST repeatedly call `list(...)` until `page_info.has_next` is false.
 - REQ-002-07: Bulk create MUST POST all item payloads to `/records/bulk` and parse both list-shaped and wrapped responses.
 - REQ-002-08: Tag operations MUST use project-scoped `/projects/{project_id}/tags` endpoints, normalize whitespace, reject empty names, skip duplicate names, and require resolved IDs to be positive integers.

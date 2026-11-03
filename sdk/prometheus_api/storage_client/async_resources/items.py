@@ -89,34 +89,16 @@ class AsyncItemsResource(AsyncBaseResource):
         self, page: int = 1, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
     ) -> Page[Item]:
         """List items with pagination asynchronously."""
-        params = {
-            "page": page,
-            "limit": page_size,
-        }
+        params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:
             params.update(filters)
 
-        response = await self._client._request("GET", f"{self._base_path}/records", params=params)
-
-        data = response.json()
-
-        # API returns array directly, not wrapped in object
-        if isinstance(data, list):
-            items = [self._parse_item(item_data) for item_data in data]
-            total_count = len(items) if len(items) < page_size else page * page_size + 1
-        else:
-            items = [self._parse_item(item_data) for item_data in data.get("records", [])]
-            total_count = data.get("total", len(items))
-        page_info = PageInfo(
-            page_number=page,
-            page_size=page_size,
-            total_count=total_count,
-            has_next=page * page_size < total_count,
-            has_previous=page > 1,
+        response = await self._client._request(
+            "GET", f"{self._base_path}/records/paginated", params=params
         )
 
-        return Page(items=items, page_info=page_info)
+        return self._parse_paginated_items(response.json(), page, page_size)
 
     async def iter_all(
         self, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
@@ -193,6 +175,23 @@ class AsyncItemsResource(AsyncBaseResource):
             )
 
         return await self.get(item_id)
+
+    def _parse_paginated_items(self, data: Any, page: int, page_size: int) -> Page[Item]:
+        """Parse a ``PaginatedResponse<RecordResponseDto>`` into a ``Page[Item]``.
+
+        The server returns ``items: null`` for an empty result, so a missing or null ``items``
+        is an empty page. The server's own paging numbers are used when present.
+        """
+        items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
+        total_count = data.get("totalCount", len(items))
+        page_info = PageInfo(
+            page_number=data.get("pageNumber", page),
+            page_size=data.get("pageSize", page_size),
+            total_count=total_count,
+            has_next=data.get("hasNext", False),
+            has_previous=data.get("hasPrevious", page > 1),
+        )
+        return Page(items=items, page_info=page_info)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse API response data into an Item model."""

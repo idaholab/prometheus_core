@@ -386,16 +386,17 @@ for item in client.items.iter_all(page_size=100):
 ### Filtering
 
 ```python
-# Filter items in list operation
+# Filter items in list operation. `filters` are sent as query parameters to
+# GET .../records/paginated, so use the parameters that route accepts:
+# dataSourceId, fileType, hideArchived and isInsightEligible.
 results = client.items.list(
     page=1,
     page_size=100,
-    filters={
-        "properties.status": "active",
-        "created_at": {"$gt": "2024-01-01"}
-    }
+    filters={"fileType": "csv", "hideArchived": True},
 )
 ```
+
+For filtering on record properties, use `client.search.advanced_query(...)` instead.
 
 ### Bulk Operations
 

@@ -135,6 +135,100 @@ async def test_item_bulk_create_defaults_missing_description_to_name(description
         assert [entry["description"] for entry in payload] == ["First", "Kept as given"]
 
 
+def paginated_payload(items, **overrides):
+    """A ``PaginatedResponse<RecordResponseDto>`` as DeepLynx returns it."""
+    payload = {
+        "items": items,
+        "pageNumber": 1,
+        "pageSize": 2,
+        "totalCount": 3,
+        "totalCountIsApproximate": False,
+        "totalPages": 2,
+        "hasPrevious": False,
+        "hasNext": True,
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def test_item_list_uses_paginated_route_and_server_paging_in_sync_and_async():
+    """Covers REQ-002-05: list calls /records/paginated and trusts the server's paging."""
+    payload = paginated_payload([item_payload(id=1), item_payload(id=2)])
+    sync_client = SyncClient(payload)
+    async_client = AsyncClient(payload)
+
+    sync_page = ItemsResource(sync_client).list(page=1, page_size=2)
+    async_page = await AsyncItemsResource(async_client).list(page=1, page_size=2)
+
+    assert sync_client.calls == async_client.calls
+    method, path, kwargs = sync_client.calls[0]
+    assert method == "GET"
+    assert path == "/organizations/1/projects/2/records/paginated"
+    assert kwargs["params"] == {"PageNumber": 1, "PageSize": 2}
+    assert sync_page.model_dump() == async_page.model_dump()
+    assert [item.id for item in sync_page.items] == [1, 2]
+    assert sync_page.page_info.total_count == 3
+    assert sync_page.page_info.has_next is True
+    assert sync_page.page_info.has_previous is False
+
+
+async def test_item_list_passes_filters_through_in_sync_and_async():
+    """Covers REQ-002-05: extra filters are sent alongside the paging parameters."""
+    payload = paginated_payload([], totalCount=0, hasNext=False)
+    sync_client = SyncClient(payload)
+    async_client = AsyncClient(payload)
+
+    ItemsResource(sync_client).list(page=2, page_size=5, filters={"fileType": "csv"})
+    await AsyncItemsResource(async_client).list(page=2, page_size=5, filters={"fileType": "csv"})
+
+    assert sync_client.calls == async_client.calls
+    assert sync_client.calls[0][2]["params"] == {
+        "PageNumber": 2,
+        "PageSize": 5,
+        "fileType": "csv",
+    }
+
+
+@pytest.mark.parametrize("empty_items", [None, []])
+async def test_item_list_treats_null_or_empty_items_as_empty_page(empty_items):
+    """Covers REQ-002-05: the server returns ``items: null`` for an empty result."""
+    payload = paginated_payload(empty_items, totalCount=0, hasNext=False, totalPages=0)
+
+    sync_page = ItemsResource(SyncClient(payload)).list()
+    async_page = await AsyncItemsResource(AsyncClient(payload)).list()
+
+    assert sync_page.items == [] and async_page.items == []
+    assert sync_page.page_info.total_count == 0
+    assert sync_page.page_info.has_next is False
+
+
+async def test_item_iter_all_follows_has_next_across_pages_in_sync_and_async():
+    """Covers REQ-002-06: iteration stops when the server says there is no next page."""
+    pages = {
+        1: paginated_payload([item_payload(id=1), item_payload(id=2)], pageNumber=1),
+        2: paginated_payload([item_payload(id=3)], pageNumber=2, hasNext=False, hasPrevious=True),
+    }
+
+    class PagedSync(SyncClient):
+        def _request(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            return Response(pages[kwargs["params"]["PageNumber"]])
+
+    class PagedAsync(AsyncClient):
+        async def _request(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            return Response(pages[kwargs["params"]["PageNumber"]])
+
+    sync_client = PagedSync(None)
+    async_client = PagedAsync(None)
+
+    sync_ids = [item.id for item in ItemsResource(sync_client).iter_all(page_size=2)]
+    async_ids = [item.id async for item in AsyncItemsResource(async_client).iter_all(page_size=2)]
+
+    assert sync_ids == async_ids == [1, 2, 3]
+    assert len(sync_client.calls) == len(async_client.calls) == 2
+
+
 async def test_item_update_payloads_match_between_sync_and_async():
     sync_client = SyncClient(item_payload(name="Updated"))
     async_client = AsyncClient(item_payload(name="Updated"))
