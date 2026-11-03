@@ -4,9 +4,30 @@
 # Any agent directory that contains a docker-compose.yml is included automatically.
 # To exclude an agent, remove its directory.
 
-# Load variables from .env if present (no error if missing). Lets settings like
-# DEBUG_AGENTS live alongside the rest of the project config.
+# Load variables from .env. Lets settings like DEBUG_AGENTS live alongside the
+# rest of the project config.
+#
+# Every goal except those in NO_ENV_GOALS first creates or completes .env with
+# scripts/init_env.py (the rule below). Make runs it before any target, and
+# reads the Makefile again when it changed .env, so what it saved (LOCAL_SDK,
+# LOCAL_DEEPLYNX, the LLM profile) counts in this same run. MAKE_RESTARTS keeps
+# it from running a second time on that reread. Plain `include`, so a failing
+# script stops make. The goals in NO_ENV_GOALS don't need .env, or need one that
+# a running stack was started with: they only read it if it is there.
+NO_ENV_GOALS := help generate clean-generated regenerate test-static check-markings \
+	check-prerequisites base-image cluster-up cluster-down cluster-reset \
+	react-dev react-build react-check react-test-e2e \
+	down down-v logs ps clear-agent-registry clobber clear-admin-users \
+	check test-system test-integration test-infra
+ifneq ($(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help)),)
+ifeq ($(MAKE_RESTARTS),)
+.env: FORCE
+	@python3 scripts/init_env.py
+endif
+include .env
+else
 -include .env
+endif
 
 COMPOSE_PROJECT_NAME ?= prometheus_platform
 export COMPOSE_PROJECT_NAME
@@ -19,7 +40,8 @@ COMPOSE_AGENTS := docker-compose.agents.yml
 # Set LOCAL_SDK=true (in .env or on the command line) to build the
 # prometheus_api base image from ../sdk into the local Docker store and build
 # all services FROM it, instead of pulling the published image. Use it to run
-# against the SDK checked out in ../sdk. Default: false.
+# against the SDK checked out in ../sdk. Default: false. The first
+# `make up` asks, when it creates .env (Enter = true).
 LOCAL_SDK ?= false
 
 ifeq ($(LOCAL_SDK),true)
@@ -60,7 +82,7 @@ OPTIONAL_AGENTS ?= false
 # from its published images, and point the platform at it: every start target
 # first starts DeepLynx and runs `make deeplynx-setup`, which writes the
 # DEEPLYNX_* settings to .env. Its web UI is at http://localhost:3000.
-# Default: false.
+# Default: false. The first `make up` asks, when it creates .env (Enter = true).
 LOCAL_DEEPLYNX ?= false
 DEEPLYNX_SERVER_PORT ?= 5000
 DEEPLYNX_DEP := $(if $(filter true,$(LOCAL_DEEPLYNX)),deeplynx-setup,)
@@ -279,46 +301,48 @@ check: ##@ Wait until the running platform answers on its host ports and every a
 
 up: ##@ Clear agent registrations, build and start all services (detached), then wait until they are up (CHECK=false to skip). Set PROFILE=dev|prod to include the React frontend.
 up: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-up: $(BASE_IMAGE_DEP) generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+up: $(BASE_IMAGE_DEP) generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build -d $(UP_WAIT) $(UP_ARGS)
 	$(RUN_CHECK)
 
 up-fg: ##@ Clear agent registrations, then build and start all services (foreground). Set PROFILE=dev|prod to include the React frontend.
 up-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-up-fg: $(BASE_IMAGE_DEP) generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+up-fg: $(BASE_IMAGE_DEP) generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build
 
 restart: ##@ Clear agent registrations, then restart all services without rebuilding.
 restart: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-restart: generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+restart: generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
 restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (foreground).
 restart-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
-restart-fg: generate init-env clear-agent-registry $(DEEPLYNX_DEP)
+restart-fg: generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up
 
 ng-up: ##@ Clear agent registrations, then start without regenerating agents compose.
-ng-up: $(BASE_IMAGE_DEP) init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-up: $(BASE_IMAGE_DEP) clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build -d $(UP_WAIT)
 	$(RUN_CHECK)
 
 ng-up-fg: ##@ Clear agent registrations, then start without regenerating (foreground).
-ng-up-fg: $(BASE_IMAGE_DEP) init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-up-fg: $(BASE_IMAGE_DEP) clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build
 
 ng-restart: ##@ Clear agent registrations, then restart without rebuilding or regenerating.
-ng-restart: init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-restart: clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
 ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding or regenerating (foreground).
-ng-restart-fg: init-env clear-agent-registry $(DEEPLYNX_DEP)
+ng-restart-fg: clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up
 
-init-env: ##@ Create .env from .env.example if missing, generate blank secrets, check the LLM API key
-	@python3 scripts/init_env.py
+# The work is done by the .env rule at the top, which runs for this goal as for
+# every start target; this target only gives it a name.
+init-env: ##@ Create .env from .env.example if missing (asking about the local SDK and DeepLynx), generate blank secrets, check the LLM API key
+	@:
 
 # Agents register with the backend at startup and the registry lives in Valkey,
 # which persists across restarts. Clearing it on every launch keeps an agent that
@@ -336,7 +360,6 @@ clear-agent-registry: ##@ Stop services and delete only the agent registrations 
 # key in .env before the rest of the stack starts. Only the DeepLynx services
 # start here, from just the files they need, so the ng-* targets still don't
 # regenerate the agents compose file; the start target that follows reuses them.
-deeplynx-setup: init-env
 deeplynx-setup: ##@ Start the local DeepLynx (LOCAL_DEEPLYNX=true) and save a project and API key for it in .env
 	@if [ "$(LOCAL_DEEPLYNX)" != true ]; then \
 		printf "LOCAL_DEEPLYNX is not true; set it (in .env or on the command line) to run DeepLynx locally.\n"; \

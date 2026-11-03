@@ -21,6 +21,11 @@
    environment if it is set there (as in CI). Otherwise, if the script runs in
    a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
    profile's key. Otherwise exit non-zero. There is no default profile.
+4. Only when step 1 created .env, and only in a terminal: ask whether to build
+   the base image from ../sdk (LOCAL_SDK) and whether to run DeepLynx next to
+   the platform (LOCAL_DEEPLYNX). Enter means yes. A variable that is set in
+   the environment (or on the make command line) is not asked about. An .env
+   that existed before is never changed here.
 
 Standard library only, so it runs before anything else is installed. Run from
 anywhere; paths resolve relative to this file.
@@ -105,6 +110,39 @@ def set_var(text: str, var: str, value: str) -> str:
     return text.rstrip("\n") + f"\n{var}={value}\n"
 
 
+def set_option(text: str, var: str, value: str) -> str:
+    """Set ``var=`` in place of its commented ``#var=`` default line, if there is one."""
+    if not re.search(rf"^{var}=", text, flags=re.M) and re.search(rf"^#{var}=", text, flags=re.M):
+        return re.sub(rf"^#{var}=.*$", lambda _: f"{var}={value}", text, count=1, flags=re.M)
+    return set_var(text, var, value)
+
+
+# Asked once, when .env is created: (variable, question). Enter means yes.
+LOCAL_OPTIONS = [
+    ("LOCAL_SDK", "Build the SDK base image locally"),
+    ("LOCAL_DEEPLYNX", "Run DeepLynx locally"),
+]
+
+
+def yes(question: str) -> bool:
+    return input(f"{question} [Y/n] (Enter = yes): ").strip().lower() not in ("n", "no")
+
+
+def prompt_local_options(text: str) -> str:
+    """Ask for each LOCAL_OPTIONS variable that the environment doesn't set, saving each answer to .env.
+
+    Saved one at a time, so an interrupt at the second question keeps the first answer.
+    """
+    for var, question in LOCAL_OPTIONS:
+        if var in os.environ:
+            continue
+        value = "true" if yes(f"{question} ({var})?") else "false"
+        text = set_option(text, var, value)
+        ENV.write_text(text)
+        print(f"Saved {var}={value} in {ENV.name}.")
+    return text
+
+
 def fill_secrets(text: str, gens: dict[str, str]) -> tuple[str, list[str]]:
     current = values(text)
     filled = []
@@ -186,26 +224,32 @@ def choose(options: list[str], labels: list[str], default: int) -> str:
         sys.stdout.flush()
 
 
-def prompt_llm(text: str) -> str:
-    """Ask for the LLM profile and its API key; return the updated .env text."""
+def prompt_llm(text: str) -> tuple[str, list[str]]:
+    """Ask for the LLM profile and its API key; return the updated .env text and what was saved.
+
+    The saved list names the key, never its value.
+    """
     env = values(text)
     known = profiles()
     options = list(known)
     labels = [desc if key else f"{desc}  [no key]" for key, desc in known.values()]
     current = env.get("LLM_CONFIG_PROFILE", "")
-    print("\nChoose an LLM profile (up/down, Enter):")
+    print("\nChoose an LLM profile (LLM_CONFIG_PROFILE; up/down, Enter):")
     profile = choose(options, labels, options.index(current) if current in options else 0)
     text = set_var(text, "LLM_CONFIG_PROFILE", profile)
+    saved = [f"LLM_CONFIG_PROFILE={profile}"]
     key, _ = known[profile]
     if key and not env.get(key):
         secret = getpass.getpass(f"{key} for {profile} (input hidden): ").strip()
         if secret:
             text = set_var(text, key, secret)
-    return text
+            saved.append(key)
+    return text, saved
 
 
 def main() -> int:
-    if not ENV.exists():
+    created = not ENV.exists()
+    if created:
         shutil.copyfile(EXAMPLE, ENV)
         # Owner-only before any secret is written to it. Later rewrites keep this mode. An
         # existing .env is left as it is
@@ -216,6 +260,12 @@ def main() -> int:
     if filled:
         ENV.write_text(text)
         print(f"Generated in {ENV.name}: {', '.join(filled)}")
+
+    # Right after the copy, so an interrupted LLM prompt below doesn't skip them: the
+    # next run finds .env and asks nothing here.
+    if created and interactive():
+        print()
+        text = prompt_local_options(text)
 
     env = values(text)
     if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):
@@ -229,10 +279,10 @@ def main() -> int:
         env = values(text)
         print(f"Saved {key} from the environment in {ENV.name}.")
     if (missing_profile(env) or unknown_profile(env) or missing_llm_key(env)) and interactive():
-        text = prompt_llm(text)
+        text, saved = prompt_llm(text)
         ENV.write_text(text)
         env = values(text)
-        print(f"Saved LLM_CONFIG_PROFILE={env['LLM_CONFIG_PROFILE']} in {ENV.name}.")
+        print(f"Saved {', '.join(saved)} in {ENV.name}.")
     if missing_profile(env):
         print(
             f"\n[ERROR] LLM_CONFIG_PROFILE is empty in {ENV}.\n"

@@ -185,7 +185,7 @@ def test_init_env_takes_llm_key_from_environment(tmp_path, env_example_path, mon
     assert rerun["LLM_API_KEY"] == "sk-from-env"
 
 
-def test_init_env_prompts_for_profile_and_key(tmp_path, env_example_path, monkeypatch):
+def test_init_env_prompts_for_profile_and_key(tmp_path, env_example_path, monkeypatch, capsys):
     init_env = _load_init_env()
     example = tmp_path / ".env.example"
     example.write_text(env_example_path.read_text())
@@ -196,11 +196,114 @@ def test_init_env_prompts_for_profile_and_key(tmp_path, env_example_path, monkey
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setattr(init_env, "choose", lambda options, labels, default: "openai")
     monkeypatch.setattr(init_env.getpass, "getpass", lambda prompt: "sk-openai-x")
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
 
     assert init_env.main() == 0
     written = init_env.values(env.read_text())
     assert written["LLM_CONFIG_PROFILE"] == "openai"
     assert written["LLM_API_KEY"] == "sk-openai-x"
+    out = capsys.readouterr().out
+    # Names the key it saved, never the key itself
+    assert "Saved LLM_CONFIG_PROFILE=openai, LLM_API_KEY in .env." in out
+    assert "sk-openai-x" not in out
+
+
+def test_init_env_names_no_key_for_a_keyless_profile(tmp_path, env_example_path, monkeypatch, capsys):
+    """ollama needs no key, so none is asked for and the saved line names only the profile."""
+    init_env = _load_init_env()
+    example = tmp_path / ".env.example"
+    example.write_text(env_example_path.read_text())
+    env = tmp_path / ".env"
+    monkeypatch.setattr(init_env, "EXAMPLE", example)
+    monkeypatch.setattr(init_env, "ENV", env)
+    monkeypatch.setattr(init_env, "interactive", lambda: True)
+    monkeypatch.delenv("LLM_CONFIG_PROFILE", raising=False)
+    monkeypatch.setattr(init_env, "choose", lambda options, labels, default: "ollama")
+    monkeypatch.setattr(init_env.getpass, "getpass", lambda prompt: pytest.fail("asked for a key"))
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+
+    assert init_env.main() == 0
+    assert "Saved LLM_CONFIG_PROFILE=ollama in .env." in capsys.readouterr().out
+
+
+def _new_env(tmp_path, env_example_path, monkeypatch, answers):
+    """init_env with a fresh .env, a terminal and a set LLM profile; ``answers`` feed input()."""
+    init_env = _load_init_env()
+    example = tmp_path / ".env.example"
+    example.write_text(env_example_path.read_text())
+    env = tmp_path / ".env"
+    monkeypatch.setattr(init_env, "EXAMPLE", example)
+    monkeypatch.setattr(init_env, "ENV", env)
+    monkeypatch.setattr(init_env, "interactive", lambda: True)
+    for var, _ in init_env.LOCAL_OPTIONS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("LLM_CONFIG_PROFILE", "anthropic")
+    monkeypatch.setenv("LLM_API_KEY", "sk-ant-x")
+    asked = []
+    replies = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda prompt: asked.append(prompt) or next(replies))
+    return init_env, env, asked
+
+
+@pytest.mark.parametrize(("answers", "expected"), [(["", ""], "true"), (["n", "no"], "false"), (["Y", "yes"], "true")])
+def test_init_env_asks_local_options_when_it_creates_env(tmp_path, env_example_path, monkeypatch, answers, expected):
+    """A new .env asks for LOCAL_SDK and LOCAL_DEEPLYNX (Enter = yes) and sets the commented default lines."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, answers)
+
+    assert init_env.main() == 0
+    assert len(asked) == 2
+    text = env.read_text()
+    written = init_env.values(text)
+    for var, _ in init_env.LOCAL_OPTIONS:
+        assert written[var] == expected
+        # In place of the commented default, not appended a second time
+        lines = text.splitlines()
+        assert f"#{var}=false" not in lines
+        assert sum(line.startswith(f"{var}=") for line in lines) == 1
+
+
+def test_init_env_never_asks_local_options_for_an_existing_env(tmp_path, env_example_path, monkeypatch):
+    """An .env that existed before is not asked about and keeps its (missing) LOCAL_* lines."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
+    env.write_text(env_example_path.read_text())
+
+    assert init_env.main() == 0
+    assert asked == []
+    written = init_env.values(env.read_text())
+    assert "LOCAL_SDK" not in written and "LOCAL_DEEPLYNX" not in written
+
+
+def test_init_env_skips_local_options_set_in_the_environment(tmp_path, env_example_path, monkeypatch):
+    """`make up LOCAL_SDK=false` passes the value on: that question is skipped, the other still asked."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [""])
+    monkeypatch.setenv("LOCAL_SDK", "false")
+
+    assert init_env.main() == 0
+    assert len(asked) == 1 and "DeepLynx" in asked[0]
+    written = init_env.values(env.read_text())
+    assert "LOCAL_SDK" not in written
+    assert written["LOCAL_DEEPLYNX"] == "true"
+
+
+def test_init_env_asks_no_local_options_without_a_terminal(tmp_path, env_example_path, monkeypatch):
+    """CI and assistant runs: nothing asked, nothing written, so both keep the Makefile default (false)."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+
+    assert init_env.main() == 0
+    assert asked == []
+    written = init_env.values(env.read_text())
+    assert "LOCAL_SDK" not in written and "LOCAL_DEEPLYNX" not in written
+
+
+def test_init_env_leaves_a_complete_env_unwritten(tmp_path, env_example_path, monkeypatch):
+    """A second run changes nothing, so make (which rereads the Makefile after a changed .env) reads it once."""
+    init_env, env, _ = _new_env(tmp_path, env_example_path, monkeypatch, ["", ""])
+    assert init_env.main() == 0
+    before = (env.read_text(), env.stat().st_mtime_ns)
+
+    assert init_env.main() == 0
+    assert (env.read_text(), env.stat().st_mtime_ns) == before
 
 
 def test_init_env_rejects_unknown_profile(tmp_path, env_example_path, monkeypatch, capsys):
