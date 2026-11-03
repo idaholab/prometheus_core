@@ -271,8 +271,8 @@ git fetch upstream
 cd platform            <span class="c"># the stack lives here</span>
 
 make init-env                       <span class="c"># secrets; pick LLM profile + key</span>
-echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env       <span class="c"># base image from ../sdk</span>
-echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env  <span class="c"># DeepLynx; make up writes DEEPLYNX_*</span>
+printf <span class="s">&#x27;\nLOCAL_SDK=true\n&#x27;</span> &gt;&gt; .env <span class="c"># base image from ../sdk</span>
+printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env <span class="c"># DeepLynx; make up writes DEEPLYNX_*</span>
 
 make up                   <span class="c"># long first build; make logs to watch</span>
 make ps</pre>

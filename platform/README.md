@@ -93,7 +93,7 @@ Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file
 Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, add one line to `.env`, after `make init-env` has created it:
 
 ```bash
-echo "LOCAL_DEEPLYNX=true" >> .env
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env
 ```
 
 Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `localhost:5000`; both ports must be free) and runs `make deeplynx-setup`, which creates a project and an API key and writes the `DEEPLYNX_*` lines to `.env`. See [DeepLynx storage](#deeplynx-storage) to use a DeepLynx you already have instead.
@@ -105,7 +105,7 @@ Every Python service is built `FROM` the `prometheus_api` base image. Pick one o
 #### Option A: build it locally (no registry access needed)
 
 ```bash
-echo "LOCAL_SDK=true" >> .env
+printf '\nLOCAL_SDK=true\n' >> .env
 ```
 
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).

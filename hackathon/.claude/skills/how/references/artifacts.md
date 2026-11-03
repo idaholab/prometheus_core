@@ -67,7 +67,9 @@ Deck 03, slide 11. The platform runs it: nothing to clone, build, or click throu
 Don't use `platform/docs/docs/local-deeplynx.md` for the hackathon: its clone, build-from-source and
 manual `.env` steps (`prometheus.host.internal:5000`) are not the hackathon path. Follow only the steps below.
 
-1. In the platform folder, once: `grep -c '^LOCAL_DEEPLYNX=true' .env`; on `0`, `echo "LOCAL_DEEPLYNX=true" >> .env` (after a yes).
+1. In the platform folder, once: `grep -cx 'LOCAL_DEEPLYNX=true' .env`; on `0`, `printf '\nLOCAL_DEEPLYNX=true\n' >> .env` (after a yes).
+   `-x` matches the whole line, so a CRLF `.env` (`true\r`, which make reads as not `true`) also gives `0`:
+   on WSL, edit `.env` inside WSL (not a Windows editor) and keep the clone in the WSL filesystem, not `/mnt/c`.
 2. `make up` (or `make restart`). Every start target first runs `make deeplynx-setup`: it starts
    `deeplynx-postgres`, `deeplynx-server` and `deeplynx-ui` in the platform's compose project, creates the
    project "Prometheus" in organization 1 and an API key, and writes `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1`,

@@ -98,8 +98,8 @@ Platform not starting yet? Work through the bonus slides at the end of this deck
 <pre class="sm">cd ~/prometheus/prometheus_core/platform
 
 <span class="h">make init-env                       <span class="c"># once: creates .env (next slide)</span></span>
-<span class="h">echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env       <span class="c"># once: base image from ../sdk</span></span>
-<span class="h">echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env  <span class="c"># once: DeepLynx next to the platform</span></span>
+<span class="h">printf <span class="s">&#x27;\nLOCAL_SDK=true\n&#x27;</span> &gt;&gt; .env <span class="c"># once: base image from ../sdk</span></span>
+<span class="h">printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env <span class="c"># once: DeepLynx next to the platform</span></span>
 
 make up                        <span class="c"># build, start, wait, make check</span>
 make restart                   <span class="c"># restart, no rebuild</span>
@@ -321,7 +321,7 @@ LLM_API_KEY=…
 <div class="grid g2" style="gap:30px;">
 <div class="col">
 <pre class="sm"><span class="c"># in prometheus_core/platform, once (deck 03, &quot;Once, then four commands&quot;)</span>
-echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env
+printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env
 make up</pre>
 <p class="small">With that line, <strong>every</strong> <code>make up</code> and <code>make restart</code> first runs <code>make deeplynx-setup</code>:</p>
 <ol class="b small">
@@ -537,8 +537,8 @@ git remote add upstream <span class="s">\</span>
 git switch devel
 
 make init-env                       <span class="c"># creates .env, asks for LLM + key</span>
-echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env       <span class="c"># base image from ../sdk</span>
-echo <span class="s">&quot;LOCAL_DEEPLYNX=true&quot;</span> &gt;&gt; .env  <span class="c"># DeepLynx in the stack</span></pre>
+printf <span class="s">&#x27;\nLOCAL_SDK=true\n&#x27;</span> &gt;&gt; .env <span class="c"># base image from ../sdk</span>
+printf <span class="s">&#x27;\nLOCAL_DEEPLYNX=true\n&#x27;</span> &gt;&gt; .env <span class="c"># DeepLynx in the stack</span></pre>
 <div class="col">
 <div class="card">
 <h4>Why a base image?</h4>

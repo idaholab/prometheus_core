@@ -81,8 +81,8 @@ Behind them: the orchestrator (`client-agent`), two agents, a state store (Valke
 cd ~/prometheus/prometheus_core/platform
 
 make init-env                       # once: creates .env (next slide)
-echo "LOCAL_SDK=true" >> .env       # once: base image from ../sdk
-echo "LOCAL_DEEPLYNX=true" >> .env  # once: DeepLynx next to the platform
+printf '\nLOCAL_SDK=true\n' >> .env # once: base image from ../sdk
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env # once: DeepLynx next to the platform
 
 make up                        # build, start, wait, make check
 make restart                   # restart, no rebuild
@@ -283,7 +283,7 @@ Note: The template compose forwards LLM_CONFIG_PROFILE, LLM_API_KEY and EMBEDDIN
 :::: grid 2 gap=30px
 ```bash {.sm}
 # in prometheus_core/platform, once (deck 03, "Once, then four commands")
-echo "LOCAL_DEEPLYNX=true" >> .env
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env
 make up
 ```
 
@@ -425,8 +425,8 @@ git remote add upstream \
 git switch devel
 
 make init-env                       # creates .env, asks for LLM + key
-echo "LOCAL_SDK=true" >> .env       # base image from ../sdk
-echo "LOCAL_DEEPLYNX=true" >> .env  # DeepLynx in the stack
+printf '\nLOCAL_SDK=true\n' >> .env # base image from ../sdk
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env # DeepLynx in the stack
 ```
 
 |||

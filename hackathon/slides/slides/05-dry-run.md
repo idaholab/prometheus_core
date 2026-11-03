@@ -229,8 +229,8 @@ git fetch upstream
 cd platform            # the stack lives here
 
 make init-env                       # secrets; pick LLM profile + key
-echo "LOCAL_SDK=true" >> .env       # base image from ../sdk
-echo "LOCAL_DEEPLYNX=true" >> .env  # DeepLynx; make up writes DEEPLYNX_*
+printf '\nLOCAL_SDK=true\n' >> .env # base image from ../sdk
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env # DeepLynx; make up writes DEEPLYNX_*
 
 make up                   # long first build; make logs to watch
 make ps
