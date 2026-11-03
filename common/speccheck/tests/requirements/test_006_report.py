@@ -733,6 +733,29 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
     assert f"#### Test [`test_a`]({blob}/proj/tests/t.py#L12) in `proj/tests/t.py`" in text
 
 
+@pytest.mark.covers(
+    "SPC-REQ-006-06",
+    "a result with no line number links its test file at the commit with no #L anchor, where one with line 12 gets #L12",
+)
+def test_a_test_with_no_line_links_the_file_without_an_anchor(project: Project):
+    """An unknown line is not line 0: the link opens the file, not `#L0`."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit", "root": "proj"}
+    with_line = {"test": "t.py::test_a", "file": "tests/t.py", "line": 12, "outcome": "passed"}
+    without_line = {"test": "t.py::test_b", "file": "tests/t.py", "outcome": "passed"}
+    lines = [
+        {**result, "covers": [{"id": "T-REQ-001-01", "how": f"{result['test']} proves it"}]}
+        for result in (with_line, without_line)
+    ]
+    project.write("u.jsonl", "\n".join(json.dumps(line) for line in [header, *lines]) + "\n")
+    env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root.parent)}
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    blob = f"https://github.com/o/r/blob/{SHA}/proj/tests/t.py"
+    assert f"#### Test [`test_a`]({blob}#L12) in `proj/tests/t.py`" in text
+    assert f"#### Test [`test_b`]({blob}) in `proj/tests/t.py`" in text
+    assert "#L0" not in text
+
+
 @pytest.mark.parametrize(
     ("change", "env"),
     [
@@ -762,6 +785,20 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
                 "SPC-REQ-006-06", "a test file path holding URL characters like ? and # is shown but not linked"
             ),
             id="url-characters",
+        ),
+        pytest.param(
+            {"root": "../outside", "file": "tests/t.py"},
+            {**ENV, "GITHUB_SHA": SHA},
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-06", "a results file whose root climbs out of the repository with .. gets no test link"
+            ),
+            id="root-dot-dot",
+        ),
+        pytest.param(
+            {"root": "my project", "file": "tests/t.py"},
+            {**ENV, "GITHUB_SHA": SHA},
+            marks=pytest.mark.covers("SPC-REQ-006-06", "a results file whose root has a space in it gets no test link"),
+            id="root-space",
         ),
         pytest.param(
             {"root": None, "file": "tests/t.py"},
