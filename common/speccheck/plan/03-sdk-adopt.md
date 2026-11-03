@@ -18,6 +18,11 @@ are marked so this step can pass, and step 4 works through them.
   `sdk/specs/`, in the tests, and in every doc that names one (`grep` across the repository,
   including `agent-template/` and `platform/`). One mechanical commit, separate from the rest, so
   it is easy to review.
+- **Titles:** all 14 `sdk/specs/NNN-*.md` titles use an em dash (`# 010 — Agent artifacts, ...`), but
+  SPC-REQ-001-01 requires `# NNN - Name` with a hyphen, and `lint` rejects the dash. Retitle each
+  with a hyphen (`# 010 - Agent artifacts, ...`). Speccheck stays strict; do not widen it. Put this
+  in the same mechanical commit as the prefix rename, and check that nothing links to the old title
+  text or its anchor (`grep` for the headings, including the report's `#NNN-name` links).
 - **Markers:** turn the existing citations (docstrings such as `"""Covers REQ-002-14."""` and
   comments such as `# REQ-005-14, BEH-005-05: ...`, about 43 IDs) into `covers(ID, how)` marks,
   each saying how that test proves the requirement. A parametrized test claims per
@@ -50,6 +55,7 @@ are marked so this step can pass, and step 4 works through them.
 
 - `speccheck-sdk` passes in `test.yml` on a PR and with `--complete` on `devel`.
 - No source file in the repository still cites a bare `REQ-NNN-XX` from `sdk/specs`.
+- `speccheck lint` on `sdk/specs/` reports no `spec-title` problem: every title reads `# NNN - Name`.
 - Breaking or skipping a test that claims an `SDK-` requirement fails the final job.
 
 ## Reviewers
