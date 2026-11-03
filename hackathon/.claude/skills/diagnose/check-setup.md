@@ -40,7 +40,7 @@ order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
 - **After item 6 passes**: the check question `registry-wipe`, once; offer
   `/how explain registration and discovery`.
 - **DeepLynx** (9): required, since agents exit at startup without it. The platform runs it with
-  `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Add the line to the platform
+  `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Set the line in the platform
   `.env` (yes), a platform `make restart` (yes; it writes the `DEEPLYNX_*` lines, no secret goes into
   the chat), then `deeplynx-env`, `deeplynx-backend`, `agent-env-sync`, and `make up` in the agent folder.
 - **Personal skills** (10): WARN; give the rename command for the user's own terminal.

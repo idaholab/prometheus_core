@@ -9,11 +9,14 @@ server, you can run one next to the platform, either from the published images
 DeepLynx publishes its server and web UI as images under
 `ghcr.io/idaholab/deeplynx/`. With `LOCAL_DEEPLYNX=true` the platform starts
 them alongside everything else (`docker-compose.deeplynx.yml`) and configures
-itself to use them, so there is nothing to build or click through:
+itself to use them, so there is nothing to build or click through. The first
+`make up`, which creates `.env`, asks "Run DeepLynx locally (LOCAL_DEEPLYNX)?":
+Enter answers yes. With an `.env` you already have, set the line in
+it instead, and start the platform:
 
 ```
 cd platform
-echo "LOCAL_DEEPLYNX=true" >> .env
+# in .env: LOCAL_DEEPLYNX=true
 make up
 ```
 

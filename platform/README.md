@@ -44,11 +44,26 @@ The first `make up` creates `.env` from `.env.example` and generates every
 secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
 `BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). The only things you have to
 set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
-`make up` asks for them in a terminal, or stops and tells you what is missing. To prepare `.env` without starting anything:
+`make up` asks for them in a terminal, or stops and tells you what is missing.
+When it creates `.env`, it also asks two questions, and Enter answers yes:
+
+```
+Build the SDK base image locally (LOCAL_SDK)? [Y/n] (Enter = yes):
+Run DeepLynx locally (LOCAL_DEEPLYNX)? [Y/n] (Enter = yes):
+```
+
+They set `LOCAL_SDK` (step 2) and `LOCAL_DEEPLYNX` (below), and count from this
+first `make up` on. They're asked only once, when `.env` is created: change your
+answer by setting the line in `.env` to `true` or `false`. A variable you set on
+the command line (`make up LOCAL_SDK=false`) isn't asked about, and without a
+terminal (CI) nothing is asked and both stay `false`.
+
+Every `make` target that builds or starts something (`up`, `restart`, `ng-*`,
+`build`, `deeplynx-setup`) runs this first. To prepare `.env` without starting
+anything:
 
 ```bash
-python3 scripts/init_env.py   # or: make init-env
-# then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
+make init-env   # or: python3 scripts/init_env.py
 ```
 
 Section 1 of `.env.example` lists what you must set; everything else has a
@@ -88,10 +103,10 @@ Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file
 
 #### Run DeepLynx with the platform
 
-Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, add one line to `.env`, after `make init-env` has created it:
+Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, answer yes (Enter) to the DeepLynx question when `make up` creates `.env`. With an `.env` you already have, set the line in it instead:
 
-```bash
-printf '\nLOCAL_DEEPLYNX=true\n' >> .env
+```dotenv
+LOCAL_DEEPLYNX=true
 ```
 
 Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `localhost:5000`; both ports must be free) and runs `make deeplynx-setup`, which creates a project and an API key and writes the `DEEPLYNX_*` lines to `.env`. See [DeepLynx storage](#deeplynx-storage) to use a DeepLynx you already have instead.
@@ -100,16 +115,18 @@ Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `local
 
 Every Python service is built `FROM` the `prometheus_api` base image. Pick one of the two options below.
 
-#### Option A: pull the published image (default)
+#### Option A: pull the published image
 
-Nothing to do. `make up` pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
+Answer no to the base image question when `make up` creates `.env` (or set `LOCAL_SDK=false` in `.env`). `make up` then pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
 
 #### Option B: build it locally from `../sdk`
 
-Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out:
+Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out.
 
-```bash
-printf '\nLOCAL_SDK=true\n' >> .env
+Answer yes (Enter) to the base image question when `make up` creates `.env`. With an `.env` you already have, set the line in it instead:
+
+```dotenv
+LOCAL_SDK=true
 ```
 
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
