@@ -41,8 +41,9 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   that SPC-REQ-005-10 would find later fails before the run. The message MUST name both claims.
 - SPC-REQ-003-12: Collection MUST fail on a claiming test with a mark on its class or module
   (`pytestmark`), with a mark on its function while it is parametrized, with more than one
-  `parametrize`, or that uses a parametrized fixture. The message MUST say to put the claim on each
-  `pytest.param` of one `parametrize`, each with its own explanation.
+  `parametrize`, or that uses a parametrized fixture. The message MUST say where the claim goes,
+  each with its own explanation: onto each test when the mark is on a class or module, and onto
+  each `pytest.param` of one `parametrize` in the other cases.
 - SPC-REQ-003-13: The message for a refused ID MUST say how to fix it: for a malformed ID it shows
   the ID format, for an unknown ID it names the spec to add it to, for a retired ID it says to
   claim what replaced it, and for a disallowed ID it names the `producers.<name>.specs` key.
