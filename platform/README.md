@@ -228,7 +228,7 @@ Run the targets from `platform/`. On Windows, run them from your WSL2 distro. Se
 | `make cluster-down` | Deletes the cluster |
 | `make cluster-reset` | `cluster-down`, then `cluster-up` |
 | `make cluster-push` | Pushes the images `make build` made to the cluster registry as `prometheus_<name>-devel:local` (`PUSH_TAG=` to change). Images that weren't built are skipped |
-| `make cluster-deploy` | Runs `init-env`, copies `.env` into the `prometheus-env` and `prometheus-env-private` Secrets, installs or upgrades the chart, and waits until every pod is ready. Then, like `make up`, it checks the frontend and `/api` through the ingress and waits until every agent is registered with LiteLLM (`CHECK=false` skips this) |
+| `make cluster-deploy` | Runs `init-env`, copies `.env` into the `prometheus-env` and `prometheus-env-private` Secrets, installs or upgrades the chart, and waits until every pod is ready. Then, like `make up`, it checks the frontend and `/api` through the ingress and waits until every agent is registered with the backend (`CHECK=false` skips this) |
 | `make cluster-undeploy` | Uninstalls the chart. The databases and Valkey keep their volumes |
 | `make cluster-status` | Lists the pods, services, ingress and volumes |
 | `make cluster-logs SVC=backend` | Follows one service's logs |
@@ -248,7 +248,7 @@ every one of them. Adding an agent means a Dockerfile, its compose file and a `h
 
 ```yaml
 agents:
-  my-agent:              # the Service name, and the name it registers with LiteLLM
+  my-agent:              # the Service name, and the name it registers under
     enabled: true
     image:
       repository: prometheus_my-agent-devel
@@ -257,14 +257,14 @@ agents:
 ```
 
 The chart's `values.yaml` documents every setting, and `values.schema.json` rejects unknown ones.
-Service names are fixed (`backend`, `litellm`, `redis`, ...) to match Compose, so install one
+Service names are fixed (`backend`, `redis`, ...) to match Compose, so install one
 release per namespace. In the cluster, `/api` goes from the ingress straight to the backend; the
 backend's `/healthz` and `/readyz` and the client-agent are reachable with
 `kubectl port-forward svc/<name>`.
 
-Behind a TLS-inspecting proxy, outbound HTTPS from the pods (LiteLLM to the LLM provider, agents
-to DeepLynx) fails certificate verification. Pass the proxy's CA certificate and the backend,
-LiteLLM and the agents trust it on top of their own CA bundles:
+Behind a TLS-inspecting proxy, outbound HTTPS from the pods (agents to their LLM provider and
+to DeepLynx) fails certificate verification. Pass the proxy's CA certificate and the backend
+and the agents trust it on top of their own CA bundles:
 
 ```bash
 make cluster-deploy EXTRA_CA_CERT=/path/to/ca.pem
@@ -272,17 +272,8 @@ make cluster-deploy EXTRA_CA_CERT=/path/to/ca.pem
 
 Nothing is added when `EXTRA_CA_CERT` is unset.
 
-The in-cluster LiteLLM uses `litellm_config.yaml`, the same file Compose mounts, which sends model
-requests to Anthropic with `LLM_API_KEY`. To send them somewhere else, such as another LiteLLM
-service, pass your own config. Keep `general_settings` from `litellm_config.yaml` and change the
-`model_list` entries:
-
-```bash
-make cluster-deploy LITELLM_CONFIG=/path/to/litellm_config.yaml
-```
-
-Agents keep `LLM_CONFIG_PROFILE=registry`, so every model request still goes through the in-cluster
-LiteLLM.
+Agents call the provider that `LLM_CONFIG_PROFILE` in `.env` selects, as under Compose. There is
+no LLM proxy in the cluster.
 
 On the INL network, `cluster-up` downloads the INL root CA from
 `https://certstore.inl.gov/pki/CAINLROOT_B64.crt` to `~/.cache/prometheus/` and trusts it inside

@@ -428,12 +428,8 @@ HELM_AGENT_VALUES         += $(if $(filter true,$(OPTIONAL_AGENTS)),$(foreach f,
 # Extra helm upgrade flags, e.g. HELM_ARGS="--set global.image.registry=k3d-prometheus-registry.localhost:5001"
 HELM_ARGS                 ?=
 KUBE_CONTEXT              := k3d-prometheus
-# The in-cluster LiteLLM's config: which upstream each model alias goes to.
-# Defaults to the same file Compose mounts; set LITELLM_CONFIG=/path/to/config.yaml
-# to send model requests elsewhere (another LiteLLM, a different provider).
-LITELLM_CONFIG            ?= litellm_config.yaml
-# Set EXTRA_CA_CERT=/path/to/ca.pem behind a TLS-inspecting proxy, so LiteLLM,
-# the backend and the agents trust it for outbound HTTPS. Unset by default.
+# Set EXTRA_CA_CERT=/path/to/ca.pem behind a TLS-inspecting proxy, so the backend
+# and the agents trust it for outbound HTTPS. Unset by default.
 EXTRA_CA_CERT             ?=
 KUBECTL                   := kubectl --context $(KUBE_CONTEXT) -n $(CLUSTER_NAMESPACE)
 
@@ -467,7 +463,6 @@ endif
 		-f $(HELM_CHART)/values-dev.yaml $(HELM_AGENT_VALUES) \
 		--set global.image.registry=$(PROMETHEUS_IMAGE_REGISTRY) \
 		--set global.image.tag=$(PROMETHEUS_IMAGE_TAG) \
-		--set-file litellm.config=$(LITELLM_CONFIG) \
 		$(if $(EXTRA_CA_CERT),--set extraCaCert.configMap=prometheus-extra-ca) \
 		--set-string envChecksum=$$(sha256sum .env | cut -c1-16) \
 		--wait --timeout 10m $(HELM_ARGS)

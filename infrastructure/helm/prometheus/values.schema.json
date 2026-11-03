@@ -117,19 +117,6 @@
     },
     "envChecksum": { "type": "string" },
     "waitImage": { "type": "string" },
-    "litellm": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["enabled"],
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "image": { "$ref": "#/definitions/image" },
-        "replicas": { "type": "integer", "minimum": 0 },
-        "config": { "type": "string" },
-        "resources": { "$ref": "#/definitions/resources" }
-      }
-    },
-    "litellmDb": { "$ref": "#/definitions/datastore" },
     "adminDb": { "$ref": "#/definitions/datastore" },
     "redis": { "$ref": "#/definitions/datastore" },
     "postgres": {

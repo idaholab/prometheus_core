@@ -4,7 +4,7 @@ directory ships its entry in a helm-values.yaml under platform/agents/.
 */ -}}
 {{- range $name, $a := .Values.agents }}
 {{- if $a.enabled }}
-{{- include "prometheus.requires" (dict "root" $ "name" $name "needs" (list "litellm")) }}
+{{- include "prometheus.requires" (dict "root" $ "name" $name "needs" (list "backend")) }}
 {{- $ctx := dict "root" $ "name" $name }}
 ---
 apiVersion: apps/v1
@@ -30,7 +30,7 @@ spec:
       {{- include "prometheus.pullSecrets" $ | trim | nindent 6 }}
       {{- include "prometheus.podSecurity" $ | trim | nindent 6 }}
       initContainers:
-        {{- include "prometheus.waitForLitellm" $ | trim | nindent 8 }}
+        {{- include "prometheus.waitForBackend" $ | trim | nindent 8 }}
         {{- include "prometheus.caInit" (dict "root" $ "image" (include "prometheus.image" (dict "root" $ "image" $a.image))) | trim | nindent 8 }}
       containers:
         - name: {{ $name }}

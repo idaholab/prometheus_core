@@ -1,6 +1,6 @@
 Prometheus is deployed to namespace {{ .Release.Namespace }}.
 
-Service names are fixed (backend, litellm, redis, client-agent, ...) to match
+Service names are fixed (backend, redis, client-agent, ...) to match
 docker-compose.yml, so install only one release per namespace.
 
 {{- if .Values.ingress.enabled }}

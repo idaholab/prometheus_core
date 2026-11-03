@@ -64,7 +64,7 @@ spec:
             # PROMETHEUS_MESH_WORKERS is the VTK pool size per web worker, so the
             # peak child count is BACKEND_WORKERS x this, which the memory limit covers
             - name: PROMETHEUS_MESH_CACHE_DIR
-              value: /var/cache/prometheus-mesh
+              value: /cache/prometheus-mesh
             - name: PROMETHEUS_MESH_WORKERS
               value: {{ $b.mesh.workers | quote }}
             - name: PROMETHEUS_MESH_TIMEOUT_SECONDS
@@ -74,7 +74,7 @@ spec:
             {{- include "prometheus.caEnv" . | trim | nindent 12 }}
           volumeMounts:
             - name: mesh-cache
-              mountPath: /var/cache/prometheus-mesh
+              mountPath: /cache/prometheus-mesh
             # Uploads spool here
             - name: tmp
               mountPath: /tmp

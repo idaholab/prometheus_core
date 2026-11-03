@@ -3,7 +3,7 @@ The client-agent orchestrator. Kept apart from the specialist agents because
 it has more config and a different role; it uses the same helpers.
 */ -}}
 {{- if .Values.clientAgent.enabled }}
-{{- include "prometheus.requires" (dict "root" . "name" "clientAgent" "needs" (list "litellm" "redis")) }}
+{{- include "prometheus.requires" (dict "root" . "name" "clientAgent" "needs" (list "backend" "redis")) }}
 {{- $ctx := dict "root" . "name" "client-agent" -}}
 {{- $c := .Values.clientAgent -}}
 {{- if and (gt (int $c.replicas) 1) (eq $c.stagedUploads.backend "local") }}
@@ -33,7 +33,7 @@ spec:
       {{- include "prometheus.podSecurity" . | trim | nindent 6 }}
       terminationGracePeriodSeconds: {{ $c.terminationGracePeriodSeconds }}
       initContainers:
-        {{- include "prometheus.waitForLitellm" . | trim | nindent 8 }}
+        {{- include "prometheus.waitForBackend" . | trim | nindent 8 }}
         {{- include "prometheus.caInit" (dict "root" . "image" (include "prometheus.image" (dict "root" . "image" $c.image))) | trim | nindent 8 }}
       containers:
         - name: client-agent

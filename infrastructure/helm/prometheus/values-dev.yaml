@@ -6,8 +6,6 @@
 # cluster registry and set
 #   global.image.registry: k3d-prometheus-registry.localhost:5001
 
-litellmDb:
-  enabled: true
 adminDb:
   enabled: true
 redis:

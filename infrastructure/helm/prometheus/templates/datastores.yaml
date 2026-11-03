@@ -1,7 +1,6 @@
 {{- /*
-In-chart datastores for dev: Postgres for LiteLLM's agent registrations and,
-separately, for the backend's admin plane (users, OIDC config, signing keys),
-plus Valkey. Single replica, a PVC each.
+In-chart datastores for dev: Postgres for the backend's admin plane (users, OIDC config, signing keys) and
+Valkey, which also holds the agent registrations. Single replica, a PVC each.
 */ -}}
 {{- define "prometheus.postgres" -}}
 {{- $root := .root -}}
@@ -75,11 +74,7 @@ spec:
       targetPort: postgres
 {{- end }}
 
-{{- if .Values.litellmDb.enabled }}
-{{ include "prometheus.postgres" (dict "root" . "name" "litellm-db" "user" "litellm" "passwordKey" "LITELLM_DB_PASSWORD" "config" .Values.litellmDb) }}
-{{- end }}
 {{- if .Values.adminDb.enabled }}
----
 {{ include "prometheus.postgres" (dict "root" . "name" "admin-db" "user" "admin" "passwordKey" "ADMIN_DB_PASSWORD" "config" .Values.adminDb) }}
 {{- end }}
 {{- if .Values.redis.enabled }}

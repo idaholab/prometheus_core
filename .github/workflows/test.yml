@@ -312,7 +312,7 @@ jobs:
         run: |
           agents=()
           for f in $(find platform/agents -name helm-values.yaml | sort); do agents+=(-f "$f"); done
-          config=(--set-file litellm.config=platform/litellm_config.yaml)
+          config=()
           check() {
             echo "::group::$*"
             helm lint --strict "$CHART" "${config[@]}" "$@"

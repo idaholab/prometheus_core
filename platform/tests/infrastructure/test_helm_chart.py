@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm is no
 
 PLATFORM = Path(__file__).resolve().parent.parent.parent
 
-INFRASTRUCTURE = {"litellm-db", "admin-db", "litellm", "redis", "backend", "client-agent", "frontend"}
+INFRASTRUCTURE = {"admin-db", "redis", "backend", "client-agent", "frontend"}
 
 
 def _discover_agents() -> dict[str, Path]:
@@ -46,8 +46,8 @@ def _discover_agents() -> dict[str, Path]:
     return agents
 
 
-# Agent name (its Deployment and Service name, and the name it registers with LiteLLM
-# under) -> its directory
+# Agent name (its Deployment and Service name, and the name it registers with the backend
+# registry under) -> its directory
 AGENTS = _discover_agents()
 
 # The agents that also run under Compose, where the compose service has the same name.
@@ -82,7 +82,7 @@ def _render(project_root: Path, chart: Path, *args: str) -> list[dict]:
     # Every agent, including the ones that ship disabled
     for name in AGENTS:
         cmd += ["--set", f"agents.{name}.enabled=true"]
-    cmd += ["--set-file", f"litellm.config={project_root / 'litellm_config.yaml'}", *args]
+    cmd += [*args]
     out = subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
     return [doc for doc in yaml.safe_load_all(out) if doc]
 
@@ -155,8 +155,9 @@ def test_debug_and_optional_agents_ship_disabled(name):
 
 def test_pinned_third_party_images(rendered, compose_data):
     workloads = _workloads(rendered)
-    for name in ("litellm-db", "admin-db", "litellm", "redis"):
-        compose_image = compose_data["services"][name]["image"]
+    for name in ("admin-db", "redis"):
+        # Compose pins by digest too (image:tag@sha256:...); the chart pins the tag
+        compose_image = compose_data["services"][name]["image"].split("@")[0]
         image = _container(workloads[name])["image"]
         assert image.endswith("/" + compose_image.split("/")[-1]), f"{name}: chart {image}, compose {compose_image}"
 
@@ -189,7 +190,7 @@ def test_agent_gets_compose_env(rendered, project_root, env_example_path, agent)
             name = line.lstrip("# ").split("=", 1)[0]
             if name.isupper() and "=" in line:
                 in_env_file.add(name)
-        in_env_file |= {"AGENT_SECRET", "REDIS_PASSWORD", "LITELLM_MASTER_KEY"}
+        in_env_file |= {"AGENT_SECRET", "REDIS_PASSWORD", "LITELLM_MASTER_KEY"}  # the latter is AGENT_SECRET under another name
         in_env_file |= {
             k for k in _compose_env(project_root / "docker-compose.yml", "backend") if k.startswith("DEEPLYNX_")
         }
@@ -204,7 +205,7 @@ def test_agent_gets_compose_env(rendered, project_root, env_example_path, agent)
 def test_agents_register_their_service_name(rendered, name):
     env = {e["name"]: e.get("value") for e in _container(_objects(rendered, "Deployment")[name])["env"]}
     assert env["EXTERNAL_AGENT_URL"] == f"http://{name}:8000"
-    assert env["REGISTRY_URL"] == "http://litellm:4000"
+    assert env["REGISTRY_URL"] == "http://backend:8000"
 
 
 def test_compose_common_env_reaches_every_agent(rendered, compose_data):
@@ -216,8 +217,11 @@ def test_compose_common_env_reaches_every_agent(rendered, compose_data):
         "REDIS_PASSWORD",
         "DEEPLYNX_KEY",
         "DEEPLYNX_SECRET",
+        "DEEPLYNX_JWT_TOKEN",
         "DEEPLYNX_ORG_ID",
         "DEEPLYNX_PROJECT_ID",
+        "DEEPLYNX_DATA_SOURCE_ID",
+        "LITELLM_MASTER_KEY",  # AGENT_SECRET under the name the SDK reads
         "USER_IDENTITY_PUBLIC_KEY",
     }
     missing = set(compose_data["x-common-env"]) - set(common) - fixed - secrets_from_env
@@ -245,7 +249,6 @@ def test_private_keys_stay_off_the_agents(rendered):
 def test_probes(rendered):
     deployments = _objects(rendered, "Deployment")
     expected = {"backend": ("/healthz", "/readyz"), "frontend": ("/healthz", "/healthz")}
-    expected["litellm"] = ("/health/liveliness", "/health/readiness")
     for name in ["client-agent", *AGENTS]:
         expected[name] = ("/healthz", "/healthz")
     for name, (liveness, readiness) in expected.items():
@@ -270,6 +273,6 @@ def test_ingress_routes_api_to_backend(rendered):
 
 
 def test_datastores_persist(rendered):
-    for name in ("litellm-db", "admin-db", "redis"):
+    for name in ("admin-db", "redis"):
         claims = _objects(rendered, "StatefulSet")[name]["spec"]["volumeClaimTemplates"]
         assert claims, f"{name} has no volume claim"

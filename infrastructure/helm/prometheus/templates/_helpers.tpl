@@ -63,7 +63,13 @@ defaults) and env with the URLs of the fixed services. Use as:
 
 {{- define "prometheus.commonEnv" -}}
 - name: REGISTRY_URL
-  value: http://litellm:4000
+  value: http://backend:8000
+# The SDK sends this as its registry token; the backend registry checks AGENT_SECRET
+- name: LITELLM_MASTER_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.secrets.shared }}
+      key: AGENT_SECRET
 - name: REDIS_URL
   value: redis://redis:6379
 - name: JWKS_URL
@@ -160,16 +166,17 @@ dict with root, name, host and port.
 {{- end }}
 
 {{/*
-Init container that waits until LiteLLM is live. Agents register with it at
-startup, and a failed first attempt only retries in the background.
+Init container that waits until the backend is live. Agents register with its
+agent registry at startup, and a failed first attempt only retries in the
+background.
 */}}
-{{- define "prometheus.waitForLitellm" -}}
-- name: wait-for-litellm
+{{- define "prometheus.waitForBackend" -}}
+- name: wait-for-backend
   image: {{ .Values.waitImage }}
   command:
     - sh
     - -c
-    - until wget -q -O /dev/null http://litellm:4000/health/liveliness; do echo "waiting for litellm"; sleep 2; done
+    - until wget -q -O /dev/null http://backend:8000/healthz; do echo "waiting for backend"; sleep 2; done
   {{- include "prometheus.containerSecurity" . | nindent 2 }}
 {{- end }}
 
