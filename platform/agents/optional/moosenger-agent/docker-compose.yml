@@ -1,0 +1,121 @@
+# MOOSEnger specialist agent.
+#
+# Included by `make generate` only when OPTIONAL_AGENTS=true (like the OSTI
+# agent): the image is large (LangChain/LangGraph/Chroma) and is built from a
+# MOOSEnger checkout. Paths are relative to this file.
+#
+# MOOSE itself runs elsewhere: in the opt-in sidecar from
+# docker-compose.moose-mcp.yml (see README.md), or in any MOOSEnger MCP server
+# reachable at MOOSE_MCP_URL. That is a separate file because the static tests
+# require every service in an agents/**/docker-compose.yml to be a
+# PrometheusAgent.
+#
+# Set in platform/.env when enabled (see README.md):
+#   MOOSENGER_SRC   the build context for MOOSEnger: a local checkout of the
+#                   MOOSEnger repository (development) or a git URL with a
+#                   pinned ref. Never a path inside platform/agents/.
+#   MOOSE_MCP_URL / MOOSE_MCP_AUTH_KEY   the MOOSE execution server
+#   MOOSENGER_LLM_HOST / MOOSENGER_MODEL / MOOSENGER_EMBEDDINGS
+services:
+  moosenger-agent:
+    build:
+      context: .
+      additional_contexts:
+        # OPTIONAL_AGENTS=true enables every optional agent, so this is not a
+        # required (:?) variable. Unset, it is <repo root>/moosenger, which only
+        # matters when this image is built.
+        moosenger: ${MOOSENGER_SRC:-../../../../moosenger}
+      args:
+        - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO}
+        - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-}
+    extra_hosts:
+      - "prometheus.host.internal:host-gateway"
+    networks:
+      - agent-network
+    environment:
+      AGENT_PORT: 8000
+      EXTERNAL_AGENT_URL: http://moosenger-agent:8000
+      AGENT_SECRET: ${AGENT_SECRET}
+      AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
+      REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+      # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
+      LITELLM_MASTER_KEY: ${AGENT_SECRET}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Multi-user identity plane: this agent verifies with JWKS, never holds
+      # the private key. See docs/dev-docs/multi-user-setup.md.
+      JWKS_URL: ${JWKS_URL:-http://backend:8000/.well-known/jwks.json}
+      USER_IDENTITY_PUBLIC_KEY: ${USER_IDENTITY_PUBLIC_KEY:-}
+      USER_IDENTITY_ISS: ${USER_IDENTITY_ISS:-prometheus-platform}
+      USER_IDENTITY_AUD: ${USER_IDENTITY_AUD:-prometheus-agents}
+      USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
+      CREDENTIAL_BROKER: ${CREDENTIAL_BROKER:-env}
+      DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
+      DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
+      DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
+      DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
+      DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
+      # Platform LLM profile, as for every agent. MOOSEnger's own LangChain
+      # client does not read it yet (see README "LLM settings").
+      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}
+      LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      # ---- MOOSEnger --------------------------------------------------------
+      MOOSENGER_PROJECT_DIR: /workspace
+      # Template rendered into /workspace/.moosenger.yaml at startup.
+      MOOSENGER_CONFIG: /app/config/moosenger.yaml
+      MOOSENGER_RENDER_CONFIG: ${MOOSENGER_RENDER_CONFIG:-true}
+      # MOOSEnger's LangChain client reads OPENAI_API_KEY; the agent falls back
+      # to MOOSENGER_API_KEY, then LLM_API_KEY.
+      MOOSENGER_API_KEY: ${MOOSENGER_API_KEY:-}
+      MOOSENGER_LLM_HOST: ${MOOSENGER_LLM_HOST:-https://litellm.inl.gov/}
+      MOOSENGER_MODEL: ${MOOSENGER_MODEL:-gpt-5-1-gov-va}
+      MOOSENGER_EMBEDDINGS: ${MOOSENGER_EMBEDDINGS:-text-embedding-3-large-gov-va}
+      MOOSE_MCP_URL: ${MOOSE_MCP_URL:-http://moose-mcp:8000/mcp}
+      MOOSE_MCP_AUTH_KEY: ${MOOSE_MCP_AUTH_KEY:-}
+      # Startup validation always runs; warmup (vector DB pull, syntax data)
+      # is optional and never compiles anything here.
+      MOOSENGER_A2A_WARMUP: ${MOOSENGER_A2A_WARMUP:-true}
+      MOOSENGER_A2A_WARMUP_DOWNLOAD: ${MOOSENGER_A2A_WARMUP_DOWNLOAD:-auto}
+      MOOSENGER_A2A_WARMUP_COMPILE: ${MOOSENGER_A2A_WARMUP_COMPILE:-false}
+      MOOSENGER_REGISTRY_USERNAME: ${MOOSENGER_REGISTRY_USERNAME:-}
+      MOOSENGER_REGISTRY_PASSWORD: ${MOOSENGER_REGISTRY_PASSWORD:-}
+      MOOSENGER_STARTUP_STRICT: ${MOOSENGER_STARTUP_STRICT:-false}
+      MOOSENGER_TRACE_TOOLS: ${MOOSENGER_TRACE_TOOLS:-false}
+      MOOSENGER_EXECUTION_ESTIMATE_SECONDS: ${MOOSENGER_EXECUTION_ESTIMATE_SECONDS:-600}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      PYTHONDONTWRITEBYTECODE: 1
+    volumes:
+      # Session workspaces, vector DB, knowledge layout, plan/run artifacts.
+      - moosenger-workspace:/workspace
+      # MOOSE checkout for syntax data, pyhit, LSP and knowledge
+      # (knowledge.moose.repo: /moose). A named volume here, because agent
+      # compose files may not bind-mount host paths; to use a local MOOSE
+      # tree, bind it in platform/docker-compose.override.yml (README.md).
+      - moose-src:/moose:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # /healthz is served by PrometheusAgent.build_app() once uvicorn is up.
+    # MOOSEnger's startup validation and warmup run in the app lifespan before
+    # that, so start_period is generous. Registry registration retries in the
+    # background and is not covered here.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+
+volumes:
+  moosenger-workspace:
+  moose-src:

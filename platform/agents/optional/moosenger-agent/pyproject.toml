@@ -1,0 +1,18 @@
+[project]
+name = "moosenger-agent"
+version = "0.1.0"
+description = "Prometheus launcher for MOOSEnger (MOOSE Q&A, input generation/validation, execution)"
+requires-python = ">=3.12"
+# Empty on purpose. prometheus_api, a2a-sdk, starlette and uvicorn come from the
+# base image. MOOSEnger is not on PyPI, so the Dockerfile installs it from the
+# `moosenger` build context (MOOSENGER_SRC) without its `prometheus` extra; the
+# agent class and its card ship inside the moosenger package.
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["."]
+relative_files = true
+omit = ["tests/*", ".venv/*"]

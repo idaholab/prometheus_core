@@ -1,0 +1,12 @@
+.venv
+.env
+.git
+.pytest_cache
+.mypy_cache
+.ruff_cache
+**/__pycache__
+**/*.pyc
+tests
+Dockerfile.moose-mcp
+docker-compose*.yml
+README.md

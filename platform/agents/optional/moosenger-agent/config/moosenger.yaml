@@ -1,0 +1,82 @@
+# MOOSEnger configuration for the Prometheus agent container.
+#
+# agent.py renders this file with `string.Template.safe_substitute(os.environ)`
+# into $MOOSENGER_PROJECT_DIR/.moosenger.yaml at startup (unless
+# MOOSENGER_RENDER_CONFIG=false), so every `$VAR` below is a container
+# environment variable set in docker-compose.yml / platform/.env.
+# Reference for every key: .moosenger.yaml.example in the MOOSEnger repository.
+
+core:
+  # MOOSEnger's own LangChain client: any OpenAI-compatible endpoint.
+  # Defaults point at INL LiteLLM, matching the platform's `inl_litellm`
+  # profile; the key arrives via OPENAI_API_KEY (= LLM_API_KEY by default).
+  model_provider: litellm
+  host: "$MOOSENGER_LLM_HOST"
+  model: "$MOOSENGER_MODEL"
+  completion_tokens: 16384
+  temperature: 0.0
+  devel: false
+
+rag:
+  preconditioner: "$MOOSENGER_MODEL"
+  pre_host: "$MOOSENGER_LLM_HOST"
+  pre_timeout: 60
+  embeddings: "$MOOSENGER_EMBEDDINGS"
+  emb_host: "$MOOSENGER_LLM_HOST"
+  vector_dir: "$MOOSENGER_PROJECT_DIR/vector_data"
+  matches: 10
+
+knowledge:
+  layout: "$MOOSENGER_PROJECT_DIR/.moosenger_knowledge"
+  moose:
+    # Read-only MOOSE checkout at /moose (bind it in docker-compose.override.yml).
+    repo: /moose
+    syntax_json: "$MOOSENGER_PROJECT_DIR/data/syntax.json"
+    markdown_lookup: "$MOOSENGER_PROJECT_DIR/data/moose_object_markdown_lookup.json"
+    docs:
+      include: []
+      exclude: []
+      skip:
+        - python/TestHarness/pbs_template.i
+        - test/tests/parser/hit_error/*
+        - test/tests/misc/check_error/checked_pointer_param_test.i
+        - test/tests/usability/bad.i
+        - test/tests/meshgenerators/polyline_mesh_generator/polyline_mesh_generator_bad_boundary.i
+  discussions:
+    - id: moose_qa
+      owner: idaholab
+      repo: moose
+
+github:
+  token_env: GITHUB_TOKEN
+
+agent:
+  # MOOSE runs in the moose-mcp sidecar (docker-compose.moose-mcp.yml) or any
+  # other MOOSEnger MCP server reachable from the agent-network.
+  mcp_url: "$MOOSE_MCP_URL"
+  # mcp_auth_key is read from MOOSE_MCP_AUTH_KEY; never put the key here.
+  agent_plan_mode: true
+  agent_max_iterations: 20
+  agent_modify_max_iterations: 50
+
+plugins:
+  modules: []
+  paths: []
+
+domains:
+  moose:
+    # No local executable in this container: execution goes through MCP.
+    local_moose_executable: null
+    moose_python_path: /moose/python
+    moose_syntax: "$MOOSENGER_PROJECT_DIR/data/syntax.json"
+    moose_markdown_lookup: "$MOOSENGER_PROJECT_DIR/data/moose_object_markdown_lookup.json"
+    lsp_enabled: true
+    smoke_required: true
+    smoke_timeout_seconds: 60
+    completion_max_lifecycle_rounds: 8
+    completion_max_total_continuations: 12
+    completion_max_semantic_revisions: 5
+    completion_max_same_revision_failures: 4
+    # The Prometheus INPUT_REQUIRED round-trip costs a user turn each time;
+    # keep the number of clarifications per request small.
+    completion_max_user_interactions: 3

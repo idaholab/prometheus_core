@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+# MOOSE execution sidecar: a MOOSE image plus MOOSEnger's FastMCP server
+# (moosenger.mcp.moose_server), so the agent container never needs a compiled
+# MOOSE.  The agent reaches it at http://moose-mcp:8000/mcp (agent.mcp_url).
+#
+# MOOSE_IMAGE must provide a MOOSE application executable (default:
+# modules/combined/combined-opt). Python 3.12 for MOOSEnger comes from uv.  Pin it by digest in .env:
+#   MOOSE_IMAGE=idaholab/moose:<tag>@sha256:<digest>
+ARG MOOSE_IMAGE
+# Same pinned uv image the SDK base image builds from (sdk/Dockerfile); we only
+# borrow the static `uv` binary from it.
+FROM ghcr.io/astral-sh/uv:0.13.6-python3.12-trixie-slim@sha256:bf889bda77474aa50c351caf1538b855ef2b7a30add45f26ca50dcb6ade06402 AS uvbin
+
+FROM ${MOOSE_IMAGE}
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY} \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Install MOOSEnger (only its MCP server is used here) into an isolated venv so
+# MOOSE's own Python tooling is untouched.
+COPY --from=uvbin /usr/local/bin/uv /usr/local/bin/uv
+RUN --mount=type=bind,from=moosenger,source=.,target=/src/moosenger,rw \
+    uv venv /opt/moosenger-venv --python 3.12 \
+    && uv pip install --python /opt/moosenger-venv/bin/python --no-cache-dir "/src/moosenger"
+
+ENV PATH="/opt/moosenger-venv/bin:${PATH}" \
+    MOOSE_MCP_HOST=0.0.0.0 \
+    MOOSE_MCP_PORT=8000 \
+    MOOSE_MCP_WD=/runs
+
+RUN mkdir -p /runs
+EXPOSE 8000
+
+# MOOSE_MCP_EXE (executable), MOOSE_MCP_AUTH_KEY and MOOSE_MCP_MAX_NPROCS come
+# from the environment (see docker-compose.moose-mcp.yml).
+CMD ["python", "-m", "moosenger.mcp.moose_server"]

@@ -123,7 +123,7 @@ make logs    # tail all services (SERVICE=<name> to filter)
 make ps      # show running services
 ```
 
-`make up` runs `make generate` first, which scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`. **Do not hand-edit that file** — re-run `make generate` after adding or removing an agent (or use `make ng-up` to skip regeneration). Agents in `agents/debug-agents/` and `agents/optional/` (OSTI research) are skipped unless `DEBUG_AGENTS=true` / `OPTIONAL_AGENTS=true`.
+`make up` runs `make generate` first, which scans `agents/*/docker-compose.yml` and writes `docker-compose.agents.yml`. **Do not hand-edit that file** — re-run `make generate` after adding or removing an agent (or use `make ng-up` to skip regeneration). Agents in `agents/debug-agents/` and `agents/optional/` (OSTI research, MOOSEnger) are skipped unless `DEBUG_AGENTS=true` / `OPTIONAL_AGENTS=true`.
 
 Launch and restart targets run `make clear-agent-registry` before starting services. This deletes the agent registrations (the `prometheus:agent-registry` Valkey key) so agents you removed don't linger, while preserving Valkey conversation and artifact state.
 
@@ -261,7 +261,7 @@ Notable environment variables (see `.env.example` for the full list):
 | `LLM_CONFIG_PROFILE` | Required; installed agent LLM mapping, e.g. `anthropic`, `openai`, `inl_hpc`, `inl_litellm`, `amsc`, or `anl_asksage` (no default; `registry` is not supported) |
 | `LLM_CONFIG_FILE` | Optional custom YAML path inside the agent container; overrides `LLM_CONFIG_PROFILE` |
 | `DEBUG_AGENTS` | When `true`, also build and start the mock agents in `agents/debug-agents/` |
-| `OPTIONAL_AGENTS` | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research; its PDF/ML dependencies make it the slowest image to build) |
+| `OPTIONAL_AGENTS` | When `true`, also build and start the heavy agents in `agents/optional/` (OSTI research, whose PDF/ML dependencies make it the slowest image to build; and MOOSEnger, built from a MOOSEnger checkout set by `MOOSENGER_SRC`) |
 | `LOCAL_DEEPLYNX` | When `true`, also start DeepLynx from its published images and point the `DEEPLYNX_*` settings at it ([Local DeepLynx install](docs/docs/local-deeplynx.md)) |
 | `PROMETHEUS_SYSTEM_TESTING` | When `true`, Make includes the Compose override that publishes the client-agent on `CLIENT_AGENT_PORT` |
 | Provider API keys | Credentials referenced by the selected profile; see `.env.example` |
@@ -301,6 +301,7 @@ platform/
     client-agent/           # A2A orchestrator
     optional/               # heavy agents, only with OPTIONAL_AGENTS=true
       osti-research-agent/  # OSTI literature search (PDF/ML deps, slow build)
+      moosenger-agent/      # MOOSE Q&A, input generation and runs (needs a MOOSEnger checkout)
     form-filler-agent/      # Dynamic form completion
     artifact-debug-agent/   # Artifact handling test agent
     (debug) corrosion-agent/        # Corrosion analysis specialist

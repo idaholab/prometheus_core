@@ -1,0 +1,61 @@
+# Opt-in MOOSE execution sidecar for the MOOSEnger agent.
+#
+# Not picked up by `make generate` (only docker-compose.yml files are); the
+# platform's static tests require every service in those to be a
+# PrometheusAgent.  Enable it with the Makefile's auto-included local override:
+#
+#   # platform/docker-compose.override.yml
+#   include:
+#     - agents/optional/moosenger-agent/docker-compose.moose-mcp.yml
+#
+# or run it on its own against the platform network:
+#
+#   docker compose -p prometheus_platform \
+#     -f agents/optional/moosenger-agent/docker-compose.moose-mcp.yml up -d
+#
+# The agent reaches it at MOOSE_MCP_URL (default http://moose-mcp:8000/mcp).
+services:
+  moose-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.moose-mcp
+      additional_contexts:
+        moosenger: ${MOOSENGER_SRC:-../../../../moosenger}
+      args:
+        - MOOSE_IMAGE=${MOOSE_IMAGE:?set MOOSE_IMAGE (digest-pinned MOOSE image) in .env}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-}
+    networks:
+      - agent-network
+    environment:
+      MOOSE_MCP_HOST: 0.0.0.0
+      MOOSE_MCP_PORT: 8000
+      # Path of the MOOSE application inside MOOSE_IMAGE.
+      MOOSE_MCP_EXE: ${MOOSE_MCP_EXE:-/opt/moose/modules/combined/combined-opt}
+      MOOSE_MCP_WD: /runs
+      MOOSE_MCP_AUTH_KEY: ${MOOSE_MCP_AUTH_KEY:-}
+      # Upper bound on MPI ranks per run (enforced by MOOSEnger's MCP server).
+      MOOSE_MCP_MAX_NPROCS: ${MOOSE_MCP_MAX_NPROCS:-4}
+      MOOSE_MCP_LOG_LEVEL: ${MOOSE_MCP_LOG_LEVEL:-info}
+    volumes:
+      - moose-runs:/runs
+    healthcheck:
+      # FastMCP streamable-http serves /mcp; any HTTP status (405/406 for a bare
+      # GET) means the server is up.
+      test: ["CMD", "python", "-c", "import urllib.request, urllib.error\ntry:\n    urllib.request.urlopen('http://localhost:8000/mcp', timeout=5)\nexcept urllib.error.HTTPError:\n    pass"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+networks:
+  agent-network:
+    # Created by platform/docker-compose.yml; when this file is run on its own
+    # the project name above makes the name match.
+    name: prometheus_platform_agent-network
+    external: true
+
+volumes:
+  moose-runs:

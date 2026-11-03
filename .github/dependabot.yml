@@ -20,6 +20,7 @@ updates:
       - /platform/agents/debug-agents/thread-pattern-agent
       - /platform/agents/form-filler-agent
       - /platform/agents/optional/osti-research-agent
+      - /platform/agents/optional/moosenger-agent
       - /platform/agents/synthesis-agent
       - /platform/backend
       - /platform/ctl
