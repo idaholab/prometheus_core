@@ -24,7 +24,7 @@ workflows = ["speccheck"]
 [ci.speccheck-self-check.covers]
 SPC-REQ-007-03 = "speccheck-upload uploads this job's results under speccheck-results-self-check, and the job checks that it fails on an empty folder"
 SPC-REQ-007-04 = "speccheck-verify runs for real on the requirements legs' results, and the job checks its report artifact names each requirements job by its display name, its step summary links that artifact, and it fails on an unreadable results file yet still uploads its report"
-SPC-REQ-007-06 = "the job sets up no Python of its own, installs speccheck once with speccheck-install, and runs `speccheck record` and speccheck-verify with that command"
+SPC-REQ-007-06 = "the job sets up no Python of its own, installs speccheck once with speccheck-install, and runs `speccheck verify` and `speccheck record` with that command"
 SPC-REQ-007-08 = "the job checks that speccheck.yml grants only actions: read and contents: read, that no job widens them, and that neither the workflow nor the speccheck actions name a secret"
 SPC-REQ-007-09 = "the job runs speccheck-verify with a run ID whose job names can't be looked up, and checks it succeeds and names every result by its producer"
 

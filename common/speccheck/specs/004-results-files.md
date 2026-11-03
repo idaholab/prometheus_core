@@ -21,14 +21,15 @@ runners and the checker, so other languages can write one too.
 - SPC-REQ-004-04: Claiming tests that were skipped or deselected MUST be written too, with that
   outcome.
 - SPC-REQ-004-05: The plugin MUST write a file only when `--speccheck-results` or
-  `SPECCHECK_RESULTS` asks for one, and MUST write it atomically when the session ends. An
-  interrupted session MUST NOT leave a file.
+  `SPECCHECK_RESULTS` asks for one, and only when the session ends. An interrupted session MUST
+  NOT leave a file, partial or whole. A path that can't be written MUST end the run as a usage
+  error that says why.
 - SPC-REQ-004-06: Under pytest-xdist, the run MUST write one file that holds every worker's results.
-- SPC-REQ-004-07: A reader MUST refuse a file over its size limit or with an over-long line, and
-  MUST NOT follow symlinks when it searches a folder.
-- SPC-REQ-004-08: In CI, the header MUST carry the CI context: the provider, server, repository,
-  workflow, job, run ID, attempt, the job's own ID when known, and commit. Outside CI, `ci` MUST be
-  null.
+- SPC-REQ-004-07: A reader MUST refuse a results file larger than 16 MiB or with a line longer than
+  64 KiB, and MUST NOT follow symlinks when it searches a folder.
+- SPC-REQ-004-08: In CI, the header's `ci` MUST say which provider, server, repository, workflow,
+  job, run and attempt wrote the file, and which commit it tested, as the shipped JSON Schema
+  defines (SPC-REQ-004-11). Outside CI, `ci` MUST be null.
 - SPC-REQ-004-09: A reader MUST reject a file with a result that claims the same ID twice, or
   whose `how` contains a line break or is one that SPC-REQ-003-17 refuses.
 - SPC-REQ-004-10: The header MUST give `root`, the folder that its results' `file` paths are

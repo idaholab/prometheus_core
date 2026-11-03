@@ -310,7 +310,7 @@ def test_unconfigured_the_plugin_changes_nothing(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-003-05",
-    "asking only for a results file, an explanation copied from a spec bullet is accepted, while a TODO one still stops collection",
+    "asking only for a results file, an explanation copied from a spec bullet is accepted, while a TODO explanation and a class-level mark still stop collection",
 )
 def test_unconfigured_only_the_spec_free_checks_run(project: Project):
     """With a results file but no config there are no specs to compare against; the checks that need none run."""
@@ -321,6 +321,10 @@ def test_unconfigured_only_the_spec_free_checks_run(project: Project):
     project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "TODO")\ndef test_a():\n    pass\n')
     assert "is a placeholder ('TODO')" in usage_error(project)
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "c")\nclass TestThing:\n    def test_a(self):\n        pass\n'
+    )
+    assert "`covers` is on class `TestThing`; move it onto each test" in usage_error(project)
 
 
 @pytest.mark.covers(

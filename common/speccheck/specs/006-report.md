@@ -27,5 +27,5 @@ The report says, for every requirement, whether it is proven and by which job, w
 - SPC-REQ-006-08: Each requirement MUST have its own section in the report, in spec order, with its
   ID, status and full text, and within it one section per claiming test or CI job, giving how it
   proves the requirement.
-- SPC-REQ-006-09: Every string taken from a results file, a spec or `--job-names` MUST be capped in
-  the report: at most 200 characters for a name, and 1000 for an explanation.
+- SPC-REQ-006-09: A name taken from a results file or `--job-names` MUST be cut to at most 200
+  characters in the report.
