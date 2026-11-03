@@ -309,6 +309,52 @@ def test_names_are_capped(project: Project):
     assert len(heading) < 200 and "…" in heading
 
 
+def _shown(project: Project, kind: str, length: int) -> str:
+    """The name the report shows for a `kind` of name that is `length` letters long (and the full name)."""
+    project.spec("- T-REQ-001-01: One.")
+    name = "x" * length
+    ci = {"job": "unit", "job_id": 8}  # a job ID to name, but no URL, so the name is plain text
+    if kind == "display":
+        project.write("names.json", json.dumps({"8": name}))
+        project.results("u.jsonl", "unit", [("t.py::test_a", ["T-REQ-001-01"], "passed")], ci=ci)
+        text = project.speccheck("report", "u.jsonl", "--job-names", "names.json").out
+        return next(line for line in text.splitlines() if " passed in " in line).split(" passed in ", 1)[1]
+    if kind == "producer":
+        project.results("u.jsonl", name, [("t.py::test_a", ["T-REQ-001-01"], "passed")])
+        text = project.speccheck("report", "u.jsonl").out
+        return next(line for line in text.splitlines() if line.startswith("- Producers reported: ")).split(": ", 1)[1]
+    project.results("u.jsonl", "unit", [(name, ["T-REQ-001-01"], "passed")], kind="ci")
+    text = project.speccheck("report", "u.jsonl").out
+    return next(line for line in text.splitlines() if line.startswith("#### Job ")).split(" ", 2)[2].strip("`")
+
+
+@pytest.mark.parametrize(
+    ("kind", "length", "cut"),
+    [
+        pytest.param(
+            kind,
+            length,
+            cut,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-09",
+                f"a {kind} name of {length} characters is {'cut to 200 ending with an ellipsis' if cut else 'shown whole'}",
+            ),
+            id=f"{kind}-{length}",
+        )
+        for kind in ("display", "producer", "job")
+        for length, cut in ((200, False), (201, True), (900, True))
+    ],
+)
+def test_every_kind_of_name_is_cut_at_200(project: Project, kind: str, length: int, cut: bool):
+    """The job's display name from `--job-names`, the producer's name and a CI job's name: at most 200, whole at 200."""
+    shown = _shown(project, kind, length)
+    if cut:
+        # The spec says at most 200; a display name is cut where `--job-names` is read, without a mark
+        assert len(shown) == 200 and (kind == "display" or shown.endswith("…"))
+    else:
+        assert shown == "x" * 200
+
+
 @pytest.mark.covers(
     "SPC-REQ-006-04",
     "the report's Inputs section lists the commit, the linked run attempt, producer unit as reported and docker as missing",
@@ -367,6 +413,17 @@ def test_requirements_and_tests_link_to_their_lines(project: Project):
             ),
             id="dot-dot",
         ),
+        *(
+            pytest.param(
+                {"root": "proj", "file": path},
+                {**ENV, "GITHUB_SHA": SHA},
+                marks=pytest.mark.covers("SPC-REQ-006-06", f"a test file path {path!r} is shown but not linked"),
+                id=f"path-{n}",
+            )
+            for n, path in enumerate(
+                ["a b.py", "a/../b.py", "/abs.py", "é.py", "a%20b.py", "a(1).py", "a\\b.py", "a//b.py", "a/", "a;b.py"]
+            )
+        ),
         pytest.param(
             {"root": "proj", "file": "tests/t.py?x=1#frag"},
             {**ENV, "GITHUB_SHA": SHA},
@@ -416,3 +473,44 @@ def test_a_source_link_needs_a_plain_path_and_ci(project: Project, change: dict,
     assert heading.startswith("#### Test `test_a` in `") and "/blob/" not in heading
     if env.get("GITHUB_SHA") != SHA:
         assert "/blob/" not in text
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            name,
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-06", f"a spec file named {name!r} is shown in its requirement's section but not linked"
+            ),
+            id=f"spec-{n}",
+        )
+        for n, name in enumerate(["001 thing.md", "001-thing%.md", "001-thing(1).md", "001-é.md"])
+    ],
+)
+def test_a_spec_path_needs_to_be_plain_to_link(project: Project, name: str):
+    """The requirement's section names its spec line, and links it only when the path is plain."""
+    project.spec("- T-REQ-001-01: One.", name=name)
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+    project.write("u.jsonl", header + json.dumps(line) + "\n")
+    env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root.parent)}
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert f"specs/{name}" in text, text
+    assert "/blob/" not in text
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-06",
+    "with GITHUB_WORKSPACE set to a sub folder that doesn't hold the specs, a requirement gets no spec line link",
+)
+def test_a_spec_outside_the_workspace_is_not_linked(project: Project):
+    """The spec has no path from the repository's root, so nothing is linked."""
+    project.spec("- T-REQ-001-01: One.")
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
+    project.write("u.jsonl", header + json.dumps(line) + "\n")
+    (project.root / "elsewhere").mkdir()
+    env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root / "elsewhere")}
+    text = project.speccheck("report", "u.jsonl", env=env).out
+    assert "/blob/" not in text and "\nIn [" not in text
