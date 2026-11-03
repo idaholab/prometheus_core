@@ -194,19 +194,36 @@ jobs:
         # $GITHUB_STEP_SUMMARY is a new file in each step, so check the one the action wrote
         env:
           SUMMARY: ${{ steps.verify.outputs.summary-path }}
+          ARTIFACT_ID: ${{ steps.verify.outputs.report-artifact-id }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          test -s "$RUNNER_TEMP/speccheck-report/report.md"
-          python3 -I -c 'import json, sys; body = json.load(open(sys.argv[1])); assert body["command"] == "report" and body["requirements"], body' \
-            "$RUNNER_TEMP/speccheck-report/report.json"
+          report="$RUNNER_TEMP/speccheck-report"
+          workflow=.github/workflows/speccheck.yml
+          test -s "$report/report.md"
+          # report.json: the same requirements, every result named by a requirements job's display name
+          python3 -I -c 'import json, sys; body = json.load(open(sys.argv[1])); assert body["command"] == "report" and body["requirements"], body; names = {e["job_name"] for r in body["requirements"] for e in r["evidence"]}; assert names and all(n.startswith("speccheck: requirements python ") for n in names), names' \
+            "$report/report.json"
           test -n "$SUMMARY" || { echo "speccheck-verify gave no summary-path" >&2; exit 1; }
           # One line of counts linking the report artifact uploaded in this run, and nothing else on a pass
           grep -qE '^\*\*speccheck:\*\* .*Full report: \[speccheck-report\]\(https://github\.com/.+/actions/runs/[0-9]+/artifacts/[0-9]+\)$' "$SUMMARY" \
             || { echo "no summary line linking the report in $SUMMARY" >&2; cat "$SUMMARY" >&2; exit 1; }
           if grep -q '^- ' "$SUMMARY"; then echo "a passing verify listed problems in $SUMMARY" >&2; exit 1; fi
-          # The job names were looked up: a result is named by its job's display name, linked to the job
-          grep -qE '^- ✅ passed in \[speccheck: requirements python 3\.[0-9]+\]\(https://github\.com/.+/job/[0-9]+\)$' \
-            "$RUNNER_TEMP/speccheck-report/report.md" \
-            || { echo "the report doesn't name the requirements jobs by their display names" >&2; exit 1; }
+          # The link is to the artifact this action uploaded, by the ID it output, and the run has it
+          linked=$(sed -nE 's#^.*Full report: \[speccheck-report\]\(https://github\.com/.+/actions/runs/[0-9]+/artifacts/([0-9]+)\)$#\1#p' "$SUMMARY")
+          test -n "$ARTIFACT_ID" && test "$linked" = "$ARTIFACT_ID" \
+            || { echo "the summary links artifact '$linked', not the uploaded report '$ARTIFACT_ID'" >&2; exit 1; }
+          gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | "\(.id) \(.name)"' | grep -qx "$ARTIFACT_ID speccheck-report-self-check" \
+            || { echo "the run has no artifact $ARTIFACT_ID named speccheck-report-self-check" >&2; exit 1; }
+          # The job names were looked up: a result is named by its job's display name, linked to the job,
+          # and every leg of the requirements matrix was read, not only one
+          for python in $(yq '.jobs.requirements.strategy.matrix.python[]' "$workflow"); do
+            grep -qE "^- ✅ passed in \[speccheck: requirements python $python\]\(https://github\.com/.+/job/[0-9]+\)$" \
+              "$report/report.md" \
+              || { echo "the report has no result from 'speccheck: requirements python $python', named by its display name" >&2; exit 1; }
+          done
       - name: speccheck-verify with the default report name
         # The final job publishes `speccheck-report` too and replaces this one (the upload sets
         # overwrite), so the default name is exercised here and the final job's report is kept
@@ -217,7 +234,14 @@ jobs:
       - name: The default-named report was uploaded
         env:
           ARTIFACT_ID: ${{ steps.default-report.outputs.report-artifact-id }}
-        run: test -n "$ARTIFACT_ID" || { echo "speccheck-verify uploaded no report artifact" >&2; exit 1; }
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          test -n "$ARTIFACT_ID" || { echo "speccheck-verify uploaded no report artifact" >&2; exit 1; }
+          gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | "\(.id) \(.name)"' | grep -qx "$ARTIFACT_ID speccheck-report" \
+            || { echo "the run has no artifact $ARTIFACT_ID named speccheck-report" >&2; exit 1; }
       - name: Add a results file that can't be read
         # download-artifact adds to this folder, so the next speccheck-verify reads this file too
         run: echo 'not json' > "$RUNNER_TEMP/speccheck-results/bad.jsonl"
@@ -231,9 +255,16 @@ jobs:
       - name: The verify failed, and published its report anyway
         env:
           OUTCOME: ${{ steps.failing-verify.outcome }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           test "$OUTCOME" = failure || { echo "speccheck-verify was $OUTCOME on a bad results file" >&2; exit 1; }
           test -s "$RUNNER_TEMP/speccheck-report/report.md"
+          # Not only a local file: the run has the artifact, so the upload step ran after the failure
+          gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[].name' | grep -qx 'speccheck-report-self-check-failing' \
+            || { echo "the failed verify uploaded no report artifact" >&2; exit 1; }
           rm "$RUNNER_TEMP/speccheck-results/bad.jsonl"
       - name: speccheck-verify when the job names can't be looked up
         # SPC-REQ-007-09: a lookup that fails warns and goes on. Run 1 isn't in this repository,
@@ -250,30 +281,75 @@ jobs:
         run: |
           test "$OUTCOME" = success || { echo "speccheck-verify was $OUTCOME when the names lookup failed" >&2; exit 1; }
           test ! -e "$RUNNER_TEMP/speccheck-job-names.json"
-          grep -qE '^- ✅ passed in \[speccheck-requirements\]\(https://github\.com/.+/job/[0-9]+\)$' \
-            "$RUNNER_TEMP/speccheck-report/report.md" \
+          report="$RUNNER_TEMP/speccheck-report/report.md"
+          grep -qE '^- ✅ passed in \[speccheck-requirements\]\(https://github\.com/.+/job/[0-9]+\)$' "$report" \
             || { echo "the report doesn't fall back to the producer's name" >&2; exit 1; }
-      - name: Read-only permissions and no secrets
+          # Every result, not just one: none is named by a display name, and none by anything but its producer
+          if grep -q 'requirements python' "$report"; then echo "a result is still named by a display name" >&2; exit 1; fi
+          test "$(grep -cE '^- [^ ]+ [a-z]+ in ' "$report")" = "$(grep -cE '^- [^ ]+ [a-z]+ in \[speccheck-requirements\]' "$report")" \
+            || { echo "a result is named by something other than its producer" >&2; grep -E '^- [^ ]+ [a-z]+ in ' "$report" >&2; exit 1; }
+      - name: Read-only permissions and no credentials in the workflow
         # SPC-REQ-007-08: the workflow grants actions: read and contents: read and nothing else,
         # no job widens it, and neither the workflow nor the actions it runs name a secret
         run: |
           workflow=.github/workflows/speccheck.yml
-          grep -qx 'permissions:' "$workflow"
-          test "$(sed -n '/^permissions:$/,/^$/p' "$workflow" | grep -E '^  [a-z-]+:' | sort | tr '\n' ' ')" \
-            = "  actions: read   contents: read "
-          test "$(grep -cE '^ *permissions:' "$workflow")" = 1
-          ! grep -nE 'secrets\.' "$workflow" .github/actions/speccheck-*/action.yml
+          # Parsed, not grepped: the top-level permissions are exactly these two, and no job has its own
+          test "$(yq -o=json -I=0 '.permissions' "$workflow")" = '{"actions":"read","contents":"read"}'
+          test "$(yq '[.jobs[] | select(has("permissions"))] | length' "$workflow")" = 0
+          # Any use of the secrets context, however it is written: secrets.X, secrets['X'],
+          # toJSON(secrets), `secrets: inherit`. Comment lines are skipped. The pattern's `[s]` keeps
+          # this step from matching itself, and the files are listed first so an empty glob fails
+          # here instead of making grep exit 2 and the `if` pass
+          files=(.github/actions/speccheck-*/action.yml)
+          test "${#files[@]}" -ge 3 && test -f "${files[0]}"
+          if grep -nE 'secret[s]' "$workflow" "${files[@]}" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#'; then
+            echo "speccheck.yml or a speccheck action names a secret" >&2
+            exit 1
+          fi
+      - name: An empty folder to upload
+        run: mkdir "$RUNNER_TEMP/empty-results"
       - name: speccheck-upload refuses an empty folder
         id: empty-upload
         continue-on-error: true
         uses: ./.github/actions/speccheck-upload
         with:
           name: must-not-exist
-          path: ${{ runner.temp }}/nothing-here
-      - name: The empty upload failed
+          path: ${{ runner.temp }}/empty-results
+      - name: The empty upload failed, and uploaded nothing
         env:
           OUTCOME: ${{ steps.empty-upload.outcome }}
-        run: test "$OUTCOME" = failure
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          test "$OUTCOME" = failure || { echo "speccheck-upload was $OUTCOME on an empty folder" >&2; exit 1; }
+          gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[].name' > "$RUNNER_TEMP/artifact-names"
+          if grep -qx 'speccheck-results-must-not-exist' "$RUNNER_TEMP/artifact-names"; then
+            echo "the empty upload left an artifact behind" >&2
+            exit 1
+          fi
+      - name: A throwaway file to upload
+        # The run keeps this artifact (deleting it would need `actions: write`), and the final job
+        # downloads every speccheck-results-* artifact. speccheck reads only *.jsonl, so the file
+        # isn't one
+        run: |
+          mkdir "$RUNNER_TEMP/throwaway"
+          echo 'not a results file' > "$RUNNER_TEMP/throwaway/x.txt"
+      - name: speccheck-upload names its artifact from its input
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: x
+          path: ${{ runner.temp }}/throwaway
+      - name: The artifact is called speccheck-results-x
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api --paginate "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[].name' | grep -qx 'speccheck-results-x' \
+            || { echo "no artifact speccheck-results-x: the action ignored its name input" >&2; exit 1; }
       - name: Install speccheck
         uses: ./.github/actions/speccheck-install
       - name: speccheck verify on an empty folder fails
