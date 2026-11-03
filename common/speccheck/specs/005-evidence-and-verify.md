@@ -18,7 +18,9 @@ Every requirement gets one status from the specs, the config and the results fil
   and the message MUST show the marker to add.
 - SPC-REQ-005-04: In `verify`, a requirement MUST be `not run` when it is claimed only by
   producers that didn't report, or when nothing claims it and a test producer that may claim it
-  hasn't reported. It MUST fail `verify` only with `--complete`.
+  hasn't reported. It MUST fail `verify` only with `--complete`. A requirement the spec marks
+  untested, planned or retired is never `not run`, and a requirement with a result but no passing
+  one is `failed` even when a producer that claims it hasn't reported.
 - SPC-REQ-005-05: With `--complete`, `verify` MUST fail on every expected producer that didn't
   report: every producer, or with `--workflow` the producers that list that workflow.
 - SPC-REQ-005-06: A results file from a producer the config doesn't declare MUST be a problem, and
