@@ -288,7 +288,7 @@ jobs:
           if grep -q 'requirements python' "$report"; then echo "a result is still named by a display name" >&2; exit 1; fi
           test "$(grep -cE '^- [^ ]+ [a-z]+ in ' "$report")" = "$(grep -cE '^- [^ ]+ [a-z]+ in \[speccheck-requirements\]' "$report")" \
             || { echo "a result is named by something other than its producer" >&2; grep -E '^- [^ ]+ [a-z]+ in ' "$report" >&2; exit 1; }
-      - name: 007-08 check permissions and secrets
+      - name: 007-08 check permissions and credentials
         # SPC-REQ-007-08: the workflow grants actions: read and contents: read and nothing else,
         # no job widens it, and neither the workflow nor the actions it runs name a secret
         run: |
