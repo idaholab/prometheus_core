@@ -24,3 +24,4 @@ One config describes one spec folder: where it is, its ID prefix, and what may p
   has a requirement's text (SPC-REQ-003-09), and a problem MUST name the job and the ID.
 - SPC-REQ-002-07: A config that isn't valid TOML MUST be an error that names the file.
 - SPC-REQ-002-08: A `[ci.<job>]` entry MUST NOT share a name with a `[producers.<name>]` entry.
+- SPC-REQ-002-09: A producer or CI job name over 200 characters MUST be an error that names the key.

@@ -253,6 +253,49 @@ def test_a_good_claim_passes_collection(project: Project):
     project.pytest().assert_outcomes(passed=1)
 
 
+def long_test(length: int) -> str:
+    """A claiming test file whose function name makes the node ID `test_project.py::...` exactly `length` characters."""
+    name = "test_" + "a" * (length - len("test_project.py::test_"))
+    return f'import pytest\n@pytest.mark.covers("T-REQ-001-01", "the long one")\ndef {name}():\n    pass\n'
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-18",
+    "an inner claiming test whose node ID is 251 characters fails collection, with a message naming the test, its length and how to shorten it",
+)
+def test_a_node_id_over_250_characters_fails_collection(project: Project):
+    """One character over the limit: a usage error that names the test and says what to do."""
+    project.tests(long_test(251))
+    error = usage_error(project)
+    assert "speccheck: 1 claim(s) the spec folder doesn't allow:" in error
+    assert "the test's node ID is 251 characters; the limit is 250." in error
+    assert "Shorten the test or class name, or give a long parameter a short id with `ids=`" in error
+    assert "test_project.py::test_" + "a" * 100 in error
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-18",
+    "an inner claiming test whose node ID is exactly 250 characters passes collection and is written whole to the results file",
+)
+def test_a_node_id_of_250_characters_is_fine(project: Project):
+    """The limit is inclusive: 250 runs and is recorded under its full name."""
+    project.tests(long_test(250))
+    project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
+    (name,) = claims(project)
+    assert len("test_project.py::" + name) == 250
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-18",
+    "an inner test with no claim and a node ID of 300 characters still runs, so only a claiming test is held to the limit",
+)
+def test_a_long_node_id_without_a_claim_is_fine(project: Project):
+    """Nothing is recorded for it, so there is nothing to refuse."""
+    name = "test_" + "a" * 280
+    project.tests(f"def {name}():\n    pass\n")
+    project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
+
+
 @pytest.mark.covers(
     "SPC-REQ-003-14",
     "with speccheck_config set and no producer, collection fails naming the ini option and the variable, and setting SPECCHECK_PRODUCER fixes it",

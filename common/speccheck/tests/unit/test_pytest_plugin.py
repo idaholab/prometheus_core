@@ -371,6 +371,27 @@ class TestCollection:
         claims = self.collect(config, item(covers("anything", "h")), monkeypatch=monkeypatch)
         assert claims["t.py::test_a"]["covers"] == [{"id": "anything", "how": "h"}]
 
+    def test_a_node_id_over_the_limit_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """MAX_TEST characters is recorded; one more fails collection with how to shorten it, and nothing is recorded."""
+        config = fake_config(tmp_path, option="r.jsonl")
+        whole = "t.py::" + "t" * (results.MAX_TEST - len("t.py::"))
+        assert list(self.collect(config, item(covers("A", "h"), nodeid=whole), monkeypatch=monkeypatch)) == [whole]
+        long = whole + "t"
+        with pytest.raises(pytest.UsageError) as raised:
+            self.collect(
+                fake_config(tmp_path, option="r.jsonl"), item(covers("A", "h"), nodeid=long), monkeypatch=monkeypatch
+            )
+        assert str(raised.value).splitlines() == [
+            "speccheck: 1 claim(s) the spec folder doesn't allow:",
+            f"t.py:3: {long}: the test's node ID is 251 characters; the limit is 250. "
+            "Shorten the test or class name, or give a long parameter a short id with `ids=`",
+        ]
+
+    def test_a_long_node_id_without_a_claim_is_left_alone(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Only a claiming test is held to the limit."""
+        config = fake_config(tmp_path, option="r.jsonl")
+        assert self.collect(config, item(nodeid="t.py::" + "t" * 300), monkeypatch=monkeypatch) == {}
+
     def test_every_bad_claim_is_listed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Malformed marks, misplaced ones (once per function), checker refusals and repeats, with control characters written out."""
         module = node_of(pytest.Module, "t.py")

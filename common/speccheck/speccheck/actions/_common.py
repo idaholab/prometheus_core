@@ -26,6 +26,7 @@ from speccheck import ci, evidence, jsonout, results, summary
 from speccheck.config import ConfigError
 from speccheck.context import Context
 from speccheck.evidence import Evaluation
+from speccheck.results import MAX_NAME
 from speccheck.specs import Problem
 
 
@@ -79,7 +80,13 @@ def job_names(ctx: Context, args: argparse.Namespace) -> dict[str, str]:
         raise ConfigError(f"--job-names {name}: not JSON") from None
     if not isinstance(data, dict) or not all(isinstance(v, str) for v in data.values()):
         raise ConfigError(f'--job-names {name}: must be a JSON object from job ID to name, such as {{"123": "build"}}')
-    return {str(key): " ".join(value.split())[:200] for key, value in data.items()}
+    names = {str(key): " ".join(value.split()) for key, value in data.items()}
+    for key, value in names.items():
+        if len(value) > MAX_NAME:
+            raise ConfigError(
+                f"--job-names {name}: the name for {key} is {len(value)} characters; the limit is {MAX_NAME}"
+            )
+    return names
 
 
 def evaluate(ctx: Context, args: argparse.Namespace, *, runtime: bool) -> Evaluation:

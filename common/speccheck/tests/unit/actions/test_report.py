@@ -331,6 +331,25 @@ class TestFull:
         sections = [line for line in lines if line.startswith("### ")]
         assert sections == ["### T-REQ-001-01 ✅ passed", "### T-REQ-001-02 ❌ unclaimed", "### T-REQ-002-01 🗓 planned"]
 
+    def test_a_problem_line_is_kept_to_the_limit(self):
+        """A line is cut at MAX_PROBLEM with a mark; one that fits is whole. A longest test ID plus its fix fits."""
+        fits = Problem("p", 1, "m" * (report.MAX_PROBLEM - len("p:1: ")))
+        over = Problem("p", 1, "m" * (report.MAX_PROBLEM - len("p:1: ") + 1))
+        lines = report.full("t", evaluation(status("passed"), problems=[fits, over])).splitlines()
+        shown = [line.strip("-` ") for line in lines if line.startswith("- `p:1: ")]
+        assert [len(s) for s in shown] == [report.MAX_PROBLEM, report.MAX_PROBLEM] and shown[1].endswith("…")
+        assert not shown[0].endswith("…")
+
+    def test_the_problem_limit_holds_the_longest_test_id_and_its_fix(self):
+        """The reason for the limit: a MAX_TEST-character ID with the longest hint is not cut short."""
+        from speccheck.evidence import HINTS
+        from speccheck.results import MAX_TEST
+
+        message = (
+            f"T-REQ-001-01 has no passing result: {'t' * MAX_TEST} deselected in unit; to fix: {HINTS['deselected']}"
+        )
+        assert len(f"specs/001-thing.md:7: {message}") <= report.MAX_PROBLEM
+
     def test_no_problems_section_when_clean(self):
         """Only when there are some."""
         assert "## Problems" not in report.full("t", evaluation(status("passed")))

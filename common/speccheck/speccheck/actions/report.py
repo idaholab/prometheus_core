@@ -44,6 +44,8 @@ ORDER = 10
 
 MAX_EVIDENCE = 50
 """The most results listed for one claim; the rest are counted."""
+MAX_PROBLEM = 500
+"""The longest Problems line, as long as a summary entry, so a test ID of the longest allowed length keeps its fix."""
 ICONS = {
     evidence.PASSED: "✅",
     evidence.FAILED: "❌",
@@ -209,7 +211,7 @@ def full(title: str, evaluation: Evaluation, links: Links | None = None) -> str:
     lines += [" · ".join(f"{ICONS[s]} {s}: {n}" for s, n in counts.items() if n), ""]
     if evaluation.problems:
         lines += [f"## Problems ({len(evaluation.problems)})", ""]
-        lines += [f"- {code(str(p), 300, in_table=False)}" for p in evaluation.problems]
+        lines += [f"- {code(str(p), MAX_PROBLEM, in_table=False)}" for p in evaluation.problems]
         lines.append("")
     by_spec: dict[str, list[Status]] = {}
     for status in evaluation.statuses:

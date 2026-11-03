@@ -48,6 +48,10 @@ MAX_TEXT = 1000
 """The longest string field kept, after which a field is a problem; also the longest explanation."""
 MAX_COVERS = 200
 """The most IDs one result may claim."""
+MAX_NAME = 200
+"""The longest producer, CI job or display name; a longer one is refused, not cut (SPC-REQ-006-09)."""
+MAX_TEST = 250
+"""The longest test node ID; a longer one is refused, not cut (SPC-REQ-006-09)."""
 
 HEADER_KEYS = {"schema", "producer", "runner", "ci", "root", "started"}
 """The header keys this speccheck reads; a reader ignores any other (see `_known`)."""
@@ -176,12 +180,12 @@ class Invalid(Exception):
     """A field of a results file is wrong; the message says which."""
 
 
-def _text(value: Any, name: str, *, allow_empty: bool = True) -> str:
-    """A string field, length-checked."""
+def _text(value: Any, name: str, *, allow_empty: bool = True, limit: int = MAX_TEXT) -> str:
+    """A string field, length-checked against `limit`."""
     if not isinstance(value, str):
         raise Invalid(f"`{name}` must be a string")
-    if len(value) > MAX_TEXT:
-        raise Invalid(f"`{name}` is longer than {MAX_TEXT} characters")
+    if len(value) > limit:
+        raise Invalid(f"`{name}` is longer than {limit} characters")
     if SURROGATE.search(value):
         raise Invalid(f"`{name}` has a lone surrogate (`\\ud800` to `\\udfff`), which isn't text")
     if not allow_empty and not value:
@@ -213,7 +217,7 @@ def _header(body: Any) -> ResultsFile:
             if isinstance(value, str):
                 _text(value, f"ci.{key}")
     return ResultsFile(
-        producer=_text(body.get("producer"), "producer", allow_empty=False),
+        producer=_text(body.get("producer"), "producer", allow_empty=False, limit=MAX_NAME),
         runner=_text(body.get("runner", ""), "runner"),
         ci=ci,
         root=None if body.get("root") is None else _text(body.get("root"), "root"),
@@ -261,7 +265,7 @@ def _result(body: Any) -> Result:
     if not isinstance(line, int) or isinstance(line, bool) or line < 0:
         raise Invalid("`line` must be a whole number")
     return Result(
-        test=_text(body.get("test"), "test", allow_empty=False),
+        test=_text(body.get("test"), "test", allow_empty=False, limit=MAX_NAME if kind == "ci" else MAX_TEST),
         covers=claimed,
         outcome=outcome,
         file=_text(body.get("file", ""), "file"),

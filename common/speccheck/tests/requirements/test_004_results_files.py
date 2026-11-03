@@ -25,7 +25,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 import speccheck
-from tests.requirements.conftest import EXPECTED, OUTCOMES, Project, outcomes
+from tests.requirements.conftest import CONFIG, EXPECTED, OUTCOMES, Project, outcomes
 
 SCHEMA = Path(speccheck.__file__).parent / "schema" / "speccheck-results-1.schema.json"
 """The JSON Schema shipped with the package."""
@@ -343,6 +343,14 @@ GOOD_LINE = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outco
             ),
             id="started-number",
         ),
+        pytest.param(
+            {"producer": "p" * 201},
+            "`producer` is longer than 200 characters",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose producer is 201 characters rejects the file and its passing result"
+            ),
+            id="producer-over-200",
+        ),
     ],
 )
 def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, message: str):
@@ -357,6 +365,28 @@ def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, mes
         run.json()["problems"]
     )
     assert run.json()["requirements"][0]["status"] != "passed"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-02",
+    "a file with a 200-character producer, a 250-character test node ID and a 200-character CI job name is read with no length problem",
+)
+def test_names_at_their_limits_are_read_whole(project: Project):
+    """The other side of the limits: exactly at them is fine."""
+    project.write("speccheck.toml", CONFIG.replace("[producers.unit]", f"[producers.{'p' * 200}]"))
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    header = {"schema": "speccheck-results/1", "producer": "p" * 200}
+    lines = [
+        {**GOOD_LINE, "test": "t" * 250},
+        {**GOOD_LINE, "test": "j" * 200, "kind": "ci", "covers": [{"id": "T-REQ-001-02", "how": "h2"}]},
+    ]
+    project.write("r.jsonl", "\n".join(json.dumps(x) for x in (header, *lines)) + "\n")
+    run = project.speccheck("check", "r.jsonl", "--json")
+    assert not [p for p in run.json()["problems"] if p["code"] == "results-invalid"], run.json()["problems"]
+    assert {r["id"]: r["status"] for r in run.json()["requirements"]} == {
+        "T-REQ-001-01": "claimed",
+        "T-REQ-001-02": "claimed",
+    }
 
 
 @pytest.mark.parametrize(
@@ -470,6 +500,22 @@ def test_a_header_that_is_not_an_object_rejects_the_whole_file(project: Project,
             "a result must be an object",
             marks=pytest.mark.covers("SPC-REQ-004-02", "a third line that is a JSON list rejects the whole file"),
             id="line-is-a-list",
+        ),
+        pytest.param(
+            {**GOOD_LINE, "test": "t" * 251},
+            "`test` is longer than 250 characters",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a third line whose test node ID is 251 characters rejects the whole file"
+            ),
+            id="test-over-250",
+        ),
+        pytest.param(
+            {**GOOD_LINE, "test": "j" * 201, "kind": "ci"},
+            "`test` is longer than 200 characters",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a third line for a CI job whose name is 201 characters rejects the whole file"
+            ),
+            id="job-over-200",
         ),
     ],
 )

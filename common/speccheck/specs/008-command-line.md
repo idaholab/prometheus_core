@@ -33,8 +33,8 @@ object for scripts and agents.
   SPC-REQ-007-10 allows a link to that artifact URL. Otherwise the line MUST have no link.
 - SPC-REQ-008-10: `report` and `verify` MUST take `--job-names FILE`, a JSON object from a job's ID
   to its display name. They MUST name each job by its display name when the file gives one, and
-  otherwise by its producer. The option MUST be optional, and a file that isn't such an object
-  MUST be a usage error.
+  otherwise by its producer. The option MUST be optional, and a file that isn't such an object, or
+  that gives a name over 200 characters, MUST be a usage error.
 - SPC-REQ-008-11: `--version` MUST print the version.
 - SPC-REQ-008-12: Everything speccheck prints MUST have control characters written out (`\n`,
   `\x1b`), so no file name, spec text or results file can start a CI log command.
