@@ -90,6 +90,24 @@ page = client.items.list(filters={"fileType": "csv", "hideArchived": True})
 by_property = client.search.advanced_query({"properties.status": "active"})
 ```
 
+### `search.recent` Returns the Newest Items, and `limit` Must Be at Least 1
+
+`search.recent(limit)` now pages through `GET .../query/records/paginated` sorted by update time,
+newest first, and returns exactly the newest `limit` items. It used to call the plain records
+route with `limit` and sort parameters that route ignores, so it probably returned every record
+in no particular order (not observed). `limit` below 1 now raises `ValueError`. This affects
+agents that call `search.recent` or rely on its order or length.
+
+Migration steps:
+
+1. Pass `limit >= 1`. A zero or negative `limit` raises `ValueError`.
+2. Expect at most `limit` items, newest first. Code that took the whole list and sorted or
+   sliced it can drop that step.
+
+```python
+newest = client.search.recent(limit=20)   # at most 20 items, most recently updated first
+```
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

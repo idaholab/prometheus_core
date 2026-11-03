@@ -375,19 +375,41 @@ class TestSearch:
         assert results.page_info is not None
 
     def test_search_recent(self, client, test_items):
-        """Test getting recent items."""
-        try:
-            recent = client.search.recent(limit=10)
-        except ItemNotFoundError as e:
-            pytest.skip(f"Recent search not available: {e}")
-        assert len(recent) > 0
+        """Covers REQ-002-15: recent returns the newest items first, capped at ``limit``."""
+        recent = client.search.recent(limit=10)
+        assert 0 < len(recent) <= 10
 
         # Our test items should be recent
         recent_ids = {item.id for item in recent}
         test_ids = {item.id for item in test_items}
-
-        # At least some overlap expected
         assert len(recent_ids & test_ids) > 0
+
+    def test_search_recent_is_newest_first_and_capped(self, client):
+        """Covers REQ-002-15: the order and the cap, with items made a second apart."""
+        made = []
+        try:
+            for n in range(3):
+                made.append(
+                    client.items.create(
+                        ItemCreate(
+                            name=f"recent-order-{TEST_RUN_ID}-{n}",
+                            description="Created to check the order of search.recent",
+                            properties={"_test_suite_marker": TEST_MARKER, "n": n},
+                        )
+                    )
+                )
+                time.sleep(1.1)  # keep the update times apart so the order is not a tie
+
+            newest_two = client.search.recent(limit=2)
+            assert [item.id for item in newest_two] == [made[2].id, made[1].id]
+            assert len(client.search.recent(limit=1)) == 1
+
+            with pytest.raises(ValueError):
+                client.search.recent(limit=0)
+        finally:
+            # No try/except: a failed delete leaves test data behind and should fail the test.
+            for item in made:
+                client.items.delete(item.id)
 
 
 class TestRelationships:
