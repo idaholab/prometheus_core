@@ -170,6 +170,32 @@ class TestSafeUrl:
         """Run, attempt and job URLs of this repository."""
         assert markdown.safe_url(url, BASE) == url
 
+    @pytest.mark.parametrize(
+        "url", ["https://github.com/o/r/actions/runs/1", "https://github.com/o/r/actions/runs/1/attempts/2"]
+    )
+    def test_a_run_position_accepts_a_run_or_an_attempt(self, url):
+        """With `job=False`, the forms a run link has."""
+        assert markdown.safe_url(url, BASE, job=False) == url
+
+    def test_a_run_position_refuses_a_job_link(self):
+        """A job URL is not a run link, though it is accepted where a job is named."""
+        url = "https://github.com/o/r/actions/runs/1/job/3"
+        assert markdown.safe_url(url, BASE) == url
+        assert markdown.safe_url(url, BASE, job=False) == ""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://github.com/o/r/actions/runs/1/attempts/2/job/3",
+            "https://github.com/o/r/actions/runs/1/job/0",
+            "https://github.com/o/r/actions/runs/1/job/",
+            "https://github.com/o/r/actions/runs/1/attempts/0",
+        ],
+    )
+    def test_a_job_link_is_the_run_without_its_attempt(self, url):
+        """A job's URL has `/job/<id>` straight after the run; an attempt before it, or a zero ID, is no link."""
+        assert markdown.safe_url(url, BASE) == ""
+
     def test_a_server_with_a_port(self):
         """GitHub Enterprise on its own host and port."""
         assert markdown.safe_url("https://ghe.example:8443/o/r/actions/runs/1", "https://ghe.example:8443/o/r") != ""

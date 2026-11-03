@@ -191,7 +191,7 @@ def _spec(number: str, statuses: list[Status], links: Links) -> list[str]:
 def _inputs(evaluation: Evaluation, base: str) -> list[str]:
     """The lines saying what the report was built from: commits, runs and producers."""
     commits = sorted({(f.ci or {}).get("sha") or "" for f in evaluation.files} - {""})
-    runs = sorted({safe_url((f.ci or {}).get("run_url"), base) for f in evaluation.files} - {""})
+    runs = sorted({safe_url((f.ci or {}).get("run_url"), base, job=False) for f in evaluation.files} - {""})
     run_links = [f"[{prose(run.rsplit('/runs/', 1)[1])}]({run})" for run in runs]
     lines = [
         f"- Commit: {', '.join(prose(c[:12]) for c in commits) or 'unknown (not run in CI)'}",

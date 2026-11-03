@@ -292,6 +292,12 @@ class TestSpec:
 class TestInputs:
     """What the report was built from."""
 
+    def test_a_job_link_is_not_a_run_link(self):
+        """A `run_url` that is really a job's URL is left out of the Runs line, though a job line may link it."""
+        lines = report._inputs(evaluation(files=[source(ci={"run_url": JOB_URL, "sha": "b" * 40})]), BASE)
+        assert lines[1] == "- Runs: none"
+        assert report._result_line(item(ci={"job_url": JOB_URL}), LINKS).endswith(f"]({JOB_URL})")
+
     def test_from_ci_files(self):
         """Commits, run links and producers, each once."""
         files = [source(ci=CI), source(ci=CI), source(ci={"run_url": "javascript:x", "sha": ""})]

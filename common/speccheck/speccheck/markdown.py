@@ -99,8 +99,10 @@ def source_url(base: str, path: str | None, line: int = 0) -> str:
     return f"{base}/{path}" + (f"#L{line}" if line > 0 else "")
 
 
-RUN_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}(?:/(?:attempts|job)/[1-9][0-9]{0,19})?")
-"""What follows `<server>/<owner>/<repo>` in a run, run attempt or job URL."""
+RUN_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}(?:/attempts/[1-9][0-9]{0,19})?")
+"""What follows `<server>/<owner>/<repo>` in a run or run attempt URL."""
+JOB_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}/job/[1-9][0-9]{0,19}")
+"""What follows `<server>/<owner>/<repo>` in a job URL: the run without its attempt, then `/job/<id>`."""
 ARTIFACT_PATH = re.compile(r"/actions/runs/[1-9][0-9]{0,19}/artifacts/[1-9][0-9]{0,19}")
 """What follows `<server>/<owner>/<repo>` in an artifact URL, as `actions/upload-artifact` gives it."""
 
@@ -112,12 +114,14 @@ def _under(url: Any, base: str, path: re.Pattern[str]) -> str:
     return url if path.fullmatch(url[len(base) :]) else ""
 
 
-def safe_url(url: Any, base: str) -> str:
-    """The URL when it is a run, attempt or job URL under `base`, this run's repository URL, else "".
+def safe_url(url: Any, base: str, *, job: bool = True) -> str:
+    """The URL when it is a run or attempt URL under `base`, this run's repository URL, else "".
 
-    `base` comes from `ci.repository_url`; without one (outside CI) nothing is linked.
+    With `job` (the default) a job URL counts too; a place that names a run passes `job=False`, since a
+    job URL is not a run link (SPC-REQ-007-07, SPC-REQ-007-10). `base` comes from `ci.repository_url`;
+    without one (outside CI) nothing is linked.
     """
-    return _under(url, base, RUN_PATH)
+    return _under(url, base, RUN_PATH) or (_under(url, base, JOB_PATH) if job else "")
 
 
 def safe_artifact_url(url: Any, base: str) -> str:
