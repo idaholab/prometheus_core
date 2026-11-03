@@ -509,6 +509,80 @@ def test_an_override_gives_root_when_it_cant_be_found(project: Project, monkeypa
     monkeypatch.setenv("GITHUB_WORKSPACE", "/home/runner/work/r/r")
     project.pytest("--speccheck-results=lost.jsonl")
     assert project.results_lines("lost.jsonl")[0]["root"] is None
-    monkeypatch.setenv("SPECCHECK_ROOT", "sdk/")
+    monkeypatch.setenv("SPECCHECK_ROOT", "sdk")
     project.pytest("--speccheck-results=given.jsonl")
     assert project.results_lines("given.jsonl")[0]["root"] == "sdk"
+
+
+@pytest.mark.parametrize(
+    ("given", "root"),
+    [
+        pytest.param(
+            "sdk/",
+            "sdk",
+            marks=pytest.mark.covers("SPC-REQ-004-12", "SPECCHECK_ROOT=`sdk/` is written as root `sdk`"),
+            id="trailing-slash",
+        ),
+        pytest.param(
+            "/sdk",
+            "sdk",
+            marks=pytest.mark.covers("SPC-REQ-004-12", "SPECCHECK_ROOT=`/sdk` is written as root `sdk`"),
+            id="leading-slash",
+        ),
+        pytest.param(
+            "  sdk\n",
+            "sdk",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-12", "SPECCHECK_ROOT padded with spaces and a newline is written as `sdk`"
+            ),
+            id="whitespace",
+        ),
+        pytest.param(
+            " /a/b/ ",
+            "a/b",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-12",
+                "SPECCHECK_ROOT=` /a/b/ ` loses the whitespace, then the slashes, and keeps the inner one",
+            ),
+            id="nested",
+        ),
+        pytest.param(
+            "/",
+            None,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-12", "SPECCHECK_ROOT=`/` is empty after trimming, so it counts as not set and root is null"
+            ),
+            id="only-a-slash",
+        ),
+        pytest.param(
+            "   ",
+            None,
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-12", "SPECCHECK_ROOT of only spaces counts as not set and root is null"
+            ),
+            id="only-spaces",
+        ),
+    ],
+)
+def test_the_override_is_trimmed(project: Project, monkeypatch: pytest.MonkeyPatch, given: str, root: str | None):
+    """With the workspace somewhere else, nothing but the override can give `root`, so null means it was ignored."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the trim")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", "/home/runner/work/r/r")
+    monkeypatch.setenv("SPECCHECK_ROOT", given)
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["root"] == root
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-12",
+    "with GITHUB_WORKSPACE holding the project's parent, so the root could be worked out as the project's folder name, SPECCHECK_ROOT=sdk still wins",
+)
+def test_the_override_wins_over_a_root_that_can_be_found(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """The override is not only a fallback."""
+    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "the winner")\ndef test_a():\n    pass\n')
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(project.root.parent))
+    project.pytest("--speccheck-results=found.jsonl")
+    assert project.results_lines("found.jsonl")[0]["root"] == project.root.name
+    monkeypatch.setenv("SPECCHECK_ROOT", "sdk")
+    project.pytest("--speccheck-results=won.jsonl")
+    assert project.results_lines("won.jsonl")[0]["root"] == "sdk"
