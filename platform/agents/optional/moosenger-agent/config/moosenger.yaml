@@ -23,7 +23,9 @@ rag:
   pre_timeout: 60
   embeddings: "$MOOSENGER_EMBEDDINGS"
   emb_host: "$MOOSENGER_LLM_HOST"
-  vector_dir: "$MOOSENGER_PROJECT_DIR/vector_data"
+  # The workspace volume by default; set MOOSENGER_VECTOR_DIR to use a vector
+  # database bound in from the host (docker-compose.override.yml).
+  vector_dir: "$MOOSENGER_VECTOR_DIR"
   matches: 10
 
 knowledge:

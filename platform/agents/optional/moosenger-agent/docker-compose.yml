@@ -68,6 +68,9 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       # ---- MOOSEnger --------------------------------------------------------
       MOOSENGER_PROJECT_DIR: /workspace
+      # Vector database location in the container: the workspace volume by
+      # default, or a host directory bound in docker-compose.override.yml.
+      MOOSENGER_VECTOR_DIR: ${MOOSENGER_VECTOR_DIR:-/workspace/vector_data}
       # Template rendered into /workspace/.moosenger.yaml at startup.
       MOOSENGER_CONFIG: /app/config/moosenger.yaml
       MOOSENGER_RENDER_CONFIG: ${MOOSENGER_RENDER_CONFIG:-true}
