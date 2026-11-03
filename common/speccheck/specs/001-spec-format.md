@@ -29,5 +29,5 @@ be found, has one ID, and says whether it is tested, planned or retired.
   be reported, saying where the setting lives now.
 - SPC-REQ-001-10: Two texts MUST count as the same text when they are equal after collapsing each
   run of whitespace to one space, trimming the ends, ignoring case, and dropping one trailing full
-  stop. Two requirements in the folder that aren't retired MUST NOT have the same text, and the
+  stop and any whitespace before it. Two requirements in the folder that aren't retired MUST NOT have the same text, and the
   problem MUST name both IDs.
