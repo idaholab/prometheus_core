@@ -53,6 +53,47 @@ def test_a_run_writes_json_lines_with_a_versioned_header(project: Project):
     }
 
 
+PRODUCER_TEST = 'import pytest\n@pytest.mark.covers("T-REQ-001-01", "the producer")\ndef test_a():\n    pass\n'
+"""A one-claim test file, for runs that only look at the header's producer."""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-01",
+    "an inner run whose pytest.ini sets speccheck_producer=from-ini writes from-ini as the header's producer, not the default local",
+)
+def test_the_header_names_the_producer_from_the_ini_option(project: Project):
+    """The ini option is the producer a run reports as, when the environment doesn't say."""
+    project.ini("speccheck_producer = from-ini\n")
+    project.tests(PRODUCER_TEST)
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["producer"] == "from-ini"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-01",
+    "an inner run with SPECCHECK_PRODUCER=from-env and no ini option writes from-env as the header's producer",
+)
+def test_the_header_names_the_producer_from_the_environment(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """`SPECCHECK_PRODUCER` alone, as a CI job sets it, is the producer the file carries."""
+    project.tests(PRODUCER_TEST)
+    monkeypatch.setenv("SPECCHECK_PRODUCER", "from-env")
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["producer"] == "from-env"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-01",
+    "an inner run with both speccheck_producer=from-ini and SPECCHECK_PRODUCER=from-env writes from-env, the precedence the README states",
+)
+def test_the_environment_producer_wins_over_the_ini_option(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """The README says the environment variable wins over the ini option, so the file carries the variable's value."""
+    project.ini("speccheck_producer = from-ini\n")
+    project.tests(PRODUCER_TEST)
+    monkeypatch.setenv("SPECCHECK_PRODUCER", "from-env")
+    project.pytest("--speccheck-results=r.jsonl")
+    assert project.results_lines("r.jsonl")[0]["producer"] == "from-env"
+
+
 @pytest.mark.covers(
     "SPC-REQ-004-01",
     "an inner run of two claiming tests, one with two marks, writes a header and exactly two result lines, "
@@ -286,6 +327,22 @@ GOOD_LINE = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outco
             ),
             id="root-number",
         ),
+        pytest.param(
+            {"runner": 3},
+            "`runner` must be a string",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose runner is a number, not a string, rejects the file and its pass"
+            ),
+            id="runner-number",
+        ),
+        pytest.param(
+            {"started": 20261102},
+            "`started` must be a string",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a header whose started is a number, not a timestamp string, rejects the file"
+            ),
+            id="started-number",
+        ),
     ],
 )
 def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, message: str):
@@ -296,7 +353,48 @@ def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, mes
     project.write("r.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
     run = project.speccheck("verify", "r.jsonl", "--json")
     assert run.code == 1
-    assert any(message in p["message"] and p["path"] == "r.jsonl" for p in run.json()["problems"])
+    assert any(message in p["message"] and p["path"] == "r.jsonl" and p["line"] == 1 for p in run.json()["problems"]), (
+        run.json()["problems"]
+    )
+    assert run.json()["requirements"][0]["status"] != "passed"
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        pytest.param(
+            "[]",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a first line that is an empty JSON list, not an object, rejects the file"
+            ),
+            id="list",
+        ),
+        pytest.param(
+            '"speccheck-results/1"',
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a first line that is the schema name as a bare JSON string rejects the file"
+            ),
+            id="string",
+        ),
+        pytest.param(
+            "null",
+            marks=pytest.mark.covers("SPC-REQ-004-02", "a first line of JSON null rejects the file"),
+            id="null",
+        ),
+    ],
+)
+def test_a_header_that_is_not_an_object_rejects_the_whole_file(project: Project, header: str):
+    """The first line must be the header object; the result line after it doesn't count."""
+    project.spec("- T-REQ-001-01: One.")
+    project.write("r.jsonl", header + "\n" + json.dumps(GOOD_LINE) + "\n")
+    run = project.speccheck("verify", "r.jsonl", "--json")
+    assert run.code == 1
+    assert any(
+        p["path"] == "r.jsonl"
+        and p["line"] == 1
+        and p["message"].startswith("not a valid speccheck-results/1 line: the first line must be the header object")
+        for p in run.json()["problems"]
+    ), run.json()["problems"]
     assert run.json()["requirements"][0]["status"] != "passed"
 
 
@@ -340,6 +438,25 @@ def test_a_bad_header_rejects_the_whole_file(project: Project, change: dict, mes
                 ("outcome", None, "`outcome` is None"),
                 ("outcome", 1, "`outcome` is 1"),
             ]
+        ),
+        *(
+            pytest.param(
+                {**GOOD_LINE, "covers": [{"id": value, "how": "h"}]},
+                "`covers[].id` must be a string",
+                marks=pytest.mark.covers(
+                    "SPC-REQ-004-02", f"a third line whose only covers entry has the id {value!r} rejects the file"
+                ),
+                id=f"covers-id-{type(value).__name__}",
+            )
+            for value in (3, None, ["T-REQ-001-01"])
+        ),
+        pytest.param(
+            {**GOOD_LINE, "covers": []},
+            "`covers` must be a list of 1 to 200 claims",
+            marks=pytest.mark.covers(
+                "SPC-REQ-004-02", "a third line whose covers is an empty list, claiming nothing, rejects the file"
+            ),
+            id="covers-empty",
         ),
         pytest.param(
             {k: v for k, v in GOOD_LINE.items() if k != "outcome"},
@@ -615,7 +732,44 @@ def test_an_unwritable_results_path_is_a_usage_error(project: Project):
     run = project.pytest("--speccheck-results=blocker/r.jsonl")
     assert run.ret == pytest.ExitCode.USAGE_ERROR
     assert "speccheck: can't write the results file" in "\n".join(run.stderr.lines + run.stdout.lines)
+    # A raw OSError would print a traceback on either stream, or in pytest's own report
     assert "Traceback" not in run.stdout.str()
+    assert "Traceback" not in run.stderr.str()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "SPECCHECK_RESULTS set to the empty string, and then --speccheck-results given empty, run clean and leave no results file or temporary file",
+)
+def test_an_empty_request_for_a_file_writes_nothing(project: Project, monkeypatch: pytest.MonkeyPatch):
+    """Set but empty is not a request: no results file, no temporary file, and no error."""
+    project.tests(PRODUCER_TEST)
+    monkeypatch.setenv("SPECCHECK_RESULTS", "")
+    run = project.pytest()
+    assert run.ret == pytest.ExitCode.OK
+    assert not list(project.root.rglob("*.jsonl"))
+    run = project.pytest("--speccheck-results=")
+    assert run.ret == pytest.ExitCode.OK
+    assert not list(project.root.rglob("*.jsonl"))
+    assert not [p for p in project.root.iterdir() if "jsonl" in p.name]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "a results path that is an existing folder ends the inner run as a usage error giving the system's error, with no traceback, and leaves the folder empty and no temporary file",
+)
+def test_a_results_path_that_is_a_folder_is_a_usage_error(project: Project):
+    """The target exists but is a folder, so nothing can be renamed over it: the run says why and leaves no litter."""
+    project.tests(PRODUCER_TEST)
+    (project.root / "taken").mkdir()
+    run = project.pytest("--speccheck-results=taken")
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    message = "\n".join(run.stderr.lines + run.stdout.lines)
+    assert re.search(r"speccheck: can't write the results file: \[Errno \d+\] .+: '.*taken", message), message
+    assert "Traceback" not in message
+    assert (project.root / "taken").is_dir()
+    assert list((project.root / "taken").iterdir()) == []
+    assert not [p for p in project.root.iterdir() if p.name.startswith(".taken")]
 
 
 @pytest.mark.covers(
@@ -1046,6 +1200,8 @@ def test_the_header_says_where_file_paths_start(project: Project, monkeypatch: p
     project.pytest("--speccheck-results=top.jsonl")
     assert project.results_lines("top.jsonl")[0]["root"] == "."
     monkeypatch.delenv("GITHUB_WORKSPACE")
+    if any((folder / ".git").exists() for folder in [project.root, *project.root.parents]):
+        pytest.skip("the temp folder is inside a repository, so there is no folder without one to test")
     # pytester's folder is under the system temp folder, which isn't in any repository
     project.pytest("--speccheck-results=none.jsonl")
     assert project.results_lines("none.jsonl")[0]["root"] is None

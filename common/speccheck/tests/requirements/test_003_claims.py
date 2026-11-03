@@ -291,8 +291,11 @@ def test_a_configured_run_needs_a_producer(project: Project, monkeypatch: pytest
         ),
         pytest.param(
             'pytest.mark.covers("T-REQ-001-01", "a", "b")',
-            "`covers` takes two strings",
-            marks=pytest.mark.covers("SPC-REQ-003-04", "an inner mark with a third argument stops collection"),
+            'test_project.py:2: test_project.py::test_a: `covers` takes two strings, the ID and how the test proves it, such as covers("T-REQ-001-01", "...")\n',
+            marks=pytest.mark.covers(
+                "SPC-REQ-003-04",
+                "an inner mark with an ID, an explanation and one more string stops collection, and the error line is the plugin's whole message after the test name",
+            ),
             id="three-arguments",
         ),
         pytest.param(
@@ -402,6 +405,50 @@ def test_unconfigured_nothing_is_checked_even_what_a_results_file_would_refuse(p
 
 @pytest.mark.covers(
     "SPC-REQ-003-05",
+    "with no speccheck settings and no results file, an inner expected failure, a non-strict unexpected pass, a setup error and a teardown error are counted exactly as pytest counts them, the exit status is pytest's, and no file is written",
+)
+def test_unconfigured_xfail_xpass_and_errors_are_pytests_own(project: Project):
+    """Claiming tests of the outcomes `changes_nothing` leaves out: pytest's counts and exit status stand."""
+    project.tests(
+        """\
+        import pytest
+
+        @pytest.fixture
+        def broken_setup():
+            raise RuntimeError("setup")
+
+        @pytest.fixture
+        def broken_teardown():
+            yield
+            raise RuntimeError("teardown")
+
+        @pytest.mark.covers("T-REQ-001-01", "x")
+        @pytest.mark.xfail(reason="known")
+        def test_xfails():
+            assert False
+
+        @pytest.mark.covers("T-REQ-001-02", "y")
+        @pytest.mark.xfail(reason="known")
+        def test_xpasses():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-03", "z")
+        def test_setup_errors(broken_setup):
+            pass
+
+        @pytest.mark.covers("T-REQ-001-04", "w")
+        def test_teardown_errors(broken_teardown):
+            pass
+        """
+    )
+    run = project.pytest()
+    run.assert_outcomes(passed=1, xfailed=1, xpassed=1, errors=2)
+    assert run.ret == pytest.ExitCode.TESTS_FAILED
+    assert not list(project.root.rglob("*.jsonl"))
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-05",
     "with only a results file asked for, a claim of an ID that no spec has is accepted and written as passed, because claims are not compared with any spec",
 )
 def test_results_only_never_compares_ids_with_a_spec(project: Project):
@@ -471,15 +518,20 @@ def test_results_only_still_refuses_what_needs_no_spec(project: Project, source:
 
 @pytest.mark.covers(
     "SPC-REQ-003-05",
-    "asking only for a results file, an explanation copied from a spec bullet is accepted, while a TODO explanation and a class-level mark still stop collection",
+    "with a results file asked for and the spec folder beside the config, an explanation copied from a spec bullet is accepted, but the same file with speccheck_config on is refused, while a TODO explanation and a class-level mark stop collection with no config",
 )
 def test_unconfigured_only_the_spec_free_checks_run(project: Project):
-    """With a results file but no config there are no specs to compare against; the checks that need none run."""
+    """The spec folder is there but unused without `speccheck_config`; the checks that need no specs run."""
     project.spec("- T-REQ-001-01: The thing MUST work.")
     project.tests(
         'import pytest\n@pytest.mark.covers("T-REQ-001-01", "The thing MUST work.")\ndef test_a():\n    pass\n'
     )
     project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
+    assert claims(project)["test_a"] == [{"id": "T-REQ-001-01", "how": "The thing MUST work."}]
+    # The contrast: the same file, with the config on, is refused for that very copy
+    project.ini(CHECKED)
+    assert "the explanation for T-REQ-001-01 is the text of T-REQ-001-01" in usage_error(project)
+    project.ini("")
     project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "TODO")\ndef test_a():\n    pass\n')
     assert "is a placeholder ('TODO')" in usage_error(project)
     project.tests(
@@ -656,6 +708,40 @@ def test_an_unusable_explanation_fails_collection(project: Project, how: str, me
     assert f"test_project.py::test_a: {message}" in err
 
 
+@pytest.mark.parametrize(
+    ("how", "message"),
+    [
+        pytest.param(
+            "",
+            "the explanation for T-REQ-001-01 is empty; say how the test proves it",
+            marks=pytest.mark.covers(
+                "SPC-REQ-003-17",
+                "with the collection check on, an empty string as the explanation stops collection, naming the test and the ID",
+            ),
+            id="empty",
+        ),
+        pytest.param(
+            "fixme",
+            "the explanation for T-REQ-001-01 is a placeholder ('fixme'); say how the test proves it",
+            marks=pytest.mark.covers(
+                "SPC-REQ-003-17",
+                "with the collection check on, a lower-case fixme as the explanation stops collection, naming the test and the ID",
+            ),
+            id="placeholder",
+        ),
+    ],
+)
+def test_an_unusable_explanation_fails_collection_when_the_check_is_on(project: Project, how: str, message: str):
+    """With `speccheck_config` and no results file asked for; the message names the test and the ID."""
+    project.spec("- T-REQ-001-01: One.")
+    project.ini(CHECKED)
+    project.tests(f"import pytest\n@pytest.mark.covers('T-REQ-001-01', {how!r})\ndef test_a():\n    pass\n")
+    run = project.pytest()
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    assert f"test_project.py::test_a: {message}" in run.stderr.str()
+    assert not list(project.root.rglob("*.jsonl"))
+
+
 @pytest.mark.covers("SPC-REQ-003-17", "an explanation of exactly 1000 characters is accepted and written whole")
 def test_an_explanation_of_exactly_1000_characters_is_accepted(project: Project):
     """The limit is 1000, so 1000 passes; the 1001 above is refused."""
@@ -703,7 +789,39 @@ def test_an_explanation_that_is_a_requirements_text_fails(project: Project):
         "test_project.py::test_own: the explanation for T-REQ-001-01 is the text of T-REQ-001-01; "
         "describe how the test proves T-REQ-001-01" in err
     )
-    assert "test_project.py::test_neighbour: the explanation for T-REQ-001-01 is the text of T-REQ-001-02" in err
+    assert (
+        "test_project.py::test_neighbour: the explanation for T-REQ-001-01 is the text of T-REQ-001-02; "
+        "describe how the test proves T-REQ-001-01" in err
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-09",
+    "with the check on, explanations that hold a requirement's whole text among other words, or are only a part of it, are accepted and run",
+)
+def test_an_explanation_that_only_contains_a_requirements_text_is_fine(project: Project):
+    """Only the same text is a copy: one that merely holds it, or is held by it, says something of its own."""
+    project.spec("- T-REQ-001-01: The file MUST be written.\n- T-REQ-001-02: Two.")
+    project.ini(CHECKED)
+    project.tests(
+        """\
+        import pytest
+
+        @pytest.mark.covers("T-REQ-001-01", "reads back that the file MUST be written, then deletes it")
+        def test_after():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-02", "The file MUST be written. Checks it by opening the path")
+        def test_before():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-02", "file MUST be")
+        def test_part():
+            pass
+        """
+    )
+    project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=3)
+    assert claims(project)["test_part"] == [{"id": "T-REQ-001-02", "how": "file MUST be"}]
 
 
 @pytest.mark.covers(
@@ -821,6 +939,47 @@ def test_an_explanation_is_given_once(project: Project):
         "test_project.py::test_c gives the same explanation for T-REQ-001-03 as test_project.py::test_c does for T-REQ-001-04"
         in err
     )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-11",
+    "with the collection check on and no results path, two tests, and two IDs on one test, giving the same explanation stop collection naming both claims, and no file is written",
+)
+def test_an_explanation_is_given_once_when_the_check_is_on(project: Project):
+    """The specs are checked first, but a repeat the specs allow still fails collection."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n- T-REQ-001-03: Three.\n- T-REQ-001-04: Four.")
+    project.ini(CHECKED)
+    project.tests(
+        """\
+        import pytest
+
+        @pytest.mark.covers("T-REQ-001-01", "writes the file")
+        def test_a():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-02", "Writes  the file.")
+        def test_b():
+            pass
+
+        @pytest.mark.covers("T-REQ-001-03", "reads the file")
+        @pytest.mark.covers("T-REQ-001-04", "reads the file")
+        def test_c():
+            pass
+        """
+    )
+    run = project.pytest()
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    err = run.stderr.str()
+    assert "speccheck: 2 claim(s)" in err
+    assert (
+        "test_project.py::test_b gives the same explanation for T-REQ-001-02 as "
+        "test_project.py::test_a does for T-REQ-001-01" in err
+    )
+    assert (
+        "test_project.py::test_c gives the same explanation for T-REQ-001-03 as "
+        "test_project.py::test_c does for T-REQ-001-04" in err
+    )
+    assert not list(project.root.rglob("*.jsonl"))
 
 
 @pytest.mark.covers(

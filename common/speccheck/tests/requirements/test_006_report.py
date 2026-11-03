@@ -20,8 +20,9 @@ import re
 import pytest
 from markdown_it import MarkdownIt
 
+from speccheck.actions.report import OUTCOMES
 from tests.conftest import CONFIG, INDEX, spec
-from tests.requirements.conftest import CI, ENV, Project
+from tests.requirements.conftest import CI, ENV, JOB, Project
 
 SHA = "e" * 40
 """The commit the run tested, whose files the report links to."""
@@ -262,6 +263,12 @@ def test_each_claimant_has_its_own_subsection(project: Project):
         "Test `test_b` in `tests/test_x.py`",
     ]
     assert "**How:** publish proves T-REQ-001-01" in text  # the how in the job's own result
+    # Each test's own how sits under its own heading, in order (`_` outside a code span is escaped)
+    assert re.findall(r"^\*\*How:\*\* (.+)$", text, re.M) == [
+        "publish proves T-REQ-001-01",
+        "tests/a.py::test\\_a proves T-REQ-001-01",
+        "tests/b.py::test\\_b proves T-REQ-001-01",
+    ]
 
 
 @pytest.mark.covers(
@@ -885,3 +892,280 @@ def test_a_spec_outside_the_workspace_is_not_linked(project: Project):
     env = {**ENV, "GITHUB_SHA": SHA, "GITHUB_WORKSPACE": str(project.root / "elsewhere")}
     text = project.speccheck("report", "u.jsonl", env=env).out
     assert "/blob/" not in text and "\nIn [" not in text
+
+
+@pytest.mark.parametrize(
+    ("outcome", "mark", "how"),
+    [
+        pytest.param(outcome, mark, how, marks=pytest.mark.covers("SPC-REQ-006-02", how), id=outcome)
+        for outcome, mark, how in [
+            (
+                "failed",
+                "❌",
+                "a requirement whose only result failed gets the line '❌ failed in' followed by the linked job",
+            ),
+            (
+                "error",
+                "❌",
+                "a requirement whose only result is an error gets the line '❌ error in' followed by the linked job",
+            ),
+            (
+                "xfailed",
+                "❌",
+                "a requirement whose only result is an expected failure gets '❌ xfailed in' and the linked job, not a pass mark",
+            ),
+            (
+                "xpassed",
+                "❌",
+                "a requirement whose only result is an unexpected pass gets '❌ xpassed in' and the linked job, not a pass mark",
+            ),
+            (
+                "deselected",
+                "❌",
+                "a requirement whose only result was deselected gets '❌ deselected in' and the linked job",
+            ),
+            (
+                "collected",
+                "☑",
+                "a requirement whose only result was collected but never run gets the ballot mark '☑ collected in' and the linked job",
+            ),
+        ]
+    ],
+)
+def test_each_outcome_has_its_own_result_line(project: Project, outcome: str, mark: str, how: str):
+    """One result of each other outcome: the mark the report gives it, its outcome word, and the job linked."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("a.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], outcome)], ci=CI)
+    text = project.speccheck("report", "a.jsonl", env=ENV).out
+    lines = [line for line in text.splitlines() if line.startswith(f"- {mark} {outcome} in ")]
+    assert lines == [f"- {mark} {outcome} in [unit](https://github.com/o/r/actions/runs/7/job/8)"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-02",
+    "one claim with a result of each of the eight outcomes, given in the reverse of the report's own order, comes out in that OUTCOMES order with failed first and passed last",
+)
+def test_result_lines_are_listed_worst_first(project: Project):
+    """The order is the report's named OUTCOMES constant, whatever order the results files were given in."""
+    project.spec("- T-REQ-001-01: One.")
+    names = {}
+    files = []
+    for n, outcome in enumerate(reversed(OUTCOMES)):
+        job = {**CI, "job_id": 10 + n, "job_url": f"https://github.com/o/r/actions/runs/7/job/{10 + n}"}
+        names[str(10 + n)] = f"job {outcome}"
+        project.results(f"{outcome}.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], outcome)], ci=job)
+        files.append(f"{outcome}.jsonl")
+    project.write("names.json", json.dumps(names))
+    text = project.speccheck("report", *files, "--job-names", "names.json", env=ENV).out
+    shown = re.findall(r"^- \S+ (\w+) in \[job \w+\]\(", text, re.M)
+    assert shown == list(OUTCOMES)
+    assert shown[0] == "failed" and shown[-1] == "passed"
+
+
+def hostile_results(
+    project: Project,
+    *,
+    test: str = "t",
+    file: str | None = None,
+    claim: str = "T-REQ-001-01",
+    kind: str | None = None,
+    producer: str = "unit",
+    ci: dict | None = None,
+) -> None:
+    """Write `u.jsonl`: one passing result for `claim` from `producer`, with the given test name, file, kind and CI block."""
+    header: dict = {"schema": "speccheck-results/1", "producer": producer}
+    if ci is not None:
+        header["ci"] = ci
+    line: dict = {"test": test, "covers": [{"id": claim, "how": "h"}], "outcome": "passed"}
+    if file is not None:
+        line["file"] = file
+    if kind is not None:
+        line["kind"] = kind
+    project.write("u.jsonl", json.dumps(header) + "\n" + json.dumps(line) + "\n")
+
+
+def payload_claim(place: str, payload: str) -> pytest.MarkDecorator:
+    """The 006-03 claim for one payload put in `place`; its explanation names both."""
+    return pytest.mark.covers(
+        "SPC-REQ-006-03",
+        f"a results file whose {place} is {payload!r} renders through CommonMark and GitHub autolinks "
+        "with the same elements as one whose is plain words",
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [pytest.param(payload, marks=payload_claim("test file path", payload), id=payload) for payload in PAYLOADS],
+)
+def test_a_test_file_path_cant_add_markdown(project: Project, payload: str):
+    """The `file` of a result is shown in the Test heading, so a results file chooses what that text is."""
+    project.spec("- T-REQ-001-01: One.")
+    hostile_results(project, test="tests/t.py::test_a", file=payload)
+    hostile = project.speccheck("report", "u.jsonl", env=ENV).out
+    hostile_results(project, test="tests/t.py::test_a", file="tests/t.py")
+    plain = project.speccheck("report", "u.jsonl", env=ENV).out
+    assert elements(plain), "the plain report has elements of its own (headings, anchors), so the check can fail"
+    assert "#### Test " in hostile
+    assert elements(hostile) == elements(plain), hostile
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [pytest.param(payload, marks=payload_claim("CI job name", payload), id=payload) for payload in PAYLOADS],
+)
+def test_a_ci_job_name_cant_add_markdown(ci_project: Project, payload: str):
+    """The name of a CI job heads its own subsection (`#### Job`), and the results file chooses it."""
+    hostile_results(ci_project, test=payload, kind="ci", producer="publish")
+    hostile = ci_project.speccheck("report", "u.jsonl", env=ENV).out
+    hostile_results(ci_project, test="publish", kind="ci", producer="publish")
+    plain = ci_project.speccheck("report", "u.jsonl", env=ENV).out
+    assert elements(plain), "the plain report has elements of its own (headings, anchors), so the check can fail"
+    assert "#### Job " in hostile
+    assert elements(hostile) == elements(plain), hostile
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(payload, marks=payload_claim("test name and claimed ID", payload), id=payload)
+        for payload in PAYLOADS
+    ],
+)
+def test_a_problem_line_cant_add_markdown(project: Project, payload: str):
+    """A result claiming an ID that isn't in any spec is a problem naming its test and the ID, listed in the report."""
+    project.spec("- T-REQ-001-01: One.")
+    hostile_results(project, test=payload, claim=payload)
+    hostile = project.speccheck("report", "u.jsonl").out
+    hostile_results(project, test="t", claim="T-REQ-009-09")
+    plain = project.speccheck("report", "u.jsonl").out
+    # The unknown ID is one problem, and the requirement nobody validly claims is the other
+    assert "## Problems (2)" in plain and "## Problems (2)" in hostile
+    assert elements(plain), "the plain report has elements of its own (headings, anchors), so the check can fail"
+    assert elements(hostile) == elements(plain), hostile
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [pytest.param(payload, marks=payload_claim("commit and run URL", payload), id=payload) for payload in PAYLOADS],
+)
+def test_the_commit_and_run_in_the_inputs_cant_add_markdown(project: Project, payload: str):
+    """The Inputs section shows the first 12 characters of `ci.sha`; a `run_url` that isn't this run's is dropped."""
+    project.spec("- T-REQ-001-01: One.")
+    hostile_results(project, ci={"sha": payload, "run_url": payload})
+    hostile = project.speccheck("report", "u.jsonl", env=ENV).out
+    hostile_results(project, ci={"sha": "e" * 40})
+    plain = project.speccheck("report", "u.jsonl", env=ENV).out
+    assert "- Runs: none" in hostile
+    assert elements(plain), "the plain report has elements of its own (headings, anchors), so the check can fail"
+    assert elements(hostile) == elements(plain), hostile
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-04",
+    "a results file with a run URL, reported on where no GITHUB_ variable is set, says 'Runs: none' and still gives its 12-character commit",
+)
+def test_a_run_url_is_only_listed_for_this_runs_repository(project: Project):
+    """Without a server and repository from the environment, no run URL is one of this run's, so none is listed or linked."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("a.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=CI)
+    inputs = project.speccheck("report", "a.jsonl", env={}).out.split("## Inputs", 1)[1]
+    assert inputs.strip().splitlines() == [
+        "- Commit: dddddddddddd",
+        "- Runs: none",
+        "- Producers reported: unit",
+    ]
+    assert "github.com" not in inputs
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-04",
+    "in a full GitHub Actions job environment, the Inputs section is exactly the 12-character commit, the linked run attempt and the reporting producer",
+)
+def test_the_inputs_in_a_ci_job(project: Project):
+    """The same three lines, whole, when the report is written by a CI job."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("a.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=CI)
+    env = {**JOB, "GITHUB_SHA": "d" * 40, "GITHUB_WORKSPACE": str(project.root)}
+    inputs = project.speccheck("report", "a.jsonl", env=env).out.split("## Inputs", 1)[1]
+    assert inputs.strip().splitlines() == [
+        "- Commit: dddddddddddd",
+        "- Runs: [7/attempts/2](https://github.com/o/r/actions/runs/7/attempts/2)",
+        "- Producers reported: unit",
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-05",
+    "a spec of which one requirement no test claims leaves report exiting 0 where verify exits 1, with the requirement reported unclaimed",
+)
+def test_report_exits_0_for_an_unclaimed_requirement(project: Project):
+    """Nothing claims T-REQ-001-02, so `verify` fails on it; `report` still writes its report and exits 0."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert project.speccheck("verify", "r.jsonl").code == 1
+    run = project.speccheck("report", "r.jsonl", "--output", "r.md")
+    assert run.code == 0
+    assert "### T-REQ-001-02 ❌ unclaimed" in (project.root / "r.md").read_text()
+
+
+@pytest.mark.parametrize(
+    "where",
+    [
+        pytest.param(
+            "stdout",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05",
+                "a failing and an unclaimed requirement leave report exiting 0 when it prints the report to stdout with no --output",
+            ),
+            id="stdout",
+        ),
+        pytest.param(
+            "json",
+            marks=pytest.mark.covers(
+                "SPC-REQ-006-05",
+                "a failing and an unclaimed requirement leave report --json exiting 0 and printing the report command's object",
+            ),
+            id="json",
+        ),
+    ],
+)
+def test_report_exits_0_to_stdout_and_as_json(reported: Project, where: str):
+    """`verify` fails on the same results; `report` prints in the other two ways it can and still exits 0."""
+    assert reported.speccheck("verify", "unit.jsonl").code == 1
+    if where == "stdout":
+        run = reported.speccheck("report", "unit.jsonl")
+        assert run.code == 0 and run.out.startswith("# speccheck requirements\n")
+    else:
+        run = reported.speccheck("report", "unit.jsonl", "--json")
+        assert run.code == 0
+        body = run.json()
+        assert body["command"] == "report"
+        assert {r["id"]: r["status"] for r in body["requirements"]} == {
+            "T-REQ-001-01": "passed",
+            "T-REQ-001-02": "failed",
+            "T-REQ-001-03": "unclaimed",
+        }
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-08",
+    "one test name claiming a requirement in two results with different explanations gets two subsections, each with its own How",
+)
+def test_one_test_with_two_hows_gets_two_subsections(project: Project):
+    """Claims are grouped by kind, test and how, so the same test name with another how is another subsection."""
+    project.spec("- T-REQ-001-01: One.")
+    header = {"schema": "speccheck-results/1", "producer": "unit"}
+    lines = [
+        {
+            "test": "tests/t.py::test_a",
+            "file": "tests/t.py",
+            "line": line,
+            "covers": [{"id": "T-REQ-001-01", "how": how}],
+            "outcome": "passed",
+        }
+        for line, how in ((3, "checks the first thing"), (9, "checks the second thing"))
+    ]
+    project.write("u.jsonl", "\n".join(json.dumps(x) for x in [header, *lines]) + "\n")
+    text = project.speccheck("report", "u.jsonl").out
+    assert re.findall(r"^#### (.+)$", text, re.M) == ["Test `test_a` in `tests/t.py`"] * 2
+    assert re.findall(r"^\*\*How:\*\* (.+)$", text, re.M) == ["checks the first thing", "checks the second thing"]

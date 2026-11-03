@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from markdown_it import MarkdownIt
 
 import speccheck
 from tests.requirements.conftest import CI, CONFIG, ENV, JOB, Project
@@ -525,11 +526,11 @@ def test_control_characters_in_a_test_name_are_written_out(project: Project, nam
     """The name's control characters are written as escapes on stderr, and no raw one reaches either stream."""
     project.spec("- T-REQ-001-01: One.")
     project.results("r.jsonl", "unit", [(name, ["T-REQ-001-01"], "failed")])
-    for flags in ([], ["--verbose"]):
-        done = command(project, "verify", "r.jsonl", *flags)
-        for stream in (done.stdout, done.stderr):
-            assert not CONTROLS.search(stream), repr(stream)
-        assert f"{written} failed in unit" in done.stderr, repr(done.stderr)
+    # No --verbose pass: it only adds `ID  status` lines to stdout, which hold nothing from a results file
+    done = command(project, "verify", "r.jsonl")
+    for stream in (done.stdout, done.stderr):
+        assert not CONTROLS.search(stream), repr(stream)
+    assert f"{written} failed in unit" in done.stderr, repr(done.stderr)
 
 
 @pytest.mark.covers(
@@ -805,7 +806,10 @@ def test_the_summary_limit_counts_bytes(project: Project):
     assert project.run("verify", "r.jsonl", *missing, "--summary", "s.md").code == 1
     data = (project.root / "s.md").read_bytes()
     assert len(data) <= 1024 * 1024
-    assert data.decode().rstrip("\n").splitlines()[-1].startswith("- … cut to fit")
+    lines = data.decode().rstrip("\n").splitlines()
+    assert lines[-1].startswith("- … cut to fit")
+    # Every entry before the note is whole: it opens its code span and closes it on its own line
+    assert len(lines) > 100 and all(line.startswith("- `") and line.endswith("`") for line in lines[2:-1])
 
 
 @pytest.mark.covers(
@@ -981,11 +985,20 @@ def test_verify_names_jobs_by_the_map(project: Project):
         ),
         pytest.param(
             b"\xff\xfe{}",
-            "--job-names names.json: ",
+            "--job-names names.json: not JSON",
             marks=pytest.mark.covers(
-                "SPC-REQ-008-10", "a --job-names file that is not UTF-8 text exits 2, no traceback"
+                "SPC-REQ-008-10",
+                "a --job-names file that is not UTF-8 text exits 2 with the whole message `--job-names names.json: not JSON`, no traceback",
             ),
             id="not-utf-8",
+        ),
+        pytest.param(
+            '{"41": {}}',
+            "--job-names names.json: must be a JSON object from job ID to name",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10", "a --job-names object whose value for job 41 is itself an object exits 2"
+            ),
+            id="nested-object",
         ),
     ],
 )
@@ -1000,6 +1013,8 @@ def test_a_bad_job_names_file_is_a_usage_error(project: Project, content: str | 
     for command_name in ("report", "verify"):
         run = project.run(command_name, "r.jsonl", "--job-names", "names.json")
         assert run.code == 2 and message in run.err and "Traceback" not in run.err, command_name
+        if message.endswith("not JSON"):  # this message is complete, so it is the whole error
+            assert run.err == f"speccheck: error: {message}\n", command_name
 
 
 @pytest.mark.covers(
@@ -1113,3 +1128,266 @@ def test_record_to_an_unwritable_path_is_an_error_object(ci_project: Project):
     body = run.json()
     assert run.code == 2 and body["ok"] is False and body["error"]["code"] == "usage"
     assert "blocker" in body["error"]["message"] and "Traceback" not in run.err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(
+            ["lint"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-03",
+                "lint --summary with a folder that is really a plain file exits 2 and writes no summary",
+            ),
+            id="lint",
+        ),
+        pytest.param(
+            ["check", "c.jsonl"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-03",
+                "check --summary into a folder that is really a plain file exits 2 even though check itself found nothing wrong",
+            ),
+            id="check",
+        ),
+        pytest.param(
+            ["verify", "c.jsonl"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-03",
+                "verify --summary under a plain file exits 2 where the same run without --summary exits 0",
+            ),
+            id="verify",
+        ),
+    ],
+)
+def test_an_unwritable_summary_is_a_usage_error(project: Project, argv: list[str]):
+    """The summary file is an output path: when its folder can't be made, that is exit 2, not 0 or 1 or a traceback."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("c.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
+    assert command(project, *argv).returncode == 0  # the same run is clean without the summary
+    project.write("blocker", "a file, not a folder")
+    done = command(project, *argv, "--summary", "blocker/s.md")
+    assert done.returncode == 2 and "blocker" in done.stderr and "Traceback" not in done.stderr
+    assert (project.root / "blocker").read_text() == "a file, not a folder"
+    as_json = command(project, *argv, "--summary", "blocker/s.md", "--json")
+    assert as_json.returncode == 2 and json.loads(as_json.stdout)["ok"] is False
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "check --json on a results file from a collect-only run gives the requirement a claimed status and one evidence entry holding its producer, test, outcome collected, how and kind",
+)
+def test_check_json_lists_the_evidence_of_a_claimed_requirement(project: Project):
+    """`check` lists evidence like `verify` does: the claim from the results file, not just an empty list."""
+    project.spec("- T-REQ-001-01: One.")
+    path = project.results("c.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "collected")])
+    body = json.loads(command(project, "check", "c.jsonl", "--json").stdout)
+    [requirement] = body["requirements"]
+    assert (requirement["id"], requirement["status"]) == ("T-REQ-001-01", "claimed")
+    [entry] = requirement["evidence"]
+    claim = json.loads(path.read_text().splitlines()[1])["covers"][0]
+    assert (entry["producer"], entry["test"], entry["outcome"], entry["kind"]) == (
+        "unit",
+        "tests/t.py::test_a",
+        "collected",
+        "test",
+    )
+    assert entry["how"] == claim["how"] == "tests/t.py::test_a proves T-REQ-001-01"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-07",
+    "a lint with three problems writes the line 3 problems, then exactly three entries in the order the terminal prints them, and the terminal's last line says 3 problems too",
+)
+def test_a_summary_lists_each_of_several_problems(project: Project):
+    """The count in the summary line, the entries and the terminal's count all agree for more than one problem."""
+    project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.\n- T-REQ-1-3: Short.\n+ T-REQ-001-04: Plus.")
+    done = project.run("lint", "--summary", "s.md")
+    assert done.code == 1
+    printed = done.err.splitlines()
+    terminal = printed[-1]
+    lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
+    assert terminal.endswith("; 3 problems") and len(printed) == 4
+    assert lines[0] == "**speccheck:** 3 problems. 1 specs, 1 requirement" and lines[1] == ""
+    assert len(lines) == 2 + 3
+    for entry, problem in zip(lines[2:], printed[:-1], strict=True):
+        # An entry is the problem as printed, in one code span, with the backticks it held left out
+        assert entry == f"- `{problem.replace(chr(96), '')}`"
+
+
+HOSTILE = "`tick` [x](y) <https://evil.example>"
+"""Text that would add a code span, a link and an autolink if it were written into the summary raw."""
+ELEMENTS = {"link_open", "image", "html_inline", "html_block", "heading_open", "blockquote_open", "fence"}
+"""The markdown elements a summary entry must never add."""
+
+
+def summary_elements(text: str) -> list[str]:
+    """The element tokens a CommonMark renderer reads from a summary, with GitHub's autolinks on, in order."""
+    found = []
+    for token in MarkdownIt("commonmark", {"linkify": True}).enable("linkify").parse(text):
+        found += [token.type] + [child.type for child in token.children or []]
+    return found
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-08",
+    "a summary written for a spec bullet holding a backtick, a link and an autolink, and for a spec file named with a backtick, a newline, a link and an html tag, renders as one paragraph and one list of exactly the problems' entries, each one code span, with no link, html or break",
+)
+def test_a_spec_and_a_file_name_problem_stay_inert_in_the_summary(project: Project):
+    """Rendered the way GitHub reads it, the summary adds nothing but the list, one item per problem."""
+    project.spec(f"- T-REQ-001-01: One.\n* T-REQ-001-02: {HOSTILE}")
+    project.write("specs/x`t`\n[x](y)<b>.md", "")
+    done = project.run("lint", "--summary", "s.md")
+    assert done.code == 1
+    text = (project.root / "s.md").read_text()
+    lines = text.rstrip("\n").splitlines()
+    problems = len(done.err.splitlines()) - 1
+    assert problems == 2
+    # No raw line break inside an entry: the newline in the file name is written out as \n
+    assert len(lines) == 2 + problems and all(line.startswith("- `") and line.endswith("`") for line in lines[2:])
+    assert "specs/xt\\n[x](y)<b>.md" in text and HOSTILE.replace("`", "") in text
+    tokens = summary_elements(text)
+    assert not ELEMENTS & set(tokens), tokens
+    assert tokens.count("list_item_open") == problems and tokens.count("bullet_list_open") == 1
+    assert tokens.count("code_inline") == problems and tokens.count("paragraph_open") == 1 + problems
+
+
+def failing_project(project: Project, command_name: str) -> None:
+    """Make `command_name` fail with one problem: `verify` on a failed result, `lint` on a bad bullet."""
+    if command_name == "verify":
+        project.spec("- T-REQ-001-01: One.")
+        project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")])
+    else:
+        project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.")
+
+
+@pytest.mark.parametrize(
+    ("argv", "counts"),
+    [
+        pytest.param(
+            ["verify", "r.jsonl"],
+            "1 requirement: 1 failed",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "a verify whose one result failed writes the count line 1 problem and the counts, with the report link after them and the failure listed below it",
+            ),
+            id="verify",
+        ),
+        pytest.param(
+            ["lint"],
+            "1 specs, 1 requirement",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "a lint of a spec with a bad bullet writes the count line 1 problem and the spec counts, with the report link after them and the bullet listed below it",
+            ),
+            id="lint",
+        ),
+    ],
+)
+def test_the_report_link_follows_a_failing_summary_line(project: Project, argv: list[str], counts: str):
+    """On a failure the link ends the one line that gives the problem count, and the entries stay below it."""
+    failing_project(project, argv[0])
+    link = f"Full report: [speccheck-report]({REPORT_URL})"
+    run = project.run(*argv, "--summary", "s.md", "--report-url", REPORT_URL, env=SUMMARY_ENV)
+    assert run.code == 1
+    lines = (project.root / "s.md").read_text().rstrip("\n").splitlines()
+    assert lines[0] == f"**speccheck:** 1 problem. {counts}. {link}"
+    assert lines[1] == "" and len(lines) == 3 and lines[2].startswith("- `") and link not in lines[2]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        pytest.param(
+            ["verify", "r.jsonl"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "a failing verify given a job URL of this run, which 007-10 doesn't allow as the report, writes its count line and entry with no link",
+            ),
+            id="verify",
+        ),
+        pytest.param(
+            ["lint"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-09",
+                "a lint with a bad bullet given a job URL of this run writes its count line and entry with no link",
+            ),
+            id="lint",
+        ),
+    ],
+)
+def test_a_failing_summary_without_an_allowed_link_has_none(project: Project, argv: list[str]):
+    """The refusal holds on a failure too: the count line is there, and nothing in the file links or names a URL."""
+    failing_project(project, argv[0])
+    refused = "https://github.com/o/r/actions/runs/7/job/8"
+    run = project.run(*argv, "--summary", "s.md", "--report-url", refused, env=SUMMARY_ENV)
+    assert run.code == 1
+    text = (project.root / "s.md").read_text()
+    lines = text.rstrip("\n").splitlines()
+    assert lines[0].startswith("**speccheck:** 1 problem. ") and lines[0].endswith(("1 failed", "1 requirement"))
+    assert len(lines) == 3 and lines[2].startswith("- `")
+    assert (
+        "Full report" not in text and "speccheck-report" not in text and "](" not in text and "github.com" not in text
+    )
+
+
+@pytest.mark.parametrize(
+    "ci",
+    [
+        pytest.param(
+            None,
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10",
+                "verify given a map but a failing result whose file has no CI block names it by its producer, with exit 1 and an empty job_name",
+            ),
+            id="no-ci-block",
+        ),
+        pytest.param(
+            {"job": "unit", "run_url": "https://github.com/o/r/actions/runs/7"},
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10",
+                "verify given a map but a failing result whose CI block has no job_id names it by its producer, with exit 1 and an empty job_name",
+            ),
+            id="no-job-id",
+        ),
+    ],
+)
+def test_a_result_without_a_job_id_is_named_by_its_producer(project: Project, ci: dict | None):
+    """A map can't name a job the results file doesn't identify; the run is not an error either."""
+    project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci=ci)
+    project.write("names.json", json.dumps({"41": "unit python 3.12"}))
+    run = project.run("verify", "r.jsonl", "--job-names", "names.json")
+    assert run.code == 1 and "t failed in unit;" in run.err and "unit python 3.12" not in run.err
+    body = project.run("verify", "r.jsonl", "--job-names", "names.json", "--json").json()
+    assert body["requirements"][0]["evidence"][0]["job_name"] == ""
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-13",
+    "a successful record --json and --version --json each still have every field their schema_version 1 snapshot lists, with its value or type, including each covers entry's id and how",
+)
+def test_the_record_and_version_json_fields_of_schema_version_1(ci_project: Project):
+    """The envelopes of the two commands that aren't a check: a removed or retyped field fails here."""
+    promised(
+        json.loads(command(ci_project, "--version", "--json").stdout),
+        {"schema_version": 1, "command": "version", "ok": True, "problems": [], "version": str},
+        "version",
+    )
+    done = ci_project.speccheck("record", "--output", "out/p.jsonl", "--json", env=JOB)
+    assert done.code == 0
+    body = done.json()
+    promised(
+        body,
+        {
+            "schema_version": 1,
+            "command": "record",
+            "ok": True,
+            "problems": [],
+            "job": "publish",
+            "covers": list,
+            "path": str,
+        },
+        "record",
+    )
+    assert len(body["covers"]) == 1
+    promised(body["covers"][0], {"id": "T-REQ-001-01", "how": str}, "record.covers[0]")

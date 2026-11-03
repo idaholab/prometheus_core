@@ -88,6 +88,47 @@ def test_paths_are_relative_to_the_config(project: Project):
 
 
 @pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param(
+            'id-prefix = "T"\n',
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-02", "a config with no `specs` key at all exits 2 asking for the spec folder's name"
+            ),
+            id="missing",
+        ),
+        pytest.param(
+            'specs = ""\nid-prefix = "T"\n',
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-02", "a config whose `specs` is an empty string exits 2 asking for the spec folder's name"
+            ),
+            id="empty",
+        ),
+        pytest.param(
+            'specs = 3\nid-prefix = "T"\n',
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-02", "a config whose `specs` is a number exits 2 asking for the spec folder's name"
+            ),
+            id="not-a-string",
+        ),
+        pytest.param(
+            'specs = ["specs"]\nid-prefix = "T"\n',
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-02", "a config whose `specs` is a list holding the folder's name exits 2 the same way"
+            ),
+            id="a-list",
+        ),
+    ],
+)
+def test_specs_must_name_the_spec_folder(project: Project, config: str):
+    """Without a usable `specs` there is no folder to read, which is exit 2 and not a crash or an empty run."""
+    project.write("speccheck.toml", config)
+    run = project.speccheck("lint")
+    assert run.code == 2
+    assert "speccheck.toml: `specs` must name the spec folder" in run.err, run.err
+
+
+@pytest.mark.parametrize(
     ("extra", "key"),
     [
         pytest.param(
@@ -241,11 +282,56 @@ def test_a_producers_list_of_specs(project: Project, specs: str, claimed: str, a
     """The list allows each spec it names and no other; `"all"` allows every spec."""
     project.write("specs/000-index.md", "# Index\n\n- [001](001-a.md)\n- [002](002-b.md)\n- [003](003-c.md)\n")
     for number, name in (("001", "001-a.md"), ("002", "002-b.md"), ("003", "003-c.md")):
-        project.spec(f"- T-REQ-{number}-01: Spec {number}'s requirement. ⚠ untested", number=number, name=name)
+        # Only the requirement the test claims goes without the marker, so an accepted claim leaves nothing to report
+        marker = "" if f"T-REQ-{number}-01" == claimed else " ⚠ untested"
+        project.spec(f"- T-REQ-{number}-01: Spec {number}'s requirement.{marker}", number=number, name=name)
     project.write("speccheck.toml", CONFIG.replace('specs = "all"', f"specs = {specs}"))
     project.results("r.jsonl", "unit", [("t", [claimed], "collected")])
     run = project.speccheck("check", "r.jsonl")
     assert ("may not claim" not in run.err) is allowed, run.err
+    if allowed:
+        # Nothing else is wrong either: the claim is accepted, not merely not refused for its spec
+        assert run.code == 0 and run.err == "", run.err
+    else:
+        assert run.code == 1
+        assert f"{claimed} is in spec 003, which producer `unit` may not claim" in run.err, run.err
+
+
+@pytest.mark.parametrize(
+    ("specs", "message"),
+    [
+        pytest.param(
+            '["1"]',
+            "`producers.unit.specs`: '1' is not a spec number such as \"001\"",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", 'a producer whose specs list holds the one-digit "1" exits 2 naming the entry'
+            ),
+            id="one-digit",
+        ),
+        pytest.param(
+            '["001", "all"]',
+            "`producers.unit.specs`: 'all' is not a spec number such as \"001\"",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a specs list that mixes a good number with the word all exits 2 naming all"
+            ),
+            id="all-inside-a-list",
+        ),
+        pytest.param(
+            "[1]",
+            "`producers.unit.specs` must be a list of strings",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-05", "a specs list holding the integer 1 instead of a string exits 2 asking for strings"
+            ),
+            id="integer-entry",
+        ),
+    ],
+)
+def test_a_malformed_list_of_specs(project: Project, specs: str, message: str):
+    """A list that is not spec numbers is a config error naming the producer's key, found before any results are read."""
+    project.write("speccheck.toml", CONFIG.replace('specs = "all"', f"specs = {specs}"))
+    run = project.speccheck("lint")
+    assert run.code == 2
+    assert f"speccheck.toml: {message}" in run.err, run.err
 
 
 @pytest.mark.covers(
@@ -277,7 +363,7 @@ def test_a_ci_job_cant_share_a_producers_name(project: Project):
     "SPC-REQ-002-06",
     "a CI job's empty, placeholder and non-string explanations exit 2, each naming the job's key and the ID",
 )
-def test_ci_job_explanations_are_checked_as_a_tests(project: Project):
+def test_ci_job_explanations_are_checked_as_tests(project: Project):
     """The same spec-free rules as a test's explanation, at config load."""
     for how, message in (
         ('"  "', "`ci.publish.covers.T-REQ-001-01`: the explanation for T-REQ-001-01 is empty"),
@@ -330,6 +416,30 @@ def test_ci_job_explanations_are_checked_as_a_tests(project: Project):
             ),
             id="padded",
         ),
+        pytest.param(
+            '"TODO"',
+            "the explanation for T-REQ-001-01 is a placeholder ('TODO')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation of upper-case TODO exits 2 as a placeholder"
+            ),
+            id="todo",
+        ),
+        pytest.param(
+            '"-"',
+            "the explanation for T-REQ-001-01 is a placeholder ('-')",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation of a lone hyphen exits 2 as a placeholder"
+            ),
+            id="hyphen",
+        ),
+        pytest.param(
+            '"t-req-001-01"',
+            "the explanation for T-REQ-001-01 is just the ID",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-06", "a CI job explanation that is the claimed ID written in lower case exits 2 as the ID"
+            ),
+            id="the-id-in-lower-case",
+        ),
     ],
 )
 def test_more_ci_job_explanations_that_are_refused(project: Project, how: str, message: str):
@@ -338,6 +448,18 @@ def test_more_ci_job_explanations_that_are_refused(project: Project, how: str, m
     run = project.speccheck("lint")
     assert run.code == 2
     assert f"`ci.publish.covers.T-REQ-001-01`: {message}" in run.err, run.err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-002-06",
+    "a CI job explanation of exactly 1000 characters loads and passes lint, where 1001 is the first length refused",
+)
+def test_a_ci_job_explanation_at_the_length_limit_is_accepted(project: Project):
+    """The limit is inclusive: 1000 characters is fine, so only a longer one is the problem."""
+    project.spec("- T-REQ-001-01: One.")
+    project.write("speccheck.toml", CONFIG + f'[ci.publish]\ncovers = {{ "T-REQ-001-01" = "{"x" * 1000}" }}\n')
+    run = project.speccheck("lint")
+    assert run.code == 0 and run.err == "", run.err
 
 
 @pytest.mark.covers(
