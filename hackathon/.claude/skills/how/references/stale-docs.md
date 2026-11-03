@@ -18,6 +18,7 @@ Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 | `get_provided_inputs`, `MissingInput(sensitive=…)`, `with_api_key(LITELLM_MASTER_KEY)` | answers in `params`; no `sensitive`; plain `self.llm_client(context)` |
 | `docker exec agent-valkey` / `docker restart <agent>` (fixed container names) | `docker compose -p prometheus_platform exec -T redis` / `docker compose -p <project> restart <service>` (no `container_name` since #310; `conventions.md`) |
 | `setup_agent.py --help` shows arguments | `main()` ignores them; it is interactive only (`setup_agent.py:389-400`) |
+| Clone DeepLynx, `cp .env_sample .env`, make a project and API key in its UI, paste `DEEPLYNX_*` with `http://prometheus.host.internal:5000/api/v1` into the platform `.env` | `LOCAL_DEEPLYNX=true` in the platform `.env`: every start runs `make deeplynx-setup`, which writes `DEEPLYNX_*` with `http://deeplynx-server:5000/api/v1` (`artifacts.md`, "Local DeepLynx") |
 | Host run with `AGENT_SECRET_REQUIRED=false` only | Also `USER_IDENTITY_REQUIRED=false`, else "No 'userToken' found" |
 
 Old text remains in the platform `docs/docs/` pages, the template `TUTORIAL.md` and `README.md`, and

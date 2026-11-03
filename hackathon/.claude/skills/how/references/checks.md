@@ -6,7 +6,7 @@ Each check has a stable id; `/diagnose` runs them by tag or by symptom (`trouble
 Fix kinds: **safe** (applied, then explained), **yes** (asked first), **you** (only you: a secret,
 a browser step, an install). Placeholders: `<root>`, `<platform>`, `<agent>`, `<project>`
 (the agent folder name), `<service>` (`<slug>-agent`; `conventions.md`, "Find your agent"), `<route-key>`, `<pin>` (`base-image-pin`), `<KEY>`. Default ports 5150,
-8600, 6379 (local DeepLynx 3000, 5000). Run bottom up: a low failure often causes the ones above it.
+8600, 6379, and the local DeepLynx 3000, 5000 (`LOCAL_DEEPLYNX=true`). Run bottom up: a low failure often causes the ones above it.
 
 ## Secrets in these commands
 
@@ -54,7 +54,7 @@ Tags: preflight, diagnose. Fix: you. Only without `LOCAL_SDK=true` (`base-image-
 ### platform-env
 Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && test -f .env && for k in AGENT_SECRET REDIS_PASSWORD ADMIN_DB_PASSWORD BACKEND_JWT_SECRET ADMIN_DB_ENCRYPTION_KEY LLM_CONFIG_PROFILE; do printf '%s %s\n' "$k" "$(grep "^$k=" .env | tail -n 1 | grep -cvE "^$k=(\"\"|sk-ant-\.\.\.|sk-change-me|change-me.*|your-.*)?\$")"; done` Expect six lines ending in `1`. `ADMIN_DB_ENCRYPTION_KEY 0`: no signing key is created (`signing-key`); `LLM_CONFIG_PROFILE 0` or `registry`: compose stops (`llm-key`). Failure: no output (no `.env`, `Makefile:130`); `BACKEND_JWT_SECRET 0` stops the backend ("jwt_secret is not configured", `backend/app/main.py:39-41`). Fix: `make init-env` (fills blank secrets, asks for the profile and key), then `agent-env-sync`.
 ### ports-free
-Tags: diagnose. Fix: yes. Run, with the platform stopped: `for p in 5150 8600 6379; do printf '%s ' "$p"; lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1; f=1} END {if (!f) print "free"}'; done` Expect `free` three times. Failure: a process (an old stack, a local Redis; macOS AirPlay holds 5000 for a local DeepLynx). Fix: `make down` in that stack, or change the `*_PORT` value. WSL: use `ss -ltn` (unverified).
+Tags: diagnose. Fix: yes. Run, with the platform stopped: `for p in 5150 8600 6379 3000 5000; do printf '%s ' "$p"; if command -v lsof >/dev/null; then lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1; f=1} END {if (!f) print "free"}'; elif command -v ss >/dev/null; then ss -H -ltn "sport = :$p" | grep -q . && echo taken || echo free; else echo unknown; fi; done` Expect `free` five times; `unknown` means neither `lsof` nor `ss` is installed, so the ports are unchecked (not a pass). Failure: a process (an old stack, a local Redis; macOS AirPlay holds 5000). Fix: `make down` in that stack, or change the `*_PORT` value. Without `lsof` (minimal Linux, WSL) it falls back to `ss` (unverified).
 ### platform-current
 Tags: diagnose. Fix: you. Run: `git -C <platform> log -1 --format='%h %cs %s'; git -C <platform> ls-files ../common/certs | head -n 3` Expect a recent commit and files under `common/certs/`; without them, `npm ci` or `pip` gets SSL errors on the INL network. Fix: pull the latest `devel`, then a platform `make up`.
 
@@ -107,7 +107,7 @@ Tags: preflight, diagnose. Fix: you. Run: `grep -E '^LLM_CONFIG_(PROFILE|FILE)='
 ## DeepLynx
 
 ### deeplynx-env
-Tags: preflight, diagnose. Fix: yes. **Required**: every agent writes an execution record and exits at startup without it (deck 03, Local DeepLynx 1-3). Run: `for k in DEEPLYNX_KEY DEEPLYNX_SECRET DEEPLYNX_ORG_ID DEEPLYNX_PROJECT_ID; do printf '%s %s\n' "$k" "$(grep "^$k=" <platform>/.env | tail -n 1 | grep -cvE "^$k=(\"\"|your-.*|change-me.*)?\$")"; done; grep '^DEEPLYNX_BASE_URL=' <platform>/.env | tail -n 1` Expect four `1` lines (or `DEEPLYNX_JWT_TOKEN` instead of key + secret, never both) and the local URL `http://prometheus.host.internal:5000/api/v1/`. Failure: "Invalid required DeepLynx configuration: …" in an agent log (`sdk/prometheus_api/agent/base.py`, `_validate_deeplynx_configuration`); "…but DeepLynx storage is not configured." on uploads. Fix: `artifacts.md` ("Local DeepLynx"), a platform `make restart`, `agent-env-sync`.
+Tags: preflight, diagnose. Fix: yes. **Required**: every agent writes an execution record and exits at startup without it (deck 03, Local DeepLynx). Run: `printf 'LOCAL_DEEPLYNX %s\n' "$(grep -cx 'LOCAL_DEEPLYNX=true' <platform>/.env)"; for k in DEEPLYNX_KEY DEEPLYNX_SECRET DEEPLYNX_ORG_ID DEEPLYNX_PROJECT_ID; do printf '%s %s\n' "$k" "$(grep "^$k=" <platform>/.env | tail -n 1 | grep -cvE "^$k=(\"\"|your-.*|change-me.*)?\$")"; done; grep '^DEEPLYNX_BASE_URL=' <platform>/.env | tail -n 1` Expect five `NAME 1` lines and `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1`, both written by `make deeplynx-setup` on a platform `make up`. Failure: "Invalid required DeepLynx configuration: …" in an agent log (`sdk/prometheus_api/agent/base.py`, `_validate_deeplynx_configuration`); "…but DeepLynx storage is not configured." on uploads. `LOCAL_DEEPLYNX 0`: the flag is missing, or `.env` has CRLF line endings (WSL: edited in a Windows editor; make then reads `true\r`, not `true`). The flag is set but no `DEEPLYNX_*` is written: usually no platform `make up`/`make restart` has run since the line was added (the setup runs only at a start), so start the platform once. If the values are still empty after a start, `grep -c '^deeplynx-setup:' <platform>/Makefile`; `0` means the platform clone predates local DeepLynx and ignores the flag (`platform-current`). Fix: `artifacts.md` ("Local DeepLynx"): add the line, a platform `make restart`, `agent-env-sync`.
 ### deeplynx-backend
 Tags: preflight, diagnose. Fix: you.
 ```sh
@@ -118,7 +118,7 @@ with StorageClient(cfg) as c:
     print("OK", cfg.base_url, len(c.items.list(page_size=5).items), "items")
 EOF
 ```
-- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (key and secret swapped or cut); connection refused to `prometheus.host.internal` (local DeepLynx stopped; host firewall; AirPlay on :5000); "Invalid required DeepLynx configuration: missing …" (empty ids).
+- Expect `OK <base URL> <n> items`. Failure: `AuthenticationError`/401 (a stale key: after `make down-v`, a platform `make up` makes a new key; otherwise re-sync the agent, `agent-env-sync`); connection refused to `deeplynx-server` (`docker compose -p prometheus_platform ps deeplynx-server`; `docker compose -p prometheus_platform logs --no-log-prefix --tail 100 deeplynx-server 2>&1`); "Invalid required DeepLynx configuration: missing …" (`deeplynx-env`).
 ### deeplynx-agent
 Tags: diagnose. Fix: yes. Run the `deeplynx-backend` command with `docker compose -p <project> exec -T <service>`. Expect `OK` and the same base URL; a `deeplynx://` URI resolves only with the same org and project. Fix: `agent-env-sync`.
 

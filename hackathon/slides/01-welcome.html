@@ -33,7 +33,7 @@
 <div class="card acc"><div class="kpi"><span class="v">4</span></div><h3>A team</h3><p class="small">4–5 people, a name, and a room for Day 2.</p></div>
 </div>
 <div class="callout info">
-We assume your platform already starts with <code>make up</code> and DeepLynx is set up. Not quite there? Each deck ends with <strong>bonus catch-up slides</strong>, and mentors will help.</div>
+We assume your platform already starts with <code>make up</code>, with <code>LOCAL_SDK=true</code> and <code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code>. Not quite there? Each deck ends with <strong>bonus catch-up slides</strong>, and mentors will help.</div>
 
   </div>
 </section>
@@ -453,13 +453,18 @@ Next: GitHub &amp; PR workflow (1:00 pm). Keep your platform running.</div>
 <td>deck 03 bonus (step 1)</td>
 </tr>
 <tr>
+<td>Local DeepLynx configured</td>
+<td><code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code> (<code>make up</code> then runs DeepLynx and writes the <code>DEEPLYNX_*</code> lines)</td>
+<td>deck 03 (local DeepLynx)</td>
+</tr>
+<tr>
 <td>Platform starts</td>
 <td><code>make up</code> in <code>prometheus_core/platform</code>, then <code>http://localhost:5150</code></td>
 <td>deck 03 bonus (<code>.env</code>, &quot;the stack won't start&quot;)</td>
 </tr>
 <tr>
 <td>Local DeepLynx (<strong>required</strong>: no agent starts without it)</td>
-<td><code>http://localhost:3000</code> shows the DeepLynx UI</td>
+<td>after <code>make up</code>, <code>http://localhost:3000</code> shows the DeepLynx UI with a <strong>Prometheus</strong> project</td>
 <td>deck 03 (local DeepLynx)</td>
 </tr>
 <tr>
@@ -912,7 +917,7 @@ Older docs show v0.3 syntax (<code>message/send</code>, <code>role: &quot;user&q
 </div>
 
 <div class="callout warn">
-DeepLynx is <strong>required</strong>. Every skill call writes an execution record there (<code>self.execution_record_id</code>), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. We set up a local DeepLynx in the deployment session.</div>
+DeepLynx is <strong>required</strong>. Every skill call writes an execution record there (<code>self.execution_record_id</code>), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. <code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code> runs a local DeepLynx with the platform and writes the credentials for you (deployment session).</div>
 
   </div>
 </section>

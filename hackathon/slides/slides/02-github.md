@@ -500,10 +500,11 @@ gh auth login
 #### Built locally
 
 {.small}
-The `prometheus_api` base image is built from `sdk/` in your clone. One line in `platform/.env`:
+The `prometheus_api` base image is built from `sdk/` in your clone, and DeepLynx runs with the platform. Two lines in `platform/.env`:
 
 ```bash {.xs}
 LOCAL_SDK=true
+LOCAL_DEEPLYNX=true
 ```
 :::
 ::::

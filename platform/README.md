@@ -88,6 +88,16 @@ The SDK's `registry` profile is not supported here: it sends model requests to a
 
 Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file. It overrides `LLM_CONFIG_PROFILE`, must be available inside every agent container, and requires any environment variables referenced by that file.
 
+#### Run DeepLynx with the platform
+
+Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, add one line to `.env`, after `make init-env` has created it:
+
+```bash
+printf '\nLOCAL_DEEPLYNX=true\n' >> .env
+```
+
+Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `localhost:5000`; both ports must be free) and runs `make deeplynx-setup`, which creates a project and an API key and writes the `DEEPLYNX_*` lines to `.env`. See [DeepLynx storage](#deeplynx-storage) to use a DeepLynx you already have instead.
+
 ### 2. Get the base image
 
 Every Python service is built `FROM` the `prometheus_api` base image. Pick one of the two options below.
@@ -95,7 +105,7 @@ Every Python service is built `FROM` the `prometheus_api` base image. Pick one o
 #### Option A: build it locally (no registry access needed)
 
 ```bash
-echo "LOCAL_SDK=true" >> .env
+printf '\nLOCAL_SDK=true\n' >> .env
 ```
 
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
@@ -271,9 +281,9 @@ Notable environment variables (see `.env.example` for the full list):
 
 ### DeepLynx storage
 
-DeepLynx configuration is required for standard agent execution records. Set either `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`. `DEEPLYNX_BASE_URL` is optional and uses the SDK default when omitted. `DEEPLYNX_DATA_SOURCE_ID` is also optional when the project has a default data source.
+DeepLynx configuration is required for standard agent execution records. The simplest setup is `LOCAL_DEEPLYNX=true` in `.env` (step 1): `make up` then also starts DeepLynx from its published images and `make deeplynx-setup` fills in the settings below for it. See [Local DeepLynx install](docs/docs/local-deeplynx.md), which also covers building DeepLynx from source.
 
-To run DeepLynx locally instead, set `LOCAL_DEEPLYNX=true`: `make up` then also starts DeepLynx from its published images and fills in these settings for it. See [Local DeepLynx install](docs/docs/local-deeplynx.md), which also covers building DeepLynx from source.
+To use a DeepLynx you already have instead, set either `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`. `DEEPLYNX_BASE_URL` is optional and uses the SDK default when omitted. `DEEPLYNX_DATA_SOURCE_ID` is also optional when the project has a default data source.
 
 ### Optional integrations (work in progress)
 

@@ -2,7 +2,7 @@
 
 Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
-The deck symptom tables (deck 03, slides 11, 17, A18-A21; deck 04, slide 19; deck 05). Run the
+The deck symptom tables (deck 03, slides 13, 19, A17-A20; deck 04, slide 19; deck 05). Run the
 named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`down`, run
 `make down`, then `make up`, in your agent folder.
 
@@ -59,14 +59,15 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 
 | symptom | cause → fix | checks |
 |---|---|---|
-| An upload says "…but DeepLynx storage is not configured." | Set `DEEPLYNX_*` in the platform `.env`, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
+| An upload says "…but DeepLynx storage is not configured." | `LOCAL_DEEPLYNX=true` is missing from the platform `.env`: add it, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
 | The plot does not render | Publish with `mime_type="image/png"` and configure DeepLynx (`artifacts.md`). | [deeplynx-agent](checks.md#deeplynx-agent), [agent-logs](checks.md#agent-logs) |
 | A `deeplynx://` URI does not resolve | The agent needs the same org and project. Re-sync `DEEPLYNX_*`. | [agent-env-sync](checks.md#agent-env-sync), [deeplynx-agent](checks.md#deeplynx-agent) |
-| `AuthenticationError` or 401 from DeepLynx | Key and secret swapped or cut. Generate a new key. | [deeplynx-backend](checks.md#deeplynx-backend) |
-| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | `DEEPLYNX_ORG_ID` or `DEEPLYNX_PROJECT_ID` is empty. | [deeplynx-env](checks.md#deeplynx-env) |
-| "Failed to get data source ID…" | Set `DEEPLYNX_DATA_SOURCE_ID` in the `.env` (the compose files forward it). | - |
-| Connection refused to `prometheus.host.internal` | Check DeepLynx listens on `0.0.0.0:5000` and the host firewall allows the Docker bridge. `host.docker.internal` does not exist on Linux; use `prometheus.host.internal`. | [deeplynx-backend](checks.md#deeplynx-backend) |
-| Nothing on :5000 (macOS) | The AirPlay Receiver holds it. Turn it off, or remap the port. | [ports-free](checks.md#ports-free) |
+| `AuthenticationError` or 401 from DeepLynx | A stale key, usually after `make down-v`: then a platform `make up` makes a new key (a key that still works is kept). Either way, `agent-env-sync` next. | [deeplynx-backend](checks.md#deeplynx-backend), [agent-env-sync](checks.md#agent-env-sync) |
+| "Invalid required DeepLynx configuration: missing DEEPLYNX_ORG_ID…" | `DEEPLYNX_ORG_ID` or `DEEPLYNX_PROJECT_ID` is empty: `LOCAL_DEEPLYNX=true` and a platform `make up` write them; then `agent-env-sync`. | [deeplynx-env](checks.md#deeplynx-env) |
+| Every agent call fails: "Failed to get data source ID. Please set DEEPLYNX_DATA_SOURCE_ID… Token refresh failed: All connection attempts failed" (or "Name or service not known"; macOS: "nodename nor servname provided, or not known") | The agent can't reach DeepLynx; setting `DEEPLYNX_DATA_SOURCE_ID` doesn't help. DeepLynx is not running: a platform `make up` with `LOCAL_DEEPLYNX=true`; `docker compose -p prometheus_platform logs --no-log-prefix --tail 100 deeplynx-server 2>&1`. An agent run on the host (`python agent.py`) uses `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1`, and needs `uv run --no-sync --env-file .env` to read its `.env` (deck 04). | [deeplynx-backend](checks.md#deeplynx-backend) |
+| "Failed to get data source ID…" without "Token refresh failed", a connection error or a name-lookup error | DeepLynx answered, but the project has no default data source. `make deeplynx-setup` relies on that default and leaves `DEEPLYNX_DATA_SOURCE_ID` blank on purpose: a platform `make up` again; if it persists, name the mentor (`mentors.md`). Set `DEEPLYNX_DATA_SOURCE_ID` only for a shared DeepLynx without a default. | [deeplynx-backend](checks.md#deeplynx-backend) |
+| `make up` stops: "port is already allocated" / "address already in use" for 5000, or "DeepLynx didn't answer at http://localhost:5000/api/v1/health" after up to 5 minutes | Port 5000 is taken (macOS AirPlay, an old stack) or the server failed. `lsof -nP -iTCP:5000 -sTCP:LISTEN` (Linux/WSL: `ss -ltnp 'sport = :5000'`, unverified) names the process. "Didn't answer" with port 5000 free: the shell sets `http_proxy` (or `HTTP_PROXY`) without `localhost` in `no_proxy`, so the setup's health check goes to the proxy; `export no_proxy=localhost,127.0.0.1`, then `make up`. | [ports-free](checks.md#ports-free) |
+| Nothing on :5000 (macOS) | The AirPlay Receiver holds it. Turn it off: the DeepLynx UI only works with the API on 5000. | [ports-free](checks.md#ports-free) |
 | "<name> exceeds the <n> byte upload limit" | Larger than `PROMETHEUS_MAX_UPLOAD_BYTES` (100 MiB). | - |
 
 ## Git and pull requests
@@ -76,7 +77,7 @@ See `git-pr.md`. No fork access: ask a mentor for the team `open`. `gh` talks to
 
 ## The reset ladder
 
-From the least to the most destructive (deck 03, A21). Each needs your yes, except a restart of
+From the least to the most destructive (deck 03, A20). Each needs your yes, except a restart of
 your own agent. Each step after the first empties the registry.
 
 | step | you lose |

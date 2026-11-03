@@ -233,7 +233,7 @@ Prefix the <strong>card name and every skill ID</strong> with your team name. Al
     context=context, artifacts=params.get(<span class="s">&quot;artifacts&quot;</span>))
 text = path.read_text()          <span class="c"># a local file, whatever the source</span></pre>
 <div class="callout warn">
-No DeepLynx configured → uploads never reach your agent. Check it before you start (deck 03).</div>
+No DeepLynx configured → uploads never reach your agent. Check that <code>platform/.env</code> has <code>LOCAL_DEEPLYNX=true</code> before you start (deck 03).</div>
 
   </div>
 </section>
@@ -1248,12 +1248,12 @@ docker compose -p hello-world logs <span class="n">2</span>&gt;&amp;<span class=
 <tr>
 <td><strong>Docker, external port</strong></td>
 <td><code>EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up</code></td>
-<td><code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042</code>. Point <code>REGISTRY_URL</code>/<code>REDIS_URL</code>/<code>JWKS_URL</code> at <code>prometheus.host.internal:8600/6379/8600</code>.</td>
+<td><code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042</code>. Point <code>REGISTRY_URL</code>/<code>REDIS_URL</code>/<code>JWKS_URL</code> at <code>prometheus.host.internal:8600/6379/8600</code>, and <code>DEEPLYNX_BASE_URL</code> at <code>http://prometheus.host.internal:5000/api/v1</code>.</td>
 </tr>
 <tr>
 <td><strong>Host Python</strong><br><span class="small">(fastest edit loop)</span></td>
-<td><code>python agent.py</code> in a venv with <code>prometheus_api</code> installed</td>
-<td>Set <code>REGISTRY_URL=http://localhost:8600</code>, <code>REDIS_URL=redis://localhost:6379</code>, <code>JWKS_URL=http://localhost:8600/.well-known/jwks.json</code>, <code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000</code></td>
+<td><code>uv run --no-sync --env-file .env python agent.py</code> in a venv with <code>prometheus_api</code> installed</td>
+<td>Set <code>REGISTRY_URL=http://localhost:8600</code>, <code>REDIS_URL=redis://localhost:6379</code>, <code>JWKS_URL=http://localhost:8600/.well-known/jwks.json</code>, <code>DEEPLYNX_BASE_URL=http://localhost:5000/api/v1</code>, <code>EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000</code></td>
 </tr>
 <tr>
 <td><strong>In-tree</strong></td>
@@ -1285,7 +1285,8 @@ uv pip install -e <span class="s">\</span>
 
 AGENT_SECRET=dev AGENT_SECRET_REQUIRED=false <span class="s">\</span>
 USER_IDENTITY_REQUIRED=false PROMETHEUS_TASK_STORE=memory <span class="s">\</span>
-AGENT_PORT=<span class="n">8000</span> python agent.py    <span class="c"># DEEPLYNX_* from .env</span>
+DEEPLYNX_BASE_URL=http://localhost:5000/api/v1 AGENT_PORT=<span class="n">8000</span> <span class="s">\</span>
+uv run --no-sync --env-file .env python agent.py   <span class="c"># DEEPLYNX_* from .env</span>
 <span class="c"># &quot;Loaded agent card…&quot;  &quot;Starting HTTP server on 0.0.0.0:8000&quot;</span>
 <span class="c"># registration retries, then &quot;Continuing without registration&quot;</span></pre>
 <pre class="sm"><span class="c"># debug shortcut: plain JSON in, result out</span>
@@ -1294,7 +1295,7 @@ curl -s -X POST localhost:8000/api/chat <span class="s">\</span>
   -d <span class="s">&#x27;{&quot;params&quot;: {&quot;input_data&quot;: &quot;hi&quot;,</span>
 <span class="s">       &quot;skill_id&quot;: &quot;hello_world_analysis&quot;},</span>
 <span class="s">       &quot;conversation_id&quot;: &quot;conv-1&quot;}&#x27;</span></pre>
-<p class="tiny">The agent refuses to start without DeepLynx (<code>DEEPLYNX_ORG_ID</code>, <code>DEEPLYNX_PROJECT_ID</code>, and key + secret or <code>DEEPLYNX_JWT_TOKEN</code>); a <code>.env</code> in the folder is read. With <code>AGENT_SECRET_REQUIRED=true</code>, add <code>-H &quot;Authorization: Bearer $AGENT_SECRET&quot;</code> to every call except <code>/healthz</code> and the card routes.</p>
+<p class="tiny">The agent refuses to start without DeepLynx (<code>DEEPLYNX_ORG_ID</code>, <code>DEEPLYNX_PROJECT_ID</code>, and key + secret or <code>DEEPLYNX_JWT_TOKEN</code>). <code>python agent.py</code> alone doesn't read <code>.env</code>: <code>--env-file .env</code> loads it, and a variable set on the command line wins over the file. On the host, <code>deeplynx-server</code> doesn't resolve, so <code>DEEPLYNX_BASE_URL</code> points at <code>localhost:5000</code>. With <code>AGENT_SECRET_REQUIRED=true</code>, add <code>-H &quot;Authorization: Bearer $AGENT_SECRET&quot;</code> to every call except <code>/healthz</code> and the card routes.</p>
 </div>
 
   </div>
