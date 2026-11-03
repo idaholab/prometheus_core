@@ -359,6 +359,38 @@ def test_a_ci_job_cant_share_a_producers_name(project: Project):
     assert run.code == 2 and "`ci.unit` has the same name as a producer" in run.err
 
 
+@pytest.mark.parametrize(
+    ("table", "key"),
+    [
+        pytest.param(
+            "producers",
+            "producers",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-09", "a [producers.<name>] whose name is 201 characters exits 2 naming that key"
+            ),
+            id="producer",
+        ),
+        pytest.param(
+            "ci",
+            "ci",
+            marks=pytest.mark.covers(
+                "SPC-REQ-002-09", "a [ci.<job>] whose name is 201 characters exits 2 naming that key"
+            ),
+            id="ci-job",
+        ),
+    ],
+)
+def test_a_name_over_200_characters_is_an_error(project: Project, table: str, key: str):
+    """The name is refused at config load, with its length; 200 characters is fine."""
+    entry = '\ncovers = { "T-REQ-001-01" = "the job proves it" }\n' if table == "ci" else "\n"
+    project.write("speccheck.toml", CONFIG + f"[{table}.{'a' * 200}]{entry}")
+    assert project.speccheck("lint").code == 0
+    project.write("speccheck.toml", CONFIG + f"[{table}.{'a' * 201}]{entry}")
+    run = project.speccheck("lint")
+    assert run.code == 2
+    assert f"`{key}.{'a' * 201}`: a name is at most 200 characters; this one is 201" in run.err
+
+
 @pytest.mark.covers(
     "SPC-REQ-002-06",
     "a CI job's empty, placeholder and non-string explanations exit 2, each naming the job's key and the ID",

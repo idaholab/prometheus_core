@@ -159,11 +159,24 @@ class TestJobNames:
         assert _common.job_names(make_ctx(tmp_path), argparse.Namespace()) == {}
 
     def test_read_relative_or_absolute_with_names_cleaned(self, tmp_path: Path):
-        """Keys become strings; a name is made one line and capped at 200 characters."""
-        (tmp_path / "n.json").write_text(json.dumps({"1": "build\n x", 2: "y" * 300}))
+        """Keys become strings; a name is made one line."""
+        (tmp_path / "n.json").write_text(json.dumps({"1": "build\n x", 2: "y" * 200}))
         names = _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
         assert names == {"1": "build x", "2": "y" * 200}
         assert _common.job_names(make_ctx(Path("/")), namespace(job_names=str(tmp_path / "n.json"))) == names
+
+    def test_a_name_over_the_limit_is_refused_not_cut(self, tmp_path: Path):
+        """One character over MAX_NAME is a usage error that names the job and the length."""
+        (tmp_path / "n.json").write_text(json.dumps({"7": "y" * 201}))
+        with pytest.raises(
+            ConfigError, match=r"--job-names n.json: the name for 7 is 201 characters; the limit is 200"
+        ):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_the_length_is_measured_after_whitespace_is_collapsed(self, tmp_path: Path):
+        """Runs of spaces in a name don't count against the limit."""
+        (tmp_path / "n.json").write_text(json.dumps({"7": "y" + " " * 500 + "z"}))
+        assert _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json")) == {"7": "y z"}
 
     @pytest.mark.parametrize(
         ("text", "message"),

@@ -129,6 +129,14 @@ def shape_problem(mark: pytest.Mark) -> str:
     return ""
 
 
+def name_problem(nodeid: str) -> str:
+    """Why a claiming test's node ID is refused for its length: say how to shorten it."""
+    return (
+        f"the test's node ID is {len(nodeid)} characters; the limit is {results.MAX_TEST}. "
+        "Shorten the test or class name, or give a long parameter a short id with `ids=`"
+    )
+
+
 def claims_of(item: pytest.Item) -> tuple[list[claims.Claim], list[str]]:
     """The test's claims in mark order, each explanation collapsed, and the problems with them.
 
@@ -227,6 +235,9 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
             problem = f"{path}:{line}: {_function_id(item)}: {placed}"
             if problem not in problems:
                 problems.append(problem)
+            continue
+        if len(item.nodeid) > results.MAX_TEST:
+            problems.append(f"{path}:{line}: {item.nodeid}: {name_problem(item.nodeid)}")
             continue
         found, bad = claims_of(item)
         problems += [f"{path}:{line}: {item.nodeid}: {why}" for why in bad]

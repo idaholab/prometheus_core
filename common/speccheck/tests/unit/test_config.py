@@ -23,6 +23,7 @@ import pytest
 from speccheck import config
 from speccheck.claims import Claim
 from speccheck.config import ConfigError
+from speccheck.results import MAX_NAME
 
 
 @pytest.fixture
@@ -140,6 +141,11 @@ class TestProducers:
         """A name a results file or a command line couldn't carry safely."""
         fails(path, table(producers={name: {}}), "a name is lowercase letters, digits, `-`, `_` and `.`")
 
+    def test_a_name_over_the_limit(self, path: Path):
+        """MAX_NAME characters is fine; one more is an error that says how long it is."""
+        assert "a" * MAX_NAME in config.from_table(table(producers={"a" * MAX_NAME: {}}), path).producers
+        fails(path, table(producers={"a" * (MAX_NAME + 1): {}}), "a name is at most 200 characters; this one is 201")
+
     @pytest.mark.parametrize("name", ["unit", "speccheck-requirements", "a.b_c", "3"])
     def test_good_names(self, path: Path, name):
         """Lowercase letters, digits, `-`, `_` and `.`, starting with a letter or digit."""
@@ -180,6 +186,10 @@ class TestCiJobs:
     def test_a_bad_name(self, path: Path):
         """The same rule as a producer's."""
         fails(path, table(ci={"Pub": {"covers": {"X": "h"}}}), "`ci.Pub`: a name is lowercase")
+
+    def test_a_name_over_the_limit(self, path: Path):
+        """The same limit as a producer's."""
+        fails(path, table(ci={"j" * 201: {"covers": {"X": "h"}}}), "a name is at most 200 characters; this one is 201")
 
     def test_a_ci_job_cant_share_a_producers_name(self, path: Path):
         """Two entries would claim to be the same results file's producer."""

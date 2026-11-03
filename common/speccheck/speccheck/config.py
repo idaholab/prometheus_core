@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from speccheck.claims import Claim, collapse, how_problem
+from speccheck.results import MAX_NAME
 from speccheck.specs import PREFIX
 
 if sys.version_info >= (3, 11):
@@ -210,6 +211,8 @@ def _check_name(name: str, path: Path, key: str) -> None:
     """Fail on a producer or job name that a results file or a command line couldn't carry safely."""
     if not NAME.match(name):
         raise ConfigError(f"{path}: `{key}`: a name is lowercase letters, digits, `-`, `_` and `.`")
+    if len(name) > MAX_NAME:
+        raise ConfigError(f"{path}: `{key}`: a name is at most {MAX_NAME} characters; this one is {len(name)}")
 
 
 def _producer(name: str, body: dict[str, Any], path: Path, key: str) -> Producer:

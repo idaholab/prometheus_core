@@ -270,6 +270,50 @@ class TestValidation:
         assert results.read(path)[1][0].path == path.as_posix()
 
 
+class TestNameLimits:
+    """A producer or CI job name is refused over MAX_NAME, a test node ID over MAX_TEST; neither is cut."""
+
+    def test_the_limits(self):
+        """A name is 200 characters, a test node ID 250."""
+        assert (results.MAX_NAME, results.MAX_TEST) == (200, 250)
+
+    def test_a_producer_is_whole_at_the_limit(self):
+        """MAX_NAME characters read back unchanged."""
+        parsed, problems = parse_lines(header(producer="p" * results.MAX_NAME))
+        assert problems == [] and parsed.producer == "p" * results.MAX_NAME
+
+    def test_a_producer_over_the_limit_is_refused(self):
+        """One more is a problem on the header line."""
+        parsed, problems = parse_lines(header(producer="p" * (results.MAX_NAME + 1)))
+        assert parsed is None and "1: not a valid speccheck-results/1 line: `producer` is longer than 200" in str(
+            problems[0]
+        )
+
+    def result_line(self, test: str, **extra) -> str:
+        """A result line for `test` claiming X, with `extra` keys."""
+        body = {"test": test, "covers": [{"id": "X", "how": "h"}], "outcome": "passed", **extra}
+        return json.dumps(body)
+
+    def test_a_test_is_whole_at_the_limit(self):
+        """MAX_TEST characters read back unchanged."""
+        parsed, problems = parse_lines(header(), self.result_line("t" * results.MAX_TEST))
+        assert problems == [] and parsed.results[0].test == "t" * results.MAX_TEST
+
+    def test_a_test_over_the_limit_is_refused(self):
+        """One more is a problem on its line, and none of the file's results are used."""
+        parsed, problems = parse_lines(header(), self.result_line("t" * (results.MAX_TEST + 1)))
+        assert parsed is None and "2: not a valid speccheck-results/1 line: `test` is longer than 250" in str(
+            problems[0]
+        )
+
+    def test_a_ci_job_is_held_to_a_name_not_a_test_id(self):
+        """A CI result's `test` is its job's name, so MAX_NAME applies: 200 is whole and 201 is refused."""
+        whole, problems = parse_lines(header(), self.result_line("j" * results.MAX_NAME, kind="ci"))
+        assert problems == [] and whole.results[0].kind == "ci"
+        parsed, problems = parse_lines(header(), self.result_line("j" * (results.MAX_NAME + 1), kind="ci"))
+        assert parsed is None and "`test` is longer than 200" in str(problems[0])
+
+
 class TestLimits:
     """Size limits and symlinks."""
 

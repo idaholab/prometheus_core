@@ -530,70 +530,83 @@ def test_a_producer_name_cant_add_markdown(project: Project):
     assert elements(hostile) == elements(report("plain"))
 
 
-@pytest.mark.covers(
-    "SPC-REQ-006-09",
-    "a 900-character test name is cut short with an ellipsis, keeping its Test heading under 200 characters",
-)
-def test_names_are_capped(project: Project):
-    """A huge test name doesn't make a huge heading."""
-    project.spec("- T-REQ-001-01: One.")
-    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
-    line = {"test": "x" * 900, "covers": [{"id": "T-REQ-001-01", "how": "h"}], "outcome": "passed"}
-    project.write("u.jsonl", header + json.dumps(line) + "\n")
-    text = project.speccheck("report", "u.jsonl").out
-    heading = next(line for line in text.splitlines() if line.startswith("#### Test"))
-    assert len(heading) < 200 and "…" in heading
-
-
-def _shown(project: Project, kind: str, length: int) -> str:
-    """The name the report shows for a `kind` of name that is `length` letters long (and the full name)."""
+def _shown(project: Project, kind: str, length: int):
+    """Run `report` with a `kind` of name that is `length` letters long; the run, and the name as the report shows it."""
     project.spec("- T-REQ-001-01: One.")
     name = "x" * length
     ci = {"job": "unit", "job_id": 8}  # a job ID to name, but no URL, so the name is plain text
     if kind == "display":
         project.write("names.json", json.dumps({"8": name}))
         project.results("u.jsonl", "unit", [("t.py::test_a", ["T-REQ-001-01"], "passed")], ci=ci)
-        text = project.speccheck("report", "u.jsonl", "--job-names", "names.json").out
-        return next(line for line in text.splitlines() if " passed in " in line).split(" passed in ", 1)[1]
+        run = project.speccheck("report", "u.jsonl", "--job-names", "names.json")
+        return run, (lambda text: next(x for x in text.splitlines() if " passed in " in x).split(" passed in ", 1)[1])
     if kind == "producer":
         project.results("u.jsonl", name, [("t.py::test_a", ["T-REQ-001-01"], "passed")])
-        text = project.speccheck("report", "u.jsonl").out
-        return next(line for line in text.splitlines() if line.startswith("- Producers reported: ")).split(": ", 1)[1]
-    project.results("u.jsonl", "unit", [(name, ["T-REQ-001-01"], "passed")], kind="ci")
-    text = project.speccheck("report", "u.jsonl").out
-    return next(line for line in text.splitlines() if line.startswith("#### Job ")).split(" ", 2)[2].strip("`")
+        run = project.speccheck("report", "u.jsonl")
+        return run, (
+            lambda text: next(x for x in text.splitlines() if x.startswith("- Producers reported: ")).split(": ", 1)[1]
+        )
+    if kind == "job":
+        project.results("u.jsonl", "unit", [(name, ["T-REQ-001-01"], "passed")], kind="ci")
+        run = project.speccheck("report", "u.jsonl")
+        return run, (
+            lambda text: next(x for x in text.splitlines() if x.startswith("#### Job ")).split(" ", 2)[2].strip("`")
+        )
+    project.results("u.jsonl", "unit", [(name, ["T-REQ-001-01"], "passed")])
+    run = project.speccheck("report", "u.jsonl")
+    return run, (lambda text: next(x for x in text.splitlines() if x.startswith("#### Test ")))
 
 
 @pytest.mark.parametrize(
-    ("kind", "length", "cut"),
+    ("kind", "limit"),
     [
         pytest.param(
             kind,
-            length,
-            cut,
+            limit,
             marks=pytest.mark.covers(
                 "SPC-REQ-006-09",
-                f"a {kind} name of {length} characters is "
-                + (
-                    "cut to exactly 200 characters" + ("" if kind == "display" else ", the last one an ellipsis")
-                    if cut
-                    else "shown whole"
-                ),
+                f"a {kind} name of exactly {limit} characters is accepted and listed in the report"
+                + (" (its heading may shorten it)" if kind == "test" else " whole")
+                + ", and one character more is refused where it comes in",
             ),
-            id=f"{kind}-{length}",
+            id=kind,
         )
-        for kind in ("display", "producer", "job")
-        for length, cut in ((200, False), (201, True), (900, True))
+        for kind, limit in (("display", 200), ("producer", 200), ("job", 200), ("test", 250))
     ],
 )
-def test_every_kind_of_name_is_cut_at_200(project: Project, kind: str, length: int, cut: bool):
-    """The job's display name from `--job-names`, the producer's name and a CI job's name: at most 200, whole at 200."""
-    shown = _shown(project, kind, length)
-    if cut:
-        # The spec says at most 200; a display name is cut where `--job-names` is read, without a mark
-        assert len(shown) == 200 and (kind == "display" or shown.endswith("…"))
+def test_a_name_is_whole_at_its_limit_and_refused_over_it(project: Project, kind: str, limit: int):
+    """The limit is 200 for a producer, a CI job and a display name, 250 for a test node ID; over it, nothing is reported."""
+    run, shown = _shown(project, kind, limit)
+    assert run.code == 0, run.err
+    if kind == "test":
+        # A heading may shorten a long test name to stay on one line (006-09), so look only for its start
+        assert shown(run.out).startswith("#### Test `" + "x" * 100)
     else:
-        assert shown == "x" * 200
+        assert shown(run.out) == "x" * limit
+    over, _ = _shown(project, kind, limit + 1)
+    assert "x" * (limit + 1) not in over.out
+    if kind == "display":
+        # `--job-names` is a command-line input, so a name over the limit is a usage error before any report
+        assert over.code == 2 and f"the name for 8 is {limit + 1} characters; the limit is {limit}" in over.err
+    else:
+        # `report` always exits 0 (006-05), so the refusal shows as a problem; `verify` fails on it
+        assert over.code == 0 and f"is longer than {limit} characters" in over.out
+        assert project.speccheck("verify", "u.jsonl").code == 1
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-09",
+    "a report of a results file whose longest test node ID is 250 characters lists that ID's problem line without cutting its fix",
+)
+def test_a_longest_test_id_keeps_its_problem_line_whole(project: Project):
+    """A failing result with a 250-character ID: the Problems line still ends with the hint on what to do."""
+    project.spec("- T-REQ-001-01: One.")
+    name = "t.py::" + "x" * 244
+    project.results("u.jsonl", "unit", [(name, ["T-REQ-001-01"], "deselected")])
+    text = project.speccheck("report", "u.jsonl").out
+    problems = text.split("## Problems", 1)[1].split("## Specs", 1)[0]
+    assert "x" * 244 in problems and "…" not in problems
+    assert "drop the -k/-m filter" in problems  # `code()` keeps no backtick, so the hint's are gone
 
 
 @pytest.mark.covers(

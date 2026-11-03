@@ -22,8 +22,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
 - SPC-REQ-003-05: With neither `speccheck_config` nor a results file asked for, the plugin MUST NOT
   fail collection or change any test's outcome, so installing it changes nothing for a project
   that doesn't use it. With a results file but no `speccheck_config`, collection MUST fail on a
-  badly formed or placed mark, a bad explanation, or a repeated claim or explanation, and MUST NOT
-  compare claims with any spec.
+  badly formed or placed mark, a bad explanation, a repeated claim or explanation, or a test node
+  ID over the limit (SPC-REQ-003-18), and MUST NOT compare claims with any spec.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
 - SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
@@ -58,3 +58,5 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   SPC-REQ-003-08, it is empty, longer than 1000 characters, the claimed ID itself, or a placeholder
   (`TODO`, `TBD`, `FIXME`, `...` or `-`, the whole text, in any case). In pytest, a refused
   explanation MUST fail collection, and the message MUST name the test and the ID.
+- SPC-REQ-003-18: Collection MUST fail on a claiming test whose node ID is over 250 characters, and
+  the message MUST name the test and say how to shorten it.

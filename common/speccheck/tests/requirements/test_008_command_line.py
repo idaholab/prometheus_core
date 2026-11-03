@@ -993,6 +993,14 @@ def test_verify_names_jobs_by_the_map(project: Project):
             id="not-utf-8",
         ),
         pytest.param(
+            json.dumps({"41": "n" * 201}),
+            "--job-names names.json: the name for 41 is 201 characters; the limit is 200",
+            marks=pytest.mark.covers(
+                "SPC-REQ-008-10", "a --job-names value of 201 characters exits 2 for report and verify alike"
+            ),
+            id="name-over-200",
+        ),
+        pytest.param(
             '{"41": {}}',
             "--job-names names.json: must be a JSON object from job ID to name",
             marks=pytest.mark.covers(
