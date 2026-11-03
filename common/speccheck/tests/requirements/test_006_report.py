@@ -370,8 +370,8 @@ def test_untrusted_text_cant_add_markdown(project: Project):
     project.write("u.jsonl", header + json.dumps(line) + "\n")
     text = project.speccheck("report", "u.jsonl", "--job-names", "names.json", env=ENV).out
     assert "#### Test `t[click](https://evil)<img src=x onerror=1>`" in text
-    assert "**How:** # see \\[here\\](https://evil) \\<i\\>\\_x\\_\\</i\\>" in text
-    assert "- ✅ passed in # \\[x\\](https://evil) \\<b\\>\\*bold\\*\\</b\\>" in text
+    assert "**How:** # see \\[here\\](https\\://evil) \\<i\\>\\_x\\_\\</i\\>" in text
+    assert "- ✅ passed in # \\[x\\](https\\://evil) \\<b\\>\\*bold\\*\\</b\\>" in text
     # Outside code spans, no bracket or angle bracket is left unescaped
     prose = re.sub(r"`[^`]*`", "", text)
     assert re.search(r"(?<!\\)\]\(https://evil", prose) is None and re.search(r"(?<!\\)<(?:img|b|i)", prose) is None
@@ -384,7 +384,7 @@ def test_untrusted_text_cant_add_markdown(project: Project):
             "x `a```b` ![px](https://evil.example/t.png) [login](https://evil.example/p) `",
             marks=pytest.mark.covers(
                 "SPC-REQ-006-03",
-                "an explanation pairing a single backtick with a run of three renders through CommonMark with no link or image",
+                "an explanation pairing a single backtick with a run of three renders through CommonMark and GitHub autolinks with no link or image",
             ),
             id="run-of-three",
         ),
@@ -392,7 +392,7 @@ def test_untrusted_text_cant_add_markdown(project: Project):
             "``[login](https://evil.example/p)`` and `<img src=https://evil.example/t.png>`",
             marks=pytest.mark.covers(
                 "SPC-REQ-006-03",
-                "an explanation in double-backtick spans renders through CommonMark with no link, image or HTML",
+                "an explanation in double-backtick spans renders through CommonMark and GitHub autolinks with no link, image or HTML",
             ),
             id="double-backticks",
         ),
@@ -400,7 +400,7 @@ def test_untrusted_text_cant_add_markdown(project: Project):
             "`` ` `` [login](https://evil.example/p) ` ``` `",
             marks=pytest.mark.covers(
                 "SPC-REQ-006-03",
-                "an explanation mixing backtick runs of one, two and three renders through CommonMark with no link",
+                "an explanation mixing backtick runs of one, two and three renders through CommonMark and GitHub autolinks with no link",
             ),
             id="mixed-runs",
         ),
@@ -412,7 +412,7 @@ def test_backtick_runs_cant_open_a_link(project: Project, how: str):
     header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
     line = {"test": "t", "covers": [{"id": "T-REQ-001-01", "how": how}], "outcome": "passed"}
     project.write("u.jsonl", header + json.dumps(line) + "\n")
-    html = MarkdownIt("commonmark").render(project.speccheck("report", "u.jsonl").out)
+    html = renderer().render(project.speccheck("report", "u.jsonl").out)
     # The report's own links are anchors within it; nothing may point anywhere else or load anything
     assert re.findall(r'<a href="(?!#)[^"]*"|<img\b', html) == []
 
@@ -424,6 +424,9 @@ PAYLOADS = [
     "1. n",
     "---",
     "<https://e.com>",
+    "https://e.com/p",
+    "www.e.com",
+    "a@b.com",
     "*e*",
     "<b>x</b>",
     "![i](https://e.com/i.png)",
@@ -447,10 +450,19 @@ STRUCTURE = {
 """The markdown elements 006-03 says text from outside must not add."""
 
 
+def renderer() -> MarkdownIt:
+    """CommonMark with GitHub's extended autolinks: a bare `http(s)://` URL, `www.` host or email address becomes a link.
+
+    linkify-it's fuzzy links also link a bare `e.com` or `t.py`, which GitHub leaves as text, so this is
+    stricter than GitHub: a report that passes here has nothing GitHub would link either.
+    """
+    return MarkdownIt("commonmark", {"linkify": True}).enable("linkify")
+
+
 def elements(text: str) -> list[str]:
     """The element tokens in the report as a CommonMark renderer reads it, raw HTML allowed, sorted."""
     found = []
-    for token in MarkdownIt("commonmark").parse(text):
+    for token in renderer().parse(text):
         found += [token.type] + [child.type for child in token.children or []]
     return sorted(t for t in found if t in STRUCTURE)
 
@@ -470,7 +482,7 @@ def hostile_spec(project: Project, text: str, purpose: str, title: str) -> None:
             payload,
             marks=pytest.mark.covers(
                 "SPC-REQ-006-03",
-                f"a spec whose requirement text, Purpose and title are {payload!r} renders through CommonMark "
+                f"a spec whose requirement text, Purpose and title are {payload!r} renders through CommonMark and GitHub autolinks "
                 "with the same elements as a spec of plain words",
             ),
             id=payload,

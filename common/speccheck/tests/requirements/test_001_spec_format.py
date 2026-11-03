@@ -492,9 +492,7 @@ def test_retired_requirements(project: Project):
 )
 def test_fenced_examples_are_ignored(project: Project):
     """Bullets in a code block are neither requirements nor problems, even a star bullet that is a problem outside one."""
-    project.spec(
-        "- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* T-REQ-001-02: Star\n```"
-    )
+    project.spec("- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* T-REQ-001-02: Star\n```")
     run = project.speccheck("lint", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
 

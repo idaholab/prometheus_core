@@ -50,14 +50,23 @@ def code(text: str, limit: int = MAX_CELL, *, in_table: bool) -> str:
 PROSE_SPECIAL = re.compile(r"([\\\[\]<>*_~|&])")
 """Outside a code span, what can start a link, image, autolink, HTML, emphasis, strikethrough, an
 entity or a table cell; each is escaped with a backslash."""
+AUTOLINK = re.compile(r"(?i)(?<![0-9a-z])(www)\.|:(?=//)|@")
+"""What GitHub turns into a link without any markdown around it: the `:` of `://` in a URL, the `.` of a
+`www.` host, and the `@` of an email address (or a mention). Each is escaped with a backslash."""
 BLOCK_START = re.compile(r"^(\s*)([#>+=-]|\d+[.)])")
 """A line start markdown reads as a heading, quote, list or rule."""
+
+
+def prose_escape(text: str) -> str:
+    """`text` with PROSE_SPECIAL and AUTOLINK characters escaped; it has no code spans."""
+    text = PROSE_SPECIAL.sub(r"\\\1", text)
+    return AUTOLINK.sub(lambda m: f"{m.group(1)}\\." if m.group(1) else f"\\{m.group(0)}", text)
 
 
 def prose(text: str, limit: int | None = MAX_CELL, *, line_start: bool = False) -> str:
     """Text as markdown that can only be text: one line, capped (`limit=None` for no cap), code spans kept as written.
 
-    Outside code spans only PROSE_SPECIAL is escaped, so `.` and `-` read as they are. Spans are kept
+    Outside code spans only PROSE_SPECIAL and AUTOLINK are escaped, so most `.` and `-` read as they are. Spans are kept
     only when every backtick stands alone and they pair up: markdown matches a span by the length of
     its backtick run, so a run of two or more would pair differently from a split on single
     backticks and leave text unescaped. Otherwise every backtick is escaped, so no span can open.
@@ -67,10 +76,10 @@ def prose(text: str, limit: int | None = MAX_CELL, *, line_start: bool = False) 
     if limit is not None and len(text) > limit:
         text = text[: limit - 1] + "…"
     if text.count("`") % 2 or "``" in text:
-        out = PROSE_SPECIAL.sub(r"\\\1", text).replace("`", "\\`")
+        out = prose_escape(text).replace("`", "\\`")
     else:
         parts = text.split("`")
-        out = "`".join(part if n % 2 else PROSE_SPECIAL.sub(r"\\\1", part) for n, part in enumerate(parts))
+        out = "`".join(part if n % 2 else prose_escape(part) for n, part in enumerate(parts))
     return BLOCK_START.sub(lambda m: m.group(1) + "\\" + m.group(2), out) if line_start else out
 
 
