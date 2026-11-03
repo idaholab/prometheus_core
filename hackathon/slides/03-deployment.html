@@ -647,7 +647,7 @@ Never commit <code>.env</code>. Never paste it into chat or a PR. Back it up: lo
 </tr>
 <tr>
 <td>&quot;port is already allocated&quot; / &quot;address already in use&quot; (5150, 8600, 6379, 3000, 5000)</td>
-<td>Another process or an old stack is using it: often a DeepLynx started from its own clone (<code>docker compose down</code> there), or on macOS the AirPlay Receiver on 5000. Find it: <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code>. Then <code>make down</code> there, or change <code>*_PORT</code> in <code>.env</code>.</td>
+<td>Another process or an old stack is using it: often a DeepLynx started from its own clone (<code>docker compose down</code> there), or on macOS the AirPlay Receiver on 5000. Find it: <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code> (Linux/WSL: <code>ss -ltnp 'sport = :5000'</code>; on Linux often a local Grafana on 3000 or a Flask dev server on 5000). Then <code>make down</code> there, or change <code>*_PORT</code> in <code>.env</code>.</td>
 </tr>
 <tr>
 <td><code>make up</code> stops: &quot;DeepLynx didn't answer at http://localhost:5000/api/v1/health&quot; (after up to 5 minutes)</td>
@@ -1588,7 +1588,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 <tbody>
 <tr>
 <td><code>make up</code> stops at <code>deeplynx-setup</code>: &quot;port is already allocated&quot;, or &quot;DeepLynx didn't answer…&quot; after up to 5 minutes</td>
-<td>Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone): <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code> names the process. Or <code>deeplynx-server</code> failed: <code>make logs SERVICE=deeplynx-server</code>.</td>
+<td>Port 5000 is taken (macOS: AirPlay Receiver; or a DeepLynx from its own clone): <code>lsof -nP -iTCP:5000 -sTCP:LISTEN</code> (Linux/WSL: <code>ss -ltnp 'sport = :5000'</code>) names the process. Or <code>deeplynx-server</code> failed: <code>make logs SERVICE=deeplynx-server</code>.</td>
 </tr>
 <tr>
 <td><code>AuthenticationError</code> / 401 in your agent</td>
