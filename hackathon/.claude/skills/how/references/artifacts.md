@@ -62,7 +62,7 @@ docker compose -p prometheus_platform exec -T backend python -c "from prometheus
 ## Local DeepLynx
 
 Deck 03, slide 11. The platform runs it: nothing to clone, build, or click through
-(`platform/docker-compose.deeplynx.yml`, `platform/scripts/deeplynx_setup.py`). Free port 5000 first
+(`platform/docker-compose.deeplynx.yml`, set up by `make deeplynx-setup`). Free port 5000 first
 (macOS: the AirPlay Receiver), and stop any DeepLynx started from its own clone (ports 3000, 5000).
 
 1. In the platform folder, once: `grep -c '^LOCAL_DEEPLYNX=true' .env`; on `0`, `echo "LOCAL_DEEPLYNX=true" >> .env` (after a yes).

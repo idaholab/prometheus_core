@@ -15,7 +15,7 @@ fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
 prompt while `LLM_CONFIG_PROFILE` or its key is empty (`scripts/init_env.py`). You add by hand,
 after it: `LOCAL_SDK=true` and `LOCAL_DEEPLYNX=true`. The Makefile reads `.env` (`-include .env`), so every
 later `make` sees both. With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make
-deeplynx-setup`, which writes the `DEEPLYNX_*` lines (`scripts/deeplynx_setup.py`). Keep `REDIS_URL` and
+deeplynx-setup`, which writes the `DEEPLYNX_*` lines. Keep `REDIS_URL` and
 `BACKEND_PORT=8600` as they are. There are no `LITELLM_*` values any more.
 
 Two traps: `ADMIN_DB_PASSWORD` is fixed at the first start (a change gives `password
