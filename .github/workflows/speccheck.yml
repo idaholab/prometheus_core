@@ -278,7 +278,10 @@ jobs:
           rm "$RUNNER_TEMP/speccheck-results/bad.jsonl" "$RUNNER_TEMP/speccheck-results/failing.jsonl"
       - name: 007-09 verify without job names
         # SPC-REQ-007-09: a lookup that fails warns and goes on. Run 1 isn't in this repository,
-        # so the lookup fails the way a missing `actions: read` would
+        # so the lookup fails the way a missing `actions: read` would. The action hands one names
+        # file to both `report` and `verify --summary`, so the report is checked here; that the
+        # command names a summary entry by producer without a names file is a pytest test
+        # (test_008_command_line.py, SPC-REQ-008-10)
         id: no-names
         uses: ./.github/actions/speccheck-verify
         with:
