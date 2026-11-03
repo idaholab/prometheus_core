@@ -114,10 +114,14 @@ def test_unknown_keys_in_pyproject_name_the_dotted_key(project: Project):
 )
 def test_the_prefix(project: Project):
     """A malformed prefix is exit 2; an empty one means bare IDs."""
-    for bad in ("spc", "S-PC", "1SPC"):
+    for bad in ("spc", "S-PC", "1SPC", "SPC\\n", "SPC "):
         project.write("speccheck.toml", f'specs = "specs"\nid-prefix = "{bad}"\n')
         run = project.speccheck("lint")
-        assert run.code == 2 and "`id-prefix` must be capital letters and digits" in run.err
+        assert run.code == 2 and "`id-prefix` must be capital letters and digits" in run.err, bad
+    for good in ("S2", "A1B", "SPC9"):
+        project.write("speccheck.toml", f'specs = "specs"\nid-prefix = "{good}"\n')
+        project.spec(f"- {good}-REQ-001-01: Digits are fine. ⚠ untested")
+        assert project.speccheck("lint").code == 0, good
     project.write("speccheck.toml", 'specs = "specs"\nid-prefix = ""\n')
     project.spec("- REQ-001-01: Bare. ⚠ untested")
     assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
