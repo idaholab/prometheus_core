@@ -666,14 +666,15 @@ def test_an_explanation_of_exactly_1000_characters_is_accepted(project: Project)
 
 @pytest.mark.covers(
     "SPC-REQ-003-17",
-    "an explanation that only contains a placeholder word, like 'TODO list is cleared', is accepted",
+    "with a results file asked for, an explanation that only contains a placeholder word, like 'TODO list is cleared', is accepted and written as given",
 )
 def test_a_placeholder_word_inside_an_explanation_is_fine(project: Project):
     """Only the whole text counts as a placeholder."""
     project.tests(
         'import pytest\n@pytest.mark.covers("T-REQ-001-01", "TODO list is cleared")\ndef test_a():\n    pass\n'
     )
-    project.pytest().assert_outcomes(passed=1)
+    project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=1)
+    assert claims(project)["test_a"] == [{"id": "T-REQ-001-01", "how": "TODO list is cleared"}]
 
 
 @pytest.mark.covers(

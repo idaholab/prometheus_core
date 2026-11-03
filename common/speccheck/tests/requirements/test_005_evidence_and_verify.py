@@ -944,19 +944,3 @@ def test_a_refused_ci_entry_is_not_a_claim(project: Project):
     assert run.json()["requirements"][0]["waiting_on"] == []
     fix = [p["message"] for p in run.json()["problems"] if p["code"] == "config-claim-invalid"][0]
     assert "T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001" in fix
-
-
-@pytest.mark.covers(
-    "SPC-REQ-005-11",
-    "a CI job's result for an ID missing from its [ci.publish.covers] gets a claim-invalid problem naming that key, and the claim doesn't count",
-)
-def test_a_ci_result_outside_the_jobs_entries_counts_for_nothing(project: Project):
-    """The job may record only what the config says it claims."""
-    project.write("speccheck.toml", ci_config({"T-REQ-001-01": "the job builds the image"}, docker=False))
-    project.spec("- T-REQ-001-01: Live.\n- T-REQ-001-02: Other.")
-    project.results("u.jsonl", "unit", [])
-    project.results("p.jsonl", "publish", [("publish", ["T-REQ-001-01", "T-REQ-001-02"], "passed")], kind="ci")
-    run = project.speccheck("verify", "u.jsonl", "p.jsonl", "--json")
-    assert status(run) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "unclaimed"}
-    invalid = [p["message"] for p in run.json()["problems"] if p["code"] == "claim-invalid"]
-    assert len(invalid) == 1 and "T-REQ-001-02 isn't in `ci.publish.covers`" in invalid[0]

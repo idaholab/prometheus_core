@@ -488,12 +488,12 @@ def test_retired_requirements(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-001-08",
-    "a bullet, a bad star line and a status line inside a markdown code fence leave lint clean with one requirement",
+    "a dash bullet and a star bullet with real IDs inside a markdown code fence leave lint clean, with one requirement counted",
 )
 def test_fenced_examples_are_ignored(project: Project):
-    """Bullets and header lines in a code block are neither requirements nor problems."""
+    """Bullets in a code block are neither requirements nor problems, even a star bullet that is a problem outside one."""
     project.spec(
-        "- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* bad\nstatus: retired\n```"
+        "- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* T-REQ-001-02: Star\n```"
     )
     run = project.speccheck("lint", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
@@ -608,15 +608,19 @@ def test_what_counts_as_the_same_text(project: Project, first: str, second: str,
 
 @pytest.mark.covers(
     "SPC-REQ-001-10",
-    "a retired spec holding the text of a live requirement, and a retired bullet with the same text as a live one, give no problem",
+    "a retired spec holding the text of a live requirement, and two retired bullets in a live spec with identical text, give no problem",
 )
 def test_retired_texts_are_not_compared(project: Project):
-    """Neither a retired spec's requirement nor a retired bullet counts as a second copy of the live text."""
+    """A retired spec's requirement is not a second copy of live text, and retired bullets are not compared with each other."""
     project.write("specs/000-index.md", INDEX + "- [002](002-old.md)\n")
     project.spec("- T-REQ-001-01: The file MUST be written.")
     project.write("specs/002-old.md", spec("- T-REQ-002-01: The file MUST be written.", status="retired", number="002"))
     assert project.speccheck("lint", "--json").json()["problems"] == []
-    project.spec("- T-REQ-001-01: The file MUST be written.\n- T-REQ-001-02: Retired. The file MUST be written.")
+    project.spec(
+        "- T-REQ-001-01: The file MUST be written.\n"
+        "- T-REQ-001-02: Retired. The file MUST be written.\n"
+        "- T-REQ-001-03: Retired. The file MUST be written."
+    )
     assert project.speccheck("lint", "--json").json()["problems"] == []
 
 

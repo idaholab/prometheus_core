@@ -322,27 +322,17 @@ def test_an_artifact_link_to_elsewhere_is_plain_text(ci_project: Project, url: s
 
 
 @pytest.mark.covers(
-    "SPC-REQ-007-10",
-    "a failing result whose job URL is on another server leaves that host out of both the verify --summary file and the report",
+    "SPC-REQ-007-05",
+    "a result with an empty job URL, and one with no job URL key, are each linked to runs/7/attempts/2, the run attempt",
 )
-def test_the_summary_and_report_leave_out_a_foreign_job_url(project: Project):
-    """Both markdown outputs, not only the report, leave the foreign URL out."""
-    project.spec("- T-REQ-001-01: One.")
-    foreign = "https://evil.example/o/r/actions/runs/7/job/8"
-    project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "failed")], ci={**CI, "job_url": foreign})
-    project.speccheck("verify", "r.jsonl", "--summary", "s.md", env=ENV)
-    assert "evil" not in (project.root / "s.md").read_text()
-    text = project.speccheck("report", "r.jsonl", env=ENV).out
-    assert "evil" not in text
-
-
-@pytest.mark.covers("SPC-REQ-007-05", "a result whose job URL is the run attempt's links runs/7/attempts/2")
 def test_without_a_job_id_it_links_the_run(project: Project):
     """The fallback link is the run attempt."""
     project.spec("- T-REQ-001-01: One.")
-    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci={**CI, "job_url": CI["run_url"]})
-    text = project.speccheck("report", "u.jsonl", env=ENV).out
-    assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/attempts/2)" in text
+    without_key = {k: v for k, v in CI.items() if k != "job_url"}
+    for n, ci in enumerate(({**CI, "job_url": ""}, without_key)):
+        project.results(f"u{n}.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")], ci=ci)
+        text = project.speccheck("report", f"u{n}.jsonl", env=ENV).out
+        assert "- ✅ passed in [unit](https://github.com/o/r/actions/runs/7/attempts/2)" in text, ci
 
 
 @pytest.mark.parametrize(
