@@ -836,6 +836,35 @@ def test_an_empty_request_for_a_file_writes_nothing(project: Project, monkeypatc
 
 @pytest.mark.covers(
     "SPC-REQ-004-05",
+    "a results path in a folder with no write permission ends the inner run as a usage error naming the permission and the path, with no traceback and nothing written",
+)
+def test_a_results_path_in_a_read_only_folder_is_a_usage_error(project: Project):
+    """The folder exists but can't be written to (skipped where that doesn't stop a write, such as root)."""
+    project.tests(PRODUCER_TEST)
+    locked = project.root / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    try:
+        try:
+            (locked / "probe").write_text("x")
+        except OSError:
+            pass
+        else:
+            pytest.skip("this user can write to a read-only folder (root, or a platform without permissions)")
+        run = project.pytest("--speccheck-results=locked/r.jsonl")
+    finally:
+        locked.chmod(0o700)
+    message = "\n".join(run.stderr.lines + run.stdout.lines)
+    assert run.ret == pytest.ExitCode.USAGE_ERROR, message
+    assert re.search(r"speccheck: can't write the results file: \[Errno 13\] Permission denied: '.*locked", message), (
+        message
+    )
+    assert "Traceback" not in message
+    assert list(locked.iterdir()) == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
     "a results path that is an existing folder ends the inner run as a usage error giving the system's error, with no traceback, and leaves the folder empty and no temporary file",
 )
 def test_a_results_path_that_is_a_folder_is_a_usage_error(project: Project):
