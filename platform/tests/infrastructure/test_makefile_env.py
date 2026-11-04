@@ -20,7 +20,9 @@ included .env, so nothing here needs Docker.
 
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -92,6 +94,43 @@ def test_other_goals_never_create_env(platform, goal):
     make(platform, *([goal] if goal else []))
     assert runs(platform) == 0
     assert not (platform / ".env").exists()
+
+
+SLOW_STUB = """\
+import pathlib, time
+root = pathlib.Path(__file__).resolve().parent.parent
+(root / ".env").write_text("LOCAL_SDK=true\\nSECRET=kept\\n")
+(root / "ready").write_text("")
+time.sleep(30)
+"""
+
+
+def test_ctrl_c_while_the_script_runs_keeps_env(platform):
+    """Make deletes the target of an interrupted rule unless it is .PRECIOUS; .env holds secrets and answers."""
+    (platform / "scripts" / "init_env.py").write_text(SLOW_STUB)
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE"))}
+    # Own process group, so the signal reaches make and the script like a Ctrl-C does
+    proc = subprocess.Popen(
+        ["make", "-n", "-k", "up"],
+        cwd=platform,
+        env=clean,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        for _ in range(100):
+            if (platform / "ready").exists():
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("the script never started")
+        os.killpg(proc.pid, signal.SIGINT)
+        proc.wait(timeout=30)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+    assert (platform / ".env").read_text() == "LOCAL_SDK=true\nSECRET=kept\n"
 
 
 def test_a_failing_script_stops_make(platform):

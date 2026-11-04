@@ -21,6 +21,9 @@ NO_ENV_GOALS := help generate clean-generated regenerate test-static check-marki
 	check test-system test-integration test-infra
 ifneq ($(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help)),)
 ifeq ($(MAKE_RESTARTS),)
+# Without this, Ctrl-C while the script runs makes Make delete .env, with the
+# secrets and answers already saved in it.
+.PRECIOUS: .env
 .env: FORCE
 	@python3 scripts/init_env.py
 endif

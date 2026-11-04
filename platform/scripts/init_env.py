@@ -317,4 +317,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (KeyboardInterrupt, EOFError):
+        # What was saved so far stays in .env; the next run asks only for the rest
+        print(f"\nStopped. Run make again to continue; what you answered is saved in {ENV.name}.", file=sys.stderr)
+        sys.exit(130)
