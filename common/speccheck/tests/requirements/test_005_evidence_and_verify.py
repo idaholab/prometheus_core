@@ -467,6 +467,25 @@ def test_a_refused_claim_has_no_evidence_and_says_how_to_fix_it(project: Project
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
+    "a passing results-file claim whose explanation is another requirement's text gets a claim-invalid problem naming that requirement in check and verify, and its own requirement stays unclaimed",
+)
+def test_a_results_file_claim_that_copies_a_requirement_counts_for_nothing(project: Project):
+    """Written by `record` or another language, so pytest's 003-09 check never ran on it."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: The cache MUST expire.")
+    header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
+    claim = '{"test": "t", "covers": [{"id": "T-REQ-001-01", "how": "the cache must expire"}], "outcome": "passed"}\n'
+    project.write("u.jsonl", header + claim)
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        invalid = [p["message"] for p in run.json()["problems"] if p["code"] == "claim-invalid"]
+        assert invalid == [
+            "the explanation for T-REQ-001-01 is the text of T-REQ-001-02; describe how the test proves T-REQ-001-01"
+        ], command
+        assert status(run)["T-REQ-001-01"] == "unclaimed", command
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
     "a claim by a producer that may not claim spec 002, the only claim on its requirement and a passing one, leaves that requirement unclaimed",
 )
 def test_a_disallowed_claim_is_not_the_requirements_proof(project: Project):
