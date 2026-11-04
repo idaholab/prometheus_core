@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The deck symptom tables (deck 03, slides 13, 19, A17-A20; deck 04, slide 19; deck 05). Run the
 named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`down`, run

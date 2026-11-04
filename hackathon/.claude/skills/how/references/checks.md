@@ -1,6 +1,6 @@
 # Checks
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, LiteLLM removed: the backend is the agent registry and A2A gateway). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, LiteLLM removed: the backend is the agent registry and A2A gateway). When the code disagrees with this file, the code is correct.
 
 Each check has a stable id; `/diagnose` runs them by tag or by symptom (`troubleshooting.md`).
 Fix kinds: **safe** (applied, then explained), **yes** (asked first), **you** (only you: a secret,
@@ -24,7 +24,7 @@ Print only `PROMETHEUS_API_BASE_IMAGE_HASH`, `LLM_CONFIG_PROFILE`, `LLM_CONFIG_F
 
 | profile | key (`sdk/prometheus_api/llm_configs/*.yaml`; deck 03, A15) |
 |---|---|
-| (none) | required: no default. `registry` is rejected by `make init-env` (no LLM proxy on the platform) |
+| (none) | required: no default. `registry` is rejected by `make init-env`, which asks only in a terminal (no LLM proxy on the platform) |
 | `ollama` | none (local aliases from `ollama cp <model> default|small|medium|large|vision`) |
 | every other profile | `LLM_API_KEY` (+ `EMBEDDING_API_KEY` for embeddings under `anthropic` / `anl_asksage`) |
 

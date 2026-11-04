@@ -1,6 +1,6 @@
 # Files and artifacts
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Files travel as artifacts: your skill gets ids, not data (deck 04, slides 8-10 and 21). An upload goes to
 DeepLynx, the catalog gives it an id, and the orchestrator passes the id. The catalog is per conversation,
