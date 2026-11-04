@@ -183,7 +183,7 @@ What you will use from today: <strong>uploads and artifacts</strong> (01, 03), <
 <div class="arrow-h" style="width:50px"></div>
 <div class="box navy" style="flex:1.3"><b>Orchestrator</b><span class="small">an LLM that calls agents' skills step by step, reading each result</span></div>
 <div class="arrow-h" style="width:50px"></div>
-<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">form-filler, OSTI research, synthesis… and <b>yours</b></span></div>
+<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">synthesis, OSTI research… and <b>yours</b></span></div>
 </div>
 <div class="arrow-v"><span>supporting services</span></div>
 <div class="row" style="gap:20px; align-items:stretch">
@@ -638,7 +638,6 @@ Next: GitHub &amp; PR workflow (1:00 pm). Keep your platform running.</div>
 </div>
 <div class="arrow-v"><span>POST /a2a/{agent_name} → the agent's registered URL</span></div>
 <div class="row" style="gap:14px">
-<div class="box green" style="flex:1"><b>form-filler-agent</b></div>
 <div class="box green dash" style="flex:1"><b>osti-research-agent</b><span class="mono">OPTIONAL_AGENTS=true</span></div>
 <div class="box green" style="flex:1"><b>synthesis-agent</b></div>
 <div class="box green dash" style="flex:1"><b>debug agents</b><span class="mono">DEBUG_AGENTS=true</span></div>
@@ -940,12 +939,6 @@ DeepLynx is <strong>required</strong>. Every skill call writes an execution reco
 <td>nuclear-analysis-client-agent</td>
 <td>The orchestrator; excludes itself from discovery</td>
 <td>always</td>
-</tr>
-<tr>
-<td><code>agents/form-filler-agent</code></td>
-<td>form-filler-agent</td>
-<td><code>fill_form</code>: extract structured data per a JSON schema</td>
-<td>yes</td>
 </tr>
 <tr class="hl">
 <td><code>agents/optional/osti-research-agent</code></td>

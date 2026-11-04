@@ -172,7 +172,7 @@ The backend creates and activates one on first start. It signs every chat turn, 
 #### Type `/agents` in the chat
 
 {.small}
-You should see form-filler and synthesis (OSTI research only with `OPTIONAL_AGENTS=true`).
+You should see synthesis (OSTI research only with `OPTIONAL_AGENTS=true`).
 :::
 
 ::: callout warn
@@ -195,7 +195,7 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
 
 :::: grid 2
 ::: callout
-Then ask the chat something real, e.g. "Extract the material, temperature and pressure from: SS316 pipe at 320 °C and 15 MPa" (form-filler). Watch it with `make logs SERVICE=client-agent`.
+Then ask the chat something real, e.g. "Summarize the corrosion, radiation and thermal findings for SS316 at 320 °C into one report" (synthesis). Watch it with `make logs SERVICE=client-agent`.
 :::
 
 ::: callout warn
@@ -944,7 +944,7 @@ Every agent has a Docker healthcheck on `/healthz` (`/health` is gone). "healthy
 | Type in the chat | Expect |
 |---|---|
 | `/help` | the slash commands |
-| `/agents` | form-filler, synthesis (plus debug / optional agents if enabled) |
+| `/agents` | synthesis (plus debug / optional agents if enabled) |
 | `/workflows` | registered workflow templates |
 | `/artifacts` | this conversation's artifacts |
 | `/tasks [id]` | background tasks |
@@ -957,7 +957,7 @@ Every agent has a Docker healthcheck on `/healthz` (`/health` is gone). "healthy
 
 ```bash {.sm}
 make logs SERVICE=client-agent
-make logs SERVICE=form-filler-agent
+make logs SERVICE=synthesis-agent
 make logs SERVICE=backend
 ```
 
