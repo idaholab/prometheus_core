@@ -146,8 +146,8 @@ def test_select_platform_env_values_includes_llm_config_profile(tmp_path):
 
 
 def test_select_platform_env_values_points_at_local_base_image_with_local_sdk(tmp_path, monkeypatch):
-    """A LOCAL_SDK=true platform has no registry access, so the agent must
-    build FROM the base image the platform built locally, not the registry."""
+    """A LOCAL_SDK=true platform runs the SDK from its checkout, so the agent
+    must build FROM the base image the platform built locally, not the registry."""
     monkeypatch.delenv("LOCAL_SDK", raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text("AGENT_SECRET=shared-secret\nLOCAL_SDK=true\n", encoding="utf-8")
