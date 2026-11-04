@@ -531,6 +531,7 @@ function settle(turnId: string, res: ChatMessageResponse): boolean {
   // Cleared before applyResponse: an auto-approved plan starts the next turn from
   // inside it, and that turn must find the slot free.
   activeTurn = null;
+  cancelRecheck();
   set({ awaiting: false });
   if (state.conversationId === turn.conversationId) {
     applyResponse(res);
@@ -553,24 +554,55 @@ function mayStillBeRunning(err: unknown): boolean {
   return true;
 }
 
+/** A running turn's state is a lease its worker renews; this is how long it lasts
+ * (`backend/CONTRACT.md`, `GET /api/chat/turns/{turn_id}`). After it, a turn whose worker
+ * died reads 404, so one more read tells "still running" from "will never finish". */
+export const TURN_LEASE_MS = 60_000;
+/** Margin past the lease, so the re-check doesn't land just before it runs out. */
+const RECHECK_MARGIN_MS = 5_000;
+
+/** The single pending re-check, for `activeTurn` only. */
+let recheck: { turnId: string; timer: ReturnType<typeof setTimeout> } | null = null;
+
+function cancelRecheck(): void {
+  if (recheck) clearTimeout(recheck.timer);
+  recheck = null;
+}
+
 /**
- * Ask the backend once where turn `turnId` stands, after this tab lost track of it: its
- * POST failed at the network level, or the event stream reconnected (a `turn_done` sent
- * while it was down went nowhere). Not a poll — `turn_done` or the next reconnect
- * covers a turn that is still running.
+ * Ask the backend where turn `turnId` stands, after this tab lost track of it: its POST
+ * failed at the network level, or the event stream reconnected (a `turn_done` sent while
+ * it was down went nowhere). Not a poll:
+ * - `done` settles the turn, and a 404 ends it with an error;
+ * - `running` normally means `turn_done` is still coming. But the worker running it may
+ *   have just died, and its lease outlives it by up to a minute, so one more read is
+ *   scheduled after the lease. That read never schedules another: `running` again means
+ *   the turn is alive, and `turn_done` or the next reconnect covers it.
  */
-async function recoverTurn(turnId: string): Promise<void> {
+async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<void> {
   let turn;
   try {
     turn = await api.getTurn(turnId);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      // The backend never started it (or it expired): nothing will settle it.
+      // Never started, expired, or its worker stopped: nothing will settle it.
       settle(turnId, errorResponse(turnId, "Error communicating with agent."));
     }
     return; // unreachable backend: the stream's reconnect calls this again
   }
-  if (turn.state === "done" && turn.response) settle(turnId, turn.response);
+  if (turn.state === "done" && turn.response) {
+    settle(turnId, turn.response);
+    return;
+  }
+  if (isRecheck || activeTurn?.id !== turnId || recheck?.turnId === turnId) return;
+  cancelRecheck();
+  recheck = {
+    turnId,
+    timer: setTimeout(() => {
+      recheck = null;
+      if (activeTurn?.id === turnId) void recoverTurn(turnId, { isRecheck: true });
+    }, TURN_LEASE_MS + RECHECK_MARGIN_MS),
+  };
 }
 
 async function post(body: ChatMessageRequest): Promise<void> {
@@ -640,6 +672,7 @@ async function decidePlan(itemId: string, approved: boolean): Promise<void> {
 /** Client-side stop — no server cancel endpoint exists yet (Decision D). */
 function stop(): void {
   activeTurn = null;
+  cancelRecheck();
   set({ awaiting: false });
 }
 
@@ -651,6 +684,7 @@ async function reset(profile?: string): Promise<void> {
   // flight; taking a new bind seq supersedes it, so it can apply neither its
   // transcript here nor its binding on the server.
   activeTurn = null;
+  cancelRecheck();
   set({ items: [], awaiting: false, resumingConversationId: null });
   const seq = nextBindSeq();
   try {
@@ -671,6 +705,7 @@ async function loadConversation(conversationId: string): Promise<void> {
   disconnect();
   awaitedTaskIds.clear();
   activeTurn = null;
+  cancelRecheck();
   set({ items: [], awaiting: false });
   const seq = nextBindSeq();
   try {
@@ -711,6 +746,7 @@ export const chatStore = {
     bootstrapGen += 1; // and an in-flight bootstrap, so it cannot mark the store ready
     bootstrapping = false;
     activeTurn = null;
+    cancelRecheck();
     set({ ready: false, authLost: false, awaiting: false, resumingConversationId: null, items: [] });
   },
   /** Drop every trace of the signed-in user's chat: close the stream, forget
@@ -725,6 +761,7 @@ export const chatStore = {
     bootstrapGen += 1;
     bootstrapping = false;
     activeTurn = null;
+    cancelRecheck();
     state = initialState;
     emit();
   },
