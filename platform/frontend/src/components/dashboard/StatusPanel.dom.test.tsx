@@ -47,17 +47,17 @@ test("the Agents tab is the default, titled Live Agents Arena, and the tabs swit
   const user = userEvent.setup();
   render(<Home />);
 
-  expect(tab("Agents")).toHaveClass("tab-active");
-  expect(tab("Agents")).toHaveAttribute("title", "Live Agents Arena");
+  expect(tab("Agents")).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel", { name: "Live Agents Arena" })).toBeInTheDocument();
   expect(screen.getByText("No Agents Yet")).toBeInTheDocument();
 
   await user.click(tab("Active Jobs"));
-  expect(tab("Active Jobs")).toHaveClass("tab-active");
-  expect(tab("Agents")).not.toHaveClass("tab-active");
+  expect(tab("Active Jobs")).toHaveAttribute("aria-selected", "true");
+  expect(tab("Agents")).toHaveAttribute("aria-selected", "false");
   expect(await screen.findByText("No Active Jobs")).toBeInTheDocument();
 
   await user.click(tab("Artifacts"));
-  expect(tab("Artifacts")).toHaveClass("tab-active");
+  expect(tab("Artifacts")).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText("No Artifacts Yet")).toBeInTheDocument();
 
   await user.click(tab("Agents"));
@@ -89,7 +89,7 @@ test("collapsing shows the icon rail, and its toggle expands back to the same ta
   expect(screen.getByRole("button", { name: "Artifacts" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Expand status panel" }));
-  expect(tab("Active Jobs")).toHaveClass("tab-active");
+  expect(tab("Active Jobs")).toHaveAttribute("aria-selected", "true");
 });
 
 test("clicking a rail icon expands the panel straight to that tab", async () => {
@@ -98,10 +98,25 @@ test("clicking a rail icon expands the panel straight to that tab", async () => 
 
   expect(screen.getByRole("button", { name: "Live Agents Arena" })).toHaveClass("text-primary");
   await user.click(screen.getByRole("button", { name: "Active Jobs" }));
-  expect(tab("Active Jobs")).toHaveClass("tab-active");
+  expect(tab("Active Jobs")).toHaveAttribute("aria-selected", "true");
 
   await user.click(screen.getByRole("button", { name: "Collapse status panel" }));
   await user.click(screen.getByRole("button", { name: "Live Agents Arena" }));
-  expect(tab("Agents")).toHaveClass("tab-active");
+  expect(tab("Agents")).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText("No Agents Yet")).toBeInTheDocument();
+});
+
+test("the status tabs follow the tabs pattern: arrow keys move, only the selected tab is in the Tab order", async () => {
+  const user = userEvent.setup();
+  render(<Home />);
+
+  expect(tab("Agents")).toHaveAttribute("tabindex", "0");
+  expect(tab("Active Jobs")).toHaveAttribute("tabindex", "-1");
+  tab("Agents").focus();
+  await user.keyboard("{ArrowRight}");
+  expect(tab("Active Jobs")).toHaveAttribute("aria-selected", "true");
+  expect(tab("Active Jobs")).toHaveFocus();
+  await user.keyboard("{End}");
+  expect(tab("Artifacts")).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel", { name: "Artifacts" })).toBeInTheDocument();
 });

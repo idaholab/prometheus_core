@@ -10,9 +10,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Bot, Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Tabs } from "@/components/ui/Tabs";
 import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
@@ -21,6 +22,13 @@ import { LiveAgentPanel } from "../LiveAgentPanel";
 import { ActiveJobsPanel } from "./ActiveJobsPanel";
 
 type StatusTab = "agents" | "jobs" | "artifacts";
+
+/** Each tab panel's accessible name (the Agents tab is the Live Agents Arena). */
+const TAB_LABELS: Record<StatusTab, string> = {
+  agents: "Live Agents Arena",
+  jobs: "Active Jobs",
+  artifacts: "Artifacts",
+};
 
 /** Every artifact in the open conversation's transcript, newest last, deduped
  * by id. A resumed conversation gives each assistant turn the artifacts it
@@ -117,6 +125,7 @@ interface StatusPanelProps {
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("agents");
   const artifacts = useConversationArtifacts();
+  const panelId = useId();
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -149,55 +158,41 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between px-6 pt-6">
-        <div role="tablist" className="tabs tabs-border">
-          <button
-            role="tab"
-            aria-selected={tab === "agents"}
-            title="Live Agents Arena"
-            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "agents" ? "tab-active" : ""}`}
-            onClick={() => setTab("agents")}
-          >
-            Agents
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === "jobs"}
-            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "jobs" ? "tab-active" : ""}`}
-            onClick={() => setTab("jobs")}
-          >
-            Active Jobs
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === "artifacts"}
-            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "artifacts" ? "tab-active" : ""}`}
-            onClick={() => setTab("artifacts")}
-          >
-            Artifacts{artifacts.length > 0 && ` (${artifacts.length})`}
-          </button>
-        </div>
+        <Tabs
+          tabs={[
+            { id: "agents", label: "Agents" },
+            { id: "jobs", label: "Active Jobs" },
+            { id: "artifacts", label: artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts" },
+          ]}
+          selected={tab}
+          onChange={setTab}
+          label="Status panel"
+          panelId={panelId}
+        />
         <RailButton size={32} label="Collapse status panel" onClick={onCollapse}>
           <PanelRight size={18} />
         </RailButton>
       </div>
 
-      {tab === "agents" ? (
-        <LiveAgentPanel />
-      ) : tab === "jobs" ? (
-        <ActiveJobsPanel />
-      ) : artifacts.length === 0 ? (
-        <EmptyState
-          icon={<FolderOpen size={32} />}
-          title="No Artifacts Yet"
-          hint="Generated artifacts will display here"
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
-          {artifacts.map((artifact) => (
-            <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
-          ))}
-        </div>
-      )}
+      <div id={panelId} role="tabpanel" aria-label={TAB_LABELS[tab]} className="flex min-h-0 flex-1 flex-col">
+        {tab === "agents" ? (
+          <LiveAgentPanel />
+        ) : tab === "jobs" ? (
+          <ActiveJobsPanel />
+        ) : artifacts.length === 0 ? (
+          <EmptyState
+            icon={<FolderOpen size={32} />}
+            title="No Artifacts Yet"
+            hint="Generated artifacts will display here"
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
+            {artifacts.map((artifact) => (
+              <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
