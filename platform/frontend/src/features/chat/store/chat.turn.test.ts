@@ -20,7 +20,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import type { EventStreamHandlers } from "@/lib/api/events";
 import type { ChatMessageRequest, ChatMessageResponse } from "@/lib/api/types";
-import { chatStore, useChatState as tapChatState } from "./chat.ts";
+import { TURN_LEASE_MS, chatStore, useChatState as tapChatState } from "./chat.ts";
 
 vi.mock("react", () => ({
   useSyncExternalStore: (_sub: unknown, get: () => unknown) => {
@@ -283,4 +283,133 @@ test("an auto-approved plan delivered by turn_done starts the next turn", async 
   assert.equal(sends.length, 2);
   assert.equal(sends[1].body.plan_approved, true);
   assert.equal(readState().awaiting, true, "the approval turn is in flight");
+});
+
+/* --- the one re-check after the lease (backend/CONTRACT.md, GET /api/chat/turns) -------- */
+
+/** Flush the promise chain a timer callback starts. */
+const flush = async () => {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+};
+
+test("a 'running' lookup is checked once more after the lease; a dead worker's turn then ends", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    const looked: string[] = [];
+    let answer: "running" | "gone" = "running";
+    getTurn = async (t) => {
+      looked.push(t);
+      if (answer === "gone") throw new ApiError(404, "No such turn.");
+      return { turn_id: id, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await flush();
+    assert.deepEqual(looked, [id]);
+    assert.equal(readState().awaiting, true);
+
+    answer = "gone"; // the worker died; its lease ran out
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS - 1);
+    assert.deepEqual(looked, [id], "not before the lease");
+    await vi.advanceTimersByTimeAsync(10_000);
+    await flush();
+    assert.deepEqual(looked, [id, id]);
+    assert.deepEqual(kinds(), ["user:q", "error"]);
+    assert.equal(readState().awaiting, false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the re-check happens once: a live turn answering 'running' again isn't polled", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    const looked: string[] = [];
+    getTurn = async (t) => {
+      looked.push(t);
+      return { turn_id: id, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await flush();
+    await vi.advanceTimersByTimeAsync(10 * TURN_LEASE_MS);
+    await flush();
+    assert.deepEqual(looked, [id, id], "one lookup, one re-check, nothing more");
+    assert.equal(readState().awaiting, true);
+
+    stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+    assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("repeated reconnects keep a single pending re-check", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    const looked: string[] = [];
+    getTurn = async (t) => {
+      looked.push(t);
+      return { turn_id: id, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await flush();
+    stream().onOpen?.();
+    stream().onOpen?.();
+    await flush();
+    assert.equal(looked.length, 3, "each reconnect reads once");
+    await vi.advanceTimersByTimeAsync(2 * TURN_LEASE_MS);
+    await flush();
+    assert.equal(looked.length, 4, "but only one re-check is scheduled");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a turn settled before the re-check is due cancels it", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    const looked: string[] = [];
+    getTurn = async (t) => {
+      looked.push(t);
+      return { turn_id: id, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await flush();
+    stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+    await vi.advanceTimersByTimeAsync(2 * TURN_LEASE_MS);
+    await flush();
+    assert.deepEqual(looked, [id]);
+    assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// Covers the outcome, not the mechanism: stop() cancels the timer, and the timer's own
+// activeTurn check would also make it a no-op, so either alone keeps this passing.
+test("a stopped turn's pending re-check can't end the next turn", async () => {
+  const first = await send("first");
+  vi.useFakeTimers();
+  try {
+    const looked: string[] = [];
+    getTurn = async (t) => {
+      looked.push(t as string);
+      if (looked.length > 1) throw new ApiError(404, "No such turn.");
+      return { turn_id: first, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await flush();
+    chatStore.stop();
+    void chatStore.sendTurn("second");
+    await flush();
+    await vi.advanceTimersByTimeAsync(2 * TURN_LEASE_MS);
+    await flush();
+    assert.deepEqual(looked, [first]);
+    assert.equal(readState().awaiting, true, "the second turn is still running");
+  } finally {
+    vi.useRealTimers();
+  }
 });
