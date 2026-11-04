@@ -226,6 +226,30 @@ def test_init_env_names_no_key_for_a_keyless_profile(tmp_path, env_example_path,
     assert "Saved LLM_CONFIG_PROFILE=ollama in .env." in capsys.readouterr().out
 
 
+def test_choose_runs_on_python_39(monkeypatch):
+    """/usr/bin/python3 on macOS is 3.9, where zip() takes no keyword arguments (strict= is 3.10+)."""
+    init_env = _load_init_env()
+
+    def zip39(*iterables, **kwargs):
+        if kwargs:
+            raise TypeError("zip() takes no keyword arguments")
+        return zip(*iterables)
+
+    monkeypatch.setattr(init_env, "zip", zip39, raising=False)
+    monkeypatch.setitem(sys.modules, "termios", None)  # the numbered prompt, as without a terminal
+    monkeypatch.setattr("builtins.input", lambda prompt: "2")
+
+    assert init_env.choose(["a", "b"], ["first", "second"], 0) == "b"
+
+
+def test_choose_rejects_a_label_count_that_differs(monkeypatch):
+    """What zip(strict=True) guarded: one label per option."""
+    init_env = _load_init_env()
+    monkeypatch.setitem(sys.modules, "termios", None)
+    with pytest.raises(ValueError, match="one label per option"):
+        init_env.choose(["a", "b"], ["first"], 0)
+
+
 def _new_env(tmp_path, env_example_path, monkeypatch, answers):
     """init_env with a fresh .env, a terminal and a set LLM profile; ``answers`` feed input()."""
     init_env = _load_init_env()

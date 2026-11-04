@@ -182,8 +182,11 @@ def interactive() -> bool:
 
 def choose(options: list[str], labels: list[str], default: int) -> str:
     """Arrow-key menu on the terminal; numbered prompt where termios is missing."""
+    # zip(strict=True) needs Python 3.10; /usr/bin/python3 on macOS is 3.9
+    if len(options) != len(labels):
+        raise ValueError("choose() needs one label per option")
     width = max(map(len, options))
-    lines = [f"{o:<{width}}  {label}" for o, label in zip(options, labels, strict=True)]
+    lines = [f"{o:<{width}}  {label}" for o, label in zip(options, labels)]  # noqa: B905
     try:
         import termios
         import tty
