@@ -14,7 +14,8 @@
  * Dev-only review page for the Workflow Builder's states that nothing can
  * reach by clicking yet: the empty canvas (Figma D.3) and a skill being
  * dragged onto it (D.4), plus the base state (D.2) to compare against. Each
- * is the real WorkflowBuilder, with a theme toggle.
+ * is the real WorkflowBuilder, with a theme toggle. It also covers the Node
+ * Inspector's two states: selected in D.2 and D.4, empty in D.3.
  *
  * Open http://localhost:5150/?harness=builder-states under `npm run dev`.
  * main.tsx loads this only in dev, so it never reaches the production build.

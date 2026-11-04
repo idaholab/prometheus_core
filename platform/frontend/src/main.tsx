@@ -21,10 +21,7 @@ const root = ReactDOM.createRoot(document.getElementById("root")!);
 // Dev-only review pages, opened with ?harness=<name>. The import() sits behind
 // import.meta.env.DEV, so production builds drop it and the page with it.
 const harness = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("harness") : null;
-if (harness === "node-inspector") {
-  const { NodeInspectorHarness } = await import("./dev/NodeInspectorHarness");
-  root.render(<NodeInspectorHarness />);
-} else if (harness === "builder-states") {
+if (harness === "builder-states") {
   const { BuilderStatesHarness } = await import("./dev/BuilderStatesHarness");
   root.render(<BuilderStatesHarness />);
 } else {
