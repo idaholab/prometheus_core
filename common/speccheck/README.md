@@ -72,7 +72,7 @@ The `greet` command says hello.
 - The first line is `# NNN - Name`, and one `status:` line (`draft` or `implemented`) comes before
   the first `##`.
 - A requirement is a bullet `- <prefix>-REQ-NNN-XX: text` (or `BEH` for behaviour), where `NNN` is
-  the spec's number. It may wrap onto lines indented two spaces.
+  the spec's number. It may wrap onto lines indented two or more spaces.
 - A requirement is implemented, so a test must claim it, or it ends with
   `(unimplemented: <reason>)`, such as `(unimplemented: plan step 3)`, and needs no claim until
   it is done. The reason is required. There is no "untested": behaviour that exists gets a test.
@@ -527,8 +527,9 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
   report.
 - **Bullets.** `- <prefix>-REQ-NNN-XX: text` or `- <prefix>-BEH-NNN-XX: text`, where `NNN` is the
   spec's number. The prefix comes from the config, or is absent when `id-prefix = ""`. A bullet may
-  wrap onto lines indented two spaces. A line that starts like an ID in any other form (`*`, bold,
-  nested, missing prefix) is a problem, so it can't go unseen.
+  wrap onto lines indented two or more spaces (not a tab); a blank line ends it. A line that starts
+  like an ID in any other form (`*`, bold, nested, missing prefix) is a problem, so it can't go
+  unseen.
 - **Unique.** IDs are unique across the folder, and so is the text of every requirement (compared
   without the unimplemented suffix, ignoring case, whitespace and a trailing full stop).
 - **Unimplemented.** A requirement whose text ends with `(unimplemented: <reason>)` needs no claim

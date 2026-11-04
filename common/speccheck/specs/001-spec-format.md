@@ -20,8 +20,9 @@ be found, has one ID, and says whether it is implemented yet.
   `- <prefix>-BEH-NNN-XX: text`, where NNN is the spec's own number. A bullet that starts like an
   ID in any other form (`*`, bold, nested, without the prefix) is a problem, so it can't go unseen.
 - SPC-REQ-001-05: An ID MUST be unique across the folder.
-- SPC-REQ-001-06: A bullet's text MAY continue on lines indented two spaces. It MUST be read as
-  one text, its lines joined with one space.
+- SPC-REQ-001-06: A bullet's text MAY continue on the lines straight after it that start with two
+  or more spaces. A blank line, or a line starting with less than two spaces or with a tab, ends
+  it. The bullet MUST be read as one text, its lines trimmed and joined with one space.
 - SPC-REQ-001-07: A requirement whose text ends with `(unimplemented: <reason>)`, with or without a
   full stop before or after it, MUST be unimplemented, and its reason is the text after the colon,
   trimmed. Its text without the suffix MUST be what comes before the suffix, trimmed.
