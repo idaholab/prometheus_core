@@ -287,14 +287,18 @@ For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, pa
 ## `GET /api/chat/turns/{turn_id}`
 
 A turn's state, scoped to the caller's session: `404` for a turn this session never
-started, one that expired (state is kept for an hour), or another session's.
+started, one that expired (a finished turn's result is kept for an hour), one whose
+worker stopped mid-turn, or another session's. A running turn's state is a 60 s lease that
+its worker renews every 20 s, so a turn whose worker died reads `404` within a minute.
 
 ```json
 { "turn_id": "7f9c2b1e-…", "state": "running", "response": null }
 { "turn_id": "7f9c2b1e-…", "state": "done", "response": { "turn_id": "7f9c2b1e-…", "status": "answer", "response_text": "…" } }
 ```
 
-Read it once when the client lost track of a turn (see **Delivery** above). Don't poll
+Read it once when the client lost track of a turn (see **Delivery** above). If it says
+`running`, read it once more after the lease (60 s): a live turn still answers `running`
+and its `turn_done` is still coming; a turn whose worker died now answers `404`. Don't poll
 it: `turn_done` is the normal path.
 
 ---
