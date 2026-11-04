@@ -1,7 +1,7 @@
 codecov:
   notify:
     # One upload per unit that reports coverage; raise it as units are added
-    after_n_builds: 16
+    after_n_builds: 15
 
 # Mark uncovered changed lines inline in the PR diff
 github_checks:
