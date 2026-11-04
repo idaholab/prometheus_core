@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- base (shared) ----
-FROM node:22.23.3-bookworm-slim@sha256:3ed98443660ff48413b5af19ecefce3b9d50845a901a43420d47cc63a9fddbe9 AS base
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS base
 WORKDIR /app
 
 RUN apt-get update \
