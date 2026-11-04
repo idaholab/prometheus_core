@@ -9,11 +9,14 @@
 #
 # Every goal except those in NO_ENV_GOALS first creates or completes .env with
 # scripts/init_env.py (the rule below). Make runs it before any target, and
-# reads the Makefile again when it changed .env, so what it saved (LOCAL_SDK,
-# LOCAL_DEEPLYNX, the LLM profile) counts in this same run. MAKE_RESTARTS keeps
-# it from running a second time on that reread. Plain `include`, so a failing
-# script stops make. The goals in NO_ENV_GOALS don't need .env, or need one that
-# a running stack was started with: they only read it if it is there.
+# then reads the Makefile again (the rule depends on FORCE, so it counts as
+# remade on every run, not only when the script changed .env), so what the script
+# saved (LOCAL_SDK, LOCAL_DEEPLYNX, the LLM profile) counts in this same run.
+# MAKE_RESTARTS keeps it from running a second time on that reread. FORCE is also
+# what lets the script fill in a blank secret in an .env that exists. Plain
+# `include`, so a failing script stops make. The goals in NO_ENV_GOALS don't need
+# .env, or need one that a running stack was started with: they only read it if
+# it is there.
 NO_ENV_GOALS := help generate clean-generated regenerate test-static check-markings \
 	check-prerequisites base-image cluster-up cluster-down cluster-reset \
 	react-dev react-build react-check react-test-e2e \
