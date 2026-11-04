@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -553,3 +554,125 @@ def test_invoke_skill_validates_nested_required_paths(monkeypatch) -> None:
     )
 
     assert result["missing_required_params"] == ["context.temperature_c"]
+
+
+def test_invoke_skill_reports_error_result_as_failed_status(monkeypatch) -> None:
+    """An unreachable agent comes back as an error *result* (call_agent catches the
+    transport exception), so invoke_skill must still emit the "'<skill>' failed:" line
+    the live agent panel keys on; otherwise the stream goes silent after "Invoking"."""
+
+    class _UnreachableTool:
+        async def ainvoke(self, params):
+            return json.dumps({"error": "All connection attempts failed (host.docker.internal:8042)"})
+
+    async def fake_find_tool_for_skill(*args, **kwargs):
+        return _UnreachableTool()
+
+    async def fake_get_capability_by_skill_id(skill_id):
+        return SimpleNamespace(input_schema={"type": "object", "properties": {}})
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", fake_find_tool_for_skill)
+    monkeypatch.setattr(
+        skills,
+        "get_capability_cache",
+        lambda: SimpleNamespace(get_capability_by_skill_id=fake_get_capability_by_skill_id),
+    )
+    statuses: list[str] = []
+    monkeypatch.setattr(runtime, "store_status_update", lambda conv, msg, **kw: statuses.append(msg))
+
+    result = asyncio.run(skills.invoke_skill("forward_sampling_uq", {}, "conv-1"))
+
+    assert "8042" in result["error"]
+    assert statuses[0] == "Invoking 'forward_sampling_uq'."
+    assert statuses[-1].startswith("'forward_sampling_uq' failed: ")
+    assert "'forward_sampling_uq' completed." not in statuses
+
+
+def test_failed_status_line_is_short_and_single_line(monkeypatch) -> None:
+    """The status line is shown in the browser: one line, at most ~200 chars of error.
+    The model still gets the full error in the tool result."""
+    long_error = "Traceback (most recent call last):\n  File x\n" + "boom " * 200
+
+    class _BrokenTool:
+        async def ainvoke(self, params):
+            return json.dumps({"error": long_error})
+
+    async def fake_find_tool_for_skill(*args, **kwargs):
+        return _BrokenTool()
+
+    async def fake_get_capability_by_skill_id(skill_id):
+        return SimpleNamespace(input_schema={"type": "object", "properties": {}})
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", fake_find_tool_for_skill)
+    monkeypatch.setattr(
+        skills,
+        "get_capability_cache",
+        lambda: SimpleNamespace(get_capability_by_skill_id=fake_get_capability_by_skill_id),
+    )
+    statuses: list[str] = []
+    monkeypatch.setattr(runtime, "store_status_update", lambda conv, msg, **kw: statuses.append(msg))
+
+    result = asyncio.run(skills.invoke_skill("forward_sampling_uq", {}, "conv-1"))
+
+    assert result["error"] == long_error
+    line = statuses[-1]
+    prefix = "'forward_sampling_uq' failed: "
+    assert line.startswith(prefix + "Traceback (most recent call last): File x boom")
+    assert "\n" not in line
+    assert len(line) - len(prefix) <= skills._STATUS_ERROR_MAX_CHARS
+    assert line.endswith("...")
+
+
+def test_failed_status_line_for_a_raised_exception_is_single_line(monkeypatch) -> None:
+    class _RaisingTool:
+        async def ainvoke(self, params):
+            raise RuntimeError("first line\nsecond line")
+
+    async def fake_find_tool_for_skill(*args, **kwargs):
+        return _RaisingTool()
+
+    async def fake_get_capability_by_skill_id(skill_id):
+        return SimpleNamespace(input_schema={"type": "object", "properties": {}})
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", fake_find_tool_for_skill)
+    monkeypatch.setattr(
+        skills,
+        "get_capability_cache",
+        lambda: SimpleNamespace(get_capability_by_skill_id=fake_get_capability_by_skill_id),
+    )
+    statuses: list[str] = []
+    monkeypatch.setattr(runtime, "store_status_update", lambda conv, msg, **kw: statuses.append(msg))
+
+    result = asyncio.run(skills.invoke_skill("forward_sampling_uq", {}, "conv-1"))
+
+    assert result["error"] == "first line\nsecond line"
+    assert statuses[-1] == "'forward_sampling_uq' failed: first line second line"
+
+
+def test_invoke_skill_error_result_is_silent_without_status(monkeypatch) -> None:
+    """With emit_status=False (a sub-step of a larger workflow), an error result is
+    still returned but no status line is written for it."""
+
+    class _UnreachableTool:
+        async def ainvoke(self, params):
+            return json.dumps({"error": "All connection attempts failed"})
+
+    async def fake_find_tool_for_skill(*args, **kwargs):
+        return _UnreachableTool()
+
+    async def fake_get_capability_by_skill_id(skill_id):
+        return SimpleNamespace(input_schema={"type": "object", "properties": {}})
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", fake_find_tool_for_skill)
+    monkeypatch.setattr(
+        skills,
+        "get_capability_cache",
+        lambda: SimpleNamespace(get_capability_by_skill_id=fake_get_capability_by_skill_id),
+    )
+    statuses: list[str] = []
+    monkeypatch.setattr(runtime, "store_status_update", lambda conv, msg, **kw: statuses.append(msg))
+
+    result = asyncio.run(skills.invoke_skill("forward_sampling_uq", {}, "conv-1", emit_status=False))
+
+    assert result["error"] == "All connection attempts failed"
+    assert statuses == []

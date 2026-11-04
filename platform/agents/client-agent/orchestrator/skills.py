@@ -24,6 +24,18 @@ from param_schema import (
 
 from . import runtime, task_tracking
 
+# The "'<skill>' failed: ..." status line is shown in the browser, so it carries a
+# short, single-line summary of the error. The full error stays in the tool result
+# for the model.
+_STATUS_ERROR_MAX_CHARS = 200
+
+
+def _failed_status(skill_id: str, error: Any) -> str:
+    summary = " ".join(str(error).split())
+    if len(summary) > _STATUS_ERROR_MAX_CHARS:
+        summary = summary[: _STATUS_ERROR_MAX_CHARS - 3].rstrip() + "..."
+    return f"'{skill_id}' failed: {summary or 'unknown error'}"
+
 
 async def find_tool_for_skill(skill_id: str, refresh_on_miss: bool = True):
     """Find tool by skill id and optionally refresh discovery once on cache miss."""
@@ -147,13 +159,18 @@ async def _invoke_skill_impl(
                 payload = {"error": str(result_data.get("error"))}
                 if missing:
                     payload["missing_required_params"] = missing
+                if emit_status:
+                    # Same line as the exception path below: an unreachable agent
+                    # comes back as an error *result* (call_agent catches it), and
+                    # without this the status stream goes silent after "Invoking".
+                    runtime.store_status_update(conversation_id, _failed_status(skill_id, payload["error"]))
                 return payload
             if emit_status:
                 runtime.store_status_update(conversation_id, f"'{skill_id}' completed.")
             return {"result": result_data}
         except Exception as e:
             if emit_status:
-                runtime.store_status_update(conversation_id, f"'{skill_id}' failed: {e}")
+                runtime.store_status_update(conversation_id, _failed_status(skill_id, e))
             return {"error": str(e)}
 
     # Batch path for comparison-style queries with multiple material IDs
