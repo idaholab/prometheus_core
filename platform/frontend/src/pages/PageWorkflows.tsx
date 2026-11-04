@@ -12,13 +12,12 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
-import type { InspectedNode } from "../components/workflows/NodeInspector";
-import type { SkillGroup } from "../components/workflows/SkillLibrary";
 import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
 import { WorkflowConsole } from "../components/workflows/WorkflowConsole";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "../components/workflows/WorkflowGraph";
 import type { WorkflowPlan } from "../components/workflows/WorkflowPlanner";
 import type { WorkflowTemplate } from "../components/workflows/WorkflowTemplateCard";
+import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "./builderPlaceholders";
 
 // Placeholder graph for Comprehensive Material Analysis, laid out as in Figma D.1.
 const EXAMPLE_NODES: WorkflowGraphNode[] = [
@@ -117,113 +116,6 @@ const EXAMPLE_PLAN: WorkflowPlan = {
   checkpoints: "2 Active",
   inputs: ["RC-7_assembly.step", "inlet_velocity_vector.config"],
   outputs: ["TH_validation_report.pdf", "velocity_vectors.vtu"],
-};
-
-// Placeholder skill library for the Builder, from Figma D.2.
-const SKILL_GROUPS: SkillGroup[] = [
-  {
-    id: "data",
-    label: "Data",
-    tone: "data",
-    skills: [
-      { id: "get-material-data", name: "Get Material Data" },
-      { id: "query-artifact-store", name: "Query Artifact Store" },
-    ],
-  },
-  {
-    id: "analysis",
-    label: "Analysis",
-    tone: "analysis",
-    skills: [
-      { id: "radiation-damage", name: "Radiation Damage" },
-      { id: "corrosion", name: "Corrosion" },
-      { id: "thermal", name: "Thermal" },
-    ],
-  },
-  {
-    id: "synthesis",
-    label: "Synthesis",
-    tone: "analysis",
-    skills: [{ id: "synthesize-report", name: "Synthesize Report" }],
-  },
-  {
-    id: "control",
-    label: "Control",
-    tone: "control",
-    skills: [
-      { id: "checkpoint-sme", name: "Checkpoint (SME)" },
-      { id: "qa-gate", name: "QA Gate" },
-    ],
-  },
-];
-
-// Placeholder Builder graph for Comprehensive Material Analysis, laid out as in
-// Figma D.2 at 100%: positions are from the canvas's top left. Radiation Damage
-// is shown selected, and Corrosion's output is mid-connection.
-const BUILDER_NODES: WorkflowGraphNode[] = [
-  {
-    id: "get-material-data",
-    type: "skill",
-    position: { x: 255, y: 70 },
-    data: {
-      name: "Get Material Data",
-      tone: "analysis",
-      input: "material_id",
-      inputTone: "data",
-      output: "material_data",
-      outputTone: "data",
-      width: 170,
-    },
-  },
-  {
-    id: "radiation-damage",
-    type: "skill",
-    position: { x: 140, y: 260 },
-    selected: true,
-    data: {
-      name: "Radiation Damage",
-      tone: "analysis",
-      input: "material_data",
-      inputTone: "data",
-      output: "rad_result",
-      outputTone: "analysis",
-      width: 170,
-    },
-  },
-  {
-    id: "corrosion",
-    type: "skill",
-    position: { x: 370, y: 260 },
-    data: {
-      name: "Corrosion",
-      tone: "analysis",
-      input: "material_data",
-      inputTone: "data",
-      output: "corr_result",
-      outputTone: "analysis",
-      width: 170,
-    },
-  },
-  { id: "corrosion-drop", type: "connect", position: { x: 345, y: 464 }, data: { label: "drop to connect →" } },
-];
-const BUILDER_WIRES: WorkflowGraphWire[] = [
-  { from: "get-material-data", to: "radiation-damage" },
-  { from: "get-material-data", to: "corrosion" },
-  { from: "corrosion", to: "corrosion-drop", dashed: true },
-];
-
-// Placeholder inspector content for the selected node, Radiation Damage, from
-// Figma D.2. Neutron flux is an optional input left unset.
-const INSPECTED_NODE: InspectedNode = {
-  name: "Radiation Damage",
-  tone: "analysis",
-  skillId: "analyze_radiation_damage",
-  inputs: [
-    { name: "material_id", value: "from input.material_id" },
-    { name: "neutron_flux" },
-    { name: "temperature_c", value: "from input.context" },
-  ],
-  outputs: [{ name: "to_context", value: "radiation" }],
 };
 
 const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";

@@ -24,6 +24,9 @@ const harness = import.meta.env.DEV ? new URLSearchParams(window.location.search
 if (harness === "node-inspector") {
   const { NodeInspectorHarness } = await import("./dev/NodeInspectorHarness");
   root.render(<NodeInspectorHarness />);
+} else if (harness === "builder-states") {
+  const { BuilderStatesHarness } = await import("./dev/BuilderStatesHarness");
+  root.render(<BuilderStatesHarness />);
 } else {
   root.render(<App />);
 }

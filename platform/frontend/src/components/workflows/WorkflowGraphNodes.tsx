@@ -50,6 +50,8 @@ export interface SkillNodeData extends Record<string, unknown> {
   outputTone: SkillTone;
   /** Node width in px. */
   width: number;
+  /** Drawn as the ghost of a skill being dragged onto the canvas (D.4). */
+  ghost?: boolean;
 }
 
 export interface ConnectEndpointData extends Record<string, unknown> {
@@ -126,38 +128,56 @@ function PortDot({ tone }: { tone: SkillTone }) {
   return <span aria-hidden="true" className={`size-1 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />;
 }
 
+/** Border and fill for each look a skill node can have. */
+function skillNodeClasses(ghost: boolean, selected: boolean): string {
+  if (ghost) return "border-dashed border-primary bg-base-100/60";
+  if (selected) return "border-primary bg-base-100 ring-1 ring-primary";
+  return "border-base-content/15 bg-base-100";
+}
+
 /**
  * One skill step on the Builder canvas (Figma D.2): name and status dot, then
  * its input and output, each led by a port dot. `selected` (set by the graph)
  * gives it D.2's selected style: a primary border and ring.
+ *
+ * With `ghost`, it's the skill being dragged onto the canvas (D.4): a dashed
+ * primary outline, dimmed contents, and its input port shown as a ringed dot
+ * at its bottom-left corner, ready to connect.
  */
 export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
+  const ghost = data.ghost ?? false;
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg border px-3 py-2.5 ${
-        selected ? "border-primary bg-base-100 ring-1 ring-primary" : "border-base-content/15 bg-base-100"
-      }`}
+      className={`relative flex flex-col gap-2 rounded-lg border px-3 py-2.5 ${skillNodeClasses(ghost, selected)}`}
       style={{ width: data.width }}
     >
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
-      <div className="flex min-w-0 items-center justify-between gap-1.5">
-        <span className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content" title={data.name}>
-          {data.name}
-        </span>
-        <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`} />
-      </div>
-      <div className="flex items-center gap-1.5">
-        <PortDot tone={data.inputTone} />
-        <div className="min-w-0 flex-1">
-          <DetailRow label="IN" value={data.input} />
+      <div className={`flex flex-col gap-2 ${ghost ? "opacity-70" : ""}`}>
+        <div className="flex min-w-0 items-center justify-between gap-1.5">
+          <span className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content" title={data.name}>
+            {data.name}
+          </span>
+          <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <PortDot tone={data.inputTone} />
+          <div className="min-w-0 flex-1">
+            <DetailRow label="IN" value={data.input} />
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <PortDot tone={data.outputTone} />
+          <div className="min-w-0 flex-1">
+            <DetailRow label="OUT" value={data.output} />
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <PortDot tone={data.outputTone} />
-        <div className="min-w-0 flex-1">
-          <DetailRow label="OUT" value={data.output} />
-        </div>
-      </div>
+      {ghost && (
+        <span
+          aria-hidden="true"
+          className="absolute bottom-0 left-0 size-2.5 -translate-x-1/2 translate-y-1/2 rounded-full border-[1.5px] border-primary bg-base-content/80"
+        />
+      )}
       <Handle type="source" position={Position.Bottom} isConnectable={false} className={HANDLE_CLASS} />
     </div>
   );
