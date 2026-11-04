@@ -3,7 +3,7 @@
 # infrastructure (a2a, starlette, uvicorn).  Its hash is pinned in the
 # platform's Makefile / your .env and passed in as a build argument — you never
 # edit the FROM line directly; you change PROMETHEUS_API_BASE_IMAGE_HASH.
-ARG PROMETHEUS_API_BASE_IMAGE_REPO=containers.github.inl.gov/genesis/prometheus_api
+ARG PROMETHEUS_API_BASE_IMAGE_REPO=ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel
 ARG PROMETHEUS_API_BASE_IMAGE_HASH
 
 # Requires uv.lock. The install step below mounts it from this stage, so it

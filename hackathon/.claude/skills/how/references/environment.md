@@ -1,6 +1,6 @@
 # Environment: prerequisites, .env files, and the base image
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The laptop needs (deck 01, homework; deck 03, bonus; each has a check in `checks.md`): Docker
 with Compose 2.20+ (`docker`), make, git, uv and Python 3.12 (`tools`), a clone of
@@ -9,15 +9,34 @@ with Compose 2.20+ (`docker`), make, git, uv and Python 3.12 (`tools`), a clone 
 
 ## Fill the platform .env
 
-In the platform folder, `make init-env` (also run by every `make up`): it copies `.env.example`,
-fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`,
-`ADMIN_DB_ENCRYPTION_KEY`, …) without printing it, and shows the LLM profile menu and the hidden key
-prompt while `LLM_CONFIG_PROFILE` or its key is empty (`scripts/init_env.py`). You add by hand:
-`LOCAL_SDK=true` and the `DEEPLYNX_*` lines from your local DeepLynx. Keep `REDIS_URL` and
-`BACKEND_PORT=8600` as they are. There are no `LITELLM_*` values any more.
+In the platform folder, `make up` (or `make init-env`, which starts nothing) first runs
+`scripts/init_env.py`. It:
 
-Two traps: `ADMIN_DB_PASSWORD` is fixed at the first start (a change gives `password
-authentication failed for user "admin"`; restore it, or `make down-v`). A new value makes the
+- copies `.env.example` if there is no `.env`;
+- fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
+  `BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`, …) without printing it;
+- in a terminal, asks a `[Y/n]` question for each of `LOCAL_SDK` and `LOCAL_DEEPLYNX` that `.env` has
+  no line for (Enter writes `true`; a "no" writes `false`, so each is asked once);
+- shows the LLM profile menu and the hidden key prompt while `LLM_CONFIG_PROFILE` or its key is empty.
+
+The Makefile reads `.env` again after the script changed it (its `.env` rule), so that same `make up`
+already sees `LOCAL_SDK` and `LOCAL_DEEPLYNX`.
+
+**The questions need a terminal.** An assistant has none: it creates `.env` without asking, with both
+lines left out, and they stay `false` until the user runs `make up` or `make init-env` in their own
+terminal, which then asks. So for a platform folder without an `.env`, the user creates it there; an
+assistant does not run the first `make up` or `make init-env`.
+
+A line that is in `.env` is never changed or asked about again. To change an answer, set the line by
+hand, after a yes (the commands are in `artifacts.md`, "Local DeepLynx", step 1; the same `sed -i.bak`
+works for `LOCAL_SDK`).
+
+With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make deeplynx-setup`,
+which writes the `DEEPLYNX_*` lines. Keep `REDIS_URL` and `BACKEND_PORT=8600` as they are. There are no
+`LITELLM_*` values any more.
+
+Two traps: `ADMIN_DB_PASSWORD` and `DEEPLYNX_DB_PASSWORD` are fixed at the first start (a change gives
+`password authentication failed for user "admin"`, or DeepLynx's database refuses its server; restore it, or `make down-v`). A new value makes the
 agent copy stale: run `agent-env-sync`, then `make up` in the agent folder.
 
 ## The base image
@@ -29,7 +48,7 @@ base-image` (automatic in `make up`). The backend builds on its own image and ne
 
 ## The pin rule
 
-1. `LOCAL_SDK=true` in the platform `.env` (or the shell) wins: repo `prometheus_api`, tag `local` (`Makefile:19-31`).
+1. `LOCAL_SDK=true` in the platform `.env` (or the shell) wins: repo `prometheus_api`, tag `local` (the `ifeq ($(LOCAL_SDK),true)` block in the platform `Makefile`).
 2. Else an uncommented, non-empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line, else the Makefile `?=` value,
    pulled from `containers.github.inl.gov` (needs `registry-login`).
 

@@ -158,7 +158,7 @@ export function ChatHistoryItem({ conversation, active, onSelect, onRenamed, onD
         <summary className="btn btn-ghost btn-xs btn-square" aria-label="Chat options">
           <MoreVertical size={14} />
         </summary>
-        <ul className="dropdown-content menu menu-sm bg-base-100 border border-base-300 rounded-box z-10 w-32 shadow">
+        <ul className="dropdown-content menu menu-sm menu-panel z-10 w-32">
           <li>
             <button
               onClick={() => {

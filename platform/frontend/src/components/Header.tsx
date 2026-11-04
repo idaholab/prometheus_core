@@ -15,6 +15,7 @@ import { Bell, ChevronDown, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { usePageHeaderOverride } from "../lib/store/pageHeader";
 import { useTheme } from "../lib/useTheme";
 import { useCurrentUser } from "../lib/store/session";
+import { Button } from "@/components/ui/Button";
 
 interface Props {
   /** Active section label. Drives the breadcrumb and page title unless the
@@ -47,10 +48,12 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
   const pageTitle = override?.title ?? crumbs[crumbs.length - 1];
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-base-300 bg-base-200 px-6">
-      <div className="flex flex-col gap-0.5">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-base-300 bg-base-200 px-6">
+      {/* min-w-0 lets a long title truncate on narrow screens instead of
+          wrapping out of the fixed-height bar. */}
+      <div className="flex min-w-0 flex-col gap-0.5">
         <nav aria-label="Breadcrumb">
-          <ol className="flex items-center gap-1 text-[10px] text-base-content/40">
+          <ol className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-[10px] text-base-content/40">
             <li>INL / Prometheus</li>
             {crumbs.map((crumb, i) => {
               const current = i === crumbs.length - 1;
@@ -65,13 +68,13 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
             })}
           </ol>
         </nav>
-        <h1 className="m-0 text-lg font-bold text-base-content">{pageTitle}</h1>
+        <h1 className="m-0 truncate text-lg font-bold text-base-content" title={pageTitle}>
+          {pageTitle}
+        </h1>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button className="btn btn-ghost btn-sm btn-square" aria-label="Notifications">
-          <Bell size={18} />
-        </button>
+      <div className="flex shrink-0 items-center gap-3">
+        <Button variant="ghost" size="sm" icon={<Bell />} ariaLabel="Notifications" tooltipPlacement="bottom" muted={false} />
         <div className="h-6 w-px bg-base-300" />
         <div className="dropdown dropdown-end">
           <div
@@ -96,7 +99,7 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
           </div>
           <ul
             tabIndex={0}
-            className="menu dropdown-content z-10 mt-2 w-48 rounded-box border border-base-300 bg-base-100 p-2 shadow"
+            className="menu menu-panel dropdown-content z-10 mt-2 w-48 p-2"
           >
             <li>
               <button onClick={() => setTheme(nextTheme)}>

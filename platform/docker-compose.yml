@@ -48,7 +48,7 @@ x-host-gateway: &host-gateway
   - "prometheus.host.internal:host-gateway"
 
 x-build-args: &prometheus-api-build-args
-  PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-containers.github.inl.gov/genesis/prometheus_api}
+  PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel}
   PROMETHEUS_API_BASE_IMAGE_HASH: ${PROMETHEUS_API_BASE_IMAGE_HASH:-}
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
