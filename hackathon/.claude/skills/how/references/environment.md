@@ -14,8 +14,11 @@ In the platform folder, `make up` (or `make init-env`, which starts nothing) fir
 questions whose Enter writes `LOCAL_SDK=true` and `LOCAL_DEEPLYNX=true`. It fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`,
 `ADMIN_DB_ENCRYPTION_KEY`, …) without printing it, and shows the LLM profile menu and the hidden key
 prompt while `LLM_CONFIG_PROFILE` or its key is empty. The Makefile reads `.env` again after the
-script changed it (its `.env` rule), so that same `make up` already sees both. An `.env` from before
-is never asked about: there, check both lines and set a missing one by hand, after a yes. With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make
+script changed it (its `.env` rule), so that same `make up` already sees both. **The questions need a
+terminal, and they are asked only when `.env` is created:** an assistant that creates `.env` (it has no
+terminal) leaves both lines `false` for good. So the user creates it, with `make init-env` in their own
+terminal; an assistant never runs the first `make up` or `make init-env` on a platform folder without an
+`.env`. An `.env` from before is never asked about: there, check both lines and set a missing one by hand, after a yes. With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make
 deeplynx-setup`, which writes the `DEEPLYNX_*` lines. Keep `REDIS_URL` and
 `BACKEND_PORT=8600` as they are. There are no `LITELLM_*` values any more.
 

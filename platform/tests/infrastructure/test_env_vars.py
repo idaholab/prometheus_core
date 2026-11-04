@@ -309,8 +309,11 @@ def test_init_env_skips_local_options_set_in_the_environment(tmp_path, env_examp
     assert written["LOCAL_DEEPLYNX"] == "true"
 
 
-def test_init_env_asks_no_local_options_without_a_terminal(tmp_path, env_example_path, monkeypatch):
-    """CI and assistant runs: nothing asked, nothing written, so both keep the Makefile default (false)."""
+def test_init_env_asks_no_local_options_without_a_terminal(tmp_path, env_example_path, monkeypatch, capsys):
+    """CI and assistant runs: nothing asked, nothing written, so both keep the Makefile default (false).
+
+    It says so, since the next run finds .env and never asks.
+    """
     init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
     monkeypatch.setattr(init_env, "interactive", lambda: False)
 
@@ -318,6 +321,37 @@ def test_init_env_asks_no_local_options_without_a_terminal(tmp_path, env_example
     assert asked == []
     written = init_env.values(env.read_text())
     assert "LOCAL_SDK" not in written and "LOCAL_DEEPLYNX" not in written
+    out = capsys.readouterr().out
+    assert "Not asked (no terminal): LOCAL_SDK, LOCAL_DEEPLYNX stay false" in out
+    assert "LOCAL_SDK=true and LOCAL_DEEPLYNX=true" in out
+
+
+def test_init_env_only_names_the_local_options_it_did_not_ask_about(tmp_path, env_example_path, monkeypatch, capsys):
+    """A variable set in the environment is not named; with both set there is nothing to say."""
+    init_env, env, _ = _new_env(tmp_path, env_example_path, monkeypatch, [])
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+    monkeypatch.setenv("LOCAL_SDK", "false")
+
+    assert init_env.main() == 0
+    out = capsys.readouterr().out
+    assert "Not asked (no terminal): LOCAL_DEEPLYNX stay false" in out
+    assert "LOCAL_SDK=true" not in out
+
+    env.unlink()
+    monkeypatch.setenv("LOCAL_DEEPLYNX", "false")
+    assert init_env.main() == 0
+    assert "Not asked" not in capsys.readouterr().out
+
+
+def test_init_env_does_not_repeat_the_no_terminal_hint_for_an_existing_env(
+    tmp_path, env_example_path, monkeypatch, capsys
+):
+    init_env, env, _ = _new_env(tmp_path, env_example_path, monkeypatch, [])
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+    env.write_text(env_example_path.read_text())
+
+    assert init_env.main() == 0
+    assert "Not asked" not in capsys.readouterr().out
 
 
 def test_init_env_leaves_a_complete_env_unwritten(tmp_path, env_example_path, monkeypatch):

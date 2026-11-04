@@ -25,7 +25,8 @@
    the base image from ../sdk (LOCAL_SDK) and whether to run DeepLynx next to
    the platform (LOCAL_DEEPLYNX). Enter means yes. A variable that is set in
    the environment (or on the make command line) is not asked about. An .env
-   that existed before is never changed here.
+   that existed before is never changed here. Without a terminal nothing is
+   asked, and it says so, since the next run no longer asks.
 
 Standard library only, so it runs before anything else is installed. Run from
 anywhere; paths resolve relative to this file.
@@ -269,6 +270,17 @@ def main() -> int:
     if created and interactive():
         print()
         text = prompt_local_options(text)
+    elif created:
+        # Never asked again: the next run finds this .env. Say what to do, so that the
+        # base-image pull (unauthorized) or an agent exiting without DeepLynx is not the
+        # first sign
+        unasked = [var for var, _ in LOCAL_OPTIONS if var not in os.environ]
+        if unasked:
+            print(
+                f"Not asked (no terminal): {', '.join(unasked)} stay false in {ENV.name}.\n"
+                f"Set {' and '.join(f'{v}=true' for v in unasked)} there to build the SDK image locally "
+                "or run DeepLynx locally."
+            )
 
     env = values(text)
     if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):

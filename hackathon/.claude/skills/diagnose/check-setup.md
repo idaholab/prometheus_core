@@ -34,7 +34,9 @@ Show `#`, item, mark, evidence, then one line per FAIL and WARN with its cause. 
 order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
 
 - **Item 6**: ask before a platform `make up` (the first build is long). For blank secrets, offer
-  `make init-env` (`environment.md`, "Fill the platform .env") after its two traps.
+  `make init-env` (`environment.md`, "Fill the platform .env") after its two traps. When the platform
+  folder has no `.env` yet, that is a step for the user's own terminal (the questions for `LOCAL_SDK` and
+  `LOCAL_DEEPLYNX` need one, and are never asked again); do not run it yourself.
 - **The first fix with a secret** (registry login, an LLM key, the generator): a 2-line
   primer (deck 03) and the check question `secrets`, once.
 - **After item 6 passes**: the check question `registry-wipe`, once; offer
