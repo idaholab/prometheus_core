@@ -184,7 +184,7 @@ export function SplitButton({
           aria-label={menuLabel ?? `More ${label} options`}
           onKeyDown={onMenuKeyDown}
           className={[
-            "menu absolute z-20 min-w-full w-max rounded-box border border-base-300 bg-base-100 p-1 shadow",
+            "menu menu-panel absolute z-20 min-w-full w-max p-1",
             placement.up ? "bottom-full mb-1" : "top-full mt-1",
             placement.start ? "right-0" : "left-0",
           ].join(" ")}
@@ -201,7 +201,18 @@ export function SplitButton({
                 aria-disabled={option.disabled || undefined}
                 onClick={() => pick(option)}
                 onMouseEnter={() => !option.disabled && setActive(i)}
-                className="whitespace-nowrap"
+                // The sidebar's active-item style for the highlighted option, a
+                // primary tint with base-content text, so the menu reads as a
+                // pick-one list like the rail. Primary text or a primary focus
+                // ring on it falls below AA contrast on the dark theme (2.5:1),
+                // so text and ring use base-content. DaisyUI's menu sets
+                // outline-style: none on focus, which outline-2 alone doesn't
+                // undo, so keyboard focus sets the style as well
+                className={
+                  option.disabled
+                    ? "whitespace-nowrap"
+                    : "whitespace-nowrap hover:bg-primary/15 hover:text-base-content focus-visible:bg-primary/15 focus-visible:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-base-content"
+                }
               >
                 {option.label}
               </button>
