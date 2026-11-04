@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { Button } from "./Button.tsx";
@@ -224,4 +224,65 @@ test("an enabled option ignores disabledReason", async () => {
   await user.click(arrow());
   expect(screen.queryByText("Not shown")).not.toBeInTheDocument();
   expect(screen.getByRole("menuitem", { name: "Edit the template" })).not.toHaveAccessibleDescription();
+});
+
+test("with no options, the arrow is disabled and its keys open nothing", () => {
+  render(<SplitButton label="Modify Plan" onClick={() => {}} options={[]} />);
+  const arrow = screen.getByRole("button", { name: "More Modify Plan options" });
+  expect(arrow).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Modify Plan" })).toBeEnabled();
+
+  // A disabled button can't be focused or clicked by a person, so fire the
+  // key events at it directly: the guards behind the arrow must still hold
+  fireEvent.keyDown(arrow, { key: "ArrowDown" });
+  fireEvent.keyDown(arrow, { key: "ArrowUp" });
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+});
+
+test("if every option is removed while the menu is open, the keys do nothing", async () => {
+  const user = userEvent.setup();
+  const one: SplitButtonOption[] = [{ label: "Edit the template", onClick: () => {} }];
+  const { rerender } = render(<SplitButton label="Modify Plan" onClick={() => {}} options={one} />);
+  await user.click(screen.getByRole("button", { name: "More Modify Plan options" }));
+  const menu = screen.getByRole("menu");
+
+  rerender(<SplitButton label="Modify Plan" onClick={() => {}} options={[]} />);
+  for (const key of ["ArrowDown", "ArrowUp", "Home", "End"]) fireEvent.keyDown(menu, { key });
+  expect(screen.getByRole("menu")).toBeInTheDocument();
+  expect(screen.queryAllByRole("menuitem")).toEqual([]);
+
+  // The keys left the focused position alone, so when the option comes back
+  // it is the one in the Tab order again
+  rerender(<SplitButton label="Modify Plan" onClick={() => {}} options={one} />);
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).toHaveAttribute("tabindex", "0");
+});
+
+test("if the focused option becomes disabled while the menu is open, the keys move to the enabled ones", async () => {
+  const user = userEvent.setup();
+  const options = (firstDisabled: boolean): SplitButtonOption[] => [
+    { label: "Edit the template", onClick: () => {}, disabled: firstDisabled },
+    { label: "Duplicate plan", onClick: () => {} },
+    { label: "Export plan", onClick: () => {} },
+  ];
+  const { rerender } = render(<SplitButton label="Modify Plan" onClick={() => {}} options={options(false)} />);
+  await user.click(screen.getByRole("button", { name: "More Modify Plan options" }));
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).toHaveFocus();
+
+  // The focused option turns disabled, e.g. after a permission change
+  rerender(<SplitButton label="Modify Plan" onClick={() => {}} options={options(true)} />);
+  await user.keyboard("{ArrowDown}");
+  expect(screen.getByRole("menuitem", { name: "Duplicate plan" })).toHaveFocus();
+
+  rerender(<SplitButton label="Modify Plan" onClick={() => {}} options={options(false)} />);
+  await user.keyboard("{Home}");
+  rerender(<SplitButton label="Modify Plan" onClick={() => {}} options={options(true)} />);
+  await user.keyboard("{ArrowUp}");
+  expect(screen.getByRole("menuitem", { name: "Export plan" })).toHaveFocus();
+});
+
+test("Down on the arrow opens the menu on the first enabled option", async () => {
+  const { user, arrow } = setup([{ label: "Duplicate plan", disabled: true }, { label: "Edit the template" }, { label: "Export plan" }]);
+  arrow().focus();
+  await user.keyboard("{ArrowDown}");
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).toHaveFocus();
 });
