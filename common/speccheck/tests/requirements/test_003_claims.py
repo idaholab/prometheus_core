@@ -157,9 +157,9 @@ def test_a_mark_that_would_stand_for_several_tests_fails(project: Project, sourc
 
 
 def refused_claims(project: Project) -> str:
-    """Four inner tests claiming a malformed, an unknown, a retired and a disallowed ID; return the error."""
+    """Three inner tests claiming a malformed, an unknown and a disallowed ID; return the error."""
     project.write("speccheck.toml", "specs = 'specs'\nid-prefix = 'T'\n[producers.unit]\nspecs = ['002']\n")
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired. Gone.")
+    project.spec("- T-REQ-001-01: One.")
     project.ini(CHECKED)
     project.tests(
         """\
@@ -173,10 +173,6 @@ def refused_claims(project: Project) -> str:
         def test_unknown():
             pass
 
-        @pytest.mark.covers("T-REQ-001-02", "retired")
-        def test_retired():
-            pass
-
         @pytest.mark.covers("T-REQ-001-01", "not allowed")
         def test_not_allowed():
             pass
@@ -187,15 +183,14 @@ def refused_claims(project: Project) -> str:
 
 @pytest.mark.covers(
     "SPC-REQ-003-03",
-    "four inner tests claiming malformed, unknown, retired and disallowed IDs stop collection with one message each, naming the test and the ID",
+    "three inner tests claiming malformed, unknown and disallowed IDs stop collection with one message each, naming the test and the ID",
 )
 def test_a_bad_claim_fails_collection(project: Project):
-    """Malformed, unknown, retired and disallowed IDs each stop the session, naming the test and the ID."""
+    """Malformed, unknown and disallowed IDs each stop the session, naming the test and the ID."""
     err = refused_claims(project)
-    assert "speccheck: 4 claim(s) the spec folder doesn't allow" in err
+    assert "speccheck: 3 claim(s) the spec folder doesn't allow" in err
     assert "test_project.py:3: test_project.py::test_malformed: `T-REQ-1-1`" in err
     assert "test_project.py::test_unknown: T-REQ-001-09" in err
-    assert "test_project.py::test_retired: T-REQ-001-02" in err
     assert "test_project.py::test_not_allowed: T-REQ-001-01" in err
 
 
@@ -215,29 +210,14 @@ def test_the_check_needs_no_results_file(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-003-03",
-    "with the check on, an inner test claiming a requirement of a spec whose status is retired stops collection, naming the test and the ID",
-)
-def test_a_claim_in_a_retired_spec_fails_collection(project: Project):
-    """A requirement is retired when its whole spec is, not only when its bullet says so."""
-    project.spec("- T-REQ-001-01: One.", status="retired")
-    project.ini(CHECKED)
-    project.tests('import pytest\n@pytest.mark.covers("T-REQ-001-01", "it passes")\ndef test_a():\n    pass\n')
-    run = project.pytest()
-    assert run.ret == pytest.ExitCode.USAGE_ERROR
-    assert "test_project.py::test_a: T-REQ-001-01 is retired; claim what replaced it" in run.stderr.str()
-
-
-@pytest.mark.covers(
     "SPC-REQ-003-13",
-    "the four refusal messages show the ID form, the spec to add to, to claim the replacement, and the producers specs key",
+    "the three refusal messages show the ID form, the spec to add to, and the producers specs key",
 )
 def test_a_refused_claim_says_how_to_fix_it(project: Project):
     """Each message ends with what to do about that kind of ID."""
     err = refused_claims(project)
     assert "`T-REQ-1-1` is not an ID of this folder; IDs read like `T-REQ-001-01`" in err
     assert "T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001" in err
-    assert "T-REQ-001-02 is retired; claim what replaced it" in err
     assert "which producer `unit` may not claim; add it to `producers.unit.specs`" in err
 
 
@@ -495,8 +475,8 @@ def test_unconfigured_xfail_xpass_and_errors_are_pytests_own(project: Project):
     "with only a results file asked for, a claim of an ID that no spec has is accepted and written as passed, because claims are not compared with any spec",
 )
 def test_results_only_never_compares_ids_with_a_spec(project: Project):
-    """An unknown ID, a retired one and one a producer may not claim all collect: there is no config to say."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired. Gone.")
+    """An unknown ID, an unimplemented one and one of no form all collect: there is no config to say."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Later. (unimplemented: step 2)")
     project.tests(
         """\
         import pytest
@@ -505,8 +485,8 @@ def test_results_only_never_compares_ids_with_a_spec(project: Project):
         def test_unknown():
             pass
 
-        @pytest.mark.covers("T-REQ-001-02", "an ID that is retired")
-        def test_retired():
+        @pytest.mark.covers("T-REQ-001-02", "an ID that is unimplemented")
+        def test_unimplemented():
             pass
 
         @pytest.mark.covers("NOT-AN-ID", "an ID of no form")
@@ -517,7 +497,7 @@ def test_results_only_never_compares_ids_with_a_spec(project: Project):
     project.pytest("--speccheck-results=r.jsonl").assert_outcomes(passed=3)
     assert outcomes(project, "r.jsonl") == {
         "test_unknown": "passed",
-        "test_retired": "passed",
+        "test_unimplemented": "passed",
         "test_nonsense": "passed",
     }
 
@@ -890,33 +870,31 @@ def test_an_explanation_copying_a_requirement_in_another_spec_fails(project: Pro
 
 @pytest.mark.covers(
     "SPC-REQ-003-09",
-    "an explanation equal to the text of a requirement in a spec whose status is retired is accepted",
+    "an explanation equal to an unimplemented requirement's text without its suffix stops collection, naming that requirement",
 )
-def test_a_retired_specs_requirement_text_is_not_compared(project: Project):
-    """A requirement is retired when its spec is, so its text is free to use."""
-    project.write("specs/000-index.md", "# Index\n\n- [001](001-thing.md)\n- [002](002-old.md)\n")
-    project.spec("- T-REQ-001-01: One.")
-    project.spec("- T-REQ-002-01: The old spec MUST hold.", number="002", name="002-old.md", status="retired")
+def test_an_unimplemented_requirements_text_is_compared_too(project: Project):
+    """Every requirement in the folder counts, and its text is the one without the suffix."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: The cache MUST expire. (unimplemented: step 2)")
     project.ini(CHECKED)
     project.tests(
-        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "The old spec MUST hold.")\ndef test_a():\n    pass\n'
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "The cache MUST expire.")\ndef test_a():\n    pass\n'
     )
-    project.pytest().assert_outcomes(passed=1)
+    assert "the explanation for T-REQ-001-01 is the text of T-REQ-001-02" in usage_error(project)
 
 
 @pytest.mark.covers(
     "SPC-REQ-003-09",
-    "a retired requirement's text is not compared, so an explanation equal to it is accepted",
+    "an explanation that is a requirement's text with an unimplemented suffix added still stops collection, since texts are compared without it",
 )
-def test_a_retired_requirements_text_is_not_compared(project: Project):
-    """Only requirements that aren't retired count."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired: the old file was written here.")
+def test_a_suffix_on_an_explanation_doesnt_hide_a_copy(project: Project):
+    """SPC-REQ-001-10 compares texts without the suffix, an explanation's as much as a requirement's."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: The cache MUST expire.")
     project.ini(CHECKED)
     project.tests(
-        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "Retired: the old file was written here.")\n'
+        'import pytest\n@pytest.mark.covers("T-REQ-001-01", "The cache MUST expire. (unimplemented: x)")\n'
         "def test_a():\n    pass\n"
     )
-    project.pytest().assert_outcomes(passed=1)
+    assert "the explanation for T-REQ-001-01 is the text of T-REQ-001-02" in usage_error(project)
 
 
 @pytest.mark.covers(

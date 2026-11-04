@@ -25,7 +25,7 @@ from tests.requirements.conftest import CONFIG, Project
 )
 def test_which_config_is_used(project: Project):
     """`--config` first, then speccheck.toml, then [tool.speccheck]; none is exit 2 with what to pass."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)")
     project.write("other.toml", 'specs = "specs"\nid-prefix = "OTHER"\n')
     # T-REQ-001-01 is not a bullet in a folder whose prefix is OTHER, so other.toml sees no requirements
     assert project.speccheck("lint", "--config", "other.toml").out == "speccheck lint: 1 specs, 0 requirements\n"
@@ -46,7 +46,7 @@ def test_which_config_is_used(project: Project):
 )
 def test_speccheck_toml_wins_over_pyproject(project: Project):
     """Both exist with different prefixes, so the count of requirements says which one was used."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)")
     project.write("pyproject.toml", '[tool.speccheck]\nspecs = "specs"\nid-prefix = "OTHER"\n')
     assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
     (project.root / "speccheck.toml").unlink()
@@ -73,12 +73,14 @@ def test_a_pyproject_without_a_speccheck_table_is_not_a_config(project: Project)
 )
 def test_paths_are_relative_to_the_config(project: Project):
     """A config in a subfolder finds its spec folder next to it, from anywhere; a missing folder is exit 2."""
-    project.spec("- T-REQ-001-01: Beside the run. ⚠ untested\n- T-REQ-001-02: Beside the run too. ⚠ untested")
+    project.spec(
+        "- T-REQ-001-01: Beside the run. (unimplemented: later)\n- T-REQ-001-02: Beside the run too. (unimplemented: later)"
+    )
     project.write("sub/speccheck.toml", 'specs = "specs"\nid-prefix = "T"\n')
     project.write("sub/specs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
     project.write(
         "sub/specs/001-thing.md",
-        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. ⚠ untested\n",
+        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
     )
     run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
@@ -177,12 +179,14 @@ def test_unknown_keys_name_the_file_and_key(project: Project, extra: str, key: s
 )
 def test_the_specs_folder_is_found_next_to_the_config_not_the_current_folder(project: Project):
     """The folder run from has its own `specs/` with another requirement; only the one beside the config may be read."""
-    project.spec("- T-REQ-001-01: Beside the run. ⚠ untested\n- T-REQ-001-02: Beside the run too. ⚠ untested")
+    project.spec(
+        "- T-REQ-001-01: Beside the run. (unimplemented: later)\n- T-REQ-001-02: Beside the run too. (unimplemented: later)"
+    )
     project.write("sub/speccheck.toml", 'specs = "docs"\nid-prefix = "T"\n')
     project.write("sub/docs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
     project.write(
         "sub/docs/001-thing.md",
-        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. ⚠ untested\n",
+        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
     )
     run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
@@ -215,10 +219,10 @@ def test_the_prefix(project: Project):
         assert run.code == 2 and "`id-prefix` must be capital letters and digits" in run.err, bad
     for good in ("S2", "A1B", "SPC9"):
         project.write("speccheck.toml", f'specs = "specs"\nid-prefix = "{good}"\n')
-        project.spec(f"- {good}-REQ-001-01: Digits are fine. ⚠ untested")
+        project.spec(f"- {good}-REQ-001-01: Digits are fine. (unimplemented: later)")
         assert project.speccheck("lint").code == 0, good
     project.write("speccheck.toml", 'specs = "specs"\nid-prefix = ""\n')
-    project.spec("- REQ-001-01: Bare. ⚠ untested")
+    project.spec("- REQ-001-01: Bare. (unimplemented: later)")
     assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
 
 
@@ -229,7 +233,7 @@ def test_the_prefix(project: Project):
 def test_a_producer_limited_to_some_specs(project: Project):
     """A claim on a spec outside the producer's list is a problem; "all" is the default."""
     project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["002"]'))
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)")
     project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "collected")])
     run = project.speccheck("check", "r.jsonl")
     assert "T-REQ-001-01 is in spec 001, which producer `unit` may not claim" in run.err
@@ -283,7 +287,7 @@ def test_a_producers_list_of_specs(project: Project, specs: str, claimed: str, a
     project.write("specs/000-index.md", "# Index\n\n- [001](001-a.md)\n- [002](002-b.md)\n- [003](003-c.md)\n")
     for number, name in (("001", "001-a.md"), ("002", "002-b.md"), ("003", "003-c.md")):
         # Only the requirement the test claims goes without the marker, so an accepted claim leaves nothing to report
-        marker = "" if f"T-REQ-{number}-01" == claimed else " ⚠ untested"
+        marker = "" if f"T-REQ-{number}-01" == claimed else " (unimplemented: later)"
         project.spec(f"- T-REQ-{number}-01: Spec {number}'s requirement.{marker}", number=number, name=name)
     project.write("speccheck.toml", CONFIG.replace('specs = "all"', f"specs = {specs}"))
     project.results("r.jsonl", "unit", [("t", [claimed], "collected")])

@@ -159,6 +159,7 @@ def test_statuses_json():
             "spec": "001",
             "status": "passed",
             "text": "It.",
+            "reason": None,
             "path": "specs/001-thing.md",
             "line": 7,
             "evidence": [

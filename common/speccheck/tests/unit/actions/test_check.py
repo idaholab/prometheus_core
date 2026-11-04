@@ -44,6 +44,6 @@ def test_a_failed_claim_is_enough(tmp_path: Path):
 
 def test_clean(tmp_path: Path):
     """Exit 0 with the summary line."""
-    ctx = make_ctx(tmp_path, specs_set=make_specs("It. ⚠ untested"))
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It. (unimplemented: later)"))
     assert check.run(ctx, namespace()) == 0
-    assert out(ctx) == "speccheck check: 1 requirement: 1 untested\n"
+    assert out(ctx) == "speccheck check: 1 requirement: 1 unimplemented\n"

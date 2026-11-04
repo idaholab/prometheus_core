@@ -138,7 +138,7 @@ def test_a_ci_job_counts_only_for_its_own_ids(ci_project: Project):
     ci_project.results("p.jsonl", "publish", [("publish", ["T-REQ-001-01", "T-REQ-001-02"], "passed")], kind="ci")
     run = ci_project.speccheck("verify", "p.jsonl", "--json")
     statuses = {r["id"]: r["status"] for r in run.json()["requirements"]}
-    assert statuses == {"T-REQ-001-01": "passed", "T-REQ-001-02": "untested"}
+    assert statuses == {"T-REQ-001-01": "passed", "T-REQ-001-02": "unimplemented"}
     assert "T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it" in [
         p["message"] for p in run.json()["problems"]
     ]
@@ -155,7 +155,7 @@ def test_a_ci_job_counts_only_for_its_own_ids_whatever_the_kind(ci_project: Proj
     requirements = {r["id"]: r for r in run.json()["requirements"]}
     assert requirements["T-REQ-001-01"]["status"] == "passed"
     assert requirements["T-REQ-001-01"]["evidence"][0]["kind"] == "test"
-    assert requirements["T-REQ-001-02"]["status"] == "untested"
+    assert requirements["T-REQ-001-02"]["status"] == "unimplemented"
     assert requirements["T-REQ-001-02"]["evidence"] == []
     assert "T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it" in [
         p["message"] for p in run.json()["problems"]

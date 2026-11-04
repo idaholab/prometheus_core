@@ -40,9 +40,12 @@ def make_spec(number: str = "001", *, status: str = "draft", title: str = "Thing
 def make_requirement(
     spec: specs.Spec, text: str = "It.", *, index: int | None = None, line: int = 0
 ) -> specs.Requirement:
-    """A requirement `T-REQ-<number>-<index>` added to `spec`; its text decides retired, untested and planned."""
+    """A requirement `T-REQ-<number>-<index>` added to `spec`; an `(unimplemented: ...)` suffix on `text` gives its reason."""
     index = len(spec.requirements) + 1 if index is None else index
-    requirement = specs.Requirement(id=f"T-REQ-{spec.number}-{index:02}", spec=spec, line=line or 6 + index, text=text)
+    text, reason = specs.split_suffix(text)
+    requirement = specs.Requirement(
+        id=f"T-REQ-{spec.number}-{index:02}", spec=spec, line=line or 6 + index, text=text, reason=reason
+    )
     spec.requirements.append(requirement)
     return requirement
 

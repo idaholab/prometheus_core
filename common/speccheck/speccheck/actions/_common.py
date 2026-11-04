@@ -158,6 +158,7 @@ def statuses_json(evaluation: Evaluation, root: Path | None = None, repository: 
             "spec": status.requirement.spec.number,
             "status": status.status,
             "text": status.requirement.text,
+            "reason": status.requirement.reason,
             "path": ci.from_root(status.requirement.spec.path, root),
             "line": status.requirement.line,
             "evidence": [evidence_json(item, repository) for item in status.evidence],

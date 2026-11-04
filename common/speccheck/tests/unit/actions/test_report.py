@@ -98,16 +98,16 @@ def evaluation(
 
 
 def test_order_puts_attention_first():
-    """Failed, unclaimed and not run before passed, then retired; ties in spec order."""
+    """Failed, unclaimed and not run before passed, then unimplemented; ties in spec order."""
     statuses = [
-        status("retired", line=1),
+        status("unimplemented", line=1),
         status("passed", line=2),
         status("failed", line=9),
         status("failed", line=3),
         status("not run", line=4),
     ]
     ordered = [(s.status, s.requirement.line) for s in sorted(statuses, key=report._order)]
-    assert ordered == [("failed", 3), ("failed", 9), ("not run", 4), ("passed", 2), ("retired", 1)]
+    assert ordered == [("failed", 3), ("failed", 9), ("not run", 4), ("passed", 2), ("unimplemented", 1)]
 
 
 def test_heading_counts_and_spec_heading():
@@ -123,7 +123,7 @@ def test_the_specs_table():
     one, two = make_spec(title="Spec *format*"), make_spec("002", title="Other")
     by_spec = {
         "001": [evidence.Status(make_requirement(one), "passed"), evidence.Status(make_requirement(one), "failed")],
-        "002": [evidence.Status(make_requirement(two), "untested")],
+        "002": [evidence.Status(make_requirement(two), "unimplemented")],
     }
     assert report._specs_table(by_spec) == [
         "## Specs",
@@ -131,7 +131,7 @@ def test_the_specs_table():
         "| Spec | Requirements | Status |",
         "|---|--:|---|",
         "| [001 Spec \\*format\\*](#001-spec-format) | 2 | ❌ 1 failed, ✅ 1 passed |",
-        "| [002 Other](#002-other) | 1 | ⚠ 1 untested |",
+        "| [002 Other](#002-other) | 1 | 🗓 1 unimplemented |",
         "",
     ]
 
@@ -238,9 +238,9 @@ class TestRequirement:
     def test_text_and_spec_line_in_ci(self):
         """Heading, quoted text, and a link to its line in its spec, from the repository's root."""
         requirement = make_requirement(make_spec(), "It <b>works</b>.", line=12)
-        lines = report._requirement(evidence.Status(requirement, "planned"), LINKS)
+        lines = report._requirement(evidence.Status(requirement, "passed"), LINKS)
         assert lines == [
-            "### T-REQ-001-01 🗓 planned",
+            "### T-REQ-001-01 ✅ passed",
             "",
             "> It \\<b\\>works\\</b\\>.",
             "",
@@ -250,7 +250,7 @@ class TestRequirement:
 
     def test_no_spec_line_outside_ci_or_outside_the_root(self):
         """No commit, or a spec not under the repository's root: no link."""
-        found = evidence.Status(make_requirement(make_spec()), "planned")
+        found = evidence.Status(make_requirement(make_spec()), "passed")
         assert not any(line.startswith("In [") for line in report._requirement(found, report.Links()))
         elsewhere = report.Links(repository=BASE, files=FILES, root=Path("/elsewhere"))
         assert not any(line.startswith("In [") for line in report._requirement(found, elsewhere))
@@ -262,10 +262,40 @@ class TestRequirement:
         unclaimed = evidence.Status(make_requirement(make_spec()), "unclaimed")
         assert report._requirement(unclaimed, report.Links())[-2] == (
             'Not claimed: add `@pytest.mark.covers("T-REQ-001-01", "<how it proves it>")` to a test that '
-            "proves it, or mark it `⚠ untested`."
+            "proves it, or end it with `(unimplemented: <reason>)`."
         )
         claimed = evidence.Status(make_requirement(make_spec()), "passed", [item()])
         assert "#### Test `test_a` in `sub/tests/t.py`" in report._requirement(claimed, report.Links())
+
+
+class TestUnimplemented:
+    """An unimplemented requirement shows its reason, escaped, and its text without the suffix."""
+
+    def unimplemented(self, reason: str = "step *2*") -> evidence.Status:
+        """A status of a requirement marked unimplemented with `reason`."""
+        return evidence.Status(make_requirement(make_spec(), f"It works. (unimplemented: {reason})"), "unimplemented")
+
+    def test_the_section_shows_the_reason_under_the_text(self):
+        """The quote has no suffix, and the reason is its own line."""
+        lines = report._requirement(self.unimplemented(), report.Links())
+        assert lines[:6] == [
+            "### T-REQ-001-01 🗓 unimplemented",
+            "",
+            "> It works.",
+            "",
+            "**Unimplemented:** step \\*2\\*",
+            "",
+        ]
+
+    def test_the_status_table_shows_the_reason(self):
+        """Beside the status, escaped like any cell."""
+        row = [line for line in report._spec("001", [self.unimplemented("a|b")], report.Links()) if "T-REQ" in line][0]
+        assert row == "| [T-REQ-001-01](#t-req-001-01--unimplemented) | 🗓 unimplemented: a\\|b |"
+
+    def test_an_implemented_requirement_shows_no_reason(self):
+        """No line for a reason it doesn't have."""
+        lines = report._requirement(evidence.Status(make_requirement(make_spec()), "passed"), report.Links())
+        assert not any(line.startswith("**Unimplemented:**") for line in lines)
 
 
 class TestSpec:
@@ -337,16 +367,22 @@ class TestFull:
         spec = make_spec(title="The thing")
         passed = evidence.Status(make_requirement(spec, "Passes."), "passed")
         unclaimed = evidence.Status(make_requirement(spec, "Nobody."), "unclaimed")
-        other = evidence.Status(make_requirement(make_spec("002", title="Other")), "planned")
+        other = evidence.Status(
+            make_requirement(make_spec("002", title="Other"), "Later. (unimplemented: step 2)"), "unimplemented"
+        )
         text = report.full("Title*", evaluation(passed, unclaimed, other, problems=[Problem("p", 1, "m`x")]))
         lines = text.splitlines()
-        assert lines[:5] == ["# Title\\*", "", "3 requirements: 1 unclaimed, 1 passed, 1 planned", "", lines[4]]
-        assert lines[4] == "❌ unclaimed: 1 · ✅ passed: 1 · 🗓 planned: 1"
+        assert lines[:5] == ["# Title\\*", "", "3 requirements: 1 unclaimed, 1 passed, 1 unimplemented", "", lines[4]]
+        assert lines[4] == "❌ unclaimed: 1 · ✅ passed: 1 · 🗓 unimplemented: 1"
         assert "## Problems (1)\n\n- `p:1: mx`\n" in text
         heads = [line for line in lines if line.startswith("## ")]
         assert heads == ["## Problems (1)", "## Specs", "## 001 The thing", "## 002 Other", "## Inputs"]
         sections = [line for line in lines if line.startswith("### ")]
-        assert sections == ["### T-REQ-001-01 ✅ passed", "### T-REQ-001-02 ❌ unclaimed", "### T-REQ-002-01 🗓 planned"]
+        assert sections == [
+            "### T-REQ-001-01 ✅ passed",
+            "### T-REQ-001-02 ❌ unclaimed",
+            "### T-REQ-002-01 🗓 unimplemented",
+        ]
 
     def test_a_problem_line_is_kept_to_the_limit(self):
         """A line is cut at MAX_PROBLEM with a mark; one that fits is whole. A longest test ID plus its fix fits."""

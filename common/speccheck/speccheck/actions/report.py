@@ -31,7 +31,7 @@ from speccheck.claims import MAX_HOW
 from speccheck.context import Context
 from speccheck.evidence import Evaluation, Evidence, Status
 from speccheck.markdown import anchor, code, prose, safe_url, source_url
-from speccheck.specs import UNTESTED, plain
+from speccheck.specs import UNIMPLEMENTED_EXAMPLE, plain
 
 NAME = "report"
 """The command name."""
@@ -52,9 +52,7 @@ ICONS = {
     evidence.UNCLAIMED: "❌",
     evidence.NOT_RUN: "⏸",
     evidence.CLAIMED: "☑",
-    evidence.PLANNED: "🗓",
-    evidence.UNTESTED_STATUS: "⚠",
-    evidence.RETIRED: "—",
+    evidence.UNIMPLEMENTED: "🗓",
 }
 """One mark per status, beside its name."""
 OUTCOMES = ("failed", "error", "xpassed", "xfailed", "skipped", "deselected", "collected", "passed")
@@ -158,6 +156,8 @@ def _requirement(status: Status, links: Links) -> list[str]:
     """One requirement's section: heading, full text, its spec line, then its claims or what it lacks."""
     requirement = status.requirement
     lines = [f"### {_heading(status)}", "", f"> {prose(requirement.text, None, line_start=True)}", ""]
+    if requirement.unimplemented:
+        lines += [f"**Unimplemented:** {prose(requirement.reason, None)}", ""]
     path = ci.from_root(requirement.spec.path, links.root)
     url = source_url(links.files, path, requirement.line)
     if url:
@@ -168,7 +168,10 @@ def _requirement(status: Status, links: Links) -> list[str]:
         lines += [f"Waiting on: {', '.join(prose(name) for name in status.waiting_on)}", ""]
     elif status.status == evidence.UNCLAIMED:
         marker = f'@pytest.mark.covers("{requirement.id}", "<how it proves it>")'
-        lines += [f"Not claimed: add `{marker}` to a test that proves it, or mark it `{UNTESTED}`.", ""]
+        lines += [
+            f"Not claimed: add `{marker}` to a test that proves it, or end it with `{UNIMPLEMENTED_EXAMPLE}`.",
+            "",
+        ]
     return lines
 
 
@@ -181,7 +184,10 @@ def _spec(number: str, statuses: list[Status], links: Links) -> list[str]:
     lines += ["| Requirement | Status |", "|---|---|"]
     for status in sorted(statuses, key=_order):
         heading = _heading(status)
-        lines.append(f"| [{status.requirement.id}](#{anchor(heading)}) | {ICONS[status.status]} {status.status} |")
+        cell = f"{ICONS[status.status]} {status.status}"
+        if status.status == evidence.UNIMPLEMENTED:
+            cell += f": {prose(status.requirement.reason)}"
+        lines.append(f"| [{status.requirement.id}](#{anchor(heading)}) | {cell} |")
     lines.append("")
     for status in statuses:
         lines += _requirement(status, links)

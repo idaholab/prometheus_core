@@ -69,12 +69,13 @@ The `greet` command says hello.
 - GRT-REQ-001-02: `greet` with no name MUST exit 2 and say a name is needed.
 ```
 
-- The first line is `# NNN - Name`, and one `status:` line (`draft`, `implemented` or `retired`)
-  comes before the first `##`.
+- The first line is `# NNN - Name`, and one `status:` line (`draft` or `implemented`) comes before
+  the first `##`.
 - A requirement is a bullet `- <prefix>-REQ-NNN-XX: text` (or `BEH` for behaviour), where `NNN` is
   the spec's number. It may wrap onto lines indented two spaces.
-- A requirement with no test yet says so with `⚠ untested`, one a later plan step delivers with
-  `(planned: <step>)`, and one that's gone starts `Retired.`. None of these needs a claim.
+- A requirement is implemented, so a test must claim it, or it ends with
+  `(unimplemented: <reason>)`, such as `(unimplemented: plan step 3)`, and needs no claim until
+  it is done. The reason is required. There is no "untested": behaviour that exists gets a test.
 
 The full rules are in "Reference", "Spec format".
 
@@ -168,7 +169,7 @@ speccheck check .speccheck/
 With one requirement claimed and one not:
 
 ```text
-specs/001-greeting.md:12: GRT-REQ-001-02 is not claimed; add `@pytest.mark.covers("GRT-REQ-001-02", "<how it proves it>")` to a test that proves it, or mark it `⚠ untested` in the spec
+specs/001-greeting.md:12: GRT-REQ-001-02 is not claimed; add `@pytest.mark.covers("GRT-REQ-001-02", "<how it proves it>")` to a test that proves it, or end it with `(unimplemented: <reason>)` in the spec if a plan delivers it later
 speccheck check: 2 requirements: 1 unclaimed, 1 claimed; reported: greeter-tests; 1 problem
 ```
 
@@ -320,7 +321,8 @@ And at the end of the workflow, which needs `actions: read` and `contents: read`
 ### Reading the report and the step summary
 
 **The report** (`report.md` in the `speccheck-report` artifact) has a table of the specs, then per
-spec its Purpose and a status table, then a section per requirement: its full text, a link to its
+spec its Purpose and a status table, then a section per requirement: its full text (without the
+unimplemented suffix, whose reason is shown beside the status and under the text), a link to its
 line in the spec, and a subsection per claiming test or job, with how it proves the requirement
 and one line per job that ran it, by the job's display name. In CI, requirements and tests link to
 their lines at the commit the run tested. `report.json` holds the same data.
@@ -341,11 +343,11 @@ nothing else. On a pass it is the line alone:
 | `passed` | at least one claiming result passed (one is enough, in any producer or job) | no |
 | `failed` | claimed, and no claiming result passed: failed, error, skipped, xfailed, xpassed, deselected or collected | `verify` |
 | `not run` | claimed only by producers that didn't report in these inputs; or, in `verify`, claimed by nothing while a test producer that may claim it hasn't reported | `verify --complete` |
-| `unclaimed` | nothing claims it, and it isn't planned, untested or retired. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
+| `unclaimed` | nothing claims it, and it isn't unimplemented. In `verify`, only once every test producer that may claim it has reported | `check`, `verify` |
 | `claimed` | (`check` only) claimed; outcomes aren't looked at | no |
-| `planned`, `untested`, `retired` | the spec says so, and nothing claims it | no |
+| `unimplemented` | the spec ends it with `(unimplemented: <reason>)`, and nothing claims it | no |
 
-A planned or untested requirement that is claimed is a problem: remove the marker.
+An unimplemented requirement that is claimed is a problem: remove the suffix.
 
 ### Adopting it in a project
 
@@ -409,7 +411,7 @@ The details. The source of truth is speccheck's own specs, in [`specs/`](specs/0
 | Command | Reads | Fails (exit 1) when |
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format |
-| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't planned, untested or retired has no claim; a claim names a malformed, unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
+| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't unimplemented has no claim; a claim names a malformed or unknown ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
 | `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
 | `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
@@ -442,9 +444,9 @@ With `--json`, stdout is exactly one object, on every exit path:
   "command": "verify",
   "ok": false,
   "problems": [{"path": "specs/002-config.md", "line": 18, "message": "SPC-REQ-002-04 has no passing result: ...", "code": "failed"}],
-  "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "planned": 0, "untested": 0, "retired": 0},
+  "counts": {"failed": 1, "unclaimed": 0, "not run": 0, "claimed": 0, "passed": 57, "unimplemented": 0},
   "requirements": [
-    {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "waiting_on": [],
+    {"id": "SPC-REQ-002-04", "spec": "002", "status": "failed", "text": "...", "reason": null, "waiting_on": [],
      "evidence": [{"test": "tests/requirements/test_002_config.py::test_the_prefix", "kind": "test", "file": "tests/requirements/test_002_config.py", "line": 70,
                    "root": "common/speccheck", "outcome": "failed", "producer": "speccheck-requirements", "job": "requirements",
                    "job_name": "speccheck: requirements python 3.12", "url": "https://..."}],
@@ -465,6 +467,8 @@ With `--json`, stdout is exactly one object, on every exit path:
   command ran in, so it opens from there. `requirements[].path` is from the repository's root, for
   links, and is `null` outside a git repository. To match a problem to its requirement, use the
   ID in the message, or `requirements[].id`, not the paths.
+- `requirements[].text` is the requirement's text without its unimplemented suffix, and `reason` is
+  the suffix's reason, or `null` when it has none.
 - Fields are only added within a `schema_version`.
 
 #### Problem codes
@@ -477,12 +481,12 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `bullet-wrong-spec` | an ID's number isn't its spec's |
 | `id-duplicate` | an ID appears twice in the folder |
 | `text-duplicate` | two requirements have the same text |
-| `marker-conflict` | a requirement is both `⚠ untested` and `(planned: ...)` |
+| `reason-missing` | a requirement ends with `(unimplemented)` or an empty reason |
 | `spec-file-name` | a file in the folder isn't `NNN-short-name.md` |
 | `spec-title` | a spec's first line isn't `# NNN - <name>` |
 | `spec-empty` | an `implemented` spec has no requirements |
 | `status-missing` | a spec has no `status:` line |
-| `status-invalid` | the `status:` isn't `draft`, `implemented` or `retired` |
+| `status-invalid` | the `status:` isn't `draft` or `implemented` |
 | `status-repeated` | a spec has a second `status:` line |
 | `index-missing` | `require-index` is on and there's no `000-index.md` |
 | `index-link-missing` | the index doesn't link a spec |
@@ -491,9 +495,8 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `unclaimed` | nothing claims a requirement that should be |
 | `failed` | every result that claims a requirement failed, errored, was skipped or didn't run |
 | `not-run` | with `--complete`, the producers that may claim a requirement didn't report |
-| `untested-marker-stale` | a requirement marked `⚠ untested` is claimed; remove the marker |
-| `planned-marker-stale` | a requirement marked `(planned: ...)` is claimed; remove the marker |
-| `claim-invalid` | a result claims an ID that is malformed, unknown, retired, or not the producer's to claim |
+| `unimplemented-stale` | a requirement marked `(unimplemented: ...)` is claimed; remove the suffix |
+| `claim-invalid` | a result claims an ID that is malformed, unknown, or not the producer's to claim |
 | `config-claim-invalid` | a `[ci.<job>] covers` entry claims an ID like that |
 | `how-duplicate` | two claims give the same explanation |
 | `producer-undeclared` | a results file comes from a producer the config doesn't declare |
@@ -516,7 +519,7 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
 - **Files.** `NNN-short-name.md`, whose first line is `# NNN - Name`. Any other `.md` file in the
   folder is a problem. With `require-index` (the default), `000-index.md` must link every spec as a
   markdown link, such as `[004](004-results-files.md)`; a mention in prose doesn't count.
-- **Header.** One `status:` line above the first `##`: `draft`, `implemented` or `retired`. An
+- **Header.** One `status:` line above the first `##`: `draft` or `implemented`. An
   `implemented` spec needs at least one requirement; a `draft` spec's requirements are checked
   like an `implemented` spec's.
   Other header lines (`sources:`, `depends-on:`) are free text.
@@ -526,12 +529,12 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
   spec's number. The prefix comes from the config, or is absent when `id-prefix = ""`. A bullet may
   wrap onto lines indented two spaces. A line that starts like an ID in any other form (`*`, bold,
   nested, missing prefix) is a problem, so it can't go unseen.
-- **Unique.** IDs are unique across the folder, and so is the text of every requirement that isn't
-  retired (compared ignoring case, whitespace and a trailing full stop).
-- **Markers**, anywhere in the bullet's text: `⚠ untested` (no test yet, on purpose) or
-  `(planned: <step>)` (a later plan step delivers it). Never both. Text starting `Retired.` or
-  `Retired:`, or a `retired` spec, retires a requirement. A retired ID stays in the spec and must
-  not be claimed.
+- **Unique.** IDs are unique across the folder, and so is the text of every requirement (compared
+  without the unimplemented suffix, ignoring case, whitespace and a trailing full stop).
+- **Unimplemented.** A requirement whose text ends with `(unimplemented: <reason>)` needs no claim
+  yet; the reason, such as a plan step, is required. A full stop may come before or after the
+  suffix, and it may wrap with the bullet. Anywhere else in the text it is ordinary text, as is
+  any other trailing `(word: ...)`. Remove the suffix when a test claims the requirement.
 - Fenced code blocks are skipped.
 
 ### Config
@@ -575,7 +578,7 @@ When the plugin is configured (`speccheck_config` is set, or the run asks for a 
   1000 characters, the ID itself, or a placeholder (`TODO`, `TBD`, `FIXME`, `...`, `-`);
 - on a test that claims one ID twice, and on two claims in the session with the same explanation.
 
-With `speccheck_config` set it also fails on a malformed, unknown or retired ID, on one the
+With `speccheck_config` set it also fails on a malformed or unknown ID, on one the
 producer may not claim, on an explanation that is the text of any requirement in the folder, and
 when no producer is set (`SPECCHECK_PRODUCER` or `speccheck_producer`), rather than skip the
 which-specs check. With only a results file asked for, just the checks that need no specs run.

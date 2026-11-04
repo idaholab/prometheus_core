@@ -166,37 +166,27 @@ def test_prose_does_not_list_a_spec(project: Project, prose: str):
         pytest.param(
             status,
             marks=pytest.mark.covers(
-                "SPC-REQ-001-03", f"a spec with status {status} and one untested requirement lints clean"
+                "SPC-REQ-001-03", f"a spec with status {status} and one unimplemented requirement lints clean"
             ),
             id=status,
         )
-        for status in ("draft", "implemented", "retired")
+        for status in ("draft", "implemented")
     ],
 )
 def test_each_status_value_is_accepted(project: Project, status: str):
-    """All three values are valid."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested", status=status)
+    """Both values are valid."""
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)", status=status)
     run = project.speccheck("lint")
     assert run.code == 0 and run.err == "", run.err
 
 
-@pytest.mark.parametrize(
-    "status",
-    [
-        pytest.param(
-            status,
-            marks=pytest.mark.covers(
-                "SPC-REQ-001-03",
-                f"a {status} spec with an empty Requirements section lints clean, exit 0 and no output",
-            ),
-            id=status,
-        )
-        for status in ("draft", "retired")
-    ],
+@pytest.mark.covers(
+    "SPC-REQ-001-03",
+    "a draft spec with an empty Requirements section lints clean, exit 0 and no output",
 )
-def test_only_an_implemented_spec_needs_a_requirement(project: Project, status: str):
+def test_only_an_implemented_spec_needs_a_requirement(project: Project):
     """The "at least one requirement" rule is for `implemented` alone."""
-    project.spec("", status=status)
+    project.spec("", status="draft")
     run = project.speccheck("lint", "--json")
     assert run.code == 0 and run.json()["problems"] == []
     assert project.speccheck("lint").err == ""
@@ -209,7 +199,8 @@ def test_only_an_implemented_spec_needs_a_requirement(project: Project, status: 
 def test_a_status_below_the_first_section_does_not_count(project: Project):
     """The line must be above the first `##`."""
     project.write(
-        "specs/001-thing.md", "# 001 - Thing\n\n## Requirements\n\nstatus: draft\n\n- T-REQ-001-01: One. ⚠ untested\n"
+        "specs/001-thing.md",
+        "# 001 - Thing\n\n## Requirements\n\nstatus: draft\n\n- T-REQ-001-01: One. (unimplemented: later)\n",
     )
     run = project.speccheck("lint")
     assert run.code == 1 and "specs/001-thing.md: missing the `status:` line" in run.err
@@ -238,7 +229,7 @@ def test_the_status_line(project: Project):
     """Missing, unknown, repeated, and implemented with nothing in it, are all problems."""
     project.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: done\nstatus: draft\n")
     run = project.speccheck("lint")
-    assert "specs/001-thing.md:3: status must be one of draft, implemented, retired" in run.err
+    assert "specs/001-thing.md:3: status must be one of draft, implemented" in run.err
     assert "specs/001-thing.md:4: a second `status:` line; a spec has one" in run.err
     project.spec("", status="implemented")
     assert "specs/001-thing.md: an implemented spec needs at least one requirement" in project.speccheck("lint").err
@@ -253,7 +244,7 @@ def test_the_status_line(project: Project):
 def test_bullets_in_any_other_form_are_reported(project: Project):
     """Star, bold, nested, unprefixed and wrongly numbered bullets each get a problem with the form to write."""
     project.spec(
-        "- T-REQ-001-01: Good. ⚠ untested\n* T-REQ-001-02: Star.\n- **T-REQ-001-03**: Bold.\n"
+        "- T-REQ-001-01: Good. (unimplemented: later)\n* T-REQ-001-02: Star.\n- **T-REQ-001-03**: Bold.\n"
         "  - T-REQ-001-04: Nested.\n- REQ-001-05: No prefix.\n- T-REQ-002-01: Wrong spec."
     )
     run = project.speccheck("lint")
@@ -268,7 +259,7 @@ def test_bullets_in_any_other_form_are_reported(project: Project):
 )
 def test_a_wrong_spec_number_is_one_coded_problem_at_its_line(project: Project):
     """The ID of spec 002 on line 8 of spec 001: the code, the line and the message are all pinned."""
-    project.spec("- T-REQ-001-01: Good. ⚠ untested\n- T-REQ-002-01: Wrong spec. ⚠ untested")
+    project.spec("- T-REQ-001-01: Good. (unimplemented: later)\n- T-REQ-002-01: Wrong spec. (unimplemented: later)")
     run = project.speccheck("lint", "--json")
     [problem] = run.json()["problems"]
     assert run.code == 1
@@ -298,7 +289,7 @@ def test_a_wrong_spec_number_is_one_coded_problem_at_its_line(project: Project):
 )
 def test_a_plus_bullet_and_an_empty_one_are_malformed(project: Project, bullet: str):
     """Both are close to `- T-REQ-NNN-XX: text` but are not it, so each is a coded problem on line 8."""
-    project.spec(f"- T-REQ-001-01: Good. ⚠ untested\n{bullet}")
+    project.spec(f"- T-REQ-001-01: Good. (unimplemented: later)\n{bullet}")
     run = project.speccheck("lint", "--json")
     [problem] = run.json()["problems"]
     assert (problem["code"], problem["line"]) == ("bullet-malformed", 8)
@@ -310,7 +301,7 @@ def test_a_plus_bullet_and_an_empty_one_are_malformed(project: Project, bullet: 
 )
 def test_a_beh_bullet_is_a_requirement(project: Project):
     """BEH is the other form, beside REQ."""
-    project.spec("- T-BEH-001-01: It behaves. ⚠ untested")
+    project.spec("- T-BEH-001-01: It behaves. (unimplemented: later)")
     run = project.speccheck("check", "--json")
     assert run.json()["problems"] == []
     assert [r["id"] for r in run.json()["requirements"]] == ["T-BEH-001-01"]
@@ -371,7 +362,7 @@ def test_a_beh_bullet_is_a_requirement(project: Project):
 )
 def test_each_malformed_bullet_is_named_at_its_line(project: Project, bullet: str, detail: str):
     """One bad bullet after a good one: its own line number, the form to write, and what is wrong with it."""
-    project.spec(f"- T-REQ-001-01: Good. ⚠ untested\n{bullet}")
+    project.spec(f"- T-REQ-001-01: Good. (unimplemented: later)\n{bullet}")
     run = project.speccheck("lint", "--json")
     [problem] = run.json()["problems"]
     assert (problem["code"], problem["line"]) == ("bullet-malformed", 8)
@@ -385,168 +376,179 @@ def test_each_malformed_bullet_is_named_at_its_line(project: Project, bullet: st
 def test_ids_are_unique(project: Project):
     """The second use of an ID points at the first."""
     project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
-    project.write("specs/002-other.md", spec("- T-REQ-001-01: Again. ⚠ untested", number="002"))
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)")
+    project.write("specs/002-other.md", spec("- T-REQ-001-01: Again. (unimplemented: later)", number="002"))
     run = project.speccheck("lint")
     assert "specs/002-other.md:7: T-REQ-001-01 is also at specs/001-thing.md:7; IDs are unique" in run.err.splitlines()
 
 
+def requirement_json(project: Project) -> dict:
+    """The first requirement of a `check --json` run."""
+    return project.speccheck("check", "--json").json()["requirements"][0]
+
+
 @pytest.mark.covers(
     "SPC-REQ-001-06",
-    "the untested and planned markers count on a wrapped second line, and a bullet carrying both is a problem",
+    "a bullet wrapped over three indented lines is read as one text, each line joined with one space",
 )
-def test_markers_on_continuation_lines(project: Project):
-    """A marker on a wrapped line counts, and both markers on one bullet is a problem."""
-    project.spec(
-        "- T-REQ-001-01: It MUST work\n  for a long while. ⚠ untested\n"
-        "- T-REQ-001-02: Later\n  (planned: step 2)\n- T-REQ-001-03: Both. (planned: step 2) ⚠ untested"
-    )
-    run = project.speccheck("check", "--json")
-    statuses = {r["id"]: r["status"] for r in run.json()["requirements"]}
-    assert statuses == {"T-REQ-001-01": "untested", "T-REQ-001-02": "planned", "T-REQ-001-03": "planned"}
-    assert [p["message"] for p in run.json()["problems"]] == [
-        "T-REQ-001-03 is both planned and untested; keep one marker"
-    ]
+def test_a_wrapped_bullet_is_one_text(project: Project):
+    """The joined text is what check reports, with one space at each join."""
+    project.spec("- T-REQ-001-01: It MUST work\n  for a long\n  while.")
+    assert requirement_json(project)["text"] == "It MUST work for a long while."
 
 
 @pytest.mark.parametrize(
     "body",
     [
         pytest.param(
-            "- T-REQ-001-01: It MUST work.\n(planned: step 2)",
-            marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "a (planned: ...) marker on an unindented line after the bullet does not count"
-            ),
-            id="unindented-planned",
+            "- T-REQ-001-01: It MUST work.\nmore text",
+            marks=pytest.mark.covers("SPC-REQ-001-06", "an unindented line after a bullet is not joined to its text"),
+            id="unindented",
         ),
         pytest.param(
-            "- T-REQ-001-01: It MUST work.\n⚠ untested",
+            "- T-REQ-001-01: It MUST work.\n more text",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "an untested marker on an unindented line after the bullet does not count"
-            ),
-            id="unindented-untested",
-        ),
-        pytest.param(
-            "- T-REQ-001-01: It MUST work.\n y ⚠ untested",
-            marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "an untested marker on a line indented by one space does not count"
+                "SPC-REQ-001-06", "a line indented by one space after a bullet is not joined to its text"
             ),
             id="one-space",
         ),
         pytest.param(
-            "- T-REQ-001-01: It MUST work.\n\n  more ⚠ untested",
+            "- T-REQ-001-01: It MUST work.\n\n  more text",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "an untested marker on an indented line after a blank line does not count"
+                "SPC-REQ-001-06", "an indented line after a blank line is not joined to the bullet's text"
             ),
             id="after-a-blank-line",
         ),
     ],
 )
-def test_a_marker_that_is_not_in_the_bullet_does_not_count(project: Project, body: str):
-    """Only the bullet's own text counts: its line and the two-space-indented lines straight after it."""
+def test_a_line_that_is_not_a_continuation_is_not_joined(project: Project, body: str):
+    """Only the two-space-indented lines straight after the bullet are its text."""
     project.spec(body)
-    run = project.speccheck("check", "--json")
-    assert run.json()["requirements"][0]["status"] == "unclaimed"
+    assert requirement_json(project)["text"] == "It MUST work."
 
 
 @pytest.mark.parametrize(
-    ("body", "status"),
+    ("body", "text", "reason"),
     [
         pytest.param(
-            "- T-REQ-001-01: It MUST work (planned:\n  step 2)",
-            "planned",
+            "- T-REQ-001-01: It works. (unimplemented: plan step 2)",
+            "It works.",
+            "plan step 2",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "a (planned: ...) marker wrapped across two indented lines still counts"
+                "SPC-REQ-001-07", "a suffix after the full stop makes the requirement unimplemented with its reason"
             ),
-            id="wrapped-planned",
+            id="stop-before",
         ),
         pytest.param(
-            "- T-REQ-001-01: It MUST work ⚠\n  untested",
-            "untested",
+            "- T-REQ-001-01: It works (unimplemented: plan step 2).",
+            "It works",
+            "plan step 2",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-06", "the untested marker wrapped across two indented lines still counts"
+                "SPC-REQ-001-07", "a suffix followed by a full stop still counts, and the stop goes with it"
             ),
-            id="wrapped-untested",
+            id="stop-after",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works (unimplemented:   plan step 2  )",
+            "It works",
+            "plan step 2",
+            marks=pytest.mark.covers("SPC-REQ-001-07", "the reason is trimmed of the spaces around it"),
+            id="trimmed",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works. (unimplemented: plan\n  step 2)",
+            "It works.",
+            "plan step 2",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "a suffix wrapped onto the next indented line is read from the joined text"
+            ),
+            id="wrapped",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works. (unimplemented: see (b))",
+            "It works.",
+            "see (b)",
+            marks=pytest.mark.covers("SPC-REQ-001-07", "a reason holding parentheses is kept whole"),
+            id="parentheses",
         ),
     ],
 )
-def test_a_marker_wrapped_over_lines_still_counts(project: Project, body: str, status: str):
-    """The continuation lines are joined into the bullet's one text, so a wrap inside a marker doesn't break it."""
+def test_the_unimplemented_suffix(project: Project, body: str, text: str, reason: str):
+    """check shows the status, the text without the suffix, and the reason, and passes: nothing needs claiming."""
     project.spec(body)
-    assert project.speccheck("check", "--json").json()["requirements"][0]["status"] == status
-
-
-@pytest.mark.covers(
-    "SPC-REQ-001-06",
-    "a marker on the third of three indented lines of a bullet counts",
-)
-def test_a_marker_on_a_later_continuation_line_counts(project: Project):
-    """Wherever it is in the continued text."""
-    project.spec("- T-REQ-001-01: It MUST work\n  for a long\n  while ⚠ untested")
-    assert project.speccheck("check", "--json").json()["requirements"][0]["status"] == "untested"
+    run = project.speccheck("check", "--json")
+    found = run.json()["requirements"][0]
+    assert (found["status"], found["text"], found["reason"]) == ("unimplemented", text, reason)
+    assert run.code == 0, run.err
 
 
 @pytest.mark.parametrize(
-    ("body", "status"),
+    "body",
     [
         pytest.param(
-            "- T-REQ-001-01: Is Retired. later",
-            "unclaimed",
-            marks=pytest.mark.covers(
-                "SPC-REQ-001-07", "`Retired.` in the middle of a bullet's text does not retire it"
-            ),
+            "- T-REQ-001-01: It (unimplemented: step 2) works.",
+            marks=pytest.mark.covers("SPC-REQ-001-07", "the suffix in the middle of the text does not count"),
             id="mid-text",
         ),
         pytest.param(
-            "- T-REQ-001-01: It was\n  Retired. long ago",
-            "unclaimed",
+            "- T-REQ-001-01: It works. (unimplemented: step 2) Really.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-07", "`Retired.` at the start of a continuation line does not retire the bullet"
+                "SPC-REQ-001-07", "the suffix followed by another sentence is not at the end, so it does not count"
             ),
-            id="continuation-line",
+            id="text-after",
         ),
         pytest.param(
-            "- T-REQ-001-01: retired. lower case",
-            "unclaimed",
-            marks=pytest.mark.covers("SPC-REQ-001-07", "a lower-case `retired.` start does not retire the bullet"),
-            id="lower-case",
+            "- T-REQ-001-01: It works. (Unimplemented: step 2)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "a capitalised `Unimplemented` is not the suffix, so the requirement needs a claim"
+            ),
+            id="capital",
         ),
         pytest.param(
-            "- T-REQ-001-01: Retirement of the old file.",
-            "unclaimed",
-            marks=pytest.mark.covers("SPC-REQ-001-07", "a text starting with `Retirement` does not retire the bullet"),
-            id="retirement",
-        ),
-        pytest.param(
-            "- T-REQ-001-01: Retired.",
-            "retired",
-            marks=pytest.mark.covers("SPC-REQ-001-07", "a text of just `Retired.` retires the bullet"),
-            id="just-retired",
+            "- T-REQ-001-01: It waits 30 seconds (default: 30s)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "another word in the same trailing form, such as `(default: 30s)`, is ordinary text"
+            ),
+            id="other-word",
         ),
     ],
 )
-def test_retired_only_at_the_start(project: Project, body: str, status: str):
-    """The marker is at the start of the bullet's own text, with a full stop or a colon right after it."""
+def test_the_suffix_counts_only_at_the_end(project: Project, body: str):
+    """Anywhere else it is text: the requirement is unclaimed, its text kept whole, with no reason."""
     project.spec(body)
-    assert project.speccheck("check", "--json").json()["requirements"][0]["status"] == status
+    found = requirement_json(project)
+    assert (found["status"], found["reason"]) == ("unclaimed", None)
+    assert found["text"] == body.split(": ", 1)[1]
 
 
-@pytest.mark.covers(
-    "SPC-REQ-001-07",
-    "check shows `Retired.` and `Retired:` bullets and every bullet of a retired spec as retired, while `Retired later.` stays unclaimed",
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        pytest.param(
+            "(unimplemented)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "lint reports `(unimplemented)` with no reason at the bullet's line, saying to add one",
+            ),
+            id="bare",
+        ),
+        pytest.param(
+            "(unimplemented:  )",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "lint reports a suffix whose reason is only spaces as having no reason"
+            ),
+            id="blank",
+        ),
+    ],
 )
-def test_retired_requirements(project: Project):
-    """`Retired.` and `Retired:` retire a bullet, other wording doesn't, and a retired spec retires all of it."""
-    project.write("specs/000-index.md", INDEX + "- [002](002-old.md)\n")
-    project.spec("- T-REQ-001-01: Retired. Gone.\n- T-REQ-001-02: Retired: gone.\n- T-REQ-001-03: Retired later.")
-    project.write("specs/002-old.md", spec("- T-REQ-002-01: It did.", status="retired", number="002"))
-    statuses = {r["id"]: r["status"] for r in project.speccheck("check", "--json").json()["requirements"]}
-    assert statuses == {
-        "T-REQ-001-01": "retired",
-        "T-REQ-001-02": "retired",
-        "T-REQ-001-03": "unclaimed",
-        "T-REQ-002-01": "retired",
-    }
+def test_the_reason_is_required(project: Project, suffix: str):
+    """A missing reason fails lint with what to write."""
+    project.spec(f"- T-REQ-001-01: One.\n- T-REQ-001-02: Later. {suffix}")
+    run = project.speccheck("lint", "--json")
+    assert run.code == 1
+    assert [(p["line"], p["code"], p["message"]) for p in run.json()["problems"]] == [
+        (8, "reason-missing", "T-REQ-001-02 needs a reason: write `(unimplemented: <reason>)`")
+    ]
 
 
 @pytest.mark.covers(
@@ -555,7 +557,9 @@ def test_retired_requirements(project: Project):
 )
 def test_fenced_examples_are_ignored(project: Project):
     """Bullets in a code block are neither requirements nor problems, even a star bullet that is a problem outside one."""
-    project.spec("- T-REQ-001-01: Real. ⚠ untested\n\n```markdown\n- T-REQ-001-09: Example\n* T-REQ-001-02: Star\n```")
+    project.spec(
+        "- T-REQ-001-01: Real. (unimplemented: later)\n\n```markdown\n- T-REQ-001-09: Example\n* T-REQ-001-02: Star\n```"
+    )
     run = project.speccheck("lint", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
 
@@ -569,7 +573,7 @@ def test_fences_in_the_header_are_ignored(project: Project):
     project.write(
         "specs/001-thing.md",
         "# 001 - Thing\n\n```markdown\n## Example\nstatus: bogus\n```\n\nstatus: draft\n\n"
-        "~~~\nstatus: again\n~~~\n\n## Requirements\n\n- T-REQ-001-01: Real. ⚠ untested\n",
+        "~~~\nstatus: again\n~~~\n\n## Requirements\n\n- T-REQ-001-01: Real. (unimplemented: later)\n",
     )
     run = project.speccheck("lint", "--json")
     assert run.code == 0, run.err
@@ -579,7 +583,7 @@ def test_fences_in_the_header_are_ignored(project: Project):
     project.write(
         "specs/001-thing.md",
         "# 001 - Thing\n\n```\nstatus: bogus\n```\n\nstatus: draft\nstatus: draft\n\n## Requirements\n\n"
-        "- T-REQ-001-01: Real. ⚠ untested\n",
+        "- T-REQ-001-01: Real. (unimplemented: later)\n",
     )
     assert "specs/001-thing.md:8: a second `status:` line; a spec has one" in project.speccheck("lint").err
 
@@ -602,12 +606,12 @@ def test_the_old_checkers_lines_say_where_the_setting_went(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-001-10",
-    "lint fails on a requirement in spec 002 repeating one in 001 in other case and spacing, naming both IDs, and skips two retired ones",
+    "lint fails on a requirement in spec 002 repeating one in 001 in other case and spacing, naming both IDs and nothing else",
 )
 def test_requirement_text_is_said_once(project: Project):
-    """Across the folder; retired requirements, whose text is often just `Retired.`, don't count."""
+    """Across the folder."""
     project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("- T-REQ-001-01: The file MUST be written.\n- T-REQ-001-02: Retired.\n- T-REQ-001-03: Retired.")
+    project.spec("- T-REQ-001-01: The file MUST be written.\n- T-REQ-001-02: Something else.")
     project.write(
         "specs/002-other.md", spec("- T-REQ-002-01: the  FILE must be\n  written", number="002", title="Other")
     )
@@ -617,7 +621,7 @@ def test_requirement_text_is_said_once(project: Project):
         "specs/002-other.md:7: T-REQ-002-01 has the same text as T-REQ-001-01 at specs/001-thing.md:7; "
         "each requirement says something new" in run.err
     )
-    assert "T-REQ-001-03" not in run.err
+    assert "T-REQ-001-02" not in run.err
 
 
 @pytest.mark.parametrize(
@@ -676,27 +680,39 @@ def test_what_counts_as_the_same_text(project: Project, first: str, second: str,
         assert run.json()["problems"][0]["message"].startswith("T-REQ-001-02 has the same text as T-REQ-001-01 at ")
 
 
-@pytest.mark.covers(
-    "SPC-REQ-001-10",
-    "a retired spec holding the text of a live requirement, and two retired bullets in a live spec with identical text, give no problem",
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(
+            "The file MUST be written.",
+            "The file MUST be written. (unimplemented: step 2)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-10",
+                "an unimplemented requirement repeating an implemented one's text, apart from the suffix, is a duplicate",
+            ),
+            id="one-suffix",
+        ),
+        pytest.param(
+            "The file MUST be written. (unimplemented: step 2)",
+            "The file MUST be written (unimplemented: step 3).",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-10",
+                "two unimplemented requirements with different reasons but the same text are duplicates",
+            ),
+            id="two-reasons",
+        ),
+    ],
 )
-def test_retired_texts_are_not_compared(project: Project):
-    """A retired spec's requirement is not a second copy of live text, and retired bullets are not compared with each other."""
-    project.write("specs/000-index.md", INDEX + "- [002](002-old.md)\n")
-    project.spec("- T-REQ-001-01: The file MUST be written.")
-    project.write("specs/002-old.md", spec("- T-REQ-002-01: The file MUST be written.", status="retired", number="002"))
-    assert project.speccheck("lint", "--json").json()["problems"] == []
-    project.spec(
-        "- T-REQ-001-01: The file MUST be written.\n"
-        "- T-REQ-001-02: Retired. The file MUST be written.\n"
-        "- T-REQ-001-03: Retired. The file MUST be written."
-    )
-    assert project.speccheck("lint", "--json").json()["problems"] == []
+def test_texts_are_compared_without_the_suffix(project: Project, first: str, second: str):
+    """The suffix says when, not what, so it doesn't make a text new."""
+    project.spec(f"- T-REQ-001-01: {first}\n- T-REQ-001-02: {second}")
+    run = project.speccheck("lint", "--json")
+    assert [p["code"] for p in run.json()["problems"]] == ["text-duplicate"]
 
 
 @pytest.mark.covers(
     "SPC-REQ-001-10",
-    "a live requirement repeating the text of an earlier one in the same spec fails lint, naming both IDs and the first one's line",
+    "a requirement repeating the text of an earlier one in the same spec fails lint, naming both IDs and the first one's line",
 )
 def test_a_duplicate_within_one_spec_names_both(project: Project):
     """Not only across specs."""

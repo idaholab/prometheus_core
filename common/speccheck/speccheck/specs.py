@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STATUSES = ("draft", "implemented", "retired")
+STATUSES = ("draft", "implemented")
 """The values a spec's `status:` line may take."""
 
 PREFIX = re.compile(r"[A-Z][A-Z0-9]*\Z")
@@ -34,14 +34,15 @@ SPEC_FILE = re.compile(r"^(\d{3})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 INDEX = "000-index.md"
 """The index file every spec folder has."""
 
-RETIRED = re.compile(r"Retired[.:]")
-"""How a retired bullet's text starts: `Retired.` or `Retired:`, not "Retired later" or "Retirement of"."""
+SUFFIX_START = "(unimplemented"
+"""Where the unimplemented suffix starts; the last one in a text is the one that may end it."""
 
-UNTESTED = "⚠ untested"
-"""The marker for a requirement that has no test yet."""
+SUFFIX = re.compile(r"\(unimplemented(?::(?P<reason>.*))?\)\.?", re.S)
+"""The unimplemented suffix, `(unimplemented: <reason>)` with an optional full stop after it, matched with
+`fullmatch` from SUFFIX_START. The reason may hold parentheses; it ends at the text's last `)`."""
 
-PLANNED = re.compile(r"\(planned: [^)]+\)")
-"""The marker for a requirement a later plan step delivers, such as `(planned: step 3b)`."""
+UNIMPLEMENTED_EXAMPLE = "(unimplemented: <reason>)"
+"""The suffix as messages show it."""
 
 CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
 """Characters that can end a line, drive a terminal or a CI log, or reorder how a line reads.
@@ -57,9 +58,23 @@ def collapse(text: str) -> str:
 
 
 def comparable(text: str) -> str:
-    """`text` as compared for sameness: whitespace collapsed, case ignored, one trailing full stop dropped."""
-    text = collapse(text).casefold()
+    """`text` as compared for sameness (SPC-REQ-001-10): the unimplemented suffix removed, whitespace collapsed,
+    case ignored, one trailing full stop dropped."""
+    text = collapse(split_suffix(collapse(text))[0]).casefold()
     return text[:-1].rstrip() if text.endswith(".") else text
+
+
+def split_suffix(text: str) -> tuple[str, str | None]:
+    """`text` without its unimplemented suffix, and the suffix's reason (None when it has no suffix).
+
+    The suffix counts only at the very end, after one optional full stop. The reason is trimmed, and
+    is "" for `(unimplemented)` or an empty reason, which is a problem the caller reports.
+    """
+    start = text.rfind(SUFFIX_START)
+    match = SUFFIX.fullmatch(text.rstrip(), start) if start >= 0 else None
+    if match is None:
+        return text, None
+    return text[:start].rstrip(), (match.group("reason") or "").strip()
 
 
 def plain(text: str) -> str:
@@ -140,22 +155,14 @@ class Requirement:
     line: int
     """Where the bullet starts in the spec file."""
     text: str
-    """The bullet's text after the ID, joined across its continuation lines."""
+    """The bullet's text after the ID, joined across its continuation lines, without the unimplemented suffix."""
+    reason: str | None = None
+    """Why it isn't implemented yet, from its `(unimplemented: <reason>)` suffix; None when it has none."""
 
     @property
-    def retired(self) -> bool:
-        """Whether the bullet, or its whole spec, is retired."""
-        return RETIRED.match(self.text) is not None or self.spec.status == "retired"
-
-    @property
-    def untested(self) -> bool:
-        """Whether the bullet carries `⚠ untested`."""
-        return UNTESTED in self.text
-
-    @property
-    def planned(self) -> bool:
-        """Whether the bullet carries `(planned: ...)`."""
-        return PLANNED.search(self.text) is not None
+    def unimplemented(self) -> bool:
+        """Whether the bullet ends with the unimplemented suffix."""
+        return self.reason is not None
 
 
 @dataclass
@@ -293,6 +300,11 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     if not seen_status:
         problems.append(Problem(name, 0, "missing the `status:` line", "status-missing"))
     spec.purpose = " ".join(purpose)
+    for requirement in spec.requirements:
+        requirement.text, requirement.reason = split_suffix(requirement.text)
+        if requirement.reason == "":
+            message = f"{requirement.id} needs a reason: write `{UNIMPLEMENTED_EXAMPLE}`"
+            problems.append(Problem(name, requirement.line, message, "reason-missing"))
     return spec
 
 
@@ -352,11 +364,6 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
                 )
                 continue
             requirements[requirement.id] = requirement
-            if requirement.untested and requirement.planned:
-                message = f"{requirement.id} is both planned and untested; keep one marker"
-                problems.append(Problem(name, requirement.line, message, "marker-conflict"))
-            if requirement.retired:
-                continue
             same = texts.setdefault(comparable(requirement.text), requirement)
             if same is not requirement:
                 where = f"{rel(same.spec.path, root)}:{same.line}"

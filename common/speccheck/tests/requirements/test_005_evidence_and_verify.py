@@ -138,22 +138,26 @@ def test_a_deselected_claim_fails_verify(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-03",
-    "check and verify both fail on an unclaimed requirement with the marker to paste, and skip the untested and planned ones",
+    "check and verify both give an unclaimed requirement the status unclaimed and fail, saying to paste the marker or add the unimplemented suffix, and skip an unimplemented one",
 )
 def test_unclaimed_fails_check_and_verify_with_the_fix(project: Project):
-    """The message is the marker to paste."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. ⚠ untested\n- T-REQ-001-03: Three. (planned: step 2)")
+    """The message gives both fixes: the marker to paste, or the suffix if a plan delivers it later."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. (unimplemented: step 2)")
     project.tests("def test_nothing():\n    pass\n")
     project.ini("speccheck_producer = unit\n")
     project.pytest("--speccheck-results=r.jsonl")
     expected = (
         'specs/001-thing.md:7: T-REQ-001-01 is not claimed; add `@pytest.mark.covers("T-REQ-001-01", '
-        '"<how it proves it>")`'
+        '"<how it proves it>")` to a test that proves it, or end it with `(unimplemented: <reason>)` in the spec'
     )
     for command in ("check", "verify"):
         run = project.speccheck(command, "r.jsonl")
         assert run.code == 1 and run.err.startswith(expected)
-        assert "T-REQ-001-02" not in run.err and "T-REQ-001-03" not in run.err
+        assert "T-REQ-001-02" not in run.err
+        assert status(project.speccheck(command, "r.jsonl", "--json")) == {
+            "T-REQ-001-01": "unclaimed",
+            "T-REQ-001-02": "unimplemented",
+        }
 
 
 @pytest.mark.covers(
@@ -244,21 +248,20 @@ def test_an_undeclared_producer_counts_for_nothing(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-07",
-    "an inner test claiming an untested and a planned requirement makes verify ask to remove each marker",
+    "an inner test that passes while claiming an unimplemented requirement makes verify fail, asking to remove the suffix",
 )
-def test_a_stale_marker_must_go(project: Project):
-    """Claimed and marked untested or planned: remove the marker."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested\n- T-REQ-001-02: Two. (planned: step 2)")
-    project.tests(
-        'import pytest\n\n@pytest.mark.covers("T-REQ-001-01", "one")\n@pytest.mark.covers("T-REQ-001-02", "two")\n'
-        "def test_it():\n    pass\n"
-    )
+def test_a_stale_suffix_must_go(project: Project):
+    """Claimed and still marked unimplemented: remove the suffix, even though the claim passed."""
+    project.spec("- T-REQ-001-01: One. (unimplemented: step 2)")
+    project.tests('import pytest\n\n@pytest.mark.covers("T-REQ-001-01", "the inner test")\ndef test_it():\n    pass\n')
     project.ini("speccheck_producer = unit\n")
     project.pytest("--speccheck-results=r.jsonl")
-    run = project.speccheck("verify", "r.jsonl")
+    run = project.speccheck("verify", "r.jsonl", "--json")
     assert run.code == 1
-    assert "T-REQ-001-01 is claimed, so remove `⚠ untested`" in run.err
-    assert "T-REQ-001-02 is claimed, so remove its `(planned: ...)`" in run.err
+    assert status(run) == {"T-REQ-001-01": "passed"}
+    assert [(p["code"], p["message"]) for p in run.json()["problems"]] == [
+        ("unimplemented-stale", "T-REQ-001-01 is claimed, so remove its `(unimplemented: ...)` suffix")
+    ]
 
 
 @pytest.mark.covers(
@@ -402,16 +405,16 @@ def test_a_test_cant_repeat_a_ci_jobs_explanation(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
-    "a results file claiming malformed, unknown, retired and disallowed IDs gets four claim-invalid problems from check and verify, and none of them counts: every requirement is left with no evidence",
+    "a results file claiming malformed, unknown and disallowed IDs gets three claim-invalid problems from check and verify, and none of them counts: every requirement is left with no evidence",
 )
 def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project):
     """Written by `record` or another language, so pytest never checked the IDs."""
     project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["001"]'))
     project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired.")
+    project.spec("- T-REQ-001-01: One.")
     project.write("specs/002-other.md", spec("- T-REQ-002-01: Other.", number="002", title="Other"))
     header = '{"schema": "speccheck-results/1", "producer": "unit"}\n'
-    ids = ["T-REQ-1-1", "T-REQ-001-09", "T-REQ-001-02", "T-REQ-002-01"]
+    ids = ["T-REQ-1-1", "T-REQ-001-09", "T-REQ-002-01"]
     lines = "".join(
         f'{{"test": "t{n}", "covers": [{{"id": "{id_}", "how": "test t{n} proves it"}}], "outcome": "passed"}}\n'
         for n, id_ in enumerate(ids)
@@ -421,20 +424,20 @@ def test_a_bad_claimed_id_in_a_results_file_counts_for_nothing(project: Project)
         run = project.speccheck(command, "u.jsonl", "--json")
         assert run.code == 1
         invalid = [p for p in run.json()["problems"] if p["code"] == "claim-invalid"]
-        assert len(invalid) == 4, run.json()["problems"]
+        assert len(invalid) == 3, run.json()["problems"]
         assert status(run)["T-REQ-001-01"] == "unclaimed"
         assert [r["id"] for r in run.json()["requirements"] if r["evidence"]] == [], command
 
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
-    "a passing claim of a retired, unknown, malformed or disallowed ID leaves its real target unclaimed or retired with no evidence, and each problem carries the 003-13 fix",
+    "a passing claim of an unknown, malformed or disallowed ID leaves its real target unclaimed with no evidence, and each problem carries the 003-13 fix",
 )
 def test_a_refused_claim_has_no_evidence_and_says_how_to_fix_it(project: Project):
     """The claim passed, so any evidence or `passed` status would show the claim counted."""
     project.write("speccheck.toml", CONFIG.replace('specs = "all"', 'specs = ["001"]'))
     project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("- T-REQ-001-01: Retired.\n- T-REQ-001-02: Live.")
+    project.spec("- T-REQ-001-01: Live.")
     project.write("specs/002-other.md", spec("- T-REQ-002-01: Other.", number="002", title="Other"))
     project.results(
         "u.jsonl",
@@ -442,25 +445,22 @@ def test_a_refused_claim_has_no_evidence_and_says_how_to_fix_it(project: Project
         [
             ("t0", ["T-REQ-1-1"], "passed"),
             ("t1", ["T-REQ-001-09"], "passed"),
-            ("t2", ["T-REQ-001-01"], "passed"),
             ("t3", ["T-REQ-002-01"], "passed"),
         ],
     )
     fixes = {
         "T-REQ-1-1": "is not an ID of this folder; IDs read like `T-REQ-",
         "T-REQ-001-09": "isn't in any spec; check the number, or add it to spec 001",
-        "T-REQ-001-01": "is retired; claim what replaced it",
         "T-REQ-002-01": "which producer `unit` may not claim; add it to `producers.unit.specs`",
     }
     for command in ("check", "verify"):
         run = project.speccheck(command, "u.jsonl", "--json")
         by_id = {r["id"]: r for r in run.json()["requirements"]}
-        assert by_id["T-REQ-001-01"]["status"] == "retired" and by_id["T-REQ-001-01"]["evidence"] == []
         assert by_id["T-REQ-002-01"]["status"] == "unclaimed" and by_id["T-REQ-002-01"]["evidence"] == []
-        assert by_id["T-REQ-001-02"]["status"] == "unclaimed"
-        assert set(by_id) == {"T-REQ-001-01", "T-REQ-001-02", "T-REQ-002-01"}
+        assert by_id["T-REQ-001-01"]["status"] == "unclaimed"
+        assert set(by_id) == {"T-REQ-001-01", "T-REQ-002-01"}
         messages = [p["message"] for p in run.json()["problems"] if p["code"] == "claim-invalid"]
-        assert len(messages) == 4, messages
+        assert len(messages) == 3, messages
         for id_, fix in fixes.items():
             assert any(id_ in m and fix in m for m in messages), (command, id_, messages)
 
@@ -640,31 +640,18 @@ def test_a_failing_ci_job_fails_verify(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-005-03",
-    "a retired requirement that nothing claims has status retired, and check and verify exit 0",
+    "SPC-REQ-005-12",
+    "an unimplemented requirement that nothing claims has status unimplemented, not unclaimed, and check and verify exit 0 with no problems",
 )
-def test_a_retired_requirement_needs_no_claim(project: Project):
-    """Retired is exempt, like untested and planned."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Retired. Gone.")
+def test_an_unimplemented_requirement_needs_no_claim(project: Project):
+    """The status itself, not just the missing message, beside a passing one so verify has a result."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. (unimplemented: step 2)")
     project.results("u.jsonl", "unit", [("tests/a.py::test_a", ["T-REQ-001-01"], "passed")])
     for command in ("check", "verify"):
         run = project.speccheck(command, "u.jsonl", "--json")
-        assert run.code == 0 and run.json()["problems"] == [], command
-        assert status(run)["T-REQ-001-02"] == "retired"
-
-
-@pytest.mark.covers(
-    "SPC-REQ-005-03",
-    "an untested and a planned requirement that nothing claims get those statuses, not unclaimed, and check and verify exit 0",
-)
-def test_untested_and_planned_are_exempt_by_status(project: Project):
-    """The statuses themselves, not just the missing message."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. ⚠ untested\n- T-REQ-001-03: Three. (planned: step 2)")
-    project.results("u.jsonl", "unit", [("tests/a.py::test_a", ["T-REQ-001-01"], "passed")])
-    for command in ("check", "verify"):
-        run = project.speccheck(command, "u.jsonl", "--json")
-        assert run.code == 0, run.err
-        assert status(run)["T-REQ-001-02"] == "untested" and status(run)["T-REQ-001-03"] == "planned"
+        assert (run.code, run.json()["problems"]) == (0, []), command
+        assert status(run)["T-REQ-001-02"] == "unimplemented"
+        assert run.json()["counts"]["unimplemented"] == 1
 
 
 @pytest.mark.covers(
@@ -722,22 +709,35 @@ def test_a_producer_that_may_not_claim_it_isnt_waited_on(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-04",
-    "with test producer docker unreported, a requirement marked untested, one marked planned and one marked retired stay untested, planned and retired, and verify --complete fails only for docker itself",
+    "with test producer docker unreported, a requirement marked unimplemented stays unimplemented, waiting on nothing, and verify --complete fails only for docker itself",
 )
-def test_marked_requirements_are_never_not_run(project: Project):
-    """The spec's own marker decides these; a producer that might claim them later changes nothing."""
+def test_unimplemented_requirements_are_never_not_run_when_unclaimed(project: Project):
+    """The spec's suffix decides it; a producer that might claim it later changes nothing."""
     project.write("speccheck.toml", CONFIG + "[producers.docker]\n")
-    project.spec(
-        "- T-REQ-001-01: One. ⚠ untested\n- T-REQ-001-02: Two. (planned: step 2)\n- T-REQ-001-03: Retired. Three."
-    )
+    project.spec("- T-REQ-001-01: One. (unimplemented: step 2)")
     project.results("u.jsonl", "unit", [])
     run = project.speccheck("verify", "--complete", "u.jsonl", "--json")
-    assert status(run) == {"T-REQ-001-01": "untested", "T-REQ-001-02": "planned", "T-REQ-001-03": "retired"}
-    assert [r["waiting_on"] for r in run.json()["requirements"]] == [[], [], []]
+    assert status(run) == {"T-REQ-001-01": "unimplemented"}
+    assert [r["waiting_on"] for r in run.json()["requirements"]] == [[]]
     assert [p["message"] for p in run.json()["problems"]] == [
         "producer `docker` didn't report; its job failed before uploading, was skipped, or was renamed "
         "(see `docker` in speccheck.toml)"
     ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-04",
+    "a requirement marked unimplemented and claimed only by CI job publish, which hasn't reported, is unimplemented, waits on nothing, and fails verify only for the stale suffix",
+)
+def test_unimplemented_requirements_are_never_not_run_when_claimed(project: Project):
+    """The claim makes the suffix stale (005-07), but the status is still the spec's, not `not run`."""
+    project.write("speccheck.toml", ci_config({"T-REQ-001-01": "the job publishes the image"}, docker=False))
+    project.spec("- T-REQ-001-01: One. (unimplemented: step 2)")
+    project.results("u.jsonl", "unit", [])
+    run = project.speccheck("verify", "u.jsonl", "--json")
+    assert status(run) == {"T-REQ-001-01": "unimplemented"}
+    assert run.json()["requirements"][0]["waiting_on"] == []
+    assert [p["code"] for p in run.json()["problems"]] == ["unimplemented-stale"]
 
 
 @pytest.mark.covers(
@@ -838,37 +838,32 @@ def test_an_undeclared_pass_doesnt_outvote_a_declared_failure(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-07",
-    "check on a collect-only run of a test claiming an untested and a planned requirement asks to remove each marker",
+    "check on a collect-only run of a test claiming an unimplemented requirement fails with one unimplemented-stale problem at its line",
 )
-def test_a_stale_marker_must_go_in_check(project: Project):
+def test_a_stale_suffix_must_go_in_check(project: Project):
     """`check` reads a collect-only run, which has no outcomes."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested\n- T-REQ-001-02: Two. (planned: step 2)")
-    project.tests(
-        'import pytest\n\n@pytest.mark.covers("T-REQ-001-01", "one")\n@pytest.mark.covers("T-REQ-001-02", "two")\n'
-        "def test_it():\n    pass\n"
-    )
+    project.spec("- T-REQ-001-01: One. (unimplemented: step 2)")
+    project.tests('import pytest\n\n@pytest.mark.covers("T-REQ-001-01", "the inner test")\ndef test_it():\n    pass\n')
     project.ini("speccheck_producer = unit\n")
     project.pytest("--collect-only", "-q", "--speccheck-results=.speccheck/collect.jsonl")
     run = project.speccheck("check", ".speccheck/", "--json")
     assert run.code == 1
-    assert {p["code"] for p in run.json()["problems"]} == {"untested-marker-stale", "planned-marker-stale"}
+    assert [(p["line"], p["code"]) for p in run.json()["problems"]] == [(7, "unimplemented-stale")]
 
 
 @pytest.mark.covers(
     "SPC-REQ-005-07",
-    "[ci.publish] entries claiming an untested and a planned requirement make check and verify ask to remove each marker",
+    "a [ci.publish] entry claiming an unimplemented requirement makes check and verify ask to remove the suffix, though publish never reported",
 )
-def test_a_stale_marker_must_go_for_a_ci_job_claim(project: Project):
+def test_a_stale_suffix_must_go_for_a_ci_job_claim(project: Project):
     """The claimer is a job in the config, so no job result is needed."""
-    covers = {"T-REQ-001-01": "the job publishes the image", "T-REQ-001-02": "the job tags the release"}
-    project.write("speccheck.toml", ci_config(covers, docker=False))
-    project.spec("- T-REQ-001-01: One. ⚠ untested\n- T-REQ-001-02: Two. (planned: step 2)")
+    project.write("speccheck.toml", ci_config({"T-REQ-001-01": "the job publishes the image"}, docker=False))
+    project.spec("- T-REQ-001-01: One. (unimplemented: step 2)")
     project.results("u.jsonl", "unit", [])
     for command in ("check", "verify"):
         run = project.speccheck(command, "u.jsonl")
         assert run.code == 1
-        assert "T-REQ-001-01 is claimed, so remove `⚠ untested`" in run.err, command
-        assert "T-REQ-001-02 is claimed, so remove its `(planned: ...)`" in run.err, command
+        assert "T-REQ-001-01 is claimed, so remove its `(unimplemented: ...)` suffix" in run.err, command
 
 
 @pytest.mark.covers(
@@ -949,17 +944,17 @@ def test_the_same_claim_in_another_attempt_is_not_a_repeat(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-005-11",
-    "[ci.publish] entries for a malformed ID and a retired ID each get a config-claim-invalid problem with the 003-13 fix, in check and verify, and neither counts",
+    "[ci.publish] entries for a malformed ID and an ID next to a real one each get a config-claim-invalid problem with the 003-13 fix, in check and verify, and neither counts",
 )
-def test_ci_entries_with_a_malformed_or_retired_id_count_for_nothing(project: Project):
+def test_ci_entries_with_a_malformed_or_unknown_id_count_for_nothing(project: Project):
     """The config's claims are checked in the config, so they can be wrong without any job running."""
-    covers = {"T-REQ-1-1": "the job builds the image", "T-REQ-001-02": "the job pushes the image"}
+    covers = {"T-REQ-1-1": "the job builds the image", "T-REQ-001-03": "the job pushes the image"}
     project.write("speccheck.toml", ci_config(covers, docker=False))
-    project.spec("- T-REQ-001-01: Live.\n- T-REQ-001-02: Retired. Gone.")
+    project.spec("- T-REQ-001-01: Live.\n- T-REQ-001-02: Pushed.")
     project.results("u.jsonl", "unit", [])
     fixes = {
         "T-REQ-1-1": "is not an ID of this folder; IDs read like `T-REQ-",
-        "T-REQ-001-02": "is retired; claim what replaced it",
+        "T-REQ-001-03": "isn't in any spec; check the number, or add it to spec 001",
     }
     for command in ("check", "verify"):
         run = project.speccheck(command, "u.jsonl", "--json")
@@ -969,8 +964,10 @@ def test_ci_entries_with_a_malformed_or_retired_id_count_for_nothing(project: Pr
         for id_, fix in fixes.items():
             assert any(id_ in m and fix in m and "`ci.publish.covers`" in m for m in invalid), (command, id_, invalid)
         by_id = {r["id"]: r for r in run.json()["requirements"]}
-        assert by_id["T-REQ-001-02"]["status"] == "retired" and by_id["T-REQ-001-02"]["evidence"] == []
-        assert by_id["T-REQ-001-01"]["status"] == "unclaimed"
+        assert {id_: r["status"] for id_, r in by_id.items()} == {
+            "T-REQ-001-01": "unclaimed",
+            "T-REQ-001-02": "unclaimed",
+        }
 
 
 @pytest.mark.covers(
