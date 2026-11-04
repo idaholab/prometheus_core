@@ -19,6 +19,7 @@ included .env, so nothing here needs Docker.
 """
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -248,6 +249,73 @@ def test_ctrl_c_while_the_script_runs_keeps_env(platform):
         if proc.poll() is None:
             os.killpg(proc.pid, signal.SIGKILL)
     assert (platform / ".env").read_text() == "LOCAL_SDK=true\nSECRET=kept\n"
+
+
+# The goals that build or start something and so need .env. A new documented target must be
+# added here, or to NO_ENV_GOALS in the Makefile: test_every_documented_goal_is_decided fails until it is.
+ENV_GOALS = {
+    "up",
+    "up-fg",
+    "restart",
+    "restart-fg",
+    "ng-up",
+    "ng-up-fg",
+    "ng-restart",
+    "ng-restart-fg",
+    "init-env",
+    "deeplynx-setup",
+    "build",
+    "build-plain",
+}
+
+
+def makefile_goals(project_root: Path) -> tuple[set[str], set[str]]:
+    """(the targets `make help` lists, the Makefile's NO_ENV_GOALS)."""
+    text = (project_root / "Makefile").read_text()
+    documented = set(re.findall(r"^([A-Za-z0-9_.-]+):[^=\n]*##@", text, flags=re.M))
+    block = re.search(r"^NO_ENV_GOALS\s*:=((?:.*\\\n)*.*)$", text, flags=re.M)
+    assert block, "NO_ENV_GOALS not found in the Makefile"
+    return documented, set(block.group(1).replace("\\", " ").split())
+
+
+def test_every_documented_goal_is_decided(project_root):
+    """A new `make` target must say whether it needs .env: add it to NO_ENV_GOALS, or to ENV_GOALS here.
+
+    Left out of both, a target that needs .env would run without one, and a read-only one
+    (logs, ps, down) would create one as a side effect of looking.
+    """
+    documented, no_env = makefile_goals(project_root)
+    undecided = documented - no_env - ENV_GOALS
+    assert not undecided, (
+        f"decide whether these need .env (NO_ENV_GOALS in the Makefile, or ENV_GOALS here): {sorted(undecided)}"
+    )
+    overlap = no_env & ENV_GOALS
+    assert not overlap, f"in both NO_ENV_GOALS and ENV_GOALS: {sorted(overlap)}"
+
+
+def test_no_env_goals_and_env_goals_name_real_targets(project_root):
+    """A renamed or removed target must not linger in either list."""
+    documented, no_env = makefile_goals(project_root)
+    text = (project_root / "Makefile").read_text()
+    defined = set(re.findall(r"^([A-Za-z0-9_.-]+)\s*:(?!=)", text, flags=re.M))
+    assert not (no_env - defined), f"NO_ENV_GOALS names no target: {sorted(no_env - defined)}"
+    assert not (ENV_GOALS - defined), f"ENV_GOALS names no target: {sorted(ENV_GOALS - defined)}"
+
+
+def test_each_decided_goal_does_what_its_list_says(platform, project_root):
+    """Every ENV_GOALS goal runs the script once; no NO_ENV_GOALS goal runs it or creates .env."""
+    _, no_env = makefile_goals(project_root)
+    for goal in sorted(ENV_GOALS):
+        for leftover in ("runs.log", ".env"):
+            (platform / leftover).unlink(missing_ok=True)
+        make(platform, goal)
+        assert runs(platform) == 1, f"make {goal} should run init_env.py once"
+    for goal in sorted(no_env):
+        for leftover in ("runs.log", ".env"):
+            (platform / leftover).unlink(missing_ok=True)
+        make(platform, goal)
+        assert runs(platform) == 0, f"make {goal} must not run init_env.py"
+        assert not (platform / ".env").exists(), f"make {goal} must not create .env"
 
 
 def test_a_failing_script_stops_make(platform):
