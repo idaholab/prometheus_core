@@ -43,10 +43,10 @@ export function CheckpointCard({ checkpoint, selected = false }: CheckpointCardP
           <Diamond aria-hidden="true" size={20} strokeWidth={1.5} className="text-primary" />
           <StatusPill label={priority} tone={priority === "urgent" ? "error" : "neutral"} />
         </div>
-        <div className="order-last flex min-w-0 basis-full flex-col gap-0.5 @sm:order-none @sm:flex-1 @sm:basis-0">
+        <div className="order-last flex min-w-0 basis-full flex-col gap-0.5 @sm:order-0 @sm:flex-1 @sm:basis-0">
           {/* Sizes go on each span: the base layer sets span font-size, so it isn't inherited. */}
           <span className="font-mono text-[10px] text-primary">{id}</span>
-          <h3 className="m-0 break-words text-sm font-bold leading-snug text-base-content">{title}</h3>
+          <h3 className="m-0 wrap-break-word text-sm font-bold leading-snug text-base-content">{title}</h3>
         </div>
         <span className="ml-auto shrink-0 self-start rounded bg-info/10 px-2 py-1 font-mono text-[10px] font-bold leading-3 text-info @sm:self-center">
           <span className="sr-only">Confidence </span>
