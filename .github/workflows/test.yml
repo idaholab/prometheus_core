@@ -338,9 +338,15 @@ jobs:
     env:
       LOCAL_SDK: "true"
       PROFILE: prod
-      # init_env.py takes the LLM key from the environment; nothing calls an
-      # LLM at startup, so a placeholder is enough
+      # init_env.py takes the LLM profile and key from the environment. Nothing
+      # calls an LLM or DeepLynx at startup, so placeholders are enough, but the
+      # agents refuse to start without DeepLynx credentials.
+      LLM_CONFIG_PROFILE: anthropic
       LLM_API_KEY: sk-ant-test-not-real
+      DEEPLYNX_KEY: ci-test-key
+      DEEPLYNX_SECRET: ci-test-secret
+      DEEPLYNX_ORG_ID: "1"
+      DEEPLYNX_PROJECT_ID: "1"
       REGISTRY: k3d-prometheus-registry.localhost:5001
     steps:
       - name: Checkout
@@ -349,6 +355,18 @@ jobs:
         uses: ./.github/actions/setup-kube-tools
         with:
           cluster-tools: "true"
+      - name: Create .env
+        # Once .env exists, make loads it over the environment, and init_env.py
+        # leaves its blank DEEPLYNX_* lines empty, so set them here
+        run: |
+          make init-env
+          sed -i.bak \
+            -e "s|^DEEPLYNX_KEY=.*|DEEPLYNX_KEY=$DEEPLYNX_KEY|" \
+            -e "s|^DEEPLYNX_SECRET=.*|DEEPLYNX_SECRET=$DEEPLYNX_SECRET|" \
+            -e "s|^DEEPLYNX_ORG_ID=.*|DEEPLYNX_ORG_ID=$DEEPLYNX_ORG_ID|" \
+            -e "s|^DEEPLYNX_PROJECT_ID=.*|DEEPLYNX_PROJECT_ID=$DEEPLYNX_PROJECT_ID|" \
+            .env
+          rm .env.bak
       - name: Build images
         # The same images make up runs
         run: make build
@@ -366,6 +384,10 @@ jobs:
           # sends straight to the backend
           curl -sSf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:8080/healthz
           curl -sSf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:8080/api/setup/status
+      - name: Check that /api/events streams unbuffered
+        # Signs in as a new first admin, so it has to run on this fresh cluster,
+        # and opens the SSE stream through the ingress
+        run: ../infrastructure/scripts/check-sse-stream.sh http://localhost:8080
       - name: Check backend health and readiness
         # /healthz and /readyz aren't exposed outside the cluster
         run: |
