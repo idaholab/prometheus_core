@@ -226,6 +226,28 @@ def test_init_env_names_no_key_for_a_keyless_profile(tmp_path, env_example_path,
     assert "Saved LLM_CONFIG_PROFILE=ollama in .env." in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [("", True), ("y", True), ("Y", True), ("yes", True), ("YES", True), (" Yes ", True)]
+    + [("n", False), ("N", False), ("no", False), ("NO", False), (" No ", False)],
+)
+def test_yes_accepts_enter_y_yes_n_no_in_any_case(monkeypatch, typed, expected):
+    init_env = _load_init_env()
+    monkeypatch.setattr("builtins.input", lambda prompt: typed)
+    assert init_env.yes("Run it?") is expected
+
+
+@pytest.mark.parametrize("typo", ["false", "0", "nope", "yep", "t", "ok"])
+def test_yes_asks_again_instead_of_taking_a_typo_for_yes(monkeypatch, capsys, typo):
+    """`false` used to count as yes, which meant a local build or DeepLynx the user had declined."""
+    init_env = _load_init_env()
+    typed = iter([typo, "n"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(typed))
+
+    assert init_env.yes("Run it?") is False
+    assert "Please answer y or n" in capsys.readouterr().out
+
+
 def test_choose_runs_on_python_39(monkeypatch):
     """/usr/bin/python3 on macOS is 3.9, where zip() takes no keyword arguments (strict= is 3.10+)."""
     init_env = _load_init_env()

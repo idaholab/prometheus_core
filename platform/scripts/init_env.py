@@ -126,7 +126,14 @@ LOCAL_OPTIONS = [
 
 
 def yes(question: str) -> bool:
-    return input(f"{question} [Y/n] (Enter = yes): ").strip().lower() not in ("n", "no")
+    """Enter, y or yes (any case) is yes; n or no is no. Anything else asks again, so a typo isn't a yes."""
+    while True:
+        answer = input(f"{question} [Y/n] (Enter = yes): ").strip().lower()
+        if answer in ("", "y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("Please answer y or n, or press Enter for yes.")
 
 
 def prompt_local_options(text: str) -> str:
