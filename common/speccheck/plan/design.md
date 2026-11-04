@@ -25,10 +25,11 @@ tracing requirements to source code, or replacing coverage.
 indentation), and it still could not see whether the test ran. All of that goes. What carries
 over:
 
-- The spec format and its parsing: `NNN-name.md` files, `000-index.md` linking each spec, the
-  `status:` header, `REQ-`/`BEH-` bullets, the `⚠ untested`, `(planned: <step>)` and `Retired.`
-  markers, the ID prefix, malformed-bullet detection, fenced code skipped, and the
-  `path:line: message` problem format with control characters written out.
+- The spec format and its parsing: `NNN-name.md` files, `000-index.md` linking each spec,
+  `REQ-`/`BEH-` bullets, the ID prefix, malformed-bullet detection, fenced code skipped, and the
+  `path:line: message` problem format with control characters written out. #355's `status:`
+  header, `⚠ untested`, `(planned: <step>)` and `Retired.` were carried over too, and replaced
+  later in step 1 (see "Requirement states").
 - Its 34 tests, where they test that parsing.
 
 Changed:
@@ -101,7 +102,7 @@ changing commands"):
 - **Exit codes:** 0 fine, 1 problems found, 2 usage or config error. `verify` uses 1 for any
   failing requirement.
 - **Output:** problems on stderr as `path:line: message`, so editors and CI logs link them; a
-  one-line summary at the end ("12 requirements: 10 passed, 1 planned, 1 untested"). `--json`
+  one-line summary at the end ("12 requirements: 10 passed, 2 unimplemented"). `--json`
   prints one object with `schema_version`, `command`, `ok`, the result, and `problems`.
 - **Step summary:** `lint`, `check` and `verify` take `--summary FILE` (see "Step summary").
 - Only `cli.py` exits; actions return a code. Nothing but `results.py`, `summary.py` and `report.py` writes
@@ -129,7 +130,7 @@ a comment pointing at platformctl's copy, so an edit to one reminds the editor o
 | Command | Reads | Fails when |
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format (the #355 rules, minus `tests:` and citations) |
-| `check` | specs, config, results files (from a collect-only run or a real one) | a requirement that is not planned, untested or retired has no claim; a claim names an unknown or retired ID, or one its producer may not claim; a marker is left on a claimed requirement |
+| `check` | specs, config, results files (from a collect-only run or a real one) | a requirement that isn't unimplemented has no claim; a claim names an unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
 | `verify` | specs, config, the results files from a CI run | everything `check` fails on, plus: a claimed requirement with no passing result among the producers that reported; with `--complete`, a requirement no reported producer claims, or an expected producer that didn't report |
 | `report` | the same as `verify` | never, unless the inputs are malformed: it writes the full markdown report (`--output`) or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry; writes a results file with one passed result for each ID the job claims |
@@ -230,7 +231,7 @@ def test_results_file_round_trips():
   - a test claims each ID once;
   - no two claims in the session share an explanation, whatever their IDs;
   - with `speccheck_config` set in the pytest ini options (agreed 2026-11-01): the ID is
-    well-formed, known, not retired and allowed for the producer, and the explanation isn't the
+    well-formed, known, not removed and allowed for the producer, and the explanation isn't the
     text of any requirement in the folder.
 
   Texts are compared after collapsing whitespace, ignoring case and dropping a trailing full
@@ -239,8 +240,8 @@ def test_results_file_round_trips():
   good one is left to review.
 - The plugin registers the marker, so `--strict-markers` accepts it.
 - A test with no `covers` mark is fine and is not recorded.
-- **Requirement text is unique too:** `lint` fails on two requirements in one folder, not
-  retired, with the same text (SPC-REQ-001-10).
+- **Requirement text is unique too:** `lint` fails on two requirements in one folder with
+  the same text, compared without the unimplemented suffix (SPC-REQ-001-10).
 
 ## Results files
 
@@ -327,9 +328,37 @@ For each requirement, from the specs, the config and every results file in the i
 | `passed` | at least one result for it passed | no |
 | `failed` | claimed by a test that reported, and none passed (failed, skipped, deselected, ...) | yes |
 | `not run` | claimed only by producers that didn't report in these inputs | only with `--complete` |
-| `unclaimed` | nothing claims it, and it isn't planned, untested or retired | yes |
-| `planned`, `untested`, `retired` | the spec says so, and nothing claims it | no |
-| marker conflict | planned or untested, but claimed | yes |
+| `unclaimed` | nothing claims it, and it isn't unimplemented | yes |
+| `unimplemented` | the spec marks it `(unimplemented: <reason>)`, and nothing claims it | no |
+| stale suffix | marked unimplemented, but claimed | yes |
+
+A removed ID isn't a requirement and has no status: it is a problem only when something claims it.
+
+### Requirement states
+
+Decided 2026-11-03, in review of #365. A requirement is in one of two states, so a requirement
+without a test is always part of a plan:
+
+- **Implemented**: no suffix. It needs a claim.
+- **Unimplemented**: its text ends with `(unimplemented: <reason>)`, and the reason is required
+  (a plan step, or anything that says why). The suffix may wrap with the bullet, and a full stop
+  may come before or after it. Anywhere else in the text it is plain text. The report and
+  `--json` show the text without the suffix and the reason beside the status, and duplicate
+  texts are compared without it.
+
+There is no "untested": behaviour that exists but has no test gets a test. More states can be
+added later as more known words in the same `(<state>: <reason>)` form. Only known words are read,
+so a trailing `(default: 30s)` stays text.
+
+A requirement that goes is **deleted**, not retired, and its ID is listed on the spec's `removed:`
+header line, which may wrap like a bullet. A listed ID can't be a requirement again, so it is
+never reused, and a claim of it says which spec removed it. A whole spec that goes is listed by
+number on `000-index.md`'s `removed:` line, and a file with that number is a problem.
+
+The spec's `status:` line goes too: with `retired` gone and `draft` checked like `implemented`, it
+said nothing. Every spec needs at least one requirement, and a planned spec marks each of its
+bullets unimplemented. `lint` reports a leftover `status:` line, `⚠ untested`, `(planned: ...)`
+and `Retired.`, each saying what replaces it.
 
 `not run` is how path-filtered workflows and jobs that run only on `devel` (`publish-images`) fit
 in. A PR checks what its jobs ran, and a complete check runs where every producer has reported
@@ -435,7 +464,9 @@ first version with one table per spec read badly with long text):
 - **one section per claiming test or CI job** (`####`): the test's name linking to its line in its
   file, then the file's path; **How:** and the explanation; then one line per result, worst
   outcome first, naming the job by its display name and linking to it;
-- a requirement with no claims says what it waits on, or the marker to add;
+- a requirement with no claims says what it waits on, or to claim it or add
+  `(unimplemented: <reason>)`;
+- an unimplemented requirement shows its reason beside its status;
 - the inputs it was built from: commit, run, and which producers reported or were missing.
 
 ```markdown
@@ -475,7 +506,7 @@ other tools, with each requirement's `path` and `line` and each result's `job_na
 The step summary shows only what failed (decided 2026-11-02). `lint`, `check` and `verify` take
 `--summary FILE` and append one line, then one list entry per problem, and nothing else:
 
-> **speccheck:** 2 problems. 48 requirements: 1 failed, 1 unclaimed, 2 not run, 37 passed, 4 planned, 2 untested, 1 retired. Full report: [speccheck-report](…)
+> **speccheck:** 2 problems. 48 requirements: 1 failed, 1 unclaimed, 2 not run, 38 passed, 6 unimplemented. Full report: [speccheck-report](…)
 >
 > - SPC-REQ-004-01 failed in `tests/requirements/test_004_results.py::test_round_trip` ([job](…))
 > - SPC-REQ-006-03 is not claimed; add `@pytest.mark.covers("SPC-REQ-006-03", "…")` to a test that proves it
@@ -497,7 +528,7 @@ step 1 alongside the code:
 
 | Spec | Covers |
 |---|---|
-| 001 Spec format | files, index, headers, bullets, markers, prefix, what `lint` rejects |
+| 001 Spec format | files, index, bullets, the unimplemented suffix, removed IDs, prefix, what `lint` rejects |
 | 002 Config | file discovery, keys, validation, errors |
 | 003 Claims | the `covers` marker, where it may go, explanations, the collection check |
 | 004 Results files | format, outcomes, merging phases, xdist, writing only when asked |
@@ -577,7 +608,7 @@ Found on `devel` as of 2026-11-01:
 
 | Folder | What | Plan |
 |---|---|---|
-| `sdk/specs/` | 14 SDD specs, about 260 REQ/BEH IDs, 20 marked `⚠ untested`; about 43 IDs are cited in tests, in docstrings or in plain comments | steps 3 and 4 |
+| `sdk/specs/` | 14 SDD specs, about 260 REQ/BEH IDs, 20 marked `⚠ untested` and 7 `Retired.`; about 43 IDs are cited in tests, in docstrings or in plain comments | step 3 (step 4 folded in) |
 | `build/specs/` (on #355/#361 only) | the build and run specs: index and 8 platformctl specs | step 2 |
 | `sdk/docs/SDD_SPEC_AUTHORING.md`, `SDD_TESTING_STANDARD.md` | the format and the testing rules | step 3 moves the checked rules into speccheck's README and points these docs at it |
 | `platform/backend/CONTRACT.md`, `platform/frontend/AGENT-CONTRACT.md` | wire contracts in prose, with no IDs | out of scope. They could become spec folders later, which is when step 5 matters |
@@ -595,7 +626,7 @@ Found on `devel` as of 2026-11-01:
   change above). "Green on `devel` for a while" can't be counted in days, because the workflow runs
   on `devel` only when a speccheck path changes. It is met when:
   - the last 10 runs of `speccheck.yml` on `devel` that touched speccheck paths are green, and
-  - the final job of every adopter's workflow (steps 3 and 4) has been green on its last 10 `devel`
+  - the final job of every adopter's workflow (step 3 onward) has been green on its last 10 `devel`
     runs, or, if the nightly run above is added, on 14 nightly runs in a row.
   A scheduled run would make the second condition a count of days, and is the alternative if the
   adopters' runs are too sparse.

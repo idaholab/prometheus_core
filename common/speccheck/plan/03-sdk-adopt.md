@@ -5,8 +5,8 @@
 ## Goal
 
 Check `sdk/specs/` with speccheck from real test runs: move its IDs to the `SDK-` prefix, turn its
-existing citations into markers, and add the final job for the sdk. Requirements nobody cites yet
-are marked so this step can pass, and step 4 works through them.
+existing citations into markers, give every requirement nobody cites yet a test, and add the
+final job for the sdk. This takes in what was step 4 (see "The rest").
 
 ## Work
 
@@ -28,9 +28,22 @@ are marked so this step can pass, and step 4 works through them.
   each saying how that test proves the requirement. A parametrized test claims per
   `pytest.param(..., marks=...)`, never on the function, and class or module marks move down to
   each test.
-- **The rest:** run `check` and mark each requirement no test claims `⚠ untested`, with a line
-  under the spec's Open questions. That is about 200. This is honest about the current state, and
-  step 4 removes the markers.
+- **Spec format** (`design.md`, "Requirement states"): drop each spec's `status:` line, delete
+  each `Retired.` requirement (7) and list its ID on its spec's `removed:` line, and remove every
+  `⚠ untested` (20). `lint` reports each leftover and says what replaces it. Mechanical, so in
+  the same commit as the prefix rename.
+- **The rest:** run `check`, and for each requirement no test claims (about 200), find the test
+  that proves it and add the marker, or write one. There is no "untested" state, so a
+  requirement can't be left without a test. Only behaviour a later plan step delivers may end with
+  `(unimplemented: <step>)`. A requirement that is no longer true is deleted and its ID listed in
+  `removed:`. Don't claim a requirement with a test that only touches it; the CI reviewer checks
+  each claim. Coverage (`fail_under` in `sdk/pyproject.toml`) can only go up.
+  - This is most of the work, so split it into one PR per spec area after the mechanical one:
+    storage (001 to 004), LLM (005 to 007, 014), agent (008 to 010), contract and Redis (011,
+    012), packaging (013).
+  - `check` fails while any area is unclaimed, so decide here how the areas land: the final job
+    in the last area's PR, or a producer limited (`producers.<name>.specs`) to the areas done so
+    far, widened by each PR.
 - **CI** in `test.yml`: producer variables and `speccheck-upload` in `sdk-python` (each leg) and
   `sdk-docker` (results path in the mounted checkout, CI variables passed with `-e`); `record`
   for spec 013's packaging requirements in `sdk-install` and `sdk-docker`; and a final
@@ -49,12 +62,14 @@ are marked so this step can pass, and step 4 works through them.
   requirement (the marker) and point to speccheck's README for the checked rules, instead of the
   docstring form. `sdk/specs/000-index.md`'s "How Agents Use These Specs" says the same.
 - **Agent skills and instructions** that tell an agent how to cite IDs (`sdk/AGENTS.md`,
-  `CLAUDE.md` files, hackathon skills) are updated in the same PR.
+  `CLAUDE.md` files, hackathon skills) are updated in the same PR, including the rules that say
+  to mark a requirement `⚠ untested` and to retire an ID rather than delete it.
 
 ## Done when
 
 - `speccheck-sdk` passes in `test.yml` on a PR and with `--complete` on `devel`.
 - No source file in the repository still cites a bare `REQ-NNN-XX` from `sdk/specs`.
+- No `sdk/specs` requirement is unclaimed, and each `(unimplemented: ...)` names a plan step.
 - `speccheck lint` on `sdk/specs/` reports no `spec-title` problem: every title reads `# NNN - Name`.
 - Breaking or skipping a test that claims an `SDK-` requirement fails the final job.
 
