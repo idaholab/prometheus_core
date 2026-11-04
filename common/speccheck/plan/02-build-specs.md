@@ -38,8 +38,11 @@ platformctl against them with speccheck, from real test runs.
 - **Cross-workflow evidence:** add `speccheck-report.yml` (`design.md`, "Evidence across
   workflows") for the complete check on `devel`, since build and run evidence comes from
   `platformctl.yml`, `test.yml` and `publish-images`.
-- **Plan ground rule** (platformctl README): each step removes the planned markers for what it
-  delivers and claims those IDs with markers or `[ci.*]` entries.
+- **Spec format** (`design.md`, "Requirement states"): each later step's requirements end with
+  `(unimplemented: step N)`, the `status:` lines go, and a retired requirement is deleted and its
+  ID listed on its spec's `removed:` line.
+- **Plan ground rule** (platformctl README): each step removes the `(unimplemented: ...)` suffix
+  from what it delivers and claims those IDs with `covers` marks or `[ci.*]` entries.
 
 ## Done when
 

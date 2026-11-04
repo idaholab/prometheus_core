@@ -22,8 +22,8 @@ platformctl requirements) are closed; their spec content is reworked onto this t
 |---|------|---------|------------|--------|
 | 1 | [`01-speccheck.md`](01-speccheck.md) | The package: spec parsing, config, results files, the pytest plugin, `lint`/`check`/`verify`/`report`/`record`, the upload and verify actions, its own specs, its own workflow checked by itself | - | In review |
 | 2 | [`02-build-specs.md`](02-build-specs.md) | Bring back the build and run specs (from #355/#361) and check platformctl against them | 1 | Not started |
-| 3 | [`03-sdk-adopt.md`](03-sdk-adopt.md) | `sdk/specs` on speccheck: the `SDK-` prefix, markers instead of citations, results from the sdk jobs, the final job | 1 | Not started |
-| 4 | [`04-sdk-evidence.md`](04-sdk-evidence.md) | Mark or test the sdk requirements nobody cites yet | 3 | Not started |
+| 3 | [`03-sdk-adopt.md`](03-sdk-adopt.md) | `sdk/specs` on speccheck: the `SDK-` prefix, markers instead of citations, a test for every requirement nobody cites yet (one PR per area), results from the sdk jobs, the final job | 1 | Not started |
+| 4 | [`04-sdk-evidence.md`](04-sdk-evidence.md) | Folded into step 3: with no "untested" state, step 3 tests the uncited requirements itself | 3 | Folded into 3 |
 | 5 | [`05-vitest.md`](05-vitest.md) | Future: a vitest reporter and a `covers()` helper that write the same results files | 1 | Not started |
 
 When a step is done, set its status here and in its file to `Done (<date>, #<PR>)`, and note

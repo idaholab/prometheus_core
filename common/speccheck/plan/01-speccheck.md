@@ -164,16 +164,30 @@ What differs from the plan above, or settles something it left open:
   the run's jobs API with `filter=all`, and the report lists both attempts under its inputs.
   SPC-REQ-007-05 is now shown by a real re-run, not only by a test that sets
   `GITHUB_RUN_ATTEMPT`.
+- **Two requirement states (2026-11-03, in review):** a requirement is implemented, or ends with
+  `(unimplemented: <reason>)`, so a requirement without a test is always part of a plan
+  (`design.md`, "Requirement states"). `⚠ untested`, `(planned: ...)`, `Retired.` and the spec's
+  `status:` line are gone, and `lint` says what replaces each. A requirement that goes is deleted
+  and its ID listed on its spec's `removed:` line, and a removed spec's number on the index's.
+  `counts` in `--json` has `unimplemented` in place of `planned`, `untested` and `retired`, within
+  `schema_version` 1, since nothing outside speccheck reads it yet. Step 4 is folded into step 3.
+  - Done in three commits, each with its requirements, requirements tests, code, unit tests and
+    docs, and an independent review of its claims: the suffix; removed IDs and specs; then
+    dropping `status:` and rejecting the old forms.
+  - Changed: 001-06, 001-10, 003-03, 003-09, 003-13, 005-03, 005-04, 005-07, 005-11, 006-07,
+    006-08, 008-04. Reused: 001-03 (at least one requirement; was the `status:` line), 001-07 (the
+    suffix; was `Retired.`). New: 001-11 (the old forms), 001-12 (a spec's `removed:`), 001-13
+    (the index's `removed:`), 005-12 (the `unimplemented` status).
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
 ## Adopting
 
-What will surprise a project that adopts speccheck (steps 3 and 4), to repeat in the migration
+What will surprise a project that adopts speccheck (step 3 onward), to repeat in the migration
 steps and in the PR that adds it:
 
 - **A half-migrated suite breaks local pytest.** With `speccheck_config` set, collection checks every
-  claim in the spec folder on every run, locally too. One malformed, unknown or retired ID, or one
+  claim in the spec folder on every run, locally too. One malformed, unknown or removed ID, or one
   the producer may not claim, stops pytest before any test runs. Migrate a whole spec at a time, and
   use `pytest -o speccheck_config=` to iterate meanwhile. That turns every check off only when no
   results file is asked for.
@@ -183,6 +197,9 @@ steps and in the PR that adds it:
 - **The job name is the producer.** `record` takes the job from `$GITHUB_JOB`, which is the job's key
   in the workflow, and looks it up as `[ci.<job>]` in the config. Renaming the job without the
   config entry makes `record` fail.
+- **No requirement waits without a reason.** `⚠ untested`, `Retired.` and the `status:` line are
+  lint errors. Every requirement needs a test, unless a plan step delivers it later
+  (`(unimplemented: <step>)`), and one that goes is deleted with its ID listed in `removed:`.
 - **Every claim needs its own explanation.** Converting a citation means writing how that test
   proves the requirement, and a parametrized test whose citation covered every case needs a
   `pytest.param(..., marks=...)` per case, each saying something different. Class and module

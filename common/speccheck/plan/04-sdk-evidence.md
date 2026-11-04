@@ -1,6 +1,10 @@
 # 4: Evidence for the sdk requirements
 
-> **Status: Not started**
+> **Status: Folded into step 3 (2026-11-03)**
+
+With no "untested" state (`design.md`, "Requirement states"), step 3 can't mark the sdk's
+unclaimed requirements and leave them for later, so this step's work moved into step 3's "The
+rest", split by the same spec areas. What follows is the original plan, kept for the record.
 
 ## Goal
 
