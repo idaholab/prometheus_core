@@ -100,7 +100,12 @@ class TestClaimProblem:
             ("T-REQ-001-01", None, ""),
             ("REQ-001-01", UNIT, "`REQ-001-01` is not an ID of this folder; IDs read like `T-REQ-001-01`"),
             ("T-REQ-001-01x", UNIT, "is not an ID of this folder"),
-            ("T-REQ-002-09", UNIT, "T-REQ-002-09 isn't in any spec; check the number, or add it to spec 002"),
+            ("T-REQ-001-09", UNIT, "T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"),
+            (
+                "T-REQ-002-09",
+                UNIT,
+                "T-REQ-002-09 isn't in any spec, and there is no spec 002; check the number, or write spec 002",
+            ),
             (
                 "T-REQ-001-01",
                 OTHER_SPECS,
