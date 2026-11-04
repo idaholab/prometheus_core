@@ -37,7 +37,9 @@ up again.
 
 The web UI is at http://localhost:3000 and the API at
 http://localhost:5000/api/v1. Both run with authentication disabled, as the
-"Local Developer" user, so this is for local use only. `DEEPLYNX_UI_PORT` and
+"Local Developer" user, so this is for local use only: both ports are published
+on `127.0.0.1`, so only your own machine reaches them, not other devices on
+your network. `DEEPLYNX_UI_PORT` and
 `DEEPLYNX_SERVER_PORT` move them to other host ports, but the UI only works
 with the API on port 5000: the browser's API address is built into the UI
 image. The images don't include DeepLynx's optional document ingestion
@@ -101,7 +103,7 @@ A popup will appear with a _key_ and a _secret_ — copy both now. This is the o
 
 ### Configure the platform to use the local DeepLynx
 
-As noted above, the API (not the web UI on port 3000) is exposed on the host at http://0.0.0.0:5000/api/v1. From inside the Prometheus platform containers that host is available as `prometheus.host.internal` (mapped to Docker's host gateway on macOS and Linux alike), so set
+As noted above, the API (not the web UI on port 3000) is exposed on the host at http://localhost:5000/api/v1, on the loopback interface only. From inside the Prometheus platform containers that host is available as `prometheus.host.internal` (mapped to Docker's host gateway). On Docker Desktop (macOS, Windows) that reaches the loopback port. On Docker Engine for Linux the host gateway is the bridge address, so it may be refused; use the `make up` setup with `LOCAL_DEEPLYNX=true` instead (it reaches `deeplynx-server` by name), or publish the port on that address yourself in `docker-compose.override.yml`. Set
 
 ```
 DEEPLYNX_KEY=...
