@@ -1,7 +1,5 @@
 # 004 - Results files
 
-status: implemented
-
 ## Purpose
 
 A results file is what a test run or a CI job hands to `verify`. It is the only interface between

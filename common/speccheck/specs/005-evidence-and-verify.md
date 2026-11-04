@@ -1,7 +1,5 @@
 # 005 - Evidence and verify
 
-status: implemented
-
 ## Purpose
 
 Every requirement gets one status from the specs, the config and the results files. `check` and

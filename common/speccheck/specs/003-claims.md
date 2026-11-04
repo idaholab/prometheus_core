@@ -1,7 +1,5 @@
 # 003 - Claims
 
-status: implemented
-
 ## Purpose
 
 A test claims the requirements it proves with a pytest marker, and says how it proves each one.

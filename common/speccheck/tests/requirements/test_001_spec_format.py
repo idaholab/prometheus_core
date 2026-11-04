@@ -18,6 +18,11 @@ import pytest
 
 from tests.requirements.conftest import INDEX, Project, spec
 
+ONE = "- T-REQ-001-01: One."
+"""Spec 001's one requirement, for a test about something else: a spec needs at least one."""
+TWO = "- T-REQ-002-01: Two."
+"""Spec 002's one requirement."""
+
 
 @pytest.mark.covers(
     "SPC-REQ-001-01",
@@ -26,8 +31,8 @@ from tests.requirements.conftest import INDEX, Project, spec
 def test_file_names_and_titles(project: Project):
     """A misnamed file and a title without the number are each reported where they are."""
     project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("")
-    project.write("specs/002-other.md", spec("", number="002").replace("# 002 -", "# 2 -"))
+    project.spec(ONE)
+    project.write("specs/002-other.md", spec(TWO, number="002").replace("# 002 -", "# 2 -"))
     project.write("specs/Notes.md", "x")
     run = project.speccheck("lint")
     assert run.code == 1
@@ -43,10 +48,10 @@ def test_only_nnn_dash_name_is_a_title(project: Project):
     """`# NNN - Name` is the one title form, on the first line; file names are exactly `NNN-short-name.md`."""
     title_error = "specs/001-thing.md:1: the first line must be the title, `# 001 - <name>`"
     for first in ("# 001 Thing", "# 001 -", "# 001 -   ", "# 001-Thing", "", "<!-- c -->\n# 001 - Thing"):
-        project.write("specs/001-thing.md", f"{first}\n\nstatus: draft\n")
+        project.write("specs/001-thing.md", f"{first}\n\n## Requirements\n\n{ONE}\n")
         run = project.speccheck("lint")
         assert run.code == 1 and title_error in run.err, first
-    project.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: draft\n")
+    project.write("specs/001-thing.md", f"# 001 - Thing\n\n## Requirements\n\n{ONE}\n")
     assert project.speccheck("lint").code == 0
     # `002-Other.md`, not a capitalised twin of 001-thing.md: that would be the same file on a case-insensitive disk
     for name in ("1-a.md", "002-Other.md", "001.md"):
@@ -63,8 +68,8 @@ def test_only_nnn_dash_name_is_a_title(project: Project):
 def test_the_index_must_link_every_spec(project: Project):
     """A spec the index only mentions in prose is reported; a link in any markdown form lists it."""
     project.write("specs/000-index.md", "# Index\n\nSpec 002 is 002-other.md.\n\n| 001 | [x](./001-thing.md#a) |\n")
-    project.spec("")
-    project.spec("", number="002", name="002-other.md")
+    project.spec(ONE)
+    project.spec(TWO, number="002", name="002-other.md")
     run = project.speccheck("lint")
     assert run.code == 1
     assert run.err.splitlines()[0] == (
@@ -82,8 +87,8 @@ def test_the_index_must_link_every_spec(project: Project):
 )
 def test_require_index_false_turns_off_the_link_check_not_just_the_missing_index(project: Project):
     """The index is there and incomplete: the config alone decides whether that is a problem."""
-    project.spec("")
-    project.spec("", number="002", name="002-other.md")
+    project.spec(ONE)
+    project.spec(TWO, number="002", name="002-other.md")
     assert project.speccheck("lint").code == 1
     project.write("speccheck.toml", 'specs = "specs"\nid-prefix = "T"\nrequire-index = false\n')
     run = project.speccheck("lint")
@@ -96,7 +101,7 @@ def test_require_index_false_turns_off_the_link_check_not_just_the_missing_index
 )
 def test_a_missing_index_is_exit_1(project: Project):
     """Exit 1, not only the message."""
-    project.spec("")
+    project.spec(ONE)
     (project.root / "specs" / "000-index.md").unlink()
     run = project.speccheck("lint")
     assert run.code == 1
@@ -126,7 +131,7 @@ def test_a_missing_index_is_exit_1(project: Project):
 def test_each_markdown_link_form_lists_a_spec(project: Project, link: str):
     """Any link to the file counts."""
     project.write("specs/000-index.md", f"# Index\n\n{link}\n")
-    project.spec("")
+    project.spec(ONE)
     assert project.speccheck("lint").code == 0
 
 
@@ -155,86 +160,282 @@ def test_each_markdown_link_form_lists_a_spec(project: Project, link: str):
 def test_prose_does_not_list_a_spec(project: Project, prose: str):
     """Only a markdown link to this exact file counts."""
     project.write("specs/000-index.md", f"# Index\n\n{prose}\n")
-    project.spec("")
+    project.spec(ONE)
     run = project.speccheck("lint")
     assert run.code == 1 and "the index doesn't link 001-thing.md" in run.err
 
 
 @pytest.mark.parametrize(
-    "status",
+    "body",
     [
         pytest.param(
-            status,
+            "",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-03", f"a spec with status {status} and one unimplemented requirement lints clean"
+                "SPC-REQ-001-03",
+                "lint reports a spec with an empty Requirements section, saying to delete it and list 001 in the index's removed: line",
             ),
-            id=status,
-        )
-        for status in ("draft", "implemented")
+            id="empty",
+        ),
+        pytest.param(
+            "Some prose, and\n\n```\n- T-REQ-001-01: Only an example.\n```",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-03",
+                "lint reports a spec whose only bullet is in a code fence as having no requirement",
+            ),
+            id="only-an-example",
+        ),
     ],
 )
-def test_each_status_value_is_accepted(project: Project, status: str):
-    """Both values are valid."""
-    project.spec("- T-REQ-001-01: One. (unimplemented: later)", status=status)
-    run = project.speccheck("lint")
-    assert run.code == 0 and run.err == "", run.err
-
-
-@pytest.mark.covers(
-    "SPC-REQ-001-03",
-    "a draft spec with an empty Requirements section lints clean, exit 0 and no output",
-)
-def test_only_an_implemented_spec_needs_a_requirement(project: Project):
-    """The "at least one requirement" rule is for `implemented` alone."""
-    project.spec("", status="draft")
+def test_a_spec_needs_a_requirement(project: Project, body: str):
+    """With nothing to require, the spec should go, through the index's `removed:` line."""
+    project.spec(body)
     run = project.speccheck("lint", "--json")
-    assert run.code == 0 and run.json()["problems"] == []
-    assert project.speccheck("lint").err == ""
-
-
-@pytest.mark.covers(
-    "SPC-REQ-001-03",
-    "a status line placed under ## Requirements does not count, so lint reports the status missing",
-)
-def test_a_status_below_the_first_section_does_not_count(project: Project):
-    """The line must be above the first `##`."""
-    project.write(
-        "specs/001-thing.md",
-        "# 001 - Thing\n\n## Requirements\n\nstatus: draft\n\n- T-REQ-001-01: One. (unimplemented: later)\n",
-    )
-    run = project.speccheck("lint")
-    assert run.code == 1 and "specs/001-thing.md: missing the `status:` line" in run.err
-
-
-@pytest.mark.covers(
-    "SPC-REQ-001-03",
-    "a draft spec's unclaimed requirement is reported by check as unclaimed, as an implemented spec's is",
-)
-def test_a_draft_specs_requirements_are_checked_like_an_implemented_ones(project: Project):
-    """The status doesn't exempt a requirement from needing a claim."""
-    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
-    project.spec("- T-REQ-001-01: Draft one.", status="draft")
-    project.spec("- T-REQ-002-01: Implemented one.", number="002", name="002-other.md", status="implemented")
-    run = project.speccheck("check", "--json")
-    statuses = {r["id"]: r["status"] for r in run.json()["requirements"]}
-    assert statuses == {"T-REQ-001-01": "unclaimed", "T-REQ-002-01": "unclaimed"}
     assert run.code == 1
+    assert [(p["path"], p["line"], p["code"], p["message"]) for p in run.json()["problems"]] == [
+        (
+            "specs/001-thing.md",
+            0,
+            "spec-empty",
+            "a spec needs at least one requirement; if it has none left, delete it and list 001 in "
+            "000-index.md's `removed:` line",
+        )
+    ]
 
 
 @pytest.mark.covers(
     "SPC-REQ-001-03",
-    "lint reports an unknown status value and a second status line each at its line, and a missing status line and an implemented spec with no requirements each with no line",
+    "a spec with a title and one unimplemented requirement but no header line lints clean: exit 0, no problems, and one requirement counted",
 )
-def test_the_status_line(project: Project):
-    """Missing, unknown, repeated, and implemented with nothing in it, are all problems."""
-    project.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: done\nstatus: draft\n")
+def test_a_spec_needs_no_header_line(project: Project):
+    """No `status:`, no other header: one requirement is enough, and an unimplemented one counts."""
+    project.write("specs/001-thing.md", "# 001 - Thing\n\n## Requirements\n\n- T-REQ-001-01: One. (unimplemented: x)\n")
     run = project.speccheck("lint")
-    assert "specs/001-thing.md:3: status must be one of draft, implemented" in run.err
-    assert "specs/001-thing.md:4: a second `status:` line; a spec has one" in run.err
-    project.spec("", status="implemented")
-    assert "specs/001-thing.md: an implemented spec needs at least one requirement" in project.speccheck("lint").err
-    project.write("specs/001-thing.md", "# 001 - Thing\n")
-    assert "specs/001-thing.md: missing the `status:` line" in project.speccheck("lint").err
+    assert (run.code, run.err, run.out) == (0, "", "speccheck lint: 1 specs, 1 requirement\n")
+
+
+@pytest.mark.parametrize(
+    ("body", "codes"),
+    [
+        pytest.param(
+            "* T-REQ-002-01: Star.",
+            ["bullet-malformed", "spec-empty"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-03",
+                "spec 002 whose only bullet is malformed has no requirement, so lint reports it empty as well, naming 002",
+            ),
+            id="only-malformed",
+        ),
+        pytest.param(
+            "- T-REQ-001-09: Numbered for 001.",
+            ["bullet-wrong-spec"],
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-03",
+                "spec 002 whose only bullet is numbered for spec 001 has that requirement, so it is not reported empty",
+            ),
+            id="only-wrong-spec",
+        ),
+    ],
+)
+def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[str]):
+    """A malformed bullet isn't a requirement; a well-formed one in the wrong spec is (and is reported for that)."""
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.spec(ONE)
+    project.write("specs/002-other.md", spec(body, number="002", title="Other"))
+    problems = project.speccheck("lint", "--json").json()["problems"]
+    assert [p["code"] for p in problems] == codes
+    empty = [p["message"] for p in problems if p["code"] == "spec-empty"]
+    assert all("list 002 in 000-index.md's `removed:` line" in m for m in empty)
+    assert len(empty) == codes.count("spec-empty")
+
+
+@pytest.mark.parametrize(
+    ("bullet", "message"),
+    [
+        pytest.param(
+            "- T-REQ-001-02: Two. ⚠ untested",
+            "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports a bullet ending in the untested marker at its line, saying to use the suffix or a test",
+            ),
+            id="untested",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Two\n  wrapped. ⚠ untested.",
+            "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports the untested marker with a full stop after it, on a wrapped bullet, at the bullet's first line",
+            ),
+            id="untested-wrapped",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Two (planned: step 3).",
+            "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports a bullet ending in a planned marker at its line, saying to use the suffix or a test",
+            ),
+            id="planned",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Retired. Gone.",
+            "T-REQ-001-02 has `Retired.`, which is gone; delete the requirement and list T-REQ-001-02 in its spec's "
+            "`removed:` line",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports a bullet starting Retired. at its line, saying to delete it and list its ID in removed:",
+            ),
+            id="retired-stop",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Retired: gone.",
+            "T-REQ-001-02 has `Retired:`, which is gone; delete the requirement and list T-REQ-001-02 in its spec's "
+            "`removed:` line",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports a bullet starting Retired: with the same fix as Retired., naming the form",
+            ),
+            id="retired-colon",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Two (planned: step 3)",
+            "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "lint reports a bullet ending in a planned marker with no full stop after it"
+            ),
+            id="planned-no-stop",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Two (planned: step 3 (after b)).",
+            "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "lint reports a planned marker whose step holds parentheses of its own"
+            ),
+            id="planned-parentheses",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Two. ⚠ untested (unimplemented: step 3)",
+            "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
+            "if a plan delivers it later, or give it a test",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "lint reports the untested marker left before an unimplemented suffix, since it is looked for without the suffix",
+            ),
+            id="untested-before-suffix",
+        ),
+    ],
+)
+def test_an_old_marker_says_what_replaces_it(project: Project, bullet: str, message: str):
+    """At the bullet's own line (line 8, after a good bullet on line 7), with code `old-marker`."""
+    project.spec(f"{ONE}\n{bullet}")
+    run = project.speccheck("lint", "--json")
+    assert run.code == 1
+    assert [(p["line"], p["code"], p["message"]) for p in run.json()["problems"]] == [(8, "old-marker", message)]
+
+
+@pytest.mark.parametrize(
+    "bullet",
+    [
+        pytest.param(
+            "- T-REQ-001-02: A bullet ending `⚠ untested` is reported.",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "the untested marker named in the middle of a requirement's text is ordinary words"
+            ),
+            id="untested-named",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: It names (planned: x) mid-text.",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "a planned marker in the middle of a requirement's text is ordinary words"
+            ),
+            id="planned-mid-text",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: Retired later, maybe.",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11",
+                "a text starting with the word Retired but no stop or colon after it is ordinary words",
+            ),
+            id="retired-later",
+        ),
+        pytest.param(
+            "- T-REQ-001-02: It was Retired. Once.",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "Retired. in the middle of a requirement's text is ordinary words"
+            ),
+            id="retired-mid-text",
+        ),
+    ],
+)
+def test_old_markers_elsewhere_are_words(project: Project, bullet: str):
+    """So a requirement can name the old markers, as SPC-REQ-001-11 itself does."""
+    project.spec(f"{ONE}\n{bullet}")
+    assert project.speccheck("lint", "--json").json()["problems"] == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-11",
+    "a bullet that starts Retired. and ends with the untested marker gets two old-marker problems, both at its line",
+)
+def test_one_problem_per_old_marker(project: Project):
+    """Each marker has its own fix, so each is its own problem."""
+    project.spec(f"{ONE}\n- T-REQ-001-02: Retired. Gone. ⚠ untested")
+    problems = project.speccheck("lint", "--json").json()["problems"]
+    assert [(p["line"], p["code"]) for p in problems] == [(8, "old-marker"), (8, "old-marker")]
+    assert {p["message"].split(";")[0] for p in problems} == {
+        "T-REQ-001-02 has `⚠ untested`, which is gone",
+        "T-REQ-001-02 has `Retired.`, which is gone",
+    }
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-11",
+    "lint reports a status: line in a spec's header at its line, saying to delete it",
+)
+def test_a_status_line_says_to_delete_it(project: Project):
+    """The old header line, wherever in the header it is."""
+    project.write("specs/001-thing.md", spec(ONE, header="sources: x\nstatus: implemented"))
+    run = project.speccheck("lint", "--json")
+    assert [(p["line"], p["code"], p["message"]) for p in run.json()["problems"]] == [
+        (
+            4,
+            "status-line-gone",
+            "the `status:` line is gone; delete it (a planned requirement ends with `(unimplemented: <reason>)`)",
+        )
+    ]
+
+
+@pytest.mark.parametrize(
+    ("body", "header"),
+    [
+        pytest.param(
+            f"{ONE}\n\nstatus: draft",
+            "sources: x",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "a status: line under the Requirements heading is prose, not the old header line"
+            ),
+            id="under-a-heading",
+        ),
+        pytest.param(
+            ONE,
+            "```\nstatus: draft\n```",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-11", "a status: line inside a fence in the header is an example, not the old line"
+            ),
+            id="in-a-fence",
+        ),
+    ],
+)
+def test_a_status_line_elsewhere_is_text(project: Project, body: str, header: str):
+    """Only the header's own line, outside a fence, is the old format."""
+    project.write("specs/001-thing.md", spec(body, header=header))
+    assert project.speccheck("lint", "--json").json()["problems"] == []
 
 
 @pytest.mark.covers(
@@ -583,26 +784,21 @@ def test_fenced_examples_are_ignored(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-001-08",
-    "a status line and a `## ` header inside ``` and ~~~ fences ahead of the real ones change nothing: lint is clean, with the real status and one requirement",
+    "status:, removed: and a `## ` header inside ``` and ~~~ fences ahead of the real header change nothing: lint is clean with one requirement, and the real removed: line is still read",
 )
 def test_fences_in_the_header_are_ignored(project: Project):
     """The fenced lines sit where they would matter, before `## Requirements`, so ignoring them is what keeps lint clean."""
-    project.write(
-        "specs/001-thing.md",
-        "# 001 - Thing\n\n```markdown\n## Example\nstatus: bogus\n```\n\nstatus: draft\n\n"
-        "~~~\nstatus: again\n~~~\n\n## Requirements\n\n- T-REQ-001-01: Real. (unimplemented: later)\n",
+    fenced = (
+        "# 001 - Thing\n\n```markdown\n## Example\nstatus: bogus\nremoved: nonsense\n```\n\n{removed}\n\n"
+        "~~~\nremoved: T-REQ-001-01\n~~~\n\n## Requirements\n\n- T-REQ-001-01: Real.\n"
     )
+    project.write("specs/001-thing.md", fenced.format(removed="removed: T-REQ-001-02"))
     run = project.speccheck("lint", "--json")
     assert run.code == 0, run.err
     assert run.json()["requirement_count"] == 1
-    assert [s["status"] for s in run.json()["specs"]] == ["draft"]
-    # An unfenced second status line is still reported, at its own line, so the fenced ones above really were skipped
-    project.write(
-        "specs/001-thing.md",
-        "# 001 - Thing\n\n```\nstatus: bogus\n```\n\nstatus: draft\nstatus: draft\n\n## Requirements\n\n"
-        "- T-REQ-001-01: Real. (unimplemented: later)\n",
-    )
-    assert "specs/001-thing.md:8: a second `status:` line; a spec has one" in project.speccheck("lint").err
+    # The unfenced removed: line between the fences is read, so the fences around it really were skipped
+    project.write("specs/001-thing.md", fenced.format(removed="removed: T-REQ-001-01"))
+    assert [p["code"] for p in project.speccheck("lint", "--json").json()["problems"]] == ["removed-reused"]
 
 
 @pytest.mark.covers(
@@ -612,7 +808,7 @@ def test_fences_in_the_header_are_ignored(project: Project):
 def test_the_old_checkers_lines_say_where_the_setting_went(project: Project):
     """`tests:` and `id-prefix:` point at the config."""
     project.write("specs/000-index.md", "# Index\n\nid-prefix: T\n\n" + INDEX)
-    project.write("specs/001-thing.md", spec("").replace("status: draft", "status: draft\ntests: tests"))
+    project.write("specs/001-thing.md", spec("", header="sources: tests\ntests: tests"))
     run = project.speccheck("lint")
     assert "specs/000-index.md:3: the `id-prefix:` line is gone; set `id-prefix` in the config instead" in run.err
     assert (
@@ -767,7 +963,7 @@ def test_three_of_one_text_each_name_the_first(project: Project):
 
 def with_removed(body: str, removed: str) -> str:
     """Spec 001 with `body` as its requirements and `removed` as its header's `removed:` line (or lines)."""
-    return spec(body).replace("status: draft", f"status: draft\n{removed}")
+    return spec(body, header=f"sources: tests\n{removed}")
 
 
 @pytest.mark.covers(

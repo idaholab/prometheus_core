@@ -64,9 +64,14 @@ INDEX = "# Index\n\n- [001](001-thing.md)\n"
 """An index that links the one spec most tests write."""
 
 
-def spec(body: str, *, status: str = "draft", number: str = "001", title: str = "Thing") -> str:
-    """A spec file with the header filled in and `body` as its Requirements section."""
-    return f"# {number} - {title}\n\nstatus: {status}\n\n## Requirements\n\n{textwrap.dedent(body).strip()}\n"
+HEADER = "sources: tests"
+"""The header line `spec` writes on line 3: free text speccheck ignores, which a test can replace with a header
+line it reads (such as `removed:`). It keeps bullets on line 7, where most tests expect them."""
+
+
+def spec(body: str, *, number: str = "001", title: str = "Thing", header: str = HEADER) -> str:
+    """A spec file with `header` as its header and `body` as its Requirements section."""
+    return f"# {number} - {title}\n\n{header}\n\n## Requirements\n\n{textwrap.dedent(body).strip()}\n"
 
 
 TESTS = Path(__file__).resolve().parent

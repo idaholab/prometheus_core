@@ -32,9 +32,9 @@ ROOT = Path("/repo")
 """Where the in-memory specs and config pretend to live; paths in messages are relative to it."""
 
 
-def make_spec(number: str = "001", *, status: str = "draft", title: str = "Thing") -> specs.Spec:
+def make_spec(number: str = "001", *, title: str = "Thing") -> specs.Spec:
     """A spec with no requirements yet, at `specs/<number>-thing.md` under ROOT."""
-    return specs.Spec(path=ROOT / "specs" / f"{number}-thing.md", number=number, title=title, status=status)
+    return specs.Spec(path=ROOT / "specs" / f"{number}-thing.md", number=number, title=title)
 
 
 def make_requirement(

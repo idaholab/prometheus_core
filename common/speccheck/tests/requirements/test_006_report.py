@@ -516,7 +516,7 @@ def hostile_spec(project: Project, text: str, purpose: str, title: str) -> None:
     """Spec 001 whose requirement text, Purpose and title are the given strings."""
     project.write(
         "specs/001-thing.md",
-        f"# 001 - {title}\n\nstatus: draft\n\n## Purpose\n\n{purpose}\n\n## Requirements\n\n- T-REQ-001-01: {text}\n",
+        f"# 001 - {title}\n\nsources: tests\n\n## Purpose\n\n{purpose}\n\n## Requirements\n\n- T-REQ-001-01: {text}\n",
     )
 
 

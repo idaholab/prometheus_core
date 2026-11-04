@@ -21,6 +21,11 @@ import pytest
 from speccheck import specs
 from tests.conftest import INDEX, spec
 
+ONE = "- T-REQ-001-01: One."
+"""Spec 001's one requirement, for a test about something else: a spec needs at least one."""
+TWO = "- T-REQ-002-01: Two."
+"""Spec 002's one requirement."""
+
 
 class Repo:
     """A spec folder under a temporary root, with the index most tests start from."""
@@ -74,31 +79,31 @@ class TestFilesAndIndex:
 
     def test_file_names_and_the_index(self, repo: Repo):
         """Specs are named NNN-name.md and the index links each one."""
-        repo.spec("")
-        repo.spec("", number="002", name="002-unlisted.md")
+        repo.spec(ONE)
+        repo.spec(TWO, number="002", name="002-unlisted.md")
         repo.write("specs/Notes.md", "x")
         assert_problems(repo, "the index doesn't link 002-unlisted.md", "must be named NNN-short-name.md")
 
     def test_the_title_must_carry_the_number(self, repo: Repo):
         """`# 001 - Name`, so a renamed file shows."""
-        repo.write("specs/001-thing.md", spec("").replace("# 001 -", "# 01 -"))
+        repo.write("specs/001-thing.md", spec(ONE).replace("# 001 -", "# 01 -"))
         assert_problems(repo, "specs/001-thing.md:1: the first line must be the title")
 
     def test_an_empty_file_has_no_title(self, repo: Repo):
         """An empty spec is reported, not a crash."""
         repo.write("specs/001-thing.md", "")
-        assert_problems(repo, "the first line must be the title", "missing the `status:` line")
+        assert_problems(repo, "the first line must be the title", "a spec needs at least one requirement")
 
     def test_the_title_is_read(self, repo: Repo):
         """The report shows each spec's title."""
-        repo.spec("", title="Spec format")
+        repo.spec(ONE, title="Spec format")
         assert specs.load(repo.root / "specs", repo.root, "T").specs[0].title == "Spec format"
 
     def test_the_purpose_is_read(self, repo: Repo):
         """The `## Purpose` section's lines, joined onto one, without a fenced example; "" when there's none."""
         repo.write(
             "specs/001-thing.md",
-            "# 001 - Thing\n\nstatus: draft\n\n## Purpose\n\nWhat it\n  is for.\n\n```\nnot this\n```\n\n"
+            "# 001 - Thing\n\nsources: tests\n\n## Purpose\n\nWhat it\n  is for.\n\n```\nnot this\n```\n\n"
             "## Requirements\n\n- T-REQ-001-01: One.\n\n## Notes\n\nNot this either.\n",
         )
         loaded = specs.load(repo.root / "specs", repo.root, "T")
@@ -111,15 +116,15 @@ class TestFilesAndIndex:
         """An indented line after a `## ` heading isn't more of the last bullet's text."""
         repo.write(
             "specs/001-thing.md",
-            "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: One.\n## Open questions\n  Two.\n",
+            "# 001 - Thing\n\nsources: tests\n\n## Requirements\n\n- T-REQ-001-01: One.\n## Open questions\n  Two.\n",
         )
         assert [r.text for r in specs.load(repo.root / "specs", repo.root, "T").requirements.values()] == ["One."]
 
     def test_an_unlinked_spec_is_named(self, repo: Repo):
         """The index's problem says which file and how to link it."""
         repo.write("specs/000-index.md", "# Index\n\nSpec 002 is below.\n\n- [001](001-thing.md)\n")
-        repo.spec("")
-        repo.spec("", number="002", name="002-other.md")
+        repo.spec(ONE)
+        repo.spec(TWO, number="002", name="002-other.md")
         assert problems(repo) == [
             "specs/000-index.md: the index doesn't link 002-other.md; list it as `[002](002-other.md)`"
         ]
@@ -127,45 +132,93 @@ class TestFilesAndIndex:
     def test_a_missing_index_fails_only_when_required(self, repo: Repo):
         """The index is the entry point, unless the config says a folder has none."""
         (repo.root / "specs" / "000-index.md").unlink()
-        repo.spec("")
+        repo.spec(ONE)
         assert_problems(repo, "needs a 000-index.md")
         assert problems(repo, require_index=False) == []
 
     def test_an_index_is_not_required_to_link_when_not_required(self, repo: Repo):
         """With require-index off, an index that exists isn't checked for links."""
-        repo.spec("", number="002", name="002-unlisted.md")
+        repo.spec(TWO, number="002", name="002-unlisted.md")
         assert problems(repo, require_index=False) == []
 
 
 class TestHeader:
-    """The `status:` line."""
+    """The header: no `status:` line any more, and at least one requirement."""
 
-    def test_the_status_line_is_required_and_known(self, repo: Repo):
-        """A missing or unknown status is a problem."""
-        repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: done\n")
-        assert_problems(repo, "status must be one of draft, implemented")
-        repo.write("specs/001-thing.md", "# 001 - Thing\n")
-        assert_problems(repo, "missing the `status:` line")
+    def test_a_status_line_is_reported(self, repo: Repo):
+        """At its line, saying to delete it."""
+        repo.write("specs/001-thing.md", spec(ONE, header="status: implemented"))
+        assert problems(repo) == [
+            "specs/001-thing.md:3: the `status:` line is gone; delete it "
+            "(a planned requirement ends with `(unimplemented: <reason>)`)"
+        ]
 
-    def test_the_header_is_read_only_above_the_first_section(self, repo: Repo):
-        """A `status:` in an example further down is prose, not the spec's setting."""
-        repo.spec("- T-REQ-001-01: It MUST work.\n\n```\nstatus: bogus\n```\n\nstatus: bogus\n")
+    def test_a_status_below_the_header_is_text(self, repo: Repo):
+        """Under a `##` or in a fence, a `status:` is prose, not the old header line."""
+        repo.spec(f"{ONE}\n\n```\nstatus: bogus\n```\n\nstatus: bogus\n")
         assert_problems(repo)
 
-    def test_a_repeated_status_line_fails(self, repo: Repo):
-        """The second one would otherwise win without a word."""
-        repo.write("specs/001-thing.md", spec("").replace("status: draft", "status: draft\nstatus: implemented"))
-        assert_problems(repo, "a second `status:` line")
+    def test_no_header_line_is_needed(self, repo: Repo):
+        """A title and a Requirements section are enough."""
+        repo.write("specs/001-thing.md", f"# 001 - Thing\n\n## Requirements\n\n{ONE}\n")
+        assert_problems(repo)
 
-    def test_an_implemented_spec_needs_a_requirement(self, repo: Repo):
-        """A skeleton is fine as a draft, but "implemented" with nothing in it would pass vacuously."""
-        repo.spec("", status="implemented")
-        assert_problems(repo, "an implemented spec needs at least one requirement")
-
-    def test_a_draft_spec_may_be_empty(self, repo: Repo):
-        """Only a spec that says it is implemented must say something."""
+    def test_a_spec_needs_a_requirement(self, repo: Repo):
+        """With nothing in it, it says to remove the spec through the index."""
         repo.spec("")
-        assert_problems(repo)
+        assert problems(repo) == [
+            "specs/001-thing.md: a spec needs at least one requirement; if it has none left, delete it "
+            "and list 001 in 000-index.md's `removed:` line"
+        ]
+
+
+class TestOldForms:
+    """`old_forms`: the old format's markers on a requirement's text, each with its replacement."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "It. ⚠ untested",
+            "It. ⚠ untested.",
+            "It. (planned: step 2)",
+            "It (planned: step 2).",
+            "It (planned: x (y)).",
+            "Retired. Gone.",
+        ],
+    )
+    def test_found(self, text):
+        """At the end (untested, planned) or the start (retired), with or without a full stop."""
+        assert len(specs.old_forms(text, "T-REQ-001-01")) == 1
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "It names `⚠ untested` in the middle.",
+            "It names (planned: x) mid-text.",
+            "Retired later.",
+            "It was Retired. Once.",
+            "It.",
+        ],
+    )
+    def test_ordinary_words(self, text):
+        """Anywhere else they are words, so a requirement can name them."""
+        assert specs.old_forms(text, "T-REQ-001-01") == []
+
+    def test_each_says_what_replaces_it(self):
+        """Untested and planned: the suffix or a test. Retired: delete it and list the ID in `removed:`."""
+        replace = "end it with `(unimplemented: <reason>)` if a plan delivers it later, or give it a test"
+        assert specs.old_forms("It. ⚠ untested", "X") == [("`⚠ untested`, which is gone", replace)]
+        assert specs.old_forms("It. (planned: 2)", "X") == [("`(planned: ...)`, which is gone", replace)]
+        assert specs.old_forms("Retired: gone", "X") == [
+            ("`Retired:`, which is gone", "delete the requirement and list X in its spec's `removed:` line")
+        ]
+
+    def test_reported_by_load(self, repo: Repo):
+        """At the bullet's line, with code `old-marker`."""
+        repo.spec("- T-REQ-001-01: One. ⚠ untested")
+        [found] = specs.load(repo.root / "specs", repo.root, "T").problems
+        assert (found.line, found.code) == (7, "old-marker")
+        assert found.message.startswith("T-REQ-001-01 has `⚠ untested`, which is gone; end it with")
 
 
 class TestBullets:
@@ -173,7 +226,7 @@ class TestBullets:
 
     def test_a_malformed_bullet_fails(self, repo: Repo):
         """`REQ-1-1` or a missing colon."""
-        repo.spec("- T-REQ-1-1: Short.\n- T-REQ-001-02 Missing colon.")
+        repo.spec(f"{ONE}\n- T-REQ-1-1: Short.\n- T-REQ-001-02 Missing colon.")
         assert_problems(repo, "a bullet must read", "a bullet must read")
 
     def test_every_bullet_style_is_a_bullet(self, repo: Repo):
@@ -189,7 +242,7 @@ class TestBullets:
         """Each malformed shape gets its own reason, and the line's first 60 characters are echoed."""
         long = "- T-REQ-001-09 " + "x" * 80
         repo.spec(
-            "* T-REQ-001-01: Star.\n- **T-REQ-001-02**: Bold.\n  - T-REQ-001-03: Nested.\n"
+            "- T-REQ-001-10: Real.\n* T-REQ-001-01: Star.\n- **T-REQ-001-02**: Bold.\n  - T-REQ-001-03: Nested.\n"
             f"- REQ-001-04: No prefix.\n- T-REQ-001-05 No colon.\n- T-REQ-1-6: Short.\n{long}"
         )
         assert_problems(
@@ -210,7 +263,7 @@ class TestBullets:
 
     def test_a_bullet_without_the_prefix_fails(self, repo: Repo):
         """The message shows the form to write."""
-        repo.spec("- REQ-001-01: It MUST work.")
+        repo.spec(f"{ONE}\n- REQ-001-01: It MUST work.")
         assert_problems(repo, "a bullet must read `- T-REQ-NNN-XX: text`")
 
     def test_a_prefixed_id_in_a_bare_folder_is_ordinary_text(self, repo: Repo):
@@ -441,9 +494,7 @@ class TestRemoved:
         """Listed on the spec, kept by ID with the spec's number, and no problem."""
         repo.write(
             "specs/001-thing.md",
-            spec("- T-REQ-001-01: One.").replace(
-                "status: draft", "status: draft\nremoved: T-REQ-001-02,\n  T-REQ-001-03"
-            ),
+            spec("- T-REQ-001-01: One.", header="sources: tests\nremoved: T-REQ-001-02,\n  T-REQ-001-03"),
         )
         loaded = specs.load(repo.root / "specs", repo.root, "T")
         assert (loaded.removed, loaded.problems) == ({"T-REQ-001-02": "001", "T-REQ-001-03": "001"}, [])
@@ -453,7 +504,7 @@ class TestRemoved:
         """Each spec lists only its own IDs."""
         repo.write(
             "specs/001-thing.md",
-            spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-002-01"),
+            spec("- T-REQ-001-01: One.", header="sources: tests\nremoved: T-REQ-002-01"),
         )
         assert_problems(
             repo,
@@ -464,7 +515,7 @@ class TestRemoved:
         """At the `removed:` line, naming where the requirement is."""
         repo.write(
             "specs/001-thing.md",
-            spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-001-01"),
+            spec("- T-REQ-001-01: One.", header="sources: tests\nremoved: T-REQ-001-01"),
         )
         assert problems(repo) == [
             "specs/001-thing.md:4: T-REQ-001-01 is listed in `removed:` but is a requirement at specs/001-thing.md:8; "
@@ -474,7 +525,7 @@ class TestRemoved:
     def test_the_index_lists_removed_specs(self, repo: Repo):
         """Read from the index, and a spec file with a listed number is a problem and not read."""
         repo.write("specs/000-index.md", INDEX + "\nremoved: 002, 003\n")
-        repo.spec("")
+        repo.spec(ONE)
         repo.spec("- T-REQ-002-01: Two.", number="002", name="002-old.md")
         loaded = specs.load(repo.root / "specs", repo.root, "T")
         assert loaded.removed_specs == ["002", "003"]
@@ -486,7 +537,7 @@ class TestRemoved:
     def test_a_bad_number_in_the_index(self, repo: Repo):
         """At the index's line."""
         repo.write("specs/000-index.md", INDEX + "\nremoved: 9\n")
-        repo.spec("")
+        repo.spec(ONE)
         assert_problems(repo, "specs/000-index.md:5: `9` in `removed:` isn't a spec number")
 
 
@@ -504,7 +555,7 @@ def test_a_fenced_example_is_not_a_requirement(repo: Repo):
 def test_the_old_checkers_lines_are_reported(repo: Repo):
     """`tests:` and `id-prefix:` moved into the config, and the messages say so."""
     repo.write("specs/000-index.md", "# Index\n\nid-prefix: T\n\n- [001](001-thing.md)\n")
-    repo.write("specs/001-thing.md", spec("").replace("status: draft", "status: draft\ntests: tests"))
+    repo.write("specs/001-thing.md", spec(ONE, header="sources: tests\ntests: tests"))
     assert_problems(
         repo,
         "specs/000-index.md:3: the `id-prefix:` line is gone; set `id-prefix` in the config",

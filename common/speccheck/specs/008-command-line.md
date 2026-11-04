@@ -1,7 +1,5 @@
 # 008 - The command line
 
-status: implemented
-
 ## Purpose
 
 One command with the same global options everywhere, readable output for people, and one JSON
