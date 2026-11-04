@@ -71,6 +71,10 @@ services:
       # Vector database location in the container: the workspace volume by
       # default, or a host directory bound in docker-compose.override.yml.
       MOOSENGER_VECTOR_DIR: ${MOOSENGER_VECTOR_DIR:-/workspace/vector_data}
+      # MOOSE knowledge base (Object Registry, compiled pages, graph): the
+      # workspace volume by default, or a host directory bound read-only in
+      # docker-compose.override.yml. The agent only reads it.
+      MOOSENGER_KNOWLEDGE_DIR: ${MOOSENGER_KNOWLEDGE_DIR:-/workspace/.moosenger_knowledge}
       # Template rendered into /workspace/.moosenger.yaml at startup.
       MOOSENGER_CONFIG: /app/config/moosenger.yaml
       MOOSENGER_RENDER_CONFIG: ${MOOSENGER_RENDER_CONFIG:-true}

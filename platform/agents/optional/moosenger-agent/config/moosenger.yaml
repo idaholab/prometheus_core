@@ -29,7 +29,9 @@ rag:
   matches: 10
 
 knowledge:
-  layout: "$MOOSENGER_PROJECT_DIR/.moosenger_knowledge"
+  # The workspace volume by default; set MOOSENGER_KNOWLEDGE_DIR to use a
+  # knowledge base bound in from the host (docker-compose.override.yml).
+  layout: "$MOOSENGER_KNOWLEDGE_DIR"
   moose:
     # MOOSE checkout for the example catalog. Empty (the default) = none.
     # Set MOOSENGER_MOOSE_REPO=/moose after binding a checkout there in
