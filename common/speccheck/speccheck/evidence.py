@@ -108,6 +108,9 @@ def claim_problem(claimed: str, producer: Producer | None, specs: SpecSet) -> st
     requirement = specs.requirements.get(claimed)
     if requirement is None:
         number = match.group("number")
+        gone = specs.removed_from(claimed, number)
+        if gone:
+            return gone
         if any(spec.number == number for spec in specs.specs):
             return f"{claimed} isn't in any spec; check the number, or add it to spec {number}"
         return f"{claimed} isn't in any spec, and there is no spec {number}; check the number, or write spec {number}"
