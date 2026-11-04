@@ -123,3 +123,59 @@ test("each half has the same classes as a Button with the same style props", () 
     expect(classes).toContain("join-item");
   }
 });
+
+test("End jumps to the last enabled option, and Tab closes the menu without refocusing the arrow", async () => {
+  const { user, arrow } = setup([{ label: "Edit the template" }, { label: "Export plan" }, { label: "Archive plan", disabled: true }]);
+  await user.click(arrow());
+
+  await user.keyboard("{End}");
+  expect(screen.getByRole("menuitem", { name: "Export plan" })).toHaveFocus();
+
+  await user.keyboard("{Tab}");
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(arrow()).not.toHaveFocus();
+});
+
+/** A DOMRect for jsdom, which doesn't lay anything out. */
+const rect = (left: number, top: number, width: number, height: number) =>
+  ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+test("the menu opens up and to the left when it would leave the viewport", async () => {
+  // A 400x300 window with the button in its bottom-right corner, and a
+  // 200x120 menu, which fits neither below nor to the right
+  vi.stubGlobal("innerWidth", 400);
+  vi.stubGlobal("innerHeight", 300);
+  const measure = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return this.getAttribute("role") === "menu" ? rect(0, 0, 200, 120) : rect(300, 250, 90, 32);
+  });
+  try {
+    const { user, arrow } = setup();
+    await user.click(arrow());
+    expect(screen.getByRole("menu")).toHaveClass("bottom-full", "right-0");
+
+    // Back in the top-left corner, it opens down and to the right
+    await user.keyboard("{Escape}");
+    measure.mockImplementation(function (this: HTMLElement) {
+      return this.getAttribute("role") === "menu" ? rect(0, 0, 200, 120) : rect(10, 10, 90, 32);
+    });
+    await user.click(arrow());
+    expect(screen.getByRole("menu")).toHaveClass("top-full", "left-0");
+  } finally {
+    measure.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
+
+test("clicking the arrow again closes the menu, and wide stretches the main half", async () => {
+  const user = userEvent.setup();
+  render(<SplitButton label="Modify Plan" onClick={() => {}} options={[{ label: "Edit", onClick: () => {} }]} wide />);
+  const arrow = screen.getByRole("button", { name: "More Modify Plan options" });
+
+  await user.click(arrow);
+  expect(screen.getByRole("menu")).toBeInTheDocument();
+  await user.click(arrow);
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  expect(arrow).toHaveFocus();
+
+  expect(screen.getByRole("button", { name: "Modify Plan" })).toHaveClass("flex-1", "btn-block");
+});
