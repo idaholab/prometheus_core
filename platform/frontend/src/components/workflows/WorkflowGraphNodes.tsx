@@ -40,10 +40,14 @@ export interface CheckpointNodeData extends Record<string, unknown> {
 
 export interface SkillNodeData extends Record<string, unknown> {
   name: string;
-  /** Dot colour, matching the skill's group in the library. */
+  /** Colour of the dot beside the name, e.g. green for every node in D.2. */
   tone: SkillTone;
   input: string;
+  /** Colour of the input's port dot, by the kind of value, e.g. cyan for material data. */
+  inputTone: SkillTone;
   output: string;
+  /** Colour of the output's port dot, by the kind of value, e.g. green for an analysis result. */
+  outputTone: SkillTone;
   /** Node width in px. */
   width: number;
 }
@@ -117,14 +121,14 @@ export function WorkflowCheckpointNode({ data }: NodeProps<CheckpointNode>) {
   );
 }
 
-/** A port dot on a skill node, in its tone colour. Decorative: the row's text carries the meaning. */
+/** A port dot on a skill node, coloured by the kind of value. Decorative: the row's text carries the meaning. */
 function PortDot({ tone }: { tone: SkillTone }) {
   return <span aria-hidden="true" className={`size-1 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />;
 }
 
 /**
  * One skill step on the Builder canvas (Figma D.2): name and status dot, then
- * its input and output, each with a port dot. `selected` (set by the graph)
+ * its input and output, each led by a port dot. `selected` (set by the graph)
  * gives it D.2's selected style: a primary border and ring.
  */
 export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
@@ -143,16 +147,16 @@ export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
         <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`} />
       </div>
       <div className="flex items-center gap-1.5">
-        <PortDot tone={data.tone} />
+        <PortDot tone={data.inputTone} />
         <div className="min-w-0 flex-1">
           <DetailRow label="IN" value={data.input} />
         </div>
       </div>
       <div className="flex items-center gap-1.5">
+        <PortDot tone={data.outputTone} />
         <div className="min-w-0 flex-1">
           <DetailRow label="OUT" value={data.output} />
         </div>
-        <PortDot tone={data.tone} />
       </div>
       <Handle type="source" position={Position.Bottom} isConnectable={false} className={HANDLE_CLASS} />
     </div>
