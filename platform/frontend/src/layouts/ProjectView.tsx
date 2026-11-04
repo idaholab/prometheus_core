@@ -37,6 +37,9 @@ interface Props {
 // <TabBar> component for section sub-navigation (e.g. inside Admin).
 export function ProjectView({ onLogout }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("home");
+  // Bumped on every sidebar click and used as the section page's key, so
+  // clicking the current section resets it (e.g. Workflows: Builder → Console).
+  const [navCount, setNavCount] = useState(0);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [chatType] = useChatType();
@@ -56,7 +59,10 @@ export function ProjectView({ onLogout }: Props) {
           isOpen={leftOpen}
           onToggle={() => setLeftOpen((v) => !v)}
           activeNav={activeNav}
-          onNavSelect={setActiveNav}
+          onNavSelect={(id) => {
+            setActiveNav(id);
+            setNavCount((n) => n + 1);
+          }}
           onNewChat={handleNewChat}
         >
           <ChatHistory
@@ -81,7 +87,7 @@ export function ProjectView({ onLogout }: Props) {
               <Home />
             </div>
             {activeNav === "admin" && currentUser?.role === "admin" && <AdminSection />}
-            {activeNav === "workflows" && <PageWorkflows />}
+            {activeNav === "workflows" && <PageWorkflows key={navCount} />}
             {activeNav === "agent-registry" && <PageAgentRegistry />}
             {activeNav === "approval-queue" && <PageApprovalQueue />}
             {activeNav === "data-management" && <PageDataManagement />}

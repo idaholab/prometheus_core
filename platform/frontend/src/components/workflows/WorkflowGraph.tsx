@@ -11,44 +11,76 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ReactFlow, type Edge, type NodeTypes, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, type EdgeTypes, type NodeTypes, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import {
   WorkflowAgentNode,
   WorkflowCheckpointNode,
+  WorkflowConnectEndpoint,
+  WorkflowSkillNode,
   type AgentNode,
   type CheckpointNode,
+  type ConnectEndpointNode,
+  type SkillNode,
 } from "./WorkflowGraphNodes";
+import { WorkflowWire, type WireEdge } from "./WorkflowWire";
 
-export type WorkflowGraphNode = AgentNode | CheckpointNode;
+export type WorkflowGraphNode = AgentNode | CheckpointNode | SkillNode | ConnectEndpointNode;
 
 export interface WorkflowGraphWire {
   from: string;
   to: string;
+  /** Drawn dashed, e.g. a wire still being connected (D.2). */
+  dashed?: boolean;
+  /** A connection of the wrong type, drawn dashed in red (D.6). */
+  invalid?: boolean;
+  /** Shows the "+" insert button and its menu on the wire (D.5). */
+  insertMenu?: boolean;
 }
 
 interface WorkflowGraphProps {
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
-  /** Layout only (size, margins). The graph fits itself to this box. */
+  /**
+   * Scale the graph to fit its box (default), as in D.1. Pass `false` to draw
+   * it at 100% from its node positions, as on the Builder canvas, so it keeps
+   * its size in a narrow box and is clipped instead.
+   */
+  fit?: boolean;
+  /** Layout only (size, margins). */
   className?: string;
 }
 
 const NODE_TYPES: NodeTypes = {
   agent: WorkflowAgentNode,
   checkpoint: WorkflowCheckpointNode,
+  skill: WorkflowSkillNode,
+  connect: WorkflowConnectEndpoint,
 };
+
+const EDGE_TYPES: EdgeTypes = { wire: WorkflowWire };
+const DEFAULT_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
 const FIT_VIEW_OPTIONS = { padding: 0.08 };
 
 /**
  * Workflow DAG (Figma D.1, WF-1) on React Flow: agent nodes and checkpoints
- * joined by curved wires. Display only, so dragging, connecting, selecting,
- * zooming and panning are all off.
+ * (D.1), or skill nodes and a connect endpoint (D.2), joined by curved wires
+ * (WorkflowWire), which can also show an insert menu (D.5) or an invalid
+ * connection (D.6).
+ * Display only, so dragging, connecting, selecting, zooming and panning are
+ * all off; a node's `selected` field only sets its style.
  */
-export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphProps) {
-  const edges = useMemo<Edge[]>(
-    () => wires.map(({ from, to }) => ({ id: `${from}->${to}`, source: from, target: to })),
+export function WorkflowGraph({ nodes, wires, fit = true, className = "" }: WorkflowGraphProps) {
+  const edges = useMemo<WireEdge[]>(
+    () =>
+      wires.map(({ from, to, dashed, invalid, insertMenu }) => ({
+        id: `${from}->${to}`,
+        type: "wire",
+        source: from,
+        target: to,
+        data: { dashed, invalid, insertMenu },
+      })),
     [wires],
   );
 
@@ -58,11 +90,11 @@ export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphPro
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
   useEffect(() => {
     const box = boxRef.current;
-    if (!box || !flow) return;
+    if (!box || !flow || !fit) return;
     const observer = new ResizeObserver(() => void flow.fitView(FIT_VIEW_OPTIONS));
     observer.observe(box);
     return () => observer.disconnect();
-  }, [flow]);
+  }, [flow, fit]);
 
   return (
     // React Flow reads its colours from these variables, so the wires and its
@@ -75,11 +107,13 @@ export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphPro
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onInit={setFlow}
         // React Flow stops zooming out at 0.5, which clips the graph in narrow boxes.
         minZoom={0.1}
-        fitView
+        fitView={fit}
         fitViewOptions={FIT_VIEW_OPTIONS}
+        defaultViewport={DEFAULT_VIEWPORT}
         nodesDraggable={false}
         nodesConnectable={false}
         nodesFocusable={false}
