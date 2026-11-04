@@ -84,6 +84,14 @@ def test_answers_saved_on_the_first_run_count_in_that_run(platform, goal):
         assert "scripts/deeplynx_setup.py" in result.stdout
 
 
+def test_a_missing_env_is_announced_once_before_make_looks_for_it(platform):
+    """Make 3.81 warns 'No such file or directory' for the include; the line before says that's expected."""
+    first = make(platform, "up").stdout
+    assert first.count("Creating .env") == 1
+    # The reread after the rule must not announce it again, and an existing .env needs no announcement
+    assert "Creating .env" not in make(platform, "up").stdout
+
+
 def test_a_complete_env_runs_the_script_once_per_call(platform):
     make(platform, "up")
     make(platform, "up")

@@ -37,6 +37,10 @@ ifeq ($(MAKE_RESTARTS),)
 .PRECIOUS: .env
 .env: FORCE
 	@python3 scripts/init_env.py
+# Make 3.81 (macOS) warns "No such file or directory" for the include below
+# before it runs the rule above. It can't be silenced (-include would also hide
+# a failing script), so say first that it is expected.
+$(if $(wildcard .env),,$(info Creating .env. (On macOS, a "No such file or directory" line for .env next is expected.)))
 endif
 include .env
 else
