@@ -829,6 +829,21 @@ INFO:prometheus_api.agent.base:Loaded agent card: My Agent v1.0.0
 INFO:prometheus_api.agent.base:Starting HTTP server on 0.0.0.0:8000
 ```
 
+**DeepLynx, when the platform runs it locally (`LOCAL_DEEPLYNX=true`):** `setup_agent.py`
+copies `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1` into your `.env`. That
+name only resolves inside Docker's network, so run on the host, the agent starts (the
+settings are valid) and the first skill call, which writes its execution record to
+DeepLynx, cannot reach it. Before `python agent.py`, point it at the port the platform
+publishes on your machine (on the loopback address only):
+
+```bash
+export DEEPLYNX_BASE_URL=http://localhost:5000/api/v1
+```
+
+Put that after the `export $(grep ...)` line, since the line from `.env` would
+otherwise overwrite it. (Use `DEEPLYNX_SERVER_PORT` from the platform's `.env` if you
+changed it.)
+
 If the target agent is running in Docker, start it in external network mode so
 `localhost:8000` reaches the container; see the
 [template README run instructions](README.md#run-it).
