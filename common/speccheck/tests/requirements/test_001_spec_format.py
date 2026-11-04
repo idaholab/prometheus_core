@@ -740,3 +740,26 @@ def test_a_duplicate_within_one_spec_names_both(project: Project):
         "specs/001-thing.md:9: T-REQ-001-03 has the same text as T-REQ-001-01 at specs/001-thing.md:7; "
         "each requirement says something new" in run.err
     )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-10",
+    "three requirements with one text across two specs give two problems, at the second and the third, each naming the first and its line",
+)
+def test_three_of_one_text_each_name_the_first(project: Project):
+    """Every later copy is reported at its own line against the first in spec and line order, not against each other."""
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.spec("- T-REQ-001-01: Other.\n- T-REQ-001-02: Same text.")
+    project.write(
+        "specs/002-other.md",
+        spec("- T-REQ-002-01: same text\n- T-REQ-002-02: SAME TEXT.", number="002", title="Other"),
+    )
+    run = project.speccheck("lint", "--json")
+    assert [(p["path"], p["line"], p["message"]) for p in run.json()["problems"]] == [
+        (
+            "specs/002-other.md",
+            line,
+            f"T-REQ-002-0{n} has the same text as T-REQ-001-02 at specs/001-thing.md:8; each requirement says something new",
+        )
+        for n, line in ((1, 7), (2, 8))
+    ]

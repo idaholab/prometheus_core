@@ -34,4 +34,6 @@ be found, has one ID, and says whether it is implemented yet.
 - SPC-REQ-001-10: Two texts MUST count as the same text when they are equal after removing the
   unimplemented suffix (SPC-REQ-001-07), collapsing each run of whitespace to one space, trimming
   the ends, ignoring case, and dropping one trailing full stop and any whitespace before it. Two
-  requirements in the folder MUST NOT have the same text, and the problem MUST name both IDs.
+  requirements in the folder MUST NOT have the same text. Each requirement whose text an earlier
+  one in the folder (in spec and line order) already has MUST be a problem at its own line that
+  names its ID and the first one's ID and line.
