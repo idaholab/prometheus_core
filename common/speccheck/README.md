@@ -323,8 +323,8 @@ And at the end of the workflow, which needs `actions: read` and `contents: read`
 **The report** (`report.md` in the `speccheck-report` artifact) has a table of the specs, then per
 spec its Purpose and a status table, then a section per requirement: its full text (without the
 unimplemented suffix, whose reason is shown beside the status and under the text), a link to its
-line in the spec, and a subsection per claiming test or job, with how it proves the requirement
-and one line per job that ran it, by the job's display name. In CI, requirements and tests link to
+line in the spec, and a subsection per claim (a claiming test or job with its explanation), with
+how it proves the requirement and one line per job that ran it, by the job's display name. In CI, requirements and tests link to
 their lines at the commit the run tested. `report.json` holds the same data.
 
 **The step summary** is one line of counts linking the report, then one entry per problem, and

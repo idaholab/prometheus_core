@@ -1268,6 +1268,22 @@ def test_report_exits_0_to_stdout_and_as_json(reported: Project, where: str):
 
 @pytest.mark.covers(
     "SPC-REQ-006-08",
+    "one test with one explanation run by two producers gets a single subsection holding both results, one passed and one failed",
+)
+def test_one_claim_run_twice_is_one_subsection(project: Project):
+    """The same test and explanation from two legs is one claim, so one section with a result line per run."""
+    project.write("speccheck.toml", CONFIG + "[producers.docker]\n")
+    project.spec("- T-REQ-001-01: One.")
+    project.results("u.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")])
+    project.results("d.jsonl", "docker", [("tests/t.py::test_a", ["T-REQ-001-01"], "failed")])
+    text = project.speccheck("report", "u.jsonl", "d.jsonl").out
+    assert re.findall(r"^#### (.+)$", text, re.M) == ["Test `test_a` in `tests/test_x.py`"]
+    body = section(text, "#### Test `test_a` in `tests/test_x.py`")
+    assert re.findall(r"^- (.+)$", body, re.M) == ["❌ failed in docker", "✅ passed in unit"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-08",
     "one test name claiming a requirement in two results with different explanations gets two subsections, each with its own How",
 )
 def test_one_test_with_two_hows_gets_two_subsections(project: Project):
