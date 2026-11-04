@@ -27,8 +27,8 @@ The report says, for every requirement, whether it is proven and by which job, w
   unimplemented one, with `failed`, `unclaimed` and `not run` first.
 - SPC-REQ-006-08: Each requirement MUST have its own section in the report, in spec order, with its
   ID, status, its reason when it is unimplemented, and its full text without the unimplemented
-  suffix, and within it one section per claiming test or CI job, giving how it proves the
-  requirement.
+  suffix, and within it one section per claim: per claiming test or CI job and explanation, giving
+  how it proves the requirement and the results of every run of that claim.
 - SPC-REQ-006-09: A producer, CI job or display name MUST be at most 200 characters, and a test's
   node ID at most 250. A longer one MUST be refused where it comes in (SPC-REQ-002-09,
   SPC-REQ-003-18, SPC-REQ-004-02, SPC-REQ-008-10), never cut. A heading may still shorten a long
