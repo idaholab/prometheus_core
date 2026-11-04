@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-/* Placeholder content for the Workflow Builder, from Figma D.2 to D.4, until
+/* Placeholder content for the Workflow Builder, from Figma D.2 to D.6, until
  * workflows come from the backend. Shared by PageWorkflows (D.2) and the
  * dev review page for the other states (src/dev/BuilderStatesHarness.tsx). */
 import type { InspectedNode } from "../components/workflows/NodeInspector";
@@ -158,3 +158,76 @@ export const DRAGGING_NODES: WorkflowGraphNode[] = [
     },
   },
 ];
+
+// The insert-on-edge state from Figma D.5: Get Material Data wired to Radiation
+// Damage (still selected), with the insert menu open on the wire.
+export const INSERT_NODES: WorkflowGraphNode[] = [
+  {
+    id: "get-material-data",
+    type: "skill",
+    position: { x: 180, y: 70 },
+    data: {
+      name: "Get Material Data",
+      tone: "analysis",
+      input: "material_id",
+      inputTone: "data",
+      output: "material_data",
+      outputTone: "data",
+      width: 170,
+    },
+  },
+  {
+    id: "radiation-damage",
+    type: "skill",
+    position: { x: 180, y: 300 },
+    selected: true,
+    data: {
+      name: "Radiation Damage",
+      tone: "analysis",
+      input: "material_data",
+      inputTone: "data",
+      output: "rad_result",
+      outputTone: "analysis",
+      width: 170,
+    },
+  },
+];
+export const INSERT_WIRES: WorkflowGraphWire[] = [
+  { from: "get-material-data", to: "radiation-damage", insertMenu: true },
+];
+
+// The invalid-connection state from Figma D.6: Mesh Generator's mesh output
+// wired to Radiation Damage's material_data input, which expects material data.
+export const INVALID_NODES: WorkflowGraphNode[] = [
+  {
+    id: "mesh-generator",
+    type: "skill",
+    position: { x: 120, y: 90 },
+    data: {
+      name: "Mesh Generator",
+      tone: "analysis",
+      input: "material_id",
+      inputTone: "data",
+      output: "mesh",
+      outputTone: "data",
+      width: 170,
+    },
+  },
+  {
+    id: "radiation-damage",
+    type: "skill",
+    position: { x: 360, y: 320 },
+    data: {
+      name: "Radiation Damage",
+      tone: "analysis",
+      input: "material_data",
+      inputTone: "data",
+      output: "rad_result",
+      outputTone: "analysis",
+      width: 170,
+      invalid: true,
+    },
+  },
+];
+export const INVALID_WIRES: WorkflowGraphWire[] = [{ from: "mesh-generator", to: "radiation-damage", invalid: true }];
+export const INVALID_ERROR = "Type mismatch: mesh → material_data";

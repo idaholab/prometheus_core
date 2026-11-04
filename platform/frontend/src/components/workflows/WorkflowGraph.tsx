@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ReactFlow, type Edge, type NodeTypes, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, type EdgeTypes, type NodeTypes, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import {
   WorkflowAgentNode,
@@ -23,6 +23,7 @@ import {
   type ConnectEndpointNode,
   type SkillNode,
 } from "./WorkflowGraphNodes";
+import { WorkflowWire, type WireEdge } from "./WorkflowWire";
 
 export type WorkflowGraphNode = AgentNode | CheckpointNode | SkillNode | ConnectEndpointNode;
 
@@ -31,6 +32,10 @@ export interface WorkflowGraphWire {
   to: string;
   /** Drawn dashed, e.g. a wire still being connected (D.2). */
   dashed?: boolean;
+  /** A connection of the wrong type, drawn dashed in red (D.6). */
+  invalid?: boolean;
+  /** Shows the "+" insert button and its menu on the wire (D.5). */
+  insertMenu?: boolean;
 }
 
 interface WorkflowGraphProps {
@@ -53,25 +58,28 @@ const NODE_TYPES: NodeTypes = {
   connect: WorkflowConnectEndpoint,
 };
 
-const DASHED_STYLE = { strokeDasharray: "5 4" };
+const EDGE_TYPES: EdgeTypes = { wire: WorkflowWire };
 const DEFAULT_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
 const FIT_VIEW_OPTIONS = { padding: 0.08 };
 
 /**
  * Workflow DAG (Figma D.1, WF-1) on React Flow: agent nodes and checkpoints
- * (D.1), or skill nodes and a connect endpoint (D.2), joined by curved wires.
+ * (D.1), or skill nodes and a connect endpoint (D.2), joined by curved wires
+ * (WorkflowWire), which can also show an insert menu (D.5) or an invalid
+ * connection (D.6).
  * Display only, so dragging, connecting, selecting, zooming and panning are
  * all off; a node's `selected` field only sets its style.
  */
 export function WorkflowGraph({ nodes, wires, fit = true, className = "" }: WorkflowGraphProps) {
-  const edges = useMemo<Edge[]>(
+  const edges = useMemo<WireEdge[]>(
     () =>
-      wires.map(({ from, to, dashed }) => ({
+      wires.map(({ from, to, dashed, invalid, insertMenu }) => ({
         id: `${from}->${to}`,
+        type: "wire",
         source: from,
         target: to,
-        style: dashed ? DASHED_STYLE : undefined,
+        data: { dashed, invalid, insertMenu },
       })),
     [wires],
   );
@@ -99,6 +107,7 @@ export function WorkflowGraph({ nodes, wires, fit = true, className = "" }: Work
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onInit={setFlow}
         // React Flow stops zooming out at 0.5, which clips the graph in narrow boxes.
         minZoom={0.1}

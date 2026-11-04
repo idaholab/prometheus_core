@@ -27,6 +27,8 @@ interface WorkflowBuilderProps {
   wires: WorkflowGraphWire[];
   /** The node shown in the inspector, or null for its empty state. */
   inspected: InspectedNode | null;
+  /** An error shown as a toast on the canvas, e.g. an invalid connection (D.6). */
+  canvasError?: string;
 }
 
 /**
@@ -38,7 +40,7 @@ interface WorkflowBuilderProps {
  *
  * The toolbar buttons have no handlers yet.
  */
-export function WorkflowBuilder({ name, skillGroups, nodes, wires, inspected }: WorkflowBuilderProps) {
+export function WorkflowBuilder({ name, skillGroups, nodes, wires, inspected, canvasError }: WorkflowBuilderProps) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-9 gap-y-3 border-b border-base-content/10 bg-base-200 px-6 py-3">
@@ -62,7 +64,7 @@ export function WorkflowBuilder({ name, skillGroups, nodes, wires, inspected }: 
         </aside>
 
         <section aria-label="Canvas" className="min-w-0 lg:min-h-0">
-          <BuilderCanvas nodes={nodes} wires={wires} />
+          <BuilderCanvas nodes={nodes} wires={wires} error={canvasError} />
         </section>
 
         <aside

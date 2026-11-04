@@ -12,11 +12,14 @@
 
 import { Minus, Plus } from "lucide-react";
 import { Button } from "../ui/Button";
+import { ErrorToast } from "../ui/ErrorToast";
 import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
 
 interface BuilderCanvasProps {
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
+  /** Shown as an error toast in the bottom right, e.g. for an invalid connection (D.6). */
+  error?: string;
 }
 
 /** D.2's canvas dot grid, from the theme's text colour so it shows in both themes. */
@@ -48,7 +51,8 @@ function EmptyCanvasPrompt() {
 /**
  * Canvas column of the Builder (Figma D.2): the workflow graph at 100% on a
  * dot grid, with a zoom control in the top left. With no nodes it shows the
- * empty-canvas prompt instead (D.3).
+ * empty-canvas prompt instead (D.3), and with an `error` an error toast in
+ * the bottom right (D.6).
  *
  * The graph keeps its D.2 size: the drawing area is at least as big as the
  * D.2 layout, and in a smaller column it scrolls inside the canvas instead of
@@ -56,7 +60,7 @@ function EmptyCanvasPrompt() {
  * zoom buttons have no handlers yet, and the graph can't be selected, dragged
  * or connected.
  */
-export function BuilderCanvas({ nodes, wires }: BuilderCanvasProps) {
+export function BuilderCanvas({ nodes, wires, error }: BuilderCanvasProps) {
   return (
     <div className="relative h-full min-h-130 bg-base-300">
       <div className="absolute inset-0 overflow-auto">
@@ -85,6 +89,7 @@ export function BuilderCanvas({ nodes, wires }: BuilderCanvasProps) {
         <span className="min-w-9 text-center font-mono text-[10px] text-base-content/70">100%</span>
         <Button variant="ghost" size="xs" icon={<Plus />} ariaLabel="Zoom in" tooltipPlacement="bottom" />
       </div>
+      {error && <ErrorToast message={error} className="absolute right-5 bottom-5 left-5 sm:left-auto sm:w-69" />}
     </div>
   );
 }

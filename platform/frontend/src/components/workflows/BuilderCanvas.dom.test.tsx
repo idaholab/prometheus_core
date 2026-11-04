@@ -27,3 +27,15 @@ test("an empty canvas shows the drop area, the or divider and Start from templat
   await user.click(screen.getByRole("button", { name: "Start from template" }));
   expect(screen.getByText("Drag a skill here to begin")).toBeInTheDocument();
 });
+
+test("an error shows as a toast on the canvas", () => {
+  render(<BuilderCanvas nodes={[]} wires={[]} error="Type mismatch: mesh → material_data" />);
+
+  expect(screen.getByRole("alert")).toHaveTextContent("Type mismatch: mesh → material_data");
+});
+
+test("no error, no toast", () => {
+  render(<BuilderCanvas nodes={[]} wires={[]} />);
+
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});

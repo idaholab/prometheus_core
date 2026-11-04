@@ -52,6 +52,8 @@ export interface SkillNodeData extends Record<string, unknown> {
   width: number;
   /** Drawn as the ghost of a skill being dragged onto the canvas (D.4). */
   ghost?: boolean;
+  /** Its input has an invalid connection (D.6): an error border, and the IN row in red. */
+  invalid?: boolean;
 }
 
 export interface ConnectEndpointData extends Record<string, unknown> {
@@ -69,14 +71,17 @@ const HANDLE_CLASS = "!size-px !min-h-0 !min-w-0 !border-0 !bg-transparent";
 
 /**
  * A label and its value, e.g. "IN material_id". Labels share a fixed width so
- * the values line up. Sizes go on each span: the base layer sets span
+ * the values line up. `error` shows both in red, e.g. an input with an invalid
+ * connection (D.6). Sizes go on each span: the base layer sets span
  * font-size, so it isn't inherited.
  */
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value, error = false }: { label: string; value: string; error?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 font-mono">
-      <span className="w-4.5 shrink-0 text-[8.5px] leading-3 text-base-content/50">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-[9px] leading-3 text-base-content/70">{value}</span>
+      <span className={`w-4.5 shrink-0 text-[8.5px] leading-3 ${error ? "text-error" : "text-base-content/50"}`}>{label}</span>
+      <span className={`min-w-0 flex-1 truncate text-[9px] leading-3 ${error ? "text-error" : "text-base-content/70"}`}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -123,14 +128,23 @@ export function WorkflowCheckpointNode({ data }: NodeProps<CheckpointNode>) {
   );
 }
 
-/** A port dot on a skill node, coloured by the kind of value. Decorative: the row's text carries the meaning. */
-function PortDot({ tone }: { tone: SkillTone }) {
-  return <span aria-hidden="true" className={`size-1 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />;
+/**
+ * A port dot on a skill node, coloured by the kind of value, or red for a port
+ * with an invalid connection. Decorative: the row's text carries the meaning.
+ */
+function PortDot({ tone, error = false }: { tone: SkillTone; error?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`size-1 shrink-0 rounded-full ${error ? "bg-error" : SKILL_TONE_DOT_CLASSES[tone]}`}
+    />
+  );
 }
 
 /** Border and fill for each look a skill node can have. */
-function skillNodeClasses(ghost: boolean, selected: boolean): string {
+function skillNodeClasses(ghost: boolean, invalid: boolean, selected: boolean): string {
   if (ghost) return "border-dashed border-primary bg-base-100/60";
+  if (invalid) return "border-error bg-base-100 ring-1 ring-error";
   if (selected) return "border-primary bg-base-100 ring-1 ring-primary";
   return "border-base-content/15 bg-base-100";
 }
@@ -143,12 +157,16 @@ function skillNodeClasses(ghost: boolean, selected: boolean): string {
  * With `ghost`, it's the skill being dragged onto the canvas (D.4): a dashed
  * primary outline, dimmed contents, and its input port shown as a ringed dot
  * at its bottom-left corner, ready to connect.
+ *
+ * With `invalid`, its input has a connection of the wrong type (D.6): an
+ * error border, and the IN row's dot, label and value in red.
  */
 export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
   const ghost = data.ghost ?? false;
+  const invalid = data.invalid ?? false;
   return (
     <div
-      className={`relative flex flex-col gap-2 rounded-lg border px-3 py-2.5 ${skillNodeClasses(ghost, selected)}`}
+      className={`relative flex flex-col gap-2 rounded-lg border px-3 py-2.5 ${skillNodeClasses(ghost, invalid, selected)}`}
       style={{ width: data.width }}
     >
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
@@ -160,9 +178,9 @@ export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
           <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`} />
         </div>
         <div className="flex items-center gap-1.5">
-          <PortDot tone={data.inputTone} />
+          <PortDot tone={data.inputTone} error={invalid} />
           <div className="min-w-0 flex-1">
-            <DetailRow label="IN" value={data.input} />
+            <DetailRow label="IN" value={data.input} error={invalid} />
           </div>
         </div>
         <div className="flex items-center gap-1.5">

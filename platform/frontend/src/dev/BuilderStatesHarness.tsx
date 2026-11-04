@@ -12,8 +12,9 @@
 
 /**
  * Dev-only review page for the Workflow Builder's states that nothing can
- * reach by clicking yet: the empty canvas (Figma D.3) and a skill being
- * dragged onto it (D.4), plus the base state (D.2) to compare against. Each
+ * reach by clicking yet: the empty canvas (Figma D.3), a skill being dragged
+ * onto it (D.4), the insert menu on a wire (D.5) and an invalid connection
+ * (D.6), plus the base state (D.2) to compare against. Each
  * is the real WorkflowBuilder, with a theme toggle. It also covers the Node
  * Inspector's two states: selected in D.2 and D.4, empty in D.3.
  *
@@ -29,23 +30,37 @@ import {
   BUILDER_NODES,
   BUILDER_WIRES,
   DRAGGING_NODES,
+  INSERT_NODES,
+  INSERT_WIRES,
   INSPECTED_NODE,
+  INVALID_ERROR,
+  INVALID_NODES,
+  INVALID_WIRES,
   SKILL_GROUPS,
 } from "../pages/builderPlaceholders";
 
-type StateId = "base" | "empty" | "dragging";
+type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
 
 interface BuilderState {
   label: string;
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
   inspected: InspectedNode | null;
+  canvasError?: string;
 }
 
 const STATES: Record<StateId, BuilderState> = {
   base: { label: "Base (D.2)", nodes: BUILDER_NODES, wires: BUILDER_WIRES, inspected: INSPECTED_NODE },
   empty: { label: "Empty canvas (D.3)", nodes: [], wires: [], inspected: null },
   dragging: { label: "Dragging skill (D.4)", nodes: DRAGGING_NODES, wires: [], inspected: INSPECTED_NODE },
+  insert: { label: "Insert on edge (D.5)", nodes: INSERT_NODES, wires: INSERT_WIRES, inspected: INSPECTED_NODE },
+  invalid: {
+    label: "Invalid connection (D.6)",
+    nodes: INVALID_NODES,
+    wires: INVALID_WIRES,
+    inspected: INSPECTED_NODE,
+    canvasError: INVALID_ERROR,
+  },
 };
 
 export function BuilderStatesHarness() {
@@ -80,6 +95,7 @@ export function BuilderStatesHarness() {
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}
+        canvasError={state.canvasError}
       />
     </div>
   );
