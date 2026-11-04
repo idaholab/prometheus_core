@@ -318,6 +318,38 @@ def test_each_decided_goal_does_what_its_list_says(platform, project_root):
         assert not (platform / ".env").exists(), f"make {goal} must not create .env"
 
 
+def test_env_is_created_before_the_docker_check(platform, project_root, tmp_path):
+    """The order the PR changed: init_env.py runs first, so a missing Docker is reported after .env exists.
+
+    A person without Docker running answers the questions once, and the rerun asks nothing.
+    """
+    scripts = tmp_path / "infrastructure" / "scripts"
+    scripts.mkdir(parents=True)
+    shutil.copy(project_root.parent / "infrastructure" / "scripts" / "check-local-prereqs.sh", scripts)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text("#!/bin/sh\nexit 1\n")
+    fake_docker.chmod(0o755)
+
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV", "SKIP_"))}
+    # Only the fake docker on PATH (plus the basics the script's own tools need)
+    result = subprocess.run(
+        ["make", "up"],
+        cwd=platform,
+        env={**clean, "PATH": f"{bin_dir}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode != 0
+    assert (platform / ".env").exists(), "the .env step must run before the Docker check"
+    assert runs(platform) == 1
+    assert "docker" in result.stdout.lower(), result.stdout
+    assert "[ERROR]" in result.stdout
+
+
 def test_a_failing_script_stops_make(platform):
     """As make up runs it (no -k): nothing after the .env rule runs."""
     result = make(platform, "up", keep_going=False, STUB_FAIL="1")
