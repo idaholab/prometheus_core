@@ -1,6 +1,6 @@
 # Checks
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, LiteLLM removed: the backend is the agent registry and A2A gateway). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, LiteLLM removed: the backend is the agent registry and A2A gateway). When the code disagrees with this file, the code is correct.
 
 Each check has a stable id; `/diagnose` runs them by tag or by symptom (`troubleshooting.md`).
 Fix kinds: **safe** (applied, then explained), **yes** (asked first), **you** (only you: a secret,
@@ -24,7 +24,7 @@ Print only `PROMETHEUS_API_BASE_IMAGE_HASH`, `LLM_CONFIG_PROFILE`, `LLM_CONFIG_F
 
 | profile | key (`sdk/prometheus_api/llm_configs/*.yaml`; deck 03, A15) |
 |---|---|
-| (none) | required: no default. `registry` is rejected by `make init-env` (no LLM proxy on the platform) |
+| (none) | required: no default. `registry` is rejected by `make init-env`, which asks only in a terminal (no LLM proxy on the platform) |
 | `ollama` | none (local aliases from `ollama cp <model> default|small|medium|large|vision`) |
 | every other profile | `LLM_API_KEY` (+ `EMBEDDING_API_KEY` for embeddings under `anthropic` / `anl_asksage`) |
 
@@ -44,7 +44,7 @@ Tags: preflight, diagnose. Fix: you. Run: `cd <root>/.. && test -f prometheus_co
 ### personal-skills
 Tags: preflight. Fix: you. Run: `d="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"; for s in create-agent how diagnose; do test -e "$d/$s" && echo "$s"; done; echo done` Expect only `done`. A name above it is a personal skill that runs instead of the hackathon skill. Fix: rename it in your own terminal (`mv ~/.claude/skills/diagnose ~/.claude/skills/my-diagnose`), then start a new session.
 ### base-image-pin
-Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && grep -nE '^(LOCAL_SDK|PROMETHEUS_API_BASE_IMAGE_HASH)=' .env` Expect `LOCAL_SDK=true` (the base image `prometheus_api:local` is built from `../sdk`, `Makefile:19-31`); then `<pin>` is `local`. Without it the build pulls `containers.github.inl.gov/genesis/prometheus_api` (`registry-login`). Failure: an empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line: "invalid reference format". Fix: `LOCAL_SDK=true` in `.env`, remove the empty line, then a platform `make up`.
+Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && grep -nE '^(LOCAL_SDK|PROMETHEUS_API_BASE_IMAGE_HASH)=' .env` Expect `LOCAL_SDK=true` (the base image `prometheus_api:local` is built from `../sdk`, the `ifeq ($(LOCAL_SDK),true)` block in the platform `Makefile`); then `<pin>` is `local`. Without it the build pulls `containers.github.inl.gov/genesis/prometheus_api` (`registry-login`). Failure: an empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line: "invalid reference format". Fix: `LOCAL_SDK=true` in `.env`, remove the empty line, then a platform `make up`.
 ### registry-login
 Tags: preflight, diagnose. Fix: you. Only without `LOCAL_SDK=true` (`base-image-pin`). Run: `docker pull -q containers.github.inl.gov/genesis/prometheus_api:<pin>` Expect the image reference. Failure: `unauthorized`/`denied` (no login, no `read:packages`, no org access); `manifest unknown` (bad pin); `dial tcp`/`no such host` (off the INL network or VPN). Fix, in your own terminal (paste the classic PAT at the first line; it never goes into the chat or a file; deck 03, slide 15):
   ```sh
@@ -52,7 +52,7 @@ Tags: preflight, diagnose. Fix: you. Only without `LOCAL_SDK=true` (`base-image-
   echo "$GITHUB_PAT" | docker login containers.github.inl.gov --username <you> --password-stdin; unset GITHUB_PAT
   ```
 ### platform-env
-Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && test -f .env && for k in AGENT_SECRET REDIS_PASSWORD ADMIN_DB_PASSWORD BACKEND_JWT_SECRET ADMIN_DB_ENCRYPTION_KEY LLM_CONFIG_PROFILE; do printf '%s %s\n' "$k" "$(grep "^$k=" .env | tail -n 1 | grep -cvE "^$k=(\"\"|sk-ant-\.\.\.|sk-change-me|change-me.*|your-.*)?\$")"; done` Expect six lines ending in `1`. `ADMIN_DB_ENCRYPTION_KEY 0`: no signing key is created (`signing-key`); `LLM_CONFIG_PROFILE 0` or `registry`: compose stops (`llm-key`). Failure: no output (no `.env`, `Makefile:130`); `BACKEND_JWT_SECRET 0` stops the backend ("jwt_secret is not configured", `backend/app/main.py:39-41`). Fix: `make init-env` (fills blank secrets, asks for the profile and key), then `agent-env-sync`.
+Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && test -f .env && for k in AGENT_SECRET REDIS_PASSWORD ADMIN_DB_PASSWORD BACKEND_JWT_SECRET ADMIN_DB_ENCRYPTION_KEY LLM_CONFIG_PROFILE; do printf '%s %s\n' "$k" "$(grep "^$k=" .env | tail -n 1 | grep -cvE "^$k=(\"\"|sk-ant-\.\.\.|sk-change-me|change-me.*|your-.*)?\$")"; done` Expect six lines ending in `1`. `ADMIN_DB_ENCRYPTION_KEY 0`: no signing key is created (`signing-key`); `LLM_CONFIG_PROFILE 0` or `registry`: compose stops (`llm-key`). Failure: no output (no `.env`: the Makefile `include .env` line fails); `BACKEND_JWT_SECRET 0` stops the backend ("jwt_secret is not configured", `backend/app/main.py:39-41`). Fix: with no `.env`, **you** run `make init-env` in your own terminal (it asks about `LOCAL_SDK` and `LOCAL_DEEPLYNX` while `.env` has no line for them, and needs a terminal for that); with an `.env`, yes: `make init-env` fills blank secrets and asks for the profile and key (from a terminal it also asks the two questions, if `.env` still lacks them). Then `agent-env-sync`.
 ### ports-free
 Tags: diagnose. Fix: yes. Run, with the platform stopped: `for p in 5150 8600 6379 3000 5000; do printf '%s ' "$p"; if command -v lsof >/dev/null; then lsof -nP -iTCP:"$p" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1; f=1} END {if (!f) print "free"}'; elif command -v ss >/dev/null; then ss -H -ltn "sport = :$p" | grep -q . && echo taken || echo free; else echo unknown; fi; done` Expect `free` five times; `unknown` means neither `lsof` nor `ss` is installed, so the ports are unchecked (not a pass). Failure: a process (an old stack, a local Redis; macOS AirPlay holds 5000). Fix: `make down` in that stack, or change the `*_PORT` value. Without `lsof` (minimal Linux, WSL) it falls back to `ss` (unverified).
 ### platform-current
@@ -94,7 +94,7 @@ Tags: preflight, diagnose. Fix: yes. Run: `curl -s localhost:8600/healthz` Expec
 ### backend-logs
 Tags: diagnose. Fix: yes. Run: `docker compose -p prometheus_platform logs --no-log-prefix --tail 200 backend 2>&1 | grep -iE 'error|exception|traceback|jwt_secret|alembic|password authentication' | tail -n 20` Failure: "jwt_secret is not configured" (`platform-env`); an alembic error (migrations run first, `backend/docker-entrypoint.sh:14-15`); `password authentication failed for user "admin"` (`ADMIN_DB_PASSWORD` changed after the first start: restore it, or `make down-v`); "libGL.so.1" (old image: a platform `make up`).
 ### chat-ui
-Tags: preflight, diagnose. Fix: yes. Run: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5150/` Expect `200` (8080 with `PROFILE=prod`). `000`: the frontend is stopped, or `PROFILE=` is empty (`Makefile:39-42`).
+Tags: preflight, diagnose. Fix: yes. Run: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5150/` Expect `200` (8080 with `PROFILE=prod`). `000`: the frontend is stopped, or `PROFILE=` is empty (the `PROFILE ?= dev` line in the platform `Makefile`).
 ### admin-user
 Tags: preflight, diagnose. Fix: you. Run: `curl -s localhost:8600/api/setup/status` Expect `{"needs_setup":false}`. `true`: open http://localhost:5150 and complete the wizard; the first user is admin.
 ### signing-key

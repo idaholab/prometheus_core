@@ -21,6 +21,14 @@
    environment if it is set there (as in CI). Otherwise, if the script runs in
    a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
    profile's key. Otherwise exit non-zero. There is no default profile.
+4. In a terminal, ask whether to build the base image from ../sdk (LOCAL_SDK)
+   and whether to run DeepLynx next to the platform (LOCAL_DEEPLYNX), for each
+   that .env has no ``VAR=`` line for. Enter means yes. The answer, yes or no,
+   is saved as that line, so each is asked once, also for an .env made before
+   these questions or without a terminal. A variable that is set in the
+   environment (or on the make command line) is not asked about, and a line
+   that is already in .env is never changed here. Without a terminal nothing is
+   asked; when step 1 created .env, it says so.
 
 Standard library only, so it runs before anything else is installed. Run from
 anywhere; paths resolve relative to this file.
@@ -105,6 +113,58 @@ def set_var(text: str, var: str, value: str) -> str:
     return text.rstrip("\n") + f"\n{var}={value}\n"
 
 
+def set_option(text: str, var: str, value: str) -> str:
+    """Set ``var=`` in place of its commented ``#var=`` default line, if there is one."""
+    if not re.search(rf"^{var}=", text, flags=re.M) and re.search(rf"^#{var}=", text, flags=re.M):
+        return re.sub(rf"^#{var}=.*$", lambda _: f"{var}={value}", text, count=1, flags=re.M)
+    return set_var(text, var, value)
+
+
+# Asked in a terminal while .env has no line for the variable: (variable, question).
+# Enter means yes. An answer, yes or no, is saved as a line, so it is asked once.
+LOCAL_OPTIONS = [
+    ("LOCAL_SDK", "Build the SDK base image locally"),
+    ("LOCAL_DEEPLYNX", "Run DeepLynx locally"),
+]
+
+
+def unanswered(text: str) -> list[tuple[str, str]]:
+    """The LOCAL_OPTIONS that neither the environment nor a ``VAR=`` line in .env settles.
+
+    A commented ``#VAR=false`` default doesn't settle it. Any ``VAR=`` line does, even a
+    blank one: that .env was set by hand, and a line already there is never changed.
+    """
+    assigned = values(text)
+    return [(var, q) for var, q in LOCAL_OPTIONS if var not in os.environ and var not in assigned]
+
+
+def yes(question: str) -> bool:
+    """Enter, y or yes (any case) is yes; n or no is no. Anything else asks again, so a typo isn't a yes."""
+    while True:
+        answer = input(f"{question} [Y/n] (Enter = yes): ").strip().lower()
+        if answer in ("", "y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("Please answer y or n, or press Enter for yes.")
+
+
+def prompt_local_options(text: str) -> str:
+    """Ask for each unanswered LOCAL_OPTIONS variable, saving each answer to .env.
+
+    Saved one at a time, so an interrupt at the second question keeps the first answer.
+    """
+    todo = unanswered(text)
+    if todo:
+        print()
+    for var, question in todo:
+        value = "true" if yes(f"{question} ({var})?") else "false"
+        text = set_option(text, var, value)
+        ENV.write_text(text)
+        print(f"Saved {var}={value} in {ENV.name}.")
+    return text
+
+
 def fill_secrets(text: str, gens: dict[str, str]) -> tuple[str, list[str]]:
     current = values(text)
     filled = []
@@ -144,8 +204,11 @@ def interactive() -> bool:
 
 def choose(options: list[str], labels: list[str], default: int) -> str:
     """Arrow-key menu on the terminal; numbered prompt where termios is missing."""
+    # zip(strict=True) needs Python 3.10; /usr/bin/python3 on macOS is 3.9
+    if len(options) != len(labels):
+        raise ValueError("choose() needs one label per option")
     width = max(map(len, options))
-    lines = [f"{o:<{width}}  {label}" for o, label in zip(options, labels, strict=True)]
+    lines = [f"{o:<{width}}  {label}" for o, label in zip(options, labels)]  # noqa: B905
     try:
         import termios
         import tty
@@ -186,26 +249,32 @@ def choose(options: list[str], labels: list[str], default: int) -> str:
         sys.stdout.flush()
 
 
-def prompt_llm(text: str) -> str:
-    """Ask for the LLM profile and its API key; return the updated .env text."""
+def prompt_llm(text: str) -> tuple[str, list[str]]:
+    """Ask for the LLM profile and its API key; return the updated .env text and what was saved.
+
+    The saved list names the key, never its value.
+    """
     env = values(text)
     known = profiles()
     options = list(known)
     labels = [desc if key else f"{desc}  [no key]" for key, desc in known.values()]
     current = env.get("LLM_CONFIG_PROFILE", "")
-    print("\nChoose an LLM profile (up/down, Enter):")
+    print("\nChoose an LLM profile (LLM_CONFIG_PROFILE; up/down, Enter):")
     profile = choose(options, labels, options.index(current) if current in options else 0)
     text = set_var(text, "LLM_CONFIG_PROFILE", profile)
+    saved = [f"LLM_CONFIG_PROFILE={profile}"]
     key, _ = known[profile]
     if key and not env.get(key):
         secret = getpass.getpass(f"{key} for {profile} (input hidden): ").strip()
         if secret:
             text = set_var(text, key, secret)
-    return text
+            saved.append(key)
+    return text, saved
 
 
 def main() -> int:
-    if not ENV.exists():
+    created = not ENV.exists()
+    if created:
         shutil.copyfile(EXAMPLE, ENV)
         # Owner-only before any secret is written to it. Later rewrites keep this mode. An
         # existing .env is left as it is
@@ -216,6 +285,20 @@ def main() -> int:
     if filled:
         ENV.write_text(text)
         print(f"Generated in {ENV.name}: {', '.join(filled)}")
+
+    # Before the LLM prompt, so that an interrupt there doesn't lose the answers. Asked
+    # for an .env that lacks the lines too (one from before these questions, or made
+    # without a terminal), until each has an answer in it.
+    if interactive():
+        text = prompt_local_options(text)
+    elif created and (unasked := [var for var, _ in unanswered(text)]):
+        # Say it once, so that the base-image pull (unauthorized) or an agent exiting
+        # without DeepLynx is not the first sign. A later run in a terminal asks.
+        print(
+            f"Not asked (no terminal): {', '.join(unasked)} stay false in {ENV.name}.\n"
+            f"Set {' and '.join(f'{v}=true' for v in unasked)} there to build the SDK image locally "
+            "or run DeepLynx locally, or run make init-env in a terminal to be asked."
+        )
 
     env = values(text)
     if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):
@@ -229,10 +312,10 @@ def main() -> int:
         env = values(text)
         print(f"Saved {key} from the environment in {ENV.name}.")
     if (missing_profile(env) or unknown_profile(env) or missing_llm_key(env)) and interactive():
-        text = prompt_llm(text)
+        text, saved = prompt_llm(text)
         ENV.write_text(text)
         env = values(text)
-        print(f"Saved LLM_CONFIG_PROFILE={env['LLM_CONFIG_PROFILE']} in {ENV.name}.")
+        print(f"Saved {', '.join(saved)} in {ENV.name}.")
     if missing_profile(env):
         print(
             f"\n[ERROR] LLM_CONFIG_PROFILE is empty in {ENV}.\n"
@@ -267,4 +350,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (KeyboardInterrupt, EOFError):
+        # What was saved so far stays in .env; the next run asks only for the rest
+        print(f"\nStopped. Run make again to continue; what you answered is saved in {ENV.name}.", file=sys.stderr)
+        sys.exit(130)

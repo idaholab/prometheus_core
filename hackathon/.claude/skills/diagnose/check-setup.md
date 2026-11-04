@@ -34,13 +34,15 @@ Show `#`, item, mark, evidence, then one line per FAIL and WARN with its cause. 
 order, one at a time, by kind (`SKILL.md`, "Fix kinds"). Also:
 
 - **Item 6**: ask before a platform `make up` (the first build is long). For blank secrets, offer
-  `make init-env` (`environment.md`, "Fill the platform .env") after its two traps.
+  `make init-env` (`environment.md`, "Fill the platform .env") after its two traps. When the platform
+  folder has no `.env` yet, that is a step for the user's own terminal (the questions for `LOCAL_SDK` and
+  `LOCAL_DEEPLYNX` need one, and an `.env` made without one leaves them unanswered); do not run it yourself.
 - **The first fix with a secret** (registry login, an LLM key, the generator): a 2-line
   primer (deck 03) and the check question `secrets`, once.
 - **After item 6 passes**: the check question `registry-wipe`, once; offer
   `/how explain registration and discovery`.
 - **DeepLynx** (9): required, since agents exit at startup without it. The platform runs it with
-  `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Add the line to the platform
+  `LOCAL_DEEPLYNX=true`: follow `artifacts.md` ("Local DeepLynx"). Set the line in the platform
   `.env` (yes), a platform `make restart` (yes; it writes the `DEEPLYNX_*` lines, no secret goes into
   the chat), then `deeplynx-env`, `deeplynx-backend`, `agent-env-sync`, and `make up` in the agent folder.
 - **Personal skills** (10): WARN; give the rename command for the user's own terminal.

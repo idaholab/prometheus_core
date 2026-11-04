@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The deck symptom tables (deck 03, slides 13, 19, A17-A20; deck 04, slide 19; deck 05). Run the
 named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`down`, run
@@ -59,7 +59,7 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 
 | symptom | cause → fix | checks |
 |---|---|---|
-| An upload says "…but DeepLynx storage is not configured." | `LOCAL_DEEPLYNX=true` is missing from the platform `.env`: add it, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
+| An upload says "…but DeepLynx storage is not configured." | `LOCAL_DEEPLYNX=true` is missing from the platform `.env` (you answered "no", or `make up` has not asked yet because it ran without a terminal or on a clone from before the question): in your terminal `make up` or `make init-env` asks, or set it yourself, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
 | The plot does not render | Publish with `mime_type="image/png"` and configure DeepLynx (`artifacts.md`). | [deeplynx-agent](checks.md#deeplynx-agent), [agent-logs](checks.md#agent-logs) |
 | A `deeplynx://` URI does not resolve | The agent needs the same org and project. Re-sync `DEEPLYNX_*`. | [agent-env-sync](checks.md#agent-env-sync), [deeplynx-agent](checks.md#deeplynx-agent) |
 | `AuthenticationError` or 401 from DeepLynx | A stale key, usually after `make down-v`: then a platform `make up` makes a new key (a key that still works is kept). Either way, `agent-env-sync` next. | [deeplynx-backend](checks.md#deeplynx-backend), [agent-env-sync](checks.md#agent-env-sync) |

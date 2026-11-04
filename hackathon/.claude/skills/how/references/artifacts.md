@@ -1,6 +1,6 @@
 # Files and artifacts
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Files travel as artifacts: your skill gets ids, not data (deck 04, slides 8-10 and 21). An upload goes to
 DeepLynx, the catalog gives it an id, and the orchestrator passes the id. The catalog is per conversation,
@@ -67,7 +67,7 @@ Deck 03, slide 11. The platform runs it: nothing to clone, build, or click throu
 Don't use `platform/docs/docs/local-deeplynx.md` for the hackathon: its clone, build-from-source and
 manual `.env` steps (`prometheus.host.internal:5000`) are not the hackathon path. Follow only the steps below.
 
-1. In the platform folder, once, after `make init-env` has created `.env` (an existing `.env` is not filled from `.env.example`): `grep -cx 'LOCAL_DEEPLYNX=true' .env`; on `0`, `printf '\nLOCAL_DEEPLYNX=true\n' >> .env` (after a yes).
+1. In the platform folder: `grep -cx 'LOCAL_DEEPLYNX=true' .env`. `make up` asks for it in the user's terminal until `.env` has the line (Enter = yes); a "no" writes `LOCAL_DEEPLYNX=false`, and the line is then never asked again. On `0`, after a yes: if `grep -c '^LOCAL_DEEPLYNX=' .env` is `1`, change that line with `sed -i.bak 's/^LOCAL_DEEPLYNX=.*/LOCAL_DEEPLYNX=true/' .env && rm .env.bak` (the `.bak` suffix is what makes the same command work on macOS and Linux); otherwise `printf '\nLOCAL_DEEPLYNX=true\n' >> .env`. Then run the `grep -cx` again: it must print `1`.
    `-x` matches the whole line, so a CRLF `.env` (`true\r`, which make reads as not `true`) also gives `0`:
    on WSL, edit `.env` inside WSL (not a Windows editor) and keep the clone in the WSL filesystem, not `/mnt/c`.
 2. `make up` (or `make restart`). Every start target first runs `make deeplynx-setup`: it starts

@@ -1,6 +1,6 @@
 # Calling an LLM
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Your code picks a flavor (`small`, `medium`, `large`, `vision`, `embedding`, `default`). The `.env` profile
 picks the model behind it (deck 04, slides 14-15). Import no provider SDK and hard-code no model ID.
@@ -39,7 +39,7 @@ pick = Pick.model_validate(call.arguments)  # then check the range
 
 ## Profile to key map
 
-`LLM_CONFIG_FILE` wins, then `LLM_CONFIG_PROFILE` (`llm_client/config.py`). The platform requires the profile (`make init-env` asks; compose stops when it is empty) and rejects `registry`. `list_llm_config_profiles()` lists the installed ones.
+`LLM_CONFIG_FILE` wins, then `LLM_CONFIG_PROFILE` (`llm_client/config.py`). The platform requires the profile (`make init-env` asks, in a terminal; compose stops when it is empty) and rejects `registry`. `list_llm_config_profiles()` lists the installed ones.
 
 Every profile reads its provider key from `LLM_API_KEY`; the template compose forwards it and
 `EMBEDDING_API_KEY`, and `setup_agent.py` copies both from the platform `.env`.

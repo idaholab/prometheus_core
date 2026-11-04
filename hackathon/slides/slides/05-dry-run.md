@@ -228,11 +228,9 @@ git remote add upstream \
 git fetch upstream
 cd platform            # the stack lives here
 
-make init-env                       # secrets; pick LLM profile + key
-printf '\nLOCAL_SDK=true\n' >> .env # base image from ../sdk
-printf '\nLOCAL_DEEPLYNX=true\n' >> .env # DeepLynx; make up writes DEEPLYNX_*
-
-make up                   # long first build; make logs to watch
+make up                   # asks: Enter, Enter (base image from ../sdk,
+                          # DeepLynx), pick LLM profile + key; then the
+                          # long first build; make logs to watch
 make ps
 ```
 
@@ -254,7 +252,7 @@ curl -s -H "Authorization: Bearer $AGENT_SECRET" \
 {.xs .wrap-code}
 | If… | then |
 |---|---|
-| `FROM …prometheus_api:` error or pull `unauthorized` | `LOCAL_SDK=true` missing in `.env` |
+| `FROM …prometheus_api:` error or pull `unauthorized` | `LOCAL_SDK=true` missing in `.env`: set it |
 | "No 'userToken' found" | `ADMIN_DB_ENCRYPTION_KEY` in `.env`; `make logs SERVICE=backend` |
 | `LLM_CONFIG_PROFILE` missing / not supported | `make init-env` shows the menu again |
 | port already in use | `make down`, or change `*_PORT` in `.env` |

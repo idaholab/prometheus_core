@@ -1,6 +1,6 @@
 # Stale docs: what older docs say, and what the code does now
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 
@@ -11,7 +11,7 @@ Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 | `process_analysis()` | `_execute(params, context, event_queue)` (`prometheus_api/prometheus_api/agent/base.py:1417`) |
 | `request_user_approval(...)` | Does not exist: `"requires_approval": true`, or `send_input_required` |
 | Log in as `prometheus` / `prometheus` | A setup wizard makes the first admin |
-| Base image from `mooseharbor`, pinned in compose | From `containers.github.inl.gov`, pinned in the platform `Makefile:22` |
+| Base image from `mooseharbor`, pinned in compose | From `containers.github.inl.gov`, pinned in the platform `Makefile` (`PROMETHEUS_API_BASE_IMAGE_REPO ?=`) |
 | `PROMETHEUS_DEBUG`, `planner.py`, the pin `2b3dbcf` (v0.8.0) | `DEBUG_AGENTS=true`; `orchestrator/agent_loop.py`; the pin `95c32b5` |
 | A workflow YAML with no `description` | `description` is required (`workflow_library/schema.py:75`) |
 | LiteLLM on `:9977`, `LITELLM_MASTER_KEY`, `litellm_config.yaml`, "Admin › Signing Keys → generate" | The backend on `:8600` is the registry and gateway (`Bearer $AGENT_SECRET`); no LLM proxy; the signing key is automatic |
