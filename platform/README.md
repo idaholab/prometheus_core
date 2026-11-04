@@ -28,6 +28,11 @@ graph TD
   - **Windows:** run the stack from a WSL2 distro, not from Windows directly. See
     [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) for enabling WSL2
     integration in Docker Desktop before continuing below.
+  - **Linux:** don't run `make` with `sudo`. It would create `.env` owned by root with
+    mode 0600, and every later `make` as your own user would fail with "permission
+    denied". Add yourself to the `docker` group instead
+    (`sudo usermod -aG docker $USER`, then log out and back in). If you already ran
+    `sudo make up`, fix it with `sudo chown $USER .env`.
 - [uv](https://docs.astral.sh/uv/) and Python — only required to run the Python components outside Docker:
   - Backend: **3.12+**
   - Client-agent: **3.12+**
