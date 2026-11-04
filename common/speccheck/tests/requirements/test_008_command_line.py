@@ -166,7 +166,7 @@ def test_version_prints_the_version(project: Project):
 )
 def test_exit_codes(project: Project):
     """0 clean, 1 problems, 2 usage or config error."""
-    project.spec("- T-REQ-001-01: One. ⚠ untested")
+    project.spec("- T-REQ-001-01: One. (unimplemented: later)")
     assert command(project, "lint").returncode == 0
     project.spec("- T-REQ-1-1: Bad.")
     assert command(project, "lint").returncode == 1
@@ -226,6 +226,22 @@ def test_verify_and_report_json_carry_the_evidence(project: Project):
             "passed",
             "unit",
         ), name
+
+
+@pytest.mark.covers(
+    "SPC-REQ-008-04",
+    "check, verify and report --json give an unimplemented requirement its text without the suffix and its reason, and an implemented one a null reason",
+)
+def test_json_gives_the_text_and_the_reason(project: Project):
+    """The suffix is split into `reason`, so `text` is the requirement alone."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two\n  wrapped. (unimplemented: plan step 2)")
+    project.results("r.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")])
+    for name in ("check", "verify", "report"):
+        body = json.loads(command(project, name, "r.jsonl", "--json").stdout)
+        assert [(r["text"], r["reason"]) for r in body["requirements"]] == [
+            ("One.", None),
+            ("Two wrapped.", "plan step 2"),
+        ], name
 
 
 @pytest.mark.covers(
@@ -301,7 +317,7 @@ def promised(actual: object, snapshot: object, where: str = "body") -> None:
         assert actual == snapshot, f"{where} changed: {actual!r} != {snapshot!r}"
 
 
-COUNTS = dict.fromkeys(("claimed", "failed", "not run", "passed", "planned", "retired", "unclaimed", "untested"), int)
+COUNTS = dict.fromkeys(("claimed", "failed", "not run", "passed", "unclaimed", "unimplemented"), int)
 """The keys of `counts`, each a count."""
 PROBLEM = {"path": str, "line": int, "message": str, "code": str}
 """A problem's fields."""
@@ -324,12 +340,14 @@ REQUIREMENT = {
     "spec": str,
     "status": str,
     "text": str,
+    "reason": None,
     "path": None,
     "line": int,
     "evidence": list,
     "waiting_on": list,
 }
-"""One requirement's fields; `path` is null because the test project isn't in a repository."""
+"""One requirement's fields; `reason` is null because neither is unimplemented, and `path` because the test
+project isn't in a repository."""
 CHECKING = {
     "schema_version": 1,
     "ok": bool,
@@ -676,14 +694,14 @@ def test_this_runs_report_is_linked(project: Project):
 )
 def test_a_passing_summary_is_one_line(project: Project):
     """On a pass the summary is the counts and the link, with nothing listed."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. ⚠ untested")
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two. (unimplemented: later)")
     project.results("r.jsonl", "unit", [("t", ["T-REQ-001-01"], "passed")])
     project.write("s.md", "an earlier step's summary\n")
     run = project.run("verify", "r.jsonl", "--summary", "s.md", "--report-url", REPORT_URL, env=SUMMARY_ENV)
     assert run.code == 0
     assert (project.root / "s.md").read_text() == (
         "an earlier step's summary\n"
-        f"**speccheck:** 2 requirements: 1 passed, 1 untested. Full report: [speccheck-report]({REPORT_URL})\n\n"
+        f"**speccheck:** 2 requirements: 1 passed, 1 unimplemented. Full report: [speccheck-report]({REPORT_URL})\n\n"
     )
 
 
@@ -736,7 +754,9 @@ def test_lint_and_check_write_the_same_summary(project: Project):
 )
 def test_the_summary_counts_are_the_terminals(project: Project):
     """Compared with what is printed, not with a copy of it written into the test."""
-    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n- T-REQ-001-03: Three.\n- T-REQ-001-04: Four. ⚠ untested")
+    project.spec(
+        "- T-REQ-001-01: One.\n- T-REQ-001-02: Two.\n- T-REQ-001-03: Three.\n- T-REQ-001-04: Four. (unimplemented: later)"
+    )
     project.results(
         "r.jsonl",
         "unit",

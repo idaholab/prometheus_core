@@ -24,13 +24,13 @@ from dataclasses import dataclass, field
 from speccheck.claims import Unique, copied_problem
 from speccheck.config import Config, ConfigError, Producer
 from speccheck.results import Result, ResultsFile
-from speccheck.specs import UNTESTED, Problem, Requirement, SpecSet, rel
+from speccheck.specs import UNIMPLEMENTED_EXAMPLE, Problem, Requirement, SpecSet, rel
 
 PASSED, FAILED, NOT_RUN, UNCLAIMED, CLAIMED = "passed", "failed", "not run", "unclaimed", "claimed"
 """The statuses evidence decides. `claimed` is only for `check`, which sees claims but not outcomes."""
-PLANNED, UNTESTED_STATUS, RETIRED = "planned", "untested", "retired"
-"""The statuses the spec decides, when nothing claims the requirement."""
-STATUSES = (FAILED, UNCLAIMED, NOT_RUN, CLAIMED, PASSED, PLANNED, UNTESTED_STATUS, RETIRED)
+UNIMPLEMENTED = "unimplemented"
+"""The status the spec decides, when nothing claims a requirement marked `(unimplemented: <reason>)`."""
+STATUSES = (FAILED, UNCLAIMED, NOT_RUN, CLAIMED, PASSED, UNIMPLEMENTED)
 """Every status, worst first: the order of the report and of the summary counts."""
 
 
@@ -93,7 +93,7 @@ class Evaluation:
 
 
 def summary_line(counts: dict[str, int]) -> str:
-    """ "12 requirements: 10 passed, 1 planned, 1 untested", leaving out statuses with none."""
+    """ "12 requirements: 10 passed, 2 unimplemented", leaving out statuses with none."""
     total = sum(counts.values())
     parts = [f"{count} {status}" for status, count in counts.items() if count]
     noun = "requirement" if total == 1 else "requirements"
@@ -108,8 +108,6 @@ def claim_problem(claimed: str, producer: Producer | None, specs: SpecSet) -> st
     requirement = specs.requirements.get(claimed)
     if requirement is None:
         return f"{claimed} isn't in any spec; check the number, or add it to spec {match.group('number')}"
-    if requirement.retired:
-        return f"{claimed} is retired; claim what replaced it"
     if producer is not None and not producer.may_claim(requirement.spec.number):
         return (
             f"{claimed} is in spec {requirement.spec.number}, which producer `{producer.name}` may not claim; "
@@ -252,15 +250,11 @@ def _decide(
     reported: list[str],
     runtime: bool,
 ) -> Status:
-    """One requirement's status, from its claims and its markers."""
+    """One requirement's status, from its claims and its unimplemented suffix."""
     claimed = bool(evidence or config_claims)
-    if requirement.retired:
-        return Status(requirement, RETIRED, evidence)
     if not claimed:
-        if requirement.planned:
-            return Status(requirement, PLANNED)
-        if requirement.untested:
-            return Status(requirement, UNTESTED_STATUS)
+        if requirement.unimplemented:
+            return Status(requirement, UNIMPLEMENTED)
         # In verify, a test run that didn't report could still claim it, so say so instead of calling it
         # unclaimed. check reads a collect-only run, which sees every claim: there, unclaimed is unclaimed.
         waiting = (
@@ -279,6 +273,9 @@ def _decide(
         return Status(requirement, PASSED, evidence, claimed=True)
     if evidence:
         return Status(requirement, FAILED, evidence, claimed=True)
+    if requirement.unimplemented:
+        # Claimed only by a CI job that hasn't reported: the suffix still says so, and is stale (005-04, 005-07)
+        return Status(requirement, UNIMPLEMENTED, evidence, claimed=True)
     waiting = sorted(name for name in config_claims if name not in reported)
     return Status(requirement, NOT_RUN, evidence, waiting_on=waiting, claimed=True)
 
@@ -289,18 +286,13 @@ def _problems_of(status: Status, root, complete: bool) -> list[Problem]:
     name = rel(requirement.spec.path, root)
     line = requirement.line
     problems = []
-    if status.claimed and requirement.untested:
-        problems.append(
-            Problem(name, line, f"{requirement.id} is claimed, so remove `{UNTESTED}`", "untested-marker-stale")
-        )
-    if status.claimed and requirement.planned:
-        problems.append(
-            Problem(name, line, f"{requirement.id} is claimed, so remove its `(planned: ...)`", "planned-marker-stale")
-        )
+    if status.claimed and requirement.unimplemented:
+        message = f"{requirement.id} is claimed, so remove its `(unimplemented: ...)` suffix"
+        problems.append(Problem(name, line, message, "unimplemented-stale"))
     if status.status == UNCLAIMED:
         message = (
             f'{requirement.id} is not claimed; add `@pytest.mark.covers("{requirement.id}", "<how it proves it>")` '
-            f"to a test that proves it, or mark it `{UNTESTED}` in the spec"
+            f"to a test that proves it, or end it with `{UNIMPLEMENTED_EXAMPLE}` in the spec if a plan delivers it later"
         )
         problems.append(Problem(name, line, message, UNCLAIMED))
     elif status.status == FAILED:

@@ -66,8 +66,8 @@ def test_the_counts_and_the_specs_table(reported: Project):
 def two_specs(project: Project) -> Project:
     """Two specs with every status between them, a `nightly` producer that never reports, and one result.
 
-    Spec 001 (with a Purpose): passed, failed, unclaimed. Spec 002 (no Purpose): planned, untested, retired,
-    and one requirement only `nightly` could prove, so it is `not run`.
+    Spec 001 (with a Purpose): passed, failed, unclaimed. Spec 002 (no Purpose): two unimplemented, and one
+    requirement only `nightly` could prove, so it is `not run`.
     """
     project.write(
         "speccheck.toml",
@@ -83,10 +83,9 @@ def two_specs(project: Project) -> Project:
     project.write(
         "specs/002-b.md",
         spec(
-            "- T-REQ-002-01: Later. (planned: step 3)\n"
-            "- T-REQ-002-02: Skipped on purpose. ⚠ untested\n"
-            "- T-REQ-002-03: Retired. Gone.\n"
-            "- T-REQ-002-04: Waits for the nightly run.",
+            "- T-REQ-002-01: Later. (unimplemented: step 3)\n"
+            "- T-REQ-002-02: Much later. (unimplemented: the `cache` | plan *b*)\n"
+            "- T-REQ-002-03: Waits for the nightly run.",
             number="002",
             title="Beta",
         ),
@@ -102,24 +101,21 @@ def two_specs(project: Project) -> Project:
 
 @pytest.mark.covers(
     "SPC-REQ-006-01",
-    "a report of two specs holding every status lists one row per spec with its own count, leaves out statuses with none, and opens with the counts of the seven statuses it has",
+    "a report of two specs holding every status lists one row per spec with its own count, leaves out statuses with none, and opens with the counts of the five statuses it has",
 )
 def test_several_specs_and_every_status(two_specs: Project):
     """Rows per spec, zero counts left out, and the summary line in order from the worst status."""
     text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
     assert text.startswith(
-        "# speccheck requirements\n\n7 requirements: 1 failed, 1 unclaimed, 1 not run, 1 passed, 1 planned, 1 untested, 1 retired\n"
+        "# speccheck requirements\n\n6 requirements: 1 failed, 1 unclaimed, 1 not run, 1 passed, 2 unimplemented\n"
     )
     rows = [line for line in section(text, "## Specs").splitlines() if line.startswith("| [")]
     assert rows == [
         "| [001 Alpha](#001-alpha) | 3 | ❌ 1 failed, ❌ 1 unclaimed, ✅ 1 passed |",
-        "| [002 Beta](#002-beta) | 4 | ⏸ 1 not run, 🗓 1 planned, ⚠ 1 untested, — 1 retired |",
+        "| [002 Beta](#002-beta) | 3 | ⏸ 1 not run, 🗓 2 unimplemented |",
     ]
     counts_line = text.splitlines()[4]
-    assert (
-        counts_line
-        == "❌ failed: 1 · ❌ unclaimed: 1 · ⏸ not run: 1 · ✅ passed: 1 · 🗓 planned: 1 · ⚠ untested: 1 · — retired: 1"
-    )
+    assert counts_line == "❌ failed: 1 · ❌ unclaimed: 1 · ⏸ not run: 1 · ✅ passed: 1 · 🗓 unimplemented: 2"
 
 
 @pytest.mark.covers(
@@ -151,6 +147,35 @@ def test_the_specs_table_links_resolve(two_specs: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-07",
+    "a spec holding failed, unclaimed, not run, passed and unimplemented requirements, written in reverse, lists them in that order",
+)
+def test_the_status_table_orders_every_status(project: Project):
+    """Failed, unclaimed and not run first, in that order, then passed, then unimplemented, whatever the spec order."""
+    # A CI job that claims T-REQ-001-03 and never reports, so that one alone is not run
+    project.write("speccheck.toml", CONFIG + '[ci.nightly.covers]\n"T-REQ-001-03" = "the nightly job waits"\n')
+    project.spec(
+        "- T-REQ-001-01: Later. (unimplemented: step 2)\n- T-REQ-001-02: Passes.\n- T-REQ-001-03: Waits.\n"
+        "- T-REQ-001-04: Nobody.\n- T-REQ-001-05: Fails."
+    )
+    project.results(
+        "u.jsonl",
+        "unit",
+        [
+            ("tests/t.py::test_ok", ["T-REQ-001-02"], "passed"),
+            ("tests/t.py::test_bad", ["T-REQ-001-05"], "failed"),
+        ],
+    )
+    text = project.speccheck("report", "u.jsonl").out
+    rows = [
+        line.split(" | ", 1)[1].removesuffix(" |")
+        for line in section(text, "## 001 Thing").splitlines()
+        if line.startswith("| [T-")
+    ]
+    assert rows == ["❌ failed", "❌ unclaimed", "⏸ not run", "✅ passed", "🗓 unimplemented: step 2"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-07",
     "a spec's section gives its Purpose on one line, then a status table with failed and unclaimed first, each ID linking to its section",
 )
 def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
@@ -167,18 +192,31 @@ def test_a_spec_section_has_its_purpose_and_a_status_table(reported: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-006-07",
-    "a spec with a not run requirement, then planned, untested and retired ones, lists failed, unclaimed and not run before the rest",
+    "a spec with a not run requirement listed last and two unimplemented ones lists not run first, then each unimplemented one with its reason escaped",
 )
 def test_the_status_table_puts_not_run_before_the_rest(two_specs: Project):
-    """Spec 002's table: `not run` first, then the rest by status."""
+    """Spec 002's table: `not run` first, then the unimplemented ones in spec order, each with its reason."""
     text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
     rows = [line for line in section(text, "## 002 Beta").splitlines() if line.startswith("| [T-")]
     assert rows == [
-        "| [T-REQ-002-04](#t-req-002-04--not-run) | ⏸ not run |",
-        "| [T-REQ-002-01](#t-req-002-01--planned) | 🗓 planned |",
-        "| [T-REQ-002-02](#t-req-002-02--untested) | ⚠ untested |",
-        "| [T-REQ-002-03](#t-req-002-03--retired) | — retired |",
+        "| [T-REQ-002-03](#t-req-002-03--not-run) | ⏸ not run |",
+        "| [T-REQ-002-01](#t-req-002-01--unimplemented) | 🗓 unimplemented: step 3 |",
+        "| [T-REQ-002-02](#t-req-002-02--unimplemented) | 🗓 unimplemented: the `cache` \\| plan \\*b\\* |",
     ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-006-08",
+    "an unimplemented requirement's section quotes its text without the suffix and gives the reason, escaped, on its own line under it",
+)
+def test_an_unimplemented_requirement_shows_its_reason(two_specs: Project):
+    """The suffix is not quoted as part of the text; the reason is shown once, as its own line."""
+    text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
+    body = section(text, "### T-REQ-002-02 🗓 unimplemented")
+    assert body.startswith(
+        "### T-REQ-002-02 🗓 unimplemented\n\n> Much later.\n\n**Unimplemented:** the `cache` \\| plan \\*b\\*\n\n"
+    )
+    assert "(unimplemented" not in body
 
 
 @pytest.mark.covers(
@@ -201,7 +239,7 @@ def test_a_status_table_link_resolves_to_its_requirements_section(two_specs: Pro
     text = two_specs.speccheck("report", "unit.jsonl", env=ENV).out
     anchors = {anchor(h) for h in re.findall(r"^### (.+)$", text, re.M)}
     linked = re.findall(r"^\| \[T-[^\]]+\]\(#([^)]+)\) \|", text, re.M)
-    assert len(linked) == 7 and set(linked) <= anchors, (linked, anchors)
+    assert len(linked) == 6 and set(linked) <= anchors, (linked, anchors)
 
 
 @pytest.mark.covers(

@@ -14,8 +14,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   `pytest.param(..., marks=...)` in the test's own `@pytest.mark.parametrize`, and it MUST claim
   for that one test only.
 - SPC-REQ-003-03: When the project sets `speccheck_config`, collection MUST fail on a claim of a
-  malformed ID, an unknown ID, a retired ID, or an ID in a spec the producer may not claim, and the
-  message MUST name the test and the ID.
+  malformed ID, an unknown ID, or an ID in a spec the producer may not claim, and the message MUST
+  name the test and the ID.
 - SPC-REQ-003-04: A `covers` mark MUST take exactly two positional strings: the ID, and how the
   test proves it. A mark with any other number of arguments, a non-string, or keyword arguments
   MUST fail collection.
@@ -32,9 +32,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
 - SPC-REQ-003-08: Each run of whitespace in an explanation, newlines included, MUST become one
   space, and the ends MUST be trimmed, before it is checked or written.
 - SPC-REQ-003-09: When the project sets `speccheck_config`, collection MUST fail when an
-  explanation has the same text (SPC-REQ-001-10) as any requirement in the folder that isn't
-  retired. The message MUST name that requirement and say to describe how the test proves the
-  claimed one.
+  explanation has the same text (SPC-REQ-001-10) as any requirement in the folder. The message
+  MUST name that requirement and say to describe how the test proves the claimed one.
 - SPC-REQ-003-10: Collection MUST fail when one test claims the same ID more than once.
 - SPC-REQ-003-11: Collection MUST fail when two claims in the session have the same text
   (SPC-REQ-001-10), whether they are in one test or two and whatever IDs they claim, so a repeat
@@ -45,8 +44,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   each with its own explanation: onto each test when the mark is on a class or module, and onto
   each `pytest.param` of one `parametrize` in the other cases.
 - SPC-REQ-003-13: The message for a refused ID MUST say how to fix it: for a malformed ID it shows
-  the ID format, for an unknown ID it names the spec to add it to, for a retired ID it says to
-  claim what replaced it, and for a disallowed ID it names the `producers.<name>.specs` key.
+  the ID format, for an unknown ID it names the spec to add it to, and for a disallowed ID it names
+  the `producers.<name>.specs` key.
 - SPC-REQ-003-14: When the project sets `speccheck_config`, collection MUST fail when no producer
   is set, and the message MUST name both ways to set one: `SPECCHECK_PRODUCER` and
   `speccheck_producer`.

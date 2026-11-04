@@ -269,7 +269,7 @@ def ci_project(project: Project) -> Project:
         CONFIG
         + '[ci.publish]\nworkflows = ["ci"]\n[ci.publish.covers]\n"T-REQ-001-01" = "the publish job pushes the image"\n',
     )
-    project.spec("- T-REQ-001-01: It publishes.\n- T-REQ-001-02: It is tested. ⚠ untested")
+    project.spec("- T-REQ-001-01: It publishes.\n- T-REQ-001-02: It is tested. (unimplemented: later)")
     return project
 
 

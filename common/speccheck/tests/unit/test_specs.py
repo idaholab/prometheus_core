@@ -143,19 +143,18 @@ class TestHeader:
     def test_the_status_line_is_required_and_known(self, repo: Repo):
         """A missing or unknown status is a problem."""
         repo.write("specs/001-thing.md", "# 001 - Thing\n\nstatus: done\n")
-        assert_problems(repo, "status must be one of draft, implemented, retired")
+        assert_problems(repo, "status must be one of draft, implemented")
         repo.write("specs/001-thing.md", "# 001 - Thing\n")
         assert_problems(repo, "missing the `status:` line")
 
     def test_the_header_is_read_only_above_the_first_section(self, repo: Repo):
         """A `status:` in an example further down is prose, not the spec's setting."""
-        repo.spec("- T-REQ-001-01: It MUST work.\n\n```\nstatus: retired\n```\n\nstatus: retired\n")
+        repo.spec("- T-REQ-001-01: It MUST work.\n\n```\nstatus: bogus\n```\n\nstatus: bogus\n")
         assert_problems(repo)
-        assert not requirements(repo)[0].retired
 
     def test_a_repeated_status_line_fails(self, repo: Repo):
         """The second one would otherwise win without a word."""
-        repo.write("specs/001-thing.md", spec("").replace("status: draft", "status: draft\nstatus: retired"))
+        repo.write("specs/001-thing.md", spec("").replace("status: draft", "status: draft\nstatus: implemented"))
         assert_problems(repo, "a second `status:` line")
 
     def test_an_implemented_spec_needs_a_requirement(self, repo: Repo):
@@ -163,11 +162,9 @@ class TestHeader:
         repo.spec("", status="implemented")
         assert_problems(repo, "an implemented spec needs at least one requirement")
 
-    def test_draft_and_retired_specs_may_be_empty(self, repo: Repo):
+    def test_a_draft_spec_may_be_empty(self, repo: Repo):
         """Only a spec that says it is implemented must say something."""
-        repo.write("specs/000-index.md", INDEX + "- [002](002-old.md)\n")
         repo.spec("")
-        repo.spec("", status="retired", number="002", name="002-old.md")
         assert_problems(repo)
 
 
@@ -235,10 +232,8 @@ def test_duplicate_ids_fail(repo: Repo):
 
 
 def test_duplicate_text_fails(repo: Repo):
-    """Text is unique across the folder, compared as `comparable`; retired requirements are skipped."""
-    repo.spec(
-        "- T-REQ-001-01: It is WRITTEN.\n- T-REQ-001-02: it is\n  written\n- T-REQ-001-03: Retired.\n- T-REQ-001-04: Retired."
-    )
+    """Text is unique across the folder, compared as `comparable`."""
+    repo.spec("- T-REQ-001-01: It is WRITTEN.\n- T-REQ-001-02: it is\n  written")
     found = problems(repo)
     assert found == [
         "specs/001-thing.md:8: T-REQ-001-02 has the same text as T-REQ-001-01 at specs/001-thing.md:7; "
@@ -254,6 +249,8 @@ def test_duplicate_text_fails(repo: Repo):
         ("It Is.", "It Is.", "it is"),
         ("It is . ", "It is .", "it is"),
         ("Two..", "Two..", "two."),
+        ("It works. (unimplemented: x)", "It works. (unimplemented: x)", "it works"),
+        ("It\n  works (unimplemented:\n  x).", "It works (unimplemented: x).", "it works"),
         ("", "", ""),
     ],
 )
@@ -262,53 +259,71 @@ def test_collapse_and_comparable(text, collapsed, compared):
     assert (specs.collapse(text), specs.comparable(text)) == (collapsed, compared)
 
 
-class TestMarkers:
-    """Continuation lines and the untested and planned markers."""
+@pytest.mark.parametrize(
+    ("text", "kept", "reason"),
+    [
+        ("It works. (unimplemented: step 2)", "It works.", "step 2"),
+        ("It works (unimplemented: step 2).", "It works", "step 2"),
+        ("It works (unimplemented:  step 2 )", "It works", "step 2"),
+        ("It works (unimplemented: see (b))", "It works", "see (b)"),
+        ("It works. (unimplemented)", "It works.", ""),
+        ("It works. (unimplemented: )", "It works.", ""),
+        ("It works.", "It works.", None),
+        ("It (unimplemented: step 2) works.", "It (unimplemented: step 2) works.", None),
+        ("It works. (unimplemented: step 2) later", "It works. (unimplemented: step 2) later", None),
+        ("It works. (unimplemented: step 2)..", "It works. (unimplemented: step 2)..", None),
+        ("It works. (Unimplemented: step 2)", "It works. (Unimplemented: step 2)", None),
+        ("It works. (default: 30s)", "It works. (default: 30s)", None),
+        ("It works. (unimplementedx: a)", "It works. (unimplementedx: a)", None),
+    ],
+)
+def test_split_suffix(text, kept, reason):
+    """Only a suffix at the very end counts, with one optional stop after it; the reason is trimmed."""
+    assert specs.split_suffix(text) == (kept, reason)
 
-    def test_a_marker_on_a_continuation_line_counts(self, repo: Repo):
-        """Long bullets wrap; the marker can be on the last line."""
-        repo.spec("- T-REQ-001-01: It MUST work\n  for a long while. ⚠ untested")
+
+class TestUnimplemented:
+    """The suffix on a bullet, as `load` reads it."""
+
+    def test_the_suffix_is_split_off(self, repo: Repo):
+        """The text is kept without it, and the reason is the requirement's."""
+        repo.spec("- T-REQ-001-01: It works. (unimplemented: step 2)")
         requirement = requirements(repo)[0]
-        assert requirement.untested and not requirement.planned
-        assert requirement.text == "It MUST work for a long while. ⚠ untested"
+        assert (requirement.text, requirement.reason, requirement.unimplemented) == ("It works.", "step 2", True)
 
-    def test_planned(self, repo: Repo):
-        """`(planned: step 3b)` marks a requirement a later step delivers."""
-        repo.spec("- T-REQ-001-01: Later. (planned: step 3b)")
-        assert requirements(repo)[0].planned
+    def test_no_suffix_is_implemented(self, repo: Repo):
+        """The default."""
+        repo.spec("- T-REQ-001-01: It works.")
+        requirement = requirements(repo)[0]
+        assert (requirement.reason, requirement.unimplemented) == (None, False)
 
-    def test_planned_and_untested_together_is_a_problem(self, repo: Repo):
-        """A requirement is either waiting for a step or untested, not both."""
-        repo.spec("- T-REQ-001-01: Later. (planned: step 7) ⚠ untested")
-        assert_problems(repo, "T-REQ-001-01 is both planned and untested")
+    def test_a_suffix_on_a_continuation_line_counts(self, repo: Repo):
+        """The lines are joined first, so the suffix may be on the last line or wrap."""
+        repo.spec("- T-REQ-001-01: It MUST work\n  for a while. (unimplemented: plan\n  step 2)")
+        requirement = requirements(repo)[0]
+        assert (requirement.text, requirement.reason) == ("It MUST work for a while.", "plan step 2")
+
+    def test_a_missing_reason_is_a_problem(self, repo: Repo):
+        """At the bullet's line, saying what to write."""
+        repo.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Later. (unimplemented)")
+        assert problems(repo) == [
+            "specs/001-thing.md:8: T-REQ-001-02 needs a reason: write `(unimplemented: <reason>)`"
+        ]
+
+    def test_the_text_is_compared_without_the_suffix(self, repo: Repo):
+        """The same requirement, with and without the suffix, is a duplicate."""
+        repo.spec("- T-REQ-001-01: It works.\n- T-REQ-001-02: It works. (unimplemented: step 2)")
+        assert_problems(repo, "T-REQ-001-02 has the same text as T-REQ-001-01")
 
     def test_a_nested_bullet_is_not_glued_to_the_one_above(self, repo: Repo):
         """It ends the previous requirement's text instead of extending it."""
-        repo.spec("- T-REQ-001-01: Real.\n  - T-REQ-001-02: nested (planned: step 2)")
-        found = requirements(repo)
-        assert [r.id for r in found] == ["T-REQ-001-01"]
-        assert not found[0].planned
+        repo.spec("- T-REQ-001-01: Real.\n  - T-REQ-001-02: nested (unimplemented: step 2)")
+        assert [(r.id, r.unimplemented) for r in requirements(repo)] == [("T-REQ-001-01", False)]
 
     def test_a_blank_line_ends_the_bullet(self, repo: Repo):
         """Indented text after a blank line is not the bullet's."""
-        repo.spec("- T-REQ-001-01: Real.\n\n  (planned: step 2)")
-        assert not requirements(repo)[0].planned
-
-
-class TestRetired:
-    """Retired requirements."""
-
-    def test_only_retired_with_a_stop_retires_a_requirement(self, repo: Repo):
-        """Text that merely starts with the word is still a live requirement."""
-        repo.spec(
-            "- T-REQ-001-01: Retired: gone.\n- T-REQ-001-02: Retired later, maybe.\n- T-REQ-001-03: Retired. Gone."
-        )
-        assert [r.retired for r in requirements(repo)] == [True, False, True]
-
-    def test_every_requirement_in_a_retired_spec_is_retired(self, repo: Repo):
-        """A retired spec keeps its IDs for history only."""
-        repo.spec("- T-REQ-001-01: It did work.", status="retired")
-        assert requirements(repo)[0].retired
+        repo.spec("- T-REQ-001-01: Real.\n\n  (unimplemented: step 2)")
+        assert not requirements(repo)[0].unimplemented
 
 
 def test_a_fenced_example_is_not_a_requirement(repo: Repo):

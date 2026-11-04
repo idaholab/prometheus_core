@@ -57,10 +57,10 @@ def how_problem(claimed: str, how: str) -> str:
 
 
 def copied_from(how: str, specs: SpecSet) -> Requirement | None:
-    """The requirement, not retired, whose text the explanation is (SPC-REQ-003-09), or None."""
+    """The requirement whose text the explanation is (SPC-REQ-003-09), or None."""
     key = comparable(how)
     for requirement in specs.requirements.values():
-        if not requirement.retired and comparable(requirement.text) == key:
+        if comparable(requirement.text) == key:
             return requirement
     return None
 

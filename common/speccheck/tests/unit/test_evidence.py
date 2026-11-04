@@ -79,7 +79,7 @@ class TestCounts:
         [
             ({}, "0 requirements"),
             ({"passed": 1}, "1 requirement: 1 passed"),
-            ({"failed": 0, "passed": 1, "planned": 1}, "2 requirements: 1 passed, 1 planned"),
+            ({"failed": 0, "passed": 1, "unimplemented": 1}, "2 requirements: 1 passed, 1 unimplemented"),
         ],
     )
     def test_summary_line(self, counts, line):
@@ -90,8 +90,8 @@ class TestCounts:
 class TestClaimProblem:
     """Why a producer may not claim an ID."""
 
-    SPECS = make_specs("It.", "Retired. Gone.")
-    """T-REQ-001-01 live, T-REQ-001-02 retired."""
+    SPECS = make_specs("It.")
+    """T-REQ-001-01."""
 
     @pytest.mark.parametrize(
         ("claimed", "who", "message"),
@@ -101,7 +101,6 @@ class TestClaimProblem:
             ("REQ-001-01", UNIT, "`REQ-001-01` is not an ID of this folder; IDs read like `T-REQ-001-01`"),
             ("T-REQ-001-01x", UNIT, "is not an ID of this folder"),
             ("T-REQ-002-09", UNIT, "T-REQ-002-09 isn't in any spec; check the number, or add it to spec 002"),
-            ("T-REQ-001-02", UNIT, "T-REQ-001-02 is retired; claim what replaced it"),
             (
                 "T-REQ-001-01",
                 OTHER_SPECS,
@@ -111,7 +110,7 @@ class TestClaimProblem:
         ],
     )
     def test_claim_problem(self, claimed, who, message):
-        """Malformed, unknown, retired and not allowed, each with what to do; "" when fine."""
+        """Malformed, unknown and not allowed, each with what to do; "" when fine."""
         found = evidence.claim_problem(claimed, who, self.SPECS)
         assert message in found and bool(found) == bool(message)
 
@@ -128,10 +127,8 @@ def test_where_and_describe():
     ("text", "status", "found", "config_claims", "reported", "runtime", "expected", "waiting"),
     [
         # what the spec says, when nothing claims it
-        ("Retired. Gone.", "draft", [], [], [], True, "retired", []),
-        ("It.", "retired", ["passed"], [], ["unit"], True, "retired", []),
-        ("It. (planned: 2)", "draft", [], [], [], True, "planned", []),
-        ("It. ⚠ untested", "draft", [], [], [], True, "untested", []),
+        ("It. (unimplemented: step 2)", "draft", [], [], [], True, "unimplemented", []),
+        ("It. (unimplemented: step 2)", "draft", [], [], [], False, "unimplemented", []),
         # nothing claims it: unclaimed, unless a test producer that may claim it didn't report (verify only)
         ("It.", "draft", [], [], ["unit"], True, "unclaimed", []),
         ("It.", "draft", [], [], [], True, "not run", ["unit"]),
@@ -141,11 +138,13 @@ def test_where_and_describe():
         ("It.", "draft", ["skipped", "passed"], [], ["unit"], True, "passed", []),
         ("It.", "draft", ["skipped", "xpassed"], [], ["unit"], True, "failed", []),
         # a marker doesn't excuse a claimed requirement: it is decided by its evidence
-        ("It. ⚠ untested", "draft", ["passed"], [], ["unit"], True, "passed", []),
-        ("It. (planned: 2)", "draft", ["collected"], [], ["unit"], False, "claimed", []),
+        ("It. (unimplemented: step 2)", "draft", ["passed"], [], ["unit"], True, "passed", []),
+        ("It. (unimplemented: step 2)", "draft", ["collected"], [], ["unit"], False, "claimed", []),
         # claimed only by a CI job in the config, which didn't report
         ("It.", "draft", [], ["job"], ["unit"], True, "not run", ["job"]),
         ("It.", "draft", [], ["job"], ["unit", "job"], True, "not run", []),
+        # an unimplemented requirement is never not run, even claimed by a job that didn't report
+        ("It. (unimplemented: step 2)", "draft", [], ["job"], ["unit"], True, "unimplemented", []),
     ],
 )
 def test_decide(text, status, found, config_claims, reported, runtime, expected, waiting):
@@ -176,9 +175,7 @@ def test_decide_ignores_producers_that_may_not_claim_the_spec():
     ("status", "complete", "expected"),
     [
         ("passed", True, []),
-        ("planned", True, []),
-        ("untested", True, []),
-        ("retired", True, []),
+        ("unimplemented", True, []),
         ("claimed", True, []),
         (
             "unclaimed",
@@ -227,17 +224,23 @@ def test_the_hint_names_each_outcome_once():
     assert evidence._hint([]) == ""
 
 
-@pytest.mark.parametrize(
-    ("text", "message"),
-    [
-        ("It. ⚠ untested", "T-REQ-001-01 is claimed, so remove `⚠ untested`"),
-        ("It. (planned: step 2)", "T-REQ-001-01 is claimed, so remove its `(planned: ...)`"),
-    ],
-)
-def test_a_marker_on_a_claimed_requirement_must_go(text, message):
-    """Once claimed, the marker is stale, whatever the status."""
-    decided = evidence.Status(make_requirement(make_spec(), text), "passed", claimed=True)
-    assert [p.message for p in evidence._problems_of(decided, ROOT, False)] == [message]
+@pytest.mark.parametrize("status", ["passed", "failed", "claimed", "not run"])
+def test_a_suffix_on_a_claimed_requirement_must_go(status):
+    """Once claimed, the suffix is stale, whatever the status."""
+    requirement = make_requirement(make_spec(), "It. (unimplemented: step 2)")
+    decided = evidence.Status(requirement, status, claimed=True)
+    found = evidence._problems_of(decided, ROOT, False)
+    assert [(p.code, p.message) for p in found if p.code == "unimplemented-stale"] == [
+        ("unimplemented-stale", "T-REQ-001-01 is claimed, so remove its `(unimplemented: ...)` suffix")
+    ]
+
+
+def test_an_unclaimed_requirement_says_how_to_mark_it_unimplemented():
+    """The message names both fixes."""
+    decided = evidence.Status(make_requirement(make_spec()), "unclaimed")
+    assert evidence._problems_of(decided, ROOT, False)[0].message.endswith(
+        "or end it with `(unimplemented: <reason>)` in the spec if a plan delivers it later"
+    )
 
 
 def evaluate(spec_text: tuple[str, ...], files, *producers, runtime=True, **kwargs) -> evidence.Evaluation:
@@ -290,8 +293,8 @@ class TestEvaluate:
         """A recorded result for an ID outside `covers` is a problem at the job's name."""
         job = ci_job("publish", "T-REQ-001-01")
         files = [results_file("publish", ("T-REQ-001-01", "passed"), ("T-REQ-001-02", "passed"), kind="ci")]
-        evaluation = evaluate(("It.", "Other. ⚠ untested"), files, UNIT, job)
-        assert statuses(evaluation) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "untested"}
+        evaluation = evaluate(("It.", "Other. (unimplemented: later)"), files, UNIT, job)
+        assert statuses(evaluation) == {"T-REQ-001-01": "passed", "T-REQ-001-02": "unimplemented"}
         assert messages(evaluation) == [
             "publish: T-REQ-001-02 isn't in `ci.publish.covers`, so job `publish` may not record it"
         ]
@@ -304,7 +307,9 @@ class TestEvaluate:
 
     def test_a_bad_id_in_a_ci_jobs_covers(self):
         """A typo in `covers` is a problem at the config, and claims nothing."""
-        evaluation = evaluate(("It. ⚠ untested",), [results_file("unit")], UNIT, ci_job("publish", "T-REQ-001-09"))
+        evaluation = evaluate(
+            ("It. (unimplemented: later)",), [results_file("unit")], UNIT, ci_job("publish", "T-REQ-001-09")
+        )
         assert messages(evaluation) == [
             "speccheck.toml: `ci.publish.covers`: T-REQ-001-09 isn't in any spec; check the number, or add it to spec 001"
         ]

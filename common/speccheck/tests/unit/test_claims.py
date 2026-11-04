@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 
 from speccheck import claims
-from tests.unit.conftest import make_requirement, make_spec, make_specs, spec_set
+from tests.unit.conftest import make_specs
 
 
 def test_a_claim_as_json():
@@ -65,15 +65,10 @@ class TestCopied:
         assert claims.copied_from("the file is written", loaded) is None
         assert claims.copied_problem("T-REQ-001-01", "the file is written", loaded) == ""
 
-    def test_a_retired_requirement_is_not_compared(self):
-        """Retired by its text, or by its whole spec."""
-        spec = make_spec()
-        make_requirement(spec, "Retired: old text.")
-        retired_spec = make_spec("002", status="retired")
-        make_requirement(retired_spec, "Gone text.")
-        loaded = spec_set(spec, retired_spec)
-        assert claims.copied_from("Retired: old text", loaded) is None
-        assert claims.copied_from("gone text", loaded) is None
+    def test_an_unimplemented_requirement_is_compared_without_its_suffix(self):
+        """Its text is what it requires; the suffix only says it isn't done yet."""
+        loaded = make_specs("It MUST be read. (unimplemented: step 2)")
+        assert claims.copied_from("it must be read", loaded).id == "T-REQ-001-01"
 
 
 class TestUnique:
