@@ -99,7 +99,7 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
           </div>
           <ul
             tabIndex={0}
-            className="menu dropdown-content z-10 mt-2 w-48 rounded-box border border-base-300 bg-base-100 p-2 shadow"
+            className="menu menu-panel dropdown-content z-10 mt-2 w-48 p-2"
           >
             <li>
               <button onClick={() => setTheme(nextTheme)}>
