@@ -266,15 +266,19 @@ def test_json_on_a_usage_error_before_any_command_runs(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-008-04",
-    "lint, check, verify, report, an unknown command and no command each print one JSON object, and check lists each requirement",
+    "lint, check, verify and report both clean and with problems, an unknown command and no command each print one JSON object whose ok is true exactly when the exit code is 0, and check lists each requirement",
 )
 def test_one_json_object_on_every_exit_path(project: Project):
-    """Clean, with problems (`verify` with no results is one), and on a usage error: stdout is one object."""
+    """Each command clean and with problems, and a usage error: stdout is one object, and `ok` is exit 0."""
     project.spec("- T-REQ-001-01: One.")
+    project.results("r.jsonl", "unit", [("tests/t.py::test_a", ["T-REQ-001-01"], "passed")])
     for argv, code in (
         (["lint", "--json"], 0),
+        (["check", "r.jsonl", "--json"], 0),
         (["check", "--json"], 1),
+        (["verify", "r.jsonl", "--json"], 0),
         (["verify", "--json"], 1),
+        (["report", "r.jsonl", "--json"], 0),
         (["report", "--json"], 0),
         (["nope", "--json"], 2),
         (["--json"], 2),
@@ -284,6 +288,11 @@ def test_one_json_object_on_every_exit_path(project: Project):
         assert done.returncode == code, argv
         assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
         assert body["ok"] is (code == 0), argv
+    # lint with a problem: a star bullet
+    project.spec("- T-REQ-001-01: One.\n* T-REQ-001-02: Star.")
+    done = command(project, "lint", "--json")
+    assert (done.returncode, json.loads(done.stdout)["ok"]) == (1, False)
+    project.spec("- T-REQ-001-01: One.")
     check = json.loads(command(project, "check", "--json").stdout)
     # `path` is the spec file from the repository's root; pytester's folder is in none, so null
     assert len(check["requirements"]) == 1
