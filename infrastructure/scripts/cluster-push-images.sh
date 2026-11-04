@@ -24,7 +24,6 @@ images=(
   "frontend-prod frontend"
   "client-agent client-agent"
   "synthesis-agent synthesis-agent"
-  "form-filler-agent form-filler-agent"
   "artifact-debug-agent artifact-debug-agent"
   "code-render-debug-agent code-render-debug-agent"
   "corrosion-agent corrosion-agent"
