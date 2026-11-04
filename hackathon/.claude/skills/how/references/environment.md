@@ -35,7 +35,7 @@ base-image` (automatic in `make up`). The backend builds on its own image and ne
 
 ## The pin rule
 
-1. `LOCAL_SDK=true` in the platform `.env` (or the shell) wins: repo `prometheus_api`, tag `local` (`Makefile:19-31`).
+1. `LOCAL_SDK=true` in the platform `.env` (or the shell) wins: repo `prometheus_api`, tag `local` (the `ifeq ($(LOCAL_SDK),true)` block in the platform `Makefile`).
 2. Else an uncommented, non-empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line, else the Makefile `?=` value,
    pulled from `containers.github.inl.gov` (needs `registry-login`).
 

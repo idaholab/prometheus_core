@@ -44,7 +44,7 @@ Tags: preflight, diagnose. Fix: you. Run: `cd <root>/.. && test -f prometheus_co
 ### personal-skills
 Tags: preflight. Fix: you. Run: `d="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"; for s in create-agent how diagnose; do test -e "$d/$s" && echo "$s"; done; echo done` Expect only `done`. A name above it is a personal skill that runs instead of the hackathon skill. Fix: rename it in your own terminal (`mv ~/.claude/skills/diagnose ~/.claude/skills/my-diagnose`), then start a new session.
 ### base-image-pin
-Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && grep -nE '^(LOCAL_SDK|PROMETHEUS_API_BASE_IMAGE_HASH)=' .env` Expect `LOCAL_SDK=true` (the base image `prometheus_api:local` is built from `../sdk`, `Makefile:19-31`); then `<pin>` is `local`. Without it the build pulls `containers.github.inl.gov/genesis/prometheus_api` (`registry-login`). Failure: an empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line: "invalid reference format". Fix: `LOCAL_SDK=true` in `.env`, remove the empty line, then a platform `make up`.
+Tags: preflight, diagnose. Fix: yes. Run: `cd <platform> && grep -nE '^(LOCAL_SDK|PROMETHEUS_API_BASE_IMAGE_HASH)=' .env` Expect `LOCAL_SDK=true` (the base image `prometheus_api:local` is built from `../sdk`, the `ifeq ($(LOCAL_SDK),true)` block in the platform `Makefile`); then `<pin>` is `local`. Without it the build pulls `containers.github.inl.gov/genesis/prometheus_api` (`registry-login`). Failure: an empty `PROMETHEUS_API_BASE_IMAGE_HASH=` line: "invalid reference format". Fix: `LOCAL_SDK=true` in `.env`, remove the empty line, then a platform `make up`.
 ### registry-login
 Tags: preflight, diagnose. Fix: you. Only without `LOCAL_SDK=true` (`base-image-pin`). Run: `docker pull -q containers.github.inl.gov/genesis/prometheus_api:<pin>` Expect the image reference. Failure: `unauthorized`/`denied` (no login, no `read:packages`, no org access); `manifest unknown` (bad pin); `dial tcp`/`no such host` (off the INL network or VPN). Fix, in your own terminal (paste the classic PAT at the first line; it never goes into the chat or a file; deck 03, slide 15):
   ```sh
@@ -94,7 +94,7 @@ Tags: preflight, diagnose. Fix: yes. Run: `curl -s localhost:8600/healthz` Expec
 ### backend-logs
 Tags: diagnose. Fix: yes. Run: `docker compose -p prometheus_platform logs --no-log-prefix --tail 200 backend 2>&1 | grep -iE 'error|exception|traceback|jwt_secret|alembic|password authentication' | tail -n 20` Failure: "jwt_secret is not configured" (`platform-env`); an alembic error (migrations run first, `backend/docker-entrypoint.sh:14-15`); `password authentication failed for user "admin"` (`ADMIN_DB_PASSWORD` changed after the first start: restore it, or `make down-v`); "libGL.so.1" (old image: a platform `make up`).
 ### chat-ui
-Tags: preflight, diagnose. Fix: yes. Run: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5150/` Expect `200` (8080 with `PROFILE=prod`). `000`: the frontend is stopped, or `PROFILE=` is empty (`Makefile:39-42`).
+Tags: preflight, diagnose. Fix: yes. Run: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5150/` Expect `200` (8080 with `PROFILE=prod`). `000`: the frontend is stopped, or `PROFILE=` is empty (the `PROFILE ?= dev` line in the platform `Makefile`).
 ### admin-user
 Tags: preflight, diagnose. Fix: you. Run: `curl -s localhost:8600/api/setup/status` Expect `{"needs_setup":false}`. `true`: open http://localhost:5150 and complete the wizard; the first user is admin.
 ### signing-key
