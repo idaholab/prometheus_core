@@ -13,6 +13,7 @@
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
 import { BuilderCanvas } from "./BuilderCanvas";
+import { NodeInspector, type InspectedNode } from "./NodeInspector";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
@@ -24,6 +25,8 @@ interface WorkflowBuilderProps {
   /** The workflow's graph, drawn on the canvas. */
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
+  /** The node shown in the inspector, or null for its empty state. */
+  inspected: InspectedNode | null;
 }
 
 /**
@@ -33,10 +36,9 @@ interface WorkflowBuilderProps {
  * - From lg (1024px) the columns sit side by side, at D.2's widths from xl.
  * - Below lg they stack, library first, and the page scrolls vertically.
  *
- * The inspector is filled in by WB-4, and the toolbar
- * buttons have no handlers yet.
+ * The toolbar buttons have no handlers yet.
  */
-export function WorkflowBuilder({ name, skillGroups, nodes, wires }: WorkflowBuilderProps) {
+export function WorkflowBuilder({ name, skillGroups, nodes, wires, inspected }: WorkflowBuilderProps) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-9 gap-y-3 border-b border-base-content/10 bg-base-200 px-6 py-3">
@@ -65,9 +67,9 @@ export function WorkflowBuilder({ name, skillGroups, nodes, wires }: WorkflowBui
 
         <aside
           aria-label="Node inspector"
-          className="flex flex-col gap-4 border-t border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-t-0 lg:border-l"
+          className="border-t border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-t-0 lg:border-l"
         >
-          <SectionLabel variant="panel">Node Inspector</SectionLabel>
+          <NodeInspector node={inspected} />
         </aside>
       </div>
     </div>

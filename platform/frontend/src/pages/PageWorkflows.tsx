@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
+import type { InspectedNode } from "../components/workflows/NodeInspector";
 import type { SkillGroup } from "../components/workflows/SkillLibrary";
 import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
 import { WorkflowConsole } from "../components/workflows/WorkflowConsole";
@@ -211,6 +212,20 @@ const BUILDER_WIRES: WorkflowGraphWire[] = [
   { from: "corrosion", to: "corrosion-drop", dashed: true },
 ];
 
+// Placeholder inspector content for the selected node, Radiation Damage, from
+// Figma D.2. Neutron flux is an optional input left unset.
+const INSPECTED_NODE: InspectedNode = {
+  name: "Radiation Damage",
+  tone: "analysis",
+  skillId: "analyze_radiation_damage",
+  inputs: [
+    { name: "material_id", value: "from input.material_id" },
+    { name: "neutron_flux" },
+    { name: "temperature_c", value: "from input.context" },
+  ],
+  outputs: [{ name: "to_context", value: "radiation" }],
+};
+
 const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";
 
 type WorkflowsView = "console" | "builder";
@@ -246,5 +261,13 @@ function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
 
 function BuilderView() {
   usePageHeader({ trail: ["Workflow Builder"] });
-  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} skillGroups={SKILL_GROUPS} nodes={BUILDER_NODES} wires={BUILDER_WIRES} />;
+  return (
+    <WorkflowBuilder
+      name={SELECTED_TEMPLATE_NAME}
+      skillGroups={SKILL_GROUPS}
+      nodes={BUILDER_NODES}
+      wires={BUILDER_WIRES}
+      inspected={INSPECTED_NODE}
+    />
+  );
 }
