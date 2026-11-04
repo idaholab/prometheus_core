@@ -27,8 +27,9 @@ def test_which_config_is_used(project: Project):
     """`--config` first, then speccheck.toml, then [tool.speccheck]; none is exit 2 with what to pass."""
     project.spec("- T-REQ-001-01: One. (unimplemented: later)")
     project.write("other.toml", 'specs = "specs"\nid-prefix = "OTHER"\n')
-    # T-REQ-001-01 is not a bullet in a folder whose prefix is OTHER, so other.toml sees no requirements
-    assert project.speccheck("lint", "--config", "other.toml").out == "speccheck lint: 1 specs, 0 requirements\n"
+    # T-REQ-001-01 is not a bullet in a folder whose prefix is OTHER, so other.toml sees no requirements (spec-empty)
+    other = project.speccheck("lint", "--config", "other.toml")
+    assert other.err.splitlines()[-1] == "speccheck lint: 1 specs, 0 requirements; 1 problem"
     assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
     assert project.speccheck("lint").code == 0
     (project.root / "speccheck.toml").unlink()
@@ -51,7 +52,7 @@ def test_speccheck_toml_wins_over_pyproject(project: Project):
     assert project.speccheck("lint").out == "speccheck lint: 1 specs, 1 requirement\n"
     (project.root / "speccheck.toml").unlink()
     # Only the pyproject is left, and its prefix OTHER sees no bullet in a folder written for T
-    assert project.speccheck("lint").out == "speccheck lint: 1 specs, 0 requirements\n"
+    assert project.speccheck("lint").err.splitlines()[-1] == "speccheck lint: 1 specs, 0 requirements; 1 problem"
 
 
 @pytest.mark.covers(
@@ -80,7 +81,7 @@ def test_paths_are_relative_to_the_config(project: Project):
     project.write("sub/specs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
     project.write(
         "sub/specs/001-thing.md",
-        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
+        "# 001 - Thing\n\nsources: tests\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
     )
     run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1
@@ -186,7 +187,7 @@ def test_the_specs_folder_is_found_next_to_the_config_not_the_current_folder(pro
     project.write("sub/docs/000-index.md", "# Index\n\n- [001](001-thing.md)\n")
     project.write(
         "sub/docs/001-thing.md",
-        "# 001 - Thing\n\nstatus: draft\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
+        "# 001 - Thing\n\nsources: tests\n\n## Requirements\n\n- T-REQ-001-01: Beside the config. (unimplemented: later)\n",
     )
     run = project.speccheck("lint", "--config", "sub/speccheck.toml", "--json")
     assert run.code == 0 and run.json()["requirement_count"] == 1

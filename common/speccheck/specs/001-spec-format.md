@@ -1,7 +1,5 @@
 # 001 - Spec format
 
-status: implemented
-
 ## Purpose
 
 A spec folder is plain markdown that people review. `lint` makes sure every requirement in it can
@@ -13,9 +11,8 @@ be found, has one ID, and says whether it is implemented yet.
   title, `# NNN - Name`. Any other `.md` file in the folder is a problem.
 - SPC-REQ-001-02: When the config requires an index, `000-index.md` MUST exist and MUST link every
   spec as a markdown link. Mentioning a spec's number or name in prose is not enough.
-- SPC-REQ-001-03: A spec MUST have one `status:` line above its first `##` section, with the
-  value `draft` or `implemented`. An `implemented` spec MUST have at least one
-  requirement. A `draft` spec's requirements MUST be checked like an `implemented` spec's.
+- SPC-REQ-001-03: A spec MUST have at least one requirement. A spec with none MUST be a problem
+  that says to delete it and list its number in the index's `removed:` line (SPC-REQ-001-13).
 - SPC-REQ-001-04: A requirement MUST be a bullet `- <prefix>-REQ-NNN-XX: text` or
   `- <prefix>-BEH-NNN-XX: text`, where NNN is the spec's own number. A bullet that starts like an
   ID in any other form (`*`, bold, nested, without the prefix) is a problem, so it can't go unseen.
@@ -31,6 +28,13 @@ be found, has one ID, and says whether it is implemented yet.
 - SPC-REQ-001-08: Lines inside fenced code blocks MUST NOT be read as requirements or headers.
 - SPC-REQ-001-09: A spec's `tests:` line and an index's `id-prefix:` line from the old checker MUST
   be reported, saying where the setting lives now.
+- SPC-REQ-001-11: The old format MUST be reported, one problem per marker at its line, saying
+  what replaces it: a `status:` line above a spec's first `##` and outside a fence (delete it); a
+  requirement whose text, without the unimplemented suffix, ends with `⚠ untested` or
+  `(planned: <step>)`, with or without a full stop after it, the step holding any text (end it
+  with `(unimplemented: <reason>)`, or give it a test); and a requirement whose text starts with
+  `Retired.` or `Retired:` (delete it and list its ID in its spec's `removed:` line,
+  SPC-REQ-001-12). Elsewhere in a text these are ordinary words.
 - SPC-REQ-001-10: Two texts MUST count as the same text when they are equal after removing the
   unimplemented suffix (SPC-REQ-001-07), collapsing each run of whitespace to one space, trimming
   the ends, ignoring case, and dropping one trailing full stop and any whitespace before it. Two

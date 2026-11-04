@@ -413,7 +413,7 @@ def test_the_lint_json_fields_of_schema_version_1(project: Project):
     promised(body, {"schema_version": 1, "command": "lint", "ok": True, "problems": [], "requirement_count": 1})
     promised(
         body["specs"][0],
-        {"number": "001", "title": "Thing", "status": "draft", "requirement_count": 1},
+        {"number": "001", "title": "Thing", "requirement_count": 1},
         "lint.specs[0]",
     )
 

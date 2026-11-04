@@ -1,7 +1,5 @@
 # 002 - Config
 
-status: implemented
-
 ## Purpose
 
 One config describes one spec folder: where it is, its ID prefix, and what may prove it.

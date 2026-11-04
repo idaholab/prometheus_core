@@ -1,7 +1,5 @@
 # 007 - CI jobs
 
-status: implemented
-
 ## Purpose
 
 A CI job can be the evidence for a requirement. Every workflow ends with the same final job, which

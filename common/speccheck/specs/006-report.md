@@ -1,7 +1,5 @@
 # 006 - Report
 
-status: implemented
-
 ## Purpose
 
 The report says, for every requirement, whether it is proven and by which job, with a link to it.

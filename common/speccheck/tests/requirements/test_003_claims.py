@@ -246,7 +246,7 @@ def removed_claims(project: Project) -> str:
     project.write("specs/000-index.md", "# Index\n\nremoved: 009\n\n- [001](001-thing.md)\n")
     project.write(
         "specs/001-thing.md",
-        spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-001-02"),
+        spec("- T-REQ-001-01: One.", header="sources: tests\nremoved: T-REQ-001-02"),
     )
     project.ini(CHECKED)
     project.tests(

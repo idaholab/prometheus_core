@@ -60,12 +60,12 @@ def test_the_summary(tmp_path):
 
 def test_json():
     """Every spec with its header and count, and the problems; nothing on stderr."""
-    spec = make_spec(status="implemented", title="Thing\x1b")
+    spec = make_spec(title="Thing\x1b")
     ctx = make_ctx(specs_set=make_specs("It.", spec=spec), json_mode=True)
     ctx.specs().problems.append(Problem("specs/x.md", 0, "m"))
     assert lint.run(ctx, argparse.Namespace()) == 1
     body = json.loads(out(ctx))
     assert (body["command"], body["ok"], body["requirement_count"]) == ("lint", False, 1)
-    assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "status": "implemented", "requirement_count": 1}]
+    assert body["specs"] == [{"number": "001", "title": "Thing\x1b", "requirement_count": 1}]
     assert body["problems"] == [{"path": "specs/x.md", "line": 0, "message": "m", "code": "problem"}]
     assert err(ctx) == ""

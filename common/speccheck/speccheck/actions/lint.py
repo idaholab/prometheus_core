@@ -47,8 +47,7 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             ok,
             specs.problems,
             specs=[
-                {"number": s.number, "title": s.title, "status": s.status, "requirement_count": len(s.requirements)}
-                for s in specs.specs
+                {"number": s.number, "title": s.title, "requirement_count": len(s.requirements)} for s in specs.specs
             ],
             requirement_count=count,
         )

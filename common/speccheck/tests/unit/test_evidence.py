@@ -140,32 +140,32 @@ def test_where_and_describe():
 
 
 @pytest.mark.parametrize(
-    ("text", "status", "found", "config_claims", "reported", "runtime", "expected", "waiting"),
+    ("text", "found", "config_claims", "reported", "runtime", "expected", "waiting"),
     [
         # what the spec says, when nothing claims it
-        ("It. (unimplemented: step 2)", "draft", [], [], [], True, "unimplemented", []),
-        ("It. (unimplemented: step 2)", "draft", [], [], [], False, "unimplemented", []),
+        ("It. (unimplemented: step 2)", [], [], [], True, "unimplemented", []),
+        ("It. (unimplemented: step 2)", [], [], [], False, "unimplemented", []),
         # nothing claims it: unclaimed, unless a test producer that may claim it didn't report (verify only)
-        ("It.", "draft", [], [], ["unit"], True, "unclaimed", []),
-        ("It.", "draft", [], [], [], True, "not run", ["unit"]),
-        ("It.", "draft", [], [], [], False, "unclaimed", []),
+        ("It.", [], [], ["unit"], True, "unclaimed", []),
+        ("It.", [], [], [], True, "not run", ["unit"]),
+        ("It.", [], [], [], False, "unclaimed", []),
         # claimed: check sees the claim only; verify needs a pass
-        ("It.", "draft", ["failed"], [], ["unit"], False, "claimed", []),
-        ("It.", "draft", ["skipped", "passed"], [], ["unit"], True, "passed", []),
-        ("It.", "draft", ["skipped", "xpassed"], [], ["unit"], True, "failed", []),
+        ("It.", ["failed"], [], ["unit"], False, "claimed", []),
+        ("It.", ["skipped", "passed"], [], ["unit"], True, "passed", []),
+        ("It.", ["skipped", "xpassed"], [], ["unit"], True, "failed", []),
         # a marker doesn't excuse a claimed requirement: it is decided by its evidence
-        ("It. (unimplemented: step 2)", "draft", ["passed"], [], ["unit"], True, "passed", []),
-        ("It. (unimplemented: step 2)", "draft", ["collected"], [], ["unit"], False, "claimed", []),
+        ("It. (unimplemented: step 2)", ["passed"], [], ["unit"], True, "passed", []),
+        ("It. (unimplemented: step 2)", ["collected"], [], ["unit"], False, "claimed", []),
         # claimed only by a CI job in the config, which didn't report
-        ("It.", "draft", [], ["job"], ["unit"], True, "not run", ["job"]),
-        ("It.", "draft", [], ["job"], ["unit", "job"], True, "not run", []),
+        ("It.", [], ["job"], ["unit"], True, "not run", ["job"]),
+        ("It.", [], ["job"], ["unit", "job"], True, "not run", []),
         # an unimplemented requirement is never not run, even claimed by a job that didn't report
-        ("It. (unimplemented: step 2)", "draft", [], ["job"], ["unit"], True, "unimplemented", []),
+        ("It. (unimplemented: step 2)", [], ["job"], ["unit"], True, "unimplemented", []),
     ],
 )
-def test_decide(text, status, found, config_claims, reported, runtime, expected, waiting):
+def test_decide(text, found, config_claims, reported, runtime, expected, waiting):
     """Every row of the status table in design.md, for one requirement."""
-    requirement = make_requirement(make_spec(status=status), text)
+    requirement = make_requirement(make_spec(), text)
     decided = evidence._decide(
         requirement, evidence_of(*found), config_claims, make_config(UNIT, OTHER_SPECS, JOB), reported, runtime
     )

@@ -23,8 +23,18 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-STATUSES = ("draft", "implemented")
-"""The values a spec's `status:` line may take."""
+OLD_UNTESTED = re.compile(r"⚠ untested\.?\Z")
+"""The old format's marker for a requirement with no test yet, at the end of its text (SPC-REQ-001-11).
+
+Only at the end, where specs put it, so a requirement can name the marker, as 001-11 does."""
+
+OLD_PLANNED = re.compile(r"\(planned:.*\)\.?\Z", re.S)
+"""The old format's marker for a requirement a later plan step delivers, such as `(planned: step 3b)`, at the end.
+
+Matched from the last `(planned:`, so its step may hold parentheses, as the unimplemented suffix's reason may."""
+
+OLD_RETIRED = re.compile(r"Retired([.:])")
+"""How an old-format retired bullet's text starts: `Retired.` or `Retired:`, not "Retired later"."""
 
 PREFIX = re.compile(r"[A-Z][A-Z0-9]*\Z")
 """A well-formed ID prefix: capital letters and digits, starting with a letter. Use `.match`; `\\Z`, unlike `$`, does not allow a trailing newline."""
@@ -178,8 +188,6 @@ class Spec:
     """Its title, from the first line."""
     purpose: str = ""
     """Its `## Purpose` section's text, joined onto one line, or "" when it has none."""
-    status: str = ""
-    """Its `status:` value."""
     requirements: list[Requirement] = field(default_factory=list)
     """Its REQ and BEH bullets, in order."""
     removed: list[str] = field(default_factory=list)
@@ -212,6 +220,22 @@ class SpecSet:
         if number in self.removed_specs:
             return f"{claimed} is in spec {number}, which was removed; delete the claim"
         return ""
+
+
+def old_forms(text: str, id_: str) -> list[tuple[str, str]]:
+    """The old format's markers on a requirement's text, each with what replaces it (SPC-REQ-001-11)."""
+    replace = f"end it with `{UNIMPLEMENTED_EXAMPLE}` if a plan delivers it later, or give it a test"
+    found = []
+    if OLD_UNTESTED.search(text):
+        found.append(("`⚠ untested`, which is gone", replace))
+    start = text.rfind("(planned:")
+    if start >= 0 and OLD_PLANNED.fullmatch(text, start):
+        found.append(("`(planned: ...)`, which is gone", replace))
+    retired = OLD_RETIRED.match(text)
+    if retired:
+        old = f"`Retired{retired.group(1)}`, which is gone"
+        found.append((old, f"delete the requirement and list {id_} in its spec's `removed:` line"))
+    return found
 
 
 def continues(line: str) -> bool:
@@ -293,7 +317,6 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     current: Requirement | None = None
     section = ""
     purpose: list[str] = []
-    seen_status = False
     in_header = True
     in_fence = False
     for line_number, line in enumerate(lines, 1):
@@ -311,17 +334,10 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         if section == "Purpose" and line.strip():
             purpose.append(line.strip())
         if in_header and line.startswith("status:"):
-            if seen_status:
-                problems.append(
-                    Problem(name, line_number, "a second `status:` line; a spec has one", "status-repeated")
-                )
-            else:
-                seen_status = True
-                spec.status = line[len("status:") :].strip()
-                if spec.status not in STATUSES:
-                    problems.append(
-                        Problem(name, line_number, f"status must be one of {', '.join(STATUSES)}", "status-invalid")
-                    )
+            message = (
+                "the `status:` line is gone; delete it (a planned requirement ends with `(unimplemented: <reason>)`)"
+            )
+            problems.append(Problem(name, line_number, message, "status-line-gone"))
         if in_header and line.startswith("tests:"):
             message = "the `tests:` line is gone; say which producers may claim this spec in the config instead"
             problems.append(Problem(name, line_number, message, "tests-line-gone"))
@@ -351,14 +367,14 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         else:
             current = None
 
-    if not seen_status:
-        problems.append(Problem(name, 0, "missing the `status:` line", "status-missing"))
     spec.purpose = " ".join(purpose)
     for requirement in spec.requirements:
         requirement.text, requirement.reason = split_suffix(requirement.text)
         if requirement.reason == "":
             message = f"{requirement.id} needs a reason: write `{UNIMPLEMENTED_EXAMPLE}`"
             problems.append(Problem(name, requirement.line, message, "reason-missing"))
+        for old, fix in old_forms(requirement.text, requirement.id):
+            problems.append(Problem(name, requirement.line, f"{requirement.id} has {old}; {fix}", "old-marker"))
     found = header_lines(lines, "removed")
     example = f"{syntax.head}REQ-{number}-01"
 
@@ -457,8 +473,12 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
     texts: dict[str, Requirement] = {}
     for spec in specs:
         name = rel(spec.path, root)
-        if spec.status == "implemented" and not spec.requirements:
-            problems.append(Problem(name, 0, "an implemented spec needs at least one requirement", "spec-empty"))
+        if not spec.requirements:
+            message = (
+                f"a spec needs at least one requirement; if it has none left, delete it and list "
+                f"{spec.number} in {INDEX}'s `removed:` line"
+            )
+            problems.append(Problem(name, 0, message, "spec-empty"))
         for requirement in spec.requirements:
             if requirement.id in requirements:
                 first = requirements[requirement.id]
