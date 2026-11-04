@@ -6,7 +6,7 @@ next to this folder says which. IDs carry the `SPC` prefix.
 
 | Spec | Covers |
 |---|---|
-| [001](001-spec-format.md) | Spec files, the index, headers, bullets, the unimplemented suffix, what `lint` rejects |
+| [001](001-spec-format.md) | Spec files, the index, headers, bullets, the unimplemented suffix, removed IDs and specs, what `lint` rejects |
 | [002](002-config.md) | Finding and validating the config |
 | [003](003-claims.md) | The `covers` marker, its explanations, and the collection check |
 | [004](004-results-files.md) | The results file: format, outcomes, writing it, xdist |

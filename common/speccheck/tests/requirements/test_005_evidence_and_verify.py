@@ -484,6 +484,60 @@ def test_a_results_file_claim_that_copies_a_requirement_counts_for_nothing(proje
         assert status(run)["T-REQ-001-01"] == "unclaimed", command
 
 
+def with_removed_ids(project: Project) -> None:
+    """Spec 001 with T-REQ-001-01 and T-REQ-001-02 removed from it, and spec 009 removed from the index."""
+    project.write("specs/000-index.md", "# Index\n\nremoved: 009\n\n- [001](001-thing.md)\n")
+    project.write(
+        "specs/001-thing.md",
+        spec("- T-REQ-001-03: Live.").replace("status: draft", "status: draft\nremoved: T-REQ-001-01, T-REQ-001-02"),
+    )
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
+    "passing results-file claims of an ID spec 001 removed and an ID of the removed spec 009 each get a claim-invalid problem with the 003-13 fix in check and verify, and neither counts",
+)
+def test_a_removed_id_in_a_results_file_counts_for_nothing(project: Project):
+    """Both commands fail on them; a test that also claims the live one proves only that one, once."""
+    with_removed_ids(project)
+    project.results(
+        "u.jsonl",
+        "unit",
+        [("t1", ["T-REQ-001-01", "T-REQ-001-03"], "passed"), ("t2", ["T-REQ-009-01"], "passed")],
+    )
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        assert run.code == 1, command
+        assert [p["message"] for p in run.json()["problems"] if p["code"] == "claim-invalid"] == [
+            "T-REQ-001-01 was removed from spec 001; delete the claim",
+            "T-REQ-009-01 is in spec 009, which was removed; delete the claim",
+        ], command
+        [live] = run.json()["requirements"]
+        assert [e["test"] for e in live["evidence"]] == ["t1"], command
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-11",
+    "[ci.publish] entries for an ID spec 001 removed and an ID of the removed spec 009 each get a config-claim-invalid problem with the 003-13 fix in check and verify, and claim nothing",
+)
+def test_a_removed_id_in_a_ci_entry_counts_for_nothing(project: Project):
+    """The config can name a removed ID without any job running; it is caught there, and is no claim."""
+    covers = {"T-REQ-001-02": "the job pushes the image", "T-REQ-009-01": "the job tags the image"}
+    project.write("speccheck.toml", ci_config(covers, docker=False))
+    with_removed_ids(project)
+    project.results("u.jsonl", "unit", [])
+    for command in ("check", "verify"):
+        run = project.speccheck(command, "u.jsonl", "--json")
+        assert run.code == 1, command
+        assert sorted(p["message"] for p in run.json()["problems"] if p["code"] == "config-claim-invalid") == [
+            "`ci.publish.covers`: T-REQ-001-02 was removed from spec 001; delete the claim",
+            "`ci.publish.covers`: T-REQ-009-01 is in spec 009, which was removed; delete the claim",
+        ], command
+        # had either counted, the job would be waited on, or the requirement claimed
+        [live] = run.json()["requirements"]
+        assert (live["status"], live["waiting_on"]) == ("unclaimed", []), command
+
+
 @pytest.mark.covers(
     "SPC-REQ-005-11",
     "a claim by a producer that may not claim spec 002, the only claim on its requirement and a passing one, leaves that requirement unclaimed",

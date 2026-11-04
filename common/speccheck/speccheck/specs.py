@@ -19,6 +19,7 @@ requirement comes from results files (`results.py`), never from the spec text.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -181,6 +182,10 @@ class Spec:
     """Its `status:` value."""
     requirements: list[Requirement] = field(default_factory=list)
     """Its REQ and BEH bullets, in order."""
+    removed: list[str] = field(default_factory=list)
+    """The IDs its `removed:` line lists, in order, each once."""
+    removed_line: int = 0
+    """The line of its `removed:` line, or 0 when it has none."""
 
 
 @dataclass
@@ -195,6 +200,55 @@ class SpecSet:
     """Format problems, as `lint` reports them."""
     syntax: Syntax
     """The folder's ID patterns."""
+    removed: dict[str, str] = field(default_factory=dict)
+    """Every ID a spec's `removed:` line lists, to the number of the spec it was removed from."""
+    removed_specs: list[str] = field(default_factory=list)
+    """The spec numbers the index's `removed:` line lists."""
+
+    def removed_from(self, claimed: str, number: str) -> str:
+        """Why the ID `claimed`, of spec `number`, can't be claimed because it was removed, or ""."""
+        if claimed in self.removed:
+            return f"{claimed} was removed from spec {self.removed[claimed]}; delete the claim"
+        if number in self.removed_specs:
+            return f"{claimed} is in spec {number}, which was removed; delete the claim"
+        return ""
+
+
+def continues(line: str) -> bool:
+    """Whether `line` continues the bullet or header line above it: two or more spaces, then text (SPC-REQ-001-06)."""
+    return line.startswith("  ") and bool(line.strip())
+
+
+def header_lines(lines: list[str], key: str) -> list[tuple[int, str]]:
+    """Each `key:` line above the first `##` outside a fence, with its value joined across continuation lines.
+
+    Returns `(line number, value)` pairs, the value trimmed, so a caller can report a repeat at its line.
+    """
+    found: list[tuple[int, str]] = []
+    in_fence = False
+    current: list[str] | None = None
+    for line_number, line in enumerate(lines, 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence, current = not in_fence, None
+            continue
+        if in_fence:
+            continue
+        if line.startswith("## "):
+            break
+        if current is not None and continues(line):
+            current.append(line.strip())
+            found[-1] = (found[-1][0], " ".join(current))
+            continue
+        current = None
+        if line.startswith(f"{key}:"):
+            current = [line[len(key) + 1 :].strip()]
+            found.append((line_number, current[0]))
+    return found
+
+
+def listed(value: str) -> list[str]:
+    """The comma-separated items of a header value, trimmed, empty ones dropped."""
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def what_is_wrong(line: str, syntax: Syntax) -> str:
@@ -292,7 +346,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
                 id=match.group("id"), spec=spec, line=line_number, text=line[match.end("id") + 2 :].strip()
             )
             spec.requirements.append(current)
-        elif current is not None and line.startswith("  ") and line.strip():
+        elif current is not None and continues(line):
             current.text += " " + line.strip()
         else:
             current = None
@@ -305,7 +359,52 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         if requirement.reason == "":
             message = f"{requirement.id} needs a reason: write `{UNIMPLEMENTED_EXAMPLE}`"
             problems.append(Problem(name, requirement.line, message, "reason-missing"))
+    found = header_lines(lines, "removed")
+    example = f"{syntax.head}REQ-{number}-01"
+
+    def wrong(item: str) -> str:
+        """Why `item` can't be one of this spec's removed IDs, or ""."""
+        match = syntax.id.fullmatch(item)
+        if match is None or match.group("number") != number:
+            return f"`{item}` in `removed:` isn't an ID of this spec; they read like `{example}`"
+        return ""
+
+    spec.removed = removed_list(found, wrong, name, problems)
+    spec.removed_line = found[0][0] if found else 0
     return spec
+
+
+def removed_list(
+    found: list[tuple[int, str]], wrong: Callable[[str], str], name: str, problems: list[Problem]
+) -> list[str]:
+    """The items a `removed:` line lists, each once (SPC-REQ-001-12, 001-13).
+
+    `wrong` says why an item can't be listed, or "". A second `removed:` line, an item `wrong`
+    refuses, and an item listed twice are each a problem in `name`, and are left out.
+    """
+    items: list[str] = []
+    for line_number, _ in found[1:]:
+        message = "a second `removed:` line; list everything on the first"
+        problems.append(Problem(name, line_number, message, "removed-repeated"))
+    for line_number, value in found[:1]:
+        for item in listed(value):
+            why = wrong(item)
+            if why:
+                problems.append(Problem(name, line_number, why, "removed-invalid"))
+            elif item in items:
+                problems.append(Problem(name, line_number, f"{item} is listed twice in `removed:`", "removed-repeated"))
+            else:
+                items.append(item)
+    return items
+
+
+def spec_number_problem(item: str) -> str:
+    """Why `item` can't be in the index's `removed:` line, or "": spec numbers are three digits, not `000`."""
+    if item == "000":
+        return "`000` in `removed:` is the index, not a spec"
+    if re.fullmatch(r"\d{3}", item):
+        return ""
+    return f"`{item}` in `removed:` isn't a spec number; they are three digits, like `007`"
 
 
 def links_to(index_text: str, name: str) -> bool:
@@ -327,11 +426,14 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
         problems.append(
             Problem(rel(index, root), 0, f"the spec folder needs a {INDEX} that links every spec", "index-missing")
         )
+    removed_specs: list[str] = []
     if index_text is not None:
         for line_number, line in enumerate(index_text.splitlines(), 1):
             if line.startswith("id-prefix:"):
                 message = "the `id-prefix:` line is gone; set `id-prefix` in the config instead"
                 problems.append(Problem(rel(index, root), line_number, message, "id-prefix-line-gone"))
+        found = header_lines(index_text.splitlines(), "removed")
+        removed_specs = removed_list(found, spec_number_problem, rel(index, root), problems)
 
     specs = []
     for path in sorted(specs_dir.glob("*.md")):
@@ -341,6 +443,10 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
             problems.append(
                 Problem(rel(path, root), 0, "a spec file must be named NNN-short-name.md", "spec-file-name")
             )
+            continue
+        if path.name[:3] in removed_specs:
+            message = f"spec {path.name[:3]} is listed as removed in {INDEX}; delete the file or the listing"
+            problems.append(Problem(rel(path, root), 0, message, "spec-removed"))
             continue
         if require_index and index_text is not None and not links_to(index_text, path.name):
             message = f"the index doesn't link {path.name}; list it as `[{path.name[:3]}]({path.name})`"
@@ -371,4 +477,21 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
                     f"{requirement.id} has the same text as {same.id} at {where}; each requirement says something new"
                 )
                 problems.append(Problem(name, requirement.line, message, "text-duplicate"))
-    return SpecSet(specs=specs, requirements=requirements, problems=problems, syntax=syntax)
+
+    removed: dict[str, str] = {}
+    for spec in specs:
+        for id_ in spec.removed:
+            removed[id_] = spec.number
+            if id_ in requirements:
+                again = requirements[id_]
+                where = f"{rel(again.spec.path, root)}:{again.line}"
+                message = f"{id_} is listed in `removed:` but is a requirement at {where}; a removed ID is never reused"
+                problems.append(Problem(rel(spec.path, root), spec.removed_line, message, "removed-reused"))
+    return SpecSet(
+        specs=specs,
+        requirements=requirements,
+        problems=problems,
+        syntax=syntax,
+        removed=removed,
+        removed_specs=removed_specs,
+    )

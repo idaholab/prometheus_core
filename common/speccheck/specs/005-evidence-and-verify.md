@@ -36,8 +36,8 @@ Every requirement gets one status from the specs, the config and the results fil
   same test or CI job (in another leg, producer or attempt) are one claim. The problem MUST name
   both.
 - SPC-REQ-005-11: `check` and `verify` MUST report each claim in a results file or a
-  `[ci.<job>]` entry of a malformed or unknown ID, or of an ID in a spec its producer may not
-  claim, with the same fix as SPC-REQ-003-13 gives, and the claim MUST NOT count. A claim in a
+  `[ci.<job>]` entry of a malformed, unknown or removed ID, or of an ID in a spec its producer may
+  not claim, with the same fix as SPC-REQ-003-13 gives, and the claim MUST NOT count. A claim in a
   results file whose explanation has a requirement's text MUST be reported as SPC-REQ-003-09
   says, and MUST NOT count either.
 - SPC-REQ-005-12: A requirement marked unimplemented that nothing claims MUST have the status

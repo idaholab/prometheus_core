@@ -37,3 +37,12 @@ be found, has one ID, and says whether it is implemented yet.
   requirements in the folder MUST NOT have the same text. Each requirement whose text an earlier
   one in the folder (in spec and line order) already has MUST be a problem at its own line that
   names its ID and the first one's ID and line.
+- SPC-REQ-001-12: A spec MAY have one `removed:` line above its first `##` section, listing the
+  IDs removed from it, separated by commas (an empty item is ignored), and it MAY wrap as a bullet
+  does (SPC-REQ-001-06). A second `removed:` line MUST be a problem. Each listed ID MUST be well
+  formed with the spec's own number, MUST be listed once, and MUST NOT be a requirement in any
+  spec of the folder.
+- SPC-REQ-001-13: `000-index.md` MAY have one `removed:` line above its first `##` section,
+  listing the numbers of the specs removed from the folder, written and checked as SPC-REQ-001-12
+  says. Each number MUST be three digits other than `000` and listed once. A spec file with a
+  listed number MUST be a problem, and MUST NOT be read.

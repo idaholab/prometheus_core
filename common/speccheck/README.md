@@ -76,6 +76,8 @@ The `greet` command says hello.
 - A requirement is implemented, so a test must claim it, or it ends with
   `(unimplemented: <reason>)`, such as `(unimplemented: plan step 3)`, and needs no claim until
   it is done. The reason is required. There is no "untested": behaviour that exists gets a test.
+- A requirement that goes is deleted, and its ID listed on the spec's `removed:` line, so it is
+  never used again. A whole spec that goes is listed by number on the index's `removed:` line.
 
 The full rules are in "Reference", "Spec format".
 
@@ -411,7 +413,7 @@ The details. The source of truth is speccheck's own specs, in [`specs/`](specs/0
 | Command | Reads | Fails (exit 1) when |
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format |
-| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't unimplemented has no claim; a claim names a malformed or unknown ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
+| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't unimplemented has no claim; a claim names a malformed, unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
 | `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
 | `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
@@ -484,6 +486,10 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `reason-missing` | a requirement ends with `(unimplemented)` or an empty reason |
 | `spec-file-name` | a file in the folder isn't `NNN-short-name.md` |
 | `spec-title` | a spec's first line isn't `# NNN - <name>` |
+| `spec-removed` | a spec file has a number the index lists as removed |
+| `removed-invalid` | an item in a `removed:` line isn't an ID of that spec, or (in the index) a spec number |
+| `removed-repeated` | an item is listed twice in `removed:`, or there is a second `removed:` line |
+| `removed-reused` | an ID listed in `removed:` is a requirement again |
 | `spec-empty` | an `implemented` spec has no requirements |
 | `status-missing` | a spec has no `status:` line |
 | `status-invalid` | the `status:` isn't `draft` or `implemented` |
@@ -496,7 +502,7 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `failed` | every result that claims a requirement failed, errored, was skipped or didn't run |
 | `not-run` | with `--complete`, the producers that may claim a requirement didn't report |
 | `unimplemented-stale` | a requirement marked `(unimplemented: ...)` is claimed; remove the suffix |
-| `claim-invalid` | a result claims an ID that is malformed, unknown, or not the producer's to claim |
+| `claim-invalid` | a result claims an ID that is malformed, unknown, removed, or not the producer's to claim |
 | `config-claim-invalid` | a `[ci.<job>] covers` entry claims an ID like that |
 | `how-duplicate` | two claims give the same explanation |
 | `producer-undeclared` | a results file comes from a producer the config doesn't declare |
@@ -536,6 +542,14 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
   yet; the reason, such as a plan step, is required. A full stop may come before or after the
   suffix, and it may wrap with the bullet. Anywhere else in the text it is ordinary text, as is
   any other trailing `(word: ...)`. Remove the suffix when a test claims the requirement.
+- **Removed.** A requirement that goes is deleted, not kept. List its ID on the spec's
+  `removed:` header line, comma-separated, which may wrap like a bullet:
+  `removed: SPC-REQ-003-05, SPC-REQ-003-11`. A listed ID must be of that spec, listed once, and
+  never a requirement again, so an old test or results file can't claim a new requirement that
+  reuses the number. A claim of it is refused, saying which spec removed it. A whole spec that
+  goes is deleted and its number listed on `000-index.md`'s `removed:` line, such as
+  `removed: 009`; a file with that number is then a problem and isn't read, and a claim of any
+  ID in it is refused. Each file has one `removed:` line, above its first `##`.
 - Fenced code blocks are skipped.
 
 ### Config
@@ -579,7 +593,7 @@ When the plugin is configured (`speccheck_config` is set, or the run asks for a 
   1000 characters, the ID itself, or a placeholder (`TODO`, `TBD`, `FIXME`, `...`, `-`);
 - on a test that claims one ID twice, and on two claims in the session with the same explanation.
 
-With `speccheck_config` set it also fails on a malformed or unknown ID, on one the
+With `speccheck_config` set it also fails on a malformed, unknown or removed ID, on one the
 producer may not claim, on an explanation that is the text of any requirement in the folder, and
 when no producer is set (`SPECCHECK_PRODUCER` or `speccheck_producer`), rather than skip the
 which-specs check. With only a results file asked for, just the checks that need no specs run.

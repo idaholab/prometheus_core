@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 
+from tests.conftest import spec
 from tests.requirements.conftest import EXPECTED, OUTCOMES, Project, outcomes
 
 CHECKED = "speccheck_config = speccheck.toml\nspeccheck_producer = unit\n"
@@ -238,6 +239,44 @@ def test_an_unknown_id_is_sent_to_its_own_spec(project: Project):
     err = usage_error(project)
     assert "T-REQ-002-09 isn't in any spec; check the number, or add it to spec 002" in err
     assert "T-REQ-009-01 isn't in any spec, and there is no spec 009; check the number, or write spec 009" in err
+
+
+def removed_claims(project: Project) -> str:
+    """Two inner tests, one claiming an ID spec 001 removed and one an ID of the removed spec 009; return the error."""
+    project.write("specs/000-index.md", "# Index\n\nremoved: 009\n\n- [001](001-thing.md)\n")
+    project.write(
+        "specs/001-thing.md",
+        spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-001-02"),
+    )
+    project.ini(CHECKED)
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-001-02", "the old one")\ndef test_old():\n    pass\n'
+        '@pytest.mark.covers("T-REQ-009-01", "the old spec")\ndef test_old_spec():\n    pass\n'
+    )
+    return usage_error(project)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-03",
+    "with the check on, inner tests claiming an ID its spec removed and an ID of a removed spec each stop collection, naming the test and the ID",
+)
+def test_a_claim_of_a_removed_id_fails_collection(project: Project):
+    """A removed ID is never claimable again, whether its bullet or its whole spec went."""
+    err = removed_claims(project)
+    assert "speccheck: 2 claim(s) the spec folder doesn't allow" in err
+    assert "test_project.py::test_old: T-REQ-001-02" in err
+    assert "test_project.py::test_old_spec: T-REQ-009-01" in err
+
+
+@pytest.mark.covers(
+    "SPC-REQ-003-13",
+    "the refusal of an ID removed from spec 001 names spec 001 and says to delete the claim, and one of the removed spec 009 says that spec was removed",
+)
+def test_a_removed_id_says_where_it_went(project: Project):
+    """Each says why it can't be claimed and that the fix is to delete the claim, not to add the ID back."""
+    err = removed_claims(project)
+    assert "T-REQ-001-02 was removed from spec 001; delete the claim" in err
+    assert "T-REQ-009-01 is in spec 009, which was removed; delete the claim" in err
 
 
 @pytest.mark.covers(

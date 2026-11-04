@@ -93,6 +93,17 @@ class TestClaimProblem:
     SPECS = make_specs("It.")
     """T-REQ-001-01."""
 
+    def test_a_removed_id(self):
+        """Removed from its spec, or in a removed spec: each says so and to delete the claim, before "unknown"."""
+        loaded = make_specs("It.")
+        loaded.removed, loaded.removed_specs = {"T-REQ-001-05": "001"}, ["009"]
+        assert evidence.claim_problem("T-REQ-001-05", UNIT, loaded) == (
+            "T-REQ-001-05 was removed from spec 001; delete the claim"
+        )
+        assert evidence.claim_problem("T-REQ-009-01", UNIT, loaded) == (
+            "T-REQ-009-01 is in spec 009, which was removed; delete the claim"
+        )
+
     @pytest.mark.parametrize(
         ("claimed", "who", "message"),
         [

@@ -326,6 +326,170 @@ class TestUnimplemented:
         assert not requirements(repo)[0].unimplemented
 
 
+@pytest.mark.parametrize(
+    ("line", "continued"),
+    [("  more", True), ("    more", True), ("  ", False), (" more", False), ("\tmore", False), ("more", False)],
+)
+def test_continues(line, continued):
+    """Two or more spaces then text continue a line; anything less, a tab, or a blank does not."""
+    assert specs.continues(line) is continued
+
+
+class TestHeaderLines:
+    """`header_lines`: a `key:` line above the first `##`, outside fences, joined across continuations."""
+
+    def test_one_line(self):
+        """Its line number and trimmed value."""
+        assert specs.header_lines(["# 001 - X", "", "removed:  A, B "], "removed") == [(3, "A, B")]
+
+    def test_continued(self):
+        """Continuation lines join with one space; a line that doesn't continue ends it."""
+        lines = ["removed: A,", "  B,", "    C", "next: x"]
+        assert specs.header_lines(lines, "removed") == [(1, "A, B, C")]
+
+    def test_every_one_is_found(self):
+        """A repeat is kept, so the caller can report it at its line."""
+        assert specs.header_lines(["removed: A", "removed: B"], "removed") == [(1, "A"), (2, "B")]
+
+    def test_only_above_the_first_section(self):
+        """The header ends at the first `##`."""
+        assert specs.header_lines(["## Requirements", "removed: A"], "removed") == []
+
+    def test_not_in_a_fence(self):
+        """A fenced example is not the spec's header, and doesn't continue the line above it."""
+        lines = ["removed: A", "```", "  B", "removed: C", "```"]
+        assert specs.header_lines(lines, "removed") == [(1, "A")]
+
+    def test_another_key_is_not_this_one(self):
+        """`removed:` must start the line; `not removed:` is text."""
+        assert specs.header_lines(["not removed: A", "removedx: B"], "removed") == []
+
+
+@pytest.mark.parametrize(
+    ("value", "items"),
+    [("A, B", ["A", "B"]), ("A,,B,", ["A", "B"]), ("  A  ", ["A"]), ("", []), (" , ", [])],
+)
+def test_listed(value, items):
+    """Comma-separated, trimmed, with empty items dropped."""
+    assert specs.listed(value) == items
+
+
+class TestRemovedList:
+    """`removed_list`: the items of a `removed:` line, checked."""
+
+    def refuse_x(self, item: str) -> str:
+        """A check that refuses only `X`."""
+        return "no X" if item == "X" else ""
+
+    def run(self, found: list[tuple[int, str]]) -> tuple[list[str], list[tuple[int, str, str]]]:
+        """The items kept, and each problem's line, code and message."""
+        problems: list[specs.Problem] = []
+        kept = specs.removed_list(found, self.refuse_x, "f.md", problems)
+        return kept, [(p.line, p.code, p.message) for p in problems]
+
+    def test_none(self):
+        """No line, nothing listed, no problem."""
+        assert self.run([]) == ([], [])
+
+    def test_kept_in_order(self):
+        """Every allowed item, in the order written."""
+        assert self.run([(3, "B, A")]) == (["B", "A"], [])
+
+    def test_a_refused_item(self):
+        """Reported at the line with the check's message, and left out."""
+        assert self.run([(3, "A, X")]) == (["A"], [(3, "removed-invalid", "no X")])
+
+    def test_an_item_twice(self):
+        """Reported once, kept once."""
+        assert self.run([(3, "A, A")]) == (["A"], [(3, "removed-repeated", "A is listed twice in `removed:`")])
+
+    def test_a_second_line(self):
+        """Reported at its own line, and its items are not read."""
+        kept, found = self.run([(3, "A"), (4, "B")])
+        assert kept == ["A"]
+        assert found == [(4, "removed-repeated", "a second `removed:` line; list everything on the first")]
+
+
+@pytest.mark.parametrize(("item", "ok"), [("007", True), ("7", False), ("0007", False), ("abc", False)])
+def test_spec_number_problem(item, ok):
+    """Three digits, and the message shows the form."""
+    found = specs.spec_number_problem(item)
+    assert (found == "") is ok
+    if not ok:
+        assert found == f"`{item}` in `removed:` isn't a spec number; they are three digits, like `007`"
+
+
+def test_the_index_is_not_a_removed_spec():
+    """`000` is three digits but names the index itself."""
+    assert specs.spec_number_problem("000") == "`000` in `removed:` is the index, not a spec"
+
+
+def test_removed_from():
+    """A removed ID names its spec; an ID of a removed spec says the spec went; anything else is ""."""
+    found = specs.SpecSet([], {}, [], specs.Syntax("T"), removed={"T-REQ-001-05": "001"}, removed_specs=["009"])
+    assert found.removed_from("T-REQ-001-05", "001") == "T-REQ-001-05 was removed from spec 001; delete the claim"
+    assert (
+        found.removed_from("T-REQ-009-01", "009") == "T-REQ-009-01 is in spec 009, which was removed; delete the claim"
+    )
+    assert found.removed_from("T-REQ-001-06", "001") == ""
+
+
+class TestRemoved:
+    """A spec's and the index's `removed:` lines, as `load` reads them."""
+
+    def test_a_specs_removed_ids(self, repo: Repo):
+        """Listed on the spec, kept by ID with the spec's number, and no problem."""
+        repo.write(
+            "specs/001-thing.md",
+            spec("- T-REQ-001-01: One.").replace(
+                "status: draft", "status: draft\nremoved: T-REQ-001-02,\n  T-REQ-001-03"
+            ),
+        )
+        loaded = specs.load(repo.root / "specs", repo.root, "T")
+        assert (loaded.removed, loaded.problems) == ({"T-REQ-001-02": "001", "T-REQ-001-03": "001"}, [])
+        assert loaded.specs[0].removed_line == 4
+
+    def test_an_id_of_another_spec_is_refused(self, repo: Repo):
+        """Each spec lists only its own IDs."""
+        repo.write(
+            "specs/001-thing.md",
+            spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-002-01"),
+        )
+        assert_problems(
+            repo,
+            "specs/001-thing.md:4: `T-REQ-002-01` in `removed:` isn't an ID of this spec; they read like `T-REQ-001-01`",
+        )
+
+    def test_a_removed_id_that_is_a_requirement(self, repo: Repo):
+        """At the `removed:` line, naming where the requirement is."""
+        repo.write(
+            "specs/001-thing.md",
+            spec("- T-REQ-001-01: One.").replace("status: draft", "status: draft\nremoved: T-REQ-001-01"),
+        )
+        assert problems(repo) == [
+            "specs/001-thing.md:4: T-REQ-001-01 is listed in `removed:` but is a requirement at specs/001-thing.md:8; "
+            "a removed ID is never reused"
+        ]
+
+    def test_the_index_lists_removed_specs(self, repo: Repo):
+        """Read from the index, and a spec file with a listed number is a problem and not read."""
+        repo.write("specs/000-index.md", INDEX + "\nremoved: 002, 003\n")
+        repo.spec("")
+        repo.spec("- T-REQ-002-01: Two.", number="002", name="002-old.md")
+        loaded = specs.load(repo.root / "specs", repo.root, "T")
+        assert loaded.removed_specs == ["002", "003"]
+        assert [s.number for s in loaded.specs] == ["001"]
+        assert [str(p) for p in loaded.problems] == [
+            "specs/002-old.md: spec 002 is listed as removed in 000-index.md; delete the file or the listing"
+        ]
+
+    def test_a_bad_number_in_the_index(self, repo: Repo):
+        """At the index's line."""
+        repo.write("specs/000-index.md", INDEX + "\nremoved: 9\n")
+        repo.spec("")
+        assert_problems(repo, "specs/000-index.md:5: `9` in `removed:` isn't a spec number")
+
+
 def test_a_fenced_example_is_not_a_requirement(repo: Repo):
     """A code block can show the format, a header line or a bullet, and none of it counts."""
     body = (

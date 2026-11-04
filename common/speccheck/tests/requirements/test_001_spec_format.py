@@ -763,3 +763,211 @@ def test_three_of_one_text_each_name_the_first(project: Project):
         )
         for n, line in ((1, 7), (2, 8))
     ]
+
+
+def with_removed(body: str, removed: str) -> str:
+    """Spec 001 with `body` as its requirements and `removed` as its header's `removed:` line (or lines)."""
+    return spec(body).replace("status: draft", f"status: draft\n{removed}")
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-12",
+    "a removed: line wrapped onto a four-space line with empty items between commas lints clean, and claims of the IDs on both lines are refused as removed",
+)
+def test_a_spec_lists_its_removed_ids(project: Project):
+    """Each listed ID is read: a claim of the one on the first line and of the one on the wrapped line both fail."""
+    project.write(
+        "specs/001-thing.md", with_removed("- T-REQ-001-01: One.", "removed: T-REQ-001-02,,\n    T-REQ-001-03,")
+    )
+    assert project.speccheck("lint", "--json").json()["problems"] == []
+    project.results("u.jsonl", "unit", [("t2", ["T-REQ-001-02"], "passed"), ("t3", ["T-REQ-001-03"], "passed")])
+    messages = [p["message"] for p in project.speccheck("check", "u.jsonl", "--json").json()["problems"]]
+    assert "T-REQ-001-02 was removed from spec 001; delete the claim" in messages
+    assert "T-REQ-001-03 was removed from spec 001; delete the claim" in messages
+
+
+@pytest.mark.parametrize(
+    "after",
+    [
+        pytest.param(
+            " T-REQ-001-03",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12", "a line indented one space after removed: is not part of it, so its ID isn't removed"
+            ),
+            id="one-space",
+        ),
+        pytest.param(
+            "\tT-REQ-001-03",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12", "a tab-indented line after removed: is not part of it, so its ID isn't removed"
+            ),
+            id="tab",
+        ),
+        pytest.param(
+            "\n  T-REQ-001-03",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12", "an indented line after a blank line is not part of removed:, so its ID isn't removed"
+            ),
+            id="after-a-blank-line",
+        ),
+    ],
+)
+def test_a_line_that_doesnt_continue_removed_isnt_read(project: Project, after: str):
+    """A claim of the ID on that line is only unknown, not removed: the line was not read into the list."""
+    project.write("specs/001-thing.md", with_removed("- T-REQ-001-01: One.", f"removed: T-REQ-001-02\n{after}"))
+    project.results("u.jsonl", "unit", [("t", ["T-REQ-001-03"], "passed")])
+    messages = [p["message"] for p in project.speccheck("check", "u.jsonl", "--json").json()["problems"]]
+    assert any(m.startswith("T-REQ-001-03 isn't in any spec") for m in messages), messages
+
+
+@pytest.mark.parametrize(
+    ("removed", "message"),
+    [
+        pytest.param(
+            "removed: T-REQ-002-01",
+            "`T-REQ-002-01` in `removed:` isn't an ID of this spec; they read like `T-REQ-001-01`",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12", "lint reports an ID of spec 002 in spec 001's removed: line at that line"
+            ),
+            id="other-spec",
+        ),
+        pytest.param(
+            "removed: REQ-001-02",
+            "`REQ-001-02` in `removed:` isn't an ID of this spec; they read like `T-REQ-001-01`",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12", "lint reports an ID without the folder's prefix in removed: at that line"
+            ),
+            id="malformed",
+        ),
+        pytest.param(
+            "removed: T-REQ-001-02, T-REQ-001-02",
+            "T-REQ-001-02 is listed twice in `removed:`",
+            marks=pytest.mark.covers("SPC-REQ-001-12", "lint reports an ID listed twice in removed: at that line"),
+            id="twice",
+        ),
+        pytest.param(
+            "removed: T-REQ-001-01",
+            "T-REQ-001-01 is listed in `removed:` but is a requirement at specs/001-thing.md:8; "
+            "a removed ID is never reused",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-12",
+                "lint reports a removed ID that is also a requirement at the removed: line, naming where the requirement is",
+            ),
+            id="reused",
+        ),
+    ],
+)
+def test_a_removed_line_is_checked(project: Project, removed: str, message: str):
+    """Each problem is at the `removed:` line, line 4, with what is wrong."""
+    project.write("specs/001-thing.md", with_removed("- T-REQ-001-01: One.", removed))
+    run = project.speccheck("lint", "--json")
+    assert run.code == 1
+    assert [(p["path"], p["line"], p["message"]) for p in run.json()["problems"]] == [
+        ("specs/001-thing.md", 4, message)
+    ]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-12",
+    "an ID spec 001 removed that is a misnumbered bullet in spec 002 is a removed-reused problem naming spec 002's line",
+)
+def test_a_removed_id_is_not_a_requirement_in_any_spec(project: Project):
+    """Not only the spec that removed it: anywhere in the folder."""
+    project.write("specs/000-index.md", INDEX + "- [002](002-other.md)\n")
+    project.write("specs/001-thing.md", with_removed("- T-REQ-001-01: One.", "removed: T-REQ-001-02"))
+    project.write("specs/002-other.md", spec("- T-REQ-001-02: Back.", number="002", title="Other"))
+    problems = project.speccheck("lint", "--json").json()["problems"]
+    assert ("specs/001-thing.md", 4, "removed-reused") in [(p["path"], p["line"], p["code"]) for p in problems]
+    assert any("is a requirement at specs/002-other.md:7" in p["message"] for p in problems)
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-12",
+    "a second removed: line in a spec is reported at its own line, and a removed: line under Requirements or in a fence is not read",
+)
+def test_one_removed_line_in_the_header(project: Project):
+    """Only the header's one line counts."""
+    project.write(
+        "specs/001-thing.md",
+        with_removed("- T-REQ-001-01: One.\n\nremoved: T-REQ-001-01", "removed: T-REQ-001-02\nremoved: T-REQ-001-03"),
+    )
+    run = project.speccheck("lint", "--json")
+    assert [(p["line"], p["code"]) for p in run.json()["problems"]] == [(5, "removed-repeated")]
+    project.write("specs/001-thing.md", with_removed("- T-REQ-001-01: One.", "```\nremoved: T-REQ-001-01\n```"))
+    assert project.speccheck("lint", "--json").json()["problems"] == []
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-13",
+    "the index listing 002 and, on a wrapped line, 003 lints clean with no files, and once both files are written each is a spec-removed problem and neither is read, not even its own problems",
+)
+def test_the_index_lists_removed_specs(project: Project):
+    """No file for a removed number is right; a file for one is a problem, and nothing in it counts."""
+    project.write("specs/000-index.md", "# Index\n\nremoved: 002,\n  003\n\n- [001](001-thing.md)\n")
+    project.spec("- T-REQ-001-01: One.")
+    assert project.speccheck("lint", "--json").json()["problems"] == []
+    project.write("specs/002-old.md", spec("- T-REQ-002-01: Back.", number="002", title="Old"))
+    # Not read: its star bullet would otherwise be a bullet-malformed problem
+    project.write("specs/003-gone.md", spec("* T-REQ-003-01: Star.", number="003", title="Gone"))
+    lint = project.speccheck("lint", "--json")
+    assert [(p["path"], p["line"], p["code"]) for p in lint.json()["problems"]] == [
+        ("specs/002-old.md", 0, "spec-removed"),
+        ("specs/003-gone.md", 0, "spec-removed"),
+    ]
+    assert [r["id"] for r in project.speccheck("check", "--json").json()["requirements"]] == ["T-REQ-001-01"]
+
+
+@pytest.mark.covers(
+    "SPC-REQ-001-13",
+    "a second removed: line in the index is reported at its own line, and one under a ## heading or in a fence is not read",
+)
+def test_one_removed_line_in_the_index(project: Project):
+    """Only the index header's one line counts, as for a spec."""
+    project.write("specs/000-index.md", "# Index\n\nremoved: 002\nremoved: 003\n\n- [001](001-thing.md)\n")
+    project.spec("- T-REQ-001-01: One.")
+    problems = project.speccheck("lint", "--json").json()["problems"]
+    assert [(p["path"], p["line"], p["code"]) for p in problems] == [("specs/000-index.md", 4, "removed-repeated")]
+    project.write(
+        "specs/000-index.md",
+        "# Index\n\n```\nremoved: 001\n```\n\n## Specs\n\nremoved: 001\n\n- [001](001-thing.md)\n",
+    )
+    assert project.speccheck("lint", "--json").json()["problems"] == []
+
+
+@pytest.mark.parametrize(
+    ("removed", "message"),
+    [
+        pytest.param(
+            "removed: 2",
+            "`2` in `removed:` isn't a spec number; they are three digits, like `007`",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-13", "lint reports a spec number of one digit in the index's removed: line"
+            ),
+            id="short",
+        ),
+        pytest.param(
+            "removed: 002, 002",
+            "002 is listed twice in `removed:`",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-13", "lint reports a spec number listed twice in the index's removed: line"
+            ),
+            id="twice",
+        ),
+        pytest.param(
+            "removed: 000",
+            "`000` in `removed:` is the index, not a spec",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-13", "lint reports 000 in the index's removed: line, since that is the index itself"
+            ),
+            id="index",
+        ),
+    ],
+)
+def test_the_indexs_removed_line_is_checked(project: Project, removed: str, message: str):
+    """At the index's `removed:` line."""
+    project.write("specs/000-index.md", f"# Index\n\n{removed}\n\n- [001](001-thing.md)\n")
+    project.spec("- T-REQ-001-01: One.")
+    run = project.speccheck("lint", "--json")
+    assert [(p["path"], p["line"], p["message"]) for p in run.json()["problems"]] == [
+        ("specs/000-index.md", 3, message)
+    ]

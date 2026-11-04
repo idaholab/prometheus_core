@@ -14,8 +14,8 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   `pytest.param(..., marks=...)` in the test's own `@pytest.mark.parametrize`, and it MUST claim
   for that one test only.
 - SPC-REQ-003-03: When the project sets `speccheck_config`, collection MUST fail on a claim of a
-  malformed ID, an unknown ID, or an ID in a spec the producer may not claim, and the message MUST
-  name the test and the ID.
+  malformed ID, an unknown ID, a removed ID (SPC-REQ-001-12, 001-13), or an ID in a spec the
+  producer may not claim, and the message MUST name the test and the ID.
 - SPC-REQ-003-04: A `covers` mark MUST take exactly two positional strings: the ID, and how the
   test proves it. A mark with any other number of arguments, a non-string, or keyword arguments
   MUST fail collection.
@@ -45,8 +45,9 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   each `pytest.param` of one `parametrize` in the other cases.
 - SPC-REQ-003-13: The message for a refused ID MUST say how to fix it: for a malformed ID it shows
   the ID format, for an unknown ID it names the spec to add it to (or, when there is no spec of
-  that number, says so and to write it), and for a disallowed ID it names the
-  `producers.<name>.specs` key.
+  that number, says so and to write it), for a removed ID it names the spec it was removed from, or
+  says its whole spec was removed, and says to delete the claim, and for a disallowed ID it names
+  the `producers.<name>.specs` key.
 - SPC-REQ-003-14: When the project sets `speccheck_config`, collection MUST fail when no producer
   is set, and the message MUST name both ways to set one: `SPECCHECK_PRODUCER` and
   `speccheck_producer`.
