@@ -47,10 +47,8 @@ graph TD
 
 The first `make up` creates `.env` from `.env.example` and generates every
 secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
-`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). The only things you have to
-set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
-`make up` asks for them in a terminal, or stops and tells you what is missing.
-When it creates `.env`, it also asks two questions, and Enter answers yes:
+`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). In a terminal, it then asks
+two questions before anything else, and Enter answers yes:
 
 ```
 Build the SDK base image locally (LOCAL_SDK)? [Y/n] (Enter = yes):
@@ -61,7 +59,11 @@ They set `LOCAL_SDK` (step 2) and `LOCAL_DEEPLYNX` (below), and count from this
 first `make up` on. They're asked only once, when `.env` is created: change your
 answer by setting the line in `.env` to `true` or `false`. A variable you set on
 the command line (`make up LOCAL_SDK=false`) isn't asked about, and without a
-terminal (CI) nothing is asked and both stay `false`.
+terminal (CI) nothing is asked, both stay `false`, and the script says so.
+
+The only other things you have to set are `LLM_CONFIG_PROFILE` and the API key
+for it (see below). Without them, `make up` asks for them next in a terminal, or
+stops and tells you what is missing.
 
 Every `make` target that builds or starts something (`up`, `restart`, `ng-*`,
 `build`, `deeplynx-setup`) runs this first. To prepare `.env` without starting
