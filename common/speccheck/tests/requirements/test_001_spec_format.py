@@ -397,6 +397,16 @@ def test_a_wrapped_bullet_is_one_text(project: Project):
     assert requirement_json(project)["text"] == "It MUST work for a long while."
 
 
+@pytest.mark.covers(
+    "SPC-REQ-001-06",
+    "a continuation line indented four spaces with trailing spaces is joined trimmed, with one space at the join",
+)
+def test_a_deeper_indent_still_continues(project: Project):
+    """Two or more spaces continue the bullet, and the extra spaces are trimmed away."""
+    project.spec("- T-REQ-001-01: It MUST work\n    for a while.   ")
+    assert requirement_json(project)["text"] == "It MUST work for a while."
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -419,10 +429,17 @@ def test_a_wrapped_bullet_is_one_text(project: Project):
             ),
             id="after-a-blank-line",
         ),
+        pytest.param(
+            "- T-REQ-001-01: It MUST work.\n\tmore text",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-06", "a line indented with a tab after a bullet is not joined to its text"
+            ),
+            id="tab",
+        ),
     ],
 )
 def test_a_line_that_is_not_a_continuation_is_not_joined(project: Project, body: str):
-    """Only the two-space-indented lines straight after the bullet are its text."""
+    """Only the lines straight after the bullet that start with two or more spaces are its text."""
     project.spec(body)
     assert requirement_json(project)["text"] == "It MUST work."
 
