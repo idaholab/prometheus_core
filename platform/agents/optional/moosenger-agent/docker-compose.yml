@@ -68,13 +68,15 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       # ---- MOOSEnger --------------------------------------------------------
       MOOSENGER_PROJECT_DIR: /workspace
-      # Vector database location in the container: the workspace volume by
-      # default, or a host directory bound in docker-compose.override.yml.
-      MOOSENGER_VECTOR_DIR: ${MOOSENGER_VECTOR_DIR:-/workspace/vector_data}
-      # MOOSE knowledge base (Object Registry, compiled pages, graph): the
-      # workspace volume by default, or a host directory bound read-only in
-      # docker-compose.override.yml. The agent only reads it.
+      # The one path for MOOSE knowledge: the knowledge base (Object Registry,
+      # compiled pages, graph) and, by default, the vector database in its
+      # vector_data/. The workspace volume by default, or a host directory
+      # bound in docker-compose.override.yml.
       MOOSENGER_KNOWLEDGE_DIR: ${MOOSENGER_KNOWLEDGE_DIR:-/workspace/.moosenger_knowledge}
+      # Optional: keep the vector database somewhere else. Empty = inside
+      # MOOSENGER_KNOWLEDGE_DIR (MOOSEnger also finds a vector_data/ next to
+      # it, or the older /workspace/vector_data).
+      MOOSENGER_VECTOR_DIR: ${MOOSENGER_VECTOR_DIR:-}
       # Template rendered into /workspace/.moosenger.yaml at startup.
       MOOSENGER_CONFIG: /app/config/moosenger.yaml
       MOOSENGER_RENDER_CONFIG: ${MOOSENGER_RENDER_CONFIG:-true}

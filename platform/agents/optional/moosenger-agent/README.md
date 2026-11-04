@@ -165,8 +165,8 @@ repository under `tests/a2a/`, next to the code.
 | `MOOSENGER_CONFIG` | `/app/config/moosenger.yaml` | Template rendered at startup; or a hand-written file with `MOOSENGER_RENDER_CONFIG=false` |
 | `MOOSENGER_API_KEY` | (empty → `LLM_API_KEY`) | Key for MOOSEnger's LLM endpoint, exported as `OPENAI_API_KEY` |
 | `MOOSENGER_LLM_HOST` / `MOOSENGER_MODEL` / `MOOSENGER_EMBEDDINGS` | INL LiteLLM values | MOOSEnger `core` / `rag` settings |
-| `MOOSENGER_VECTOR_DIR` | `/workspace/vector_data` | Vector database in the container; point it at a host directory bound read-write in `docker-compose.override.yml` |
-| `MOOSENGER_KNOWLEDGE_DIR` | `/workspace/.moosenger_knowledge` | Knowledge base in the container; point it at a host directory bound (read-only is fine) in `docker-compose.override.yml` |
+| `MOOSENGER_KNOWLEDGE_DIR` | `/workspace/.moosenger_knowledge` | The one path for MOOSE knowledge: the knowledge base and, by default, its vector database in `vector_data/`. Bind a host directory in `docker-compose.override.yml`; read-write if the vector database is inside it |
+| `MOOSENGER_VECTOR_DIR` | (empty = inside the knowledge base) | Optional: the vector database somewhere else, e.g. a host directory bound read-write |
 | `MOOSENGER_MOOSE_REPO` | (empty = none) | MOOSE checkout in the container (`/moose` once bound): example lookup, example catalog, pyhit |
 | `MOOSE_MCP_URL` | `http://moose-mcp:8000/mcp` | MOOSE execution server |
 | `MOOSE_MCP_AUTH_KEY` | (empty = no auth) | Shared secret with that server |

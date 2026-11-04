@@ -23,14 +23,17 @@ rag:
   pre_timeout: 60
   embeddings: "$MOOSENGER_EMBEDDINGS"
   emb_host: "$MOOSENGER_LLM_HOST"
-  # The workspace volume by default; set MOOSENGER_VECTOR_DIR to use a vector
-  # database bound in from the host (docker-compose.override.yml).
+  # Empty by default: the vector database then lives inside the knowledge base
+  # (knowledge.layout below), in vector_data/. Set MOOSENGER_VECTOR_DIR only to
+  # keep it somewhere else, e.g. a host directory bound read-write.
   vector_dir: "$MOOSENGER_VECTOR_DIR"
   matches: 10
 
 knowledge:
-  # The workspace volume by default; set MOOSENGER_KNOWLEDGE_DIR to use a
-  # knowledge base bound in from the host (docker-compose.override.yml).
+  # The one path for MOOSE knowledge: the knowledge base and, unless
+  # MOOSENGER_VECTOR_DIR is set, the vector database in its vector_data/. The
+  # workspace volume by default; set MOOSENGER_KNOWLEDGE_DIR to use one bound
+  # in from the host (docker-compose.override.yml).
   layout: "$MOOSENGER_KNOWLEDGE_DIR"
   moose:
     # MOOSE checkout for the example catalog. Empty (the default) = none.
