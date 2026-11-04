@@ -11,38 +11,9 @@
 // SPDX-License-Identifier: MIT
 
 import type { ReactNode } from "react";
+import { buttonClassName, type ButtonSize, type ButtonStyle } from "./buttonStyle";
 
-export type ButtonVariant =
-  | "neutral"
-  | "primary"
-  | "secondary"
-  | "accent"
-  | "info"
-  | "success"
-  | "warning"
-  | "error"
-  | "ghost";
-
-export type ButtonSize = "xs" | "sm" | "md" | "lg";
-
-const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  neutral: "btn-neutral",
-  primary: "btn-primary",
-  secondary: "btn-secondary",
-  accent: "btn-accent",
-  info: "btn-info",
-  success: "btn-success",
-  warning: "btn-warning",
-  error: "btn-error",
-  ghost: "btn-ghost",
-};
-
-const SIZE_CLASSES: Record<ButtonSize, string> = {
-  xs: "btn-xs",
-  sm: "btn-sm",
-  md: "btn-md",
-  lg: "btn-lg",
-};
+export type { ButtonSize, ButtonStyle, ButtonVariant } from "./buttonStyle";
 
 /** Icon and spinner box per button size. The icon's SVG is stretched to fill
  * it (a class beats lucide's width/height attributes), so callers needn't
@@ -71,28 +42,13 @@ const TOOLTIP_PLACEMENT_CLASSES = {
   right: "tooltip-right",
 } as const;
 
-interface ButtonCommonProps {
-  /** Omit for DaisyUI's default (base) button. */
-  variant?: ButtonVariant;
-  size?: ButtonSize;
+interface ButtonCommonProps extends ButtonStyle {
   onClick?: () => void;
   /**
    * Route to open on click. Not wired yet: until the router lands, buttons
    * that navigate should pass `onClick` instead.
    */
   navTo?: string;
-  /** Selected/pressed state, e.g. the current tab in a rail. */
-  active?: boolean;
-  /** Full width of the container. */
-  wide?: boolean;
-  soft?: boolean;
-  outline?: boolean;
-  /**
-   * With `outline` and no `variant`: a faint border and dimmed text that
-   * brighten on hover, for secondary actions that shouldn't compete with the
-   * page, e.g. Request Revision and the preview toolbar (Figma E.1).
-   */
-  subtle?: boolean;
   disabled?: boolean;
   /** Swaps the icon (or, with no icon, leads the label) for a spinner. */
   loading?: boolean;
@@ -146,9 +102,6 @@ export function Button(props: ButtonProps) {
     onClick,
     active = false,
     wide = false,
-    soft = false,
-    outline = false,
-    subtle = false,
     disabled = false,
     loading = false,
     type = "button",
@@ -173,37 +126,23 @@ export function Button(props: ButtonProps) {
     </span>
   ) : null;
 
-  const ghostIcon = iconOnly && variant === "ghost";
-  const stateClass = ghostIcon
-    ? active
-      ? "bg-primary/15 text-primary"
-      : props.muted === false
-        ? ""
-        : "text-base-content/60 hover:text-base-content"
-    : active
-      ? "btn-active"
-      : "";
+  // Ghost icon buttons use the rail style in place of btn-active
+  const ghostState =
+    iconOnly && variant === "ghost"
+      ? active
+        ? "bg-primary/15 text-primary"
+        : props.muted === false
+          ? ""
+          : "text-base-content/60 hover:text-base-content"
+      : undefined;
 
-  const classes = [
-    "btn",
-    variant && VARIANT_CLASSES[variant],
-    SIZE_CLASSES[size],
-    iconOnly && (props.shape === "circle" ? "btn-circle" : "btn-square"),
-    !iconOnly && iconSlot && ICON_SIDE_PADDING_CLASSES[size][props.iconPosition ?? "left"],
-    soft && "btn-soft",
-    outline && "btn-outline",
-    // Same faint border as cards and Tag. Utilities outrank DaisyUI's layer,
-    // so these win over btn-outline's base-content border.
-    outline &&
-      subtle &&
-      !variant &&
-      "border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:text-base-content",
-    wide && "btn-block",
-    stateClass,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const shape = iconOnly
+    ? props.shape === "circle"
+      ? "btn-circle"
+      : "btn-square"
+    : iconSlot && ICON_SIDE_PADDING_CLASSES[size][props.iconPosition ?? "left"];
+
+  const classes = [buttonClassName(props, { shape, state: ghostState }), className].filter(Boolean).join(" ");
 
   const button = (
     <button
