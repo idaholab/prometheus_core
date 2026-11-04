@@ -222,6 +222,25 @@ def test_a_refused_claim_says_how_to_fix_it(project: Project):
 
 
 @pytest.mark.covers(
+    "SPC-REQ-003-13",
+    "an unknown ID in spec 002 is told to go in spec 002, and one numbered for a spec 009 that doesn't exist is told there is no spec 009 and to write it",
+)
+def test_an_unknown_id_is_sent_to_its_own_spec(project: Project):
+    """The spec named comes from the ID, so a number other than 001 shows it isn't fixed; a missing spec is said."""
+    project.write("specs/000-index.md", "# Index\n\n- [001](001-thing.md)\n- [002](002-other.md)\n")
+    project.spec("- T-REQ-001-01: One.")
+    project.spec("- T-REQ-002-01: Two.", number="002", name="002-other.md")
+    project.ini(CHECKED)
+    project.tests(
+        'import pytest\n@pytest.mark.covers("T-REQ-002-09", "in two")\ndef test_a():\n    pass\n'
+        '@pytest.mark.covers("T-REQ-009-01", "in nine")\ndef test_b():\n    pass\n'
+    )
+    err = usage_error(project)
+    assert "T-REQ-002-09 isn't in any spec; check the number, or add it to spec 002" in err
+    assert "T-REQ-009-01 isn't in any spec, and there is no spec 009; check the number, or write spec 009" in err
+
+
+@pytest.mark.covers(
     "SPC-REQ-003-03",
     "with the collection check on and no results path, an inner test claiming a known, allowed ID runs and passes, so a correct claim is let through where the bad ones above are refused",
 )

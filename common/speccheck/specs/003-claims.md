@@ -44,8 +44,9 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   each with its own explanation: onto each test when the mark is on a class or module, and onto
   each `pytest.param` of one `parametrize` in the other cases.
 - SPC-REQ-003-13: The message for a refused ID MUST say how to fix it: for a malformed ID it shows
-  the ID format, for an unknown ID it names the spec to add it to, and for a disallowed ID it names
-  the `producers.<name>.specs` key.
+  the ID format, for an unknown ID it names the spec to add it to (or, when there is no spec of
+  that number, says so and to write it), and for a disallowed ID it names the
+  `producers.<name>.specs` key.
 - SPC-REQ-003-14: When the project sets `speccheck_config`, collection MUST fail when no producer
   is set, and the message MUST name both ways to set one: `SPECCHECK_PRODUCER` and
   `speccheck_producer`.
