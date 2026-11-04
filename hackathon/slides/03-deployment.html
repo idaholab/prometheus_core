@@ -105,13 +105,13 @@ make down                      <span class="c"># stop (down-v also deletes uploa
                                <span class="c"># DeepLynx data and its key)</span></pre>
 <div class="col">
 <div class="callout info">
-<strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>), so you run exactly the SDK you have checked out. Without it, <code>make up</code> pulls the published image from <code>ghcr.io</code>. The first <code>make up</code> asks for it when it creates <code>.env</code>: press Enter.</div>
+<strong><code>LOCAL_SDK=true</code></strong>: every Python service is built <code>FROM</code> the <code>prometheus_api</code> base image. With this line, <code>make up</code> first builds that image from <code>../sdk</code> on your laptop (<code>prometheus_api:local</code>), so you run exactly the SDK you have checked out. Without it, <code>make up</code> pulls the published image from <code>ghcr.io</code>. <code>make up</code> asks for it in your terminal until your <code>.env</code> has the line: press Enter.</div>
 
 <div class="callout info">
 <strong><code>LOCAL_DEEPLYNX=true</code></strong> (asked right after, Enter again): every <code>make up</code> also starts DeepLynx in the platform's compose project and runs <code>make deeplynx-setup</code>, which creates a project and API key and writes the <code>DEEPLYNX_*</code> lines to <code>.env</code> for you. Its UI is at <code>http://localhost:3000</code>.</div>
 
 <div class="callout warn">
-<strong><code>.env</code> from before?</strong> The two questions come only when <code>make up</code> creates <code>.env</code>. If yours exists already, check for both lines (<code>grep -E '^LOCAL_(SDK|DEEPLYNX)=' .env</code>), and set any that's missing to <code>true</code> in <code>.env</code>.</div>
+<strong><code>.env</code> from before?</strong> <code>make up</code> asks in your terminal for each of the two lines your <code>.env</code> doesn't have yet, so a clone from before these questions is asked once on its next <code>make up</code>. A &quot;no&quot; is saved as <code>false</code> and not asked again; change an answer by editing the line (<code>grep -E '^LOCAL_(SDK|DEEPLYNX)=' .env</code> shows both).</div>
 
 <div class="callout bad">
 <strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
@@ -647,7 +647,7 @@ Never commit <code>.env</code>. Never paste it into chat or a PR. Back it up: lo
 <tbody>
 <tr>
 <td><code>unauthorized</code>, <code>denied</code> or <code>invalid reference format</code> for the base image</td>
-<td><code>LOCAL_SDK=true</code> is missing from <code>.env</code> (an <code>.env</code> from before, or you answered no), so the build looks for an image registry. Set <code>LOCAL_SDK=true</code> in <code>.env</code> and run <code>make up</code> again.</td>
+<td><code>LOCAL_SDK=true</code> is not in <code>.env</code> (you answered no, or <code>make up</code> has not asked yet because it ran without a terminal), so the build looks for an image registry. Run <code>make up</code> in your terminal to be asked, or set <code>LOCAL_SDK=true</code> in <code>.env</code>, and run <code>make up</code> again.</td>
 </tr>
 <tr>
 <td><code>pull access denied for prometheus_api</code></td>

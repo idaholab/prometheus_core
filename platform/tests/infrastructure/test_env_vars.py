@@ -308,15 +308,52 @@ def test_init_env_asks_local_options_when_it_creates_env(tmp_path, env_example_p
         assert sum(line.startswith(f"{var}=") for line in lines) == 1
 
 
-def test_init_env_never_asks_local_options_for_an_existing_env(tmp_path, env_example_path, monkeypatch):
-    """An .env that existed before is not asked about and keeps its (missing) LOCAL_* lines."""
-    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
+def test_init_env_asks_an_existing_env_that_has_no_local_lines(tmp_path, env_example_path, monkeypatch):
+    """An .env from before the questions (or made without a terminal) is asked, once, in a terminal."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, ["n", ""])
     env.write_text(env_example_path.read_text())
 
     assert init_env.main() == 0
-    assert asked == []
+    assert len(asked) == 2
     written = init_env.values(env.read_text())
-    assert "LOCAL_SDK" not in written and "LOCAL_DEEPLYNX" not in written
+    assert written["LOCAL_SDK"] == "false" and written["LOCAL_DEEPLYNX"] == "true"
+
+
+def test_init_env_asks_a_question_only_until_it_has_an_answer(tmp_path, env_example_path, monkeypatch):
+    """A No is saved as a false line, so the next run in a terminal asks nothing."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, ["n", "n"])
+    assert init_env.main() == 0
+    assert len(asked) == 2
+
+    before = env.read_text()
+    assert init_env.main() == 0
+    assert len(asked) == 2, "asked again after both were answered"
+    assert env.read_text() == before
+
+
+@pytest.mark.parametrize("line", ["LOCAL_SDK=true", "LOCAL_SDK=false", "LOCAL_SDK="])
+def test_init_env_never_changes_or_asks_about_a_line_that_is_there(tmp_path, env_example_path, monkeypatch, line):
+    """A hand-set line (even blank) is respected: only the missing question is asked."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [""])
+    env.write_text(env_example_path.read_text() + f"\n{line}\n")
+
+    assert init_env.main() == 0
+    assert len(asked) == 1 and "DeepLynx" in asked[0]
+    lines = env.read_text().splitlines()
+    assert lines.count(line) == 1
+    assert sum(entry.startswith("LOCAL_SDK=") for entry in lines) == 1
+
+
+def test_init_env_asks_a_complete_env_nothing(tmp_path, env_example_path, monkeypatch):
+    """Both lines present: nothing is asked and .env is not rewritten."""
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
+    env.write_text(env_example_path.read_text() + "\nLOCAL_SDK=true\nLOCAL_DEEPLYNX=false\n")
+    assert init_env.main() == 0  # fills the blank secrets and the profile, which rewrites it once
+    complete = (env.read_text(), env.stat().st_mtime_ns)
+
+    assert init_env.main() == 0
+    assert asked == []
+    assert (env.read_text(), env.stat().st_mtime_ns) == complete
 
 
 def test_init_env_skips_local_options_set_in_the_environment(tmp_path, env_example_path, monkeypatch):
@@ -334,7 +371,7 @@ def test_init_env_skips_local_options_set_in_the_environment(tmp_path, env_examp
 def test_init_env_asks_no_local_options_without_a_terminal(tmp_path, env_example_path, monkeypatch, capsys):
     """CI and assistant runs: nothing asked, nothing written, so both keep the Makefile default (false).
 
-    It says so, since the next run finds .env and never asks.
+    It says so, when it created .env, and a later run in a terminal asks.
     """
     init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, [])
     monkeypatch.setattr(init_env, "interactive", lambda: False)
@@ -368,6 +405,7 @@ def test_init_env_only_names_the_local_options_it_did_not_ask_about(tmp_path, en
 def test_init_env_does_not_repeat_the_no_terminal_hint_for_an_existing_env(
     tmp_path, env_example_path, monkeypatch, capsys
 ):
+    """Said once, when .env is created; CI and assistants reruns on that .env stay quiet."""
     init_env, env, _ = _new_env(tmp_path, env_example_path, monkeypatch, [])
     monkeypatch.setattr(init_env, "interactive", lambda: False)
     env.write_text(env_example_path.read_text())

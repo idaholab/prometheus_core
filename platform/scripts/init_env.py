@@ -21,12 +21,14 @@
    environment if it is set there (as in CI). Otherwise, if the script runs in
    a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
    profile's key. Otherwise exit non-zero. There is no default profile.
-4. Only when step 1 created .env, and only in a terminal: ask whether to build
-   the base image from ../sdk (LOCAL_SDK) and whether to run DeepLynx next to
-   the platform (LOCAL_DEEPLYNX). Enter means yes. A variable that is set in
-   the environment (or on the make command line) is not asked about. An .env
-   that existed before is never changed here. Without a terminal nothing is
-   asked, and it says so, since the next run no longer asks.
+4. In a terminal, ask whether to build the base image from ../sdk (LOCAL_SDK)
+   and whether to run DeepLynx next to the platform (LOCAL_DEEPLYNX), for each
+   that .env has no ``VAR=`` line for. Enter means yes. The answer, yes or no,
+   is saved as that line, so each is asked once, also for an .env made before
+   these questions or without a terminal. A variable that is set in the
+   environment (or on the make command line) is not asked about, and a line
+   that is already in .env is never changed here. Without a terminal nothing is
+   asked; when step 1 created .env, it says so.
 
 Standard library only, so it runs before anything else is installed. Run from
 anywhere; paths resolve relative to this file.
@@ -118,11 +120,22 @@ def set_option(text: str, var: str, value: str) -> str:
     return set_var(text, var, value)
 
 
-# Asked once, when .env is created: (variable, question). Enter means yes.
+# Asked in a terminal while .env has no line for the variable: (variable, question).
+# Enter means yes. An answer, yes or no, is saved as a line, so it is asked once.
 LOCAL_OPTIONS = [
     ("LOCAL_SDK", "Build the SDK base image locally"),
     ("LOCAL_DEEPLYNX", "Run DeepLynx locally"),
 ]
+
+
+def unanswered(text: str) -> list[tuple[str, str]]:
+    """The LOCAL_OPTIONS that neither the environment nor a ``VAR=`` line in .env settles.
+
+    A commented ``#VAR=false`` default doesn't settle it. Any ``VAR=`` line does, even a
+    blank one: that .env was set by hand, and a line already there is never changed.
+    """
+    assigned = values(text)
+    return [(var, q) for var, q in LOCAL_OPTIONS if var not in os.environ and var not in assigned]
 
 
 def yes(question: str) -> bool:
@@ -137,13 +150,14 @@ def yes(question: str) -> bool:
 
 
 def prompt_local_options(text: str) -> str:
-    """Ask for each LOCAL_OPTIONS variable that the environment doesn't set, saving each answer to .env.
+    """Ask for each unanswered LOCAL_OPTIONS variable, saving each answer to .env.
 
     Saved one at a time, so an interrupt at the second question keeps the first answer.
     """
-    for var, question in LOCAL_OPTIONS:
-        if var in os.environ:
-            continue
+    todo = unanswered(text)
+    if todo:
+        print()
+    for var, question in todo:
         value = "true" if yes(f"{question} ({var})?") else "false"
         text = set_option(text, var, value)
         ENV.write_text(text)
@@ -272,22 +286,19 @@ def main() -> int:
         ENV.write_text(text)
         print(f"Generated in {ENV.name}: {', '.join(filled)}")
 
-    # Right after the copy, so an interrupted LLM prompt below doesn't skip them: the
-    # next run finds .env and asks nothing here.
-    if created and interactive():
-        print()
+    # Before the LLM prompt, so that an interrupt there doesn't lose the answers. Asked
+    # for an .env that lacks the lines too (one from before these questions, or made
+    # without a terminal), until each has an answer in it.
+    if interactive():
         text = prompt_local_options(text)
-    elif created:
-        # Never asked again: the next run finds this .env. Say what to do, so that the
-        # base-image pull (unauthorized) or an agent exiting without DeepLynx is not the
-        # first sign
-        unasked = [var for var, _ in LOCAL_OPTIONS if var not in os.environ]
-        if unasked:
-            print(
-                f"Not asked (no terminal): {', '.join(unasked)} stay false in {ENV.name}.\n"
-                f"Set {' and '.join(f'{v}=true' for v in unasked)} there to build the SDK image locally "
-                "or run DeepLynx locally."
-            )
+    elif created and (unasked := [var for var, _ in unanswered(text)]):
+        # Say it once, so that the base-image pull (unauthorized) or an agent exiting
+        # without DeepLynx is not the first sign. A later run in a terminal asks.
+        print(
+            f"Not asked (no terminal): {', '.join(unasked)} stay false in {ENV.name}.\n"
+            f"Set {' and '.join(f'{v}=true' for v in unasked)} there to build the SDK image locally "
+            "or run DeepLynx locally, or run make init-env in a terminal to be asked."
+        )
 
     env = values(text)
     if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):

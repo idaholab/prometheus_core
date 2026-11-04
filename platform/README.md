@@ -56,10 +56,14 @@ Run DeepLynx locally (LOCAL_DEEPLYNX)? [Y/n] (Enter = yes):
 ```
 
 They set `LOCAL_SDK` (step 2) and `LOCAL_DEEPLYNX` (below), and count from this
-first `make up` on. They're asked only once, when `.env` is created: change your
-answer by setting the line in `.env` to `true` or `false`. A variable you set on
-the command line (`make up LOCAL_SDK=false`) isn't asked about, and without a
-terminal (CI) nothing is asked, both stay `false`, and the script says so.
+`make up` on. Each answer, yes or no, is saved as a line in `.env`, and a
+question is asked until `.env` has its line: so an `.env` from before these
+questions is asked once, in a terminal, and then never again. Change an answer
+by setting the line in `.env` to `true` or `false`; a line that is already there
+is never changed. A variable you set on the command line
+(`make up LOCAL_SDK=false`) isn't asked about. Without a terminal (CI) nothing
+is asked, both stay `false`, and the script says so when it creates `.env`; the
+next `make up` or `make init-env` in a terminal asks.
 
 The only other things you have to set are `LLM_CONFIG_PROFILE` and the API key
 for it (see below). Without them, `make up` asks for them next in a terminal, or
@@ -110,7 +114,7 @@ Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file
 
 #### Run DeepLynx with the platform
 
-Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, answer yes (Enter) to the DeepLynx question when `make up` creates `.env`. With an `.env` you already have, set the line in it instead:
+Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, answer yes (Enter) to the DeepLynx question that `make up` asks until `.env` has the line. Or set the line in `.env` yourself:
 
 ```dotenv
 LOCAL_DEEPLYNX=true
@@ -130,7 +134,7 @@ Answer no to the base image question when `make up` creates `.env` (or set `LOCA
 
 Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out.
 
-Answer yes (Enter) to the base image question when `make up` creates `.env`. With an `.env` you already have, set the line in it instead:
+Answer yes (Enter) to the base image question that `make up` asks until `.env` has the line. Or set the line in `.env` yourself:
 
 ```dotenv
 LOCAL_SDK=true

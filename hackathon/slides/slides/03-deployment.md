@@ -91,7 +91,7 @@ make down                      # stop (down-v also deletes uploads,
 |||
 
 ::: callout info
-**`LOCAL_SDK=true`**: every Python service is built `FROM` the `prometheus_api` base image. With this line, `make up` first builds that image from `../sdk` on your laptop (`prometheus_api:local`), so you run exactly the SDK you have checked out. Without it, `make up` pulls the published image from `ghcr.io`. The first `make up` asks for it when it creates `.env`: press Enter.
+**`LOCAL_SDK=true`**: every Python service is built `FROM` the `prometheus_api` base image. With this line, `make up` first builds that image from `../sdk` on your laptop (`prometheus_api:local`), so you run exactly the SDK you have checked out. Without it, `make up` pulls the published image from `ghcr.io`. `make up` asks for it in your terminal until your `.env` has the line: press Enter.
 :::
 
 ::: callout info
@@ -99,7 +99,7 @@ make down                      # stop (down-v also deletes uploads,
 :::
 
 ::: callout warn
-**`.env` from before?** The two questions come only when `make up` creates `.env`. If yours exists already, check for both lines (`grep -E '^LOCAL_(SDK|DEEPLYNX)=' .env`), and set any that's missing to `true` in `.env`.
+**`.env` from before?** `make up` asks in your terminal for each of the two lines your `.env` doesn't have yet, so a clone from before these questions is asked once on its next `make up`. A "no" is saved as `false` and not asked again; change an answer by editing the line (`grep -E '^LOCAL_(SDK|DEEPLYNX)=' .env` shows both).
 :::
 
 ::: callout bad
@@ -505,7 +505,7 @@ Never commit `.env`. Never paste it into chat or a PR. Back it up: losing `ADMIN
 {.sm widths="470px|"}
 | Symptom | Cause → fix |
 |---|---|
-| `unauthorized`, `denied` or `invalid reference format` for the base image | `LOCAL_SDK=true` is missing from `.env` (an `.env` from before, or you answered no), so the build looks for an image registry. Set `LOCAL_SDK=true` in `.env` and run `make up` again. |
+| `unauthorized`, `denied` or `invalid reference format` for the base image | `LOCAL_SDK=true` is not in `.env` (you answered no, or `make up` has not asked yet because it ran without a terminal), so the build looks for an image registry. Run `make up` in your terminal to be asked, or set `LOCAL_SDK=true` in `.env`, and run `make up` again. |
 | `pull access denied for prometheus_api` | `LOCAL_SDK=true` is set, but `docker compose` ran without make, so `prometheus_api:local` was never built. Run `make base-image`, or always go through `make up`. |
 | `make up` stops: "`LLM_API_KEY` is empty" or "`LLM_CONFIG_PROFILE=registry` … is not supported" | Set `LLM_CONFIG_PROFILE` and its `LLM_API_KEY` in `.env` (or blank the profile and rerun `make up` for the menu). |
 | "port is already allocated" / "address already in use" (5150, 8600, 6379, 3000, 5000) | Another process or an old stack is using it (on macOS often the AirPlay Receiver on 5000). Find it: `lsof -nP -iTCP:5000 -sTCP:LISTEN` (Linux/WSL: `ss -ltnp 'sport = :5000'`; on Linux often a local Grafana on 3000 or a Flask dev server on 5000). Then `make down` there, or change `*_PORT` in `.env`. |

@@ -61,8 +61,8 @@ COMPOSE_AGENTS := docker-compose.agents.yml
 # Set LOCAL_SDK=true (in .env or on the command line) to build the
 # prometheus_api base image from ../sdk into the local Docker store and build
 # all services FROM it, instead of pulling the published image. Use it to run
-# against the SDK checked out in ../sdk. Default: false. The first
-# `make up` asks, when it creates .env (Enter = true).
+# against the SDK checked out in ../sdk. Default: false. `make up` asks, in
+# a terminal, until .env has a LOCAL_SDK line (Enter = true).
 LOCAL_SDK ?= false
 
 ifeq ($(LOCAL_SDK),true)
@@ -103,7 +103,8 @@ OPTIONAL_AGENTS ?= false
 # from its published images, and point the platform at it: every start target
 # first starts DeepLynx and runs `make deeplynx-setup`, which writes the
 # DEEPLYNX_* settings to .env. Its web UI is at http://localhost:3000.
-# Default: false. The first `make up` asks, when it creates .env (Enter = true).
+# Default: false. `make up` asks, in a terminal, until .env has a LOCAL_DEEPLYNX
+# line (Enter = true).
 LOCAL_DEEPLYNX ?= false
 DEEPLYNX_SERVER_PORT ?= 5000
 DEEPLYNX_DEP := $(if $(filter true,$(LOCAL_DEEPLYNX)),deeplynx-setup,)

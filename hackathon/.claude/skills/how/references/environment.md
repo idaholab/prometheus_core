@@ -10,15 +10,17 @@ with Compose 2.20+ (`docker`), make, git, uv and Python 3.12 (`tools`), a clone 
 ## Fill the platform .env
 
 In the platform folder, `make up` (or `make init-env`, which starts nothing) first runs
-`scripts/init_env.py`: it copies `.env.example`, and only then, in a terminal, asks two `[Y/n]`
-questions whose Enter writes `LOCAL_SDK=true` and `LOCAL_DEEPLYNX=true`. It fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`,
+`scripts/init_env.py`: it copies `.env.example` if there is no `.env`, and, in a terminal, asks a `[Y/n]`
+question for each of `LOCAL_SDK` and `LOCAL_DEEPLYNX` that `.env` has no line for (Enter writes `true`; a
+"no" writes `false`, so each is asked once). It fills every blank secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`,
 `ADMIN_DB_ENCRYPTION_KEY`, …) without printing it, and shows the LLM profile menu and the hidden key
 prompt while `LLM_CONFIG_PROFILE` or its key is empty. The Makefile reads `.env` again after the
 script changed it (its `.env` rule), so that same `make up` already sees both. **The questions need a
-terminal, and they are asked only when `.env` is created:** an assistant that creates `.env` (it has no
-terminal) leaves both lines `false` for good. So the user creates it, with `make init-env` in their own
-terminal; an assistant never runs the first `make up` or `make init-env` on a platform folder without an
-`.env`. An `.env` from before is never asked about: there, check both lines and set a missing one by hand, after a yes (the commands are in `artifacts.md`, "Local DeepLynx", step 1; the same `sed -i.bak` works for `LOCAL_SDK`). With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make
+terminal:** an assistant (it has none) creates `.env` without asking, with both lines left out, and they
+stay `false` until the user runs `make up` or `make init-env` in their own terminal, which then asks. So
+for a platform folder without an `.env`, the user creates it there; an assistant does not run the first
+`make up` or `make init-env`. A line that is in `.env` is never changed or asked about again: to change an
+answer, set the line by hand, after a yes (the commands are in `artifacts.md`, "Local DeepLynx", step 1; the same `sed -i.bak` works for `LOCAL_SDK`). With `LOCAL_DEEPLYNX=true` every start target first starts DeepLynx and runs `make
 deeplynx-setup`, which writes the `DEEPLYNX_*` lines. Keep `REDIS_URL` and
 `BACKEND_PORT=8600` as they are. There are no `LITELLM_*` values any more.
 

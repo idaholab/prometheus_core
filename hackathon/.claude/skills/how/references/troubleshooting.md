@@ -59,7 +59,7 @@ named checks of `checks.md` to confirm. Around a platform `make up`/`restart`/`d
 
 | symptom | cause → fix | checks |
 |---|---|---|
-| An upload says "…but DeepLynx storage is not configured." | `LOCAL_DEEPLYNX=true` is missing from the platform `.env` (an `.env` from before the `make up` question, or a "no"): set it, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
+| An upload says "…but DeepLynx storage is not configured." | `LOCAL_DEEPLYNX=true` is missing from the platform `.env` (you answered "no", or `make up` has not asked yet because it ran without a terminal or on a clone from before the question): in your terminal `make up` or `make init-env` asks, or set it yourself, then `make restart`. | [deeplynx-env](checks.md#deeplynx-env), [deeplynx-backend](checks.md#deeplynx-backend) |
 | The plot does not render | Publish with `mime_type="image/png"` and configure DeepLynx (`artifacts.md`). | [deeplynx-agent](checks.md#deeplynx-agent), [agent-logs](checks.md#agent-logs) |
 | A `deeplynx://` URI does not resolve | The agent needs the same org and project. Re-sync `DEEPLYNX_*`. | [agent-env-sync](checks.md#agent-env-sync), [deeplynx-agent](checks.md#deeplynx-agent) |
 | `AuthenticationError` or 401 from DeepLynx | A stale key, usually after `make down-v`: then a platform `make up` makes a new key (a key that still works is kept). Either way, `agent-env-sync` next. | [deeplynx-backend](checks.md#deeplynx-backend), [agent-env-sync](checks.md#agent-env-sync) |
