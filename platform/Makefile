@@ -19,7 +19,18 @@ NO_ENV_GOALS := help generate clean-generated regenerate test-static check-marki
 	react-dev react-build react-check react-test-e2e \
 	down down-v logs ps clear-agent-registry clobber clear-admin-users \
 	check test-system test-integration test-infra
-ifneq ($(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help)),)
+#
+# `make -n` (dry run) leaves .env alone: Make would run the rule anyway, since it
+# always remakes included makefiles, so it is skipped and .env is read only if it
+# exists. INIT_ENV_ON_DRY_RUN=true runs it under -n (the tests need that).
+# Only the short flags count (a word of MAKEFLAGS like n, kn or -n): not --long
+# flags such as --no-print-directory, and not variable assignments such as
+# CHECK=n, which Make 4.x lists after "--". (A % pattern can't drop the
+# assignments: only its first % is a wildcard.)
+INIT_ENV_ON_DRY_RUN ?= false
+DRY_RUN := $(strip $(foreach w,$(filter-out --% -O% -I%,$(MAKEFLAGS)),$(if $(findstring =,$(w)),,$(findstring n,$(w)))))
+NEEDS_ENV := $(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help))
+ifneq ($(and $(NEEDS_ENV),$(if $(DRY_RUN),$(filter true,$(INIT_ENV_ON_DRY_RUN)),x)),)
 ifeq ($(MAKE_RESTARTS),)
 # Without this, Ctrl-C while the script runs makes Make delete .env, with the
 # secrets and answers already saved in it.

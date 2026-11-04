@@ -54,11 +54,12 @@ def platform(tmp_path: Path, project_root: Path) -> Path:
 
 def make(root: Path, *goals: str, keep_going: bool = True, **env: str) -> subprocess.CompletedProcess:
     # -k: keep going past recipes that fail without the rest of the repo (../sdk)
-    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE"))}
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV"))}
     return subprocess.run(
         ["make", "-n", *(["-k"] if keep_going else []), *goals],
         cwd=root,
-        env={**clean, **env},
+        # make -n skips the .env rule unless told otherwise; these tests are about that rule
+        env={**clean, "INIT_ENV_ON_DRY_RUN": "true", **env},
         capture_output=True,
         text=True,
         timeout=60,
@@ -96,6 +97,42 @@ def test_other_goals_never_create_env(platform, goal):
     assert not (platform / ".env").exists()
 
 
+@pytest.mark.parametrize("flags", [["-n"], ["-nk"], ["-k", "-n"], ["--dry-run"], ["-n", "-j4"], ["--just-print"]])
+def test_a_dry_run_leaves_env_alone(platform, flags):
+    """Make remakes included makefiles even under -n, so the rule is skipped: -n must not create .env."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV"))}
+    result = subprocess.run(
+        ["make", *flags, "-k", "up"], cwd=platform, env=clean, capture_output=True, text=True, timeout=60
+    )
+    assert runs(platform) == 0, result.stderr
+    assert not (platform / ".env").exists()
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        [],
+        ["--no-print-directory"],
+        ["-k"],
+        ["-s"],
+        ["--warn-undefined-variables"],
+        ["-j4"],
+        ["FOO=n"],
+        ["CHECK=n", "-k"],
+    ],
+)
+def test_other_flags_still_run_the_script(platform, flags):
+    """Only a dry run skips the rule: the flag test must not mistake --no-print-directory or similar for -n."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV"))}
+    # init-env's own recipe is a no-op, so this really runs make without -n and starts nothing
+    result = subprocess.run(
+        ["make", *flags, "init-env"], cwd=platform, env=clean, capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0, result.stderr
+    assert runs(platform) == 1
+    assert (platform / ".env").exists()
+
+
 SLOW_STUB = """\
 import pathlib, time
 root = pathlib.Path(__file__).resolve().parent.parent
@@ -108,12 +145,12 @@ time.sleep(30)
 def test_ctrl_c_while_the_script_runs_keeps_env(platform):
     """Make deletes the target of an interrupted rule unless it is .PRECIOUS; .env holds secrets and answers."""
     (platform / "scripts" / "init_env.py").write_text(SLOW_STUB)
-    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE"))}
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV"))}
     # Own process group, so the signal reaches make and the script like a Ctrl-C does
     proc = subprocess.Popen(
         ["make", "-n", "-k", "up"],
         cwd=platform,
-        env=clean,
+        env={**clean, "INIT_ENV_ON_DRY_RUN": "true"},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
