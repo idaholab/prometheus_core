@@ -10,7 +10,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
+import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
 import { WorkflowConsole } from "../components/workflows/WorkflowConsole";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "../components/workflows/WorkflowGraph";
 import type { WorkflowPlan } from "../components/workflows/WorkflowPlanner";
@@ -115,18 +117,40 @@ const EXAMPLE_PLAN: WorkflowPlan = {
   outputs: ["TH_validation_report.pdf", "velocity_vectors.vtu"],
 };
 
+const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";
+
+type WorkflowsView = "console" | "builder";
+
 /**
- * Workflows section page: owns the page's data and header. Layout lives in
- * WorkflowConsole. Route params and filters will land here with the router.
+ * Workflows section page: owns the page's data and header, and which view is
+ * showing: the Workflow Console, or the Builder opened from its "Modify Plan".
+ * Layout lives in WorkflowConsole and WorkflowBuilder.
+ *
+ * Until the router lands (RT-1), the Builder is a view here rather than its
+ * own route. ProjectView remounts this page on every sidebar click, so
+ * clicking Workflows from the Builder returns to the Console.
  */
 export function PageWorkflows() {
-  usePageHeader({ title: "Workflow Console" });
+  const [view, setView] = useState<WorkflowsView>("console");
 
+  if (view === "builder") return <BuilderView />;
+  return <ConsoleView onModifyPlan={() => setView("builder")} />;
+}
+
+/** Each view sets its own header, so the header switches with the view. */
+function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
+  usePageHeader({ title: "Workflow Console" });
   return (
     <WorkflowConsole
       templates={TEMPLATES}
       selectedId={SELECTED_TEMPLATE_ID}
       plan={EXAMPLE_PLAN}
+      onModifyPlan={onModifyPlan}
     />
   );
+}
+
+function BuilderView() {
+  usePageHeader({ trail: ["Workflow Builder"] });
+  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} />;
 }
