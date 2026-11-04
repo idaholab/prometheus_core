@@ -12,10 +12,13 @@
 
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
+import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
 
 interface WorkflowBuilderProps {
   /** Workflow being edited, e.g. "Comprehensive Material Analysis". */
   name: string;
+  /** Skills offered in the library column, in display order. */
+  skillGroups: SkillGroup[];
 }
 
 /** D.2's canvas dot grid, from the theme's text colour so it shows in both themes. */
@@ -29,10 +32,10 @@ const CANVAS_DOTS =
  * - From lg (1024px) the columns sit side by side, at D.2's widths from xl.
  * - Below lg they stack, library first, and the page scrolls vertically.
  *
- * Shell only: the columns are filled in by WB-2 to WB-4, and the toolbar
+ * The canvas and inspector are filled in by WB-3 and WB-4, and the toolbar
  * buttons have no handlers yet.
  */
-export function WorkflowBuilder({ name }: WorkflowBuilderProps) {
+export function WorkflowBuilder({ name, skillGroups }: WorkflowBuilderProps) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-9 gap-y-3 border-b border-base-content/10 bg-base-200 px-6 py-3">
@@ -50,9 +53,9 @@ export function WorkflowBuilder({ name }: WorkflowBuilderProps) {
       <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[200px_minmax(0,1fr)_240px] xl:grid-cols-[240px_minmax(0,1fr)_280px]">
         <aside
           aria-label="Skill library"
-          className="flex flex-col gap-4 border-b border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-r lg:border-b-0"
+          className="border-b border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-r lg:border-b-0"
         >
-          <SectionLabel variant="panel">Skill Library</SectionLabel>
+          <SkillLibrary groups={skillGroups} />
         </aside>
 
         {/* Dot grid from D.2; the canvas itself lands in WB-3. */}

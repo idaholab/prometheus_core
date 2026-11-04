@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
+import type { SkillGroup } from "../components/workflows/SkillLibrary";
 import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
 import { WorkflowConsole } from "../components/workflows/WorkflowConsole";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "../components/workflows/WorkflowGraph";
@@ -117,6 +118,44 @@ const EXAMPLE_PLAN: WorkflowPlan = {
   outputs: ["TH_validation_report.pdf", "velocity_vectors.vtu"],
 };
 
+// Placeholder skill library for the Builder, from Figma D.2.
+const SKILL_GROUPS: SkillGroup[] = [
+  {
+    id: "data",
+    label: "Data",
+    tone: "data",
+    skills: [
+      { id: "get-material-data", name: "Get Material Data" },
+      { id: "query-artifact-store", name: "Query Artifact Store" },
+    ],
+  },
+  {
+    id: "analysis",
+    label: "Analysis",
+    tone: "analysis",
+    skills: [
+      { id: "radiation-damage", name: "Radiation Damage" },
+      { id: "corrosion", name: "Corrosion" },
+      { id: "thermal", name: "Thermal" },
+    ],
+  },
+  {
+    id: "synthesis",
+    label: "Synthesis",
+    tone: "analysis",
+    skills: [{ id: "synthesize-report", name: "Synthesize Report" }],
+  },
+  {
+    id: "control",
+    label: "Control",
+    tone: "control",
+    skills: [
+      { id: "checkpoint-sme", name: "Checkpoint (SME)" },
+      { id: "qa-gate", name: "QA Gate" },
+    ],
+  },
+];
+
 const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";
 
 type WorkflowsView = "console" | "builder";
@@ -152,5 +191,5 @@ function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
 
 function BuilderView() {
   usePageHeader({ trail: ["Workflow Builder"] });
-  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} />;
+  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} skillGroups={SKILL_GROUPS} />;
 }
