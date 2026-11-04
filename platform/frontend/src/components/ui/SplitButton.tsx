@@ -18,6 +18,12 @@ export interface SplitButtonOption {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  /**
+   * Why the option is disabled, e.g. "Approve the plan first". Shown under
+   * the option and read out with it, so people know what they're missing and
+   * how to get it, rather than meeting a dead option with no explanation.
+   */
+  disabledReason?: string;
 }
 
 interface SplitButtonProps extends Omit<ButtonStyle, "active"> {
@@ -45,6 +51,12 @@ const ARROW_SIZE_CLASSES = { xs: "size-3", sm: "size-3.5", md: "size-4", lg: "si
  * takes focus. Up/Down/Home/End move between options, skipping disabled
  * ones; Enter or Space picks one; Escape or Tab closes the menu. Escape
  * returns focus to the arrow. A click outside closes it too.
+ *
+ * The menu still opens when every option is disabled, so people can see what
+ * exists and, with `disabledReason`, why it's unavailable. Keys then move
+ * between the disabled options, which can be focused but not picked. Use
+ * `disabled` to turn off the whole control when the main action is
+ * unavailable too.
  */
 export function SplitButton({
   label,
@@ -65,7 +77,10 @@ export function SplitButton({
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const menuId = useId();
 
-  const enabled = options.flatMap((option, i) => (option.disabled ? [] : [i]));
+  // The options keys and clicks land on: the enabled ones, or every option
+  // when all are disabled, so the menu can still be opened and read
+  const enabledOnly = options.flatMap((option, i) => (option.disabled ? [] : [i]));
+  const enabled = enabledOnly.length ? enabledOnly : options.map((_, i) => i);
 
   const close = (refocus: boolean) => {
     setOpen(false);
@@ -189,35 +204,54 @@ export function SplitButton({
             placement.start ? "right-0" : "left-0",
           ].join(" ")}
         >
-          {options.map((option, i) => (
-            <li key={option.label} role="none" className={option.disabled ? "menu-disabled" : undefined}>
-              <button
-                ref={(element) => {
-                  itemRefs.current[i] = element;
-                }}
-                type="button"
-                role="menuitem"
-                tabIndex={i === active ? 0 : -1}
-                aria-disabled={option.disabled || undefined}
-                onClick={() => pick(option)}
-                onMouseEnter={() => !option.disabled && setActive(i)}
-                // The sidebar's active-item style for the highlighted option, a
-                // primary tint with base-content text, so the menu reads as a
-                // pick-one list like the rail. Primary text or a primary focus
-                // ring on it falls below AA contrast on the dark theme (2.5:1),
-                // so text and ring use base-content. DaisyUI's menu sets
-                // outline-style: none on focus, which outline-2 alone doesn't
-                // undo, so keyboard focus sets the style as well
-                className={
-                  option.disabled
-                    ? "whitespace-nowrap"
-                    : "whitespace-nowrap hover:bg-primary/15 hover:text-base-content focus-visible:bg-primary/15 focus-visible:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-base-content"
-                }
-              >
-                {option.label}
-              </button>
-            </li>
-          ))}
+          {options.map((option, i) => {
+            const reasonId = option.disabled && option.disabledReason ? `${menuId}-reason-${i}` : undefined;
+            return (
+              <li key={option.label} role="none" className={option.disabled ? "menu-disabled" : undefined}>
+                <button
+                  ref={(element) => {
+                    itemRefs.current[i] = element;
+                  }}
+                  type="button"
+                  role="menuitem"
+                  tabIndex={i === active ? 0 : -1}
+                  aria-disabled={option.disabled || undefined}
+                  aria-describedby={reasonId}
+                  onClick={() => pick(option)}
+                  onMouseEnter={() => !option.disabled && setActive(i)}
+                  // The sidebar's active-item style for the highlighted option,
+                  // a primary tint with base-content text, so the menu reads as
+                  // a pick-one list like the rail. Primary text or a primary
+                  // focus ring on it falls below AA contrast on the dark theme
+                  // (2.5:1), so text and ring use base-content. DaisyUI's menu
+                  // sets outline-style: none on focus, which outline-2 alone
+                  // doesn't undo, so keyboard focus sets the style as well.
+                  // Disabled options get no highlight, but keep the ring, since
+                  // keys can land on them when every option is disabled
+                  className={[
+                    "flex flex-col items-start gap-0 whitespace-nowrap",
+                    "focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-base-content",
+                    option.disabled
+                      ? // DaisyUI's menu focus style brightens the text and adds a
+                        // fill, which made a focused disabled option look enabled
+                        "focus-visible:bg-transparent focus-visible:text-base-content/20"
+                      : "hover:bg-primary/15 hover:text-base-content focus-visible:bg-primary/15 focus-visible:text-base-content",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {option.label}
+                  {reasonId && (
+                    // Dimmer than an enabled label but above the 20% DaisyUI
+                    // gives disabled text, so the reason stays readable
+                    <span id={reasonId} className="text-xs text-base-content/60">
+                      {option.disabledReason}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

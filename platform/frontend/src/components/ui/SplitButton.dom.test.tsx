@@ -21,7 +21,7 @@ function setup(options?: Partial<SplitButtonOption>[]) {
   const picked: string[] = [];
   const items: SplitButtonOption[] = (
     options ?? [{ label: "Edit the template" }, { label: "Duplicate plan", disabled: true }, { label: "Export plan" }]
-  ).map((o) => ({ label: o.label!, disabled: o.disabled, onClick: () => picked.push(o.label!) }));
+  ).map((o) => ({ ...o, label: o.label!, onClick: () => picked.push(o.label!) }));
   const main = vi.fn();
   render(<SplitButton label="Modify Plan" onClick={main} options={items} variant="primary" outline size="sm" />);
   return { main, picked, user: userEvent.setup(), arrow: () => screen.getByRole("button", { name: "More Modify Plan options" }) };
@@ -178,4 +178,50 @@ test("clicking the arrow again closes the menu, and wide stretches the main half
   expect(arrow).toHaveFocus();
 
   expect(screen.getByRole("button", { name: "Modify Plan" })).toHaveClass("flex-1", "btn-block");
+});
+
+test("with every option disabled, the menu still opens and keys move through the options, but none runs", async () => {
+  const { picked, main, user, arrow } = setup([
+    { label: "Edit the template", disabled: true },
+    { label: "Export plan", disabled: true },
+  ]);
+  expect(arrow()).toBeEnabled();
+
+  await user.click(arrow());
+  expect(screen.getByRole("menu")).toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).toHaveFocus();
+
+  await user.keyboard("{ArrowDown}");
+  expect(screen.getByRole("menuitem", { name: "Export plan" })).toHaveFocus();
+  await user.keyboard("{Enter}");
+  await user.click(screen.getByRole("menuitem", { name: "Edit the template" }));
+  expect(picked).toEqual([]);
+  expect(main).not.toHaveBeenCalled();
+  expect(screen.getByRole("menu")).toBeInTheDocument();
+
+  // From the keyboard too, Up opens it on the last option
+  await user.keyboard("{Escape}");
+  await user.keyboard("{ArrowUp}");
+  expect(screen.getByRole("menuitem", { name: "Export plan" })).toHaveFocus();
+});
+
+test("a disabled option's reason is shown under it and read out with it", async () => {
+  const { user, arrow } = setup([
+    { label: "Edit the template" },
+    { label: "Propose new version", disabled: true, disabledReason: "Approve the plan first" },
+  ]);
+  await user.click(arrow());
+
+  const option = screen.getByRole("menuitem", { name: /Propose new version/ });
+  expect(option).toHaveAccessibleDescription("Approve the plan first");
+  expect(screen.getByText("Approve the plan first")).toBeVisible();
+  // An enabled option has no description
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).not.toHaveAccessibleDescription();
+});
+
+test("an enabled option ignores disabledReason", async () => {
+  const { user, arrow } = setup([{ label: "Edit the template", disabledReason: "Not shown" }]);
+  await user.click(arrow());
+  expect(screen.queryByText("Not shown")).not.toBeInTheDocument();
+  expect(screen.getByRole("menuitem", { name: "Edit the template" })).not.toHaveAccessibleDescription();
 });
