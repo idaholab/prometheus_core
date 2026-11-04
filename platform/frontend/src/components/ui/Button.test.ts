@@ -10,8 +10,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-/* Pins what Button renders for each prop it styles by, so moving its styling
- * into buttonClassName can't change any existing button. */
+/* Pins what Button renders for each prop it styles by, so a change to
+ * buttonClassName shows up here as a deliberate test edit. */
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -30,12 +30,14 @@ test("Button's classes for each variant, size and style flag", () => {
     [{ label: "Go" }, "btn btn-md"],
     [{ label: "Go", variant: "primary", size: "sm" }, "btn btn-primary btn-sm"],
     [{ label: "Go", variant: "error", size: "xs", outline: true }, "btn btn-error btn-xs btn-outline"],
+    // A neutral outline keeps its border on hover, with a faint tint
+    [{ label: "Go", outline: true }, "btn btn-md btn-outline hover:border-base-content hover:bg-base-content/8"],
     [{ label: "Go", variant: "neutral", size: "lg", soft: true }, "btn btn-neutral btn-lg btn-soft"],
     [{ label: "Go", wide: true }, "btn btn-md btn-block"],
     [{ label: "Go", active: true }, "btn btn-md btn-active"],
     [
       { label: "Go", outline: true, subtle: true },
-      "btn btn-md btn-outline border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:text-base-content",
+      "btn btn-md btn-outline border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:bg-base-content/8 hover:text-base-content",
     ],
     // subtle only applies to an outline button with no variant
     [{ label: "Go", variant: "primary", outline: true, subtle: true }, "btn btn-primary btn-md btn-outline"],

@@ -83,12 +83,16 @@ export function buttonClassName(
     shape,
     soft && "btn-soft",
     outline && "btn-outline",
-    // Same faint border as cards and Tag. Utilities outrank DaisyUI's layer,
-    // so these win over btn-outline's base-content border.
+    // DaisyUI's btn hover fills with base-200 darkened and sets the border to
+    // match, which on the dark theme turns a neutral outline button into a
+    // dark block with no outline. Keep the border and use a faint tint of the
+    // text color instead. Utilities outrank DaisyUI's layer.
+    outline && !variant && !subtle && "hover:border-base-content hover:bg-base-content/8",
+    // Same faint border as cards and Tag, brightening on hover
     outline &&
       subtle &&
       !variant &&
-      "border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:text-base-content",
+      "border-base-content/15 text-base-content/70 hover:border-base-content/30 hover:bg-base-content/8 hover:text-base-content",
     wide && "btn-block",
     state ?? (active && "btn-active"),
   ]
