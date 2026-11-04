@@ -172,7 +172,7 @@ Full card JSON for both skills and the implementation hints: this deck's appendi
 {widths="470px|"}
 | Make sure… | Because |
 |---|---|
-| **DeepLynx works**: `LOCAL_DEEPLYNX=true` in `platform/.env` | agents won't start without it, never see the upload, and the PNG can't render |
+| **DeepLynx works**: `LOCAL_DEEPLYNX=true` in `platform/.env` (the first `make up` asks; deck 03) | agents won't start without it, never see the upload, and the PNG can't render |
 | **Team prefix** on the card name and skill IDs | every team builds the same skills; same names overwrite each other |
 | `uv add matplotlib pandas`, commit `uv.lock`; `MPLBACKEND=Agg` | the base image has none of them, the build needs the lock, and there is no display |
 | `"streaming": true` in the card | so "Parsing 4 tables…" shows up live |
