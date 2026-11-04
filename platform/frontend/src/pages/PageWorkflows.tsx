@@ -156,6 +156,37 @@ const SKILL_GROUPS: SkillGroup[] = [
   },
 ];
 
+// Placeholder Builder graph for Comprehensive Material Analysis, laid out as in
+// Figma D.2 at 100%: positions are from the canvas's top left. Radiation Damage
+// is shown selected, and Corrosion's output is mid-connection.
+const BUILDER_NODES: WorkflowGraphNode[] = [
+  {
+    id: "get-material-data",
+    type: "skill",
+    position: { x: 255, y: 70 },
+    data: { name: "Get Material Data", tone: "data", input: "material_id", output: "material_data", width: 170 },
+  },
+  {
+    id: "radiation-damage",
+    type: "skill",
+    position: { x: 140, y: 260 },
+    selected: true,
+    data: { name: "Radiation Damage", tone: "analysis", input: "material_data", output: "rad_result", width: 170 },
+  },
+  {
+    id: "corrosion",
+    type: "skill",
+    position: { x: 370, y: 260 },
+    data: { name: "Corrosion", tone: "analysis", input: "material_data", output: "corr_result", width: 170 },
+  },
+  { id: "corrosion-drop", type: "connect", position: { x: 345, y: 464 }, data: { label: "drop to connect →" } },
+];
+const BUILDER_WIRES: WorkflowGraphWire[] = [
+  { from: "get-material-data", to: "radiation-damage" },
+  { from: "get-material-data", to: "corrosion" },
+  { from: "corrosion", to: "corrosion-drop", dashed: true },
+];
+
 const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";
 
 type WorkflowsView = "console" | "builder";
@@ -191,5 +222,5 @@ function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
 
 function BuilderView() {
   usePageHeader({ trail: ["Workflow Builder"] });
-  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} skillGroups={SKILL_GROUPS} />;
+  return <WorkflowBuilder name={SELECTED_TEMPLATE_NAME} skillGroups={SKILL_GROUPS} nodes={BUILDER_NODES} wires={BUILDER_WIRES} />;
 }

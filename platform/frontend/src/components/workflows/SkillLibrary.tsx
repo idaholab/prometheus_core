@@ -13,20 +13,7 @@
 import { GripVertical } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { SectionLabel } from "../ui/SectionLabel";
-
-/**
- * Dot colour for a group's skills (Figma D.2):
- * - `data`: cyan, e.g. Get Material Data.
- * - `analysis`: green, used by Analysis and Synthesis.
- * - `control`: indigo, e.g. Checkpoint (SME).
- */
-export type SkillTone = "data" | "analysis" | "control";
-
-const TONE_DOT_CLASSES: Record<SkillTone, string> = {
-  data: "bg-info",
-  analysis: "bg-success",
-  control: "bg-primary",
-};
+import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
 
 export interface Skill {
   id: string;
@@ -53,7 +40,7 @@ interface SkillLibraryItemProps {
 export function SkillLibraryItem({ name, tone }: SkillLibraryItemProps) {
   return (
     <div className="flex h-[34px] items-center gap-2.5 rounded-md border border-base-content/10 bg-base-100 pr-2 pl-3">
-      <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${TONE_DOT_CLASSES[tone]}`} />
+      <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />
       <span className="min-w-0 flex-1 truncate text-xs text-base-content" title={name}>
         {name}
       </span>

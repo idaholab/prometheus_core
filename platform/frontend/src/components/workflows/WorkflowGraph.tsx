@@ -16,39 +16,63 @@ import "@xyflow/react/dist/base.css";
 import {
   WorkflowAgentNode,
   WorkflowCheckpointNode,
+  WorkflowConnectEndpoint,
+  WorkflowSkillNode,
   type AgentNode,
   type CheckpointNode,
+  type ConnectEndpointNode,
+  type SkillNode,
 } from "./WorkflowGraphNodes";
 
-export type WorkflowGraphNode = AgentNode | CheckpointNode;
+export type WorkflowGraphNode = AgentNode | CheckpointNode | SkillNode | ConnectEndpointNode;
 
 export interface WorkflowGraphWire {
   from: string;
   to: string;
+  /** Drawn dashed, e.g. a wire still being connected (D.2). */
+  dashed?: boolean;
 }
 
 interface WorkflowGraphProps {
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
-  /** Layout only (size, margins). The graph fits itself to this box. */
+  /**
+   * Scale the graph to fit its box (default), as in D.1. Pass `false` to draw
+   * it at 100% from its node positions, as on the Builder canvas, so it keeps
+   * its size in a narrow box and is clipped instead.
+   */
+  fit?: boolean;
+  /** Layout only (size, margins). */
   className?: string;
 }
 
 const NODE_TYPES: NodeTypes = {
   agent: WorkflowAgentNode,
   checkpoint: WorkflowCheckpointNode,
+  skill: WorkflowSkillNode,
+  connect: WorkflowConnectEndpoint,
 };
+
+const DASHED_STYLE = { strokeDasharray: "5 4" };
+const DEFAULT_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
 const FIT_VIEW_OPTIONS = { padding: 0.08 };
 
 /**
  * Workflow DAG (Figma D.1, WF-1) on React Flow: agent nodes and checkpoints
- * joined by curved wires. Display only, so dragging, connecting, selecting,
- * zooming and panning are all off.
+ * (D.1), or skill nodes and a connect endpoint (D.2), joined by curved wires.
+ * Display only, so dragging, connecting, selecting, zooming and panning are
+ * all off; a node's `selected` field only sets its style.
  */
-export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphProps) {
+export function WorkflowGraph({ nodes, wires, fit = true, className = "" }: WorkflowGraphProps) {
   const edges = useMemo<Edge[]>(
-    () => wires.map(({ from, to }) => ({ id: `${from}->${to}`, source: from, target: to })),
+    () =>
+      wires.map(({ from, to, dashed }) => ({
+        id: `${from}->${to}`,
+        source: from,
+        target: to,
+        style: dashed ? DASHED_STYLE : undefined,
+      })),
     [wires],
   );
 
@@ -58,11 +82,11 @@ export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphPro
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
   useEffect(() => {
     const box = boxRef.current;
-    if (!box || !flow) return;
+    if (!box || !flow || !fit) return;
     const observer = new ResizeObserver(() => void flow.fitView(FIT_VIEW_OPTIONS));
     observer.observe(box);
     return () => observer.disconnect();
-  }, [flow]);
+  }, [flow, fit]);
 
   return (
     // React Flow reads its colours from these variables, so the wires and its
@@ -78,8 +102,9 @@ export function WorkflowGraph({ nodes, wires, className = "" }: WorkflowGraphPro
         onInit={setFlow}
         // React Flow stops zooming out at 0.5, which clips the graph in narrow boxes.
         minZoom={0.1}
-        fitView
+        fitView={fit}
         fitViewOptions={FIT_VIEW_OPTIONS}
+        defaultViewport={DEFAULT_VIEWPORT}
         nodesDraggable={false}
         nodesConnectable={false}
         nodesFocusable={false}

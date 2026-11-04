@@ -12,18 +12,19 @@
 
 import { Button } from "../ui/Button";
 import { SectionLabel } from "../ui/SectionLabel";
+import { BuilderCanvas } from "./BuilderCanvas";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
 interface WorkflowBuilderProps {
   /** Workflow being edited, e.g. "Comprehensive Material Analysis". */
   name: string;
   /** Skills offered in the library column, in display order. */
   skillGroups: SkillGroup[];
+  /** The workflow's graph, drawn on the canvas. */
+  nodes: WorkflowGraphNode[];
+  wires: WorkflowGraphWire[];
 }
-
-/** D.2's canvas dot grid, from the theme's text colour so it shows in both themes. */
-const CANVAS_DOTS =
-  "radial-gradient(circle, color-mix(in oklab, var(--color-base-content) 15%, transparent) 1px, transparent 1px)";
 
 /**
  * Workflow Builder shell (Figma D.2): a toolbar with the workflow's name and
@@ -32,10 +33,10 @@ const CANVAS_DOTS =
  * - From lg (1024px) the columns sit side by side, at D.2's widths from xl.
  * - Below lg they stack, library first, and the page scrolls vertically.
  *
- * The canvas and inspector are filled in by WB-3 and WB-4, and the toolbar
+ * The inspector is filled in by WB-4, and the toolbar
  * buttons have no handlers yet.
  */
-export function WorkflowBuilder({ name, skillGroups }: WorkflowBuilderProps) {
+export function WorkflowBuilder({ name, skillGroups, nodes, wires }: WorkflowBuilderProps) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-9 gap-y-3 border-b border-base-content/10 bg-base-200 px-6 py-3">
@@ -58,12 +59,9 @@ export function WorkflowBuilder({ name, skillGroups }: WorkflowBuilderProps) {
           <SkillLibrary groups={skillGroups} />
         </aside>
 
-        {/* Dot grid from D.2; the canvas itself lands in WB-3. */}
-        <section
-          aria-label="Canvas"
-          className="min-h-[400px] bg-base-300 bg-size-[20px_20px] lg:min-h-0"
-          style={{ backgroundImage: CANVAS_DOTS }}
-        />
+        <section aria-label="Canvas" className="min-w-0 lg:min-h-0">
+          <BuilderCanvas nodes={nodes} wires={wires} />
+        </section>
 
         <aside
           aria-label="Node inspector"
