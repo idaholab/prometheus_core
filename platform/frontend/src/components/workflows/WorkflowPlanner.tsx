@@ -68,7 +68,7 @@ export function WorkflowPlanner({ plan, onModifyPlan }: { plan: WorkflowPlan; on
         {/* Segments wrap at the slashes, never mid-word. */}
         <span className="flex min-w-0 flex-wrap gap-x-1.5">
           {plan.path.map((segment, i) => (
-            <span key={segment} className="break-all text-[10px] leading-3 tracking-[0.1em] text-primary">
+            <span key={segment} className="break-all text-[10px] leading-3 tracking-widest text-primary">
               {i > 0 && "/ "}
               {segment}
             </span>
@@ -109,7 +109,7 @@ export function WorkflowPlanner({ plan, onModifyPlan }: { plan: WorkflowPlan; on
         <WorkflowGraph
           nodes={plan.nodes}
           wires={plan.wires}
-          className="h-[628px] w-full min-w-[772px] lg:min-w-0"
+          className="h-157 w-full min-w-193 lg:min-w-0"
         />
       </div>
     </div>

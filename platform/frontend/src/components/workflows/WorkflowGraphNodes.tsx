@@ -69,7 +69,7 @@ const HANDLE_CLASS = "!size-px !min-h-0 !min-w-0 !border-0 !bg-transparent";
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 font-mono">
-      <span className="w-[18px] shrink-0 text-[8.5px] leading-3 text-base-content/50">{label}</span>
+      <span className="w-4.5 shrink-0 text-[8.5px] leading-3 text-base-content/50">{label}</span>
       <span className="min-w-0 flex-1 truncate text-[9px] leading-3 text-base-content/70">{value}</span>
     </div>
   );
@@ -105,7 +105,7 @@ export function WorkflowAgentNode({ data }: NodeProps<AgentNode>) {
  */
 export function WorkflowCheckpointNode({ data }: NodeProps<CheckpointNode>) {
   return (
-    <div className="relative flex size-[42px] items-center justify-center">
+    <div className="relative flex size-10.5 items-center justify-center">
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
       <span aria-hidden="true" className="size-8 shrink-0 rotate-45 rounded border-[1.5px] border-primary bg-primary/20" />
       <div className="absolute left-full top-1/2 ml-2 flex -translate-y-1/2 flex-col whitespace-nowrap font-mono uppercase">
@@ -166,7 +166,7 @@ export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
 export function WorkflowConnectEndpoint({ data }: NodeProps<ConnectEndpointNode>) {
   return (
     <div className="relative flex size-2.5 items-center justify-center">
-      <Handle type="target" position={Position.Top} isConnectable={false} className={`${HANDLE_CLASS} !top-1/2`} />
+      <Handle type="target" position={Position.Top} isConnectable={false} className={`${HANDLE_CLASS} top-1/2!`} />
       <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-primary bg-base-content/80" />
       <span className="absolute left-full top-1/2 ml-2.5 -translate-y-1/2 whitespace-nowrap font-mono text-[9px] leading-3 tracking-[0.04em] text-base-content/50">
         {data.label}

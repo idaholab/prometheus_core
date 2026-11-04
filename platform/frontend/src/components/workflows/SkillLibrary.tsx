@@ -39,7 +39,7 @@ interface SkillLibraryItemProps {
  */
 export function SkillLibraryItem({ name, tone }: SkillLibraryItemProps) {
   return (
-    <div className="flex h-[34px] items-center gap-2.5 rounded-md border border-base-content/10 bg-base-100 pr-2 pl-3">
+    <div className="flex h-8.5 items-center gap-2.5 rounded-md border border-base-content/10 bg-base-100 pr-2 pl-3">
       <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />
       <span className="min-w-0 flex-1 truncate text-xs text-base-content" title={name}>
         {name}

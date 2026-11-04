@@ -35,10 +35,10 @@ const CANVAS_DOTS =
  */
 export function BuilderCanvas({ nodes, wires }: BuilderCanvasProps) {
   return (
-    <div className="relative h-full min-h-[520px] bg-base-300">
+    <div className="relative h-full min-h-130 bg-base-300">
       <div className="absolute inset-0 overflow-auto">
         <div
-          className="relative h-full min-h-[520px] w-full min-w-[600px] bg-size-[20px_20px]"
+          className="relative h-full min-h-130 w-full min-w-150 bg-size-[20px_20px]"
           style={{ backgroundImage: CANVAS_DOTS }}
         >
           <WorkflowGraph
