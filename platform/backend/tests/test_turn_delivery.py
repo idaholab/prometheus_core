@@ -205,12 +205,125 @@ async def test_turn_result_is_visible_to_another_worker(session_store, valkey_se
     }
 
 
-async def test_turn_state_expires(session_store, fake_redis):
-    from app.sessions import TURN_TTL_SECONDS
+async def test_a_running_turn_is_a_short_lease_and_a_finished_one_lasts_an_hour(session_store, fake_redis):
+    """A running turn's state expires soon unless renewed, so a turn whose worker died
+    reads as 404 within a minute; a finished turn's result is kept for the full hour."""
+    from app.sessions import TURN_LEASE_SECONDS, TURN_TTL_SECONDS
 
+    key = f"session:sid-ttl:turn:{TURN}"
     await session_store.start_turn("sid-ttl", TURN)
-    ttl = await fake_redis.ttl(f"session:sid-ttl:turn:{TURN}")
-    assert 0 < ttl <= TURN_TTL_SECONDS
+    assert TURN_LEASE_SECONDS - 5 < await fake_redis.ttl(key) <= TURN_LEASE_SECONDS
+
+    await fake_redis.expire(key, 3)
+    await session_store.renew_turn("sid-ttl", TURN)
+    assert TURN_LEASE_SECONDS - 5 < await fake_redis.ttl(key) <= TURN_LEASE_SECONDS
+
+    await session_store.finish_turn("sid-ttl", TURN, {"turn_id": TURN, "status": "answer"})
+    assert TURN_TTL_SECONDS - 60 < await fake_redis.ttl(key) <= TURN_TTL_SECONDS
+
+
+async def test_a_turn_whose_lease_ran_out_reads_as_no_turn(session_store, fake_redis):
+    """The worker died mid-turn: nothing renews the lease, so the lookup stops saying
+    "running" and the client can stop waiting."""
+    await session_store.start_turn("sid-dead", TURN)
+    await fake_redis.delete(f"session:sid-dead:turn:{TURN}")  # what expiry does
+    assert await session_store.get_turn("sid-dead", TURN) is None
+
+
+async def test_the_turn_lease_is_renewed_while_the_agent_works(monkeypatch, session_store):
+    """A long turn keeps its lease even when the agent sends no status line."""
+    import asyncio
+
+    from app.routers import chat as chat_router
+
+    monkeypatch.setattr(chat_router, "TURN_LEASE_REFRESH_SECONDS", 0)
+    renewed: list[str] = []
+
+    async def renew(sid, turn_id):
+        renewed.append(turn_id)
+
+    monkeypatch.setattr(session_store, "renew_turn", renew)
+    lease = asyncio.create_task(chat_router._keep_turn_alive(session_store, "sid-l", TURN))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    await asyncio.wait_for(chat_router._end_lease(lease), timeout=2)
+    count = len(renewed)
+    assert count >= 2 and set(renewed) == {TURN}
+
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert len(renewed) == count, "no renewal after the lease ended"
+
+
+async def test_a_failed_renewal_is_retried_on_the_next_tick(monkeypatch, session_store):
+    import asyncio
+
+    from app.routers import chat as chat_router
+
+    monkeypatch.setattr(chat_router, "TURN_LEASE_REFRESH_SECONDS", 0)
+    calls = 0
+
+    async def flaky(sid, turn_id):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ConnectionError("valkey blip")
+
+    monkeypatch.setattr(session_store, "renew_turn", flaky)
+    lease = asyncio.create_task(chat_router._keep_turn_alive(session_store, "sid-l", TURN))
+    for _ in range(6):
+        await asyncio.sleep(0)
+    await asyncio.wait_for(chat_router._end_lease(lease), timeout=2)
+    assert calls >= 2
+
+
+async def test_a_cancelled_turn_stops_renewing_its_lease(monkeypatch, session_store, valkey_state):
+    """Worker shutdown cancels the request: the lease must end with it, not outlive it."""
+    import asyncio
+
+    from app.routers import chat as chat_router
+    from app.security import TokenClaims
+
+    monkeypatch.setattr(chat_router, "TURN_LEASE_REFRESH_SECONDS", 0)
+    renewed: list[str] = []
+
+    async def renew(sid, turn_id):
+        renewed.append(turn_id)
+
+    monkeypatch.setattr(session_store, "renew_turn", renew)
+    started = asyncio.Event()
+
+    async def hang(*args, **kwargs):
+        started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(chat_service, "handle_turn", hang)
+
+    async def no_token(sub):
+        return None
+
+    monkeypatch.setattr(chat_router.identity, "mint_for_user", no_token)
+
+    from app.main import app
+
+    class _Req:
+        pass
+
+    req = _Req()
+    req.app = app  # type: ignore[attr-defined]
+    claims = TokenClaims(sub="alice", role="user", sid="sid-c", exp=0)
+    body = chat_router.ChatMessageRequest(query="hi", turn_id=TURN)
+    turn = asyncio.create_task(chat_router.post_message(req, body, claims))  # type: ignore[arg-type]
+    await started.wait()
+    turn.cancel()
+    try:
+        await asyncio.wait_for(turn, timeout=2)  # hangs if the lease isn't ended
+    except asyncio.CancelledError:
+        pass
+    count = len(renewed)
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert len(renewed) == count
 
 
 def test_a_turn_whose_result_cannot_be_stored_still_answers_and_announces(monkeypatch, session_store, event_bus):

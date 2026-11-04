@@ -103,10 +103,16 @@ def _turn_key(sid: str, turn_id: str) -> str:
     return f"session:{sid}:turn:{turn_id}"
 
 
-# How long a chat turn's state outlives the turn. Longer than the agent call timeout
-# (``A2AClient``, 900 s), so a client that lost the POST reply can still read the result
-# when its event stream reconnects.
+# How long a chat turn's state outlives the turn. The agent call has no total time bound
+# (``A2AClient``'s 900 s httpx timeout applies to each read of the stream), so this is sized
+# for a long turn plus the time a client needs to reconnect and read the result.
 TURN_TTL_SECONDS = 3600
+# A running turn's state is a lease: the worker running the turn refreshes it every
+# TURN_LEASE_REFRESH_SECONDS (routers/chat.py). If that worker dies mid-turn, nothing
+# will ever finish the turn, so the state expires within TURN_LEASE_SECONDS and a lookup
+# answers 404 instead of "running" for an hour.
+TURN_LEASE_SECONDS = 60
+TURN_LEASE_REFRESH_SECONDS = 20
 
 
 @dataclass(frozen=True)
@@ -434,9 +440,14 @@ class SessionStore:
         the agent a second time.
         """
         created = await self._redis.set(
-            _turn_key(sid, turn_id), json.dumps({"state": "running"}), nx=True, ex=TURN_TTL_SECONDS
+            _turn_key(sid, turn_id), json.dumps({"state": "running"}), nx=True, ex=TURN_LEASE_SECONDS
         )
         return bool(created)
+
+    async def renew_turn(self, sid: str, turn_id: str) -> None:
+        """Extend a running turn's lease. Only the turn's own worker calls this, and it
+        stops before :meth:`finish_turn`, so it never shortens a stored result."""
+        await self._redis.expire(_turn_key(sid, turn_id), TURN_LEASE_SECONDS)
 
     async def finish_turn(self, sid: str, turn_id: str, response: dict[str, Any]) -> None:
         """Store the turn's final (mapped) response, for a client that lost the POST reply."""

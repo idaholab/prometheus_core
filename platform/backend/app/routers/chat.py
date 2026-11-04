@@ -25,6 +25,8 @@ Errors from ``A2AClient.send`` are caught and returned as an ``error``-status
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import uuid
 from typing import Optional
@@ -33,7 +35,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, status as 
 
 from app import identity
 from app.a2a_client import A2AClient
-from app.api_responses import AUTH_RESPONSES
+from app.api_responses import AUTH_RESPONSES, error
 from app.config import settings
 from app.contract import (
     TURN_ID_PATTERN,
@@ -49,7 +51,7 @@ from app.redis_client import get_redis
 from app.security import TokenClaims, current_claims
 from app.services import chat as chat_service
 from app.services import events as events_service
-from app.sessions import get_store
+from app.sessions import TURN_LEASE_REFRESH_SECONDS, get_store
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +108,32 @@ def _get_a2a_client() -> A2AClient:
     return A2AClient(agent_url=settings.agent_url, agent_secret=settings.agent_secret)
 
 
-@router.post("/messages", response_model=ChatMessageResponse)
+_TURN_ID_REUSED = "This turn id was already used; send a new turn with a new id."
+_NO_SUCH_TURN = "No such turn."
+
+
+async def _keep_turn_alive(store, sid: str, turn_id: str) -> None:
+    """Renew the running turn's lease until cancelled (see ``TURN_LEASE_SECONDS``).
+
+    A timer, not the status stream: an agent step can run for minutes without a status
+    line, and its turn is alive all the same."""
+    while True:
+        await asyncio.sleep(TURN_LEASE_REFRESH_SECONDS)
+        try:
+            await store.renew_turn(sid, turn_id)
+        except Exception as exc:  # noqa: BLE001 - a missed renewal is retried next tick
+            logger.warning("Failed to renew the lease of turn %s: %s", turn_id, exc)
+
+
+@router.post(
+    "/messages",
+    response_model=ChatMessageResponse,
+    responses=error(
+        http_status.HTTP_409_CONFLICT,
+        "This session already sent a turn with this `turn_id`; the agent is not run again.",
+        _TURN_ID_REUSED,
+    ),
+)
 async def post_message(
     request: Request,
     body: ChatMessageRequest,
@@ -140,12 +167,13 @@ async def post_message(
     if not await store.start_turn(claims.sid, turn_id):
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
-            detail="This turn id was already used; send a new turn with a new id.",
+            detail=_TURN_ID_REUSED,
         )
     event_bus = _get_event_bus(request)
     on_status = _make_on_status(event_bus, claims.sid, turn_id)
     user_token = await identity.mint_for_user(claims.sub)
 
+    lease = asyncio.create_task(_keep_turn_alive(store, claims.sid, turn_id))
     try:
         response = await chat_service.handle_turn(
             _get_a2a_client(),
@@ -171,8 +199,15 @@ async def post_message(
             status=ChatStatus.ERROR,
             message=f"Error communicating with agent: {exc}",
         )
+        await _end_lease(lease)
         await _deliver(store, event_bus, claims.sid, response)
         return response
+    except BaseException:
+        # Cancelled (e.g. the worker shuts down): stop renewing, so the lease runs out and
+        # a client asking about this turn hears 404 rather than "running".
+        await _end_lease(lease)
+        raise
+    await _end_lease(lease)
 
     # T-4: a fast-finishing backgrounded task can reach a terminal state before the SSE
     # subscriber sees the event; re-check the node once so its completion isn't lost.
@@ -192,6 +227,14 @@ async def post_message(
     return response
 
 
+async def _end_lease(lease: "asyncio.Task[None]") -> None:
+    """Stop renewing the turn's lease, and wait until it has stopped: ``finish_turn`` must
+    not be followed by a renewal, which would cut the stored result's TTL to the lease's."""
+    lease.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await lease
+
+
 async def _deliver(store, event_bus, sid: str, response: ChatMessageResponse) -> None:
     """Store the finished turn and announce it with ``turn_done``, besides returning it.
 
@@ -208,7 +251,16 @@ async def _deliver(store, event_bus, sid: str, response: ChatMessageResponse) ->
         await event_bus.publish(sid, TurnDoneEvent(turn_id=response.turn_id, response=response))
 
 
-@router.get("/turns/{turn_id}", response_model=TurnStateResponse)
+@router.get(
+    "/turns/{turn_id}",
+    response_model=TurnStateResponse,
+    responses=error(
+        http_status.HTTP_404_NOT_FOUND,
+        "This session has no such turn: it never started, its result expired, the worker running "
+        "it stopped, or it belongs to another session.",
+        _NO_SUCH_TURN,
+    ),
+)
 async def get_turn(
     request: Request,
     turn_id: str = Path(pattern=TURN_ID_PATTERN),
@@ -219,11 +271,11 @@ async def get_turn(
     For a client that lost track of a turn: its POST failed at the network level, or its
     event stream reconnected while the turn was in flight. Read once at those moments;
     the ``turn_done`` event is the normal path, so don't poll this. 404 when this session
-    has no such turn (never started, expired, or another session's).
+    has no such turn (never started, expired, its worker stopped, or another session's).
     """
     state = await get_store(request).get_turn(claims.sid, turn_id)
     if state is None:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="No such turn.")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_TURN)
     if state.get("state") == "done" and isinstance(state.get("response"), dict):
         return TurnStateResponse(
             turn_id=turn_id, state="done", response=ChatMessageResponse.model_validate(state["response"])
