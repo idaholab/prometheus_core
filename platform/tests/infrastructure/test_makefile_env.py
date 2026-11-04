@@ -84,6 +84,78 @@ def test_answers_saved_on_the_first_run_count_in_that_run(platform, goal):
         assert "scripts/deeplynx_setup.py" in result.stdout
 
 
+@pytest.fixture
+def real_platform(tmp_path: Path, project_root: Path) -> Path:
+    """The platform folder as `make` sees it, with the real init_env.py and the SDK's LLM profiles it reads."""
+    root = tmp_path / "platform"
+    (root / "scripts").mkdir(parents=True)
+    shutil.copy(project_root / "Makefile", root)
+    shutil.copy(project_root / ".env.example", root)
+    shutil.copy(project_root / "scripts" / "init_env.py", root / "scripts")
+    shutil.copytree(
+        project_root.parent / "sdk" / "prometheus_api" / "llm_configs",
+        tmp_path / "sdk" / "prometheus_api" / "llm_configs",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    return root
+
+
+def make_real(root: Path, *goals: str, **env: str) -> subprocess.CompletedProcess:
+    """`make -n` with no terminal (stdin closed), the way CI and an assistant run it."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV", "LLM_"))}
+    return subprocess.run(
+        ["make", "-n", "-k", *goals],
+        cwd=root,
+        env={**clean, "INIT_ENV_ON_DRY_RUN": "true", **env},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_the_real_script_creates_env_through_the_makefile_in_one_run(real_platform):
+    """What `make up` does on a fresh clone: no stub, the real script and Makefile together."""
+    result = make_real(real_platform, "up", LLM_CONFIG_PROFILE="ollama")
+
+    env = real_platform / ".env"
+    assert env.exists(), result.stderr
+    assert oct(env.stat().st_mode & 0o777) == "0o600"
+    written = dict(line.split("=", 1) for line in env.read_text().splitlines() if "=" in line and line[0] != "#")
+    assert written["LLM_CONFIG_PROFILE"] == "ollama"
+    assert written["AGENT_SECRET"] and written["BACKEND_JWT_SECRET"]
+    # No terminal: both questions are skipped, and it says so
+    assert "Not asked (no terminal): LOCAL_SDK, LOCAL_DEEPLYNX stay false" in result.stdout
+    assert "build-local" not in result.stdout
+
+
+def test_the_real_script_stops_make_when_the_profile_is_missing(real_platform):
+    """No terminal and no profile: the script exits 1, and make stops before any start recipe."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("LOCAL_", "MAKE", "INIT_ENV", "LLM_"))}
+    result = subprocess.run(
+        ["make", "-n", "up"],
+        cwd=real_platform,
+        env={**clean, "INIT_ENV_ON_DRY_RUN": "true"},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode != 0
+    assert "LLM_CONFIG_PROFILE is empty" in result.stderr
+    assert "docker compose" not in result.stdout
+
+
+def test_the_real_script_leaves_a_complete_env_for_the_second_run(real_platform):
+    make_real(real_platform, "up", LLM_CONFIG_PROFILE="ollama")
+    first = (real_platform / ".env").read_text()
+    second_run = make_real(real_platform, "up")
+
+    assert (real_platform / ".env").read_text() == first
+    assert "Not asked" not in second_run.stdout
+    assert "Creating .env" not in second_run.stdout
+
+
 def test_a_missing_env_is_announced_once_before_make_looks_for_it(platform):
     """Make 3.81 warns 'No such file or directory' for the include; the line before says that's expected."""
     first = make(platform, "up").stdout
