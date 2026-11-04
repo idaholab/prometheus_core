@@ -92,9 +92,10 @@ export function NodeInspector({ node }: { node: InspectedNode | null }) {
           <Button label="Remove Node" variant="error" outline wide size="sm" className="mt-1" />
         </>
       ) : (
-        <div className="flex flex-col gap-1 font-mono text-[10px] text-base-content/50">
-          <p className="m-0">No node selected.</p>
-          <p className="m-0">Click a node to edit its inputs.</p>
+        // Sizes go on each p: the base layer sets p font-size, so it isn't inherited.
+        <div className="flex flex-col gap-1 font-mono text-base-content/50">
+          <p className="m-0 text-[10px]">No node selected.</p>
+          <p className="m-0 text-[10px]">Click a node to edit its inputs.</p>
         </div>
       )}
     </div>

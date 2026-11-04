@@ -89,7 +89,7 @@ export function BuilderCanvas({ nodes, wires, error }: BuilderCanvasProps) {
         <span className="min-w-9 text-center font-mono text-[10px] text-base-content/70">100%</span>
         <Button variant="ghost" size="xs" icon={<Plus />} ariaLabel="Zoom in" tooltipPlacement="bottom" />
       </div>
-      {error && <ErrorToast message={error} className="absolute right-5 bottom-5 left-5 sm:left-auto sm:w-69" />}
+      {error && <ErrorToast message={error} className="absolute right-5 bottom-5 left-5 sm:left-auto sm:w-69 xl:w-75" />}
     </div>
   );
 }
