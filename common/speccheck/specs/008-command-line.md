@@ -22,8 +22,11 @@ object for scripts and agents.
   `command`, `ok` and `problems` on every exit path, usage errors included (but not `--help`, see
   SPC-REQ-008-01). `ok` MUST be true
   exactly when the command exits 0, so `report`, which exits 0 whatever is wrong, has `ok` true
-  with its problems listed. `check`, `verify` and `report` MUST also give each requirement's ID,
-  status, text without the unimplemented suffix, reason (`null` when it has none) and evidence.
+  with its problems listed. Each problem MUST give its `path`, `line` (0 when it has none),
+  `message` and `code`. A usage or config error MUST also give `error`, an object with `code`
+  `usage` and a `message` saying what is wrong. `check`, `verify` and `report` MUST also give each
+  requirement's ID, status, text without the unimplemented suffix, reason (`null` when it has
+  none) and evidence.
 - SPC-REQ-008-05: Without `--json`, `lint`, `check` and `verify` MUST print problems to stderr, and
   the last line MUST be a summary of the counts. `verify` MUST name the producers that reported and
   those that are missing. With `--quiet`, a run with no problems MUST print nothing, and one with

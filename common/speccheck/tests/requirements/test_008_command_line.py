@@ -246,19 +246,22 @@ def test_json_gives_the_text_and_the_reason(project: Project):
 
 @pytest.mark.covers(
     "SPC-REQ-008-04",
-    "a missing config and an unknown option, each with --json, print one object with ok false and exit 2",
+    "a missing config, an unknown option and a config that isn't TOML, each with --json, print one object with ok false, exit 2, and an error of code usage whose message names what is wrong",
 )
 def test_json_on_a_usage_error_before_any_command_runs(project: Project):
-    """The error paths that fail before the command's own work: still exactly one object."""
-    for argv in (["lint", "--config", "missing.toml", "--json"], ["lint", "--bogus", "--json"]):
+    """The error paths that fail before the command's own work: still exactly one object, with its `error`."""
+    project.write("broken.toml", "specs = \n")
+    for argv, named in (
+        (["lint", "--config", "missing.toml", "--json"], "missing.toml"),
+        (["lint", "--bogus", "--json"], "--bogus"),
+        (["lint", "--config", "broken.toml", "--json"], "broken.toml"),
+    ):
         done = command(project, *argv)
         body = json.loads(done.stdout)
         assert done.returncode == 2 and body["ok"] is False, argv
         assert {"schema_version", "command", "ok", "problems"} <= set(body), argv
+        assert body["error"]["code"] == "usage" and named in body["error"]["message"], (argv, body["error"])
         assert "Traceback" not in done.stderr
-    project.write("broken.toml", "specs = \n")
-    done = command(project, "lint", "--config", "broken.toml", "--json")
-    assert done.returncode == 2 and json.loads(done.stdout)["ok"] is False
 
 
 @pytest.mark.covers(
