@@ -5,6 +5,7 @@
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
+  "ssoSessionIdleTimeout": 5,
   "clients": [
     {
       "clientId": "prometheus-platform",

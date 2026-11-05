@@ -119,6 +119,26 @@ would rather watch than wait on a detached container.
 It returns only once every healthcheck passes, the backend and frontend answer
 on their ports, and all nine agents have registered.
 
+If `make up` stops with `container prometheus_platform-backend-1 is unhealthy`
+and the backend logs say `password authentication failed for user "admin"`, an
+older admin-db volume is still using a previous `ADMIN_DB_PASSWORD`. Postgres
+keeps that password in the volume and ignores the one in `.env`. On WSL2 the
+same failure often leaves the shell's working directory stale, so the next
+`make` prints `getcwd: No such file or directory` and `scripts/init_env.py`
+exits with `FileNotFoundError` even though the file is still there. Drop the
+volumes, re-enter the directory, and start again:
+
+```bash
+make down-v
+cd ..
+cd platform
+make up
+```
+
+`make down-v` deletes the platform volumes, including every local user and
+conversation. The two `cd` commands are what clear the stale WSL directory;
+the prompt can already say `platform` and still need them.
+
 ## 5. Create the first administrator
 
 Open http://localhost:5150. The first-run wizard asks for a username and
