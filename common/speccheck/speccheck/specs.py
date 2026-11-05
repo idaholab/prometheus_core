@@ -24,9 +24,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 OLD_UNTESTED = re.compile(r"⚠ untested\.?\Z")
-"""The old format's marker for a requirement with no test yet, at the end of its text (SPC-REQ-001-11).
+"""The old format's marker for a requirement with no test yet, at the end of its text (SPC-REQ-001-09).
 
-Only at the end, where specs put it, so a requirement can name the marker, as 001-11 does."""
+Only at the end, where specs put it, so a requirement can name the marker, as 001-09 does."""
 
 OLD_PLANNED = re.compile(r"\(planned:.*\)\.?\Z", re.S)
 """The old format's marker for a requirement a later plan step delivers, such as `(planned: step 3b)`, at the end.
@@ -223,7 +223,7 @@ class SpecSet:
 
 
 def old_forms(text: str, id_: str) -> list[tuple[str, str]]:
-    """The old format's markers on a requirement's text, each with what replaces it (SPC-REQ-001-11)."""
+    """The old format's markers on a requirement's text, each with what replaces it (SPC-REQ-001-09)."""
     replace = f"end it with `{UNIMPLEMENTED_EXAMPLE}` if a plan delivers it later, or give it a test"
     found = []
     if OLD_UNTESTED.search(text):
@@ -338,9 +338,6 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
                 "the `status:` line is gone; delete it (a planned requirement ends with `(unimplemented: <reason>)`)"
             )
             problems.append(Problem(name, line_number, message, "status-line-gone"))
-        if in_header and line.startswith("tests:"):
-            message = "the `tests:` line is gone; say which producers may claim this spec in the config instead"
-            problems.append(Problem(name, line_number, message, "tests-line-gone"))
 
         if syntax.bullet_start.match(line):
             match = syntax.bullet.match(line)
@@ -393,7 +390,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
 def removed_list(
     found: list[tuple[int, str]], wrong: Callable[[str], str], name: str, problems: list[Problem]
 ) -> list[str]:
-    """The items a `removed:` line lists, each once (SPC-REQ-001-12, 001-13).
+    """The items a `removed:` line lists, each once (SPC-REQ-001-11, 001-12).
 
     `wrong` says why an item can't be listed, or "". A second `removed:` line, an item `wrong`
     refuses, and an item listed twice are each a problem in `name`, and are left out.
@@ -444,10 +441,6 @@ def load(specs_dir: Path, root: Path, prefix: str = "", require_index: bool = Tr
         )
     removed_specs: list[str] = []
     if index_text is not None:
-        for line_number, line in enumerate(index_text.splitlines(), 1):
-            if line.startswith("id-prefix:"):
-                message = "the `id-prefix:` line is gone; set `id-prefix` in the config instead"
-                problems.append(Problem(rel(index, root), line_number, message, "id-prefix-line-gone"))
         found = header_lines(index_text.splitlines(), "removed")
         removed_specs = removed_list(found, spec_number_problem, rel(index, root), problems)
 

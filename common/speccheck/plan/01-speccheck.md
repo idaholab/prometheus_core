@@ -176,7 +176,7 @@ What differs from the plan above, or settles something it left open:
     dropping `status:` and rejecting the old forms.
   - Changed: 001-06, 001-10, 003-03, 003-09, 003-13, 005-03, 005-04, 005-07, 005-11, 006-07,
     006-08, 008-04. Reused: 001-03 (at least one requirement; was the `status:` line), 001-07 (the
-    suffix; was `Retired.`). New: 001-11 (the old forms), 001-12 (a spec's `removed:`), 001-13
+    suffix; was `Retired.`). New: 001-09 (the old forms), 001-11 (a spec's `removed:`), 001-12
     (the index's `removed:`), 005-12 (the `unimplemented` status).
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.

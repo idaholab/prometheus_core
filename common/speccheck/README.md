@@ -368,8 +368,6 @@ What surprises a project moving onto speccheck:
 - **A workflow needs both pieces:** the upload in each producing job, and the final job, with
   `needs:` on every producer, `if: ${{ !cancelled() }}`, and `speccheck-verify`. Without the final
   job nothing checks the results.
-- **The old checker's settings move to the config.** A spec's `tests:` line and the index's
-  `id-prefix:` line are `lint` problems that say where each setting lives now.
 
 ### Installing it
 
@@ -492,8 +490,6 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `old-marker` | a requirement still has `⚠ untested`, `(planned: ...)` or `Retired.`; the message says what replaces it |
 | `index-missing` | `require-index` is on and there's no `000-index.md` |
 | `index-link-missing` | the index doesn't link a spec |
-| `tests-line-gone` | a spec still has the old `tests:` line; it moved to the config |
-| `id-prefix-line-gone` | the index still has the old `id-prefix:` line; it moved to the config |
 | `unclaimed` | nothing claims a requirement that should be |
 | `failed` | every result that claims a requirement failed, errored, was skipped or didn't run |
 | `not-run` | with `--complete`, the producers that may claim a requirement didn't report |
