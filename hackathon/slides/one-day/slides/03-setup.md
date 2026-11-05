@@ -19,7 +19,7 @@ Note: Lunch is at noon. The first make up builds images, which is idle time; peo
 
 :::: cols 1.1fr 1fr gap=28px
 {.small}
-Run this in a terminal window:
+Run this in a terminal window. **On Windows, use the Ubuntu (WSL2) terminal, not PowerShell or cmd, and keep the clone in your Linux home (`~/projects`), never under `/mnt/c`:**
 
 ```bash {.sm}
 cd ~/projects/prometheus_core/platform
