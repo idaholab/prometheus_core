@@ -114,7 +114,7 @@ make down                      <span class="c"># stop (down-v also deletes uploa
 <strong><code>.env</code> from before?</strong> <code>make up</code> asks in your terminal for each of the two lines your <code>.env</code> doesn't have yet, so a clone from before these questions is asked once on its next <code>make up</code>. A &quot;no&quot; is saved as <code>false</code> and not asked again; change an answer by editing the line (<code>grep -E '^LOCAL_(SDK|DEEPLYNX)=' .env</code> shows both).</div>
 
 <div class="callout bad">
-<strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Your agent doesn't</strong>: restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
+<strong>Every <code>make up</code> or <code>make restart</code> empties the agent registry</strong> (<code>clear-agent-registry</code>). The platform's own agents re-register by themselves. <strong>Yours does only on a base image with the SDK keep-alive</strong> (within about 5 s). On the pinned image, restart it afterwards with <code>docker compose -p &lt;agent-folder&gt; restart</code>.</div>
 
 </div>
 </div>
@@ -994,7 +994,7 @@ make PROMETHEUS_SYSTEM_TESTING=true up  <span class="c"># :8001</span>
 make ps ; make logs SERVICE=client-agent</pre>
 <div class="col">
 <div class="callout bad">
-<strong><code>make up</code> and <code>make restart</code> wipe all agent registrations.</strong> Every run does a full <code>down</code> and deletes the registrations from Valkey. In-tree agents re-register because they restart too. An <strong>external agent</strong> (your template agent) must be restarted afterwards.</div>
+<strong><code>make up</code> and <code>make restart</code> wipe all agent registrations.</strong> Every run does a full <code>down</code> and deletes the registrations from Valkey. In-tree agents re-register because they restart too. An <strong>external agent</strong> (your template agent) must be restarted afterwards, unless its base image has the SDK keep-alive: then it is back within about 5 s.</div>
 
 <p class="small"><code>restart</code> = the same without <code>--build</code>. <code>ng-up</code> / <code>ng-restart</code> skip regenerating the agents file. <code>docker-compose.override.yml</code> is picked up automatically if present (gitignored).</p>
 </div>
@@ -1680,7 +1680,7 @@ No DeepLynx configured → agents exit at startup with &quot;Invalid required De
 </tr>
 <tr>
 <td>The agent is running but not in <code>/agents</code></td>
-<td>The registration was wiped by <code>make up</code>/<code>restart</code>. <code>docker compose -p &lt;agent-folder&gt; restart</code> re-registers it; it is routable within about 60 s.</td>
+<td>The registration was wiped by <code>make up</code>/<code>restart</code>. With the SDK keep-alive it is back within about 5 s; otherwise <code>docker compose -p &lt;agent-folder&gt; restart</code> re-registers it. Either way the orchestrator sees it within about 60 s more.</td>
 </tr>
 </tbody>
 </table>

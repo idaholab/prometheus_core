@@ -55,8 +55,8 @@ the plan. Ask (header `Plan`): "Looks right (Recommended)", "Change something".
    set -a; source <platform>/.env; set +a; curl -s -H "Authorization: Bearer $AGENT_SECRET" localhost:8600/v1/agents | python3 -c 'import json, sys; [print(a.get("agent_name"), sorted(s.get("id") for s in (a.get("agent_card_params") or {}).get("skills", []))) for a in json.load(sys.stdin)]'
    ```
 
-   The route key must not be listed: the same key deletes the other agent's entry
-   (`registry.py:123-130`). Each skill id matches `^[A-Za-z0-9_-]{1,64}$`, is not `ask_user`, and
+   The route key must not be listed: a POST replaces the entry of the same name, so your agent
+   would replace the other agent's entry (`AgentRegistryClient.register_once_async`). Each skill id matches `^[A-Za-z0-9_-]{1,64}$`, is not `ask_user`, and
    is not listed.
 4. Ask the check question `card-interface`. Offer `/how explain the agent card`.
 

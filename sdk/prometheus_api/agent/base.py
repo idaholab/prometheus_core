@@ -1461,6 +1461,59 @@ class PrometheusAgent:
             backoff_factor=backoff_factor,
         )
 
+    @staticmethod
+    def registry_check_interval() -> float:
+        """Seconds between registry checks after startup; 0 disables them.
+
+        ``REGISTRY_CHECK_INTERVAL_SECONDS`` (default 5); see
+        ``AgentRegistryClient.resolve_check_interval``. Each check is one GET of
+        the registry's agent list.
+        """
+        return AgentRegistryClient.resolve_check_interval()
+
+    def _overrides_registration(self) -> bool:
+        """Whether this agent replaces ``register_with_registry_async``.
+
+        Such an agent owns its registration (a different name or payload, or no
+        registration at all), so the SDK does not re-register it with the default
+        payload. It can still run ``AgentRegistryClient.keep_registered_async``
+        itself.
+        """
+        own = type(self).register_with_registry_async
+        return own is not PrometheusAgent.register_with_registry_async
+
+    async def keep_registered_async(self, agent_card: AgentCard) -> None:
+        """Register at startup, then re-register whenever the registry forgets
+        this agent (a registry restart or clear while the agent keeps running).
+
+        This is what the Starlette lifespan runs at startup. The checks also run
+        when startup registration gave up (the registry was not up yet), so the
+        agent joins once the registry appears. They are skipped when the interval
+        is 0 and when the agent overrides ``register_with_registry_async``. There is
+        always a registry URL (``registry_url`` falls back to the LiteLLM default),
+        so a standalone agent runs the checks too; its failures are logged at
+        WARNING once, then at DEBUG until a check succeeds.
+        """
+        await self.register_with_registry_async(agent_card)
+        interval = self.registry_check_interval()
+        if interval <= 0:
+            return
+        if self._overrides_registration():
+            logger.warning(
+                "%s overrides register_with_registry_async, so the SDK does not check that "
+                "the registry still lists it (calling super() does not bring the checks "
+                "back); call AgentRegistryClient.register_and_keep_registered_async from "
+                "the override to keep it listed",
+                type(self).__name__,
+            )
+            return
+        registry_client = self._registry_client()
+        if registry_client is None:
+            return
+        await registry_client.keep_registered_async(
+            agent_card, raw_agent_card=self.agent_card_dict, interval=interval
+        )
+
     @property
     def execution_record_id(self) -> Optional[int]:
         """DeepLynx execution item ID for the active request, if any."""
@@ -2143,7 +2196,7 @@ class PrometheusAgent:
         async with self.lifespan(app):
             if register_on_startup:
                 registration_task = asyncio.create_task(
-                    self.register_with_registry_async(agent_card),
+                    self.keep_registered_async(agent_card),
                     name=f"{self.agent_name}-registry-registration",
                 )
                 registration_task.add_done_callback(self._log_background_registration_result)

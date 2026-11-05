@@ -1,6 +1,6 @@
 # Stale docs: what older docs say, and what the code does now
 
-Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310, #322 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 
@@ -20,6 +20,7 @@ Trust the code, and tell a mentor (deck 01, slide 12 and A18-A19; deck 04, A3).
 | `setup_agent.py --help` shows arguments | `main()` ignores them; it is interactive only (`setup_agent.py:389-400`) |
 | Clone DeepLynx, `cp .env_sample .env`, make a project and API key in its UI, paste `DEEPLYNX_*` with `http://prometheus.host.internal:5000/api/v1` into the platform `.env` | `LOCAL_DEEPLYNX=true` in the platform `.env`: every start runs `make deeplynx-setup`, which writes `DEEPLYNX_*` with `http://deeplynx-server:5000/api/v1` (`artifacts.md`, "Local DeepLynx") |
 | Host run with `AGENT_SECRET_REQUIRED=false` only | Also `USER_IDENTITY_REQUIRED=false`, else "No 'userToken' found" |
+| "Your agent registers only at startup: restart it after a platform `make up`" | True on the pinned base image (`platform/Makefile`). With the re-registration checks (#322; the log says "Checking the registry still lists this agent every") a running agent registers again within about 5 s (`REGISTRY_CHECK_INTERVAL_SECONDS`); restart only if it does not |
 
 Old text remains in the platform `docs/docs/` pages, the template `TUTORIAL.md` and `README.md`, and
 `prometheus_api/docs/agent/MULTI_USER.md`. "Planner tool" means "orchestrator tool".

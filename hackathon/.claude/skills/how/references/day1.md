@@ -1,13 +1,14 @@
 # Day 1: the hello-world agent
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Four parts (deck 05, slide 1). You are done when `/agents` lists your agent, the chat returns your greeting, and
 your PR is approved. With Claude Code, `/diagnose` checks the laptop, and `/create-agent` does steps 2 to 4.
 
 Names: `<you>` is your login (`gh api user --hostname github.inl.gov -q .login`). The card is `Hello <You> Agent`,
 the skill id `hello_<you>_greeting` (`-` to `_`), the container `hello-<you>-agent`. Use your own names: an agent
-with the same card name replaces yours (`registry.py:123-130`). Keep the four clones side by side.
+with the same card name replaces yours (a POST replaces the entry of the same name,
+`AgentRegistryClient.register_once_async`). Keep the four clones side by side.
 
 ## Step 1. Check the platform
 
