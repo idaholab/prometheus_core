@@ -36,7 +36,7 @@ from typing import Any, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from starlette.background import BackgroundTask
 
 from app import uri_resolver
@@ -173,7 +173,27 @@ async def get_artifact_content(
 _REPORT_CSP = "sandbox allow-scripts allow-popups; connect-src 'none'"
 # A baked notebook with inline Plotly is a few MB; refuse anything far larger.
 _MAX_REPORT_BYTES = 64 * 1024 * 1024
-_REPORT_UNAVAILABLE = "The report could not be loaded from storage."
+# Shown inside the viewer's frame when there is no report to serve: the frame is the
+# only request for the report, so the failure has to be a page it can display.
+_REPORT_UNAVAILABLE_HTML = (
+    '<!doctype html><html><head><meta charset="utf-8"><title>Report unavailable</title></head>'
+    '<body style="font-family:system-ui,sans-serif;font-size:14px;margin:16px;color:#555">'
+    "<p>The report could not be loaded. Download the notebook to view the results.</p>"
+    "</body></html>"
+)
+_REPORT_HEADERS = {
+    "Content-Security-Policy": _REPORT_CSP,
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+def _report_unavailable(status_code: int) -> HTMLResponse:
+    """The fixed notice the viewer's frame shows instead of the report (no URI echoed)."""
+    return HTMLResponse(
+        _REPORT_UNAVAILABLE_HTML,
+        status_code=status_code,
+        headers={**_REPORT_HEADERS, "Cache-Control": "no-store"},
+    )
 
 
 @router.get("/artifacts/{artifact_id}/report")
@@ -189,23 +209,17 @@ async def get_artifact_report(
     notebook itself. Only ``deeplynx://`` is served, and the file id comes from the
     URI's item id (``services.artifacts.report_file_id``), so no service shares a disk
     with the agent and the producer cannot point the backend at another address.
+
+    The viewer's frame is the only request for the report, so a missing or unreadable
+    report answers ``404``/``502`` with a short HTML notice the frame can show.
     """
     store = get_store(request)
     session = await store.get_or_create(claims.sid)
 
     artifact = _find_artifact(session, artifact_id)
-    if artifact is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail=f"Artifact {artifact_id!r} is not in this session's catalog.",
-        )
-
-    file_id = report_file_id(artifact)
-    if file_id is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail=f"Artifact {artifact_id!r} has no report.",
-        )
+    file_id = report_file_id(artifact) if artifact is not None else None
+    if artifact is None or file_id is None:
+        return _report_unavailable(http_status.HTTP_404_NOT_FOUND)
     uri = str(artifact["metadata"]["report"]["uri"])
 
     name = f"{Path(str(artifact.get('name') or 'report')).stem}.html"
@@ -221,10 +235,12 @@ async def get_artifact_report(
         )
         if local_path is None or not local_path.is_file():
             logger.warning("Report of artifact %r (DeepLynx file %d) could not be resolved", artifact_id, file_id)
-            raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=_REPORT_UNAVAILABLE)
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return _report_unavailable(http_status.HTTP_502_BAD_GATEWAY)
         if local_path.stat().st_size > _MAX_REPORT_BYTES:
             logger.warning("Report of artifact %r (DeepLynx file %d) exceeds the size cap", artifact_id, file_id)
-            raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=_REPORT_UNAVAILABLE)
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return _report_unavailable(http_status.HTTP_502_BAD_GATEWAY)
     except BaseException:
         # Clean up on every failure, including a resolver that raises.
         shutil.rmtree(cache_dir, ignore_errors=True)
@@ -234,8 +250,7 @@ async def get_artifact_report(
         media_type="text/html",
         headers={
             **_content_disposition(name, "inline"),
-            "Content-Security-Policy": _REPORT_CSP,
-            "X-Content-Type-Options": "nosniff",
+            **_REPORT_HEADERS,
             # Per-user (the session's catalog), so never in a shared cache.
             "Cache-Control": "private, max-age=300",
         },

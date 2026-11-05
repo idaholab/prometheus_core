@@ -27,15 +27,13 @@
  *   - downloadUrl → the artifact content proxy (`GET /api/artifacts/{id}/content`),
  *     which streams the `.ipynb` bytes for download.
  *
- * The frame loads lazily. Its sandboxed document is opaque to us, so once it has
- * loaded the viewer re-checks the report URL (a private-cacheable response, so
- * usually a cache hit); a 404/502 swaps the frame for a short notice, leaving the
- * notebook download as the way in, instead of raw JSON in a 760px frame.
+ * The frame loads lazily and the report is fetched once, by the frame. When the
+ * report cannot be served the route answers with a short HTML notice (same
+ * sandbox), so the frame shows that notice and the download stays the way in.
  *
  * Mirrors PdfViewerElement / ReportElement (daisyui card + iframe + header link).
  */
 
-import { useEffect, useRef, useState } from "react";
 import { FileDown, FileText } from "lucide-react";
 import type { ArtifactLink } from "@/lib/api/types";
 import type { ViewerProps } from "@/lib/elements/elements";
@@ -59,27 +57,6 @@ export function UQNotebookElement({ element }: ViewerProps) {
   } = (element.props ?? {}) as UQProps;
 
   const name = filename || element.name || "UQ analysis";
-  const [reportFailed, setReportFailed] = useState(false);
-  const probe = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    setReportFailed(false);
-    return () => probe.current?.abort();
-  }, [reportUrl]);
-
-  const checkReport = () => {
-    probe.current?.abort();
-    const controller = new AbortController();
-    probe.current = controller;
-    fetch(reportUrl, { credentials: "same-origin", signal: controller.signal })
-      .then((resp) => {
-        if (!resp.ok) setReportFailed(true);
-      })
-      .catch((err: unknown) => {
-        if (!controller.signal.aborted) setReportFailed(err instanceof Error);
-      });
-  };
-
   if (!reportUrl && !downloadUrl) return null;
 
   return (
@@ -104,12 +81,7 @@ export function UQNotebookElement({ element }: ViewerProps) {
           )}
         </div>
       </div>
-      {reportUrl && reportFailed && (
-        <p role="status" className="m-0 px-3 py-4 text-sm text-base-content/70">
-          The report could not be loaded.{downloadUrl ? " Download the notebook to view the results." : ""}
-        </p>
-      )}
-      {reportUrl && !reportFailed && (
+      {reportUrl && (
         // The report runs its own scripts (Plotly); a sandbox without
         // allow-same-origin keeps them away from the platform's cookies and DOM,
         // and any popup it opens stays sandboxed.
@@ -118,7 +90,6 @@ export function UQNotebookElement({ element }: ViewerProps) {
           title={name}
           sandbox="allow-scripts allow-popups"
           loading="lazy"
-          onLoad={checkReport}
           style={{ height }}
           className="w-full bg-base-100"
         />

@@ -398,8 +398,10 @@ URIs and any producer-supplied `deeplynx_file_id` are ignored. Served inline as
 `text/html` with `Content-Security-Policy: sandbox allow-scripts allow-popups; connect-src 'none'`
 (the report's scripts run in an opaque origin), `X-Content-Type-Options: nosniff`
 and `Cache-Control: private, max-age=300`. `404` when the artifact is not in the
-session's catalog or has no DeepLynx report; `502` (fixed message, no URI echoed)
-when storage cannot serve it or the report exceeds 64 MiB.
+session's catalog or has no DeepLynx report; `502` when storage cannot serve it or
+the report exceeds 64 MiB. Both failures answer with a short fixed HTML notice (same
+CSP, `Cache-Control: no-store`, no URI echoed), because the viewer's frame is the
+only request for the report and shows whatever the route returns.
 
 ## Chat history
 

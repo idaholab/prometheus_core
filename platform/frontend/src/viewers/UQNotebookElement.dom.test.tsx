@@ -14,7 +14,7 @@
 /* The UQ notebook viewer, reached the way the chat reaches it: an artifact goes through
  * the adapter and the element registry, and the user sees the baked report inline with
  * its download and agent-attached buttons. */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ElementList } from "@/components/ElementRenderer";
 import type { ArtifactMeta } from "@/lib/api/types";
@@ -53,6 +53,8 @@ test("a UQ artifact shows its baked report inline, with a notebook download and 
     { label: "Open interactive dashboard", url: "https://uq.example/console/run-7" },
     { label: "Not a web link", url: "javascript:alert(1)" },
   ];
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
   render(<ElementList elements={[artifactToElement(uqArtifact({ links }))]} />);
 
   const frame = screen.getByTitle("uq_bank_worth.ipynb");
@@ -74,6 +76,8 @@ test("a UQ artifact shows its baked report inline, with a notebook download and 
   expect(dashboard).toHaveAttribute("href", "https://uq.example/console/run-7");
   expect(dashboard).toHaveAttribute("target", "_blank");
   expect(screen.queryByText("Not a web link")).not.toBeInTheDocument();
+  // The frame is the only request for the report: the viewer fetches nothing itself.
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 test("without a filename or download URL the viewer falls back to the element name and hides the download", () => {
@@ -99,64 +103,4 @@ test("a UQ artifact whose producer attached no report shows only the notebook do
     "href",
     "/api/artifacts/uq-7/content",
   );
-});
-
-test("a report that fails to load falls back to the notebook download", async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 502 }));
-  vi.stubGlobal("fetch", fetchMock);
-  render(<ElementList elements={[artifactToElement(uqArtifact())]} />);
-
-  fireEvent.load(screen.getByTitle("uq_bank_worth.ipynb"));
-
-  expect(await screen.findByRole("status")).toHaveTextContent("The report could not be loaded.");
-  expect(fetchMock).toHaveBeenCalledWith("/api/artifacts/uq-7/report", expect.objectContaining({ credentials: "same-origin" }));
-  expect(screen.queryByTitle("uq_bank_worth.ipynb")).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Download uq_bank_worth.ipynb notebook" })).toHaveAttribute(
-    "href",
-    "/api/artifacts/uq-7/content",
-  );
-});
-
-test("a report that loads keeps the frame", async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response("<html></html>", { status: 200 }));
-  vi.stubGlobal("fetch", fetchMock);
-  render(<ElementList elements={[artifactToElement(uqArtifact())]} />);
-
-  fireEvent.load(screen.getByTitle("uq_bank_worth.ipynb"));
-
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  expect(screen.getByTitle("uq_bank_worth.ipynb").tagName).toBe("IFRAME");
-  expect(screen.queryByRole("status")).not.toBeInTheDocument();
-});
-
-test("a network error on the report check also falls back", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
-  render(<UQNotebookElement element={{ type: "custom", props: { reportUrl: "/r" } }} />);
-
-  fireEvent.load(screen.getByTitle("UQ analysis"));
-
-  expect(await screen.findByRole("status")).toHaveTextContent("The report could not be loaded.");
-});
-
-test("a report check aborted by unmounting is ignored", async () => {
-  let signal: AbortSignal | undefined;
-  let rejectFetch!: (e: unknown) => void;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((_url: string, init: RequestInit) => {
-      signal = init.signal ?? undefined;
-      return new Promise((_res, rej) => {
-        rejectFetch = rej;
-      });
-    }),
-  );
-  const { unmount } = render(<UQNotebookElement element={{ type: "custom", props: { reportUrl: "/r" } }} />);
-  fireEvent.load(screen.getByTitle("UQ analysis"));
-  unmount();
-  expect(signal?.aborted).toBe(true);
-  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-  rejectFetch(new DOMException("aborted", "AbortError"));
-  await new Promise((r) => setTimeout(r, 0));
-  expect(errors).not.toHaveBeenCalled(); // no state update after unmount
-  errors.mockRestore();
 });

@@ -619,6 +619,22 @@ async def test_report_502_when_storage_fails_does_not_echo_the_uri(monkeypatch, 
     resp = client.get("/api/artifacts/uq-1/report")
     assert resp.status_code == 502
     assert "deeplynx" not in resp.text and "secret" not in resp.text
+    # The viewer's frame is the only request for the report, so the failure is a
+    # page the frame can show, sandboxed like the report itself, and never cached.
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "The report could not be loaded." in resp.text
+    assert resp.headers["content-security-policy"].startswith("sandbox allow-scripts")
+    assert resp.headers["x-content-type-options"] == "nosniff"
+    assert resp.headers["cache-control"] == "no-store"
+
+
+async def test_report_404_is_a_notice_the_frame_can_show(monkeypatch, session_store):
+    client = await _authed_client(monkeypatch, session_store, artifacts=[_uq_notebook({})])
+    resp = client.get("/api/artifacts/uq-1/report")
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("text/html")
+    assert "The report could not be loaded." in resp.text
+    assert "uq-1" not in resp.text
 
 
 async def test_report_502_when_over_the_size_cap(monkeypatch, session_store):
