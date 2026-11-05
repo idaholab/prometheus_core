@@ -18,8 +18,11 @@ Note: This deck is a reference to keep open, not a script to present. The presen
 ## Start the platform and try the debug agents {eyebrow="Step 1 of 6 · setup block"}
 
 :::: cols 1.2fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
-cd prometheus_core/platform
+cd ~/projects/prometheus_core/platform
 make up
 #  asks: local SDK? local DeepLynx?
 #  asks: LLM profile and your API key
@@ -48,13 +51,16 @@ make up
 ## Scaffold an agent {eyebrow="Step 2 of 6 · setup block"}
 
 :::: cols 1.2fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
-cd prometheus_core/agent-template
+cd ~/projects/prometheus_core/agent-template
 python setup_agent.py
 #  name, description, slug,
 #  class name, first skill id
 
-cd ../../<your-agent>
+cd ~/projects/<your-agent>
 uv sync
 uv add <package>
 

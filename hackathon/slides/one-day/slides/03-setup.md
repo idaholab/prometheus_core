@@ -18,8 +18,11 @@ Note: Lunch is at noon. The first make up builds images, which is idle time; peo
 ## Start the platform {eyebrow="Step 1 of 5"}
 
 :::: cols 1.1fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
-cd prometheus_core/platform
+cd ~/projects/prometheus_core/platform
 make up
 ```
 
@@ -31,7 +34,7 @@ Choose an LLM profile (LLM_CONFIG_PROFILE; up/down, Enter):
 ```
 
 ::: callout info
-**Repo updated?** Run `git pull` in `prometheus_core`, then `make up` again in `platform/` and in your agent folder. Your `.env` files are not touched.
+**Repo updated?** Run `git pull` in `~/projects/prometheus_core`, then `make up` again in `platform/` and in your agent folder. Your `.env` files are not touched.
 :::
 |||
 - Answer **yes** to both questions (press Enter). The first builds the SDK image from your clone; the second starts DeepLynx next to the platform, creates its project and API key, and writes them into `.env`.
@@ -65,6 +68,9 @@ Type "hello". A reply means the orchestrator, your LLM profile and the chat all 
 DeepLynx is at `http://localhost:3000`. The files the agents produce are stored there.
 :::
 |||
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
 make ps       # all "Up" / "(healthy)"
 make check    # every agent registered?
@@ -81,6 +87,9 @@ Every chat turn fails with "No 'userToken' found…"? The backend could not crea
 ## Try the debug agents {eyebrow="Step 3 of 5"}
 
 :::: cols 1.1fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
 make down
 echo "DEBUG_AGENTS=true" >> .env
@@ -108,20 +117,24 @@ This is the same loop your own agent will go through: the orchestrator reads a c
 ## Scaffold your agent {eyebrow="Step 4 of 5"}
 
 :::: cols 1.1fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
-cd prometheus_core/agent-template
+cd ~/projects/prometheus_core/agent-template
 python setup_agent.py
 #  name, description, slug,
 #  class name, first skill id
-#  output folder: ../../<your-agent>
+#  output folder: ../../<your-agent>   (= ~/projects/<your-agent>)
 #  copy secrets from the platform .env? yes
 
-cd ../../<your-agent>
+cd ~/projects/<your-agent>
 uv sync
 ```
 |||
 - Answer **yes** to copying the secrets. Your agent's `.env` then has the keys it needs and `LOCAL_SDK`, so it builds from the same SDK image as the platform.
 - Open the folder in your editor. `agent.py` is the class, `agent_card.json` is what the orchestrator reads.
+- Type the output folder as `../../<your-agent>`, not with a `~`: the script does not expand it and would create a folder named `~`.
 - Choose skill ids that do not clash with the built-in agents. `/agents` shows what is taken.
 
 ::: callout warn
@@ -134,8 +147,11 @@ Put the folder **beside** the clone, not inside it. Commit nothing yet: `.env` h
 ## Start it and find it {eyebrow="Step 5 of 5"}
 
 ::: cols 1.1fr 1fr gap=28px
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
-cd <your-agent>
+cd ~/projects/<your-agent>
 make up        # build and start
 make logs      # "Registered '<name>' ..."
 ```
@@ -164,9 +180,14 @@ Not finished with the homework? These slides get you to the same place.
 
 ## No clone, tools, or key yet? {eyebrow="Bonus · Catch up"}
 
+{.small}
+Run this in a terminal window:
+
 ```bash {.sm}
+mkdir -p ~/projects
+cd ~/projects
 git clone https://github.com/idaholab/prometheus_core.git
-cd prometheus_core/platform
+cd ~/projects/prometheus_core/platform
 make up        # answer the prompts as on step 1
 ```
 

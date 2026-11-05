@@ -272,14 +272,14 @@ Today you use the first four. The rest are in the agent developer guide.
 
 :::: cols 1.15fr 1fr gap=28px
 ```text {.sm}
-prometheus_core/          # idaholab/prometheus_core
-├── platform/             # the stack: make up here
-├── sdk/                  # prometheus_api (in your image)
-└── agent-template/       # setup_agent.py
-
-my-agent/                 # your agent, beside the clone
-├── agent.py · agent_card.json
-└── tests/
+~/projects/
+├── prometheus_core/      # idaholab/prometheus_core
+│   ├── platform/         # the stack: make up here
+│   ├── sdk/              # prometheus_api (in your image)
+│   └── agent-template/   # setup_agent.py
+└── my-agent/             # your agent, beside the clone
+    ├── agent.py · agent_card.json
+    └── tests/
 ```
 
 |||
