@@ -28,6 +28,10 @@ This page is the long one, with every option turned on.
     and every later `make` as yourself fails with "permission denied". Add
     yourself to the `docker` group instead. If you already did it, `sudo chown
     $USER .env`.
+  - **macOS without Docker Desktop**: if your organization does not license
+    Docker Desktop, Colima runs the stack instead. See
+    [Running without Docker Desktop](#running-without-docker-desktop-macos)
+    below — it installs entirely under `$HOME` and needs no admin rights.
 - `make` and `openssl`. A minimal distro or WSL image may have neither.
 - An API key for one of the supported LLM providers.
 
@@ -37,6 +41,131 @@ yourself, stop it (`docker compose -p deeplynx down`) before continuing, since
 the two cannot both bind those ports. Docker Desktop reports the clash as
 `ports are not available: ... /forwards/expose returned unexpected status: 500`,
 which does not name the conflict.
+
+## Running without Docker Desktop (macOS)
+
+Docker Desktop is the licensed product; the `docker` CLI (Apache-2.0) and
+[Colima](https://github.com/abiosoft/colima) (MIT) are not. Colima runs a small
+Linux VM and exposes a Docker socket, which is all
+`infrastructure/scripts/check-local-prereqs.sh` asks for: the `docker` command
+on `PATH`, a daemon that answers `docker info`, and server version 24.0 or
+newer.
+
+Everything below installs under `$HOME`, so it works on a managed laptop where
+you are in `staff` rather than `admin`, `/usr/local/bin` is not writable, and
+there is no Homebrew. With Homebrew and admin rights, `brew install colima
+docker docker-compose docker-buildx` replaces everything up to
+[Start the VM](#start-the-vm).
+
+The commands are written for Apple Silicon (`arm64`). On an Intel Mac,
+substitute `x86_64` for `aarch64` in the download URLs and `amd64` for `arm64`.
+
+### Directories
+
+```bash
+mkdir -p ~/.local/bin ~/.local/share ~/.local/libexec ~/.docker/cli-plugins
+mkdir -p ~/Downloads/container-tooling/{docker,lima}
+```
+
+### Docker CLI
+
+A static build of the client alone — no daemon, no Docker Desktop.
+
+```bash
+cd ~/Downloads/container-tooling/docker
+curl -fsSLO https://download.docker.com/mac/static/stable/aarch64/docker-29.9.3.tgz
+tar -xzf docker-29.9.3.tgz
+install -m 755 docker/docker ~/.local/bin/docker
+```
+
+### Lima
+
+Colima drives [Lima](https://github.com/lima-vm/lima), which it does not
+bundle. The tarball's `bin`, `libexec` and `share` directories have to keep
+their relative layout, or `limactl` cannot find its guest agents.
+
+```bash
+cd ~/Downloads/container-tooling/lima
+curl -fsSLO https://github.com/lima-vm/lima/releases/download/v2.2.1/lima-2.2.1-Darwin-arm64.tar.gz
+tar -xzf lima-2.2.1-Darwin-arm64.tar.gz
+cp -R bin/. ~/.local/bin/
+cp -R libexec/. ~/.local/libexec/
+cp -R share/. ~/.local/share/
+```
+
+**Install Colima and Lima as a matched pair.** Colima 0.10.3 expects Lima
+2.2.1 — the versions Homebrew ships together. Pairing a 0.10.x Colima with a
+Lima 1.x tarball is the usual self-inflicted failure here.
+
+### Colima
+
+```bash
+curl -fsSL -o ~/.local/bin/colima \
+  https://github.com/abiosoft/colima/releases/download/v0.10.3/colima-Darwin-arm64
+chmod 755 ~/.local/bin/colima
+```
+
+### The Compose and buildx plugins
+
+The static CLI ships with neither, and both are required: the Makefile drives
+`docker compose`, and `make base-image` passes `--build-context`, which only
+BuildKit understands.
+
+```bash
+curl -fsSL -o ~/.docker/cli-plugins/docker-compose \
+  https://github.com/docker/compose/releases/download/v5.7.0/docker-compose-darwin-aarch64
+curl -fsSL -o ~/.docker/cli-plugins/docker-buildx \
+  https://github.com/docker/buildx/releases/download/v0.38.2/buildx-v0.38.2.darwin-arm64
+chmod 755 ~/.docker/cli-plugins/docker-{compose,buildx}
+```
+
+Skip buildx and the SDK build fails at `unknown flag: --build-context`, after a
+`DEPRECATED: The legacy builder is deprecated` warning that reads like noise
+but is the actual cause — without the plugin the CLI silently falls back to the
+legacy builder.
+
+### PATH
+
+Add to `~/.zshrc`, then open a new terminal:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Check all four:
+
+```bash
+docker --version && colima version && limactl --version && docker compose version
+```
+
+### Start the VM
+
+```bash
+colima start --cpu 6 --memory 10 --disk 100 --vm-type vz --mount-type virtiofs
+```
+
+Colima's defaults of 2 CPUs and 2 GB are far too small for this stack — it
+runs fifteen containers with the debug agents and local DeepLynx. `--vm-type
+vz` uses Apple's Virtualization framework (macOS 13+), which is faster than
+the QEMU default.
+
+**On a 16 GB machine, 10 GB to the VM leaves macOS about 6 GB.** Drop to
+`--memory 8` if the host starts swapping during the build.
+
+Colima points the `docker` CLI at the VM itself by creating and selecting a
+`colima` context, so nothing else needs configuring. Confirm with:
+
+```bash
+docker info
+```
+
+The SDK base image and the DeepLynx v0.8.0 images both publish `arm64`
+manifests, so nothing here is emulated. Colima registers amd64 emulation at
+startup anyway, so an amd64-only image would still run, slowly.
+
+From here, continue with [1. Clone](#1-clone). `colima stop` reclaims the
+memory when you are done; after a reboot, plain `colima start` remembers the
+sizing above.
 
 ## 1. Clone
 
@@ -197,6 +326,9 @@ make logs SERVICE=backend
 make ps
 make clear-admin-users   # forgot the local administrator password
 ```
+
+On Colima, `colima start` has to come before any of these after a reboot, and
+`colima stop` gives the VM's memory back when you are done for the day.
 
 Resetting goes in widening circles: `make oidc-reset` discards Keycloak's
 users, `make down-v` drops the platform's volumes, and `make clobber` deletes
