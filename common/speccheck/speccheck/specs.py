@@ -23,19 +23,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-OLD_UNTESTED = re.compile(r"⚠ untested\.?\Z")
-"""The old format's marker for a requirement with no test yet, at the end of its text (SPC-REQ-001-09).
-
-Only at the end, where specs put it, so a requirement can name the marker, as 001-09 does."""
-
-OLD_PLANNED = re.compile(r"\(planned:.*\)\.?\Z", re.S)
-"""The old format's marker for a requirement a later plan step delivers, such as `(planned: step 3b)`, at the end.
-
-Matched from the last `(planned:`, so its step may hold parentheses, as the unimplemented suffix's reason may."""
-
-OLD_RETIRED = re.compile(r"Retired([.:])")
-"""How an old-format retired bullet's text starts: `Retired.` or `Retired:`, not "Retired later"."""
-
 PREFIX = re.compile(r"[A-Z][A-Z0-9]*\Z")
 """A well-formed ID prefix: capital letters and digits, starting with a letter. Use `.match`; `\\Z`, unlike `$`, does not allow a trailing newline."""
 
@@ -69,7 +56,7 @@ def collapse(text: str) -> str:
 
 
 def comparable(text: str) -> str:
-    """`text` as compared for sameness (SPC-REQ-001-10): the unimplemented suffix removed, whitespace collapsed,
+    """`text` as compared for sameness (SPC-REQ-001-09): the unimplemented suffix removed, whitespace collapsed,
     case ignored, one trailing full stop dropped."""
     text = collapse(split_suffix(collapse(text))[0]).casefold()
     return text[:-1].rstrip() if text.endswith(".") else text
@@ -222,22 +209,6 @@ class SpecSet:
         return ""
 
 
-def old_forms(text: str, id_: str) -> list[tuple[str, str]]:
-    """The old format's markers on a requirement's text, each with what replaces it (SPC-REQ-001-09)."""
-    replace = f"end it with `{UNIMPLEMENTED_EXAMPLE}` if a plan delivers it later, or give it a test"
-    found = []
-    if OLD_UNTESTED.search(text):
-        found.append(("`⚠ untested`, which is gone", replace))
-    start = text.rfind("(planned:")
-    if start >= 0 and OLD_PLANNED.fullmatch(text, start):
-        found.append(("`(planned: ...)`, which is gone", replace))
-    retired = OLD_RETIRED.match(text)
-    if retired:
-        old = f"`Retired{retired.group(1)}`, which is gone"
-        found.append((old, f"delete the requirement and list {id_} in its spec's `removed:` line"))
-    return found
-
-
 def continues(line: str) -> bool:
     """Whether `line` continues the bullet or header line above it: two or more spaces, then text (SPC-REQ-001-06)."""
     return line.startswith("  ") and bool(line.strip())
@@ -317,7 +288,6 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
     current: Requirement | None = None
     section = ""
     purpose: list[str] = []
-    in_header = True
     in_fence = False
     for line_number, line in enumerate(lines, 1):
         if line.lstrip().startswith(("```", "~~~")):
@@ -327,17 +297,11 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         if in_fence:
             continue
         if line.startswith("## "):
-            in_header = False
             section = line[3:].strip()
             current = None
             continue
         if section == "Purpose" and line.strip():
             purpose.append(line.strip())
-        if in_header and line.startswith("status:"):
-            message = (
-                "the `status:` line is gone; delete it (a planned requirement ends with `(unimplemented: <reason>)`)"
-            )
-            problems.append(Problem(name, line_number, message, "status-line-gone"))
 
         if syntax.bullet_start.match(line):
             match = syntax.bullet.match(line)
@@ -370,8 +334,6 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
         if requirement.reason == "":
             message = f"{requirement.id} needs a reason: write `{UNIMPLEMENTED_EXAMPLE}`"
             problems.append(Problem(name, requirement.line, message, "reason-missing"))
-        for old, fix in old_forms(requirement.text, requirement.id):
-            problems.append(Problem(name, requirement.line, f"{requirement.id} has {old}; {fix}", "old-marker"))
     found = header_lines(lines, "removed")
     example = f"{syntax.head}REQ-{number}-01"
 
@@ -390,7 +352,7 @@ def parse_spec(path: Path, root: Path, syntax: Syntax, problems: list[Problem]) 
 def removed_list(
     found: list[tuple[int, str]], wrong: Callable[[str], str], name: str, problems: list[Problem]
 ) -> list[str]:
-    """The items a `removed:` line lists, each once (SPC-REQ-001-11, 001-12).
+    """The items a `removed:` line lists, each once (SPC-REQ-001-10, 001-11).
 
     `wrong` says why an item can't be listed, or "". A second `removed:` line, an item `wrong`
     refuses, and an item listed twice are each a problem in `name`, and are left out.

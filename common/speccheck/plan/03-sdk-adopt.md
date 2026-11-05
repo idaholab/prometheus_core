@@ -30,8 +30,9 @@ final job for the sdk. This takes in what was step 4 (see "The rest").
   each test.
 - **Spec format** (`design.md`, "Requirement states"): drop each spec's `status:` line, delete
   each `Retired.` requirement (7) and list its ID on its spec's `removed:` line, and remove every
-  `⚠ untested` (20). `lint` reports each leftover and says what replaces it. Mechanical, so in
-  the same commit as the prefix rename.
+  `⚠ untested` (20). `lint` doesn't report these (it did once; see `01-speccheck.md`, "As
+  built"), so find them by search: `rg -n '^status:|⚠ untested|Retired[.:]' sdk/specs`. Mechanical,
+  so in the same commit as the prefix rename.
 - **The rest:** run `check`, and for each requirement no test claims (about 200), find the test
   that proves it and add the marker, or write one. There is no "untested" state, so a
   requirement can't be left without a test. Only behaviour a later plan step delivers may end with

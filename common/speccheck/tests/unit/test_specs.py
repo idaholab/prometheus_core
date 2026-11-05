@@ -143,20 +143,7 @@ class TestFilesAndIndex:
 
 
 class TestHeader:
-    """The header: no `status:` line any more, and at least one requirement."""
-
-    def test_a_status_line_is_reported(self, repo: Repo):
-        """At its line, saying to delete it."""
-        repo.write("specs/001-thing.md", spec(ONE, header="status: implemented"))
-        assert problems(repo) == [
-            "specs/001-thing.md:3: the `status:` line is gone; delete it "
-            "(a planned requirement ends with `(unimplemented: <reason>)`)"
-        ]
-
-    def test_a_status_below_the_header_is_text(self, repo: Repo):
-        """Under a `##` or in a fence, a `status:` is prose, not the old header line."""
-        repo.spec(f"{ONE}\n\n```\nstatus: bogus\n```\n\nstatus: bogus\n")
-        assert_problems(repo)
+    """The header: at least one requirement."""
 
     def test_no_header_line_is_needed(self, repo: Repo):
         """A title and a Requirements section are enough."""
@@ -170,55 +157,6 @@ class TestHeader:
             "specs/001-thing.md: a spec needs at least one requirement; if it has none left, delete it "
             "and list 001 in 000-index.md's `removed:` line"
         ]
-
-
-class TestOldForms:
-    """`old_forms`: the old format's markers on a requirement's text, each with its replacement."""
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "It. ⚠ untested",
-            "It. ⚠ untested.",
-            "It. (planned: step 2)",
-            "It (planned: step 2).",
-            "It (planned: x (y)).",
-            "Retired. Gone.",
-        ],
-    )
-    def test_found(self, text):
-        """At the end (untested, planned) or the start (retired), with or without a full stop."""
-        assert len(specs.old_forms(text, "T-REQ-001-01")) == 1
-
-    @pytest.mark.parametrize(
-        "text",
-        [
-            "It names `⚠ untested` in the middle.",
-            "It names (planned: x) mid-text.",
-            "Retired later.",
-            "It was Retired. Once.",
-            "It.",
-        ],
-    )
-    def test_ordinary_words(self, text):
-        """Anywhere else they are words, so a requirement can name them."""
-        assert specs.old_forms(text, "T-REQ-001-01") == []
-
-    def test_each_says_what_replaces_it(self):
-        """Untested and planned: the suffix or a test. Retired: delete it and list the ID in `removed:`."""
-        replace = "end it with `(unimplemented: <reason>)` if a plan delivers it later, or give it a test"
-        assert specs.old_forms("It. ⚠ untested", "X") == [("`⚠ untested`, which is gone", replace)]
-        assert specs.old_forms("It. (planned: 2)", "X") == [("`(planned: ...)`, which is gone", replace)]
-        assert specs.old_forms("Retired: gone", "X") == [
-            ("`Retired:`, which is gone", "delete the requirement and list X in its spec's `removed:` line")
-        ]
-
-    def test_reported_by_load(self, repo: Repo):
-        """At the bullet's line, with code `old-marker`."""
-        repo.spec("- T-REQ-001-01: One. ⚠ untested")
-        [found] = specs.load(repo.root / "specs", repo.root, "T").problems
-        assert (found.line, found.code) == (7, "old-marker")
-        assert found.message.startswith("T-REQ-001-01 has `⚠ untested`, which is gone; end it with")
 
 
 class TestBullets:

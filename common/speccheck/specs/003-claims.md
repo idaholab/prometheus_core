@@ -12,7 +12,7 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   `pytest.param(..., marks=...)` in the test's own `@pytest.mark.parametrize`, and it MUST claim
   for that one test only.
 - SPC-REQ-003-03: When the project sets `speccheck_config`, collection MUST fail on a claim of a
-  malformed ID, an unknown ID, a removed ID (SPC-REQ-001-11, 001-12), or an ID in a spec the
+  malformed ID, an unknown ID, a removed ID (SPC-REQ-001-10, 001-11), or an ID in a spec the
   producer may not claim, and the message MUST name the test and the ID.
 - SPC-REQ-003-04: A `covers` mark MUST take exactly two positional strings: the ID, and how the
   test proves it. A mark with any other number of arguments, a non-string, or keyword arguments
@@ -30,11 +30,11 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
 - SPC-REQ-003-08: Each run of whitespace in an explanation, newlines included, MUST become one
   space, and the ends MUST be trimmed, before it is checked or written.
 - SPC-REQ-003-09: When the project sets `speccheck_config`, collection MUST fail when an
-  explanation has the same text (SPC-REQ-001-10) as any requirement in the folder. The message
+  explanation has the same text (SPC-REQ-001-09) as any requirement in the folder. The message
   MUST name that requirement and say to describe how the test proves the claimed one.
 - SPC-REQ-003-10: Collection MUST fail when one test claims the same ID more than once.
 - SPC-REQ-003-11: Collection MUST fail when two claims in the session have the same text
-  (SPC-REQ-001-10), whether they are in one test or two and whatever IDs they claim, so a repeat
+  (SPC-REQ-001-09), whether they are in one test or two and whatever IDs they claim, so a repeat
   that SPC-REQ-005-10 would find later fails before the run. The message MUST name both claims.
 - SPC-REQ-003-12: Collection MUST fail on a claiming test with a mark on its class or module
   (`pytestmark`), with a mark on its function while it is parametrized, with more than one

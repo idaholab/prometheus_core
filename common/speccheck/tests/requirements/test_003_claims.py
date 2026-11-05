@@ -945,7 +945,7 @@ def test_an_unimplemented_requirements_text_is_compared_too(project: Project):
     "an explanation that is a requirement's text with an unimplemented suffix added still stops collection, since texts are compared without it",
 )
 def test_a_suffix_on_an_explanation_doesnt_hide_a_copy(project: Project):
-    """SPC-REQ-001-10 compares texts without the suffix, an explanation's as much as a requirement's."""
+    """SPC-REQ-001-09 compares texts without the suffix, an explanation's as much as a requirement's."""
     project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: The cache MUST expire.")
     project.ini(CHECKED)
     project.tests(
