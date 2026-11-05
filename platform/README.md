@@ -305,7 +305,7 @@ To use a DeepLynx you already have instead, set either `DEEPLYNX_JWT_TOKEN` or b
 
 ### Optional integrations (work in progress)
 
-**OIDC single sign-on** — alternative to the local-users login. Providers are *not* configured by environment variable: an admin registers each one at runtime through the in-app admin UI (`POST /api/admin/oidc-providers`), which stores it in admin-db with the client secret encrypted at rest. Login then lives at `GET /api/auth/login/{provider_id}`. See `docs/docs/dev-docs/multi-user-setup.md`.
+**OIDC single sign-on** — alternative to the local-users login. Providers are *not* configured by environment variable: an admin registers each one at runtime through the in-app admin UI (`POST /api/admin/oidc-providers`), which stores it in admin-db with the client secret encrypted at rest. Login then lives at `GET /api/auth/login/{provider_id}`. Set `BACKEND_PUBLIC_URL` to the address the browser uses, so the `redirect_uri` sent to the provider matches the one registered with it. To try this without a real provider, `make oidc-up` starts a local Keycloak — see [Local OIDC provider](docs/docs/local-oidc.md). Also `docs/docs/dev-docs/multi-user-setup.md`.
 
 ## Project structure
 
@@ -399,3 +399,4 @@ _TBD — common issues and fixes will be collected here as they come up._
 - [Visualization plugins](docs/docs/dev-docs/visualization-plugins.md)
 - [Migration guide](docs/docs/dev-docs/migration.md) - what changed from the original projects and why
 - [Self-hosted DeepLynx](docs/docs/local-deeplynx.md) - roll out your own DeepLynx instance and connect the platform to it
+- [Local OIDC provider](docs/docs/local-oidc.md) - run a Keycloak next to the platform to exercise single sign-on
