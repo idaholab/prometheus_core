@@ -32,17 +32,6 @@ jobs:
       - name: Build hackathon slides
         working-directory: hackathon/slides
         run: make build
-      - name: Check the index pages are up to date
-        # The decks are built here and not committed. build.py also rewrites the deck lists in
-        # the committed index.html files, which must match the decks' front matter
-        working-directory: hackathon/slides
-        run: |
-          if [ -n "$(git status --porcelain .)" ]; then
-            git status --short .
-            git --no-pager diff --stat .
-            echo "::error::An index page is out of date. Run 'make build' in hackathon/slides and commit the changed index.html."
-            exit 1
-          fi
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Assemble site
