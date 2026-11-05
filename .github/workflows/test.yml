@@ -324,12 +324,8 @@ jobs:
           fi
       - name: Assemble the decks for review
         if: ${{ github.event_name == 'pull_request' }}
-        # The same files and layout the pages workflow serves from /hackathon/
-        run: |
-          preview="$RUNNER_TEMP/slides-preview"
-          mkdir -p "$preview/one-day"
-          cp -R ./*.html assets "$preview/"
-          cp one-day/*.html "$preview/one-day/"
+        # The same target the pages workflow uses for what it serves from /hackathon/
+        run: make site DEST="$RUNNER_TEMP/slides-preview"
       # Download and unzip it, then open index.html or one-day/index.html. The
       # decks load their fonts from Google Fonts, so they need internet access.
       # The decks are public on the Pages site, but the repo is public too, so
