@@ -19,13 +19,15 @@ interface WorkflowConsoleProps {
   selectedId?: string;
   /** The selected template's plan. */
   plan: WorkflowPlan;
+  /** "Modify Plan" in the planner: opens the Builder. */
+  onModifyPlan?: () => void;
 }
 
 /**
  * Workflow Console layout (Figma D.1): the template picker, then the execution
  * planner for the selected template. Display only; PageWorkflows supplies the data.
  */
-export function WorkflowConsole({ templates, selectedId, plan }: WorkflowConsoleProps) {
+export function WorkflowConsole({ templates, selectedId, plan, onModifyPlan }: WorkflowConsoleProps) {
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
       <section className="flex flex-col gap-3">
@@ -39,7 +41,7 @@ export function WorkflowConsole({ templates, selectedId, plan }: WorkflowConsole
 
       <section className="flex flex-col gap-3">
         <SectionLabel>Workflow Execution Planner</SectionLabel>
-        <WorkflowPlanner plan={plan} />
+        <WorkflowPlanner plan={plan} onModifyPlan={onModifyPlan} />
       </section>
     </div>
   );

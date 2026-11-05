@@ -25,7 +25,6 @@ graph TD
     DATA[Data Agent]
     SYNTH[Synthesis Agent]
     OSTI[OSTI Research Agent]
-    FF[Form Filler Agent]
     REQ[Requirements Agent]
   end
 
@@ -117,7 +116,7 @@ Each specialist agent is a standalone container built on the `PrometheusAgent` b
 - Execute domain-specific analysis
 - Return results as artifacts
 
-Current specialists: corrosion, radiation, thermal, data retrieval, synthesis, OSTI literature search, form filler, requirements.
+Current specialists: corrosion, radiation, thermal, data retrieval, synthesis, OSTI literature search, requirements.
 
 ## Data flow for a typical request
 
@@ -201,7 +200,6 @@ All services are containerized via Docker Compose:
 | Radiation Agent | radiation-agent | 8003 | Specialist |
 | Thermal Agent | thermal-agent | 8004 | Specialist |
 | Data Agent | data-agent | 8005 | Specialist |
-| Form Filler | form-filler-agent | 8006 | Specialist |
 | OSTI Research | osti-research-agent | 8007 | Specialist |
 | Artifact Debug | artifact-debug-agent | 8008 | Testing |
 | Synthesis Agent | synthesis-agent | 8009 | Specialist |

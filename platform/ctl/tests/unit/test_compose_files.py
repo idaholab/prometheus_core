@@ -29,7 +29,7 @@ def make_root(tmp_path: Path) -> Path:
     root = tmp_path / "platform"
     for rel in (
         "agents/client-agent",
-        "agents/form-filler-agent",
+        "agents/synthesis-agent",
         "agents/debug-agents/thermal-agent",
         "agents/optional/osti-research-agent",
         "agents/no-compose",
@@ -51,7 +51,7 @@ def test_discover_in_tree_only_by_default(tmp_path):
     """Discover in tree only by default."""
     root = make_root(tmp_path)
     agents = cf.discover_agents(root, config_for(root))
-    assert [(a.name, a.group) for a in agents] == [("client-agent", "in-tree"), ("form-filler-agent", "in-tree")]
+    assert [(a.name, a.group) for a in agents] == [("client-agent", "in-tree"), ("synthesis-agent", "in-tree")]
     assert agents[0].card == root / "agents/client-agent/agent_card.json"
     assert agents[1].card is None
 
@@ -120,7 +120,7 @@ def test_agents_file_content_is_pinned(tmp_path):
         "\n"
         "include:\n"
         "  - agents/client-agent/docker-compose.yml\n"
-        "  - agents/form-filler-agent/docker-compose.yml\n"
+        "  - agents/synthesis-agent/docker-compose.yml\n"
     )
 
 

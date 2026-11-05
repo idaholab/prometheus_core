@@ -146,8 +146,8 @@ def test_select_platform_env_values_includes_llm_config_profile(tmp_path):
 
 
 def test_select_platform_env_values_points_at_local_base_image_with_local_sdk(tmp_path, monkeypatch):
-    """A LOCAL_SDK=true platform has no registry access, so the agent must
-    build FROM the base image the platform built locally, not the registry."""
+    """A LOCAL_SDK=true platform runs the SDK from its checkout, so the agent
+    must build FROM the base image the platform built locally, not the registry."""
     monkeypatch.delenv("LOCAL_SDK", raising=False)
     platform_env = tmp_path / "platform.env"
     platform_env.write_text("AGENT_SECRET=shared-secret\nLOCAL_SDK=true\n", encoding="utf-8")
@@ -278,6 +278,126 @@ def test_env_only_writes_env_and_gitignore_for_existing_agent(tmp_path, monkeypa
     assert "EMBEDDING_API_KEY=sk-emb" in env
     assert "BACKEND_JWT_SECRET" not in env
     assert ".env" in (agent_dir / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+
+def test_env_only_keeps_own_lines_and_replaces_platform_values(tmp_path, monkeypatch, capsys):
+    """After `make down-v`, a re-sync takes the new DeepLynx key and keeps the agent's own lines."""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text("AGENT_SECRET=mine\nDEEPLYNX_KEY=new-key\n", encoding="utf-8")
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", platform_env)
+    agent_dir = _agent_dir(tmp_path)
+    (agent_dir / ".env").write_text(
+        "AGENT_SECRET=old\nDEEPLYNX_KEY=old-key\n# my tool\nMY_TOOL_API_KEY=s3cret-value\n"
+        "USER_IDENTITY_REQUIRED=false\nEXTERNAL_AGENT_HOST=localhost\n",
+        encoding="utf-8",
+    )
+
+    setup_agent.main(["--env-only", str(agent_dir)])
+
+    env = (agent_dir / ".env").read_text(encoding="utf-8")
+    assert "DEEPLYNX_KEY=new-key" in env
+    assert "old" not in env
+    for line in ("# my tool", "MY_TOOL_API_KEY=s3cret-value", "USER_IDENTITY_REQUIRED=false"):
+        assert line in env.splitlines()
+    assert "EXTERNAL_AGENT_HOST=localhost" in env.splitlines()
+    out = capsys.readouterr().out
+    assert "MY_TOOL_API_KEY, USER_IDENTITY_REQUIRED, EXTERNAL_AGENT_HOST" in out
+    assert "s3cret-value" not in out
+
+
+def test_env_only_drops_deeplynx_server_secrets_of_an_old_agent(tmp_path, monkeypatch):
+    """Agents scaffolded before the client-key list got the DeepLynx server's secrets; a re-sync drops them."""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text("AGENT_SECRET=mine\nDEEPLYNX_KEY=k\nDEEPLYNX_DB_PASSWORD=db\n", encoding="utf-8")
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", platform_env)
+    agent_dir = _agent_dir(tmp_path)
+    (agent_dir / ".env").write_text(
+        "DEEPLYNX_DB_PASSWORD=db\nDEEPLYNX_JWT_SECRET=jwt\nDEEPLYNX_ENCRYPTION_KEY=enc\n", encoding="utf-8"
+    )
+
+    setup_agent.main(["--env-only", str(agent_dir)])
+
+    env = (agent_dir / ".env").read_text(encoding="utf-8")
+    assert "DEEPLYNX_KEY=k" in env
+    for key in ("DEEPLYNX_DB_PASSWORD", "DEEPLYNX_JWT_SECRET", "DEEPLYNX_ENCRYPTION_KEY"):
+        assert key not in env
+    assert setup_agent.OWN_LINES_HEADING not in env
+
+
+def test_env_only_twice_gives_the_same_env(tmp_path, monkeypatch):
+    """Re-running doesn't duplicate the header, the external-mode block or the own-lines heading."""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text("AGENT_SECRET=mine\nLLM_API_KEY=sk-x\n", encoding="utf-8")
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", platform_env)
+    agent_dir = _agent_dir(tmp_path)
+    (agent_dir / ".env").write_text("\n\nMY_KEY=1\n\n\n# note\n\n", encoding="utf-8")
+
+    setup_agent.main(["--env-only", str(agent_dir)])
+    first = (agent_dir / ".env").read_text(encoding="utf-8")
+    setup_agent.main(["--env-only", str(agent_dir)])
+
+    assert (agent_dir / ".env").read_text(encoding="utf-8") == first
+    assert first.endswith(f"{setup_agent.OWN_LINES_HEADING}\nMY_KEY=1\n\n# note\n")
+
+
+LOCAL_DEEPLYNX_NOTE = "LOCAL_DEEPLYNX=true but no DeepLynx key yet"
+
+
+@pytest.mark.parametrize(
+    ("platform_lines", "shell_flag", "expect_note"),
+    [
+        ("LOCAL_DEEPLYNX=true\nDEEPLYNX_KEY=\n", None, True),
+        ('LOCAL_DEEPLYNX=true\nDEEPLYNX_KEY=""\n', None, True),
+        ("DEEPLYNX_KEY=\n", "true", True),
+        ("LOCAL_DEEPLYNX=true\nDEEPLYNX_KEY=k\nDEEPLYNX_SECRET=s\n", None, False),
+        ("LOCAL_DEEPLYNX=true\nDEEPLYNX_JWT_TOKEN=t\n", None, False),
+        ("DEEPLYNX_KEY=\n", None, False),
+        ("LOCAL_DEEPLYNX=false\nDEEPLYNX_KEY=\n", "true", False),
+    ],
+    ids=[
+        "flag-no-key",
+        "flag-quoted-empty-key",
+        "shell-flag-no-key",
+        "flag-with-key",
+        "flag-with-jwt",
+        "no-flag",
+        "env-file-flag-wins-over-shell",
+    ],
+)
+def test_env_only_notes_a_local_deeplynx_that_is_not_set_up(
+    tmp_path, monkeypatch, capsys, platform_lines, shell_flag, expect_note
+):
+    """An agent .env written before the platform's first start has no DeepLynx key; say so."""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text("AGENT_SECRET=mine\n" + platform_lines, encoding="utf-8")
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", platform_env)
+    if shell_flag is None:
+        monkeypatch.delenv("LOCAL_DEEPLYNX", raising=False)
+    else:
+        monkeypatch.setenv("LOCAL_DEEPLYNX", shell_flag)
+    agent_dir = _agent_dir(tmp_path)
+
+    setup_agent.main(["--env-only", str(agent_dir)])
+
+    out = capsys.readouterr().out
+    assert (LOCAL_DEEPLYNX_NOTE in out) is expect_note
+    if expect_note:
+        assert f"setup_agent.py --env-only {agent_dir}" in out
+
+
+def test_scaffold_notes_a_local_deeplynx_that_is_not_set_up(tmp_path, monkeypatch, capsys):
+    """The scaffold's .env step gives the same note as --env-only."""
+    platform_env = tmp_path / "platform.env"
+    platform_env.write_text("AGENT_SECRET=mine\nLOCAL_DEEPLYNX=true\nDEEPLYNX_KEY=\n", encoding="utf-8")
+    monkeypatch.setattr(setup_agent, "PLATFORM_ENV_PATH", platform_env)
+    monkeypatch.delenv("LOCAL_DEEPLYNX", raising=False)
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+
+    setup_agent.create_env_from_platform_if_requested(agent_dir, assume_defaults=True)
+
+    assert (agent_dir / ".env").exists()
+    assert LOCAL_DEEPLYNX_NOTE in capsys.readouterr().out
 
 
 def test_env_only_rejects_a_directory_without_agent_card(tmp_path, monkeypatch):

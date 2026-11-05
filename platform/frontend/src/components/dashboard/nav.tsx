@@ -17,8 +17,8 @@ import { Cpu, Database, GitBranch, Home, ShieldCheck, Shield, Terminal, Users } 
  * Primary navigation model for the app shell's left sidebar (Figma nav list).
  * Shared between LeftPanel (renders the items) and ProjectView (dispatches
  * content + derives the header title). Only `home`, `admin`, `workflows`,
- * `agent-registry`, `data-management` and `project-management` are wired;
- * the rest render a ComingSoon placeholder until scoped individually.
+ * `agent-registry`, `approval-queue`, `data-management` and
+ * `project-management` are wired; the rest render a ComingSoon placeholder until scoped individually.
  */
 export type NavId =
   | "home"

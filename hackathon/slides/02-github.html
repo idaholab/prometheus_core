@@ -474,8 +474,9 @@ Next: <strong>Your local platform</strong> (1:45 pm). Keep your platform running
 
 <div class="card"><span class="tag">3 · base image</span>
 <h4>Built locally</h4>
-<p class="small">The <code>prometheus_api</code> base image is built from <code>sdk/</code> in your clone. One line in <code>platform/.env</code>:</p>
-<pre class="xs">LOCAL_SDK=true</pre>
+<p class="small">The <code>prometheus_api</code> base image is built from <code>sdk/</code> in your clone, and DeepLynx runs with the platform. The first <code>make up</code> asks for both (Enter, Enter), and writes two lines in <code>platform/.env</code>:</p>
+<pre class="xs">LOCAL_SDK=true
+LOCAL_DEEPLYNX=true</pre>
 </div>
 
 </div>
@@ -660,7 +661,6 @@ For the hackathon you need only <code>prometheus_core</code> and a github.com ac
 </table>
 <h4 class="acc" style="margin-top:6px" class="acc">Tooling</h4>
 <table class="t xs">
-<tr><td><b>agent-sandbox-mcp</b></td><td>notebook MCP sandbox</td></tr>
 <tr><td>mcps</td><td>FastMCP server template</td></tr>
 <tr><td>a2a-tester</td><td>debug UI (still A2A v0.3)</td></tr>
 <tr><td>reactor-dt-modules</td><td>digital-twin library</td></tr>
@@ -752,7 +752,6 @@ Change something in <code>sdk/</code>? The next <code>make up</code> in <code>pl
 ├── backend/             # FastAPI + registry
 ├── agents/
 │   ├── client-agent/    # orchestrator
-│   ├── form-filler-agent/
 │   ├── synthesis-agent/
 │   ├── debug-agents/*/
 │   └── optional/osti-research-agent/

@@ -25,7 +25,7 @@ Note: ANL welcoming address goes first. Then walk the agenda, the architecture o
 </div>
 
 ::: callout info
-We assume your platform already starts with `make up` and DeepLynx is set up. Not quite there? Each deck ends with **bonus catch-up slides**, and mentors will help.
+We assume your platform already starts with `make up`, with `LOCAL_SDK=true` and `LOCAL_DEEPLYNX=true` in `platform/.env` (the first `make up` asks for both: press Enter twice). Not quite there? Each deck ends with **bonus catch-up slides**, and mentors will help.
 :::
 
 ---
@@ -189,7 +189,7 @@ Write **one agent**: a Python class with a method that does the work, and a card
 <div class="arrow-h" style="width:50px"></div>
 <div class="box navy" style="flex:1.3"><b>Orchestrator</b><span class="small">an LLM that calls agents' skills step by step, reading each result</span></div>
 <div class="arrow-h" style="width:50px"></div>
-<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">form-filler, OSTI research, synthesis… and <b>yours</b></span></div>
+<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">synthesis, OSTI research… and <b>yours</b></span></div>
 </div>
 <div class="arrow-v"><span>supporting services</span></div>
 <div class="row" style="gap:20px; align-items:stretch">
@@ -357,9 +357,10 @@ For participants who could not finish the homework. Work through these with a me
 | Access to `idaholab/prometheus_core` | open `github.com/idaholab/prometheus_core` in the browser | ask the organizer to add your github.com account; deck 02 bonus |
 | Docker installed and running | `docker info`, `docker compose version` (≥ 2.20) | install Docker Desktop and start it |
 | Platform cloned | `ls ~/prometheus/prometheus_core` shows `platform`, `sdk`, `agent-template` | deck 02 bonus (clone commands) |
-| Base image builds | `LOCAL_SDK=true` in `platform/.env`, then `make base-image` in `prometheus_core/platform` | deck 03 bonus (step 1) |
+| Base image builds | `LOCAL_SDK=true` in `platform/.env` (the first `make up` asks; Enter = yes), then `make base-image` in `prometheus_core/platform` | deck 03 bonus (step 1) |
+| Local DeepLynx configured | `LOCAL_DEEPLYNX=true` in `platform/.env` (the first `make up` asks; Enter = yes. `make up` then runs DeepLynx and writes the `DEEPLYNX_*` lines) | deck 03 (local DeepLynx) |
 | Platform starts | `make up` in `prometheus_core/platform`, then `http://localhost:5150` | deck 03 bonus (`.env`, "the stack won't start") |
-| Local DeepLynx (**required**: no agent starts without it) | `http://localhost:3000` shows the DeepLynx UI | deck 03 (local DeepLynx) |
+| Local DeepLynx (**required**: no agent starts without it) | after `make up`, `http://localhost:3000` shows the DeepLynx UI with a **Prometheus** project | deck 03 (local DeepLynx) |
 | `uv` (for the agent session) | `uv --version` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | `gh` (decks 02 and 05) | `gh auth status` | `brew install gh` (needs admin), or copy the release binary from `github.com/cli/cli/releases` into `~/.local/bin`; then `gh auth login`. No `gh`? Use the Fork and "Compare & pull request" buttons on the web. |
 
@@ -471,7 +472,6 @@ Any service that speaks A2A and publishes a card can join. It can live in the pl
 </div>
 <div class="arrow-v"><span>POST /a2a/{agent_name} → the agent's registered URL</span></div>
 <div class="row" style="gap:14px">
-<div class="box green" style="flex:1"><b>form-filler-agent</b></div>
 <div class="box green dash" style="flex:1"><b>osti-research-agent</b><span class="mono">OPTIONAL_AGENTS=true</span></div>
 <div class="box green" style="flex:1"><b>synthesis-agent</b></div>
 <div class="box green dash" style="flex:1"><b>debug agents</b><span class="mono">DEBUG_AGENTS=true</span></div>
@@ -681,7 +681,7 @@ The backend picks a viewer from `json_type`, then `mime_type`, tags, and file ex
 ::::
 
 ::: callout warn
-DeepLynx is **required**. Every skill call writes an execution record there (`self.execution_record_id`), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. We set up a local DeepLynx in the deployment session.
+DeepLynx is **required**. Every skill call writes an execution record there (`self.execution_record_id`), so an agent without DeepLynx credentials refuses to start, and uploads are not stored. `LOCAL_DEEPLYNX=true` in `platform/.env` runs a local DeepLynx with the platform and writes the credentials for you (deployment session).
 :::
 
 ---
@@ -692,7 +692,6 @@ DeepLynx is **required**. Every skill call writes an execution record there (`se
 | Directory | Card name → route key | Skills | Default? |
 |---|---|---|---|
 | `agents/client-agent` | nuclear-analysis-client-agent | The orchestrator; excludes itself from discovery | always |
-| `agents/form-filler-agent` | form-filler-agent | `fill_form`: extract structured data per a JSON schema | yes |
 | `agents/optional/osti-research-agent` | osti-research-agent | `search_literature`: OSTI search, PDF download, synthesis. Heavy PDF/ML build | `OPTIONAL_AGENTS` {.hl} |
 | `agents/synthesis-agent` | synthesis-agent | `synthesize_material_analysis`. **About 100 lines: the best small example.** | yes |
 | `agents/debug-agents/artifact-debug-agent` | artifact-debug-agent | `create_svg_artifact`, `convert_svg_to_png`, `create_json_artifact`, plus a workflow | `DEBUG_AGENTS` {.hl} |
@@ -714,13 +713,6 @@ The route key is the card `name` lowercased with spaces turned into hyphens. The
 
 {.small}
 STEP → tetrahedral Exodus mesh with Gmsh. Branch `agentic-hex-meshing`: an LLM tool loop driving a sandboxed Python kernel.
-:::
-
-::: card
-#### agent-sandbox-mcp
-
-{.small}
-A Python notebook MCP server with per-user session isolation. It is the code-execution sandbox used by agents.
 :::
 
 ::: card

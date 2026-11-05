@@ -1,6 +1,6 @@
 # Files and artifacts
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-11-03, after #310 and the init-env questions (#383) (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Files travel as artifacts: your skill gets ids, not data (deck 04, slides 8-10 and 21). An upload goes to
 DeepLynx, the catalog gives it an id, and the orchestrator passes the id. The catalog is per conversation,
@@ -61,17 +61,25 @@ docker compose -p prometheus_platform exec -T backend python -c "from prometheus
 
 ## Local DeepLynx
 
-Deck 03, slides 18-20. Free ports 3000, 5000, 5432 first.
+Deck 03, slide 11. The platform runs it: nothing to clone, build, or click through
+(`platform/docker-compose.deeplynx.yml`, set up by `make deeplynx-setup`). Free port 5000 first
+(macOS: the AirPlay Receiver).
+Don't use `platform/docs/docs/local-deeplynx.md` for the hackathon: its clone, build-from-source and
+manual `.env` steps (`prometheus.host.internal:5000`) are not the hackathon path. Follow only the steps below.
 
-1. Next to the platform: `git clone https://github.com/idaholab/DeepLynx.git && cd DeepLynx && cp .env_sample .env && docker compose build && docker compose up -d`.
-   Check: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000` prints `200`.
-2. Open http://localhost:3000, pick "INL – default organization" (id 1), click "+ Project". The URL shows the project id.
-3. Person icon › Settings › API Keys › "+ Generate New". The secret shows once. Never paste it into the chat.
-4. In `prometheus_platform/.env` (your editor): `DEEPLYNX_KEY`, `DEEPLYNX_SECRET`,
-   `DEEPLYNX_BASE_URL=http://prometheus.host.internal:5000/api/v1`, `DEEPLYNX_ORG_ID=1`, `DEEPLYNX_PROJECT_ID`.
-5. `make down` in the agent folder, then `make restart` in the platform (it empties the registry).
-6. Copy the values into the agent, printing nothing:
-   `cd <agent> && { grep -v '^DEEPLYNX_' .env; grep -E '^DEEPLYNX_(BASE_URL|KEY|SECRET|JWT_TOKEN|ORG_ID|PROJECT_ID|DATA_SOURCE_ID)=' <platform>/.env; } > .env.new && mv .env.new .env`.
-   Only the client keys: the other `DEEPLYNX_*` lines in the platform `.env` are the DeepLynx server's own secrets.
-   This also drops them from an agent scaffolded before `setup_agent.py` stopped copying them.
-7. `make up` in the agent folder. Upload a small file in a fresh chat; `/artifacts` lists it.
+1. In the platform folder: `grep -cx 'LOCAL_DEEPLYNX=true' .env`. `make up` asks for it in the user's terminal until `.env` has the line (Enter = yes); a "no" writes `LOCAL_DEEPLYNX=false`, and the line is then never asked again. On `0`, after a yes: if `grep -c '^LOCAL_DEEPLYNX=' .env` is `1`, change that line with `sed -i.bak 's/^LOCAL_DEEPLYNX=.*/LOCAL_DEEPLYNX=true/' .env && rm .env.bak` (the `.bak` suffix is what makes the same command work on macOS and Linux); otherwise `printf '\nLOCAL_DEEPLYNX=true\n' >> .env`. Then run the `grep -cx` again: it must print `1`.
+   `-x` matches the whole line, so a CRLF `.env` (`true\r`, which make reads as not `true`) also gives `0`:
+   on WSL, edit `.env` inside WSL (not a Windows editor) and keep the clone in the WSL filesystem, not `/mnt/c`.
+2. `make up` (or `make restart`). Every start target first runs `make deeplynx-setup`: it starts
+   `deeplynx-postgres`, `deeplynx-server` and `deeplynx-ui` in the platform's compose project, creates the
+   project "Prometheus" in organization 1 and an API key, and writes `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1`,
+   `DEEPLYNX_KEY`, `DEEPLYNX_SECRET`, `DEEPLYNX_ORG_ID=1` and `DEEPLYNX_PROJECT_ID` to `.env`. A key that still works is kept.
+   Expect "DeepLynx is already set up in .env." or "Saved a new DeepLynx API key for project <n> in .env."
+3. Check: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000` prints `200` (the UI, no login).
+4. Copy the values into the agent: `python3 setup_agent.py --env-only <agent>` in `agent-template/`
+   (`agent-env-sync`), then `make up` in the agent folder. Again after every `make down-v`: it deletes
+   DeepLynx's data, and the next platform start makes a new key. In this order (deck 03, "Local
+   DeepLynx"): `make down` in the agent folder first (the agent holds the platform network), then
+   `make down-v && make up` in the platform, then the re-sync, then `make up` in the agent folder.
+   A re-sync before the platform is up copies the old key, and the 401 stays.
+5. Upload a small file in a fresh chat; `/artifacts` lists it, and it shows in the UI under "Prometheus".

@@ -61,4 +61,15 @@ sudo dnf install openssl
 
 Debian/Ubuntu-based distros can substitute `sudo apt install build-essential openssl`.
 
+## 5. Ports and files
+
+- Docker Desktop forwards the published ports to Windows, so a Windows browser opens the stack on
+  `localhost` (`5150` for the UI; with `LOCAL_DEEPLYNX=true` also `3000` for the DeepLynx UI and
+  `5000` for its API). A Windows program already listening on one of those ports collides with
+  the stack: stop it, or change the matching `*_PORT` in `.env` (DeepLynx's UI only works with
+  its API on `5000`).
+- Keep the clone in the WSL filesystem (for example `~/prometheus`), not under `/mnt/c`, and edit
+  `.env` with an editor inside WSL. A Windows editor can save it with CRLF line endings, and then
+  `make` doesn't read `LOCAL_SDK=true` or `LOCAL_DEEPLYNX=true` as `true`.
+
 From here, continue with the main [Quickstart](../../README.md#quickstart).

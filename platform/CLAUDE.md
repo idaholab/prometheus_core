@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Stack at a glance
 
-Multi-agent platform for engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, form-filler, plus the debug agents artifact-debug and code-render-debug) through the **backend**, which also hosts the agent registry (`/v1/agents`) and A2A gateway (`/a2a/{agent_name}`). There is no LLM proxy: each agent calls the provider its `LLM_CONFIG_PROFILE` selects directly. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus, the artifact registry and the agent registrations (hash `prometheus:agent-registry`) via the Redis-compatible protocol. Postgres (`admin-db`) backs only the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
+Multi-agent platform for engineering analysis. A React frontend (`frontend/`) talks to a FastAPI **`backend/`** service over a JSON/SSE contract; the backend relays to a tool-calling **client-agent** orchestrator over A2A JSON-RPC 2.0; the client-agent dispatches to specialist agents (corrosion, radiation, thermal, data, synthesis, OSTI research, plus the debug agents artifact-debug and code-render-debug) through the **backend**, which also hosts the agent registry (`/v1/agents`) and A2A gateway (`/a2a/{agent_name}`). There is no LLM proxy: each agent calls the provider its `LLM_CONFIG_PROFILE` selects directly. Valkey holds conversation state, browser-session state, short-lived status updates, the SSE event bus, the artifact registry and the agent registrations (hash `prometheus:agent-registry`) via the Redis-compatible protocol. Postgres (`admin-db`) backs only the backend's admin plane (local users, OIDC config, signing keys) — migrated by Alembic from `backend/docker-entrypoint.sh`.
 
 The `frontend/` is a Node/TypeScript app (React + Vite). The `backend/` runs Python 3.12+ (also 3.13); the client-agent and infra tests use 3.13.
 
@@ -47,7 +47,7 @@ To temporarily exclude an agent, remove (or rename) its `agents/<name>/docker-co
 
 ## Frontend commands (`frontend/Makefile`)
 
-Run from `frontend/` with Node + npm. The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), so bring up the `backend` (and the stack behind it) first. The root `Makefile` also exposes `make react-dev` / `react-build` / `react-check`.
+Run from `frontend/` with Node + npm. The Vite dev server proxies `/api` to the backend at `VITE_BACKEND_URL` (default `http://localhost:8600`), so bring up the `backend` (and the stack behind it) first. The root `Makefile` also exposes `make react-dev` / `react-build` / `react-check` / `react-test-e2e`.
 
 ```bash
 make install     # npm install
@@ -55,8 +55,12 @@ make dev         # npm run dev -- --port 5150   (Vite dev server, hot reload)
 make build       # npm run build                (production bundle → dist/)
 make lint        # npm run lint                 (eslint)
 make typecheck   # npm run typecheck            (tsc)
-make check       # lint + typecheck
+make test        # npm test                     (Vitest unit and component tests)
+make test-e2e    # npm run test:e2e             (Playwright end-to-end tests, headless Chromium)
+make check       # lint + typecheck + test      (not the end-to-end tests)
 ```
+
+The end-to-end tests need a browser first (`npx playwright install chromium`); CI runs them in the `platform: frontend e2e` job.
 
 Config comes from `frontend/config.ts` plus `VITE_*` env vars (e.g. `VITE_BACKEND_URL`); there is no `config.yml`.
 
@@ -87,7 +91,7 @@ User → React frontend (frontend/, Vite dev server or nginx-served build)
        package, baked into the prometheus_api base image at PROMETHEUS_API_BASE_IMAGE_HASH)
 ```
 
-The backend consumes the client-agent's A2A `message/stream` and re-emits status and artifact events to the React frontend over SSE (`/api/events`). Do not add `/status/{conversation_id}` polling for new long-running agent calls.
+The backend consumes the client-agent's A2A `message/stream` and re-emits status and artifact events to the React frontend over SSE (`/api/events`). Do not add `/status/{conversation_id}` polling for new long-running agent calls. A chat turn's result reaches the page by its client-made `turn_id`: the POST reply and a `turn_done` SSE event carry the same response and the frontend settles on the first; `GET /api/chat/turns/{turn_id}` is read once on stream reconnect, never polled (`backend/CONTRACT.md`, "Delivery").
 
 ### Agent registry and A2A gateway (backend)
 
@@ -101,7 +105,7 @@ Every registry route requires `Authorization: Bearer <AGENT_SECRET>`. Every agen
 
 Every specialist subclasses `PrometheusAgent` (provided by the prebuilt `prometheus_api` base image; see `agents/<name>/Dockerfile`). The base class handles HTTP serving, Bearer auth (`AGENT_SECRET`), agent-card serving, registry registration on startup, A2A JSON-RPC parsing, task lifecycle, and auto-wrapping the `process_analysis()` return value as a JSON artifact. To add a new agent see `docs/docs/dev-docs/adding-agents.md` — the short version: create `agents/<name>/{agent.py, agent_card.json, Dockerfile, docker-compose.yml, pyproject.toml}` and `make generate` will pick it up.
 
-Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiation-agent`, `thermal-agent`, `data-agent`, `synthesis-agent`, `osti-research-agent`, `form-filler-agent`, `artifact-debug-agent`, `code-render-debug-agent` (debug agents, included with `DEBUG_AGENTS=true`; `osti-research-agent` lives in `agents/optional/` and is only included with `OPTIONAL_AGENTS=true` because its PDF/ML dependencies dominate the build; `code-render-debug-agent` returns fixed sample files per language to exercise the `code` and `table` viewers).
+Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiation-agent`, `thermal-agent`, `data-agent`, `synthesis-agent`, `osti-research-agent`, `artifact-debug-agent`, `code-render-debug-agent` (debug agents, included with `DEBUG_AGENTS=true`; `osti-research-agent` lives in `agents/optional/` and is only included with `OPTIONAL_AGENTS=true` because its PDF/ML dependencies dominate the build; `code-render-debug-agent` returns fixed sample files per language to exercise the `code` and `table` viewers).
 
 ### Artifacts
 
@@ -117,11 +121,11 @@ Two contracts sit back to back. The **React frontend ↔ backend** wire contract
 
 ## Configuration & secrets
 
-- `.env` (created from `.env.example` and secrets auto-generated by `scripts/init_env.py`, run by `make init-env` before every start target) holds `LLM_CONFIG_PROFILE` (required; no default, and the SDK's `registry` profile is rejected because there is no LLM proxy), optional `LLM_CONFIG_FILE`, provider keys, `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`, required DeepLynx authentication plus organization/project IDs, optional DeepLynx base URL/data-source ID, and optional proxy vars. Compose sets `LITELLM_MASTER_KEY: ${AGENT_SECRET}` on every agent only because the SDK still reads its registry token from that name; don't put it in `.env`.
+- `.env` (created from `.env.example` and secrets auto-generated by `scripts/init_env.py`, which the Makefile's `.env` rule runs before every goal outside `NO_ENV_GOALS`, then rereads `.env`; in a terminal it also asks for `LOCAL_SDK` and `LOCAL_DEEPLYNX` (Enter = true) while `.env` has no line for them, and saves each answer, yes or no, as that line) holds `LLM_CONFIG_PROFILE` (required; no default, and the SDK's `registry` profile is rejected because there is no LLM proxy), optional `LLM_CONFIG_FILE`, provider keys, `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`, `BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`, required DeepLynx authentication plus organization/project IDs, optional DeepLynx base URL/data-source ID, and optional proxy vars. Compose sets `LITELLM_MASTER_KEY: ${AGENT_SECRET}` on every agent only because the SDK still reads its registry token from that name; don't put it in `.env`.
 - The backend loads `backend/app/config.yml` (`agent_url`, `agent_secret`, `redis_url`, session/JWT settings). Env vars (`CLIENT_AGENT_URL`, `AGENT_SECRET`, `REDIS_URL`, `BACKEND_JWT_SECRET`, `BACKEND_COOKIE_NAME`, `BACKEND_TOKEN_TTL_SECONDS`) override individual keys; `PROMETHEUS_CONFIG_PATH` overrides the file path. The React app is configured via `frontend/config.ts` + `VITE_*` env (e.g. `VITE_BACKEND_URL`).
 - Multi-user identity is a **separate key** from the session cookie above: `USER_IDENTITY_PRIVATE_KEY` (RS256, backend only) signs the short-lived JWT the backend mints per turn (`backend/app/identity.py`) to prove the caller's identity to agents; every agent verifies with `USER_IDENTITY_PUBLIC_KEY`, never the private key. Generate a keypair with `prometheus-identity-keygen`. `CREDENTIAL_BROKER` selects the per-user credential backend (`env` default, `vault` for production). See `docs/dev-docs/multi-user-setup.md`.
 - Agents hardcode semantic flavors such as `medium`. Their selected installed or custom YAML maps those flavors to provider models.
-- The base image `prometheus_api` is pulled from `PROMETHEUS_API_BASE_IMAGE_REPO` (default `containers.github.inl.gov/genesis/prometheus_api`), tag pinned via `PROMETHEUS_API_BASE_IMAGE_HASH` in the root Makefile. Bumping the platform's PrometheusAgent SDK = bumping that hash. `LOCAL_SDK=true` instead builds `prometheus_api:local` from `../sdk` (`make base-image`, run automatically before `up`/`build`) — for collaborators without registry access. The sdk, backend and frontend builds use the registry build cache that `publish-images` writes (needs the containerd image store). `USE_BUILD_CACHE=false` disables it and `BUILD_CACHE=<prefix>` changes where it's read from. Agent images aren't cached.
+- The base image `prometheus_api` is pulled from `PROMETHEUS_API_BASE_IMAGE_REPO` (default `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel`, written by `publish-images`), tag pinned via `PROMETHEUS_API_BASE_IMAGE_HASH` in the root Makefile (`<commit date>-<7 char sha>`). Bumping the platform's PrometheusAgent SDK = bumping that hash, here and in `DEFAULT_BASE_IMAGE_*` in `ctl/platformctl/config.py`. `LOCAL_SDK=true` instead builds `prometheus_api:local` from `../sdk` (`make base-image`, run automatically before `up`/`build`) — to run against the SDK checked out next to the platform. The sdk, backend and frontend builds use the registry build cache that `publish-images` writes (needs the containerd image store). `USE_BUILD_CACHE=false` disables it and `BUILD_CACHE=<prefix>` changes where it's read from. Agent images aren't cached.
 
 ## Service map (default ports)
 

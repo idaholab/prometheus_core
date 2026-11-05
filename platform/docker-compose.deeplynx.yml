@@ -49,8 +49,9 @@ services:
         condition: service_healthy
     ports:
       # The UI image calls the API from the browser at localhost:5000 (baked in
-      # at build time), so the UI only works with the default
-      - "${DEEPLYNX_SERVER_PORT:-5000}:5000"
+      # at build time), so the UI only works with the default. Loopback only:
+      # authentication is off, so nothing else on the network may reach it
+      - "127.0.0.1:${DEEPLYNX_SERVER_PORT:-5000}:5000"
     networks:
       - agent-network
     volumes:
@@ -100,7 +101,8 @@ services:
       deeplynx-server:
         condition: service_healthy
     ports:
-      - "${DEEPLYNX_UI_PORT:-3000}:3000"
+      # Loopback only, like the API: the UI has no login either
+      - "127.0.0.1:${DEEPLYNX_UI_PORT:-3000}:3000"
     networks:
       - agent-network
     environment:

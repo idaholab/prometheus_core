@@ -59,7 +59,7 @@ The status history is the Valkey key `agent:status_history:<conversation id>`, k
 In the Prometheus chat: `/help`, `/agents` (your agent must be here), `/workflows`, `/artifacts`, `/tasks [id]`.
 Each workflow is also a slash command (`orchestrator/debug_commands.py:16-24`).
 
-Always on: `client-agent`, `form-filler-agent`, `synthesis-agent` (the best small LLM example);
+Always on: `client-agent`, `synthesis-agent` (the best small LLM example);
 `osti-research-agent` with `OPTIONAL_AGENTS=true`. `make DEBUG_AGENTS=true up` in the platform adds `agents/debug-agents/` (it empties the registry:
 `make down` your agent first): `artifact-debug-agent` (a PNG through DeepLynx, JSON, a workflow: "Make an image
 with the word Success"), `corrosion-agent` (input-required, answers merged into `params`, approval: "Corrosion analysis of

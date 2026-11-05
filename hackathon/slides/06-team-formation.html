@@ -223,7 +223,7 @@ Tune for the conventions, not for the practice file. Hard-coding &quot;Brie Basi
 </thead>
 <tbody>
 <tr>
-<td><strong>DeepLynx works</strong> on your platform</td>
+<td><strong>DeepLynx works</strong>: <code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code> (the first <code>make up</code> asks; deck 03)</td>
 <td>agents won't start without it, never see the upload, and the PNG can't render</td>
 </tr>
 <tr>
@@ -693,7 +693,7 @@ x_col, y_col = params.get(<span class="s">&quot;x_column&quot;</span>), params.g
 </thead>
 <tbody>
 <tr class="hl">
-<td><strong>DeepLynx is configured</strong> (your local instance, deck 03) in the platform's and your agent's <code>.env</code></td>
+<td><strong>DeepLynx is configured</strong>: <code>LOCAL_DEEPLYNX=true</code> in <code>platform/.env</code> (deck 03), and the <code>DEEPLYNX_*</code> lines in your agent's <code>.env</code> (<code>setup_agent.py</code> copies them)</td>
 <td>Every agent writes an execution record to DeepLynx, so it <strong>won't start</strong> without <code>DEEPLYNX_*</code>. Chat uploads are stored there too, and a PNG cannot render without it.</td>
 </tr>
 <tr>
