@@ -219,6 +219,9 @@ class Citation(BaseModel):
     page: Optional[str] = None
 
 
+ArtifactDisplay = Literal["inline", "panel"]
+
+
 class ArtifactMeta(BaseModel):
     """Conversation-scoped artifact reference on our wire.
 
@@ -243,6 +246,10 @@ class ArtifactMeta(BaseModel):
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None
     created_at: Optional[str] = None
+    # Where the frontend shows it: ``inline`` in the message body (default) or
+    # ``panel``, only in the side artifact panel. Set by the producing agent
+    # through ``metadata.display``; anything else is ``inline``.
+    display: ArtifactDisplay = "inline"
 
 
 # --------------------------------------------------------------------------- #
