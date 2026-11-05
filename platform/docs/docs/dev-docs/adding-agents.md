@@ -105,6 +105,35 @@ Key fields for discovery and routing:
 - `skills[].tags`: Used by the client-agent when matching capabilities to a request
 - `skills[].requires_approval`: If `true`, the client-agent asks the user before invoking
 
+#### Receiving the user's own words
+
+By default the client-agent's model writes every skill argument, so a free-text
+field such as `message` gets the model's rewording of the request. When a skill
+needs what the user actually said (for example, an agent with its own request
+parser), mark that top-level string property:
+
+```json
+"inputSchema": {
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "The request, in the user's own words.",
+      "x-prometheus-source": "user_message"
+    }
+  },
+  "required": ["message"]
+}
+```
+
+The client-agent then hides the field from its model and fills it with the
+user's words for the request in progress: every message they typed and every
+form answer since the last successful call to a skill with a marked field,
+oldest first, one per line (form answers as `<question> <answer>`). A failed
+call keeps them, so a retry carries the whole request. `inputSources` reports
+the field as `user`. Only top-level properties are read; the marker is dropped
+before the schema reaches the model.
+
 Do **not** put a `url` field in the card. `PrometheusAgent` sets the registered
 URL at startup: `EXTERNAL_AGENT_URL` if set, else
 `http://{container hostname}:{AGENT_PORT}`. Always set `EXTERNAL_AGENT_URL` to
