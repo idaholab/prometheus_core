@@ -90,7 +90,7 @@ services:
   # Valkey for Redis-compatible shared state (conversations, status, artifacts).
   # The service name stays "redis" so existing REDIS_URL values keep working.
   redis:
-    image: valkey/valkey-bundle:9.1.3@sha256:dd30c59c2b2a598e83308095220a31d6d93d64c40a839c702cb1e98c8e220660
+    image: valkey/valkey-bundle:9.1.4@sha256:c64007296a2a38398d4be63847e1c9890954e45574c16cbe607883ba71c6b985
     command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
     ports:
       - "${REDIS_LOCAL_PORT:-6379}:6379"
