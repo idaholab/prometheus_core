@@ -29,5 +29,5 @@ The report says, for every requirement, whether it is proven and by which job, w
   how it proves the requirement and the results of every run of that claim.
 - SPC-REQ-006-09: A producer, CI job or display name MUST be at most 200 characters, and a test's
   node ID at most 250. A longer one MUST be refused where it comes in (SPC-REQ-002-09,
-  SPC-REQ-003-18, SPC-REQ-004-02, SPC-REQ-008-10), never cut. A heading may still shorten a long
+  SPC-REQ-003-17, SPC-REQ-004-02, SPC-REQ-008-10), never cut. A heading may still shorten a long
   test name to stay on one line.

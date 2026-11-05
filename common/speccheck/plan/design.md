@@ -224,7 +224,7 @@ def test_results_file_round_trips():
 - **The explanation:** whitespace is collapsed to single spaces, so a long one can span lines in
   the decorator. It is plain text, at most 1000 characters, and escaped wherever it is shown.
   Like node IDs, it goes into CI artifacts, so keep secrets out of it.
-- **Rules, at collection** (SPC-REQ-003-02 to 003-17, on any run, locally too):
+- **Rules, at collection** (SPC-REQ-003-02 to 003-16, on any run, locally too):
   - a mark takes exactly two strings;
   - the explanation isn't empty, too long, the ID itself, or a placeholder (`TODO`, `TBD`,
     `FIXME`, `...`, `-`);

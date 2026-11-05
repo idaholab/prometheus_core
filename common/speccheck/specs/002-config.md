@@ -18,7 +18,7 @@ One config describes one spec folder: where it is, its ID prefix, and what may p
 - SPC-REQ-002-05: A `[producers.<name>]` entry MUST be able to limit the specs it may claim to a
   list of spec numbers. `"all"` is the default.
 - SPC-REQ-002-06: A `[ci.<job>]` entry's `covers` MUST be a table from ID to how the job proves
-  it, with at least one entry. Each explanation MUST NOT be one that SPC-REQ-003-17 refuses or one that
+  it, with at least one entry. Each explanation MUST NOT be one that SPC-REQ-003-16 refuses or one that
   has a requirement's text (SPC-REQ-003-09), and a problem MUST name the job and the ID.
 - SPC-REQ-002-07: A config that isn't valid TOML MUST be an error that names the file.
 - SPC-REQ-002-08: A `[ci.<job>]` entry MUST NOT share a name with a `[producers.<name>]` entry.

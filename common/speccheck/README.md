@@ -639,11 +639,9 @@ is there for runners in other languages.
   the end of the session. An interrupted session leaves none, so `verify --complete` reports the
   producer as missing.
 - A test's outcome merges its setup, call and teardown: an error in setup or teardown makes it
-  `error`, a skip `skipped`, and an expected failure `xfailed`. `error` is sticky, so a flaky
-  fixture can't hide behind a rerun plugin's retry. A failed call isn't: with a rerun plugin, a
-  test that fails and then passes is `passed`, so a flaky test proves its requirement once it
-  passes. Catching flaky tests is the rerun plugin's job. Skipped, deselected and (`--collect-only`)
-  collected claims are written too, so `verify` can say "claimed but didn't run".
+  `error`, a skip `skipped`, and an expected failure `xfailed`. Skipped, deselected and
+  (`--collect-only`) collected claims are written too, so `verify` can say "claimed but didn't
+  run".
 - Under pytest-xdist the run writes one file, with every worker's results.
 
 A reader checks a result's explanations itself, whoever wrote the file, because a writer in

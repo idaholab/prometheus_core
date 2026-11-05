@@ -440,10 +440,6 @@ def test_phase_outcome(when, outcome, xfail, expected):
     assert pytest_plugin.phase_outcome(report(when, outcome, xfail=xfail)) == expected
 
 
-CLEAN_ATTEMPT = [("setup", "passed"), ("call", "passed"), ("teardown", "passed")]
-"""A second attempt of the same test, as a rerun plugin sends it, that passes."""
-
-
 @pytest.mark.parametrize(
     ("phases", "expected"),
     [
@@ -454,14 +450,10 @@ CLEAN_ATTEMPT = [("setup", "passed"), ("call", "passed"), ("teardown", "passed")
         ([("setup", "skipped"), ("teardown", "passed")], "skipped"),
         ([("setup", "passed"), ("call", "failed"), ("teardown", "failed")], "error"),
         ([("setup", "failed"), ("teardown", "skipped")], "error"),
-        # A rerun plugin sends a second setup, call and teardown for the same test: an error stays
-        ([("setup", "passed"), ("call", "passed"), ("teardown", "failed")] + CLEAN_ATTEMPT, "error"),
-        ([("setup", "failed"), ("teardown", "passed")] + CLEAN_ATTEMPT, "error"),
-        ([("setup", "passed"), ("call", "failed"), ("teardown", "passed")] + CLEAN_ATTEMPT, "passed"),
     ],
 )
 def test_phases_merge(phases, expected):
-    """An error in setup or teardown wins, even over a later clean attempt; a teardown skip changes nothing."""
+    """An error in setup or teardown wins; a teardown skip changes nothing."""
     outcome = "collected"
     for when, result in phases:
         outcome = pytest_plugin.merge(outcome, report(when, result))
