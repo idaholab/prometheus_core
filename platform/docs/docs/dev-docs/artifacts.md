@@ -145,6 +145,31 @@ async def process_analysis(self, params, context, event_queue):
     return result
 ```
 
+## Showing an artifact only in the side panel
+
+By default every artifact appears in the assistant message and in the side
+artifact panel. For a large result the reply only names, such as a generated
+input file or a run archive, set `display` to `panel` in the artifact's
+metadata. It is then left out of the message, listed in the side panel, and a
+newly arrived one opens there in its viewer:
+
+```python
+await self.send_deeplynx_artifact(
+    context,
+    event_queue,
+    file_path=path,
+    name="current.i",
+    description="Verified MOOSE input file",
+    storage_config=config,
+    mime_type="text/plain",
+    metadata={"display": "panel"},
+)
+```
+
+`display` only changes *where* an artifact appears; its viewer still comes from
+the classification below. Any value other than `panel` means inline. See
+"Artifact `display`" in `backend/CONTRACT.md`.
+
 ## How artifacts are rendered in Chainlit
 
 The frontend inspects artifact metadata and routes to the appropriate viewer:

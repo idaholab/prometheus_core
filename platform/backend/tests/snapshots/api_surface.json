@@ -1150,6 +1150,14 @@
             "default": "",
             "type": "string"
           },
+          "display": {
+            "default": "inline",
+            "enum": [
+              "inline",
+              "panel"
+            ],
+            "type": "string"
+          },
           "json_body": {
             "anyOf": [
               {},

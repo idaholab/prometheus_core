@@ -40,7 +40,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
-from app.contract import ArtifactMeta, Citation, RenderHint
+from app.contract import ArtifactDisplay, ArtifactMeta, Citation, RenderHint
 
 # --------------------------------------------------------------------------- #
 # Classifier trigger tables — copied verbatim from frontend/plugins/<name>/__init__.py
@@ -474,7 +474,14 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         citation=_citation_from(metadata),
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),
+        display=_display_from(metadata),
     )
+
+
+def _display_from(metadata: dict[str, Any]) -> ArtifactDisplay:
+    """Return the producer's ``metadata.display`` choice, or ``inline``."""
+    value = str(metadata.get("display") or "").strip().lower()
+    return "panel" if value == "panel" else "inline"
 
 
 def is_user_upload(artifact: dict[str, Any]) -> bool:
