@@ -320,6 +320,26 @@ jobs:
             echo "::error::The generated slides are out of date. Run 'make build' in hackathon/slides and commit the result."
             exit 1
           fi
+      - name: Assemble the decks for review
+        if: ${{ github.event_name == 'pull_request' }}
+        # The same files and layout the pages workflow serves from /hackathon/
+        run: |
+          preview="$RUNNER_TEMP/slides-preview"
+          mkdir -p "$preview/one-day"
+          cp -R ./*.html assets "$preview/"
+          cp one-day/*.html "$preview/one-day/"
+      # Download and unzip it, then open index.html or one-day/index.html. The
+      # decks load their fonts from Google Fonts, so they need internet access.
+      # The decks are public on the Pages site, but the repo is public too, so
+      # anyone signed in to GitHub can download this
+      - name: Upload the decks
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hackathon-slides
+          path: ${{ runner.temp }}/slides-preview/
+          if-no-files-found: error
+          retention-days: 14
 
   platform-docs:
     name: "platform: docs"
