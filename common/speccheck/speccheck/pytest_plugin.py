@@ -140,7 +140,7 @@ def name_problem(nodeid: str) -> str:
 def claims_of(item: pytest.Item) -> tuple[list[claims.Claim], list[str]]:
     """The test's claims in mark order, each explanation collapsed, and the problems with them.
 
-    A claim with a problem is left out. Checks only what needs no specs: 003-04, 003-08, 003-10 and 003-17.
+    A claim with a problem is left out. Checks only what needs no specs: 003-04, 003-08, 003-10 and 003-16.
     """
     found: list[claims.Claim] = []
     problems: list[str] = []
@@ -274,13 +274,9 @@ def phase_outcome(report: pytest.TestReport) -> str | None:
 
 
 def merge(current: str, report: pytest.TestReport) -> str:
-    """The outcome after one more phase: an error in setup or teardown wins over everything else.
-
-    Only `error` sticks. A failed call is replaced by a later attempt's outcome, so with a rerun
-    plugin a test that fails and then passes is `passed` (SPC-REQ-003-15).
-    """
+    """The outcome after one more phase: an error in setup or teardown wins over everything else."""
     new = phase_outcome(report)
-    if new is None or current == "error":
+    if new is None:
         return current
     if report.when == "teardown" and new != "error":
         return current

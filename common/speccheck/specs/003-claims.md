@@ -21,7 +21,7 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   fail collection or change any test's outcome, so installing it changes nothing for a project
   that doesn't use it. With a results file but no `speccheck_config`, collection MUST fail on a
   badly formed or placed mark, a bad explanation, a repeated claim or explanation, or a test node
-  ID over the limit (SPC-REQ-003-18), and MUST NOT compare claims with any spec.
+  ID over the limit (SPC-REQ-003-17), and MUST NOT compare claims with any spec.
 - SPC-REQ-003-06: A docstring or comment that mentions an ID MUST NOT count as a claim.
 - SPC-REQ-003-07: The plugin MUST give each claiming test one outcome, merged from its setup, call
   and teardown: an error in setup or teardown makes it `error`, a skip makes it `skipped`, an
@@ -49,13 +49,10 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
 - SPC-REQ-003-14: When the project sets `speccheck_config`, collection MUST fail when no producer
   is set, and the message MUST name both ways to set one: `SPECCHECK_PRODUCER` and
   `speccheck_producer`.
-- SPC-REQ-003-15: When a rerun plugin runs a claiming test again, an `error` MUST stay `error` for
-  the rest of the session, and a test whose call failed and whose later attempt passes MUST be
-  `passed`.
-- SPC-REQ-003-16: A `--collect-only` run MUST write each claiming test as `collected`.
-- SPC-REQ-003-17: An explanation MUST be refused when, after its whitespace is collapsed as in
+- SPC-REQ-003-15: A `--collect-only` run MUST write each claiming test as `collected`.
+- SPC-REQ-003-16: An explanation MUST be refused when, after its whitespace is collapsed as in
   SPC-REQ-003-08, it is empty, longer than 1000 characters, the claimed ID itself, or a placeholder
   (`TODO`, `TBD`, `FIXME`, `...` or `-`, the whole text, in any case). In pytest, a refused
   explanation MUST fail collection, and the message MUST name the test and the ID.
-- SPC-REQ-003-18: Collection MUST fail on a claiming test whose node ID is over 250 characters, and
+- SPC-REQ-003-17: Collection MUST fail on a claiming test whose node ID is over 250 characters, and
   the message MUST name the test and say how to shorten it.

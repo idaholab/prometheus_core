@@ -30,7 +30,7 @@ runners and the checker, so other languages can write one too.
   job, run and attempt wrote the file, and which commit it tested, as the shipped JSON Schema
   defines (SPC-REQ-004-11). Outside CI, `ci` MUST be null.
 - SPC-REQ-004-09: A reader MUST reject a file with a result that claims the same ID twice, or
-  whose `how` contains a line break or is one that SPC-REQ-003-17 refuses.
+  whose `how` contains a line break or is one that SPC-REQ-003-16 refuses.
 - SPC-REQ-004-10: The header MUST give `root`, the folder that its results' `file` paths are
   relative to, as a path from the repository's root, so a report can link each test's file. When
   the repository's root can't be found, `root` MUST be null.

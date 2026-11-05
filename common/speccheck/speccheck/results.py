@@ -48,7 +48,7 @@ MAX_TEXT = 1000
 """The longest string field kept, after which a field is a problem."""
 MAX_RAW_HOW = 16 * 1024
 """The longest explanation as written, before its whitespace is collapsed. Only a safety limit, well
-under MAX_LINE_BYTES: the explanation's real limit, MAX_HOW, is measured on the collapsed text (SPC-REQ-003-17)."""
+under MAX_LINE_BYTES: the explanation's real limit, MAX_HOW, is measured on the collapsed text (SPC-REQ-003-16)."""
 MAX_COVERS = 200
 """The most IDs one result may claim."""
 MAX_NAME = 200

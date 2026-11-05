@@ -728,7 +728,7 @@ def test_a_how_of_exactly_1000_characters_is_accepted(project: Project):
     "a result whose how is 1400 spaces of padding around 12 characters, over 1000 as written, is accepted and its pass counts",
 )
 def test_a_how_is_measured_after_its_whitespace_is_collapsed(project: Project):
-    """The same rule as the plugin's (003-17): padding is not text, so a writer that doesn't collapse is not penalised."""
+    """The same rule as the plugin's (003-16): padding is not text, so a writer that doesn't collapse is not penalised."""
     project.spec("- T-REQ-001-01: One.")
     header = {"schema": "speccheck-results/1", "producer": "unit"}
     how = "proves it" + " " * 1400 + "well"
