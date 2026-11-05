@@ -50,10 +50,6 @@ SLIDES = ROOT / "slides"
 DECK_ROOTS = [ROOT, ROOT / "one-day"]
 ASSETS = ROOT / "assets"
 
-# Prefix for asset URLs in the deck being built ("assets" for the decks in ROOT, "../assets" for
-# those one folder down). Set by build() and read by the helpers that emit <img>, <link> and <script>.
-assets_prefix = "assets"
-
 # ---------------------------------------------------------------------------
 # attribute strings: {.cls key="value" key=value #id}
 # ---------------------------------------------------------------------------
@@ -437,12 +433,12 @@ def inline(text: str) -> str:
 # ---------------------------------------------------------------------------
 # slides
 # ---------------------------------------------------------------------------
-def logos() -> str:
+def logos(assets_prefix: str) -> str:
     return (f'<div class="logos"><img src="{assets_prefix}/INL-logo.png" alt="INL">'
             f'<img src="{assets_prefix}/genesis_logo.png" alt="Genesis"></div>')
 
 
-def prom() -> str:
+def prom(assets_prefix: str) -> str:
     return (f'<img src="{assets_prefix}/prometheus_logo.png" alt="Prometheus" '
             'style="width:560px; margin-left:-18px">')
 
@@ -486,8 +482,11 @@ def section_open(classes: list[str], at: dict[str, str]) -> str:
     return a + ">"
 
 
-def build_slide(src: str, mode: list[str]) -> tuple[str, list[str]]:
-    """Return (html, new_mode). mode is the inherited ['appendix'] / ['bonus'] / []."""
+def build_slide(src: str, mode: list[str], assets_prefix: str) -> tuple[str, list[str]]:
+    """Return (html, new_mode). mode is the inherited ['appendix'] / ['bonus'] / [].
+
+    assets_prefix is the URL prefix of the shared assets/ folder, relative to the deck.
+    """
     src, notes = take_notes(src)
     lines = src.split("\n")
     first = next((i for i, l in enumerate(lines) if l.strip()), 0)
@@ -503,7 +502,7 @@ def build_slide(src: str, mode: list[str]) -> tuple[str, list[str]]:
             sub = render_md(rest).strip()
             sub = re.sub(r"^<p>(.*)</p>$", r'<p class="sub">\1</p>', sub, flags=re.S)
             kicker = f'<div class="kicker">{inline(at["kicker"])}</div>' if "kicker" in at else ""
-            body = (f"  {logos()}\n  {prom()}\n  {kicker}\n  <h1>{inline(text)}</h1>\n  {sub}\n"
+            body = (f"  {logos(assets_prefix)}\n  {prom(assets_prefix)}\n  {kicker}\n  <h1>{inline(text)}</h1>\n  {sub}\n"
                     f'  <div class="meta">{pills}</div>')
             return f"{section_open(['title'] + mode, at)}\n{body}{notes}\n</section>", mode
         # section / interstitial page; may switch the mode for the following slides
@@ -597,8 +596,8 @@ def deck_root(path: pathlib.Path) -> pathlib.Path:
 
 
 def build(path: pathlib.Path) -> pathlib.Path:
-    global assets_prefix
     root = deck_root(path)
+    # "assets" for the decks in ROOT, "../assets" for those one folder down
     assets_prefix = pathlib.PurePosixPath(os.path.relpath(ASSETS, root)).as_posix()
     meta, body = load_deck(path)
     sec, style = accent_style(str(meta.get("accent", "welcome")))
@@ -606,7 +605,7 @@ def build(path: pathlib.Path) -> pathlib.Path:
         style += f"\n<style>\n{meta['css']}\n</style>"
     out, mode = [], []
     for src in split_slides(body):
-        h, mode = build_slide(src, mode)
+        h, mode = build_slide(src, mode, assets_prefix)
         out.append(h)
     src = root.relative_to(ROOT) / "slides" / path.name
     # Decks outside ROOT get a footer link back to their own index and load the logo from ../assets.
