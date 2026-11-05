@@ -1,0 +1,11 @@
+{
+  /* In e2e/ and named tsconfig.json so editors find it for the tests: they
+   * use the nearest tsconfig.json above a file */
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    /* The e2e tests and config run in Node, not the browser */
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": [".", "../playwright.config.ts"]
+}

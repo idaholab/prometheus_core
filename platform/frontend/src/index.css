@@ -328,3 +328,18 @@ canvas {
 .ag-theme-quartz .ag-row:nth-child(even) {
   background-color: var(--color-base-200); /* Lighter stripe for light mode */
 }
+
+/* Dropdown and menu panels (SplitButton, the Header user menu, chat-history
+ * options). On the dark theme base-100 matches the page and base-300 is
+ * darker than it, so a bg-base-100 border-base-300 panel showed only a black
+ * edge. This lifts the panel a little above the page with a light tint, a
+ * faint light border and a shadow, so it separates over the page and over
+ * cards in both themes. */
+@utility menu-panel {
+  background-color: color-mix(in oklab, var(--color-base-content) 5%, var(--color-base-100));
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: var(--radius-box);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.4),
+    0 4px 6px -4px rgb(0 0 0 / 0.4);
+}

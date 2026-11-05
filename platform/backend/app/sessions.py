@@ -99,6 +99,22 @@ def _awaited_key(sid: str) -> str:
     return f"session:{sid}:awaited"
 
 
+def _turn_key(sid: str, turn_id: str) -> str:
+    return f"session:{sid}:turn:{turn_id}"
+
+
+# How long a chat turn's state outlives the turn. The agent call has no total time bound
+# (``A2AClient``'s 900 s httpx timeout applies to each read of the stream), so this is sized
+# for a long turn plus the time a client needs to reconnect and read the result.
+TURN_TTL_SECONDS = 3600
+# A running turn's state is a lease: the worker running the turn refreshes it every
+# TURN_LEASE_REFRESH_SECONDS (routers/chat.py). If that worker dies mid-turn, nothing
+# will ever finish the turn, so the state expires within TURN_LEASE_SECONDS and a lookup
+# answers 404 instead of "running" for an hour.
+TURN_LEASE_SECONDS = 60
+TURN_LEASE_REFRESH_SECONDS = 20
+
+
 @dataclass(frozen=True)
 class SessionState:
     """Read-only snapshot of one logged-in browser session.
@@ -414,6 +430,42 @@ class SessionStore:
         """Whether ``task_id`` is still awaited. A hint only — :meth:`claim_task` is
         the authority, since this can go stale the moment it returns."""
         return bool(await self._redis.sismember(_awaited_key(sid), task_id))
+
+    # -- chat turns (delivery by turn id) ----------------------------------- #
+
+    async def start_turn(self, sid: str, turn_id: str) -> bool:
+        """Record ``turn_id`` as running; ``False`` if this session already used that id.
+
+        ``SET NX`` makes a retried POST with the same id lose the race instead of running
+        the agent a second time.
+        """
+        created = await self._redis.set(
+            _turn_key(sid, turn_id), json.dumps({"state": "running"}), nx=True, ex=TURN_LEASE_SECONDS
+        )
+        return bool(created)
+
+    async def renew_turn(self, sid: str, turn_id: str) -> None:
+        """Extend a running turn's lease. Only the turn's own worker calls this, and it
+        stops before :meth:`finish_turn`, so it never shortens a stored result."""
+        await self._redis.expire(_turn_key(sid, turn_id), TURN_LEASE_SECONDS)
+
+    async def finish_turn(self, sid: str, turn_id: str, response: dict[str, Any]) -> None:
+        """Store the turn's final (mapped) response, for a client that lost the POST reply."""
+        value = json.dumps({"state": "done", "response": response})
+        await self._redis.set(_turn_key(sid, turn_id), value, ex=TURN_TTL_SECONDS)
+
+    async def get_turn(self, sid: str, turn_id: str) -> Optional[dict[str, Any]]:
+        """``{"state": "running"}`` or ``{"state": "done", "response": {...}}``; ``None`` if
+        this session has no such turn (never started, expired, or another session's)."""
+        raw = await self._redis.get(_turn_key(sid, turn_id))
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            logger.warning("session: discarding unparseable turn state for %s", turn_id)
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
 
 def get_store(request: Request) -> SessionStore:

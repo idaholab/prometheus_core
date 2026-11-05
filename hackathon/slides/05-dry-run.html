@@ -20,7 +20,7 @@
 <div class="card acc">
 <div class="kpi"><span class="v">1</span><span class="l">~10 min</span></div>
 <h3>Check</h3>
-<p class="small">Your platform from the homework is up and current, local DeepLynx is running, and you are logged in.</p>
+<p class="small">Your platform from the homework is up and current (with <code>LOCAL_DEEPLYNX=true</code>, so DeepLynx runs with it), and you are logged in.</p>
 </div>
 
 <div class="card acc">
@@ -77,10 +77,10 @@ curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span
 <ol class="b">
 <li>Open <code>http://localhost:5150</code>; create the admin in the setup wizard if you haven't (the signing key is created for you)</li>
 <li>Chat: <code>/agents</code>, then ask a question</li>
-<li>Upload any small file: it should appear in your local DeepLynx (<code>http://localhost:3000</code>)</li>
+<li>Upload any small file: it should appear in your local DeepLynx (<code>http://localhost:3000</code>, project <strong>Prometheus</strong>)</li>
 </ol>
 <div class="callout warn">
-Platform or DeepLynx not up yet? Use the <strong>bonus slide</strong> at the end of this deck, and the DeepLynx slides of deck 03.</div>
+Platform or DeepLynx not up yet? Use the <strong>bonus slide</strong> at the end of this deck, and the local DeepLynx slide of deck 03.</div>
 
 </div>
 </div>
@@ -161,7 +161,7 @@ docker compose -p prometheus_platform restart client-agent</pre>
 </tr>
 <tr>
 <td>exits at startup: &quot;Invalid required DeepLynx configuration&quot;</td>
-<td><code>DEEPLYNX_*</code> in <code>.env</code> (deck 03)</td>
+<td>no <code>DEEPLYNX_*</code> in its <code>.env</code>: <code>LOCAL_DEEPLYNX=true</code> and <code>make up</code> in the platform, then <code>setup_agent.py --env-only</code> (deck 03)</td>
 </tr>
 <tr>
 <td><code>ModuleNotFoundError</code> in the container</td>
@@ -270,11 +270,9 @@ git remote add upstream <span class="s">\</span>
 git fetch upstream
 cd platform            <span class="c"># the stack lives here</span>
 
-make init-env                   <span class="c"># secrets; pick LLM profile + key</span>
-echo <span class="s">&quot;LOCAL_SDK=true&quot;</span> &gt;&gt; .env   <span class="c"># base image from ../sdk</span>
-<span class="c"># DEEPLYNX_* from your local DeepLynx (deck 03)</span>
-
-make up                   <span class="c"># long first build; make logs to watch</span>
+make up                   <span class="c"># asks: Enter, Enter (base image from ../sdk,</span>
+                          <span class="c"># DeepLynx), pick LLM profile + key; then the</span>
+                          <span class="c"># long first build; make logs to watch</span>
 make ps</pre>
 <div class="col">
 <pre class="xs"><span class="c"># 3. verify (bottom-up)</span>
@@ -297,7 +295,7 @@ curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span
 <tbody>
 <tr>
 <td><code>FROM …prometheus_api:</code> error or pull <code>unauthorized</code></td>
-<td><code>LOCAL_SDK=true</code> missing in <code>.env</code></td>
+<td><code>LOCAL_SDK=true</code> missing in <code>.env</code>: set it</td>
 </tr>
 <tr>
 <td>&quot;No 'userToken' found&quot;</td>
@@ -351,7 +349,7 @@ curl -s -H <span class="s">&quot;Authorization: Bearer </span>$AGENT_SECRET<span
 <ol class="b">
 <li>Open <code>http://localhost:5150</code>; create the admin in the setup wizard if you haven't</li>
 <li>Chat: <code>/agents</code>, then ask a question</li>
-<li>Upload any small file: it should appear in DeepLynx</li>
+<li>Upload any small file: it should appear in DeepLynx (<code>http://localhost:3000</code>)</li>
 </ol>
 <div class="callout warn">
 Platform not up yet? Use the <strong>bonus slide</strong> at the end of this deck, and the bonus section of deck 03.</div>

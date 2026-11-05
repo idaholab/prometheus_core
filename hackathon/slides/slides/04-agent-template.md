@@ -208,7 +208,7 @@ text = path.read_text()          # a local file, whatever the source
 ```
 
 ::: callout warn
-No DeepLynx configured → uploads never reach your agent. Check it before you start (deck 03).
+No DeepLynx configured → uploads never reach your agent. Check that `platform/.env` has `LOCAL_DEEPLYNX=true` before you start (deck 03).
 :::
 
 ---
@@ -980,8 +980,8 @@ Restart the agent (re-registers), then refresh discovery or restart the client-a
 | Mode | How | Registered URL / notes |
 |---|---|---|
 | **Docker, internal network**<br><span class="small">(recommended)</span> | `make up` in the agent dir. It joins `prometheus_platform_agent-network` via `docker-compose.net_internal.yml`. | `http://<service>:8000`. `REGISTRY_URL`, `REDIS_URL`, and `JWKS_URL` resolve by service name. Start the platform first. {.hl} |
-| **Docker, external port** | `EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `prometheus.host.internal:8600/6379/8600`. |
-| **Host Python**<br><span class="small">(fastest edit loop)</span> | `python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:8600`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000` |
+| **Docker, external port** | `EXTERNAL_AGENT_HOST=prometheus.host.internal EXTERNAL_AGENT_PORT=8042 make up` | `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8042`. Point `REGISTRY_URL`/`REDIS_URL`/`JWKS_URL` at `prometheus.host.internal:8600/6379/8600`, and `DEEPLYNX_BASE_URL` at `http://prometheus.host.internal:5000/api/v1`. |
+| **Host Python**<br><span class="small">(fastest edit loop)</span> | `uv run --no-sync --env-file .env python agent.py` in a venv with `prometheus_api` installed | Set `REGISTRY_URL=http://localhost:8600`, `REDIS_URL=redis://localhost:6379`, `JWKS_URL=http://localhost:8600/.well-known/jwks.json`, `DEEPLYNX_BASE_URL=http://localhost:5000/api/v1`, `EXTERNAL_AGENT_URL=http://prometheus.host.internal:8000` |
 | **In-tree** | Copy into `prometheus_core/platform/agents/<name>/`, then `make generate && make up` in `platform/` | Auto-included (one directory level). Uses the platform's `prometheus_api:local`. Copy `agents/synthesis-agent/docker-compose.yml` as the model. |
 
 :::: grid 2
@@ -1007,7 +1007,8 @@ uv pip install -e \
 
 AGENT_SECRET=dev AGENT_SECRET_REQUIRED=false \
 USER_IDENTITY_REQUIRED=false PROMETHEUS_TASK_STORE=memory \
-AGENT_PORT=8000 python agent.py    # DEEPLYNX_* from .env
+DEEPLYNX_BASE_URL=http://localhost:5000/api/v1 AGENT_PORT=8000 \
+uv run --no-sync --env-file .env python agent.py   # DEEPLYNX_* from .env
 # "Loaded agent card…"  "Starting HTTP server on 0.0.0.0:8000"
 # registration retries, then "Continuing without registration"
 ```
@@ -1022,7 +1023,7 @@ curl -s -X POST localhost:8000/api/chat \
 ```
 
 {.tiny}
-The agent refuses to start without DeepLynx (`DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID`, and key + secret or `DEEPLYNX_JWT_TOKEN`); a `.env` in the folder is read. With `AGENT_SECRET_REQUIRED=true`, add `-H "Authorization: Bearer $AGENT_SECRET"` to every call except `/healthz` and the card routes.
+The agent refuses to start without DeepLynx (`DEEPLYNX_ORG_ID`, `DEEPLYNX_PROJECT_ID`, and key + secret or `DEEPLYNX_JWT_TOKEN`). `python agent.py` alone doesn't read `.env`: `--env-file .env` loads it, and a variable set on the command line wins over the file. On the host, `deeplynx-server` doesn't resolve, so `DEEPLYNX_BASE_URL` points at `localhost:5000`. With `AGENT_SECRET_REQUIRED=true`, add `-H "Authorization: Bearer $AGENT_SECRET"` to every call except `/healthz` and the card routes.
 :::
 
 ---
@@ -1589,7 +1590,7 @@ The pattern for any "wrap an existing code" agent: **artifact in → worker thre
 <div class="row" style="gap:0; align-items:stretch">
 <div class="box orange" style="flex:1"><b>meshing agent</b><span class="small">skill <code>agentic_hex_meshing</code>, <code>streaming: true</code>, 1800 s</span></div>
 <div class="arrow-h" style="width:70px"><span>MCP</span></div>
-<div class="box teal" style="flex:1"><b>meshing-sandbox</b><span class="small">agent-sandbox-mcp + gmsh, pyvista…</span><span class="mono">internal: true network</span></div>
+<div class="box teal" style="flex:1"><b>meshing-sandbox</b><span class="small">Jupyter kernel + gmsh, pyvista…</span><span class="mono">internal: true network</span></div>
 </div>
 <div class="arrow-v"><span>vision flavor</span></div>
 <div class="box violet"><b>LLM tool loop</b><span class="small">tools: <code>run_python(code, summary)</code> and <code>submit_final_mesh(basename, summary)</code></span></div>
@@ -1618,58 +1619,6 @@ The pattern for any "wrap an existing code" agent: **artifact in → worker thre
 {.small}
 Branch `agentic-hex-meshing` of `genesis/gmsh_agent` on github.inl.gov (PR #1): `meshing_loop.py`, `sandbox_client.py`, `DESIGN.md`.
 :::
-
----
-
-## `agent-sandbox-mcp`: safe execution of LLM-written code {eyebrow="Building block · INL network only"}
-
-:::: grid 2 gap=26px
-{.small}
-A notebook MCP server with one persistent, isolated Jupyter kernel per session, each under its own unprivileged uid. Streamable HTTP at `http://<svc>:8080/mcp/mcp`; health at `/healthz`.
-
-{.xs}
-| MCP tool | Returns |
-|---|---|
-| `start_session(idle_ttl_s)` | `session_id` (a capability token) |
-| `run_cell(session_id, code)` | `done` within 10 s (stdout, stderr, MIME results such as `image/png`, error), else `running` + `task_id` |
-| `get_task_status(session_id, task_id)` | poll a long cell |
-| `upload_file` / `download_file` / `list_files` | base64; downloads capped at 25 MiB |
-| `end_session(session_id)` | kills the kernel and everything its uid owns |
-
-{.tiny}
-Every cell is appended to `notebook.ipynb` in the session's scratch dir.
-
-|||
-
-```docker {.xs}
-# your sandbox image (INL network only)
-FROM containers.github.inl.gov/genesis/agent-sandbox-mcp:latest
-RUN pip install numpy pandas matplotlib
-```
-
-```yaml {.xs}
-# compose: sandbox reachable only by your agent
-services:
-  my-sandbox:
-    build: ./sandbox
-    read_only: true
-    tmpfs: [/tmp, /scratch]
-    cap_drop: [ALL]
-    cap_add: [SETUID, SETGID, CHOWN, SETPCAP, KILL]
-    security_opt: [no-new-privileges:true]
-    networks: [my-sandbox-net]
-  my-agent:
-    environment:
-      SANDBOX_MCP_URL: http://my-sandbox:8080/mcp/mcp
-    networks: [agent-network, my-sandbox-net]
-networks:
-  my-sandbox-net: {internal: true}
-```
-
-::: callout warn
-**No authentication**: the network placement is the security. Connecting by service name returns **421 Misdirected Request** (FastMCP DNS-rebinding protection), so send `Host: localhost:8080` as `sandbox_client.py` does. No numpy or pandas preinstalled.
-:::
-::::
 
 ---
 

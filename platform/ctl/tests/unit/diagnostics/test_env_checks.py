@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+from platformctl import config as cfg
 from platformctl.diagnostics import env_checks as ec
 from platformctl.diagnostics.base import FAIL, PASS, SKIP, WARN
 from tests.unit.conftest import make_context
@@ -85,7 +86,7 @@ def test_base_image_pin_local_sdk(platform_root, runner):
 def test_base_image_pin_default(platform_root, runner):
     """Without `LOCAL_SDK` or a blank pin, the default base image passes."""
     result = run(ec.BASE_IMAGE_PIN, platform_root, runner)
-    assert result.status == PASS and "prometheus_api:1914b55" in result.evidence
+    assert result.status == PASS and f"{cfg.DEFAULT_BASE_IMAGE_REPO}:{cfg.DEFAULT_BASE_IMAGE_HASH}" in result.evidence
 
 
 @pytest.mark.parametrize("key", ["PROMETHEUS_API_BASE_IMAGE_HASH", "PROMETHEUS_API_BASE_IMAGE_REPO"])

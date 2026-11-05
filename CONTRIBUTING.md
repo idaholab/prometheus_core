@@ -111,7 +111,7 @@ touched locally first:
 | `sdk/` | `make check` (ruff lint, ruff format, mypy) and `make test` |
 | `agent-template/` | `make check` and `make test` |
 | `platform/backend/` | `uv run ruff check . && uv run ruff format --check .` and `uv run pytest` |
-| `platform/frontend/` | `make check` (eslint and TypeScript) |
+| `platform/frontend/` | `make check` (ESLint, TypeScript and the Vitest tests) and `make test-e2e` (the Playwright end-to-end tests) |
 | `platform/` | `make test-static` and `make check-markings` |
 
 `make fix` (in `sdk/` and `agent-template/`) applies ruff's automatic fixes and

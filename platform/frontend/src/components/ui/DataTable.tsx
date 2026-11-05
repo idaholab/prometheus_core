@@ -12,13 +12,21 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
+  columnFilteringFeature,
+  createFilteredRowModel,
+  createSortedRowModel,
+  filterFn_includesString,
   flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
+  globalFilteringFeature,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_datetime,
+  sortFn_text,
+  tableFeatures,
+  useTable,
   type ColumnDef,
   type ColumnFiltersState,
+  type RowData,
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -32,6 +40,19 @@ const TR_CLASSES = "border-b border-base-content/10 last:border-b-0 hover:bg-bas
 const TD_CLASSES = "h-12 whitespace-nowrap px-5 text-[13px] text-base-content/70";
 
 export type CellValue = string | number | null | undefined;
+
+/* TanStack Table 9 only bundles the features a table registers. Sorting picks
+ * a sort function from the column's values, as v8 did by default, so the ones
+ * it can pick are registered here. */
+const features = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  filterFns: { includesString: filterFn_includesString },
+  sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text, datetime: sortFn_datetime },
+});
 
 export interface DataTableColumn<T> {
   /** Unique per table; also the key for `columnFilters` and `defaultSort`. */
@@ -81,7 +102,7 @@ interface DataTableProps<T> {
  * controls live outside the table; pass their values in as `search` and
  * `columnFilters`.
  */
-export function DataTable<T>({
+export function DataTable<T extends RowData>({
   data,
   columns,
   rowId,
@@ -95,14 +116,14 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>(defaultSort ? [{ id: defaultSort.id, desc: !!defaultSort.desc }] : []);
 
-  const columnDefs = useMemo<ColumnDef<T, CellValue>[]>(
+  const columnDefs = useMemo<ColumnDef<typeof features, T>[]>(
     () =>
       columns.map((col) => ({
         id: col.id,
         header: col.header ?? "",
         // TanStack only puts undefined last when sorting, so null becomes undefined.
         accessorFn: col.value ? (row: T) => col.value!(row) ?? undefined : undefined,
-        cell: ({ row, getValue }) => (col.cell ? col.cell(row.original) : (getValue() ?? "")),
+        cell: ({ row }) => (col.cell ? col.cell(row.original) : (col.value?.(row.original) ?? "")),
         enableSorting: !!col.sortable && !!col.value,
         enableGlobalFilter: !!col.value,
         enableColumnFilter: !!col.value,
@@ -121,21 +142,14 @@ export function DataTable<T>({
     [columnFilters],
   );
 
-  // TanStack Table returns functions that can't be memoized safely, which only
-  // matters under the React Compiler; this app doesn't use it
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
+  const table = useTable({
+    features,
     data,
     columns: columnDefs,
     state: { sorting, globalFilter: search.trim(), columnFilters: filters },
     onSortingChange: setSorting,
     getRowId: rowId ? (row) => rowId(row) : undefined,
     globalFilterFn: "includesString",
-    // TanStack's default only searches columns whose first value is a string or number.
-    getColumnCanGlobalFilter: (column) => column.columnDef.enableGlobalFilter !== false,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
   });
 
   const rows = table.getRowModel().rows;
@@ -187,7 +201,7 @@ export function DataTable<T>({
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className={TR_CLASSES}>
-                {row.getVisibleCells().map((cell) => {
+                {row.getAllCells().map((cell) => {
                   const col = columnOf(cell.column.columnDef.meta);
                   const classes = [TD_CLASSES, col.align === "right" && "text-right", col.className]
                     .filter(Boolean)
