@@ -1,8 +1,12 @@
 # Prometheus hackathon slides
 
 Slide decks for the Prometheus agent developer hackathon (Day 1 sessions, the Day 2
-challenge, judging) plus a one-page cheat sheet. Open `index.html` in a browser to
-start.
+challenge, judging) plus a one-page cheat sheet.
+
+**Just want to see the slides?** Open them on the web: <https://idaholab.github.io/prometheus_core/hackathon/>
+(one-day format: <https://idaholab.github.io/prometheus_core/hackathon/one-day/>). A clone of this
+repository has only the Markdown sources, because the deck HTML is generated and not committed. To
+view the decks from a clone, run `make build` in this folder, then open `index.html`.
 
 ## What is where
 
