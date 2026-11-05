@@ -34,8 +34,11 @@ dependencies — builds are small and fast.
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Docker Desktop (or Podman) — for containerized runs
-- Access to the `prometheus_api` base image registry
-  (`containers.github.inl.gov/genesis/prometheus_api`)
+- The platform's `.env`: its first `make up` asks whether to build the
+  `prometheus_api` base image from `../sdk` (`LOCAL_SDK`) and whether to run a
+  local DeepLynx (`LOCAL_DEEPLYNX`), and `setup_agent.py` copies those answers
+  into your agent's `.env`. Run the platform's `make up` once before you
+  scaffold, so there is a `platform/.env` to copy from.
 
 ### Scaffold a new agent
 

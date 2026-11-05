@@ -43,7 +43,8 @@ Example:
     python setup_agent.py --env-only ../../my-team-agent
 
 --env-only writes only the .env of an agent you already have (for example a
-clone of a teammate's agent repo), from this clone's ../platform/.env.
+clone of a teammate's agent repo), from this clone's ../platform/.env. Lines
+of your own in that .env are kept.
 """
 
 import argparse
@@ -485,13 +486,32 @@ def platform_uses_local_sdk(assignments: dict[str, str]) -> bool:
     return assignments.get("LOCAL_SDK", os.environ.get("LOCAL_SDK")) == "true"
 
 
+def warn_if_local_deeplynx_not_set_up(platform_env_path: Path, agent_dir: Path) -> None:
+    """Print a note when the platform runs a local DeepLynx that has no key yet.
+
+    `make deeplynx-setup` writes the key on a platform start, so an agent .env
+    written before that has no DeepLynx credentials, and the agent stops at
+    startup. Same flag precedence as platform_uses_local_sdk.
+    """
+    assignments = read_env_assignments(platform_env_path)
+    if assignments.get("LOCAL_DEEPLYNX", os.environ.get("LOCAL_DEEPLYNX")) != "true":
+        return
+    if any(assignments.get(key, "").strip("\"'") for key in ("DEEPLYNX_KEY", "DEEPLYNX_JWT_TOKEN")):
+        return
+    print(
+        "\nNote: the platform has LOCAL_DEEPLYNX=true but no DeepLynx key yet, so this\n"
+        "agent's .env has none. Run `make up` in platform/ once, then:\n"
+        f"  python3 setup_agent.py --env-only {agent_dir}"
+    )
+
+
 def select_platform_env_values(env_path: Path) -> dict[str, str]:
     """Select the platform env values that are useful to a generated agent."""
     assignments = read_env_assignments(env_path)
     selected = {key: assignments[key] for key in PLATFORM_SECRET_KEYS + PLATFORM_DEEPLYNX_KEYS if key in assignments}
 
-    # A platform built with LOCAL_SDK=true has no registry access; the agent
-    # Makefile then builds FROM the base image the platform built locally.
+    # A platform built with LOCAL_SDK=true runs the SDK from its checkout; the
+    # agent Makefile then builds FROM the base image the platform built locally.
     if platform_uses_local_sdk(assignments):
         selected["LOCAL_SDK"] = "true"
 
@@ -562,26 +582,69 @@ def create_env_from_platform_if_requested(output_dir: Path, assume_defaults: boo
             return
 
     write_agent_env(output_dir, selected_values)
+    warn_if_local_deeplynx_not_set_up(PLATFORM_ENV_PATH, output_dir)
 
 
-def write_agent_env(output_dir: Path, selected_values: dict[str, str]) -> None:
-    """Write the agent .env from the selected platform values and gitignore it."""
-    lines = [
-        "# Created by setup_agent.py from ../platform/.env.",
-        "# Contains shared platform secrets needed by this agent.",
-        "",
-    ]
+ENV_HEADER = (
+    "# Created by setup_agent.py from ../platform/.env.",
+    "# Contains shared platform secrets needed by this agent.",
+)
+ENV_EXTERNAL_BLOCK = (
+    "# Uncomment this for external network mode",
+    "#EXTERNAL_AGENT_HOST=prometheus.host.internal",
+    "#EXTERNAL_AGENT_PORT=8042",
+    "#REGISTRY_URL=http://prometheus.host.internal:8600",
+    "#REDIS_URL=redis://prometheus.host.internal:6379",
+)
+OWN_LINES_HEADING = "# Your own settings (kept by setup_agent.py --env-only)"
+
+
+def env_line_key(line: str) -> str | None:
+    """Return the key a KEY=VALUE line assigns, or None for comments and other lines."""
+    stripped = line.strip()
+    if stripped.startswith("#") or "=" not in stripped:
+        return None
+    key = stripped.split("=", 1)[0].strip()
+    return key if ENV_KEY_PATTERN.fullmatch(key) else None
+
+
+def is_managed_env_key(key: str) -> bool:
+    """Whether setup_agent.py owns this key in an agent .env.
+
+    Every DEEPLYNX_ key counts, not only the client keys it writes: agents
+    scaffolded before PLATFORM_DEEPLYNX_KEYS also got the DeepLynx server's
+    secrets, and a re-sync must drop them.
+    """
+    return key in PLATFORM_SECRET_KEYS or key == "LOCAL_SDK" or key.startswith("DEEPLYNX_")
+
+
+def read_own_env_lines(env_path: Path) -> list[str]:
+    """Return the lines of an existing agent .env that setup_agent.py doesn't write."""
+    generated = {*ENV_HEADER, *ENV_EXTERNAL_BLOCK, OWN_LINES_HEADING}
+    kept: list[str] = []
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        key = env_line_key(line)
+        if stripped in generated or (key is not None and is_managed_env_key(key)):
+            continue
+        if not stripped and (not kept or not kept[-1].strip()):
+            continue  # no leading blank lines, no runs of them
+        kept.append(line)
+    while kept and not kept[-1].strip():
+        kept.pop()
+    return kept
+
+
+def write_agent_env(output_dir: Path, selected_values: dict[str, str], own_lines: list[str] | None = None) -> None:
+    """Write the agent .env from the selected platform values and gitignore it.
+
+    own_lines (see read_own_env_lines) go after the generated part.
+    """
+    lines = [*ENV_HEADER, ""]
     lines.extend(f"{key}={value}" for key, value in selected_values.items())
-    lines.extend(
-        [
-            "",
-            "# Uncomment this for external network mode",
-            "#EXTERNAL_AGENT_HOST=prometheus.host.internal",
-            "#EXTERNAL_AGENT_PORT=8042",
-            "#REGISTRY_URL=http://prometheus.host.internal:8600",
-            "#REDIS_URL=redis://prometheus.host.internal:6379",
-        ]
-    )
+    lines.extend(["", *ENV_EXTERNAL_BLOCK])
+    if own_lines:
+        lines.extend(["", OWN_LINES_HEADING, *own_lines])
 
     with open(output_dir / ".env", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -591,7 +654,11 @@ def write_agent_env(output_dir: Path, selected_values: dict[str, str]) -> None:
 
 
 def write_env_only(agent_dir: Path) -> None:
-    """Write only the .env of an existing agent directory from ../platform/.env."""
+    """Write only the .env of an existing agent directory from ../platform/.env.
+
+    The platform values are replaced; lines of the agent's own (keys
+    setup_agent.py doesn't manage, comments) are kept.
+    """
     if not (agent_dir / "agent_card.json").is_file():
         print(f"\nError: '{agent_dir}' has no agent_card.json; is it an agent directory?")
         sys.exit(1)
@@ -602,9 +669,15 @@ def write_env_only(agent_dir: Path) -> None:
     if not selected_values:
         print(f"\nError: '{PLATFORM_ENV_PATH}' has none of the values an agent needs.")
         sys.exit(1)
-    if (agent_dir / ".env").exists():
-        print(f"\nReplacing '{agent_dir / '.env'}'.")
-    write_agent_env(agent_dir, selected_values)
+    env_path = agent_dir / ".env"
+    own_lines: list[str] = []
+    if env_path.exists():
+        own_lines = read_own_env_lines(env_path)
+        own_keys = [key for line in own_lines if (key := env_line_key(line))]
+        kept = f" (kept your own: {', '.join(own_keys)})" if own_keys else ""
+        print(f"\nUpdating '{env_path}'{kept}.")
+    write_agent_env(agent_dir, selected_values, own_lines)
+    warn_if_local_deeplynx_not_set_up(PLATFORM_ENV_PATH, agent_dir)
 
 
 def process_file(file_path: Path, replacements: dict[str, str], output_dir: Path) -> None:

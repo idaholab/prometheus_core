@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
@@ -46,9 +47,7 @@ function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
           <span className="min-w-0 truncate text-sm font-semibold text-base-content">
             {artifact.name}
           </span>
-          <span className="badge badge-outline badge-sm shrink-0 border-base-300 font-mono text-[10px] text-primary">
-            {artifact.render_hint}
-          </span>
+          <Tag mono label={artifact.render_hint} />
         </div>
         {artifact.description && (
           <p className="m-0 line-clamp-2 text-xs leading-snug text-base-content/60">

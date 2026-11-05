@@ -1012,7 +1012,7 @@ Compose's own output.
     Client agent http://localhost:8001   (with PROMETHEUS_SYSTEM_TESTING=true)
     DeepLynx UI  http://localhost:3000   (with LOCAL_DEEPLYNX=true)
 
-    Agents: form-filler-agent, synthesis-agent, hello-alex-agent (yours, restarted)
+    Agents: synthesis-agent, hello-alex-agent (yours, restarted)
 
   Next: open the chat UI. Logs: ./platformctl logs <service>. Stop: ./platformctl down
   ```

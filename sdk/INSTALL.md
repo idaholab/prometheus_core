@@ -10,25 +10,25 @@ There are three supported ways to use `prometheus-api`, in order of preference:
 
 ## Container (recommended)
 
-Multi-arch images (`linux/amd64`, `linux/arm64`) are published to INL's GitHub [registry](https://github.inl.gov/orgs/genesis/packages):
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to the GitHub Container Registry after every green CI run on `devel`:
 
 ```bash
-docker pull containers.github.inl.gov/genesis/prometheus_api:latest
+docker pull ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel:20261031-b999096
 ```
 
-You can substitute `latest` with a specific git short-SHA tag (see `make build-push` output, or browse [GitHub](https://github.inl.gov/orgs/genesis/packages)) for reproducible builds.
+Tags are `<commit date>-<7 char sha>` of the `devel` commit the image was built from. The [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) lists them; the platform pins one with `PROMETHEUS_API_BASE_IMAGE_HASH` in [`platform/Makefile`](../platform/Makefile).
 
 Run the image, mounting a `.env` based on `.env.example` so DeepLynx credentials are available:
 
 ```bash
 docker run -it --rm \
   --env-file .env \
-  containers.github.inl.gov/genesis/prometheus_api:latest /bin/bash
+  ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel:20261031-b999096 /bin/bash
 ```
 
-### Building the image locally (no registry access)
+### Building the image locally
 
-Without access to `containers.github.inl.gov`, build the image from this directory into your local Docker image store:
+To use the SDK as it is in your checkout instead, build the image from this directory into your local Docker image store:
 
 ```bash
 make build-local                     # → prometheus_api:local (host architecture)

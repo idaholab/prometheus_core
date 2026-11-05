@@ -40,7 +40,7 @@ Every agent starts from a small project template:
 - **uv** — the package manager used across the platform. Install with `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - **Docker Desktop** (or Podman) — only needed for Steps 6–9
 - **Git** — for cloning and version control
-- Access to the `prometheus_api` base image registry (`containers.github.inl.gov/genesis/prometheus_api`) — or the platform's `.env` file, which has the `PROMETHEUS_API_BASE_IMAGE_HASH` value (defaults to `latest`)
+- **The platform's `.env`** — the platform's first `make up` asks whether to build the base image from `../sdk` (`LOCAL_SDK`, Enter = yes) and whether to run a local DeepLynx (`LOCAL_DEEPLYNX`, Enter = yes); `setup_agent.py` copies both answers into your agent's `.env`. Run the platform's `make up` before you scaffold, so there is a `platform/.env` to copy from, and so the DeepLynx key it writes exists.
 
 ---
 
@@ -644,10 +644,11 @@ Docker packages your code and all its dependencies into a **container image** �
 ### Your Dockerfile
 
 ```dockerfile
+ARG PROMETHEUS_API_BASE_IMAGE_REPO=ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel
 ARG PROMETHEUS_API_BASE_IMAGE_HASH
-FROM containers.github.inl.gov/genesis/prometheus_api:${PROMETHEUS_API_BASE_IMAGE_HASH}
+FROM ${PROMETHEUS_API_BASE_IMAGE_REPO}:${PROMETHEUS_API_BASE_IMAGE_HASH}
 ```
-Starts from the pre-built base image, pinned to a specific hash for reproducibility. The hash is passed in as a build argument — you never change this line directly; you change the value in `.env` or the platform's `Makefile`.
+Starts from the pre-built base image, pinned to a specific tag for reproducibility. The repo and tag are passed in as build arguments — you never change this line directly; you change the value in `.env` or the platform's `Makefile`. (The real Dockerfile uses the same `FROM` twice: once for a small stage that checks `uv.lock` exists, then for the image itself.)
 
 ```dockerfile
 WORKDIR /app
@@ -870,6 +871,21 @@ The agent starts and logs something like:
 INFO:prometheus_api.agent.base:Loaded agent card: My Agent v1.0.0
 INFO:prometheus_api.agent.base:Starting HTTP server on 0.0.0.0:8000
 ```
+
+**DeepLynx, when the platform runs it locally (`LOCAL_DEEPLYNX=true`):** `setup_agent.py`
+copies `DEEPLYNX_BASE_URL=http://deeplynx-server:5000/api/v1` into your `.env`. That
+name only resolves inside Docker's network, so run on the host, the agent starts (the
+settings are valid) and the first skill call, which writes its execution record to
+DeepLynx, cannot reach it. Before `python agent.py`, point it at the port the platform
+publishes on your machine (on the loopback address only):
+
+```bash
+export DEEPLYNX_BASE_URL=http://localhost:5000/api/v1
+```
+
+Put that after the `export $(grep ...)` line, since the line from `.env` would
+otherwise overwrite it. (Use `DEEPLYNX_SERVER_PORT` from the platform's `.env` if you
+changed it.)
 
 If the target agent is running in Docker, start it in external network mode so
 `localhost:8000` reaches the container; see the
