@@ -73,7 +73,10 @@ test("the artifact id is stamped into props for dedupe", () => {
 });
 
 test("links the producing agent attached are passed to the viewer", () => {
-  const links = [{ label: "Open interactive dashboard", url: "http://localhost:8042/console/run-7" }];
+  const links = [
+    { label: "Pipeline", url: "https://gitlab.example/g/p/-/pipelines/42" },
+    { label: "Open interactive dashboard", url: "/api/artifacts/uq-123/links/1" },
+  ];
   assert.deepEqual(artifactToElement(meta({ links })).props?.links, links);
   assert.deepEqual(artifactToElement(meta({})).props?.links, []);
 });

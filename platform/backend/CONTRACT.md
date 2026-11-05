@@ -288,17 +288,26 @@ For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, pa
 Two more `ArtifactMeta` fields are always present:
 
 - `links`: buttons the producing agent attaches (raw `metadata.links`), each
-  `{label, url}`, opened in a new tab. Only absolute `http`/`https` URLs with a host
-  are kept, at most 5, labels up to 80 characters; anything else (including a URL
-  that does not parse) is dropped. Use it to point at a page the agent serves for
-  that artifact (e.g. an interactive dashboard) or at the job that produced it.
-  Default `[]`.
+  `{label, url}`, opened in a new tab. At most 5, labels up to 80 characters.
+  A raw entry is one of:
+  - `{label, url}`: an absolute `http`/`https` URL with a host (e.g. the job that
+    produced the artifact), passed through as is.
+  - `{label, path}`: a page the producing agent serves itself, such as an interactive
+    dashboard (`"/console/?run=7"`). Its `url` here is the same-origin
+    `/api/artifacts/{artifact_id}/links/{n}`, which proxies the page through the
+    platform, so it works wherever the agent runs (see below). The path must be
+    absolute and inside a directory (`/console/…`, not `/x`), with no `..`.
+
+  Anything else (including a URL that does not parse) is dropped. Default `[]`.
 - `has_report`: `true` when the producer attached a baked HTML report in DeepLynx
   (`metadata.report.uri` is `deeplynx://…/items/{item_id}`), served by
   `GET /api/artifacts/{artifact_id}/report`. Default `false`.
 
 ```json
-"links": [{ "label": "Open interactive dashboard", "url": "http://localhost:8042/console/run-7" }],
+"links": [
+  { "label": "Pipeline", "url": "https://gitlab.example/group/project/-/pipelines/4242" },
+  { "label": "Open interactive dashboard", "url": "/api/artifacts/uq-7/links/1" }
+],
 "has_report": true
 ```
 
@@ -402,6 +411,27 @@ session's catalog or has no DeepLynx report; `502` when storage cannot serve it 
 the report exceeds 64 MiB. Both failures answer with a short fixed HTML notice (same
 CSP, `Cache-Control: no-store`, no URI echoed), because the viewer's frame is the
 only request for the report and shows whatever the route returns.
+
+## `GET /api/artifacts/{artifact_id}/links/{n}`
+
+Opens the `n`-th link of an artifact when it is a page the producing agent serves
+(a `{label, path}` entry). Session cookie required. `303` to
+`/api/agent-pages/{grant}/{rest}`, where `grant` is a token signed for this session,
+artifact and link that expires after an hour; `404` when the artifact is not in the
+session's catalog or that link is not a path link.
+
+`GET /api/agent-pages/{grant}/{rest}` forwards the request to the producing agent
+(`producer_agent_id`, looked up in the agent registry) at the link's directory joined
+with `rest`, with the agent's own registered credentials, the way `POST /a2a/{agent_name}`
+does. The page's relative URLs (scripts, data) resolve under the grant path, so they
+go the same way without the session cookie. Every request re-checks the grant, that
+the session is not logged out and the artifact is still in its catalog, and that
+`rest` stays inside the directory; any failure is `404`. The agent's redirects are not
+followed (`502`), and only its `Content-Type`, `ETag` and `Last-Modified` are relayed.
+Responses carry `Content-Security-Policy: sandbox allow-scripts allow-popups`
+(the page runs in an opaque origin, away from the platform's cookies and DOM),
+`Referrer-Policy: no-referrer`, `nosniff` and `Cache-Control: private, no-store`.
+Not in the OpenAPI schema: the browser follows the redirect, no client calls it.
 
 ## Chat history
 

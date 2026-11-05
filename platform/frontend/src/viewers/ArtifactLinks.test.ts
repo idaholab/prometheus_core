@@ -27,10 +27,18 @@ test("each link is a new-tab button with no opener", () => {
   assert.match(out, />Open interactive dashboard</);
 });
 
+test("a page the agent serves opens through the platform's proxy route", () => {
+  const out = html([{ label: "Open interactive dashboard", url: "/api/artifacts/uq-7/links/1" }]);
+  assert.match(out, /href="\/api\/artifacts\/uq-7\/links\/1"/);
+  assert.match(out, /target="_blank"/);
+  assert.match(out, /rel="noopener noreferrer"/);
+});
+
 test("non-web URLs and empty labels are not rendered", () => {
   const out = html([
     { label: "bad", url: "javascript:alert(1)" },
     { label: "relative", url: "/console/7" },
+    { label: "other api", url: "/api/admin/users" },
     { label: "", url: "https://agent.example/x" },
   ]);
   assert.equal(out, "");

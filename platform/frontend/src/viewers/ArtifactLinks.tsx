@@ -14,19 +14,23 @@
  * src/viewers/ArtifactLinks.tsx
  *
  * Buttons a producing agent attached to its artifact (`ArtifactMeta.links`, from
- * the artifact's `metadata.links`), e.g. an interactive page the agent serves for
- * that artifact. The backend has already kept only http(s) URLs; this re-checks
- * before rendering and always opens a new tab with no opener. Any viewer can drop
- * it into its header.
+ * the artifact's `metadata.links`). Either an absolute http(s) URL (e.g. the job
+ * that produced it) or, for a page the agent serves itself, the platform's own
+ * `/api/artifacts/{id}/links/{n}`, which proxies that page so it opens wherever
+ * the agent runs. The backend has already validated both; this re-checks before
+ * rendering and always opens a new tab with no opener. Any viewer can drop it into
+ * its header.
  */
 
 import { ExternalLink } from "lucide-react";
 import type { ArtifactLink } from "@/lib/api/types";
 
 const isWebUrl = (url: string) => /^https?:\/\//i.test(url);
+/** A link the platform proxies to the agent's page (same origin). */
+const isAgentPage = (url: string) => /^\/api\/artifacts\/[^/]+\/links\/\d+$/.test(url);
 
 export function ArtifactLinks({ links }: { links?: ArtifactLink[] }) {
-  const shown = (links ?? []).filter((l) => l.label && isWebUrl(l.url));
+  const shown = (links ?? []).filter((l) => l.label && (isWebUrl(l.url) || isAgentPage(l.url)));
   if (shown.length === 0) return null;
   return (
     <>

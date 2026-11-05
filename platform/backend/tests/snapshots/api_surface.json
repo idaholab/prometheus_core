@@ -393,6 +393,29 @@
           }
         }
       },
+      "/api/artifacts/{artifact_id}/links/{n}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "artifact_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "in": "path",
+              "name": "n",
+              "required": true,
+              "schema": {
+                "type": "integer"
+              }
+            }
+          ],
+          "responses": {}
+        }
+      },
       "/api/artifacts/{artifact_id}/report": {
         "get": {
           "parameters": [
@@ -2702,6 +2725,24 @@
       ],
       "params": {
         "body": [],
+        "cookie": [],
+        "header": [],
+        "path": [
+          "grant",
+          "rest"
+        ],
+        "query": []
+      },
+      "path": "/api/agent-pages/{grant}/{rest:path}",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
         "cookie": [
           "prometheus_session"
         ],
@@ -2734,6 +2775,26 @@
       "path": "/api/artifacts/{artifact_id}/content",
       "response_model": null,
       "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "artifact_id",
+          "n"
+        ],
+        "query": []
+      },
+      "path": "/api/artifacts/{artifact_id}/links/{n}",
+      "response_model": null,
+      "status_code": 303
     },
     {
       "methods": [

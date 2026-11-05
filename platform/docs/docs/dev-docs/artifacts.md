@@ -94,11 +94,17 @@ async def process_analysis(self, params, context, event_queue):
 
 ### Links on an artifact
 
-An agent can attach buttons to any artifact through `metadata["links"]`, a list
-of `{"label": ..., "url": ...}`. The platform shows them on the artifact's viewer
-and opens them in a new tab. Only absolute `http`/`https` URLs are kept (at most
-5). Typical use: a page the agent itself serves for that artifact, such as an
-interactive dashboard, or the job that produced it.
+An agent can attach buttons to any artifact through `metadata["links"]`, a list of
+up to 5 entries. The platform shows them on the artifact's viewer and opens them in
+a new tab. An entry is either:
+
+- `{"label": ..., "url": ...}`: an absolute `http`/`https` URL anyone can open, such
+  as the job that produced the artifact.
+- `{"label": ..., "path": ...}`: a page the agent serves itself, such as an
+  interactive dashboard. The platform proxies it, so the browser never needs to
+  reach the agent, which can run on another host. The path must sit inside a
+  directory (`/console/?run=7`, not `/console`): the proxy serves that directory
+  only, and the page's relative URLs (scripts, data) are proxied the same way.
 
 ```python
 await self.send_artifact_reference(
@@ -107,9 +113,18 @@ await self.send_artifact_reference(
     description="Baked results report",
     uri=f"file://{report_path}",
     mime_type="text/html",
-    metadata={"links": [{"label": "Open interactive dashboard", "url": dashboard_url}]},
+    metadata={"links": [
+        {"label": "Pipeline", "url": pipeline_url},
+        {"label": "Open interactive dashboard", "path": f"/console/?run={run_id}"},
+    ]},
 )
 ```
+
+The proxied page reaches the agent with the agent's own registered credentials, not
+the user's session, and runs sandboxed in the browser (no access to the platform's
+cookies). It must use relative URLs: absolute paths (`/console/x`) or another host
+are not proxied. The agent's routes behind a path link should keep requiring the
+agent secret, as its A2A routes do.
 
 ### A baked HTML report on an artifact
 

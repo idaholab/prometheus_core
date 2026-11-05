@@ -39,7 +39,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from app.contract import ArtifactLink, ArtifactMeta, Citation, RenderHint
 
@@ -454,39 +454,97 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
     )
 
 
-# Producer-supplied links (``metadata.links``): kept short and few, and only
-# absolute http(s) URLs, since the viewer renders them as clickable buttons.
+# Producer-supplied links (``metadata.links``): kept short and few, since the viewer
+# renders them as clickable buttons. An entry is either
+#   {"label", "url"}  - an absolute http(s) URL anyone can open (e.g. a CI pipeline), or
+#   {"label", "path"} - a page the producing agent serves itself, e.g. "/console/?run=7".
+# A path link is proxied through the platform (``routers.agent_pages``), so it works
+# wherever the agent runs; the browser never needs to reach the agent directly.
 _MAX_LINKS = 5
 _MAX_LINK_LABEL = 80
 _MAX_LINK_URL = 2048
 
 
-def _artifact_links(metadata: dict[str, Any]) -> list[ArtifactLink]:
-    """``metadata.links`` as validated :class:`ArtifactLink` s.
+def agent_page_prefix(path: str) -> Optional[str]:
+    """The directory a path link may proxy under, or ``None`` when the path is unusable.
 
-    Each entry must be ``{"label": str, "url": str}`` with an absolute ``http``/``https``
-    URL; anything else (``javascript:``, relative paths, wrong types, a URL
-    ``urlsplit`` cannot parse) is dropped, so one bad link never fails the turn.
+    ``"/console/?run=7"`` -> ``"/console/"``; ``"/dash/run-7"`` -> ``"/dash/"``. The page
+    loads its scripts and data with relative URLs, so the proxy serves that whole
+    directory, never the agent's root (``"/x"`` has no directory and is refused).
     """
-    out: list[ArtifactLink] = []
+    if (
+        not isinstance(path, str)
+        or len(path) > _MAX_LINK_URL
+        or not path.startswith("/")
+        or path.startswith("//")
+        or "\\" in path
+        or any(ch.isspace() or ord(ch) < 0x20 for ch in path)
+    ):
+        return None
+    # A path that starts with a single "/" has no scheme or host, and the checks above
+    # leave nothing urlsplit can reject, so this only splits off the query and fragment.
+    parts = urlsplit(path)
+    segments = parts.path.split("/")
+    if any(seg in (".", "..") for seg in segments):
+        return None
+    prefix = parts.path[: parts.path.rfind("/") + 1]
+    return prefix if prefix != "/" else None
+
+
+def _link_entries(metadata: dict[str, Any]) -> list[tuple[str, Optional[str], Optional[str]]]:
+    """Valid ``metadata.links`` entries as ``(label, url, path)``, one of url/path set.
+
+    Anything else (``javascript:``, relative URLs, wrong types, a URL ``urlsplit``
+    cannot parse, a path outside a directory) is dropped, so one bad link never fails
+    the turn.
+    """
+    out: list[tuple[str, Optional[str], Optional[str]]] = []
     raw = metadata.get("links")
     for entry in raw if isinstance(raw, list) else []:
         if not isinstance(entry, dict):
             continue
         label = str(entry.get("label") or "").strip()[:_MAX_LINK_LABEL]
-        url = str(entry.get("url") or "").strip()
-        if not label or len(url) > _MAX_LINK_URL:
+        if not label:
             continue
-        try:
-            parts = urlsplit(url)
-        except ValueError:  # e.g. "https://[oops": an invalid IPv6 host
-            continue
-        if parts.scheme not in ("http", "https") or not parts.netloc:
-            continue
-        out.append(ArtifactLink(label=label, url=url))
+        path = entry.get("path")
+        if path is not None:
+            if agent_page_prefix(path) is not None:
+                out.append((label, None, path))
+        else:
+            url = str(entry.get("url") or "").strip()
+            if len(url) > _MAX_LINK_URL:
+                continue
+            try:
+                parts = urlsplit(url)
+            except ValueError:  # e.g. "https://[oops": an invalid IPv6 host
+                continue
+            if parts.scheme not in ("http", "https") or not parts.netloc:
+                continue
+            out.append((label, url, None))
         if len(out) == _MAX_LINKS:
             break
     return out
+
+
+def _artifact_links(artifact_id: str, metadata: dict[str, Any]) -> list[ArtifactLink]:
+    """``metadata.links`` as :class:`ArtifactLink` s. A path link becomes the
+    same-origin ``/api/artifacts/{artifact_id}/links/{n}``, which the platform proxies."""
+    links: list[ArtifactLink] = []
+    for n, (label, url, _path) in enumerate(_link_entries(metadata)):
+        if url is None:
+            url = f"/api/artifacts/{quote(artifact_id, safe='')}/links/{n}"
+        links.append(ArtifactLink(label=label, url=url))
+    return links
+
+
+def artifact_link_path(artifact: dict[str, Any], n: int) -> Optional[str]:
+    """The agent path of the artifact's ``n``-th link, or ``None`` when that link is not
+    a path link (an absolute URL needs no proxy) or does not exist."""
+    metadata = artifact.get("metadata")
+    entries = _link_entries(metadata if isinstance(metadata, dict) else {})
+    if not 0 <= n < len(entries):
+        return None
+    return entries[n][2]
 
 
 # A producer's baked report (``metadata.report.uri``) is served only from DeepLynx.
@@ -542,7 +600,7 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         citation=_citation_from(metadata),
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),
-        links=_artifact_links(metadata if isinstance(metadata, dict) else {}),
+        links=_artifact_links(artifact_identity(artifact), metadata if isinstance(metadata, dict) else {}),
         has_report=report_file_id(artifact) is not None,
     )
 

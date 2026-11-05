@@ -50,7 +50,7 @@ function uqArtifact(over: Partial<ArtifactMeta> = {}): ArtifactMeta {
 
 test("a UQ artifact shows its baked report inline, with a notebook download and the agent's buttons", () => {
   const links = [
-    { label: "Open interactive dashboard", url: "https://uq.example/console/run-7" },
+    { label: "Open interactive dashboard", url: "/api/artifacts/uq-7/links/0" },
     { label: "Not a web link", url: "javascript:alert(1)" },
   ];
   const fetchMock = vi.fn();
@@ -73,7 +73,7 @@ test("a UQ artifact shows its baked report inline, with a notebook download and 
   expect(download).toHaveAttribute("download", "uq_bank_worth.ipynb");
 
   const dashboard = screen.getByRole("link", { name: "Open interactive dashboard (opens in a new tab)" });
-  expect(dashboard).toHaveAttribute("href", "https://uq.example/console/run-7");
+  expect(dashboard).toHaveAttribute("href", "/api/artifacts/uq-7/links/0");
   expect(dashboard).toHaveAttribute("target", "_blank");
   expect(screen.queryByText("Not a web link")).not.toBeInTheDocument();
   // The frame is the only request for the report: the viewer fetches nothing itself.

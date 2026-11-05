@@ -223,9 +223,10 @@ class Citation(BaseModel):
 class ArtifactLink(BaseModel):
     """A link a producing agent attaches to its artifact (``metadata.links``).
 
-    Viewers show these as buttons that open in a new tab, e.g. an interactive
-    dashboard the agent serves for that artifact, or the job that produced it.
-    Only ``http``/``https`` URLs are kept (see ``services.artifacts``).
+    Viewers show these as buttons that open in a new tab: the job that produced the
+    artifact (an absolute ``http``/``https`` URL), or a page the agent serves for it,
+    which the platform proxies (a same-origin ``/api/artifacts/{id}/links/{n}``).
+    See ``services.artifacts`` and ``routers.agent_pages``.
     """
 
     model_config = ConfigDict(extra="ignore")
