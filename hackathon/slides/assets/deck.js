@@ -6,6 +6,7 @@
   const slides = Array.from(stage.querySelectorAll(".slide"));
   const deckTitle = document.body.dataset.title || document.title;
   const footLogo = document.body.dataset.logo || "assets/prometheus_logo.png";
+  const indexHref = document.body.dataset.index; // set by the build for decks that have an index to link to
   let cur = 0;
 
   // Talk (and bonus) slides are numbered on their own; appendix slides get "A n / m".
@@ -17,7 +18,10 @@
     const num = inAppx ? `A ${appx.indexOf(s) + 1} / ${appx.length}` : `${main.indexOf(s) + 1} / ${main.length}`;
     const f = document.createElement("div");
     f.className = "foot";
-    f.innerHTML = `<span class="fl"><img src="${footLogo}" alt=""><span>${deckTitle}</span></span><span>${num}</span>`;
+    const right = indexHref
+      ? `<span class="fr"><a class="idx" href="${indexHref}">All decks</a><span>${num}</span></span>`
+      : `<span>${num}</span>`;
+    f.innerHTML = `<span class="fl"><img src="${footLogo}" alt=""><span>${deckTitle}</span></span>${right}`;
     s.appendChild(f);
   });
 

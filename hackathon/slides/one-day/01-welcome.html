@@ -1,0 +1,421 @@
+<!doctype html>
+<!-- generated from one-day/slides/01-welcome.md: edit that file and run tools/build.py -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome &amp; Prometheus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/deck.css">
+</head>
+<body data-sec="welcome" data-title="One day · Welcome &amp; Prometheus · https://idaholab.github.io/prometheus_core/hackathon/one-day" data-logo="../assets/prometheus_logo.png" data-index="index.html">
+<div id="viewport"><div id="stage">
+
+<section class="slide title">
+  <div class="logos"><img src="../assets/INL-logo.png" alt="INL"><img src="../assets/genesis_logo.png" alt="Genesis"></div>
+  <img src="../assets/prometheus_logo.png" alt="Prometheus" style="width:560px; margin-left:-18px">
+  <div class="kicker">Agent developer hackathon · One day · 8:30 am</div>
+  <h1>Welcome &amp; Prometheus</h1>
+  <p class="sub">What we will build today, what AI can and cannot do, and how Prometheus fits the pieces together.</p>
+  <div class="meta"><span class="pill acc">All participants</span><span class="pill">60 min</span><span class="pill">Press N for notes · O for overview</span></div>
+  <aside class="notes">Welcome first (15 minutes): agenda, outcomes, links. Then the AI primer and the Prometheus overview (45 minutes). The live demo follows at 9:30.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Welcome</div><h2>Today you will…</h2></div>
+  <div class="content">
+<div class="grid g4" style="margin-top:10px">
+<div class="card acc"><div class="kpi"><span class="v">1</span></div><h3>Run the platform</h3><p class="small">Prometheus and DeepLynx on your own laptop, with the debug agents to try.</p></div>
+<div class="card acc"><div class="kpi"><span class="v">2</span></div><h3>Build an agent</h3><p class="small">Start from the template, add skills, and watch the chat route requests to them.</p></div>
+<div class="card acc"><div class="kpi"><span class="v">3</span></div><h3>Pass files around</h3><p class="small">Read an uploaded file, publish a result, and let a second skill pick it up.</p></div>
+<div class="card acc"><div class="kpi"><span class="v">4</span></div><h3>Use an LLM</h3><p class="small">Call one from your agent. Tool calling is in the live demo for everyone, and an optional stretch to build.</p></div>
+</div>
+<div class="callout info">
+No AI-development experience is needed. The homework was installs (git, Docker, uv, VS Code), an LLM API key, and cloning <code>prometheus_core</code>. Not quite there? Mentors will help, and the setup deck starts from the clone.</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Links</div><h2>Follow along online</h2><p class="lede">Everything you see today is online. Open it on your laptop and keep it there.</p></div>
+  <div class="content">
+<div class="grid g2" style="margin-top:10px">
+<div class="card acc"><h3>These slides</h3><p><a href="https://idaholab.github.io/prometheus_core/hackathon/one-day">idaholab.github.io/prometheus_core/hackathon/one-day</a></p><p class="small">Welcome, the live demo reference, setup, and the challenge.</p></div>
+<div class="card acc"><h3>Platform documentation</h3><p><a href="https://idaholab.github.io/prometheus_core">idaholab.github.io/prometheus_core</a></p><p class="small">Architecture, deployment, the SDK, and the agent template.</p></div>
+</div>
+  </div>
+  <aside class="notes">Point out that the slide URL is also in the footer of every slide in this deck.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Agenda</div><h2>The day</h2></div>
+  <div class="content" style="gap:0">
+<div class="agenda-row now"><span class="tm">8:30</span><div><div class="ti">Welcome and Prometheus</div><div class="de">Agenda · what AI can and cannot do · how Prometheus works</div></div></div>
+<div class="agenda-row"><span class="tm">9:30</span><div><div class="ti">Live demo</div><div class="de">An agent built from scratch, step by step. Follow along or just watch.</div></div></div>
+<div class="agenda-row"><span class="tm">10:30</span><div><div class="ti">Break</div></div></div>
+<div class="agenda-row"><span class="tm">10:40</span><div><div class="ti">The challenge</div><div class="de">What you will build today, and questions</div></div></div>
+<div class="agenda-row"><span class="tm">11:00</span><div><div class="ti">Setting up (hands-on)</div><div class="de">Start the platform and DeepLynx, try the debug agents, scaffold your agent. Lunch at noon while it runs.</div></div></div>
+<div class="agenda-row"><span class="tm">1:00</span><div><div class="ti">Challenge checkpoints (hands-on)</div><div class="de">A new skill · files in and out · an LLM call · a second skill that plots. Mentors circulate.</div></div></div>
+<div class="agenda-row"><span class="tm">1:45</span><div><div class="ti">Break (10 min, then back to the checkpoints)</div></div></div>
+<div class="agenda-row"><span class="tm">2:50</span><div><div class="ti">Close out</div><div class="de">What you built, and where to go next</div></div></div>
+
+  </div>
+</section>
+
+<section class="slide section">
+  <div class="num">AI</div>
+  <h2>What AI can and cannot do</h2>
+  <p class="lede">Four slides for anyone new to this. Everyone else gets a shared vocabulary for the day.</p>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">AI primer</div><h2>An LLM predicts text</h2><p class="lede">A large language model takes text in and gives text back. You supply the prompt.</p></div>
+  <div class="content">
+<div class="grid g2" style="gap:30px;">
+<div class="card acc"><span class="tag">Good at</span>
+<h3>Working with language</h3>
+<p class="small">Reading and summarizing, rewriting, pulling structure out of messy text, translating, explaining, and writing code.</p>
+</div>
+
+<div class="card"><span class="tag">Not built for</span>
+<h3>Being a database or a calculator</h3>
+<p class="small">It does not look facts up. It does not run the arithmetic. It only knows what it learned plus what is in your prompt.</p>
+</div>
+
+</div>
+
+  </div>
+  <aside class="notes">Ask who has used Claude or a similar chat tool. About three quarters of the room is expected to have.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">AI primer</div><h2>Where it goes wrong</h2></div>
+  <div class="content">
+<div class="takeaways">
+<div class="tk"><span class="n">1</span><div><h3>It sounds sure when it is wrong</h3>
+<p>A wrong answer reads exactly like a right one.</p>
+</div></div>
+<div class="tk"><span class="n">2</span><div><h3>Exact work is shaky</h3>
+<p>Unit conversions, sums and lookups can be off, and differ from run to run.</p>
+</div></div>
+<div class="tk"><span class="n">3</span><div><h3>It cannot see what you did not give it</h3>
+<p>No file, no table, no state, unless it is in the prompt.</p>
+</div></div>
+</div>
+
+  </div>
+  <aside class="notes">The live demo makes this concrete. Do not spend long on it here.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">AI primer</div><h2>An agent adds tools and a loop</h2><p class="lede">The model asks for a tool, your code runs it, and the result goes back to the model.</p></div>
+  <div class="content">
+<div class="row" style="align-items:stretch; gap:0;">
+<div class="box sky" style="flex:1"><strong>Prompt</strong><span class="small">what the user asked</span></div>
+<div class="arrow-h" style="width:44px"></div>
+<div class="box navy" style="flex:1.2"><strong>LLM</strong><span class="small">decides what to do next</span></div>
+<div class="arrow-h" style="width:110px"><span>tool call</span></div>
+<div class="box orange" style="flex:1.2"><strong>Your code</strong><span class="small">runs the tool exactly</span></div>
+<div class="arrow-h" style="width:90px"><span>result</span></div>
+<div class="box navy" style="flex:1"><strong>LLM</strong><span class="small">reads it and answers</span></div>
+</div>
+
+<p class="small">The loop repeats until the model stops asking for tools. Your code does the exact work; the model decides which tool to call and with what.</p>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">AI primer</div><h2>Verify it</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:30px;">
+<div class="col">
+<div class="card acc"><span class="tag">Use the LLM for</span>
+<h3>Interpreting</h3>
+<p class="small">Understanding a request, finding the right part of a document, choosing which tool to call.</p>
+</div>
+
+</div>
+<div class="col">
+<div class="card"><span class="tag">Use Python for</span>
+<h3>Being exact</h3>
+<p class="small">Arithmetic, parsing, checking an answer, anything that must be right every time.</p>
+</div>
+
+</div>
+</div>
+
+<div class="callout good">
+That is the pattern for today: let the model interpret, then <strong>check what it returns before you use it</strong>.</div>
+
+  </div>
+</section>
+
+<section class="slide section">
+  <div class="num">01</div>
+  <h2>How Prometheus works</h2>
+  <p class="lede">Just enough of the platform to build an agent today: what it does for you, and what happens when someone types into the chat.</p>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Why Prometheus</div><h2>A chat front door to a team of specialist agents</h2></div>
+  <div class="content">
+<div class="grid g2" style="gap:36px;">
+<div class="col">
+<p class="body">Engineering work needs many specialized tools: meshing, CFD, uncertainty quantification, requirements, literature search.</p>
+<p class="body">Prometheus wraps each tool in an <strong>agent</strong>. A user just asks in a chat, and an <strong>orchestrator</strong> decides which agents to call, in what order, and with which files.</p>
+</div>
+<div class="col">
+<div class="card acc">
+<h3>Your part this hackathon</h3>
+<p class="body">Write <strong>one agent</strong>: a Python class with a method that does the work, and a card that says what it can do. The platform handles everything around it.</p>
+</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">The big picture</div><h2>The platform at a glance</h2></div>
+  <div class="content">
+<div class="dg">
+<div class="row" style="align-items:stretch; gap:0">
+<div class="box sky" style="flex:1"><b>Chat UI</b><span class="small">localhost:5150</span><span class="small">uploads, plots, forms</span></div>
+<div class="arrow-h" style="width:50px"></div>
+<div class="box navy" style="flex:1.3"><b>Orchestrator</b><span class="small">an LLM that calls agents' skills step by step, reading each result</span></div>
+<div class="arrow-h" style="width:50px"></div>
+<div class="box orange" style="flex:1.3"><b>Agents</b><span class="small">built-in, debug, and <b>yours</b></span></div>
+</div>
+<div class="arrow-v"><span>supporting services</span></div>
+<div class="row" style="gap:20px; align-items:stretch">
+<div class="box gray" style="flex:1"><b>Registry</b><span class="small">agents announce themselves at startup</span></div>
+<div class="box gray" style="flex:1"><b>LLM profile</b><span class="small">one key, many models</span></div>
+<div class="box teal" style="flex:1"><b>DeepLynx</b><span class="small">stores uploads and result files</span></div>
+<div class="box gray" style="flex:1"><b>State store</b><span class="small">conversations, artifacts, background tasks</span></div>
+</div>
+</div>
+<p class="small">All of it runs on your laptop in Docker. The backend is also the agent registry; each agent calls its LLM provider directly, picked by <code>LLM_CONFIG_PROFILE</code>.</p>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">One chat turn</div><h2>&quot;Create an image of the word INL&quot;</h2></div>
+  <div class="content">
+<div class="steps">
+<div class="step"><div><h4>You ask</h4>
+<p class="small">&quot;Create an image of the word 'INL' with white background and blue text.&quot;</p>
+</div></div>
+<div class="step"><div><h4>The orchestrator picks a skill</h4>
+<p class="small">Its LLM sees every registered skill as a tool. It calls the artifact debug agent's <code>create_svg_artifact</code> with the word and the two colors.</p>
+</div></div>
+<div class="step"><div><h4>The agent works</h4>
+<p class="small">It writes the SVG, stores it in DeepLynx as an <strong>artifact</strong>, and returns the artifact's id.</p>
+</div></div>
+<div class="step"><div><h4>The chat shows the result</h4>
+<p class="small">The image renders in the conversation, with the orchestrator's summary.</p>
+</div></div>
+<div class="step"><div><h4>Chain the next step</h4>
+<p class="small">&quot;Convert that to a PNG&quot; calls <code>convert_svg_to_png</code> with the id from step 3. Skills hand each other files by artifact id.</p>
+</div></div>
+</div>
+
+  </div>
+  <aside class="notes">This is the same prompt used in the first minutes of the live demo. The debug agents are switched on with DEBUG_AGENTS=true.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Vocabulary</div><h2>Eight words you will hear all day</h2></div>
+  <div class="content">
+<table class="t">
+<thead>
+<tr>
+<th style="width:230px">Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Agent</strong></td>
+<td>A small Python service, a subclass of <code>PrometheusAgent</code></td>
+</tr>
+<tr>
+<td><strong>Skill</strong></td>
+<td>One thing an agent can do. Each skill is one tool for the orchestrator.</td>
+</tr>
+<tr>
+<td><strong>Agent card</strong></td>
+<td><code>agent_card.json</code>: the skills, described for the orchestrator's LLM</td>
+</tr>
+<tr>
+<td><strong>Orchestrator</strong></td>
+<td>The client agent: an LLM loop that calls skills and chains them</td>
+</tr>
+<tr>
+<td><strong>Artifact</strong></td>
+<td>A file or data result in the conversation (an upload, a table, a plot)</td>
+</tr>
+<tr>
+<td><strong>DeepLynx</strong></td>
+<td>INL's data store, where uploads and result files live</td>
+</tr>
+<tr>
+<td><strong>Flavor</strong></td>
+<td>The kind of LLM you ask for in code: <code>small</code>, <code>medium</code>, <code>large</code>, <code>vision</code>…</td>
+</tr>
+<tr>
+<td><strong>Tool call</strong></td>
+<td>The model asking your code to run something and use the result</td>
+</tr>
+</tbody>
+</table>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">What you get for free</div><h2>What the platform does for your agent</h2></div>
+  <div class="content">
+<table class="t">
+<thead>
+<tr>
+<th style="width:470px">Service</th>
+<th>You use it via</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Registration and discovery</td>
+<td>nothing: it happens at startup</td>
+</tr>
+<tr>
+<td>Routing the user's request to your skill</td>
+<td>a good card</td>
+</tr>
+<tr>
+<td>File storage, upload handling, viewers</td>
+<td>artifacts, DeepLynx</td>
+</tr>
+<tr>
+<td>LLM access, any of several providers</td>
+<td><code>self.llm_client(...)</code> + <code>LLM_CONFIG_PROFILE</code></td>
+</tr>
+<tr>
+<td>Forms for missing inputs and follow-up questions</td>
+<td><code>required</code> parameters, <code>send_input_required</code></td>
+</tr>
+<tr>
+<td>Live progress in the chat</td>
+<td><code>send_status_update</code>, with <code>&quot;streaming&quot;: true</code> in the card</td>
+</tr>
+<tr>
+<td>Approval before costly steps</td>
+<td><code>&quot;requires_approval&quot;: true</code></td>
+</tr>
+<tr>
+<td>Background tasks for long jobs</td>
+<td><code>declare_long_running</code></td>
+</tr>
+<tr>
+<td>Per-conversation memory</td>
+<td><code>load_context_state</code> / <code>save_context_state</code></td>
+</tr>
+</tbody>
+</table>
+<p class="small">Today you use the first four. The rest are in the agent developer guide.</p>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">The code</div><h2>The code and the stack you will run</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.15fr 1fr; gap:28px;">
+<pre class="sm">prometheus_core/          # idaholab/prometheus_core
+├── platform/             # the stack: make up here
+├── sdk/                  # prometheus_api (in your image)
+└── agent-template/       # setup_agent.py
+
+my-agent/                 # your agent, beside the clone
+├── agent.py · agent_card.json
+└── tests/</pre>
+<div class="col">
+<div class="card"><span class="tag">one clone</span>
+<h3>prometheus_core</h3>
+<p class="small">A monorepo: the platform, the SDK (<code>sdk/</code>), and the agent template (<code>agent-template/</code>). Run commands from inside the directory you work on.</p>
+</div>
+
+<div class="card acc"><span class="tag">your code</span>
+<h3>Your agent</h3>
+<p class="small"><code>setup_agent.py</code> copies the template into a folder of your own. We put it beside the clone, so the clone stays free of untracked files.</p>
+</div>
+
+</div>
+</div>
+
+<div class="callout warn">
+The code moves fast and some docs lag behind. When a doc disagrees with these slides or the code, trust the code and ask a mentor.</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Where to find things</div><h2>Help</h2></div>
+  <div class="content">
+<div class="grid g2" style="gap:30px;">
+<table class="t">
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The mentors</td>
+<td>in the room, all day</td>
+</tr>
+<tr>
+<td>Agent developer guide</td>
+<td><code>sdk/docs/agent/GUIDE.md</code> in <code>prometheus_core</code></td>
+</tr>
+<tr>
+<td>These slides</td>
+<td>the <strong>All decks</strong> link in the footer of every slide</td>
+</tr>
+<tr>
+<td>Platform repo</td>
+<td><a href="https://github.com/idaholab/prometheus_core">github.com/idaholab/prometheus_core</a></td>
+</tr>
+<tr>
+<td>Platform docs</td>
+<td><a href="https://idaholab.github.io/prometheus_core">idaholab.github.io/prometheus_core</a></td>
+</tr>
+</tbody>
+</table>
+<div class="col">
+<div class="takeaways">
+<div class="tk"><span class="n">1</span><div><h3>You write one agent</h3>
+<p>The platform does the rest.</p>
+</div></div>
+<div class="tk"><span class="n">2</span><div><h3>The orchestrator chains skills</h3>
+<p>Your card decides whether you get called.</p>
+</div></div>
+<div class="tk"><span class="n">3</span><div><h3>Files are artifacts</h3>
+<p>Stored in DeepLynx, passed by id.</p>
+</div></div>
+</div>
+
+</div>
+</div>
+
+<div class="callout good">
+Next: the live demo at 9:30.</div>
+
+  </div>
+</section>
+
+</div></div>
+<script src="../assets/deck.js"></script>
+</body>
+</html>

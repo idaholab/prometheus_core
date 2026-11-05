@@ -69,6 +69,9 @@ body[data-sec="judge"]   { --acc: var(--teal);    --acc-ink: var(--teal-ink);   
 }
 .foot img { height: 22px; }
 .foot .fl { display: flex; align-items: center; gap: 14px; }
+.foot .fr { display: flex; align-items: center; gap: 26px; }
+.foot a.idx { color: var(--acc-ink); text-decoration: none; border-bottom: 1px solid currentColor; }
+.foot a.idx:hover { opacity: .75; }
 
 .eyebrow {
   font-family: var(--mono); font-size: 15px; font-weight: 600; letter-spacing: .14em;

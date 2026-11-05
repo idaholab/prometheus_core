@@ -13,6 +13,7 @@ start.
 | `index.html` | Landing page. The deck list between `<!-- decks:start -->` and `<!-- decks:end -->` is generated; the rest is hand-written |
 | `cheatsheet.html` | One-page Day 2 reference (hand-written HTML, not a deck) |
 | `challenge/` | The Day 2 challenge brief and practice files handed to participants |
+| `one-day/` | A second, independent set of decks for the one-day format (no teams). Same layout as this folder: `slides/NN-name.md` sources, generated `NN-name.html`, its own `index.html`, and `challenge/`. It loads this folder's `assets/` through `../assets` |
 | `assets/` | `deck.css` (styles), `deck.js` (slide engine), logos and images |
 | `tools/` | Build, layout check, PDF export, comparison and conversion scripts |
 | `pdf/` | Exported PDFs (generated, not committed) |
@@ -100,7 +101,7 @@ make pdf          # one PDF per deck in pdf/, one slide per page
 
 | Script | Purpose |
 |---|---|
-| `tools/build.py` | Markdown → HTML decks and the index deck list |
+| `tools/build.py` | Markdown → HTML decks and the index deck list, for this folder and `one-day/` |
 | `tools/check_layout.py` | Overlap/overflow check; `--shots DIR` also saves a PNG per slide |
 | `tools/export_pdf.py` | PDF export |
 | `tools/sheet.py` | Contact sheets (3×3) from screenshots, for a quick visual review |

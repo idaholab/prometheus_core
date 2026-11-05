@@ -1,0 +1,225 @@
+<!doctype html>
+<!-- generated from one-day/slides/03-setup.md: edit that file and run tools/build.py -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setting up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/deck.css">
+</head>
+<body data-sec="gh" data-title="One day · Setting up · https://idaholab.github.io/prometheus_core/hackathon/one-day" data-logo="../assets/prometheus_logo.png" data-index="index.html">
+<div id="viewport"><div id="stage">
+
+<section class="slide title">
+  <div class="logos"><img src="../assets/INL-logo.png" alt="INL"><img src="../assets/genesis_logo.png" alt="Genesis"></div>
+  <img src="../assets/prometheus_logo.png" alt="Prometheus" style="width:560px; margin-left:-18px">
+  <div class="kicker">Agent developer hackathon · One day · 11:00 am</div>
+  <h1>Setting up</h1>
+  <p class="sub">By the end of this block the platform runs on your laptop, you have talked to the debug agents, and your own agent is registered and visible in the chat.</p>
+  <div class="meta"><span class="pill acc">Hands-on</span><span class="pill">about 2 hours</span><span class="pill">lunch at noon while images build</span></div>
+  <aside class="notes">Lunch is at noon. The first make up builds images, which is idle time; people eat while it runs. The checkpoints start at 1:00.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Step 1 of 5</div><h2>Start the platform</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.1fr 1fr; gap:28px;">
+<div class="col">
+<pre class="sm">cd prometheus_core/platform
+make up</pre>
+<pre class="xs">Build the SDK base image locally (LOCAL_SDK)? [Y/n] (Enter = yes):
+Run DeepLynx locally (LOCAL_DEEPLYNX)? [Y/n] (Enter = yes):
+Choose an LLM profile (LLM_CONFIG_PROFILE; up/down, Enter):
+<span class="p">&lt;KEY&gt;</span> for <span class="p">&lt;profile&gt;</span> (input hidden):</pre>
+<div class="callout info">
+<strong>Repo updated?</strong> Run <code>git pull</code> in <code>prometheus_core</code>, then <code>make up</code> again in <code>platform/</code> and in your agent folder. Your <code>.env</code> files are not touched.</div>
+
+</div>
+<div class="col">
+<ul class="b">
+<li>Answer <strong>yes</strong> to both questions (press Enter). The first builds the SDK image from your clone; the second starts DeepLynx next to the platform, creates its project and API key, and writes them into <code>.env</code>.</li>
+<li>Pick the <strong>LLM profile</strong> you were given a key for, and paste the key. It is hidden as you type and stays in <code>.env</code>, which is never committed.</li>
+<li>The first run builds images and can take a while. Keep going; it prints when everything is up.</li>
+</ul>
+<div class="callout warn">
+<code>make up</code> only asks in a terminal, and only for what <code>.env</code> is missing. If it stops with <code>[ERROR] … is empty in .env</code>, run <code>make init-env</code> and answer again.</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Step 2 of 5</div><h2>Log in and check health</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:28px;">
+<div class="col">
+<div class="steps">
+<div class="step"><div><h4>Open the chat</h4>
+<p class="small"><code>http://localhost:5150</code>. The first time, a wizard asks for a username and password. Any local values work; the first user is the admin.</p>
+</div></div>
+<div class="step"><div><h4>Say hello</h4>
+<p class="small">Type &quot;hello&quot;. A reply means the orchestrator, your LLM profile and the chat all work.</p>
+</div></div>
+<div class="step"><div><h4>See the stored artifact</h4>
+<p class="small">DeepLynx is at <code>http://localhost:3000</code>. The files the agents produce are stored there.</p>
+</div></div>
+</div>
+
+</div>
+<div class="col">
+<pre class="sm">make ps       <span class="c"># all &quot;Up&quot; / &quot;(healthy)&quot;</span>
+make check    <span class="c"># every agent registered?</span>
+make logs SERVICE=client-agent</pre>
+<div class="callout warn">
+Every chat turn fails with &quot;No 'userToken' found…&quot;? The backend could not create its signing key. Look at <code>make logs SERVICE=backend</code>.</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Step 3 of 5</div><h2>Try the debug agents</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.1fr 1fr; gap:28px;">
+<div class="col">
+<pre class="sm">make down
+echo <span class="s">&quot;DEBUG_AGENTS=true&quot;</span> &gt;&gt; .env
+make up</pre>
+<pre class="sm">/agents
+Create an image of the word &#x27;INL&#x27;
+  with white background and blue text.
+Convert that to a PNG.</pre>
+</div>
+<div class="col">
+<ul class="b">
+<li>The debug agents are small agents that exist to be tried: they make images, return JSON, and show code samples.</li>
+<li><code>/agents</code> lists what is registered. The artifact debug agent should be there.</li>
+<li>Ask for the image, then for the PNG, and watch the chat pick a skill each time. Look at the artifacts in DeepLynx.</li>
+</ul>
+<div class="callout info">
+This is the same loop your own agent will go through: the orchestrator reads a card, picks a skill, and the result comes back as an artifact.</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Step 4 of 5</div><h2>Scaffold your agent</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.1fr 1fr; gap:28px;">
+<pre class="sm">cd prometheus_core/agent-template
+python setup_agent.py
+<span class="c">#  name, description, slug,</span>
+<span class="c">#  class name, first skill id</span>
+<span class="c">#  output folder: ../../&lt;your-agent&gt;</span>
+<span class="c">#  copy secrets from the platform .env? yes</span>
+
+cd ../../<span class="p">&lt;your-agent&gt;</span>
+uv sync</pre>
+<div class="col">
+<ul class="b">
+<li>Answer <strong>yes</strong> to copying the secrets. Your agent's <code>.env</code> then has the keys it needs and <code>LOCAL_SDK</code>, so it builds from the same SDK image as the platform.</li>
+<li>Open the folder in your editor. <code>agent.py</code> is the class, <code>agent_card.json</code> is what the orchestrator reads.</li>
+<li>Choose skill ids that do not clash with the built-in agents. <code>/agents</code> shows what is taken.</li>
+</ul>
+<div class="callout warn">
+Put the folder <strong>beside</strong> the clone, not inside it. Commit nothing yet: <code>.env</code> holds your keys.</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Step 5 of 5</div><h2>Start it and find it</h2></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.1fr 1fr; gap:28px;">
+<div class="col">
+<pre class="sm">cd <span class="p">&lt;your-agent&gt;</span>
+make up        <span class="c"># build and start</span>
+make logs      <span class="c"># &quot;Registered &#x27;&lt;name&gt;&#x27; ...&quot;</span></pre>
+<pre class="sm">/agents</pre>
+</div>
+<div class="col">
+<ul class="b">
+<li>The agent registers itself with the platform on startup. Give the orchestrator about a minute to notice, then type <code>/agents</code> in a <strong>fresh chat</strong>.</li>
+<li>Ask the chat something your skill's description fits and watch it route.</li>
+</ul>
+<table class="t">
+<thead>
+<tr>
+<th>If this happens</th>
+<th>Look at</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Not under <code>/agents</code></td>
+<td><code>make logs</code>; restart the agent</td>
+</tr>
+<tr>
+<td>Missing right after a platform <code>make up</code></td>
+<td>restart your agent: the registry was emptied</td>
+</tr>
+<tr>
+<td>Build fails on <code>uv.lock</code></td>
+<td>run <code>uv sync</code> and rebuild</td>
+</tr>
+<tr>
+<td>Skill never called</td>
+<td>the card's <code>description</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+  </div>
+</section>
+
+<section class="slide section bonus">
+  <div class="num">+</div>
+  <h2>Bonus: catch up</h2>
+  <p class="lede">Not finished with the homework? These slides get you to the same place.</p>
+</section>
+
+<section class="slide bonus">
+  <div class="head"><div class="eyebrow">Bonus · Catch up</div><h2>No clone, tools, or key yet?</h2></div>
+  <div class="content">
+<pre class="sm">git clone https://github.com/idaholab/prometheus_core.git
+cd prometheus_core/platform
+make up        <span class="c"># answer the prompts as on step 1</span></pre>
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:28px;">
+<div class="col">
+<div class="card acc"><span class="tag">Needed</span>
+<h3>Installed</h3>
+<p class="small">Git, Docker (running), <code>uv</code> and an editor such as VS Code.</p>
+</div>
+
+</div>
+<div class="col">
+<div class="card acc"><span class="tag">Needed</span>
+<h3>An LLM key</h3>
+<p class="small">For the profile you pick at the menu. Ask a mentor if you do not have one yet.</p>
+</div>
+
+</div>
+</div>
+
+  </div>
+</section>
+
+</div></div>
+<script src="../assets/deck.js"></script>
+</body>
+</html>

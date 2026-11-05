@@ -1,0 +1,293 @@
+<!doctype html>
+<!-- generated from one-day/slides/04-challenge.md: edit that file and run tools/build.py -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The challenge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/deck.css">
+</head>
+<body data-sec="agt" data-title="One day · The challenge · https://idaholab.github.io/prometheus_core/hackathon/one-day" data-logo="../assets/prometheus_logo.png" data-index="index.html">
+<div id="viewport"><div id="stage">
+
+<section class="slide title">
+  <div class="logos"><img src="../assets/INL-logo.png" alt="INL"><img src="../assets/genesis_logo.png" alt="Genesis"></div>
+  <img src="../assets/prometheus_logo.png" alt="Prometheus" style="width:560px; margin-left:-18px">
+  <div class="kicker">Agent developer hackathon · One day · 10:40 am</div>
+  <h1>The challenge</h1>
+  <p class="sub">One agent, two skills: pull a table out of a Markdown report, then plot it. Four checkpoints, each building on the last.</p>
+  <div class="meta"><span class="pill acc">Brief, then reference</span><span class="pill">4 checkpoints</span><span class="pill">about 100 minutes</span></div>
+  <aside class="notes">Present the first two slides as the 20-minute brief and take questions. The checkpoint slides are the reference for the hands-on stretch after lunch. They give the goal, a test prompt, a done-when list and hints, and no solutions.</aside>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">The challenge</div><h2>Build a table plotter</h2><p class="lede">Upload a report. Ask for a table. Get a plot back in the chat.</p></div>
+  <div class="content">
+<div class="row" style="align-items:stretch; gap:0;">
+<div class="box sky" style="flex:1"><strong>Upload</strong><span class="small"><code>performance-car-report.md</code></span></div>
+<div class="arrow-h" style="width:60px"></div>
+<div class="box orange" style="flex:1.2"><strong>extract_table</strong><span class="small">finds the table you asked for</span></div>
+<div class="arrow-h" style="width:130px"><span>CSV artifact</span></div>
+<div class="box orange" style="flex:1.2"><strong>plot_table</strong><span class="small">draws the columns you asked for</span></div>
+<div class="arrow-h" style="width:60px"></div>
+<div class="box green" style="flex:1"><strong>PNG</strong><span class="small">in the chat</span></div>
+</div>
+
+<div class="grid g2" style="gap:30px;">
+<div class="card acc"><span class="tag">Skill 1</span>
+<h3>extract_table</h3>
+<p class="small">Takes the uploaded Markdown document and a description of the table. Publishes that table as a <strong>CSV artifact</strong> and returns its id.</p>
+</div>
+
+<div class="card acc"><span class="tag">Skill 2</span>
+<h3>plot_table</h3>
+<p class="small">Takes the CSV artifact and a description of each axis. Publishes a <strong>PNG artifact</strong> that renders in the chat.</p>
+</div>
+
+</div>
+
+<p class="small">The orchestrator chains the two: it calls skill 1, reads the CSV id from the result, and passes it to skill 2.</p>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Ground rules</div><h2>How to work</h2></div>
+  <div class="content">
+<div class="grid g2" style="gap:30px;">
+<div class="steps">
+<div class="step"><div><h4>Four checkpoints, in order</h4>
+<p class="small">Each builds on the one before. Test each before moving on.</p>
+</div></div>
+<div class="step"><div><h4>One fresh chat per test</h4>
+<p class="small">Old uploads and results stay visible to the orchestrator and can confuse it. Upload the practice document again each time.</p>
+</div></div>
+<div class="step"><div><h4>Rebuild after every change</h4>
+<p class="small"><code>make up</code> in your agent's folder, then wait about a minute for the orchestrator to see the new card.</p>
+</div></div>
+</div>
+
+<div class="card"><span class="tag">Practice document</span>
+<h3>performance-car-report.md</h3>
+<p class="small">In your clone: <code>prometheus_core/hackathon/slides/one-day/challenge/</code>. It has two captioned tables of simulated data: <strong>category scores</strong> (six rows) and <strong>acceleration-test speeds</strong> (ten rows over 0 to 9 seconds).</p>
+</div>
+
+</div>
+
+<div class="callout info">
+Stuck? Ask a mentor. Never paste a key into the chat.</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Checkpoint 1 of 4 · 15 min</div><h2>Checkpoint 1: Route to a new skill</h2><p class="lede">Add an <code>extract_table</code> skill, and show that the chat routes a request to it. An error message as the result is enough.</p></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:30px;">
+<div class="col">
+<div class="callout">
+<p><strong>Test prompt</strong>, after uploading the practice document:</p>
+<p>&quot;Extract the performance car speed table.&quot;</p>
+</div>
+
+<h3>Done when</h3>
+<ul class="b sm">
+<li>The orchestrator calls your new skill.</li>
+<li>Your temporary result appears in the chat.</li>
+</ul>
+</div>
+
+<div class="col">
+<h3>Hints</h3>
+<ul class="b sm">
+<li>The orchestrator picks a skill from its <strong>card</strong>: write a clear <code>description</code> and <code>usage_notes</code>, and say that a successful call returns the CSV artifact id.</li>
+<li>The skill needs no inputs yet: an empty <code>inputSchema</code> (<code>{}</code>) is fine.</li>
+<li>Dispatch on <code>params[&quot;skill_id&quot;]</code> in <code>_execute</code>.</li>
+<li>The template's tests call <code>_execute</code> without a <code>skill_id</code>. They will fail until you update them.</li>
+</ul>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Checkpoint 2 of 4 · 30 min</div><h2>Checkpoint 2: Retrieve and publish artifacts</h2><p class="lede">Read the uploaded document, convert its tables with the helper, and publish the CSV to DeepLynx.</p></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1.2fr 1fr; gap:26px;">
+<pre class="xs"><span class="k">import</span> csv
+<span class="k">import</span> io
+<span class="k">import</span> re
+
+TABLE_ROW = re.compile(<span class="s">r&quot;^\|(.+)\|[ \t]*$&quot;</span>, re.MULTILINE)
+SEPARATOR_ROW = re.compile(<span class="s">r&quot;[\s:|-]+&quot;</span>)
+
+
+<span class="k">def</span> <span class="p">markdown_tables_as_csv</span>(markdown: str) -&gt; str:
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator=<span class="s">&quot;\n&quot;</span>)
+    <span class="k">for</span> row <span class="k">in</span> TABLE_ROW.findall(markdown):
+        <span class="k">if</span> SEPARATOR_ROW.fullmatch(row):  <span class="c"># the |---| line</span>
+            <span class="k">continue</span>
+        writer.writerow(cell.strip() <span class="k">for</span> cell <span class="k">in</span> row.split(<span class="s">&quot;|&quot;</span>))
+    <span class="k">return</span> output.getvalue()</pre>
+<div class="col">
+<h3>Done when</h3>
+<ul class="b sm">
+<li>A CSV artifact appears in the chat and in DeepLynx.</li>
+<li>Your result returns the CSV artifact id.</li>
+<li>The CSV has 18 rows. <strong>Both tables run together</strong>, with the second header in the middle. That is expected: the helper is naive on purpose.</li>
+</ul>
+<h3>Hints</h3>
+<ul class="b sm">
+<li>Add a string parameter for the uploaded document to the card and mark it with <code>&quot;x_artifact_ref&quot;: &quot;single&quot;</code>. The orchestrator then fills it with the artifact id.</li>
+<li><code>get_artifact_file_path</code> turns the artifact id into a local file.</li>
+<li><code>send_deeplynx_artifact</code> publishes a file. Set <code>mime_type=&quot;text/csv&quot;</code> and call it while the temporary folder still exists.</li>
+</ul>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Checkpoint 3 of 4 · 25 min</div><h2>Checkpoint 3: Use an LLM to extract the table</h2><p class="lede">Stop using the helper. Let an LLM find the table that matches the user's description and return just that table as CSV.</p></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:30px;">
+<div class="col">
+<div class="callout">
+<p><strong>Test prompt:</strong></p>
+<p>&quot;Extract the table that compares the cars on acceleration, braking, comfort, and everyday usability.&quot;</p>
+</div>
+
+<h3>Done when</h3>
+<ul class="b sm">
+<li>The helper is no longer used to pick or convert the table.</li>
+<li>The CSV has one header row and <strong>six data rows</strong>.</li>
+<li>It is published to DeepLynx and the result returns its id.</li>
+</ul>
+</div>
+
+<div class="col">
+<h3>Hints</h3>
+<ul class="b sm">
+<li>Add a string parameter to the card for the table the user wants, in their own words.</li>
+<li><code>self.llm_client(context)</code> and the <code>medium</code> flavor. Give the model the whole document and that description.</li>
+<li>Ask for <strong>only CSV</strong>: no code fence, no commentary. Keep the exact column names and row order.</li>
+<li>Give it a way to say no, such as a fixed word like <code>NO_MATCH</code>.</li>
+<li><strong>Check the answer in Python</strong> before you upload: parse it with <code>csv</code> and reject an empty or ragged result.</li>
+</ul>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Checkpoint 4 of 4 · 30 min</div><h2>Checkpoint 4: Add a plot skill</h2><p class="lede">Add <code>plot_table</code>: take the CSV artifact, plot two columns with Matplotlib, and publish the image.</p></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:30px;">
+<div class="col">
+<div class="callout">
+<p><strong>Test prompt</strong>, in a fresh chat with the practice document:</p>
+<p>&quot;Extract the table containing the ten-second acceleration-test speeds, then plot Ferrari speed versus time as a line chart.&quot;</p>
+</div>
+
+<h3>Done when</h3>
+<ul class="b sm">
+<li>The orchestrator calls the plot skill with the CSV artifact id.</li>
+<li>A PNG renders in the chat: x from 0 to 9, the Ferrari line from 0 to 162 mph.</li>
+</ul>
+</div>
+
+<div class="col">
+<h3>Hints</h3>
+<ul class="b sm">
+<li>Three parameters: the CSV id (<code>x_artifact_ref</code>), and a short description of each axis, such as &quot;time&quot; and &quot;Ferrari speed&quot;.</li>
+<li>The axes are <strong>descriptions, not column names</strong>. Read the CSV header, ask an LLM which header fits each description, and check in Python that its answer is a real header.</li>
+<li><code>uv add matplotlib &quot;python-dateutil&lt;3&quot;</code>, then <code>make up</code>. Select the <code>Agg</code> backend before importing <code>pyplot</code>.</li>
+<li>Publish with <code>mime_type=&quot;image/png&quot;</code>.</li>
+</ul>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Optional · tool calling</div><h2>Stretch goal: Let the LLM choose how to plot</h2><p class="lede">Give the LLM one tool per chart type and let it decide which to call. You build this only if the checkpoints are done.</p></div>
+  <div class="content">
+<div class="grid" style="grid-template-columns: 1fr 1fr; gap:30px;">
+<div class="col">
+<h3>The change</h3>
+<ul class="b sm">
+<li>Replace the two axis parameters with one free-text <code>plot_request</code>.</li>
+<li>Register <code>line_plot</code>, <code>bar_plot</code> and <code>scatter_plot</code> as tools. Each takes an x column, a list of y columns and a title.</li>
+<li>Your Python checks every call and draws the figure. The model never writes plotting code.</li>
+</ul>
+<div class="callout">
+<strong>Try:</strong> &quot;compare all three cars against time on one chart&quot;, or &quot;a bar chart of the category scores&quot;. Then ask for a <strong>line</strong> chart of the category scores and watch what happens.</div>
+
+</div>
+
+<div class="col">
+<h3>Done when</h3>
+<ul class="b sm">
+<li>The model chose the chart type by calling a tool, and your result says which.</li>
+<li>A bad column or the wrong chart type returns an error to the model, not a crash.</li>
+<li>The loop is bounded, and the PNG renders in the chat.</li>
+</ul>
+<h3>Hints</h3>
+<ul class="b sm">
+<li>Stop when the model makes no tool call, and cap the turns.</li>
+<li>Replay the model's turn (<code>assistant_message</code>) before the tool results.</li>
+<li>List the valid columns in every error, so the model can fix its call.</li>
+</ul>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+<section class="slide">
+  <div class="head"><div class="eyebrow">Close out</div><h2>What you built</h2></div>
+  <div class="content">
+<div class="takeaways">
+<div class="tk"><span class="n">1</span><div><h3>The model interprets</h3>
+<p>It found the right table and chose the right columns.</p>
+</div></div>
+<div class="tk"><span class="n">2</span><div><h3>Python verifies</h3>
+<p>Every answer was checked before anything was published.</p>
+</div></div>
+<div class="tk"><span class="n">3</span><div><h3>Artifacts connect skills</h3>
+<p>A CSV id was all the plot skill needed from the extract skill.</p>
+</div></div>
+</div>
+
+<div class="grid g2" style="gap:30px;">
+<div class="card acc"><span class="tag">Keep going</span>
+<h3>Next steps</h3>
+<p class="small">Add a skill of your own. The agent developer guide is <code>sdk/docs/agent/GUIDE.md</code> in <code>prometheus_core</code>.</p>
+</div>
+
+<div class="card"><span class="tag">Tell us</span>
+<h3>How was today?</h3>
+<p class="small">Tell a mentor, or open an issue in <code>idaholab/prometheus_core</code>.</p>
+</div>
+
+</div>
+
+  </div>
+</section>
+
+</div></div>
+<script src="../assets/deck.js"></script>
+</body>
+</html>

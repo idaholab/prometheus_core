@@ -15,6 +15,10 @@
     uv run --with markdown-it-py --with mdit-py-plugins --with pygments --with pyyaml \
         python tools/build.py [slides/NN-name.md ...]
 
+With no arguments it builds every deck set: the decks in slides/ and those in one-day/slides/.
+A deck is written next to the slides/ folder that holds its source and loads the shared
+assets/ through a relative path.
+
 The syntax is documented in slides/README.md. The generated HTML uses the classes
 in assets/deck.css and the engine in assets/deck.js, so the layout and the other
 tools (check_layout.py, export_pdf.py) are unchanged.
@@ -23,6 +27,7 @@ tools (check_layout.py, export_pdf.py) are unchanged.
 from __future__ import annotations
 
 import html
+import os
 import pathlib
 import re
 import shlex
@@ -39,6 +44,13 @@ from pygments.token import Comment, Generic, Keyword, Literal, Name, Number, Ope
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SLIDES = ROOT / "slides"
+# Every folder whose slides/ holds decks. Each has its own index.html; all share ROOT / "assets".
+DECK_ROOTS = [ROOT, ROOT / "one-day"]
+ASSETS = ROOT / "assets"
+
+# Prefix for asset URLs in the deck being built ("assets" for the decks in ROOT, "../assets" for
+# those one folder down). Set by build() and read by the helpers that emit <img>, <link> and <script>.
+assets_prefix = "assets"
 
 # ---------------------------------------------------------------------------
 # attribute strings: {.cls key="value" key=value #id}
@@ -423,9 +435,14 @@ def inline(text: str) -> str:
 # ---------------------------------------------------------------------------
 # slides
 # ---------------------------------------------------------------------------
-LOGOS = ('<div class="logos"><img src="assets/INL-logo.png" alt="INL">'
-         '<img src="assets/genesis_logo.png" alt="Genesis"></div>')
-PROM = '<img src="assets/prometheus_logo.png" alt="Prometheus" style="width:560px; margin-left:-18px">'
+def logos() -> str:
+    return (f'<div class="logos"><img src="{assets_prefix}/INL-logo.png" alt="INL">'
+            f'<img src="{assets_prefix}/genesis_logo.png" alt="Genesis"></div>')
+
+
+def prom() -> str:
+    return (f'<img src="{assets_prefix}/prometheus_logo.png" alt="Prometheus" '
+            'style="width:560px; margin-left:-18px">')
 
 
 def split_slides(body: str) -> list[str]:
@@ -484,7 +501,7 @@ def build_slide(src: str, mode: list[str]) -> tuple[str, list[str]]:
             sub = render_md(rest).strip()
             sub = re.sub(r"^<p>(.*)</p>$", r'<p class="sub">\1</p>', sub, flags=re.S)
             kicker = f'<div class="kicker">{inline(at["kicker"])}</div>' if "kicker" in at else ""
-            body = (f"  {LOGOS}\n  {PROM}\n  {kicker}\n  <h1>{inline(text)}</h1>\n  {sub}\n"
+            body = (f"  {logos()}\n  {prom()}\n  {kicker}\n  <h1>{inline(text)}</h1>\n  {sub}\n"
                     f'  <div class="meta">{pills}</div>')
             return f"{section_open(['title'] + mode, at)}\n{body}{notes}\n</section>", mode
         # section / interstitial page; may switch the mode for the following slides
@@ -542,16 +559,16 @@ HEAD = """<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="assets/deck.css">{style}
+<link rel="stylesheet" href="{assets}/deck.css">{style}
 </head>
-<body data-sec="{sec}" data-title="{footer}">
+<body data-sec="{sec}" data-title="{footer}"{attrs}>
 <div id="viewport"><div id="stage">
 
 """
 TAIL = """
 
 </div></div>
-<script src="assets/deck.js"></script>
+<script src="{assets}/deck.js"></script>
 </body>
 </html>
 """
@@ -572,7 +589,15 @@ def accent_style(accent: str) -> tuple[str, str]:
     return accent, ""
 
 
+def deck_root(path: pathlib.Path) -> pathlib.Path:
+    """The folder that holds the slides/ folder containing ``path``; decks are written there."""
+    return path.resolve().parent.parent
+
+
 def build(path: pathlib.Path) -> pathlib.Path:
+    global assets_prefix
+    root = deck_root(path)
+    assets_prefix = pathlib.PurePosixPath(os.path.relpath(ASSETS, root)).as_posix()
     meta, body = load_deck(path)
     sec, style = accent_style(str(meta.get("accent", "welcome")))
     if meta.get("css"):
@@ -581,10 +606,14 @@ def build(path: pathlib.Path) -> pathlib.Path:
     for src in split_slides(body):
         h, mode = build_slide(src, mode)
         out.append(h)
-    page = HEAD.format(src=f"slides/{path.name}", title=esc(str(meta.get("title", path.stem))),
-                       style=style, sec=esc(sec), footer=esc(str(meta.get("footer", ""))))
-    page += "\n\n".join(out) + TAIL
-    target = ROOT / (path.stem + ".html")
+    src = root.relative_to(ROOT) / "slides" / path.name
+    # Decks outside ROOT get a footer link back to their own index and load the logo from ../assets.
+    attrs = "" if root == ROOT else f' data-logo="{assets_prefix}/prometheus_logo.png" data-index="index.html"'
+    page = HEAD.format(src=src.as_posix(), title=esc(str(meta.get("title", path.stem))),
+                       style=style, sec=esc(sec), footer=esc(str(meta.get("footer", ""))),
+                       assets=assets_prefix, attrs=attrs)
+    page += "\n\n".join(out) + TAIL.format(assets=assets_prefix)
+    target = root / (path.stem + ".html")
     target.write_text(page)
     return target
 
@@ -600,18 +629,18 @@ def counts(html_text: str) -> str:
     return " · ".join(parts)
 
 
-def build_index() -> None:
-    """Rewrite the deck entries between the decks:start/decks:end markers in index.html."""
-    idx = ROOT / "index.html"
+def build_index(root: pathlib.Path = ROOT) -> None:
+    """Rewrite the deck entries between the decks:start/decks:end markers in root/index.html."""
+    idx = root / "index.html"
     if not idx.exists():
         return
     rows = []
-    for md in sorted(SLIDES.glob("[0-9]*.md")):
+    for md in sorted((root / "slides").glob("[0-9]*.md")):
         meta, _ = load_deck(md)
         e = meta.get("index")
         if not e:
             continue
-        deck = ROOT / (md.stem + ".html")
+        deck = root / (md.stem + ".html")
         n = counts(deck.read_text()) if deck.exists() else ""
         rows.append(f'  <a class="deck" href="{md.stem}.html" style="--c: {e.get("color", "var(--navy)")}">'
                     f'<span class="tm">{e.get("time", "")}</span><div><h3>{e.get("heading", md.stem)}</h3>'
@@ -621,16 +650,19 @@ def build_index() -> None:
     if not m:
         return
     idx.write_text(text[: m.end(1)] + "\n".join(rows) + text[m.start(3):])
-    print(f"index.html: {len(rows)} decks")
+    print(f"{idx.relative_to(ROOT)}: {len(rows)} decks")
 
 
 def main(argv):
-    paths = [pathlib.Path(a) for a in argv] or sorted(SLIDES.glob("[0-9]*.md"))
+    paths = [pathlib.Path(a) for a in argv] or [
+        md for r in DECK_ROOTS for md in sorted((r / "slides").glob("[0-9]*.md"))]
     for p in paths:
         t = build(p)
         n = len(re.findall(r'<section class="slide', t.read_text()))
-        print(f"{p} -> {t.name} ({n} slides)")
-    build_index()
+        print(f"{p} -> {t.relative_to(ROOT)} ({n} slides)")
+    # Refresh the index of every deck set that has one (an explicit path still updates its own set).
+    for r in DECK_ROOTS:
+        build_index(r)
 
 
 if __name__ == "__main__":

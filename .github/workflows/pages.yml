@@ -51,6 +51,8 @@ jobs:
           mkdir _site/hackathon
           cd hackathon/slides
           cp -R ./*.html assets ../../_site/hackathon/
+          mkdir ../../_site/hackathon/one-day
+          cp one-day/*.html ../../_site/hackathon/one-day/
       - name: Upload site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
