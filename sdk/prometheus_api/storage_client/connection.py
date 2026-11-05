@@ -189,9 +189,9 @@ class ConnectionConfig(BaseModel):
 
         # Compose passes unset variables through as "" (``${VAR:-}``); treat
         # blank values as unset rather than failing on int("").
-        org_id = int(org_id) if str(org_id or "").strip() else None
-        proj_id = int(proj_id) if str(proj_id or "").strip() else None
-        ds_id = int(ds_id) if str(ds_id or "").strip() else None
+        org_id = int(org_id) if org_id is not None and str(org_id).strip() else None
+        proj_id = int(proj_id) if proj_id is not None and str(proj_id).strip() else None
+        ds_id = int(ds_id) if ds_id is not None and str(ds_id).strip() else None
 
         # Base URL (optional)
         base_url = (
