@@ -552,17 +552,6 @@ def test_a_fenced_example_is_not_a_requirement(repo: Repo):
     assert [r.id for r in requirements(repo)] == ["T-REQ-001-01"]
 
 
-def test_the_old_checkers_lines_are_reported(repo: Repo):
-    """`tests:` and `id-prefix:` moved into the config, and the messages say so."""
-    repo.write("specs/000-index.md", "# Index\n\nid-prefix: T\n\n- [001](001-thing.md)\n")
-    repo.write("specs/001-thing.md", spec(ONE, header="sources: tests\ntests: tests"))
-    assert_problems(
-        repo,
-        "specs/000-index.md:3: the `id-prefix:` line is gone; set `id-prefix` in the config",
-        "specs/001-thing.md:4: the `tests:` line is gone; say which producers may claim this spec in the config",
-    )
-
-
 class TestProblems:
     """The problem format, and control characters."""
 

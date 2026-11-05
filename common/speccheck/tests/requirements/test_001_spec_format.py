@@ -256,7 +256,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports a bullet ending in the untested marker at its line, saying to use the suffix or a test",
             ),
             id="untested",
@@ -266,7 +266,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports the untested marker with a full stop after it, on a wrapped bullet, at the bullet's first line",
             ),
             id="untested-wrapped",
@@ -276,7 +276,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports a bullet ending in a planned marker at its line, saying to use the suffix or a test",
             ),
             id="planned",
@@ -286,7 +286,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `Retired.`, which is gone; delete the requirement and list T-REQ-001-02 in its spec's "
             "`removed:` line",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports a bullet starting Retired. at its line, saying to delete it and list its ID in removed:",
             ),
             id="retired-stop",
@@ -296,7 +296,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `Retired:`, which is gone; delete the requirement and list T-REQ-001-02 in its spec's "
             "`removed:` line",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports a bullet starting Retired: with the same fix as Retired., naming the form",
             ),
             id="retired-colon",
@@ -306,7 +306,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "lint reports a bullet ending in a planned marker with no full stop after it"
+                "SPC-REQ-001-09", "lint reports a bullet ending in a planned marker with no full stop after it"
             ),
             id="planned-no-stop",
         ),
@@ -315,7 +315,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `(planned: ...)`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "lint reports a planned marker whose step holds parentheses of its own"
+                "SPC-REQ-001-09", "lint reports a planned marker whose step holds parentheses of its own"
             ),
             id="planned-parentheses",
         ),
@@ -324,7 +324,7 @@ def test_what_counts_as_a_requirement(project: Project, body: str, codes: list[s
             "T-REQ-001-02 has `⚠ untested`, which is gone; end it with `(unimplemented: <reason>)` "
             "if a plan delivers it later, or give it a test",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "lint reports the untested marker left before an unimplemented suffix, since it is looked for without the suffix",
             ),
             id="untested-before-suffix",
@@ -345,21 +345,21 @@ def test_an_old_marker_says_what_replaces_it(project: Project, bullet: str, mess
         pytest.param(
             "- T-REQ-001-02: A bullet ending `⚠ untested` is reported.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "the untested marker named in the middle of a requirement's text is ordinary words"
+                "SPC-REQ-001-09", "the untested marker named in the middle of a requirement's text is ordinary words"
             ),
             id="untested-named",
         ),
         pytest.param(
             "- T-REQ-001-02: It names (planned: x) mid-text.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "a planned marker in the middle of a requirement's text is ordinary words"
+                "SPC-REQ-001-09", "a planned marker in the middle of a requirement's text is ordinary words"
             ),
             id="planned-mid-text",
         ),
         pytest.param(
             "- T-REQ-001-02: Retired later, maybe.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11",
+                "SPC-REQ-001-09",
                 "a text starting with the word Retired but no stop or colon after it is ordinary words",
             ),
             id="retired-later",
@@ -367,20 +367,20 @@ def test_an_old_marker_says_what_replaces_it(project: Project, bullet: str, mess
         pytest.param(
             "- T-REQ-001-02: It was Retired. Once.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "Retired. in the middle of a requirement's text is ordinary words"
+                "SPC-REQ-001-09", "Retired. in the middle of a requirement's text is ordinary words"
             ),
             id="retired-mid-text",
         ),
     ],
 )
 def test_old_markers_elsewhere_are_words(project: Project, bullet: str):
-    """So a requirement can name the old markers, as SPC-REQ-001-11 itself does."""
+    """So a requirement can name the old markers, as SPC-REQ-001-09 itself does."""
     project.spec(f"{ONE}\n{bullet}")
     assert project.speccheck("lint", "--json").json()["problems"] == []
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-11",
+    "SPC-REQ-001-09",
     "a bullet that starts Retired. and ends with the untested marker gets two old-marker problems, both at its line",
 )
 def test_one_problem_per_old_marker(project: Project):
@@ -395,7 +395,7 @@ def test_one_problem_per_old_marker(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-11",
+    "SPC-REQ-001-09",
     "lint reports a status: line in a spec's header at its line, saying to delete it",
 )
 def test_a_status_line_says_to_delete_it(project: Project):
@@ -418,7 +418,7 @@ def test_a_status_line_says_to_delete_it(project: Project):
             f"{ONE}\n\nstatus: draft",
             "sources: x",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "a status: line under the Requirements heading is prose, not the old header line"
+                "SPC-REQ-001-09", "a status: line under the Requirements heading is prose, not the old header line"
             ),
             id="under-a-heading",
         ),
@@ -426,7 +426,7 @@ def test_a_status_line_says_to_delete_it(project: Project):
             ONE,
             "```\nstatus: draft\n```",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-11", "a status: line inside a fence in the header is an example, not the old line"
+                "SPC-REQ-001-09", "a status: line inside a fence in the header is an example, not the old line"
             ),
             id="in-a-fence",
         ),
@@ -802,22 +802,6 @@ def test_fences_in_the_header_are_ignored(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-09",
-    "lint points an index's `id-prefix:` line and a spec's `tests:` line at the config, each at its line",
-)
-def test_the_old_checkers_lines_say_where_the_setting_went(project: Project):
-    """`tests:` and `id-prefix:` point at the config."""
-    project.write("specs/000-index.md", "# Index\n\nid-prefix: T\n\n" + INDEX)
-    project.write("specs/001-thing.md", spec("", header="sources: tests\ntests: tests"))
-    run = project.speccheck("lint")
-    assert "specs/000-index.md:3: the `id-prefix:` line is gone; set `id-prefix` in the config instead" in run.err
-    assert (
-        "specs/001-thing.md:4: the `tests:` line is gone; say which producers may claim this spec in the config"
-        in run.err
-    )
-
-
-@pytest.mark.covers(
     "SPC-REQ-001-10",
     "lint fails on a requirement in spec 002 repeating one in 001 in other case and spacing, naming both IDs and nothing else",
 )
@@ -967,7 +951,7 @@ def with_removed(body: str, removed: str) -> str:
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-12",
+    "SPC-REQ-001-11",
     "a removed: line wrapped onto a four-space line with empty items between commas lints clean, and claims of the IDs on both lines are refused as removed",
 )
 def test_a_spec_lists_its_removed_ids(project: Project):
@@ -988,21 +972,21 @@ def test_a_spec_lists_its_removed_ids(project: Project):
         pytest.param(
             " T-REQ-001-03",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12", "a line indented one space after removed: is not part of it, so its ID isn't removed"
+                "SPC-REQ-001-11", "a line indented one space after removed: is not part of it, so its ID isn't removed"
             ),
             id="one-space",
         ),
         pytest.param(
             "\tT-REQ-001-03",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12", "a tab-indented line after removed: is not part of it, so its ID isn't removed"
+                "SPC-REQ-001-11", "a tab-indented line after removed: is not part of it, so its ID isn't removed"
             ),
             id="tab",
         ),
         pytest.param(
             "\n  T-REQ-001-03",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12", "an indented line after a blank line is not part of removed:, so its ID isn't removed"
+                "SPC-REQ-001-11", "an indented line after a blank line is not part of removed:, so its ID isn't removed"
             ),
             id="after-a-blank-line",
         ),
@@ -1023,7 +1007,7 @@ def test_a_line_that_doesnt_continue_removed_isnt_read(project: Project, after: 
             "removed: T-REQ-002-01",
             "`T-REQ-002-01` in `removed:` isn't an ID of this spec; they read like `T-REQ-001-01`",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12", "lint reports an ID of spec 002 in spec 001's removed: line at that line"
+                "SPC-REQ-001-11", "lint reports an ID of spec 002 in spec 001's removed: line at that line"
             ),
             id="other-spec",
         ),
@@ -1031,14 +1015,14 @@ def test_a_line_that_doesnt_continue_removed_isnt_read(project: Project, after: 
             "removed: REQ-001-02",
             "`REQ-001-02` in `removed:` isn't an ID of this spec; they read like `T-REQ-001-01`",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12", "lint reports an ID without the folder's prefix in removed: at that line"
+                "SPC-REQ-001-11", "lint reports an ID without the folder's prefix in removed: at that line"
             ),
             id="malformed",
         ),
         pytest.param(
             "removed: T-REQ-001-02, T-REQ-001-02",
             "T-REQ-001-02 is listed twice in `removed:`",
-            marks=pytest.mark.covers("SPC-REQ-001-12", "lint reports an ID listed twice in removed: at that line"),
+            marks=pytest.mark.covers("SPC-REQ-001-11", "lint reports an ID listed twice in removed: at that line"),
             id="twice",
         ),
         pytest.param(
@@ -1046,7 +1030,7 @@ def test_a_line_that_doesnt_continue_removed_isnt_read(project: Project, after: 
             "T-REQ-001-01 is listed in `removed:` but is a requirement at specs/001-thing.md:8; "
             "a removed ID is never reused",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-12",
+                "SPC-REQ-001-11",
                 "lint reports a removed ID that is also a requirement at the removed: line, naming where the requirement is",
             ),
             id="reused",
@@ -1064,7 +1048,7 @@ def test_a_removed_line_is_checked(project: Project, removed: str, message: str)
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-12",
+    "SPC-REQ-001-11",
     "an ID spec 001 removed that is a misnumbered bullet in spec 002 is a removed-reused problem naming spec 002's line",
 )
 def test_a_removed_id_is_not_a_requirement_in_any_spec(project: Project):
@@ -1078,7 +1062,7 @@ def test_a_removed_id_is_not_a_requirement_in_any_spec(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-12",
+    "SPC-REQ-001-11",
     "a second removed: line in a spec is reported at its own line, and a removed: line under Requirements or in a fence is not read",
 )
 def test_one_removed_line_in_the_header(project: Project):
@@ -1094,7 +1078,7 @@ def test_one_removed_line_in_the_header(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-13",
+    "SPC-REQ-001-12",
     "the index listing 002 and, on a wrapped line, 003 lints clean with no files, and once both files are written each is a spec-removed problem and neither is read, not even its own problems",
 )
 def test_the_index_lists_removed_specs(project: Project):
@@ -1114,7 +1098,7 @@ def test_the_index_lists_removed_specs(project: Project):
 
 
 @pytest.mark.covers(
-    "SPC-REQ-001-13",
+    "SPC-REQ-001-12",
     "a second removed: line in the index is reported at its own line, and one under a ## heading or in a fence is not read",
 )
 def test_one_removed_line_in_the_index(project: Project):
@@ -1137,7 +1121,7 @@ def test_one_removed_line_in_the_index(project: Project):
             "removed: 2",
             "`2` in `removed:` isn't a spec number; they are three digits, like `007`",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-13", "lint reports a spec number of one digit in the index's removed: line"
+                "SPC-REQ-001-12", "lint reports a spec number of one digit in the index's removed: line"
             ),
             id="short",
         ),
@@ -1145,7 +1129,7 @@ def test_one_removed_line_in_the_index(project: Project):
             "removed: 002, 002",
             "002 is listed twice in `removed:`",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-13", "lint reports a spec number listed twice in the index's removed: line"
+                "SPC-REQ-001-12", "lint reports a spec number listed twice in the index's removed: line"
             ),
             id="twice",
         ),
@@ -1153,7 +1137,7 @@ def test_one_removed_line_in_the_index(project: Project):
             "removed: 000",
             "`000` in `removed:` is the index, not a spec",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-13", "lint reports 000 in the index's removed: line, since that is the index itself"
+                "SPC-REQ-001-12", "lint reports 000 in the index's removed: line, since that is the index itself"
             ),
             id="index",
         ),

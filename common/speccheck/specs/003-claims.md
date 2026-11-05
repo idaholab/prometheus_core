@@ -12,7 +12,7 @@ pytest checks the marker, so a typo or a missing explanation fails locally befor
   `pytest.param(..., marks=...)` in the test's own `@pytest.mark.parametrize`, and it MUST claim
   for that one test only.
 - SPC-REQ-003-03: When the project sets `speccheck_config`, collection MUST fail on a claim of a
-  malformed ID, an unknown ID, a removed ID (SPC-REQ-001-12, 001-13), or an ID in a spec the
+  malformed ID, an unknown ID, a removed ID (SPC-REQ-001-11, 001-12), or an ID in a spec the
   producer may not claim, and the message MUST name the test and the ID.
 - SPC-REQ-003-04: A `covers` mark MUST take exactly two positional strings: the ID, and how the
   test proves it. A mark with any other number of arguments, a non-string, or keyword arguments
