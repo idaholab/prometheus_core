@@ -97,6 +97,28 @@ cp -R share/. ~/.local/share/
 2.2.1 — the versions Homebrew ships together. Pairing a 0.10.x Colima with a
 Lima 1.x tarball is the usual self-inflicted failure here.
 
+**Run `colima stop` before repeating these copies.** While the VM is up, two
+`limactl` processes (`usernet` and `hostagent`) are executing from
+`~/.local/bin/limactl`. Overwriting that file in place invalidates its code
+signature, and macOS then kills every later run:
+
+```
+zsh: killed     limactl --version
+```
+
+The file is not corrupt — `shasum` matches and `codesign --verify` passes —
+so the error is misleading. Writing a *new* file at the path fixes it, with
+or without the VM running:
+
+```bash
+rm -f ~/.local/bin/limactl
+cp ~/Downloads/container-tooling/lima/bin/limactl ~/.local/bin/
+```
+
+`rm` only unlinks, so the running processes keep the old copy and the VM is
+undisturbed. The same applies to `docker` and `colima` if you reinstall them
+while the VM is up.
+
 ### Colima
 
 ```bash
@@ -132,16 +154,19 @@ Add to `~/.zshrc`, then open a new terminal:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Check all four:
+Check all four separately, so one failure does not hide the rest:
 
 ```bash
-docker --version && colima version && limactl --version && docker compose version
+docker --version
+colima version
+limactl --version
+docker compose version
 ```
 
 ### Start the VM
 
 ```bash
-colima start --cpu 6 --memory 10 --disk 100 --vm-type vz --mount-type virtiofs
+colima start --cpu 6 --memory 8 --disk 100 --vm-type vz --mount-type virtiofs
 ```
 
 Colima's defaults of 2 CPUs and 2 GB are far too small for this stack — it
@@ -149,8 +174,8 @@ runs fifteen containers with the debug agents and local DeepLynx. `--vm-type
 vz` uses Apple's Virtualization framework (macOS 13+), which is faster than
 the QEMU default.
 
-**On a 16 GB machine, 10 GB to the VM leaves macOS about 6 GB.** Drop to
-`--memory 8` if the host starts swapping during the build.
+**On a 16 GB machine, 8 GB to the VM leaves macOS about 8 GB.** Drop to
+`--memory 6` if the host starts swapping during the build.
 
 Colima points the `docker` CLI at the VM itself by creating and selecting a
 `colima` context, so nothing else needs configuring. Confirm with:
@@ -163,9 +188,52 @@ The SDK base image and the DeepLynx v0.8.0 images both publish `arm64`
 manifests, so nothing here is emulated. Colima registers amd64 emulation at
 startup anyway, so an amd64-only image would still run, slowly.
 
-From here, continue with [1. Clone](#1-clone). `colima stop` reclaims the
-memory when you are done; after a reboot, plain `colima start` remembers the
-sizing above.
+`colima stop` reclaims the memory when you are done; after a reboot, plain
+`colima start` remembers the sizing above.
+
+### Turn off AirPlay Receiver
+
+**macOS listens on port 5000 itself.** AirPlay Receiver binds it on every
+interface, so DeepLynx's port is taken before the stack starts. Turn it off in
+**System Settings → General → AirDrop & Handoff → AirPlay Receiver**.
+
+Left on, `make up` reaches DeepLynx, hangs for five minutes, and fails:
+
+```
+ ✔ Container prometheus_platform-deeplynx-ui-1       Healthy
+[ERROR] DeepLynx didn't answer at http://localhost:5000/api/v1/health within 300s.
+```
+
+Every container reports `Healthy` because DeepLynx is fine — the check never
+reaches it. `docker-compose.deeplynx.yml` publishes the API on IPv4 only
+(`127.0.0.1:5000:5000`), but `scripts/deeplynx_setup.py` asks for
+`http://localhost:5000`, and `localhost` resolves to IPv6 `::1` first. AirPlay
+answers there with `403`, so the script never falls back to IPv4 and retries
+that same `403` until it times out.
+
+`lsof` names the culprit — `ControlCe` is AirPlay, inside Control Center:
+
+```bash
+lsof -nP -iTCP:5000 -sTCP:LISTEN
+```
+
+Both listeners are visible at once, which is what makes this confusing:
+
+```bash
+# quote the IPv6 URL: zsh treats the brackets as a glob pattern
+curl -so /dev/null -w '%{http_code}\n' 'http://[::1]:5000/api/v1/health'  # 403
+curl -so /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5000/api/v1/health'  # 200
+```
+
+If your organization locks that setting, set `DEEPLYNX_SERVER_PORT=5050` in
+`.env` instead; the Makefile passes it to the setup script. The agents reach
+DeepLynx over the Docker network and do not care. **The DeepLynx web UI does**
+— it calls `localhost:5000` from the browser, baked in at build time, so on
+any other port the UI at http://localhost:3000 stops working. Turning AirPlay
+Receiver off is the only fix that leaves the whole stack working, since the
+browser resolves `::1` first too.
+
+From here, continue with [1. Clone](#1-clone).
 
 ## 1. Clone
 
