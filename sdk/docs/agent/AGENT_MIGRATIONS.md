@@ -5,6 +5,19 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.15.1
+
+### Resumed Tasks Reuse Their Execution Record
+
+When a user answers an `INPUT_REQUIRED` form, the task resumes with the same task ID. The
+executor used to try to create a second DeepLynx execution record for it, which DeepLynx
+rejects (`original_id` is unique per task), so the resumed request failed before
+`_execute(...)` ran and the user's answer never reached the agent. The executor now reuses
+the task's existing record (REQ-009-23).
+
+No migration steps. Agents that pause for input start receiving the resumed request;
+`self.execution_record_id` is the same ID on the first request and on every resume.
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

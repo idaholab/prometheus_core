@@ -30,6 +30,7 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - REQ-009-20: If credential acquisition, storage configuration, or execution-item creation fails, the executor MUST emit its normal terminal failure and MUST NOT invoke `_execute(...)`.
 - REQ-009-21: `PrometheusAgent.execution_record_id` MUST expose the created item ID only during the active execution, isolate concurrent executions, and reset after success or failure.
 - REQ-009-22: Execution-item names MUST identify the invoked skill using its agent-card name when available, fall back to its nonblank skill ID when unresolved, use a natural agent-level execution name when no skill is supplied, remain within 499 characters, and MUST NOT contain the task ID. Task IDs remain in the description, properties, and `original_id` for correlation.
+- REQ-009-23: A resumed task (a request continuing an `INPUT_REQUIRED` task, so with the same task ID) MUST reuse that task's existing execution item instead of failing on the duplicate `original_id`. When item creation fails, the executor MUST look up the item with the same `original_id` and bind its ID; only when no such item exists MUST the creation failure propagate as REQ-009-20 describes.
 
 ## Behavior
 - BEH-009-01: GIVEN a slow `_execute(...)` and a short heartbeat interval WHEN execution runs THEN at least one silent non-final heartbeat is emitted before the final completed event.
@@ -41,6 +42,7 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - BEH-009-07: GIVEN DeepLynx execution-item creation fails WHEN execution begins THEN the task fails before `_execute(...)` runs.
 - BEH-009-08: GIVEN arbitrarily nested effective parameters WHEN the execution item is created THEN their redacted structure is recoverable from `parameters_json` without adding nested containers to the DeepLynx properties tree.
 - BEH-009-09: GIVEN an invoked skill WHEN its execution item is created THEN the item name uses the skill's human-readable card name, or its ID when unresolved; GIVEN no skill THEN the name describes a general agent execution. In every case the name excludes the task ID while correlation metadata retains it.
+- BEH-009-10: GIVEN a task whose execution item already exists WHEN the user answers its `INPUT_REQUIRED` form and the same task ID executes again THEN execution proceeds, `self.execution_record_id` is the existing item's ID, and no second item is created.
 
 ## Interfaces
 - `MissingInput` is owned by spec 010.
