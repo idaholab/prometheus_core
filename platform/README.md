@@ -389,6 +389,7 @@ _TBD — common issues and fixes will be collected here as they come up._
 
 ## Documentation
 
+- [Full local setup](docs/docs/local-full-setup.md) - start to finish with the local SDK, the debug agents, a local DeepLynx and a local Keycloak
 - [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) - installing and verifying Docker Desktop's WSL2 integration before running `make up`
 - [Local Kubernetes cluster with k3d](#local-kubernetes-cluster-with-k3d) - prototype local cluster setup
 - [Architecture](docs/docs/dev-docs/architecture.md)

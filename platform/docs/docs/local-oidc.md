@@ -8,6 +8,10 @@ so the OIDC flow can be exercised end to end without a real one.
 For local use only. The realm, its client secret and its test user are fixed in
 this repository, and the Keycloak admin password defaults to `admin`.
 
+This page assumes a platform that already runs. [Full local
+setup](local-full-setup.md) is the install from scratch, with this as one of
+its steps.
+
 ## Start it
 
 Keycloak joins the platform's Docker network, so start the platform first:
@@ -94,6 +98,81 @@ the password form. The realm has one user:
 On the first sign-in the backend creates a matching platform account from the
 ID token's claims, with the provider's default role. Later sign-ins reuse it
 and refresh the email and display name.
+
+## Managing users
+
+Keycloak and the platform keep **separate records**. Keycloak authenticates;
+the platform creates its own row in `admin-db` the first time someone signs in,
+keyed on the provider and the `sub` claim. That has three consequences worth
+knowing before you start editing users:
+
+- Deleting someone in Keycloak does not delete their platform account or their
+  conversations. Remove that under **Admin → Users** as well.
+- Deleting and re-creating the same username in Keycloak produces a new `sub`,
+  so the platform treats it as a different person. The old row still holds the
+  username, so the new account is named `keycloak:<uuid>` instead. Delete the
+  stale platform row first, or disable the Keycloak user rather than deleting.
+- Role, and whether an account is active, live on the platform side. Changing
+  them in Keycloak has no effect; the provider's default role only applies the
+  first time someone signs in.
+
+Always set an email and a first and last name. Without them the ID token
+carries no `email` or `name` claim, and the platform account ends up named
+after the user's UUID.
+
+### In the admin console
+
+At http://localhost:8180, **switch the realm picker in the top left from
+`master` to `prometheus`** first. This is the easy thing to miss: a user added
+to `master` is a Keycloak administrator, not someone who can sign in to the
+platform.
+
+- **Add**: Users → Add user → fill in username, email, first and last name, and
+  turn *Email verified* on → Create → **Credentials** → Set password, with
+  *Temporary* turned off.
+- **Disable**: the user's Details tab → *Enabled* off. Takes effect at once and
+  can be undone.
+- **Remove**: the user → Action → Delete.
+
+### From the command line
+
+`kcadm.sh` ships in the container. `--server http://localhost:8080` is right:
+that address is inside the container, not on your machine.
+
+```bash
+cd platform
+KC="docker compose -p prometheus_platform_oidc exec -T keycloak /opt/keycloak/bin/kcadm.sh"
+
+# Once per container; the login is cached
+$KC config credentials --server http://localhost:8080 \
+    --realm master --user admin --password admin
+
+$KC get users -r prometheus --fields id,username,email
+
+$KC create users -r prometheus \
+    -s username=alice -s enabled=true -s emailVerified=true \
+    -s email=alice@example.test -s firstName=Alice -s lastName=Example
+$KC set-password -r prometheus --username alice --new-password 'alice-pw'
+
+$KC update users/<id> -r prometheus -s enabled=false
+
+ID=$($KC get users -r prometheus -q username=alice --fields id --format csv --noquotes)
+$KC delete users/$ID -r prometheus
+```
+
+Replace `prometheus_platform_oidc` if `COMPOSE_PROJECT_NAME` is not the default.
+
+### In the realm file
+
+Adding to the `users` array in `keycloak/realm-prometheus.json` is the way to
+change the set of users *everyone* gets. It is not a way to add a user today:
+the file is imported only into an empty database, so the change takes
+
+```
+make oidc-reset && make oidc-up
+```
+
+which discards every user and credential currently in Keycloak.
 
 ## Why two addresses
 
