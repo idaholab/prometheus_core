@@ -9,7 +9,7 @@ start.
 | Path | What |
 |---|---|
 | `slides/NN-name.md` | **The slide sources. Edit these.** Syntax: [`slides/README.md`](slides/README.md) |
-| `NN-name.html` | Generated decks, one per `.md`. Don't edit; they are overwritten by `make build` |
+| `NN-name.html` | Generated decks, one per `.md`. Not committed (git ignores them): `make build` creates them, CI builds them for the Pages site, and a pull request's `hackathon-slides` artifact has them. Don't edit |
 | `index.html` | Landing page. The deck list between `<!-- decks:start -->` and `<!-- decks:end -->` is generated; the rest is hand-written |
 | `cheatsheet.html` | One-page Day 2 reference (hand-written HTML, not a deck) |
 | `challenge/` | The Day 2 challenge brief and practice files handed to participants |
@@ -55,7 +55,7 @@ start.
    ```
 
 4. Look at it: open the deck in a browser and reload.
-5. Commit the `.md` **and** the regenerated `.html` together.
+5. Commit the `.md`. The decks are not committed. `make build` also refreshes the deck list in `index.html`; commit that file if it changed.
 
 Without make:
 

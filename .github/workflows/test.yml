@@ -312,12 +312,14 @@ jobs:
           python-version: "3.12"
       - name: Build
         run: make build
-      - name: Check generated decks are up to date
+      # The decks are built here and not committed. build.py also rewrites the deck lists in the
+      # committed index.html files, which must match the decks' front matter
+      - name: Check the index pages are up to date
         run: |
           if [ -n "$(git status --porcelain .)" ]; then
             git status --short .
             git --no-pager diff --stat .
-            echo "::error::The generated slides are out of date. Run 'make build' in hackathon/slides and commit the result."
+            echo "::error::An index page is out of date. Run 'make build' in hackathon/slides and commit the changed index.html."
             exit 1
           fi
       - name: Assemble the decks for review

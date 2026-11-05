@@ -12,6 +12,8 @@
 
 """Build slide decks from Markdown: slides/NN-name.md -> NN-name.html (and index.html).
 
+The decks (NN-name.html) are generated and git-ignored; the index.html files are tracked.
+
     uv run --with markdown-it-py --with mdit-py-plugins --with pygments --with pyyaml \
         python tools/build.py [slides/NN-name.md ...]
 
