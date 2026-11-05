@@ -106,7 +106,7 @@ The scaffolder copies the platform secrets, `LLM_CONFIG_PROFILE`, `LLM_API_KEY`,
 `LOCAL_SDK=true`, but not a hash pin or `USER_IDENTITY_REQUIRED` (`setup_agent.py:48-66`). Show the planned edits as key names. Ask
 (header `.env edits`): "Apply the edits (Recommended)", "Skip". Check each result with `grep -c`.
 
-1. The pin, only when the platform `.env` has no `LOCAL_SDK=true` (`grep -c '^LOCAL_SDK=true' <OUTPUT_DIR>/.env`
+1. The pin, only when the platform `.env` has no `LOCAL_SDK=true` (`grep -cx 'LOCAL_SDK=true' <OUTPUT_DIR>/.env`
    is then 0):
 
    ```sh

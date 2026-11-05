@@ -105,6 +105,18 @@ Mirrors the args `A2AClient.send()` accepts. `conversation_id` is **not** here.
 }
 ```
 
+`turn_id` (optional, `^[A-Za-z0-9-]{8,64}$`) names the turn; the client makes a fresh
+UUID per send. The response, the turn's `status` events, its `turn_done` event and
+`GET /api/chat/turns/{turn_id}` all carry it. Without it the server mints one. A
+`turn_id` this session already used gets `409` and does not run the agent again.
+
+**Delivery.** A finished turn reaches the client two ways with the same body: the POST
+reply and a `turn_done` event on `/api/events`. The client settles the turn on whichever
+arrives first and ignores the other, so a proxy that drops a long-held POST doesn't
+leave the page waiting. If the event stream was down too, the client reads
+`GET /api/chat/turns/{turn_id}` once when the stream reconnects (or when the POST fails at
+the network level). Nothing polls.
+
 A follow-up submission reuses the same endpoint with `followup_answers` populated
 (keys are `FormField.id`s):
 
@@ -292,6 +304,25 @@ Two more `ArtifactMeta` fields are always present:
 
 ---
 
+## `GET /api/chat/turns/{turn_id}`
+
+A turn's state, scoped to the caller's session: `404` for a turn this session never
+started, one that expired (a finished turn's result is kept for an hour), one whose
+worker stopped mid-turn, or another session's. A running turn's state is a 60 s lease that
+its worker renews every 20 s, so a turn whose worker died reads `404` within a minute.
+
+```json
+{ "turn_id": "7f9c2b1e-…", "state": "running", "response": null }
+{ "turn_id": "7f9c2b1e-…", "state": "done", "response": { "turn_id": "7f9c2b1e-…", "status": "answer", "response_text": "…" } }
+```
+
+Read it once when the client lost track of a turn (see **Delivery** above). If it says
+`running`, read it once more after the lease (60 s): a live turn still answers `running`
+and its `turn_done` is still coming; a turn whose worker died now answers `404`. Don't poll
+it: `turn_done` is the normal path.
+
+---
+
 ## `GET /api/events` — Server-Sent Events
 
 Per-session SSE stream (task 05). Session is identified by the auth JWT. Each JSON
@@ -299,7 +330,7 @@ event is a discriminated union on `type`; a heartbeat is a bare SSE **comment**
 line (`: ping`), not a JSON event.
 
 The `event:` name is the JSON `type`, so the browser can
-`addEventListener("status" | "task_progress" | "task_done", …)`.
+`addEventListener("status" | "task_progress" | "task_done" | "turn_done", …)`.
 
 **`status`** — progress for the in-flight turn. `history` is the accumulated,
 consecutive-duplicate-suppressed list of status lines for this turn (drives the running
@@ -325,6 +356,15 @@ carry a human-readable `message` and a null `response`:
 event: task_done
 data: {"type":"task_done","task_id":"bg-42","state":"completed","response":{"turn_id":"bg-42","status":"completed","report":"…"}}
 data: {"type":"task_done","task_id":"bg-43","state":"failed","message":"Background task ended (failed).","response":null}
+```
+
+**`turn_done`** — a chat turn finished. `response` is the same `ChatMessageResponse` its
+POST returned (including an `error` one). Sent to every stream of the session; a client
+acts only on the `turn_id` it is waiting for:
+
+```
+event: turn_done
+data: {"type":"turn_done","turn_id":"7f9c2b1e-…","response":{"turn_id":"7f9c2b1e-…","status":"answer","response_text":"…"}}
 ```
 
 **heartbeat** (comment line, ignored by JSON parsers):

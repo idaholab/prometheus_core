@@ -17,7 +17,6 @@ graph TD
   GW -->|A2A| DATA[Data Agent]
   GW -->|A2A| SYNTH[Synthesis Agent]
   GW -->|A2A| OSTI[OSTI Research Agent]
-  GW -->|A2A| FF[Form Filler Agent]
   FE -->|renders| VIZ[MeshViewer / IFCViewer / MermaidViewer]
 ```
 
@@ -29,7 +28,11 @@ graph TD
   - **Windows:** run the stack from a WSL2 distro, not from Windows directly. See
     [Windows + WSL2 setup](docs/docs/windows-wsl2-setup.md) for enabling WSL2
     integration in Docker Desktop before continuing below.
-- Either a [PAT](https://github.inl.gov/settings/tokens/new) for `containers.github.inl.gov` (to pull the `prometheus_api` base image) — 90 days is the recommended expiration — or `LOCAL_SDK=true` to build that image from `../sdk` instead (see step 2)
+  - **Linux:** don't run `make` with `sudo`. It would create `.env` owned by root with
+    mode 0600, and every later `make` as your own user would fail with "permission
+    denied". Add yourself to the `docker` group instead
+    (`sudo usermod -aG docker $USER`, then log out and back in). If you already ran
+    `sudo make up`, fix it with `sudo chown $USER .env`.
 - [uv](https://docs.astral.sh/uv/) and Python — only required to run the Python components outside Docker:
   - Backend: **3.12+**
   - Client-agent: **3.12+**
@@ -44,13 +47,34 @@ graph TD
 
 The first `make up` creates `.env` from `.env.example` and generates every
 secret (`AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
-`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). The only things you have to
-set are `LLM_CONFIG_PROFILE` and the API key for it (see below). Without them,
-`make up` asks for them in a terminal, or stops and tells you what is missing. To prepare `.env` without starting anything:
+`BACKEND_JWT_SECRET`, `ADMIN_DB_ENCRYPTION_KEY`). In a terminal, it then asks
+two questions before anything else, and Enter answers yes:
+
+```
+Build the SDK base image locally (LOCAL_SDK)? [Y/n] (Enter = yes):
+Run DeepLynx locally (LOCAL_DEEPLYNX)? [Y/n] (Enter = yes):
+```
+
+They set `LOCAL_SDK` (step 2) and `LOCAL_DEEPLYNX` (below), and count from this
+`make up` on. Each answer, yes or no, is saved as a line in `.env`, and a
+question is asked until `.env` has its line: so an `.env` from before these
+questions is asked once, in a terminal, and then never again. Change an answer
+by setting the line in `.env` to `true` or `false`; a line that is already there
+is never changed. A variable you set on the command line
+(`make up LOCAL_SDK=false`) isn't asked about. Without a terminal (CI) nothing
+is asked, both stay `false`, and the script says so when it creates `.env`; the
+next `make up` or `make init-env` in a terminal asks.
+
+The only other things you have to set are `LLM_CONFIG_PROFILE` and the API key
+for it (see below). Without them, `make up` asks for them next in a terminal, or
+stops and tells you what is missing.
+
+Every `make` target that builds or starts something (`up`, `restart`, `ng-*`,
+`build`, `deeplynx-setup`) runs this first. To prepare `.env` without starting
+anything:
 
 ```bash
-python3 scripts/init_env.py   # or: make init-env
-# then set LLM_CONFIG_PROFILE and LLM_API_KEY for your chosen profile in .env
+make init-env   # or: python3 scripts/init_env.py
 ```
 
 Section 1 of `.env.example` lists what you must set; everything else has a
@@ -88,32 +112,37 @@ The SDK's `registry` profile is not supported here: it sends model requests to a
 
 Advanced users can set `LLM_CONFIG_FILE` to a custom LLM configuration YAML file. It overrides `LLM_CONFIG_PROFILE`, must be available inside every agent container, and requires any environment variables referenced by that file.
 
+#### Run DeepLynx with the platform
+
+Every agent writes an execution record to DeepLynx and won't start without it. To run DeepLynx with the platform, answer yes (Enter) to the DeepLynx question that `make up` asks until `.env` has the line. Or set the line in `.env` yourself:
+
+```dotenv
+LOCAL_DEEPLYNX=true
+```
+
+Every `make up` then also starts DeepLynx (UI on `localhost:3000`, API on `localhost:5000`; both ports must be free) and runs `make deeplynx-setup`, which creates a project and an API key and writes the `DEEPLYNX_*` lines to `.env`. See [DeepLynx storage](#deeplynx-storage) to use a DeepLynx you already have instead.
+
 ### 2. Get the base image
 
 Every Python service is built `FROM` the `prometheus_api` base image. Pick one of the two options below.
 
-#### Option A: build it locally (no registry access needed)
+#### Option A: pull the published image
 
-```bash
-echo "LOCAL_SDK=true" >> .env
+Answer no to the base image question when `make up` creates `.env` (or set `LOCAL_SDK=false` in `.env`). `make up` then pulls `ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel` at the tag pinned by `PROMETHEUS_API_BASE_IMAGE_HASH` in the `Makefile`. CI publishes a new tag (`<commit date>-<7 char sha>`) after every green run on `devel`; see the [package page](https://github.com/idaholab/prometheus_core/pkgs/container/prometheus_core%2Fprometheus_sdk-devel) for the list. Set `PROMETHEUS_API_BASE_IMAGE_HASH` in `.env` to run against a different one.
+
+#### Option B: build it locally from `../sdk`
+
+Use this when you're changing the SDK, or want the platform to use exactly the SDK you have checked out.
+
+Answer yes (Enter) to the base image question that `make up` asks until `.env` has the line. Or set the line in `.env` yourself:
+
+```dotenv
+LOCAL_SDK=true
 ```
 
 `make up` (and `make build`, `make ng-up`) then first runs `make base-image`, which builds `prometheus_api:local` from `../sdk` for your machine's architecture, and builds every service `FROM` it. The pinned `PROMETHEUS_API_BASE_IMAGE_HASH` is ignored; you get whatever SDK is checked out next to the platform. After pulling SDK changes, the next `make up` rebuilds it (Docker's cache keeps that fast when nothing changed).
 
 The SDK base image, the backend and the frontend import the registry build cache that CI publishes (`amd64` or `arm64`, from your machine), so a first build reuses layers instead of rebuilding them. The agent images aren't published, so they still build locally. Importing a registry cache needs Docker's containerd image store (the default in recent Docker Desktop); if your builds ignore it, enable it under Settings → General. To build without the cache, for example when offline, set `USE_BUILD_CACHE=false` in `.env` or on the command line. A fork can point `BUILD_CACHE` at its own cache prefix.
-
-#### Option B: pull it from the container registry
-
-The `prometheus_api` base image is pulled from INL's Github with a [PAT](https://github.inl.gov/settings/tokens/new):
-
-The PAT (Personal Access Token) requires `read:packages` permissions. 90 days is the recommended expiration.
-
-```bash
-export GITHUB_PAT=<your-token>
-echo $GITHUB_PAT | docker login containers.github.inl.gov \
-  --username <your-github-username> \
-  --password-stdin
-```
 
 ### 3. Start the stack
 
@@ -140,7 +169,6 @@ NAME                                    IMAGE                                   
 prometheus_platform-admin-db-1          postgres:16-alpine                        admin-db              Up (healthy)
 prometheus_platform-backend-1           prometheus_platform-backend               backend               Up (healthy)
 prometheus_platform-client-agent-1      prometheus_platform-client-agent          client-agent          Up (healthy)
-prometheus_platform-form-filler-agent-1 prometheus_platform-form-filler-agent     form-filler-agent     Up (healthy)
 prometheus_platform-frontend-dev-1      prometheus_platform-frontend-dev          frontend-dev          Up
 prometheus_platform-redis-1             valkey/valkey-bundle:9.1.3                redis                 Up
 prometheus_platform-synthesis-agent-1   prometheus_platform-synthesis-agent       synthesis-agent       Up (healthy)
@@ -271,9 +299,9 @@ Notable environment variables (see `.env.example` for the full list):
 
 ### DeepLynx storage
 
-DeepLynx configuration is required for standard agent execution records. Set either `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`. `DEEPLYNX_BASE_URL` is optional and uses the SDK default when omitted. `DEEPLYNX_DATA_SOURCE_ID` is also optional when the project has a default data source.
+DeepLynx configuration is required for standard agent execution records. The simplest setup is `LOCAL_DEEPLYNX=true` in `.env` (step 1): `make up` then also starts DeepLynx from its published images and `make deeplynx-setup` fills in the settings below for it. See [Local DeepLynx install](docs/docs/local-deeplynx.md), which also covers building DeepLynx from source.
 
-To run DeepLynx locally instead, set `LOCAL_DEEPLYNX=true`: `make up` then also starts DeepLynx from its published images and fills in these settings for it. See [Local DeepLynx install](docs/docs/local-deeplynx.md), which also covers building DeepLynx from source.
+To use a DeepLynx you already have instead, set either `DEEPLYNX_JWT_TOKEN` or both `DEEPLYNX_KEY` and `DEEPLYNX_SECRET`, together with `DEEPLYNX_ORG_ID` and `DEEPLYNX_PROJECT_ID`. `DEEPLYNX_BASE_URL` is optional and uses the SDK default when omitted. `DEEPLYNX_DATA_SOURCE_ID` is also optional when the project has a default data source.
 
 ### Optional integrations (work in progress)
 
@@ -301,7 +329,6 @@ platform/
     client-agent/           # A2A orchestrator
     optional/               # heavy agents, only with OPTIONAL_AGENTS=true
       osti-research-agent/  # OSTI literature search (PDF/ML deps, slow build)
-    form-filler-agent/      # Dynamic form completion
     artifact-debug-agent/   # Artifact handling test agent
     (debug) corrosion-agent/        # Corrosion analysis specialist
     (debug) radiation-agent/        # Radiation damage specialist

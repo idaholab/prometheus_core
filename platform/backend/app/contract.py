@@ -285,6 +285,9 @@ class UploadDescriptor(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
+TURN_ID_PATTERN = r"^[A-Za-z0-9-]{8,64}$"
+
+
 class ChatMessageRequest(BaseModel):
     """Frontend → backend body for ``POST /api/chat/messages``.
 
@@ -300,6 +303,11 @@ class ChatMessageRequest(BaseModel):
     plan_rejected: bool = False
     workflow_id: Optional[str] = None
     upload_ids: Optional[list[UploadDescriptor]] = None
+    # Client-made id for this turn. The POST reply, the turn's ``status`` events, its
+    # ``turn_done`` event and ``GET /api/chat/turns/{turn_id}`` all carry it, so the
+    # client can settle the turn from whichever reaches it first. Minted by the server
+    # when absent.
+    turn_id: Optional[str] = Field(default=None, pattern=TURN_ID_PATTERN)
 
 
 class ChatMessageResponse(BaseModel):
@@ -370,8 +378,29 @@ class TaskDoneEvent(BaseModel):
     response: Optional[ChatMessageResponse] = None
 
 
+class TurnDoneEvent(BaseModel):
+    """A chat turn finished. ``response`` is the same body the turn's POST returns.
+
+    Published to every stream of the session, so a client whose POST reply was dropped
+    still settles the turn. A client settles on whichever of the two arrives first and
+    ignores ids it isn't waiting on."""
+
+    type: Literal["turn_done"] = "turn_done"
+    turn_id: str
+    response: ChatMessageResponse
+
+
+class TurnStateResponse(BaseModel):
+    """``GET /api/chat/turns/{turn_id}``: a turn's state, for a client that lost track of it
+    (POST failed at the network level, or its event stream reconnected)."""
+
+    turn_id: str
+    state: Literal["running", "done"]
+    response: Optional[ChatMessageResponse] = None
+
+
 ServerEvent = Annotated[
-    Union[StatusEvent, TaskProgressEvent, TaskDoneEvent],
+    Union[StatusEvent, TaskProgressEvent, TaskDoneEvent, TurnDoneEvent],
     Field(discriminator="type"),
 ]
 """Discriminated union of JSON SSE events.

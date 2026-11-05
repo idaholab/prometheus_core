@@ -26,8 +26,11 @@ repositories.
 ## Platform quick start
 
 ```
-cd platform && make up LOCAL_SDK=true
+cd platform && make up
 ```
+
+The first `make up` asks for an LLM profile and its key, and whether to build
+the base image locally and run DeepLynx next to the platform (Enter for yes to both).
 
 Needed prerequisites are Docker, python, make.
 

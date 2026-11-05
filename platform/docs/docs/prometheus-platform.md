@@ -46,9 +46,8 @@ for the schema, ownership model, and authoring rules.
 
 ```bash
 cd platform
-python3 scripts/init_env.py   # creates .env, generates all secrets
-# Set LLM_CONFIG_PROFILE (required, no default) and LLM_API_KEY for that provider
-make up
+make up   # creates .env, generates all secrets, asks for the LLM profile and key,
+          # and whether to build the base image and run DeepLynx locally (Enter: yes)
 ```
 
 ### Local development

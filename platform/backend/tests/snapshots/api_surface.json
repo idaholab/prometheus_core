@@ -553,6 +553,32 @@
           }
         }
       },
+      "/api/chat/turns/{turn_id}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "turn_id",
+              "required": true,
+              "schema": {
+                "pattern": "^[A-Za-z0-9-]{8,64}$",
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TurnStateResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "/api/config": {
         "get": {
           "responses": {
@@ -1318,6 +1344,17 @@
           "query": {
             "default": "",
             "type": "string"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9-]{8,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "upload_ids": {
             "anyOf": [
@@ -2312,6 +2349,35 @@
         ],
         "type": "object"
       },
+      "TurnStateResponse": {
+        "properties": {
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatMessageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "enum": [
+              "running",
+              "done"
+            ],
+            "type": "string"
+          },
+          "turn_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn_id",
+          "state"
+        ],
+        "type": "object"
+      },
       "UploadDescriptor": {
         "properties": {
           "mime_type": {
@@ -2801,6 +2867,25 @@
       },
       "path": "/api/chat/messages",
       "response_model": "ChatMessageResponse",
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "turn_id"
+        ],
+        "query": []
+      },
+      "path": "/api/chat/turns/{turn_id}",
+      "response_model": "TurnStateResponse",
       "status_code": null
     },
     {

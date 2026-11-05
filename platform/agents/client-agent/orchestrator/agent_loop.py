@@ -144,7 +144,9 @@ ASK_USER_SPEC = ToolSpec(
     agent_name="orchestrator",
     description=(
         "Ask the user open clarification questions that no skill parameter captures. "
-        "The questions are shown as a form; the answers come back as this tool's result."
+        "The questions are shown as a form; the answers come back as this tool's result. "
+        "Set required=false on a follow-up that only applies to some answers of another "
+        "question (e.g. 'If Other, describe ...'), so the form can be submitted without it."
     ),
     parameters={
         "type": "object",
@@ -159,6 +161,10 @@ ASK_USER_SPEC = ToolSpec(
                         "question": {"type": "string", "description": "Question shown to the user."},
                         "type": {"type": "string", "enum": ["text", "number", "select", "checkbox"]},
                         "options": {"type": "array", "items": {"type": "string"}},
+                        "required": {
+                            "type": "boolean",
+                            "description": "Must be answered before submitting (default true).",
+                        },
                     },
                     "required": ["field", "question"],
                 },
@@ -628,6 +634,8 @@ def _normalize_questions(raw: Any) -> List[Dict[str, Any]]:
         if isinstance(item.get("options"), list) and item["options"]:
             question["options"] = [str(option) for option in item["options"]]
             question["type"] = "select"
+        if item.get("required") is False:
+            question["required"] = False
         questions.append(question)
     return questions
 

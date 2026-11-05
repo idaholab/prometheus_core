@@ -172,7 +172,7 @@ Full card JSON for both skills and the implementation hints: this deck's appendi
 {widths="470px|"}
 | Make sure… | Because |
 |---|---|
-| **DeepLynx works** on your platform | agents won't start without it, never see the upload, and the PNG can't render |
+| **DeepLynx works**: `LOCAL_DEEPLYNX=true` in `platform/.env` (the first `make up` asks; deck 03) | agents won't start without it, never see the upload, and the PNG can't render |
 | **Team prefix** on the card name and skill IDs | every team builds the same skills; same names overwrite each other |
 | `uv add matplotlib pandas`, commit `uv.lock`; `MPLBACKEND=Agg` | the base image has none of them, the build needs the lock, and there is no display |
 | `"streaming": true` in the card | so "Parsing 4 tables…" shows up live |
@@ -521,7 +521,7 @@ When the user answers, `_execute` runs again with the original arguments and the
 {widths="420px|"}
 | Make sure… | Why |
 |---|---|
-| **DeepLynx is configured** (your local instance, deck 03) in the platform's and your agent's `.env` | Every agent writes an execution record to DeepLynx, so it **won't start** without `DEEPLYNX_*`. Chat uploads are stored there too, and a PNG cannot render without it. {.hl} |
+| **DeepLynx is configured**: `LOCAL_DEEPLYNX=true` in `platform/.env` (deck 03), and the `DEEPLYNX_*` lines in your agent's `.env` (`setup_agent.py` copies them) | Every agent writes an execution record to DeepLynx, so it **won't start** without `DEEPLYNX_*`. Chat uploads are stored there too, and a PNG cannot render without it. {.hl} |
 | `matplotlib`, `pandas`… added with `uv add`, `uv.lock` committed | The base image has none of them, and the build stops without a current `uv.lock`. Set `MPLBACKEND=Agg` (no display in the container). |
 | Extra modules have `COPY` lines in the Dockerfile | The template copies only `agent.py`, the card, `prompts/`, and `workflows/`. |
 | Card name and skill IDs carry your **team prefix** | Every team builds an "extract table" skill. Same name → the registry replaces one agent with the other. |

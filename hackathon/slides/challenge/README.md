@@ -39,7 +39,7 @@ The new files follow the same conventions as the practice file: GitHub-flavoured
 
 ## Platform prerequisites
 
-- **DeepLynx must be configured** (your local instance, see deck 03) in the platform's and your agent's `.env`. Every agent writes an execution record to DeepLynx and won't start without `DEEPLYNX_*`; chat uploads are stored there, and a PNG artifact needs it to render (`send_deeplynx_artifact`).
+- **DeepLynx must be configured**: `LOCAL_DEEPLYNX=true` in `platform/.env` runs it with the platform and writes the `DEEPLYNX_*` lines (deck 03); `setup_agent.py` copies them into your agent's `.env`. Every agent writes an execution record to DeepLynx and won't start without `DEEPLYNX_*`; chat uploads are stored there, and a PNG artifact needs it to render (`send_deeplynx_artifact`).
 - Add `matplotlib` (and anything else you import) with `uv add matplotlib` and commit `uv.lock` (the image build fails without it); use the `Agg` backend.
 - LLM calls: use the platform's `LLM_CONFIG_PROFILE` (`anthropic`, `openai`, `genesis`, `ollama`, `amsc`, `anl_asksage`, `inl_hpc` or `inl_litellm`) and its key `LLM_API_KEY` in your agent's `.env` (`setup_agent.py` copies both), then use `self.llm_client(context)` with the flavor that fits each call (`small` for cheap classification, `medium`/`large` for matching, `vision` to check a plot).
 

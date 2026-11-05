@@ -18,7 +18,6 @@ SPECIALIST_AGENTS = {
     "artifact-debug-agent",
     "corrosion-agent",
     "data-agent",
-    "form-filler-agent",
     "osti-research-agent",
     "radiation-agent",
     "synthesis-agent",
