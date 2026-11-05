@@ -97,6 +97,7 @@ from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
 from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
+from ..storage_client.exceptions import APIError
 from ..storage_client.models.item import ItemCreate, ItemUpdate
 from ..llm_client.security import redact_secrets
 import uvicorn
@@ -1514,6 +1515,21 @@ class PrometheusAgent:
         skill_name = self._truncate_name_value(skill_label, skill_budget)
         return f"'{agent_name}' executed skill '{skill_name}' by '{user_id}' at '{created_at}'"
 
+    @staticmethod
+    async def _find_execution_record(client: Any, original_id: Optional[str]):
+        """Return the record whose ``original_id`` matches, or ``None``."""
+        if not original_id:
+            return None
+        page = await client.items.list(page_size=50, filters={"originalId": original_id})
+        for candidate in page.items:
+            if candidate.original_id == original_id:
+                return candidate
+        # Servers that ignore the filter: scan, newest records being last.
+        async for candidate in client.items.iter_all(page_size=200):
+            if candidate.original_id == original_id:
+                return candidate
+        return None
+
     @asynccontextmanager
     async def _create_execution_record(
         self,
@@ -1562,7 +1578,22 @@ class PrometheusAgent:
             original_id=f"prometheus-execution:{producer_id}:{task_id}",
         )
         async with AsyncStorageClient(config) as client:
-            item = await client.items.create(item_create)
+            try:
+                item = await client.items.create(item_create)
+            except APIError as exc:
+                # Answering an INPUT_REQUIRED form resumes the same task, so its
+                # record already exists (``original_id`` is unique per task).
+                # Reuse it rather than fail the resumed request.
+                existing = await self._find_execution_record(client, item_create.original_id)
+                if existing is None:
+                    raise
+                logger.info(
+                    "Reusing execution record %s for resumed task %s (%s)",
+                    existing.id,
+                    task_id,
+                    exc.__class__.__name__,
+                )
+                item = existing
 
         token = self._execution_record_id.set(item.id)
         try:
