@@ -381,7 +381,11 @@ curl -s localhost:8600/api/auth/providers   # lists keycloak
 ```
 
 Log out. The login page now shows **Sign in with Keycloak** below the password
-form; the realm's test user is `prometheus` / `prometheus`.
+form; the realm's test user is 
+
+| Username | Password |
+| --- | --- |
+| `prometheus` | `prometheus` |
 
 ## Day to day
 
