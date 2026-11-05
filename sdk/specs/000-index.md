@@ -37,6 +37,7 @@ Test coverage and `⚠ untested` handling should follow
 | 012 | Redis-backed state and degradation | implemented | Shared Redis client creation and Redis-backed A2A task storage with memory fallback. |
 | 013 | Package distribution and developer commands | implemented | Package metadata, version export, Makefile quality gates, install smoke tests, and container build contract. |
 | 014 | LLM tool calling | implemented | Tool-call parsing, tool definitions, replayable tool history, and forced single-call tool selection. |
+| 017 | LangGraph runtime | implemented | LangChain chat model over `AsyncLLMClient`, DeepLynx artifacts and provenance, approval and summarization middleware, and the checkpointed `LangGraphPrometheusAgent`. |
 
 ## Interface Ownership
 
@@ -48,6 +49,7 @@ Each public interface should be claimed by exactly one spec:
 - Agent exports and routes: 008-010, 012.
 - Top-level contract, stream helpers, and Redis helpers: 011-012.
 - Package metadata, Makefile commands, and container packaging: 013.
+- LangGraph runtime exports (`prometheus_api.langgraph`): 017.
 
 ## How Agents Use These Specs
 

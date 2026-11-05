@@ -19,8 +19,11 @@ services:
       EXTERNAL_AGENT_URL: http://artifact-debug-agent:8000
       AGENT_SECRET: ${AGENT_SECRET}
       REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+      LLM_CONFIG_PROFILE: ${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}
+      LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
       # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
       LITELLM_MASTER_KEY: ${AGENT_SECRET}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
@@ -43,8 +46,12 @@ services:
       DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
       DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
       DEEPLYNX_DATA_SOURCE_ID: ${DEEPLYNX_DATA_SOURCE_ID:-}
+      # LangGraph checkpoints: the langgraph schema of admin-db (a psycopg URL, not +asyncpg).
+      LANGGRAPH_CHECKPOINT_DB_URL: ${LANGGRAPH_CHECKPOINT_DB_URL:-postgresql://langgraph:${LANGGRAPH_DB_PASSWORD}@admin-db:5432/admin?options=-csearch_path%3Dlanggraph}
     depends_on:
       backend:
+        condition: service_healthy
+      admin-db:
         condition: service_healthy
     # /healthz is served by the PrometheusAgent base class once uvicorn is up.
     # It does not cover registry registration, which retries in the background.
