@@ -241,7 +241,7 @@ def test_results_file_round_trips():
 - The plugin registers the marker, so `--strict-markers` accepts it.
 - A test with no `covers` mark is fine and is not recorded.
 - **Requirement text is unique too:** `lint` fails on two requirements in one folder with
-  the same text, compared without the unimplemented suffix (SPC-REQ-001-10).
+  the same text, compared without the unimplemented suffix (SPC-REQ-001-09).
 
 ## Results files
 
@@ -357,8 +357,7 @@ number on `000-index.md`'s `removed:` line, and a file with that number is a pro
 
 The spec's `status:` line goes too: with `retired` gone and `draft` checked like `implemented`, it
 said nothing. Every spec needs at least one requirement, and a planned spec marks each of its
-bullets unimplemented. `lint` reports a leftover `status:` line, `⚠ untested`, `(planned: ...)`
-and `Retired.`, each saying what replaces it.
+bullets unimplemented.
 
 `not run` is how path-filtered workflows and jobs that run only on `devel` (`publish-images`) fit
 in. A PR checks what its jobs ran, and a complete check runs where every producer has reported

@@ -486,8 +486,6 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `removed-repeated` | an item is listed twice in `removed:`, or there is a second `removed:` line |
 | `removed-reused` | an ID listed in `removed:` is a requirement again |
 | `spec-empty` | a spec has no requirements; delete it and list its number in the index's `removed:` |
-| `status-line-gone` | a spec still has the old `status:` line; delete it |
-| `old-marker` | a requirement still has `⚠ untested`, `(planned: ...)` or `Retired.`; the message says what replaces it |
 | `index-missing` | `require-index` is on and there's no `000-index.md` |
 | `index-link-missing` | the index doesn't link a spec |
 | `unclaimed` | nothing claims a requirement that should be |
@@ -520,11 +518,6 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
 - **Header.** The lines above the first `##`. Only `removed:` is read (see "Removed"); others
   (`sources:`, `depends-on:`) are free text. A spec needs at least one requirement; a planned spec
   ends each of its requirements with `(unimplemented: <reason>)`.
-- **Old format.** A `status:` header line, and a requirement ending `⚠ untested` or
-  `(planned: ...)` (a full stop after it is fine) or starting `Retired.` or `Retired:`, are each
-  reported with what replaces them, one problem per marker, so a folder from the old checker can
-  be moved over by following the messages. Elsewhere in a text these are ordinary words, and a
-  `status:` line under a `##` or in a fence is prose.
 - **Purpose.** A `## Purpose` section, when there is one, is shown under the spec's heading in the
   report.
 - **Bullets.** `- <prefix>-REQ-NNN-XX: text` or `- <prefix>-BEH-NNN-XX: text`, where `NNN` is the

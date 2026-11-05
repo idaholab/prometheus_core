@@ -136,7 +136,7 @@ What differs from the plan above, or settles something it left open:
     `--summary`, writing one counts line with a `--report-url` link to
     the artifact, then the problems. `speccheck-verify` uploads the report before `verify` runs,
     so it has the link.
-  - New and changed requirements: 001-10, 002-06, 003-02, 003-04, 003-05, 003-08 to 003-11,
+  - New and changed requirements: 001-09, 002-06, 003-02, 003-04, 003-05, 003-08 to 003-11,
     004-01, 004-09, 005-10, 006-01, 006-03, 007-01, 007-04, 007-07, 008-07 to 008-09.
 - **The report, one section per requirement (2026-11-02, from the first CI report):** the table
   per spec read badly once the text was long. The report now has a table of specs, then per spec
@@ -167,17 +167,23 @@ What differs from the plan above, or settles something it left open:
 - **Two requirement states (2026-11-03, in review):** a requirement is implemented, or ends with
   `(unimplemented: <reason>)`, so a requirement without a test is always part of a plan
   (`design.md`, "Requirement states"). `⚠ untested`, `(planned: ...)`, `Retired.` and the spec's
-  `status:` line are gone, and `lint` says what replaces each. A requirement that goes is deleted
+  `status:` line are gone. A requirement that goes is deleted
   and its ID listed on its spec's `removed:` line, and a removed spec's number on the index's.
   `counts` in `--json` has `unimplemented` in place of `planned`, `untested` and `retired`, within
   `schema_version` 1, since nothing outside speccheck reads it yet. Step 4 is folded into step 3.
   - Done in three commits, each with its requirements, requirements tests, code, unit tests and
     docs, and an independent review of its claims: the suffix; removed IDs and specs; then
     dropping `status:` and rejecting the old forms.
-  - Changed: 001-06, 001-10, 003-03, 003-09, 003-13, 005-03, 005-04, 005-07, 005-11, 006-07,
-    006-08, 008-04. Reused: 001-03 (at least one requirement; was the `status:` line), 001-07 (the
-    suffix; was `Retired.`). New: 001-09 (the old forms), 001-11 (a spec's `removed:`), 001-12
-    (the index's `removed:`), 005-12 (the `unimplemented` status).
+  - Changed: 001-06, 001-09 (sameness), 003-03, 003-09, 003-13, 005-03, 005-04, 005-07, 005-11,
+    006-07, 006-08, 008-04. Reused: 001-03 (at least one requirement; was the `status:` line),
+    001-07 (the suffix; was `Retired.`). New: 001-10 (a spec's `removed:`), 001-11 (the index's
+    `removed:`), 005-12 (the `unimplemented` status).
+- **Requirements trimmed (2026-11-04, in review):** three requirements that protected nothing in
+  use were dropped, with their tests and the code only they reached (found by diffing the
+  requirement tests' coverage before and after), and the later IDs renumbered: `lint` reporting
+  the old checker's `tests:` and `id-prefix:` lines (only #355 had them); keeping `error` across a
+  rerun plugin's attempts (no project uses one); and `lint` reporting the old `status:`, `⚠
+  untested`, `(planned: ...)` and `Retired.` forms (step 3 converts the sdk's by hand).
 - **Not done here:** actionlint and zizmor weren't run locally (not installed). `lint-workflows.yml`
   runs both on the PR.
 
@@ -198,7 +204,7 @@ steps and in the PR that adds it:
   in the workflow, and looks it up as `[ci.<job>]` in the config. Renaming the job without the
   config entry makes `record` fail.
 - **No requirement waits without a reason.** `⚠ untested`, `Retired.` and the `status:` line are
-  lint errors. Every requirement needs a test, unless a plan step delivers it later
+  gone. Every requirement needs a test, unless a plan step delivers it later
   (`(unimplemented: <step>)`), and one that goes is deleted with its ID listed in `removed:`.
 - **Every claim needs its own explanation.** Converting a citation means writing how that test
   proves the requirement, and a parametrized test whose citation covered every case needs a
