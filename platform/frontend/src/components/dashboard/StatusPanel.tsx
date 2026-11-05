@@ -15,6 +15,8 @@ import { Bot, Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tabs } from "@/components/ui/Tabs";
 import { Tag } from "@/components/ui/Tag";
+import { PerSampleList } from "../PerSampleList";
+import { splitPerSample } from "@/lib/artifacts/perSample";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
@@ -126,6 +128,9 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
   const [tab, setTab] = useState<StatusTab>("agents");
   const artifacts = useConversationArtifacts();
   const panelId = useId();
+  const { main, perSample } = splitPerSample(artifacts);
+  // The tab count shows what a person opens, not every per-sample file.
+  const mainCount = main.length;
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -146,7 +151,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
         </RailButton>
         <RailButton
           active={tab === "artifacts"}
-          label={artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts"}
+          label={mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts"}
           onClick={() => openTo("artifacts")}
         >
           <FolderOpen size={20} />
@@ -162,7 +167,7 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           tabs={[
             { id: "agents", label: "Agents" },
             { id: "jobs", label: "Active Jobs" },
-            { id: "artifacts", label: artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts" },
+            { id: "artifacts", label: mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts" },
           ]}
           selected={tab}
           onChange={setTab}
@@ -187,9 +192,10 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
-            {artifacts.map((artifact) => (
+            {main.map((artifact) => (
               <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
             ))}
+            <PerSampleList artifacts={perSample} />
           </div>
         )}
       </div>
