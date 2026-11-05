@@ -10,8 +10,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
-import { Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, Cpu, Download, FolderOpen, PanelRight } from "lucide-react";
+import { ElementList } from "@/components/ElementRenderer";
+import { Button } from "@/components/ui/Button";
+import { artifactToElement, isPanelOnly } from "@/lib/elements/artifactAdapter";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
@@ -34,12 +37,67 @@ function useConversationArtifacts(): ArtifactMeta[] {
   return [...byId.values()];
 }
 
-function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
+/** Render hints with an in-panel viewer; others open the raw file in a tab. */
+const PANEL_VIEWABLE = new Set(["code", "report", "json", "table", "image", "pdf"]);
+
+function canOpenInPanel(artifact: ArtifactMeta): boolean {
+  return PANEL_VIEWABLE.has(artifact.render_hint);
+}
+
+/** The newest panel-only artifact this panel has not shown yet, if any. */
+function useNewestPanelArtifact(artifacts: ArtifactMeta[]): ArtifactMeta | null {
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<ArtifactMeta | null>(null);
+  useEffect(() => {
+    if (seen.current === null) {
+      // Artifacts already in a resumed conversation are not "new".
+      seen.current = new Set(artifacts.map((a) => a.artifact_id));
+      return;
+    }
+    const unseen = artifacts.filter((a) => !seen.current!.has(a.artifact_id));
+    for (const a of unseen) seen.current.add(a.artifact_id);
+    const newest = [...unseen].reverse().find((a) => isPanelOnly(a) && canOpenInPanel(a));
+    if (newest) setFresh(newest);
+  }, [artifacts]);
+  return fresh;
+}
+
+function ArtifactViewer({ artifact, onBack }: { artifact: ArtifactMeta; onBack: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-base-300 px-4 py-2">
+        <Button variant="ghost" size="xs" icon={<ChevronLeft />} ariaLabel="Back to artifacts" onClick={onBack} />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{artifact.name}</span>
+        <a
+          href={api.artifactContentUrl(artifact.artifact_id)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex size-6 items-center justify-center rounded text-base-content/60 hover:bg-base-300 hover:text-base-content"
+          aria-label={`Open ${artifact.name} in a new tab`}
+          title="Open raw file"
+        >
+          <Download size={14} />
+        </a>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+        <ElementList elements={[artifactToElement(artifact)]} />
+      </div>
+    </div>
+  );
+}
+
+function ArtifactCard({ artifact, onOpen }: { artifact: ArtifactMeta; onOpen: () => void }) {
+  const viewable = canOpenInPanel(artifact);
   return (
     <a
       href={api.artifactContentUrl(artifact.artifact_id)}
       target="_blank"
       rel="noreferrer"
+      onClick={(event) => {
+        if (!viewable) return;
+        event.preventDefault();
+        onOpen();
+      }}
       className="card border border-base-300 bg-base-200 transition-colors hover:border-primary/40 hover:bg-base-300"
     >
       <div className="card-body gap-1.5 p-3">
@@ -114,6 +172,20 @@ interface StatusPanelProps {
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");
   const artifacts = useConversationArtifacts();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = artifacts.find((a) => a.artifact_id === openId) ?? null;
+
+  // A new panel-only artifact (e.g. a generated MOOSE input) opens itself,
+  // since the message no longer shows it inline.
+  const fresh = useNewestPanelArtifact(artifacts);
+  useEffect(() => {
+    if (!fresh) return;
+    setTab("artifacts");
+    setOpenId(fresh.artifact_id);
+    if (collapsed) onExpand();
+    // Only react to a newly arrived artifact, not to panel state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh]);
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -176,10 +248,16 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           title="No Artifacts Yet"
           hint="Generated artifacts will display here"
         />
+      ) : opened ? (
+        <ArtifactViewer artifact={opened} onBack={() => setOpenId(null)} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
           {artifacts.map((artifact) => (
-            <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
+            <ArtifactCard
+              key={artifact.artifact_id}
+              artifact={artifact}
+              onOpen={() => setOpenId(artifact.artifact_id)}
+            />
           ))}
         </div>
       )}

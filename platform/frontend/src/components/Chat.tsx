@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Markdown } from "./Markdown";
 import { ElementList } from "./ElementRenderer";
-import { artifactsToElements } from "@/lib/elements/artifactAdapter";
+import { artifactsToElements, inlineArtifacts } from "@/lib/elements/artifactAdapter";
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -469,7 +469,10 @@ export function Chat({ scrollContainerRef }: ChatProps) {
             <AssistantAvatar />
             <div className="flex-1 text-base text-base-content [&_p]:text-[length:inherit] [&_p]:leading-normal [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_a]:underline">
               {item.text && <Markdown>{item.text}</Markdown>}
-              <ElementList elements={artifactsToElements(item.artifacts)} onSend={handleSend} />
+              <ElementList
+                elements={artifactsToElements(inlineArtifacts(item.artifacts))}
+                onSend={handleSend}
+              />
               {item.recommendedMaterials.length > 0 && (
                 <p className="mt-2 text-sm text-base-content/70">
                   Recommended materials: {item.recommendedMaterials.join(", ")}

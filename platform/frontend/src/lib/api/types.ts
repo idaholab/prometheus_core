@@ -99,7 +99,13 @@ export interface ArtifactMeta {
   citation?: Citation | null;
   producer_agent_id?: string | null;
   created_at?: string | null;
+  /** `inline` in the message body (default) or `panel`: only in the side
+   * artifact panel. Set by the producing agent; mirrors `ArtifactMeta.display`
+   * in backend/app/contract.py. */
+  display?: ArtifactDisplay;
 }
+
+export type ArtifactDisplay = "inline" | "panel";
 
 // --- uploads ----------------------------------------------------------------
 
