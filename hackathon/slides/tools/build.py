@@ -608,8 +608,11 @@ def build(path: pathlib.Path) -> pathlib.Path:
         h, mode = build_slide(src, mode, assets_prefix)
         out.append(h)
     src = root.relative_to(ROOT) / "slides" / path.name
-    # Decks outside ROOT get a footer link back to their own index and load the logo from ../assets.
-    attrs = "" if root == ROOT else f' data-logo="{assets_prefix}/prometheus_logo.png" data-index="index.html"'
+    # Every deck gets a footer link back to its own index (the I key goes there too). Decks outside
+    # ROOT also load the footer logo from ../assets.
+    attrs = ' data-index="index.html"'
+    if root != ROOT:
+        attrs += f' data-logo="{assets_prefix}/prometheus_logo.png"'
     page = HEAD.format(src=src.as_posix(), title=esc(str(meta.get("title", path.stem))),
                        style=style, sec=esc(sec), footer=esc(str(meta.get("footer", ""))),
                        assets=assets_prefix, attrs=attrs)
