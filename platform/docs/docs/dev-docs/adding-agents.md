@@ -137,10 +137,12 @@ between. `inputSources` reports the field as `user`. The marker is dropped befor
 
 You can mark more than one property; each gets the same text. The user's words
 are free text, so the marker only works on a top-level property of type
-`string` (or `["string", "null"]`) with no `enum`, `const` or `pattern`, and no
-`maxLength` under 6000 characters. On any other top-level property the
+`string` (or `["string", "null"]`) whose other keywords are only `title`,
+`description`, `examples`, `default`, a `minLength` of at most 1, a `maxLength`
+of at least 6000, and `x-`/`x_` keys. On any other top-level property the
 client-agent logs a warning and ignores the marker, and its model fills the
-field as usual. A marker on a nested property is ignored without a warning.
+field as usual. A marker on a nested property, or on a skill used as a
+workflow step, is ignored without a warning.
 
 Do **not** put a `url` field in the card. `PrometheusAgent` sets the registered
 URL at startup: `EXTERNAL_AGENT_URL` if set, else
