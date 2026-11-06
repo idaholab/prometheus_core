@@ -137,8 +137,9 @@ user's words for the request in progress, oldest first, one per line:
 
 So "Generate a MOOSE flow input", "Navier Stokes module", "yes" and a form
 answer reach the skill as one four-line request. Later calls made before the
-user writes again get the same text, and the user's next words start a new
-request. A failed call keeps the text, so a retry carries the whole request.
+user types again get the same text, and an answer to a client-agent question
+adds to it. The user's next typed message starts a new request. A failed call
+keeps the text, so a retry carries the whole request.
 Text over 6000 characters keeps its start and its end, with `[...]` in between.
 `inputSources` reports the field as `user`. The marker is dropped before the
 schema reaches the model.

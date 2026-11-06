@@ -2028,3 +2028,24 @@ def test_a_typed_reply_during_approval_is_part_of_the_request(harness) -> None:
     send(plan_approved=True)
 
     assert harness.invocations[0][1]["message"] == "explain the SMP preconditioner\nalso cover FDP"
+
+
+def test_an_ask_user_answer_after_a_call_continues_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    form = {"questions": [{"field": "dimension", "question": "2D or 3D?", "type": "text"}]}
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply(calls=[tool_call("ask_user", form, "c2")]),
+            reply(calls=[tool_call("docs_qa", {}, "c3")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="generate a channel flow input").status == "needs_info"
+    send(followup_answers={"dimension": "2D"})
+
+    first, second = (params["message"] for _, params in harness.invocations)
+    assert first == "generate a channel flow input"
+    assert second == "generate a channel flow input\n2D or 3D? 2D"
