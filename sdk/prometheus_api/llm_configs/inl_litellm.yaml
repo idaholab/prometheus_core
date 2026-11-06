@@ -10,7 +10,7 @@ model_list:
 
   - model_name: small
     litellm_params:
-      model: openai/claude-sonnet-5-5-awsgov
+      model: openai/claude-haiku-5-5-awsgov
       api_key: os.environ/LLM_API_KEY
       api_base: https://litellm.inl.gov/v1
 
