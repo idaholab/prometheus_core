@@ -1,0 +1,51 @@
+{
+  "realm": "prometheus",
+  "displayName": "Prometheus (local dev)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "ssoSessionIdleTimeout": 5,
+  "clients": [
+    {
+      "clientId": "prometheus-platform",
+      "name": "Prometheus platform",
+      "description": "LOCAL DEVELOPMENT ONLY. The secret below is published in this repository; never register this client with anything that is not a loopback-bound dev Keycloak.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "local-dev-only-not-a-real-secret",
+      "redirectUris": [
+        "http://localhost:5150/api/auth/callback/keycloak"
+      ],
+      "webOrigins": [
+        "http://localhost:5150"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:5150/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "prometheus",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "prometheus@example.test",
+      "firstName": "Local",
+      "lastName": "Tester",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "prometheus",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
