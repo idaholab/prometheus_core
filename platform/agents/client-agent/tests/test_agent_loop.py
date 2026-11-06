@@ -1948,3 +1948,28 @@ def test_the_users_next_words_start_a_new_request(harness) -> None:
         "tell me about MOOSE preconditioner",
         "and which solve type?",
     ]
+
+
+def test_an_unrelated_skill_call_ends_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(
+        create_svg_artifact=lambda params: {"result": {"ok": True}},
+        docs_qa=lambda params: {"result": {"answer": "PJFNK."}},
+    )
+    harness.script(
+        [
+            reply(calls=[tool_call("create_svg_artifact", {"word": "Hi"}, "c1")]),
+            reply("Done."),
+            reply("You're welcome."),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("PJFNK."),
+        ]
+    )
+
+    send(query="make an svg that says Hi")
+    send(query="thanks, you are great")
+    send(query="what is the default MOOSE solve type?")
+
+    docs = [params for skill, params in harness.invocations if skill == "docs_qa"]
+    # Small talk after the svg call stays with the next request; the svg request does not.
+    assert docs[0]["message"] == "thanks, you are great\nwhat is the default MOOSE solve type?"
