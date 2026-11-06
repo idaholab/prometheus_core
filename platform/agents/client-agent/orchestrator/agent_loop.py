@@ -100,8 +100,8 @@ _VERBATIM_ALLOWED_KEYWORDS = {"type", "title", "description", "examples", "defau
 #: spans turns ("Navier Stokes module" / "yes" / a form), so the last message
 #: alone ("yes") is not the request.
 USER_REQUEST_PARTS = "user_request_parts"
-#: Set once any skill call succeeds: later calls before the user's next words
-#: still get the same request; those next words start a new one.
+#: Set once any skill call succeeds: later calls before the user's next typed
+#: message still get the same request; that message starts a new one.
 USER_REQUEST_DELIVERED = "user_request_delivered"
 _MAX_REQUEST_PARTS = 12
 _MAX_REQUEST_CHARS = 6000
@@ -713,9 +713,14 @@ def _normalize_questions(raw: Any) -> List[Dict[str, Any]]:
     return questions
 
 
-def _note_user_words(state: Dict[str, Any], text: Any) -> None:
-    """Add one piece of the user's own wording to the request in progress."""
-    if state.pop(USER_REQUEST_DELIVERED, False):
+def _note_user_words(state: Dict[str, Any], text: Any, *, typed: bool = True) -> None:
+    """Add one piece of the user's own wording to the request in progress.
+
+    A typed message after a successful skill call starts a new request. An
+    answer to the orchestrator's own question (``typed=False``) belongs to the
+    request it was asked for, so it is added to that one.
+    """
+    if typed and state.pop(USER_REQUEST_DELIVERED, False):
         state[USER_REQUEST_PARTS] = []
     words = str(text or "").strip()
     parts = list(state.get(USER_REQUEST_PARTS) or [])
@@ -863,7 +868,11 @@ def apply_answers(
             }
             if provided:
                 labels = {q["field"]: q.get("question") or q["field"] for q in call.get("questions") or []}
-                _note_user_words(state, "\n".join(f"{labels[field]} {value}" for field, value in provided.items()))
+                _note_user_words(
+                    state,
+                    "\n".join(f"{labels[field]} {value}" for field, value in provided.items()),
+                    typed=False,
+                )
                 _finish(call, {"status": "answered", "answers": provided})
         elif status == "waiting_input":
             provided: Dict[str, Any] = {}
