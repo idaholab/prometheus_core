@@ -91,6 +91,8 @@ ORCHESTRATOR_PARAMS = {"artifacts", "conversation_id"}
 #: ``"x-prometheus-source": "user_message"`` to receive the user's message for the
 #: turn exactly as typed, instead of the orchestrator model's rewording of it.
 VERBATIM_SOURCE_KEY = "x-prometheus-source"
+#: Spellings accepted for the key, as for ``x_input_source`` / ``x-input-source``.
+_VERBATIM_SOURCE_KEYS = (VERBATIM_SOURCE_KEY, "x_prometheus_source")
 VERBATIM_USER_MESSAGE = "user_message"
 #: The only keywords a marked property may carry: anything else (``minLength``,
 #: ``format``, ``anyOf``, ...) could reject free text the model cannot correct.
@@ -273,7 +275,13 @@ def _verbatim_markers(input_schema: Any) -> Dict[str, Optional[str]]:
         return {}
     markers: Dict[str, Optional[str]] = {}
     for name, prop in properties.items():
-        if not isinstance(prop, dict) or prop.get(VERBATIM_SOURCE_KEY) != VERBATIM_USER_MESSAGE:
+        if not isinstance(prop, dict):
+            continue
+        source = next((prop[key] for key in _VERBATIM_SOURCE_KEYS if key in prop), None)
+        if source is None:
+            continue
+        if source != VERBATIM_USER_MESSAGE:
+            markers[name] = f"its value {source!r} is not {VERBATIM_USER_MESSAGE!r}"
             continue
         kind = prop.get("type")
         limits = [key for key in prop if key not in _VERBATIM_ALLOWED_KEYWORDS and not key.startswith(("x_", "x-"))]
