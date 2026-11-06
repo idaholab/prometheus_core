@@ -92,6 +92,9 @@ ORCHESTRATOR_PARAMS = {"artifacts", "conversation_id"}
 #: turn exactly as typed, instead of the orchestrator model's rewording of it.
 VERBATIM_SOURCE_KEY = "x-prometheus-source"
 VERBATIM_USER_MESSAGE = "user_message"
+#: The only keywords a marked property may carry: anything else (``minLength``,
+#: ``format``, ``anyOf``, ...) could reject free text the model cannot correct.
+_VERBATIM_ALLOWED_KEYWORDS = {"type", "title", "description", "examples", "default", "maxLength", "minLength"}
 #: The user's own words for the request in progress: every typed message and
 #: ``ask_user`` answer since the last successful skill call. A request often
 #: spans turns ("Navier Stokes module" / "yes" / a form), so the last message
@@ -273,10 +276,12 @@ def _verbatim_markers(input_schema: Any) -> Dict[str, Optional[str]]:
         if not isinstance(prop, dict) or prop.get(VERBATIM_SOURCE_KEY) != VERBATIM_USER_MESSAGE:
             continue
         kind = prop.get("type")
-        limits = [key for key in ("enum", "const", "pattern") if key in prop]
-        max_length = prop.get("maxLength")
-        if isinstance(max_length, int) and max_length < _MAX_REQUEST_CHARS:
+        limits = [key for key in prop if key not in _VERBATIM_ALLOWED_KEYWORDS and not key.startswith(("x_", "x-"))]
+        max_length, min_length = prop.get("maxLength"), prop.get("minLength")
+        if "maxLength" in prop and not (isinstance(max_length, int) and max_length >= _MAX_REQUEST_CHARS):
             limits.append(f"maxLength {max_length}")
+        if "minLength" in prop and not (isinstance(min_length, int) and min_length <= 1):
+            limits.append(f"minLength {min_length}")
         if kind != "string" and not (isinstance(kind, list) and "string" in kind):
             markers[name] = f"its type is {kind!r}, not 'string'"
         elif limits:

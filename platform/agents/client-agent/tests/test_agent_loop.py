@@ -1879,6 +1879,11 @@ def test_every_marked_string_field_gets_the_users_words(harness) -> None:
         ({"type": "string", "enum": ["2D", "3D"]}, "3D"),
         ({"type": "string", "pattern": "^[0-9]D$"}, "3D"),
         ({"type": "string", "maxLength": 20}, "3D"),
+        ({"type": "string", "minLength": 20}, "3D or maybe 2D, either is fine"),
+        ({"type": "string", "format": "date"}, "2026-11-06"),
+        ({"type": "string", "anyOf": [{"enum": ["2D"]}, {"enum": ["3D"]}]}, "3D"),
+        ({"type": "string", "not": {"const": "2D"}}, "3D"),
+        ({"$ref": "#/$defs/dimension"}, "3D"),
     ],
 )
 def test_marker_on_a_field_free_text_could_fail_is_ignored(
@@ -1886,7 +1891,12 @@ def test_marker_on_a_field_free_text_could_fail_is_ignored(
 ) -> None:
     capability = _capability(
         "set_option",
-        {"type": "object", "properties": {"value": {**prop, **MARKED}}, "required": ["value"]},
+        {
+            "type": "object",
+            "properties": {"value": {**prop, **MARKED}},
+            "required": ["value"],
+            "$defs": {"dimension": {"type": "string", "enum": ["2D", "3D"]}},
+        },
     )
     with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
         spec = agent_loop._skill_spec("set_option", capability)
