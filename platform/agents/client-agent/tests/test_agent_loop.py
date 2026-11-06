@@ -1968,6 +1968,21 @@ def test_the_users_next_words_start_a_new_request(harness) -> None:
     ]
 
 
+def test_marker_honours_the_underscore_spelling_and_warns_on_an_unknown_value(caplog) -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "x_prometheus_source": "user_message"},
+            "note": {"type": "string", "x-prometheus-source": "user-message"},
+        },
+    }
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        spec = agent_loop._skill_spec("docs_qa", _capability("docs_qa", schema))
+    assert set(spec.parameters["properties"]) == {"note"}
+    warnings = [r.getMessage() for r in caplog.records if r.name == "orchestrator.agent_loop"]
+    assert len(warnings) == 1 and "'note'" in warnings[0] and "'user-message'" in warnings[0]
+
+
 def test_an_unrelated_skill_call_ends_the_request(harness) -> None:
     harness.capabilities.append(DOCS_QA)
     harness.results.update(
