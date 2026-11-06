@@ -9,6 +9,7 @@ updates:
     directories:
       - /agent-template
       - /agent-template/agent_template
+      - /common/speccheck
       - /platform/agents
       - /platform/agents/client-agent
       - /platform/agents/debug-agents/artifact-debug-agent

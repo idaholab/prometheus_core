@@ -1,0 +1,57 @@
+# 2: The build and run specs
+
+> **Status: Not started**
+
+## Goal
+
+Bring back the build and run specs from #355 and #361 (both closed 2026-11-01), and check
+platformctl against them with speccheck, from real test runs.
+
+## Before it starts
+
+- **What gates a merge on speccheck itself.** From this step on, platformctl installs speccheck
+  from the checkout, but `speccheck.yml` isn't a required check, so a PR can break speccheck's own
+  tests and still merge. Only its lint is required (`common/speccheck` is in `test.yml`'s `ruff`
+  matrix). Making the final job required needs the path-filter change and the promotion criterion
+  in `design.md`, "Open questions", which come after step 3. Until then, a reviewer of a PR that
+  touches `common/speccheck/` checks that `speccheck.yml` passed.
+
+## Work
+
+- **Recover the content** from the `speccheck` and `specs-step1` branches on the fork:
+  `build/specs/000-index.md`, the eight platformctl specs, the requirements #361 added (step 1's
+  and the planned drafts for steps 2 to 9), and the plan edits (each step's Requirements section,
+  the README's ground rule, `reviews.md`'s note to the CI reviewer). Leave out
+  `common/speccheck/` and `test_specs.py`.
+- **Rework them:**
+  - drop each spec's `tests:` line and the index's `id-prefix:` line; their content moves into
+    `build/specs/speccheck.toml` (prefix `BLD`, producers for `platformctl-unit` and the
+    `test.yml` jobs that prove platform requirements);
+  - turn every docstring citation in `platform/ctl/tests` into `@pytest.mark.covers(ID, how)`,
+    writing how each test proves its requirement;
+  - turn every `# Covers` / `# Implements` workflow comment into a `[ci.<job>]` claim (an
+    explanation per ID) plus a `record` step in that job.
+- **platformctl:** add `prometheus-speccheck` as a path dev dependency (lock change), set
+  `speccheck_config` in its pytest options, set the producer variables in `platformctl.yml`, upload
+  results from the `unit` legs, and end the workflow with the `speccheck-verify` job.
+  `platformctl.yml`'s path filter gains `build/specs/**` and `common/speccheck/**`.
+- **Cross-workflow evidence:** add `speccheck-report.yml` (`design.md`, "Evidence across
+  workflows") for the complete check on `devel`, since build and run evidence comes from
+  `platformctl.yml`, `test.yml` and `publish-images`.
+- **Spec format** (`design.md`, "Requirement states"): each later step's requirements end with
+  `(unimplemented: step N)`, the `status:` lines go, and a retired requirement is deleted and its
+  ID listed on its spec's `removed:` line.
+- **Plan ground rule** (platformctl README): each step removes the `(unimplemented: ...)` suffix
+  from what it delivers and claims those IDs with `covers` marks or `[ci.*]` entries.
+
+## Done when
+
+- `platformctl.yml`'s final job passes, and a skipped platformctl test that claims a `BLD-`
+  requirement fails it.
+- `speccheck-report.yml` produces a complete report for a `devel` commit, linking jobs from more
+  than one workflow.
+- The platformctl plan says how each later step claims its requirements.
+
+## Reviewers
+
+technical, CI and tests, security, rollout, user. See `reviews.md`.

@@ -1,0 +1,34 @@
+# speccheck's own config: its specs, and what may prove them. See README.md, "Config".
+
+specs = "specs"
+id-prefix = "SPC"
+require-index = true
+
+# tests/requirements, every leg of the `requirements` job in speccheck.yml. The unit tests
+# (tests/unit) claim nothing: they are for coverage and for finding a broken module fast
+[producers.speccheck-requirements]
+specs = "all"
+workflows = ["speccheck"]
+
+# The `speccheck-self-check` job in speccheck.yml. It runs speccheck-verify on the requirements legs'
+# results (which installs speccheck with speccheck-install), runs it again with the default report
+# name, checks that it fails on a results file that can't be read and still publishes its report,
+# runs it with a job-names lookup that fails and checks that results fall back to the producer,
+# checks that the workflow grants only `actions: read` and `contents: read` and names no secret,
+# checks that speccheck-upload refuses an empty folder and names its artifact as asked, then runs
+# `speccheck verify` and `speccheck record` as commands, and uploads with speccheck-upload. The job
+# sets up no Python itself: the commands come from the PATH that speccheck-install sets, which its
+# first speccheck-verify step already ran, and the later install step repeats it. `record` is its
+# last step before the upload, so it runs only when all of that passed
+[ci.speccheck-self-check]
+workflows = ["speccheck"]
+
+[ci.speccheck-self-check.covers]
+SPC-REQ-007-03 = "speccheck-upload uploads this job's results under speccheck-results-self-check, and the job checks that it fails on an empty folder"
+SPC-REQ-007-04 = "speccheck-verify runs for real on the requirements legs' results, and the job checks its report artifact names each requirements job by its display name, its step summary links that artifact, a failing result's entry in a step summary names its job by display name, and it fails on an unreadable results file yet still uploads its report"
+SPC-REQ-007-06 = "the job sets up no Python of its own: its first step after checkout is speccheck-verify, which runs one speccheck-install step and then the `speccheck` command, and the job's own later steps run `speccheck verify` and `speccheck record` from the PATH that install set"
+SPC-REQ-007-08 = "the job checks that speccheck.yml grants only actions: read and contents: read, that no job widens them, and that neither the workflow nor the speccheck actions name a secret"
+SPC-REQ-007-09 = "the job runs speccheck-verify with a run ID whose job names can't be looked up, and checks it succeeds and its report names every result by its producer; a step summary naming an entry by producer is proven by a requirements test of the command"
+
+[report]
+title = "speccheck requirements"
