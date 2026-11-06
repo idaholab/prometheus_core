@@ -1791,7 +1791,7 @@ def test_verbatim_field_gets_the_whole_request_across_turns_and_forms(harness) -
         "Describe the case: 2D channel flow with no-slip walls"
     )
     # Delivered: the next request starts from the user's next words.
-    assert harness.store[CONV][agent_loop.USER_REQUEST_PARTS] == []
+    assert harness.store[CONV][agent_loop.USER_REQUEST_DELIVERED] is True
 
 
 def test_failed_verbatim_call_keeps_the_request_for_the_retry(harness) -> None:
@@ -1823,3 +1823,128 @@ def test_user_request_text_is_bounded() -> None:
     parts = state[agent_loop.USER_REQUEST_PARTS]
     assert parts == [f"part {i}" for i in range(18, 30)]
     assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["x" * 9000]}) == "x" * 6000
+
+
+def test_verbatim_fields_are_left_unset_without_user_words() -> None:
+    spec = agent_loop._skill_spec("docs_qa", DOCS_QA)
+    words = {agent_loop.USER_REQUEST_PARTS: ["hello"]}
+    assert agent_loop._verbatim_user_fields(spec, {}) == {}
+    no_properties = agent_loop.ToolSpec(**{**spec.__dict__, "input_schema": {"type": "object"}})
+    assert agent_loop._verbatim_user_fields(no_properties, words) == {}
+    assert agent_loop._verbatim_user_fields(spec, words) == {"message": "hello"}
+
+
+MARKED = {agent_loop.VERBATIM_SOURCE_KEY: agent_loop.VERBATIM_USER_MESSAGE}
+
+
+def test_every_marked_string_field_gets_the_users_words(harness) -> None:
+    both = _capability(
+        "docs_qa",
+        {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", **MARKED},
+                "query": {"type": "string", **MARKED},
+                "topic": {"type": "string"},
+            },
+            "required": ["message", "query"],
+        },
+    )
+    assert set(agent_loop._skill_spec("docs_qa", both).parameters["properties"]) == {"topic"}
+    harness.capabilities.append(both)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]), reply("Done.")])
+
+    send(query="tell me about MOOSE preconditioner")
+
+    params = harness.invocations[0][1]
+    assert params["message"] == params["query"] == "tell me about MOOSE preconditioner"
+    assert params["_input_sources"] == {"message": "user", "query": "user", "topic": "model"}
+
+
+@pytest.mark.parametrize(
+    ("prop", "model_value"),
+    [
+        ({"type": "integer"}, 3),
+        ({"type": "array", "items": {"type": "string"}}, ["3D"]),
+        ({"type": "string", "enum": ["2D", "3D"]}, "3D"),
+        ({"type": "string", "pattern": "^[0-9]D$"}, "3D"),
+        ({"type": "string", "maxLength": 20}, "3D"),
+    ],
+)
+def test_marker_on_a_field_free_text_could_fail_is_ignored(
+    harness, caplog, prop: Dict[str, Any], model_value: Any
+) -> None:
+    capability = _capability(
+        "set_option",
+        {"type": "object", "properties": {"value": {**prop, **MARKED}}, "required": ["value"]},
+    )
+    agent_loop._logged_ignored_markers.clear()
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        spec = agent_loop._skill_spec("set_option", capability)
+        agent_loop._skill_spec("set_option", capability)  # the catalog is rebuilt every turn
+    warnings = [r.getMessage() for r in caplog.records if r.name == "orchestrator.agent_loop"]
+    assert len(warnings) == 1 and "set_option" in warnings[0] and "'value'" in warnings[0]
+    # The model sees and fills the field as usual.
+    assert "value" in spec.parameters["properties"]
+    assert agent_loop.VERBATIM_SOURCE_KEY not in spec.parameters["properties"]["value"]
+    assert spec.parameters["required"] == ["value"]
+
+    harness.capabilities.append(capability)
+    harness.results.update(set_option=lambda params: {"result": {"ok": True}})
+    harness.script([reply(calls=[tool_call("set_option", {"value": model_value}, "c1")]), reply("Done.")])
+
+    send(query="use the second option please, the 3D one")
+
+    params = harness.invocations[0][1]
+    assert params["value"] == model_value
+    assert params["_input_sources"] == {"value": "model"}
+
+
+def test_marker_accepts_nullable_and_long_string_fields() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "nullable": {"type": ["string", "null"], **MARKED},
+            "long": {"type": "string", "maxLength": 10000, "minLength": 1, **MARKED},
+        },
+    }
+    assert agent_loop._verbatim_field_names(schema) == ["nullable", "long"]
+
+
+def test_later_marked_call_in_the_same_request_gets_the_users_words(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]),
+            reply(calls=[tool_call("docs_qa", {"topic": "examples"}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    response = send(query="tell me about MOOSE preconditioner")
+
+    assert response.status == "completed"
+    assert [call[1]["message"] for call in harness.invocations] == ["tell me about MOOSE preconditioner"] * 2
+
+
+def test_the_users_next_words_start_a_new_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply("SMP is the default."),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Use PJFNK."),
+        ]
+    )
+
+    send(query="tell me about MOOSE preconditioner")
+    send(query="and which solve type?")
+
+    assert [call[1]["message"] for call in harness.invocations] == [
+        "tell me about MOOSE preconditioner",
+        "and which solve type?",
+    ]
