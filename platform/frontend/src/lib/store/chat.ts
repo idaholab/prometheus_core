@@ -295,17 +295,24 @@ function applyResponse(res: ChatMessageResponse): void {
     }
     case "backgrounded": {
       if (res.task_id) awaitedTaskIds.add(res.task_id);
-      setItems((items) => [
-        ...items,
-        {
-          id: nextId("tool"),
-          kind: "tool",
-          taskId: res.task_id ?? undefined,
-          name: res.message ?? "Running in the background…",
-          history: [],
-          done: false,
-        },
-      ]);
+      // The detached task continues this turn: reuse the turn's progress step
+      // (re-opened, now keyed by the task too) rather than adding a second row,
+      // so the trace keeps the status lines already seen and later task_progress
+      // events extend that same step. Only a turn with no progress yet gets a new one.
+      const name = res.message ?? "Running in the background…";
+      const taskId = res.task_id ?? undefined;
+      setItems((items) => {
+        const idx = items.findIndex((it) => it.kind === "tool" && it.turnId === res.turn_id);
+        if (idx >= 0) {
+          const next = [...items];
+          next[idx] = { ...(next[idx] as ToolItem), taskId, name, done: false };
+          return next;
+        }
+        return [
+          ...items,
+          { id: nextId("tool"), kind: "tool", turnId: res.turn_id, taskId, name, history: [], done: false },
+        ];
+      });
       break;
     }
     case "error": {
