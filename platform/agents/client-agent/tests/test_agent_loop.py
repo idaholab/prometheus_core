@@ -154,6 +154,13 @@ class _ScriptedClient:
         return SimpleNamespace(text="Test title")
 
 
+@pytest.fixture(autouse=True)
+def _fresh_marker_warnings():
+    agent_loop._logged_ignored_markers.clear()
+    yield
+    agent_loop._logged_ignored_markers.clear()
+
+
 @pytest.fixture
 def harness(monkeypatch):
     store: Dict[str, Any] = {}
@@ -1881,7 +1888,6 @@ def test_marker_on_a_field_free_text_could_fail_is_ignored(
         "set_option",
         {"type": "object", "properties": {"value": {**prop, **MARKED}}, "required": ["value"]},
     )
-    agent_loop._logged_ignored_markers.clear()
     with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
         spec = agent_loop._skill_spec("set_option", capability)
         agent_loop._skill_spec("set_option", capability)  # the catalog is rebuilt every turn
