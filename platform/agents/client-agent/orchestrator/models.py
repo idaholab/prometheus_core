@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, NotRequired, Optional, TypedDict
 
 # The frontend <-> client-agent wire contract is owned by prometheus_api;
 # re-exported here so orchestrator modules keep importing from .models.
@@ -48,6 +48,12 @@ class AgentState(TypedDict):
     # of every call in the current user turn.
     turn_tool_results: Dict[str, Any]
     turn_tool_inputs: Dict[str, Any]
+
+    # The user's own words for the request in progress, sent to skill fields
+    # marked ``x-prometheus-source: user_message`` (agent_loop.USER_REQUEST_PARTS),
+    # and whether a skill has run since, so the next typed message starts anew.
+    user_request_parts: NotRequired[List[str]]
+    user_request_delivered: NotRequired[bool]
 
     # Pause bookkeeping, also read by the backend to infer conversation status.
     plan: Optional[Dict[str, Any]]
