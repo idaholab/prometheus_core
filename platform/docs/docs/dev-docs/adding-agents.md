@@ -132,8 +132,8 @@ form answer since the last successful skill call (any skill, marked or not),
 oldest first, one per line (form answers as `<question> <answer>`). Later calls
 made before the user writes again get the same text, and the user's next words
 start a new request. A failed call keeps them, so a retry carries the whole
-request. `inputSources` reports
-the field as `user`. The marker is dropped before the schema reaches the model.
+request. Text over 6000 characters keeps its start and its end, with `[...]` in
+between. `inputSources` reports the field as `user`. The marker is dropped before the schema reaches the model.
 
 You can mark more than one property; each gets the same text. The user's words
 are free text, so the marker only works on a top-level property of type

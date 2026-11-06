@@ -1822,7 +1822,9 @@ def test_user_request_text_is_bounded() -> None:
     agent_loop._note_user_words(state, "part 29")  # repeated message is not stored twice
     parts = state[agent_loop.USER_REQUEST_PARTS]
     assert parts == [f"part {i}" for i in range(18, 30)]
-    assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["x" * 9000]}) == "x" * 6000
+    text = agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["HEAD " + "x" * 9000 + " TAIL"]})
+    assert len(text) == 6000
+    assert text.startswith("HEAD ") and text.endswith(" TAIL") and "\n[...]\n" in text
 
 
 def test_verbatim_fields_are_left_unset_without_user_words() -> None:

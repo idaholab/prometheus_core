@@ -720,9 +720,18 @@ def _note_user_words(state: Dict[str, Any], text: Any) -> None:
 
 
 def user_request_text(state: Mapping[str, Any]) -> str:
-    """The user's words for the request in progress, oldest first."""
-    text = "\n".join(str(part) for part in state.get(USER_REQUEST_PARTS) or [])
-    return text[-_MAX_REQUEST_CHARS:].strip()
+    """The user's words for the request in progress, oldest first.
+
+    Text over the cap keeps its start, where a request usually states what it
+    wants, and its end, the latest words; the middle is cut.
+    """
+    text = "\n".join(str(part) for part in state.get(USER_REQUEST_PARTS) or []).strip()
+    if len(text) <= _MAX_REQUEST_CHARS:
+        return text
+    marker = "\n[...]\n"
+    head = (_MAX_REQUEST_CHARS - len(marker)) // 2
+    tail = _MAX_REQUEST_CHARS - len(marker) - head
+    return text[:head] + marker + text[-tail:]
 
 
 def _verbatim_user_fields(spec: ToolSpec, state: Mapping[str, Any]) -> Dict[str, str]:
