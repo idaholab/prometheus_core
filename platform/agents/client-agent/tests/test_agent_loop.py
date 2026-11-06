@@ -1973,3 +1973,40 @@ def test_an_unrelated_skill_call_ends_the_request(harness) -> None:
     docs = [params for skill, params in harness.invocations if skill == "docs_qa"]
     # Small talk after the svg call stays with the next request; the svg request does not.
     assert docs[0]["message"] == "thanks, you are great\nwhat is the default MOOSE solve type?"
+
+
+def test_a_typed_reply_to_a_form_is_part_of_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    form = {"questions": [{"field": "dimension", "question": "2D or 3D?", "type": "text"}]}
+    harness.script(
+        [
+            reply(calls=[tool_call("ask_user", form, "c1")]),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="make a mesh").status == "needs_info"
+    send(query="just 3D please, quad elements")
+
+    assert harness.invocations[0][1]["message"] == "make a mesh\njust 3D please, quad elements"
+
+
+def test_a_typed_reply_during_approval_is_part_of_the_request(harness) -> None:
+    approved_docs = _capability("docs_qa", DOCS_QA.input_schema, requires_approval=True)
+    harness.capabilities.append(approved_docs)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="explain the SMP preconditioner").status == "plan_ready"
+    assert send(query="also cover FDP").status == "plan_ready"
+    send(plan_approved=True)
+
+    assert harness.invocations[0][1]["message"] == "explain the SMP preconditioner\nalso cover FDP"
