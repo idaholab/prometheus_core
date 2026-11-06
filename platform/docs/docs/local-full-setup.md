@@ -8,7 +8,7 @@ infrastructure, and nothing but the LLM provider is reached over the network.
 The [README quickstart](../../README.md) is the shorter path, with the defaults.
 This page is the long one, with every option turned on.
 
-## What you end up with
+## 1. What you end up with
 
 | | |
 | --- | --- |
@@ -18,7 +18,7 @@ This page is the long one, with every option turned on.
 | Keycloak | http://localhost:8180 |
 | Agents | 9 registered: client-agent, synthesis-agent, and the 7 debug agents |
 
-## Prerequisites
+## 2. Prerequisites
 
 - Docker and Docker Compose.
   - **Windows**: run everything from a WSL2 shell, not from Windows directly.
@@ -30,7 +30,7 @@ This page is the long one, with every option turned on.
     $USER .env`.
   - **macOS without Docker Desktop**: if your organization does not license
     Docker Desktop, Colima runs the stack instead. See
-    [Running without Docker Desktop](#running-without-docker-desktop-macos)
+    [3. (optional) Running without Docker Desktop](#3-optional-running-without-docker-desktop-macos)
     below — it installs entirely under `$HOME` and needs no admin rights.
 - `make` and `openssl`. A minimal distro or WSL image may have neither.
 - An API key for one of the supported LLM providers.
@@ -42,7 +42,7 @@ the two cannot both bind those ports. Docker Desktop reports the clash as
 `ports are not available: ... /forwards/expose returned unexpected status: 500`,
 which does not name the conflict.
 
-## Running without Docker Desktop (macOS)
+## 3. (optional) Running without Docker Desktop (macOS)
 
 Docker Desktop is the licensed product; the `docker` CLI (Apache-2.0) and
 [Colima](https://github.com/abiosoft/colima) (MIT) are not. Colima runs a small
@@ -55,19 +55,19 @@ Everything below installs under `$HOME`, so it works on a managed laptop where
 you are in `staff` rather than `admin`, `/usr/local/bin` is not writable, and
 there is no Homebrew. With Homebrew and admin rights, `brew install colima
 docker docker-compose docker-buildx` replaces everything up to
-[Start the VM](#start-the-vm).
+[Start the VM](#37-start-the-vm).
 
 The commands are written for Apple Silicon (`arm64`). On an Intel Mac,
 substitute `x86_64` for `aarch64` in the download URLs and `amd64` for `arm64`.
 
-### Directories
+### 3.1. Create Directories
 
 ```bash
 mkdir -p ~/.local/bin ~/.local/share ~/.local/libexec ~/.docker/cli-plugins
 mkdir -p ~/Downloads/container-tooling/{docker,lima}
 ```
 
-### Docker CLI
+### 3.2. Install Docker CLI
 
 A static build of the client alone — no daemon, no Docker Desktop.
 
@@ -78,7 +78,7 @@ tar -xzf docker-29.9.3.tgz
 install -m 755 docker/docker ~/.local/bin/docker
 ```
 
-### Lima
+### 3.3. Install Lima
 
 Colima drives [Lima](https://github.com/lima-vm/lima), which it does not
 bundle. The tarball's `bin`, `libexec` and `share` directories have to keep
@@ -97,7 +97,7 @@ cp -R share/. ~/.local/share/
 2.2.1 — the versions Homebrew ships together. Pairing a 0.10.x Colima with a
 Lima 1.x tarball is the usual self-inflicted failure here.
 
-**Run `colima stop` before repeating these copies.** While the VM is up, two
+**Note: Run `colima stop` before repeating these copies.** While the VM is up, two
 `limactl` processes (`usernet` and `hostagent`) are executing from
 `~/.local/bin/limactl`. Overwriting that file in place invalidates its code
 signature, and macOS then kills every later run:
@@ -119,7 +119,7 @@ cp ~/Downloads/container-tooling/lima/bin/limactl ~/.local/bin/
 undisturbed. The same applies to `docker` and `colima` if you reinstall them
 while the VM is up.
 
-### Colima
+### 3.4.  Install Colima
 
 ```bash
 curl -fsSL -o ~/.local/bin/colima \
@@ -127,7 +127,7 @@ curl -fsSL -o ~/.local/bin/colima \
 chmod 755 ~/.local/bin/colima
 ```
 
-### The Compose and buildx plugins
+### 3.5 Install the Compose and buildx plugins
 
 The static CLI ships with neither, and both are required: the Makefile drives
 `docker compose`, and `make base-image` passes `--build-context`, which only
@@ -146,15 +146,15 @@ Skip buildx and the SDK build fails at `unknown flag: --build-context`, after a
 but is the actual cause — without the plugin the CLI silently falls back to the
 legacy builder.
 
-### PATH
+### 3.6. Edit PATH
 
-Add to `~/.zshrc`, then open a new terminal:
+Add the following line to `~/.zprofile`
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Check all four separately, so one failure does not hide the rest:
+Go back to your terminal. Check all four separately, so one failure does not hide the rest:
 
 ```bash
 docker --version
@@ -163,7 +163,7 @@ limactl --version
 docker compose version
 ```
 
-### Start the VM
+### 3.7. Start the VM
 
 ```bash
 colima start --cpu 6 --memory 8 --disk 100 --vm-type vz --mount-type virtiofs
@@ -191,11 +191,11 @@ startup anyway, so an amd64-only image would still run, slowly.
 `colima stop` reclaims the memory when you are done; after a reboot, plain
 `colima start` remembers the sizing above.
 
-### Turn off AirPlay Receiver
+### 3.8. Turn off AirPlay Receiver
 
 **macOS listens on port 5000 itself.** AirPlay Receiver binds it on every
 interface, so DeepLynx's port is taken before the stack starts. Turn it off in
-**System Settings → General → AirDrop & Handoff → AirPlay Receiver**.
+**System Settings → General → AirDrop & Continuity → AirPlay Receiver**.
 
 Left on, `make up` reaches DeepLynx, hangs for five minutes, and fails:
 
@@ -233,9 +233,9 @@ any other port the UI at http://localhost:3000 stops working. Turning AirPlay
 Receiver off is the only fix that leaves the whole stack working, since the
 browser resolves `::1` first too.
 
-From here, continue with [1. Clone](#1-clone).
+From here, continue with [4. Clone](#4-clone).
 
-## 1. Clone
+## 4. Clone
 
 ```bash
 git clone https://github.com/idaholab/prometheus_core.git
@@ -245,7 +245,7 @@ cd prometheus_core/platform
 The SDK is at `prometheus_core/sdk`, already a sibling of `platform/`, so
 building it locally needs no second clone.
 
-## 2. Create .env
+## 5. Create .env
 
 ```bash
 make init-env
@@ -266,20 +266,14 @@ It also generates `AGENT_SECRET`, `REDIS_PASSWORD`, `ADMIN_DB_PASSWORD`,
 **Back up `.env` now.** Lose `ADMIN_DB_ENCRYPTION_KEY` and the encrypted rows in
 admin-db — OIDC client secrets and signing keys — cannot be read again.
 
-## 3. Add the two settings nothing asks about
+## 6. Add the two settings nothing asks about
 
-Open `.env` and add:
+Open `.env` and modify the following two lines:
 
 ```dotenv
-DEBUG_AGENTS=true
 BACKEND_PUBLIC_URL=http://localhost:5150
+DEBUG_AGENTS=true
 ```
-
-`DEBUG_AGENTS=true` includes the seven agents under `agents/debug-agents/`
-(corrosion, radiation, thermal, material-data, thread-pattern, artifact-debug,
-code-render-debug), taking the stack from 2 registered agents to 9. In a plain
-checkout the specialist agents exist *only* there, so without this you get the
-orchestrator and synthesis agent and nothing to dispatch to.
 
 `BACKEND_PUBLIC_URL` is the address the browser uses to reach the platform. The
 backend sends it to the identity provider as the `redirect_uri` and has no
@@ -287,18 +281,25 @@ other way to know it. It has to be set **before** the backend starts, or OIDC
 sign-in fails with a redirect-URI mismatch. See
 [Local OIDC provider](local-oidc.md).
 
+`DEBUG_AGENTS=true` includes the seven agents under `agents/debug-agents/`
+(corrosion, radiation, thermal, material-data, thread-pattern, artifact-debug,
+code-render-debug), taking the stack from 2 registered agents to 9. In a plain
+checkout the specialist agents exist *only* there, so without this you get the
+orchestrator and synthesis agent and nothing to dispatch to.
+
+
 `.env` should now contain:
 
 ```dotenv
-LOCAL_SDK=true
-LOCAL_DEEPLYNX=true
-DEBUG_AGENTS=true
-BACKEND_PUBLIC_URL=http://localhost:5150
 LLM_CONFIG_PROFILE=<the profile you picked>
 LLM_API_KEY=<its key>
+BACKEND_PUBLIC_URL=http://localhost:5150
+LOCAL_SDK=true
+DEBUG_AGENTS=true
+LOCAL_DEEPLYNX=true
 ```
 
-## 4. Start the platform
+## 7. Start the platform
 
 ```bash
 make up
@@ -316,7 +317,7 @@ would rather watch than wait on a detached container.
 It returns only once every healthcheck passes, the backend and frontend answer
 on their ports, and all nine agents have registered.
 
-If `make up` stops with `container prometheus_platform-backend-1 is unhealthy`
+**Note:** If `make up` stops with `container prometheus_platform-backend-1 is unhealthy`
 and the backend logs say `password authentication failed for user "admin"`, an
 older admin-db volume is still using a previous `ADMIN_DB_PASSWORD`. Postgres
 keeps that password in the volume and ignores the one in `.env`. On WSL2 the
@@ -336,16 +337,16 @@ make up
 conversation. The two `cd` commands are what clear the stale WSL directory;
 the prompt can already say `platform` and still need them.
 
-## 5. Create the first administrator
+## 8. Create the first administrator
 
-Open http://localhost:5150. The first-run wizard asks for a username and
+Open http://localhost:5150 in a browser. The first-run wizard asks for a username and
 password. **Save them**: this is the only account that exists, and the only one
-that can register the identity provider in step 7.
+that can register the identity provider in Step [10. Register the provider](#10-register-the-provider).
 
 Forgotten it later: `make clear-admin-users` deletes the local accounts and the
 wizard runs again.
 
-## 6. Start Keycloak
+## 9. Start Keycloak
 
 ```bash
 make oidc-up
@@ -355,7 +356,7 @@ This has to come after `make up`, because Keycloak joins the Docker network
 that `make up` creates. It runs as its own Compose project, so `make down` and
 `make restart` leave it running.
 
-## 7. Register the provider
+## 10. Register the provider
 
 Sign in as the administrator, go to **Admin → Identity Providers**, add one:
 
@@ -373,21 +374,28 @@ fetches the discovery document over the Docker network.
 [Local OIDC provider](local-oidc.md) explains why those differ, and how to add
 your own users.
 
-## 8. Check it
+## 11. Check it
 
 ```bash
 make check                                  # 9 agents registered
 curl -s localhost:8600/api/auth/providers   # lists keycloak
 ```
 
-Log out. The login page now shows **Sign in with Keycloak** below the password
+Log out from Prometheus frontend (http://localhost:5150). The login page now shows **Sign in with Keycloak** below the password
 form; the realm's test user is 
 
 | Username | Password |
 | --- | --- |
 | `prometheus` | `prometheus` |
 
-## Day to day
+## 12. Keycloak OIDC back stage
+The back stage of Keycloak is http://localhost:8180/. You can access it using the following admin account:
+
+| Username | Password |
+| --- | --- |
+| `admin` | `admin` |
+
+## 13. Day to day
 
 ```bash
 make up                  # start (leaves Keycloak alone)
