@@ -129,10 +129,18 @@ parser), mark that top-level string property:
 The client-agent then hides the field from its model and fills it with the
 user's words for the request in progress: every message they typed and every
 form answer since the last successful call to a skill with a marked field,
-oldest first, one per line (form answers as `<question> <answer>`). A failed
-call keeps them, so a retry carries the whole request. `inputSources` reports
-the field as `user`. Only top-level properties are read; the marker is dropped
-before the schema reaches the model.
+oldest first, one per line (form answers as `<question> <answer>`). Later calls
+made before the user writes again get the same text, and the user's next words
+start a new request. A failed call keeps them, so a retry carries the whole
+request. `inputSources` reports
+the field as `user`. The marker is dropped before the schema reaches the model.
+
+You can mark more than one property; each gets the same text. The user's words
+are free text, so the marker only works on a top-level property of type
+`string` (or `["string", "null"]`) with no `enum`, `const` or `pattern`, and no
+`maxLength` under 6000 characters. On any other top-level property the
+client-agent logs a warning and ignores the marker, and its model fills the
+field as usual. A marker on a nested property is ignored without a warning.
 
 Do **not** put a `url` field in the card. `PrometheusAgent` sets the registered
 URL at startup: `EXTERNAL_AGENT_URL` if set, else
