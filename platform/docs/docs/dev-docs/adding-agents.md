@@ -128,7 +128,7 @@ parser), mark that top-level string property:
 
 The client-agent then hides the field from its model and fills it with the
 user's words for the request in progress: every message they typed and every
-form answer since the last successful call to a skill with a marked field,
+form answer since the last successful skill call (any skill, marked or not),
 oldest first, one per line (form answers as `<question> <answer>`). Later calls
 made before the user writes again get the same text, and the user's next words
 start a new request. A failed call keeps them, so a retry carries the whole

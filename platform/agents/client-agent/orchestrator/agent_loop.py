@@ -93,11 +93,11 @@ ORCHESTRATOR_PARAMS = {"artifacts", "conversation_id"}
 VERBATIM_SOURCE_KEY = "x-prometheus-source"
 VERBATIM_USER_MESSAGE = "user_message"
 #: The user's own words for the request in progress: every typed message and
-#: ``ask_user`` answer since the last successful verbatim call. A request often
+#: ``ask_user`` answer since the last successful skill call. A request often
 #: spans turns ("Navier Stokes module" / "yes" / a form), so the last message
 #: alone ("yes") is not the request.
 USER_REQUEST_PARTS = "user_request_parts"
-#: Set once a verbatim call succeeds: later calls before the user's next words
+#: Set once any skill call succeeds: later calls before the user's next words
 #: still get the same request; those next words start a new one.
 USER_REQUEST_DELIVERED = "user_request_delivered"
 _MAX_REQUEST_PARTS = 12
@@ -958,6 +958,9 @@ def _result_key(state: Dict[str, Any], base: str) -> str:
 
 
 def _record_result(state: Dict[str, Any], key: str, arguments: Dict[str, Any], result: Any) -> None:
+    # Any skill that ran ends the request in progress: later calls before the
+    # user's next message get the same words, and that message starts a new one.
+    state[USER_REQUEST_DELIVERED] = True
     artifacts = result.get("artifacts") if isinstance(result, dict) else None
     state["context"] = merge_artifacts_into_context(state.get("context") or {}, artifacts or [])
     state.setdefault("turn_tool_results", {})[key] = result
@@ -1054,10 +1057,6 @@ async def _settle_skill_item(
         _finish(call, {"status": "failed", "error": str(item["error"])})
         return
     result = item.get("result")
-    if call.get("verbatim_fields"):
-        # Delivered: later calls in this request get the same words, and the
-        # user's next words start a new request.
-        state[USER_REQUEST_DELIVERED] = True
     _record_result(state, _result_key(state, skill_id), call["arguments"], result)
     payload = _compact_result(result, "succeeded")
     # Inputs supplied after the call was made are part of what ran; the model
