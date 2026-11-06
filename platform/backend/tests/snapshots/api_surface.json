@@ -393,6 +393,29 @@
           }
         }
       },
+      "/api/artifacts/{artifact_id}/report": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "artifact_id",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
       "/api/auth/callback/{provider}": {
         "get": {
           "parameters": [
@@ -1121,6 +1144,21 @@
         ],
         "type": "object"
       },
+      "ArtifactLink": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "url"
+        ],
+        "type": "object"
+      },
       "ArtifactMeta": {
         "properties": {
           "artifact_id": {
@@ -1150,6 +1188,10 @@
             "default": "",
             "type": "string"
           },
+          "has_report": {
+            "default": false,
+            "type": "boolean"
+          },
           "json_body": {
             "anyOf": [
               {},
@@ -1167,6 +1209,12 @@
                 "type": "null"
               }
             ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactLink"
+            },
+            "type": "array"
           },
           "mime_type": {
             "anyOf": [
@@ -1202,6 +1250,7 @@
               "mesh",
               "mermaid",
               "thermal",
+              "uq",
               "report",
               "code",
               "table",
@@ -2683,6 +2732,25 @@
         "query": []
       },
       "path": "/api/artifacts/{artifact_id}/content",
+      "response_model": null,
+      "status_code": null
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "params": {
+        "body": [],
+        "cookie": [
+          "prometheus_session"
+        ],
+        "header": [],
+        "path": [
+          "artifact_id"
+        ],
+        "query": []
+      },
+      "path": "/api/artifacts/{artifact_id}/report",
       "response_model": null,
       "status_code": null
     },

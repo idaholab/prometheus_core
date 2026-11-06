@@ -92,6 +92,58 @@ async def process_analysis(self, params, context, event_queue):
     return {"status": "model_generated", "path": output_path}
 ```
 
+### Links on an artifact
+
+An agent can attach buttons to any artifact through `metadata["links"]`, a list
+of `{"label": ..., "url": ...}`. The platform shows them on the artifact's viewer
+and opens them in a new tab. Only absolute `http`/`https` URLs are kept (at most
+5). Typical use: a page the agent itself serves for that artifact, such as an
+interactive dashboard, or the job that produced it.
+
+```python
+await self.send_artifact_reference(
+    context, event_queue,
+    name="Run report",
+    description="Baked results report",
+    uri=f"file://{report_path}",
+    mime_type="text/html",
+    metadata={"links": [{"label": "Open interactive dashboard", "url": dashboard_url}]},
+)
+```
+
+### A baked HTML report on an artifact
+
+An artifact can carry a static HTML view of itself in `metadata["report"]`, a
+`{"uri": "deeplynx://organizations/{org}/projects/{proj}/items/{item_id}"}` that
+points at the HTML in DeepLynx. The platform shows it inline in a sandboxed frame
+(`GET /api/artifacts/{artifact_id}/report`), and the artifact itself stays the
+download. Only `deeplynx://` reports are shown: an `http`/`https` or `file://`
+report is ignored, so the producer can run on any host and any number of
+replicas, and the backend never fetches an address the producer names. The file
+is read from the URI's item id (DeepLynx gives an uploaded file the same id as its
+item); any `deeplynx_file_id` in `metadata["report"]` is ignored.
+
+```python
+storage = ConnectionConfig.from_env()
+async with AsyncStorageClient(storage) as client:
+    html = await client.files.upload(html_path, name=html_path.name)
+await self.send_deeplynx_artifact(
+    context, event_queue,
+    file_path=notebook_path,
+    name=notebook_path.name,
+    description="UQ notebook",
+    storage_config=storage,
+    mime_type="application/x-ipynb+json",
+    metadata={
+        "json_type": "prometheus.uq.result.v1",
+        "report": {
+            "uri": f"deeplynx://organizations/{storage.organization_id}"
+                   f"/projects/{storage.project_id}/items/{html.id}",
+        },
+    },
+)
+```
+
 ### Retrieving artifacts as files
 
 Downstream agents should consume reusable artifacts through the shared
