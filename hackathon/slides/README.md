@@ -1,18 +1,23 @@
 # Prometheus hackathon slides
 
 Slide decks for the Prometheus agent developer hackathon (Day 1 sessions, the Day 2
-challenge, judging) plus a one-page cheat sheet. Open `index.html` in a browser to
-start.
+challenge, judging) plus a one-page cheat sheet.
+
+**Just want to see the slides?** Open them on the web: <https://idaholab.github.io/prometheus_core/hackathon/>
+(one-day format: <https://idaholab.github.io/prometheus_core/hackathon/one-day/>). A clone of this
+repository has only the Markdown sources, because the deck HTML is generated and not committed. To
+view the decks from a clone, run `make build` in this folder, then open `index.html`.
 
 ## What is where
 
 | Path | What |
 |---|---|
 | `slides/NN-name.md` | **The slide sources. Edit these.** Syntax: [`slides/README.md`](slides/README.md) |
-| `NN-name.html` | Generated decks, one per `.md`. Don't edit; they are overwritten by `make build` |
+| `NN-name.html` | Generated decks, one per `.md`. Not committed (git ignores them): `make build` creates them, CI builds them for the Pages site, and a pull request's `hackathon-slides` artifact has them. Don't edit |
 | `index.html` | Landing page. The deck list between `<!-- decks:start -->` and `<!-- decks:end -->` is generated; the rest is hand-written |
 | `cheatsheet.html` | One-page Day 2 reference (hand-written HTML, not a deck) |
 | `challenge/` | The Day 2 challenge brief and practice files handed to participants |
+| `one-day/` | A second, independent set of decks for the one-day format (no teams). Same layout as this folder: `slides/NN-name.md` sources, generated `NN-name.html`, its own `index.html`, and `challenge/`. It loads this folder's `assets/` through `../assets` |
 | `assets/` | `deck.css` (styles), `deck.js` (slide engine), logos and images |
 | `tools/` | Build, layout check, PDF export, comparison and conversion scripts |
 | `pdf/` | Exported PDFs (generated, not committed) |
@@ -54,7 +59,7 @@ start.
    ```
 
 4. Look at it: open the deck in a browser and reload.
-5. Commit the `.md` **and** the regenerated `.html` together.
+5. Commit the `.md`. The decks are not committed. `make build` also refreshes the deck list in `index.html`; commit that file if it changed.
 
 Without make:
 
@@ -100,7 +105,7 @@ make pdf          # one PDF per deck in pdf/, one slide per page
 
 | Script | Purpose |
 |---|---|
-| `tools/build.py` | Markdown → HTML decks and the index deck list |
+| `tools/build.py` | Markdown → HTML decks and the index deck list, for this folder and `one-day/` |
 | `tools/check_layout.py` | Overlap/overflow check; `--shots DIR` also saves a PNG per slide |
 | `tools/export_pdf.py` | PDF export |
 | `tools/sheet.py` | Contact sheets (3×3) from screenshots, for a quick visual review |

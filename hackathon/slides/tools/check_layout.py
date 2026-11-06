@@ -124,7 +124,11 @@ def main() -> int:
     ap.add_argument("decks", nargs="*")
     ap.add_argument("--shots", help="directory for per-slide PNG screenshots")
     args = ap.parse_args()
-    decks = [pathlib.Path(d) for d in args.decks] or sorted(ROOT.glob("[0-9]*.html")) + [ROOT / "index.html"]
+    decks = [pathlib.Path(d) for d in args.decks] or [
+        deck
+        for folder in (ROOT, ROOT / "one-day")
+        for deck in sorted(folder.glob("[0-9]*.html")) + [folder / "index.html"]
+    ]
     shots = pathlib.Path(args.shots) if args.shots else None
     if shots:
         shots.mkdir(parents=True, exist_ok=True)
