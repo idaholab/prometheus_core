@@ -127,13 +127,21 @@ parser), mark that top-level string property:
 ```
 
 The client-agent then hides the field from its model and fills it with the
-user's words for the request in progress: every message they typed and every
-form answer since the last successful skill call (any skill, marked or not),
-oldest first, one per line (form answers as `<question> <answer>`). Later calls
-made before the user writes again get the same text, and the user's next words
-start a new request. A failed call keeps them, so a retry carries the whole
-request. Text over 6000 characters keeps its start and its end, with `[...]` in
-between. `inputSources` reports the field as `user`. The marker is dropped before the schema reaches the model.
+user's words for the request in progress, oldest first, one per line:
+
+- every message the user typed since the last successful skill call (any
+  skill, marked or not), including small talk in between;
+- every answer to a question the client-agent asked (`ask_user`), as
+  `<question> <answer>`. Answers to a skill's own missing-input form are not
+  included; they go to that skill's fields.
+
+So "Generate a MOOSE flow input", "Navier Stokes module", "yes" and a form
+answer reach the skill as one four-line request. Later calls made before the
+user writes again get the same text, and the user's next words start a new
+request. A failed call keeps the text, so a retry carries the whole request.
+Text over 6000 characters keeps its start and its end, with `[...]` in between.
+`inputSources` reports the field as `user`. The marker is dropped before the
+schema reaches the model.
 
 You can mark more than one property; each gets the same text. The user's words
 are free text, so the marker only works on a top-level property of type
