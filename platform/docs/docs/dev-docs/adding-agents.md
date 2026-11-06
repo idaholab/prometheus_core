@@ -142,7 +142,7 @@ adds to it. The user's next typed message starts a new request. A failed call
 keeps the text, so a retry carries the whole request.
 Text over 6000 characters keeps its start and its end, with `[...]` in between.
 `inputSources` reports the field as `user`. The marker is dropped before the
-schema reaches the model.
+schema reaches the model, and the value isn't shown to the model afterwards.
 
 You can mark more than one property; each gets the same text. The user's words
 are free text, so the marker only works on a top-level property of type

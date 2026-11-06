@@ -610,7 +610,8 @@ def recent_skill_inputs(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) 
         for key in sorted(tool_inputs, key=_repeat_index, reverse=True):
             skill_id = key.split("#", 1)[0]
             if skill_id not in newest and skill_id in schemas and isinstance(tool_inputs[key], dict):
-                inputs = {name: value for name, value in tool_inputs[key].items() if name not in ORCHESTRATOR_PARAMS}
+                hidden = ORCHESTRATOR_PARAMS | set(_verbatim_field_names(schemas[skill_id]))
+                inputs = {name: value for name, value in tool_inputs[key].items() if name not in hidden}
                 newest[skill_id] = _restrict_to_schema(inputs, schemas[skill_id])
         if len(newest) >= MAX_DIGEST_SKILLS:
             break
@@ -1086,7 +1087,12 @@ async def _settle_skill_item(
     # must see them and who supplied each, or it credits the skill with the
     # user's choice. Its own arguments are already in the tool call.
     sources = call.get("input_sources") or {}
-    supplied = {name: call["arguments"][name] for name, source in sources.items() if source != "model"}
+    # A verbatim field is hidden from the model and is the user's own message,
+    # which the model already has; echoing it back only costs tokens.
+    hidden = set(call.get("verbatim_fields") or [])
+    supplied = {
+        name: call["arguments"][name] for name, source in sources.items() if source != "model" and name not in hidden
+    }
     if supplied:
         encoded = json.dumps(supplied, default=str)
         payload["inputs"] = (

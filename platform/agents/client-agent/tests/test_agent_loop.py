@@ -2049,3 +2049,18 @@ def test_an_ask_user_answer_after_a_call_continues_the_request(harness) -> None:
     first, second = (params["message"] for _, params in harness.invocations)
     assert first == "generate a channel flow input"
     assert second == "generate a channel flow input\n2D or 3D? 2D"
+
+
+def test_the_hidden_field_is_not_echoed_back_to_the_model(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]), reply("Done.")])
+
+    send(query="tell me about MOOSE preconditioner")
+
+    state = harness.store[CONV]
+    tool_result = next(m for m in state["llm_messages"] if m["role"] == "tool")
+    assert "tell me about MOOSE preconditioner" not in tool_result["content"]
+    catalog = asyncio.run(agent_loop.build_tool_catalog())
+    digest = "\n".join(agent_loop.recent_skill_inputs(state, catalog))
+    assert "docs_qa" in digest and "solvers" in digest and "preconditioner" not in digest
