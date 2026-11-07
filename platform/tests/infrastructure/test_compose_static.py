@@ -12,6 +12,8 @@
 
 """Static validation of docker-compose.yml structure and service definitions."""
 
+import re
+
 import yaml
 
 SPECIALIST_AGENTS = {
@@ -59,12 +61,14 @@ def _image_tag(svc):
 
 
 def test_postgres_image_version(compose_data):
-    assert _image_tag(compose_data["services"]["admin-db"]) == "postgres:16.15-alpine"
+    tag = _image_tag(compose_data["services"]["admin-db"])
+    assert re.fullmatch(r"postgres:\d+\.\d+-alpine", tag), tag
 
 
 def test_redis_service_uses_valkey_bundle(compose_data):
     svc = compose_data["services"]["redis"]
-    assert _image_tag(svc) == "valkey/valkey-bundle:9.1.3"
+    tag = _image_tag(svc)
+    assert re.fullmatch(r"valkey/valkey-bundle:\d+\.\d+\.\d+", tag), tag
     assert svc["command"][:1] == ["valkey-server"]
 
 

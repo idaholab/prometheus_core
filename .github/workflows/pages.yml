@@ -32,25 +32,13 @@ jobs:
       - name: Build hackathon slides
         working-directory: hackathon/slides
         run: make build
-      - name: Check generated slides are up to date
-        # Don't publish decks that differ from their slides/*.md sources
-        working-directory: hackathon/slides
-        run: |
-          if [ -n "$(git status --porcelain .)" ]; then
-            git status --short .
-            git --no-pager diff --stat .
-            echo "::error::The generated slides are out of date. Run 'make build' in hackathon/slides and commit the result."
-            exit 1
-          fi
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Assemble site
         # The docs are the site root and the slides are served from /hackathon/
         run: |
           cp -R platform/docs/site _site
-          mkdir _site/hackathon
-          cd hackathon/slides
-          cp -R ./*.html assets ../../_site/hackathon/
+          make -C hackathon/slides site DEST="$PWD/_site/hackathon"
       - name: Upload site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

@@ -1082,7 +1082,7 @@ On GitHub-hosted runners, for PRs to `devel` and `main` and the merge queue:
 {.sm}
 | Workflow | Does |
 |---|---|
-| `test.yml` | gitleaks, ruff, copyright markings, `uv lock --check`, image pins, hadolint + shellcheck, SDK/template/agent/backend/frontend tests, Docker builds, `compose config`, a full `make up`, slides up to date |
+| `test.yml` | gitleaks, ruff, copyright markings, `uv lock --check`, image pins, hadolint + shellcheck, SDK/template/agent/backend/frontend tests, Docker builds, `compose config`, a full `make up`, slides build and their index pages up to date |
 | `lint-workflows.yml` | actionlint + zizmor on `.github/` changes |
 | codecov | **100% of changed lines covered**, project coverage may not drop |
 
