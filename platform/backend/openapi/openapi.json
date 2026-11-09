@@ -1,0 +1,5030 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Prometheus Backend",
+    "description": "The JSON/SSE API behind the Prometheus Platform's React frontend. The backend\nauthenticates users, holds per-browser session state, relays chat turns to the\nclient-agent orchestrator, and streams progress back over Server-Sent Events.\n\n## Authentication\n\nAuthentication is a session cookie (`prometheus_session` by default; the name is\nconfigurable). It is an HttpOnly, `SameSite=Lax` JWT issued by a successful login\nand sent automatically by the browser on every request. Routes that need it answer\n`401` without a valid, unrevoked cookie; `/api/admin/*` routes additionally answer\n`403` unless the user has the `admin` role.\n\nPublic routes: `/healthz`, `/.well-known/jwks.json`, `/api/setup/*`, and every\n`/api/auth/*` route except `GET /api/auth/me`.\n\n## Typical flow\n\n1. **First run:** `GET /api/setup/status`; if not bootstrapped,\n   `POST /api/setup/bootstrap` creates the first admin and logs them in.\n2. **Log in:** `GET /api/auth/providers` lists the login options. Then either\n   `POST /api/auth/login` (username and password), or follow the browser redirect\n   from `GET /api/auth/login/{provider_id}` (OIDC).\n3. **Start a conversation:** `POST /api/sessions` binds a new `conversation_id` to\n   the session. The id lives server-side and is never sent in a request body.\n4. **Open the event stream:** `GET /api/events` (one per browser session) for\n   status updates and background-task progress.\n5. **Chat:** `POST /api/chat/messages`, optionally attaching files staged with\n   `POST /api/uploads`. Fetch artifacts with\n   `GET /api/artifacts/{artifact_id}/content`.\n6. **History:** `/api/conversations/*` lists, reopens, renames and deletes past\n   conversations.\n\n## Errors\n\nErrors are JSON of the form `{\"detail\": \"<message>\"}`, and the message is meant to\nbe shown to the user. The exception is request validation performed by the\nframework itself, which returns `422` with `detail` as a list of field errors.\n\nA chat turn that fails while talking to the agent is **not** an HTTP error: it\nreturns `200` with `status: \"error\"` and a `message`, so the conversation can render\nit inline.\n\n## Wire contract\n\nEvery payload is defined by the Pydantic models in `app/contract.py` and explained,\nwith examples, in `CONTRACT.md` alongside this service.\n",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Healthz",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readyz",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/jwks.json": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Jwks",
+        "operationId": "jwks__well_known_jwks_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object",
+                  "title": "Response Jwks  Well Known Jwks Json Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/setup/status": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Status ",
+        "description": "``needs_setup`` is true iff no ``users`` row exists yet.",
+        "operationId": "status__api_setup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/setup/bootstrap": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Bootstrap",
+        "description": "Create the first admin user, once, and log them in immediately.\n\nClosing the race between two concurrent first requests matters here more than\nalmost anywhere else in the app (it's the one window where *anyone* can create\nan admin account) so, on Postgres, this takes a transaction-scoped advisory\nlock before checking the count -- a second concurrent request blocks until the\nfirst commits (at which point its own count check correctly sees >0). SQLite\n(used in tests, and only in tests) has no advisory locks; the plain\ncheck-then-insert below is fine there since TestClient issues requests\nsequentially, not concurrently.",
+        "operationId": "bootstrap_api_setup_bootstrap_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Accept form-encoded or JSON ``{username, password}`` and set the cookie.",
+        "operationId": "login_api_auth_login_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "Clear the session cookie and forget any server-side session state.",
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Logout Api Auth Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "description": "Return the authenticated user, or 401. Replaces the React ``/user`` probe.",
+        "operationId": "me_api_auth_me_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "List Providers",
+        "description": "Public: enabled OIDC providers, for <Login> to render a button per entry.",
+        "operationId": "list_providers_api_auth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List Providers Api Auth Providers Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/{provider_id}": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login Via Provider",
+        "description": "Start the OIDC authorization-code flow: redirect the browser to the\nidentity provider, with the state/nonce cookie ``callback`` reads back.",
+        "operationId": "login_via_provider_api_auth_login__provider_id__get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/callback/{provider}": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Oauth Callback",
+        "description": "OIDC redirect callback — resolved through the provider registry (AU-6).\n\nA registered provider completes the handshake via ``IdentityProvider.callback``,\nwhich raises on any failure (``HTTPException`` for a request-level problem,\n``NotImplementedError`` for a provider with no redirect flow at all).",
+        "operationId": "oauth_callback_api_auth_callback__provider__get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "The server's admin-plane encryption key (`ADMIN_DB_ENCRYPTION_KEY`) is missing or invalid, or a stored secret was encrypted under a different key. A deployment problem for an administrator to fix; the `detail` says which.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ..."
+                    }
+                  },
+                  "example_2": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ..."
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written.",
+                    "value": {
+                      "detail": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "get": {
+        "tags": [
+          "config"
+        ],
+        "summary": "Get Config",
+        "operationId": "get_config_api_config_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Create Session",
+        "description": "Create a new conversation under the caller's session identity.\n\nA second call reuses the same session (keyed by the JWT ``sid``) but mints a\nfresh ``conversation_id``, so the user can start a new conversation without\nre-authenticating.",
+        "operationId": "create_session_api_sessions_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CreateSessionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/messages": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Post Message",
+        "operationId": "post_message_api_chat_messages_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This session already sent a turn with this `turn_id`; the agent is not run again.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "This turn id was already used; send a new turn with a new id.",
+                    "value": {
+                      "detail": "This turn id was already used; send a new turn with a new id."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/turns/{turn_id}": {
+      "get": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Get Turn",
+        "description": "A turn's state: ``running``, or ``done`` with the response its POST returned.\n\nFor a client that lost track of a turn: its POST failed at the network level, or its\nevent stream reconnected while the turn was in flight. Read once at those moments;\nthe ``turn_done`` event is the normal path, so don't poll this. 404 when this session\nhas no such turn (never started, expired, its worker stopped, or another session's).",
+        "operationId": "get_turn_api_chat_turns__turn_id__get",
+        "parameters": [
+          {
+            "name": "turn_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{8,64}$",
+              "title": "Turn Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This session has no such turn: it never started, its result expired, the worker running it stopped, or it belongs to another session.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "No such turn.",
+                    "value": {
+                      "detail": "No such turn."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Events",
+        "description": "Open the session's SSE stream. Auth-required; one per browser connection.",
+        "operationId": "events_api_events_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uploads": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Post Upload",
+        "operationId": "post_upload_api_uploads_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_post_upload_api_uploads_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadDescriptor"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/artifacts/{artifact_id}/content": {
+      "get": {
+        "tags": [
+          "artifacts"
+        ],
+        "summary": "Get Artifact Content",
+        "operationId": "get_artifact_content_api_artifacts__artifact_id__content_get",
+        "parameters": [
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artifact Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/artifacts/mesh/{dataset_id}/{filename}": {
+      "get": {
+        "tags": [
+          "artifacts"
+        ],
+        "summary": "Get Mesh File",
+        "description": "Serve a converted VTP timestep for the React MeshViewer (auth-required).\n\nA mesh artifact's ``json_body.baseUrl`` is ``/api/artifacts/mesh/{dataset_id}``\n(see ``services/mesh/service.py``); the viewer fetches each\n``${baseUrl}/${filename}`` from here. ``dataset_id`` is a content hash and the\ncached files are session-independent, so the guard is auth + path-traversal\nsafety: both segments must be single safe names and the resolved path must stay\ninside the mesh cache root.",
+        "operationId": "get_mesh_file_api_artifacts_mesh__dataset_id___filename__get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/recent": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Get Recent Conversations",
+        "operationId": "get_recent_conversations_api_conversations_recent_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Get Conversation Detail",
+        "operationId": "get_conversation_detail_api_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Rename Conversation",
+        "operationId": "rename_conversation_api_conversations__conversation_id__patch",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRenameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Delete Conversation",
+        "description": "Soft delete: hides the conversation from ``recent``, and ``GET /{id}`` and\n``/resume`` answer 404 for it. The underlying ``conversation:{id}`` document (and\nits artifacts) are left intact.",
+        "operationId": "delete_conversation_api_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}/tasks": {
+      "get": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Get Conversation Tasks",
+        "description": "The conversation's background-task tree (the client-agent's Task Graph) as\nJSON: the structured form of the ``/tasks`` slash command. Running and finished\ntasks alike, root turns newest first, each with its skill dispatches nested.",
+        "operationId": "get_conversation_tasks_api_conversations__conversation_id__tasks_get",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationTasksResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}/resume": {
+      "post": {
+        "tags": [
+          "conversations"
+        ],
+        "summary": "Resume Conversation",
+        "description": "Rebind the caller's session to a past conversation so the next chat turn\ncontinues it. Returns its transcript + artifact catalog in the same call so\nthe frontend can render history and resume in one round-trip.\n\nRebinds first, enriches meshes second. Enrichment can take seconds per mesh on a\ncache miss, and the frontend lets the user click elsewhere meanwhile; the rebind\nitself is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer click\nalways wins regardless of which request finishes last. The enriched catalog is then\nwritten back only if the session is still on this conversation, with the catalog\nthe rebind seeded.",
+        "operationId": "resume_conversation_api_conversations__conversation_id__resume_post",
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConversationResumeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_api_admin_users_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  },
+                  "title": "Response List Users Api Admin Users Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "Create User",
+        "operationId": "create_user_api_admin_users_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "Update User",
+        "operationId": "update_user_api_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "Delete User",
+        "operationId": "delete_user_api_admin_users__user_id__delete",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/signing-keys": {
+      "get": {
+        "tags": [
+          "admin-signing-keys"
+        ],
+        "summary": "List Keys",
+        "operationId": "list_keys_api_admin_signing_keys_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SigningKeyOut"
+                  },
+                  "title": "Response List Keys Api Admin Signing Keys Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-signing-keys"
+        ],
+        "summary": "Create Key",
+        "description": "Generate a new RS256 keypair. Does not activate it -- see .../activate.",
+        "operationId": "create_key_api_admin_signing_keys_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SigningKeyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server's admin-plane encryption key (`ADMIN_DB_ENCRYPTION_KEY`) is missing or invalid, or a stored secret was encrypted under a different key. A deployment problem for an administrator to fix; the `detail` says which.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ..."
+                    }
+                  },
+                  "example_2": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ..."
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written.",
+                    "value": {
+                      "detail": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/signing-keys/{key_id}/activate": {
+      "post": {
+        "tags": [
+          "admin-signing-keys"
+        ],
+        "summary": "Activate Key",
+        "description": "Make this the one key mint_for_user() signs with.\n\nDeactivates whichever key was active before -- it stays in the table and\nkeeps appearing in the JWKS, un-retired, until an admin explicitly retires\nit (see /retire below).",
+        "operationId": "activate_key_api_admin_signing_keys__key_id__activate_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SigningKeyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/signing-keys/{key_id}/retire": {
+      "post": {
+        "tags": [
+          "admin-signing-keys"
+        ],
+        "summary": "Retire Key",
+        "description": "Mark this key as done -- it keeps verifying (still served in the JWKS)\nbut is no longer eligible for /activate.\n\nRefuses to retire the currently active key with no replacement: that would\nleave mint_for_user() with no active DB row at all, silently falling back\nto the (usually unconfigured) env var. Activate a replacement first.",
+        "operationId": "retire_key_api_admin_signing_keys__key_id__retire_post",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Key Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SigningKeyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/oidc-providers": {
+      "get": {
+        "tags": [
+          "admin-oidc-providers"
+        ],
+        "summary": "List Providers",
+        "operationId": "list_providers_api_admin_oidc_providers_get",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OidcProviderOut"
+                  },
+                  "title": "Response List Providers Api Admin Oidc Providers Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-oidc-providers"
+        ],
+        "summary": "Create Provider",
+        "operationId": "create_provider_api_admin_oidc_providers_post",
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcProviderCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server's admin-plane encryption key (`ADMIN_DB_ENCRYPTION_KEY`) is missing or invalid, or a stored secret was encrypted under a different key. A deployment problem for an administrator to fix; the `detail` says which.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ..."
+                    }
+                  },
+                  "example_2": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ..."
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written.",
+                    "value": {
+                      "detail": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/oidc-providers/{provider_row_id}": {
+      "patch": {
+        "tags": [
+          "admin-oidc-providers"
+        ],
+        "summary": "Update Provider",
+        "operationId": "update_provider_api_admin_oidc_providers__provider_row_id__patch",
+        "parameters": [
+          {
+            "name": "provider_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Provider Row Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcProviderUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcProviderOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The server's admin-plane encryption key (`ADMIN_DB_ENCRYPTION_KEY`) is missing or invalid, or a stored secret was encrypted under a different key. A deployment problem for an administrator to fix; the `detail` says which.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not configured. Generate one with: ..."
+                    }
+                  },
+                  "example_2": {
+                    "summary": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ...",
+                    "value": {
+                      "detail": "ADMIN_DB_ENCRYPTION_KEY is not a valid Fernet key: ..."
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written.",
+                    "value": {
+                      "detail": "Could not decrypt value -- ADMIN_DB_ENCRYPTION_KEY may have changed since this row was written."
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin-oidc-providers"
+        ],
+        "summary": "Delete Provider",
+        "operationId": "delete_provider_api_admin_oidc_providers__provider_row_id__delete",
+        "parameters": [
+          {
+            "name": "provider_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Provider Row Id"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The signed-in user does not have the `admin` role.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Admin role required",
+                    "value": {
+                      "detail": "Admin role required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents": {
+      "get": {
+        "tags": [
+          "agent-registry"
+        ],
+        "summary": "List Agents",
+        "operationId": "list_agents_v1_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Agents V1 Agents Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent-registry"
+        ],
+        "summary": "Register Agent",
+        "operationId": "register_agent_v1_agents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRegistration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Register Agent V1 Agents Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{agent_id}": {
+      "delete": {
+        "tags": [
+          "agent-registry"
+        ],
+        "summary": "Delete Agent",
+        "operationId": "delete_agent_v1_agents__agent_id__delete",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete Agent V1 Agents  Agent Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/a2a/{agent_name}": {
+      "get": {
+        "tags": [
+          "agent-registry"
+        ],
+        "summary": "Get Agent Card",
+        "operationId": "get_agent_card_a2a__agent_name__get",
+        "parameters": [
+          {
+            "name": "agent_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Agent Card A2A  Agent Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent-registry"
+        ],
+        "summary": "Proxy A2A",
+        "operationId": "proxy_a2a_a2a__agent_name__post",
+        "parameters": [
+          {
+            "name": "agent_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Proxy A2A A2A  Agent Name  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminUserCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AdminUserCreate"
+      },
+      "AdminUserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "external_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Subject"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role",
+          "provider",
+          "is_active",
+          "created_at"
+        ],
+        "title": "AdminUserOut"
+      },
+      "AdminUserUpdate": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "title": "AdminUserUpdate",
+        "description": "Partial update -- every field is optional; only the ones sent are applied."
+      },
+      "AgentRegistration": {
+        "properties": {
+          "agent_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Agent Name"
+          },
+          "agent_card_params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Agent Card Params"
+          },
+          "static_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Static Headers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_name",
+          "agent_card_params"
+        ],
+        "title": "AgentRegistration"
+      },
+      "ArtifactMeta": {
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "title": "Artifact Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "json_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "json_body": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Body"
+          },
+          "render_hint": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "image",
+              "json",
+              "ifc",
+              "mesh",
+              "mermaid",
+              "thermal",
+              "report",
+              "code",
+              "table",
+              "reference",
+              "file",
+              "unknown"
+            ],
+            "title": "Render Hint",
+            "default": "unknown"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Citation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "producer_agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producer Agent Id"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artifact_id"
+        ],
+        "title": "ArtifactMeta",
+        "description": "Conversation-scoped artifact reference on our wire.\n\nSnake_case per the Prometheus catalog convention (see\ndocs/docs/dev-docs/artifacts.md). Superset of ``prometheus_api``'s\n``ArtifactReference`` fields the frontend needs, plus the derived\n``render_hint``. ``json_body`` is inline-only; bytes are fetched via\n``GET /api/artifacts/{artifact_id}/content`` (task 07)."
+      },
+      "Body_post_upload_api_uploads_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_post_upload_api_uploads_post"
+      },
+      "BootstrapRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "BootstrapRequest"
+      },
+      "BootstrapResult": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "BootstrapResult"
+      },
+      "ChatMessageRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "default": ""
+          },
+          "followup_answers": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup Answers"
+          },
+          "plan_approved": {
+            "type": "boolean",
+            "title": "Plan Approved",
+            "default": false
+          },
+          "plan_rejected": {
+            "type": "boolean",
+            "title": "Plan Rejected",
+            "default": false
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          },
+          "upload_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/UploadDescriptor"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upload Ids"
+          },
+          "turn_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9-]{8,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Id"
+          }
+        },
+        "type": "object",
+        "title": "ChatMessageRequest",
+        "description": "Frontend → backend body for ``POST /api/chat/messages``.\n\nMirrors the args ``A2AClient.send()`` accepts (frontend/utils/a2a_client.py:81).\n``conversation_id`` is **not** in the body — it comes from session state."
+      },
+      "ChatMessageResponse": {
+        "properties": {
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChatStatus"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "followup_questions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FormField"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Followup Questions"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "auto_approve": {
+            "type": "boolean",
+            "title": "Auto Approve",
+            "default": false
+          },
+          "report": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report"
+          },
+          "response_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Text"
+          },
+          "artifacts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ArtifactMeta"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifacts"
+          },
+          "recommended_materials": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Materials"
+          },
+          "follow_up_suggestions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Suggestions"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "status"
+        ],
+        "title": "ChatMessageResponse",
+        "description": "backend → frontend body for ``POST /api/chat/messages``.\n\nA normalized view of ``prometheus_api``'s ``ConversationResponse``. Fields are\ngrouped by the ``status`` that populates them; all are optional so a single\nmodel round-trips every variant."
+      },
+      "ChatProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "markdown_description": {
+            "type": "string",
+            "title": "Markdown Description",
+            "default": ""
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ChatProfile",
+        "description": "A selectable chat profile, mirroring Chainlit's ``cl.ChatProfile``.\n\nPorted from ``frontend/main.py`` ``set_chat_profiles``. The frontend picks one\nat session creation; ``POST /api/sessions`` echoes the chosen ``profile`` and,\nfor the beginner profile, includes ``workflow_suggestions``."
+      },
+      "ChatStatus": {
+        "type": "string",
+        "enum": [
+          "needs_info",
+          "plan_ready",
+          "executing",
+          "completed",
+          "recommendation",
+          "answer",
+          "backgrounded",
+          "error"
+        ],
+        "title": "ChatStatus",
+        "description": "Public status set, mirroring ``prometheus_api``'s ``ConversationStatus``.\n\nString-valued so ``response.status == \"completed\"`` comparisons work on both\nsides of the wire."
+      },
+      "Citation": {
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          }
+        },
+        "type": "object",
+        "title": "Citation",
+        "description": "Source / section / page for a ``reference`` (citation) artifact.\n\nPorted from the old inline citation renderer ``_render_reference_artifact``\n(frontend/components/message_handler.py:1004), which read these from the raw\nartifact ``metadata``. The frontend's citation card formats from these fields;\nwithout them a ``reference`` artifact loses its provenance on the wire (CON-1).\n(The ``uri`` link and ``name``/``description`` the old renderer also used are\nalready top-level :class:`ArtifactMeta` fields.)"
+      },
+      "ConfigResponse": {
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ChatProfile"
+            },
+            "type": "array",
+            "title": "Profiles"
+          },
+          "chat_intro": {
+            "type": "string",
+            "title": "Chat Intro",
+            "default": ""
+          },
+          "chat_suggestion_title": {
+            "type": "string",
+            "title": "Chat Suggestion Title",
+            "default": ""
+          },
+          "workflow_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Workflow Suggestions"
+          },
+          "auto_approve_steps": {
+            "type": "boolean",
+            "title": "Auto Approve Steps",
+            "default": false
+          },
+          "max_upload_bytes": {
+            "type": "integer",
+            "title": "Max Upload Bytes",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ConfigResponse",
+        "description": "Returned by ``GET /api/config`` — static, non-session settings."
+      },
+      "ConversationDetailResponse": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "profile": {
+            "type": "string",
+            "title": "Profile",
+            "default": ""
+          },
+          "auto_approve_steps": {
+            "type": "boolean",
+            "title": "Auto Approve Steps",
+            "default": false
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactMeta"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationDetailResponse",
+        "description": "Returned by ``GET /api/conversations/{id}`` and ``POST\n/api/conversations/{id}/resume`` — a past conversation's transcript plus\nenough session-bootstrap info for the frontend to resume it."
+      },
+      "ConversationHistoryResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": false
+          },
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "type": "array",
+            "title": "Conversations"
+          }
+        },
+        "type": "object",
+        "title": "ConversationHistoryResponse",
+        "description": "Returned by ``GET /api/conversations/recent``.\n\n``available`` is ``False`` when Redis is unreachable — the endpoint degrades to\nan empty list with a 200 rather than erroring (parallels the Chainlit \"History\nunavailable\" message)."
+      },
+      "ConversationMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "default": ""
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "default": ""
+          },
+          "artifact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Artifact Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "ConversationMessage",
+        "description": "One normalized chat turn, as returned by the conversation-detail/resume\nendpoints. Distinct from the richer live ``ChatMessageResponse``: this is a\ndisplay-only replay of a past turn, not a re-playable turn result."
+      },
+      "ConversationRenameRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "ConversationRenameRequest",
+        "description": "Body for ``PATCH /api/conversations/{id}``."
+      },
+      "ConversationResumeRequest": {
+        "properties": {
+          "bind_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bind Seq"
+          }
+        },
+        "type": "object",
+        "title": "ConversationResumeRequest",
+        "description": "Optional body for ``POST /api/conversations/{id}/resume``.\n\n``bind_seq`` orders session rebinds by click, not by arrival: a resume or new\nsession whose seq is not greater than the last one applied leaves the session where\nit is. The frontend sends a strictly increasing value (``Date.now()``-based).\n``POST /api/sessions`` takes the same field in :class:`CreateSessionRequest`."
+      },
+      "ConversationSummary": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "unknown"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "default": ""
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationSummary",
+        "description": "One recent-conversation row.\n\nMirrors the dict shape produced by\n``ConversationStateClient.get_conversation_history`` (ported from the Chainlit\n``/history`` command); ``status`` is the client's inferred user-facing status.\n``title`` is the effective title: a user rename wins over the client-agent's\nLLM-generated title, which wins over the raw first query (``query``).\n``pending`` is true while a turn is actively running against this\nconversation (``agent:status:{id}.final is False``) — a conversation the\ncaller isn't currently viewing may still have work in flight."
+      },
+      "ConversationTasksResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": false
+          },
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskNodeOut"
+            },
+            "type": "array",
+            "title": "Tasks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationTasksResponse",
+        "description": "Returned by ``GET /api/conversations/{id}/tasks``: the conversation's Task\nGraph as a tree of root turns, newest first. Includes finished tasks until their\nnodes expire (24 h by default); filter on ``state`` / ``is_background`` client-side.\n\n``available`` is ``False`` when Valkey is unreachable, matching ``recent``."
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "bind_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bind Seq"
+          }
+        },
+        "type": "object",
+        "title": "CreateSessionRequest",
+        "description": "Optional body for ``POST /api/sessions`` — the selected chat profile, plus the\n``bind_seq`` that orders this rebind against in-flight resumes (see\n:class:`ConversationResumeRequest`)."
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Human-readable explanation, suitable for showing to the user."
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "description": "Body of every error the backend raises itself."
+      },
+      "FormField": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "input_type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "number",
+              "email",
+              "password",
+              "date",
+              "datetime",
+              "textarea",
+              "select",
+              "checkbox"
+            ],
+            "title": "Input Type",
+            "default": "text"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": true
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SelectOption"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "default": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
+          "help": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help"
+          },
+          "placeholder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeholder"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "FormField",
+        "description": "A single follow-up form field.\n\nMatches the props consumed by ``frontend/src/components/chat/FollowupForm.tsx``\nand the normalized shape produced by ``normalize_followup_questions`` below\n(ported from ``message_handler._handle_needs_info``)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginResult": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "title": "LoginResult"
+      },
+      "OidcProviderCreate": {
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "issuer_url": {
+            "type": "string",
+            "title": "Issuer Url"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "type": "string",
+            "title": "Client Secret"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes",
+            "default": "openid profile email"
+          },
+          "default_role": {
+            "type": "string",
+            "title": "Default Role",
+            "default": "user"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider_id",
+          "display_name",
+          "issuer_url",
+          "client_id",
+          "client_secret"
+        ],
+        "title": "OidcProviderCreate"
+      },
+      "OidcProviderOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "issuer_url": {
+            "type": "string",
+            "title": "Issuer Url"
+          },
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes"
+          },
+          "default_role": {
+            "type": "string",
+            "title": "Default Role"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider_id",
+          "display_name",
+          "issuer_url",
+          "client_id",
+          "scopes",
+          "default_role",
+          "is_enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "OidcProviderOut"
+      },
+      "OidcProviderUpdate": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "issuer_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer Url"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          },
+          "default_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Role"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          }
+        },
+        "type": "object",
+        "title": "OidcProviderUpdate",
+        "description": "Partial update -- every field optional. ``client_secret`` omitted keeps\nthe existing one; ``provider_id`` isn't editable at all (see module docstring)."
+      },
+      "ProviderInfo": {
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider_id",
+          "display_name"
+        ],
+        "title": "ProviderInfo"
+      },
+      "SelectOption": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "SelectOption",
+        "description": "One option for a ``select`` field."
+      },
+      "SessionResponse": {
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "title": "Conversation Id"
+          },
+          "profile": {
+            "type": "string",
+            "title": "Profile",
+            "default": ""
+          },
+          "chat_intro": {
+            "type": "string",
+            "title": "Chat Intro",
+            "default": ""
+          },
+          "chat_suggestion_title": {
+            "type": "string",
+            "title": "Chat Suggestion Title",
+            "default": ""
+          },
+          "workflow_suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Workflow Suggestions"
+          },
+          "auto_approve_steps": {
+            "type": "boolean",
+            "title": "Auto Approve Steps",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "conversation_id"
+        ],
+        "title": "SessionResponse",
+        "description": "Returned by ``POST /api/sessions`` — starts a conversation."
+      },
+      "SetupStatus": {
+        "properties": {
+          "needs_setup": {
+            "type": "boolean",
+            "title": "Needs Setup"
+          }
+        },
+        "type": "object",
+        "required": [
+          "needs_setup"
+        ],
+        "title": "SetupStatus"
+      },
+      "SigningKeyOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          },
+          "public_key_pem": {
+            "type": "string",
+            "title": "Public Key Pem"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kid",
+          "public_key_pem",
+          "is_active",
+          "created_at"
+        ],
+        "title": "SigningKeyOut"
+      },
+      "TaskNodeOut": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "parent_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Task Id"
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "own_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Own State"
+          },
+          "is_background": {
+            "type": "boolean",
+            "title": "Is Background",
+            "default": false
+          },
+          "waiting_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "last_status_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Status Message"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/TaskNodeOut"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "state"
+        ],
+        "title": "TaskNodeOut",
+        "description": "One Task Graph node, as returned by ``GET /api/conversations/{id}/tasks``.\n\nMirrors the client-agent's ``TaskNode`` (agents/client-agent/task_graph.py), minus\n``conversation_id`` (the request's scope) and ``child_task_ids`` (replaced by the\nnested ``children``). A root is one chat turn; its children are the specialist\nskill dispatches it made. ``state`` is the effective state after the children\npercolate up (an A2A ``TaskState`` string: ``submitted``, ``working``,\n``input-required``, ``completed``, ``failed``, ``canceled``, ``rejected``);\n``own_state`` is the node's own. ``is_background`` marks a turn the client-agent\ndetached, and the skill that asked for it. Timestamps are ISO-8601 strings."
+      },
+      "TurnStateResponse": {
+        "properties": {
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done"
+            ],
+            "title": "State"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatMessageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "state"
+        ],
+        "title": "TurnStateResponse",
+        "description": "``GET /api/chat/turns/{turn_id}``: a turn's state, for a client that lost track of it\n(POST failed at the network level, or its event stream reconnected)."
+      },
+      "UploadDescriptor": {
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "title": "Upload Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload_id",
+          "name",
+          "mime_type",
+          "size_bytes"
+        ],
+        "title": "UploadDescriptor",
+        "description": "Returned by ``POST /api/uploads``; echoed back in the next chat request."
+      },
+      "User": {
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "user"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "credentials"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identifier"
+        ],
+        "title": "User",
+        "description": "Authenticated principal, mirroring Chainlit's ``cl.User`` shape.\n\n``identifier`` matches what the React app read from ``/user``; ``role`` and\n``provider`` mirror the ``cl.User.metadata`` keys set in ``auth_callback``."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness probe for load balancers and orchestrators."
+    },
+    {
+      "name": "identity",
+      "description": "Public signing keys (JWKS) that agents use to verify the short-lived identity tokens the backend mints for each chat turn."
+    },
+    {
+      "name": "setup",
+      "description": "First-run bootstrap: check whether the platform has an admin yet and create the first one. Unauthenticated, and closed for good once any user exists."
+    },
+    {
+      "name": "auth",
+      "description": "Log in with a username and password or an OIDC provider, log out, and identify the current user. Login sets the session cookie."
+    },
+    {
+      "name": "config",
+      "description": "Settings the UI reads at startup: chat profiles, intro text, suggestions and the upload size limit."
+    },
+    {
+      "name": "sessions",
+      "description": "Start a new conversation and bind it to the browser session."
+    },
+    {
+      "name": "chat",
+      "description": "Send a chat turn to the agent orchestrator. Progress for the turn streams over `GET /api/events`."
+    },
+    {
+      "name": "events",
+      "description": "The per-session Server-Sent Events stream: turn status updates and background-task progress and completion."
+    },
+    {
+      "name": "uploads",
+      "description": "Stage files to attach to the next chat turn."
+    },
+    {
+      "name": "artifacts",
+      "description": "Download artifact content produced by agents, and converted mesh files for the 3D viewer."
+    },
+    {
+      "name": "conversations",
+      "description": "Conversation history: list recent conversations, reopen, resume, rename and delete them."
+    },
+    {
+      "name": "admin-users",
+      "description": "Manage local user accounts and roles. Requires the `admin` role."
+    },
+    {
+      "name": "admin-oidc-providers",
+      "description": "Configure the OIDC identity providers offered at login. Requires the `admin` role."
+    },
+    {
+      "name": "admin-signing-keys",
+      "description": "Create, activate and retire the RS256 keys that sign per-turn identity tokens. Requires the `admin` role."
+    },
+    {
+      "name": "agent-registry",
+      "description": "Agent self-registration and the A2A gateway the orchestrator calls agents through. Authenticated with the shared agent secret, not the session cookie."
+    }
+  ]
+}

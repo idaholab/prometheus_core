@@ -76,6 +76,36 @@ examples, tags, error responses), so editing a docstring never trips it.
 Nobody needs to read the file itself; it is long because it lists every endpoint in
 full. Only its diff matters.
 
+### OpenAPI document
+
+`openapi/openapi.json` is the OpenAPI document the backend serves at `/openapi.json`,
+committed so CI can lint it and so a PR shows how it changes the published API.
+Unlike the surface snapshot it includes the documentation, so editing a summary,
+description or example changes it too. Regenerate it after changing a route, a model
+or the API's documentation, and commit the diff:
+
+```bash
+uv run python scripts/export_openapi.py
+```
+
+If you change the API's behavior, regenerate the surface snapshot too. On a merge
+conflict in either file, regenerate it rather than resolving it by hand.
+
+CI's `platform: backend openapi` job regenerates the document and fails if that
+changes the committed file, printing the diff. It then checks that the document is
+complete, such as that every route declares its authentication, by linting it with
+[Redocly](https://redocly.com/docs/cli/). Problems show up on the lines of
+`openapi/openapi.json` in a PR. The rules are in `openapi/redocly.yaml`: Redocly's
+`recommended-strict` set, which fails on warnings too, with each rule that doesn't
+apply turned off and the reason given. The problems the document had when the lint
+was added are listed in `openapi/.redocly.lint-ignore.yaml`, one rule at one location
+each, so new problems still fail. Remove an entry when you fix it; don't add new ones.
+To run it locally (needs Node):
+
+```bash
+cd openapi && npm ci && npm run lint
+```
+
 ## Configuration
 
 `app/config.py` loads `app/config.yml` (override the path with `PROMETHEUS_CONFIG_PATH`).

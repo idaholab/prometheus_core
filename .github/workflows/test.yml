@@ -814,6 +814,56 @@ jobs:
         # Exits non-zero and prints the diff if the models have drifted
         run: uv run --frozen --no-sync alembic check
 
+  platform-backend-openapi:
+    # Checks that the backend's committed OpenAPI document matches the app,
+    # then lints it with Redocly, using the rules in
+    # platform/backend/openapi/redocly.yaml
+    name: "platform: backend openapi"
+    needs: gitleaks
+    runs-on: ubuntu-26.04
+    env:
+      REDOCLY_TELEMETRY: "off"
+      REDOCLY_SUPPRESS_NOTIFICATIONS: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+      - name: Regenerate the document
+        working-directory: platform/backend
+        run: uv run --frozen python scripts/export_openapi.py
+      - name: Check the document is up to date
+        # Before linting, so a stale document isn't linted as if it were current
+        run: |
+          if [ -n "$(git status --porcelain platform/backend/openapi/openapi.json)" ]; then
+            git --no-pager diff platform/backend/openapi/openapi.json
+            echo "::error file=platform/backend/openapi/openapi.json::openapi.json is out of date. Run 'uv run python scripts/export_openapi.py' in platform/backend and commit the result."
+            exit 1
+          fi
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Matches the frontend jobs
+          node-version: "22.23.3"
+          cache: npm
+          cache-dependency-path: platform/backend/openapi/package-lock.json
+      - name: Install Redocly
+        working-directory: platform/backend/openapi
+        run: npm ci --no-audit --no-fund
+      - name: Lint
+        # From the repository root, so the annotations' file paths are relative
+        # to it and land on the document in a pull request
+        run: |
+          platform/backend/openapi/node_modules/.bin/redocly lint \
+            platform/backend/openapi/openapi.json \
+            --config platform/backend/openapi/redocly.yaml \
+            --format=github-actions
+
   platform-infrastructure:
     name: "platform: infrastructure"
     needs: gitleaks
