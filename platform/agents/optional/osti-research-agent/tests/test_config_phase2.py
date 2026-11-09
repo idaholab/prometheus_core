@@ -82,7 +82,7 @@ def test_from_env_phase2_defaults(monkeypatch):
     assert cfg.total_budget_s == 900
     assert cfg.max_papers_analyzed == 5
     assert cfg.max_pdf_mb == 50
-    assert cfg.docling_timeout_s == 240
+    assert cfg.docling_timeout_s == 480
     assert cfg.docling_images_scale == 2.0
     assert cfg.docling_table_mode == "accurate"
     assert cfg.max_figures == 12

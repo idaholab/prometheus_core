@@ -155,7 +155,7 @@ def test_arxiv_gives_up_after_a_second_429(caplog):
 
 @respx.mock
 def test_arxiv_requests_are_spaced(monkeypatch):
-    monkeypatch.setattr(scholarly, "ARXIV_MIN_INTERVAL_S", 0.3)
+    monkeypatch.setattr(scholarly.ARXIV_API_GATE, "interval_s", 0.3)
     respx.get(scholarly.ARXIV_URL).mock(return_value=httpx.Response(200, text=_ARXIV_ATOM))
     import time
 

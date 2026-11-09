@@ -198,7 +198,7 @@ def test_search_tools_use_the_configured_limits(monkeypatch):
     from research_agent.tools import RunContext
     from research_agent.tools.osti import build_osti_tools
 
-    monkeypatch.setattr(osti_client, "search_osti", lambda query, k: [])
+    monkeypatch.setattr(osti_client, "search_osti", lambda query, k, **kwargs: [])
     ctx = RunContext(
         config=AgentConfig(litellm_base_url="http://unused", max_osti_searches=2),
         complete=None,

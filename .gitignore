@@ -16,3 +16,4 @@ platform/agents/optional/osti-research-agent/evals/results/
 platform/agents/optional/osti-research-agent/evals/out/
 platform/agents/optional/osti-research-agent/evals/report.json
 platform/agents/optional/osti-research-agent/evals/report.md
+.vscode/settings.json

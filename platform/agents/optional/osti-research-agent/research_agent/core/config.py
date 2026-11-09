@@ -89,7 +89,9 @@ class AgentConfig(BaseModel):
 
     # --- PDF parsing (docling worker -> paper.md + per-table CSV/MD +
     # per-figure PNG/JSON, PyMuPDF text as the fallback) ---
-    docling_timeout_s: int = 240
+    # Docling runs single-threaded on the CPU (about 2-3 s a page with
+    # "accurate" tables), so 480 s fits papers of roughly 150-180 pages.
+    docling_timeout_s: int = 480
     # Docling memory use. Page images are rendered at this scale and kept for
     # figure crops, so memory grows with its square: 1.0 needs about a quarter
     # of 2.0's. "fast" TableFormer uses less memory and time than "accurate".
@@ -142,7 +144,7 @@ class AgentConfig(BaseModel):
             verifier_tool_call_limit=int(os.getenv("VERIFIER_TOOL_CALL_LIMIT", "12")),
             max_pdf_mb=int(os.getenv("MAX_PDF_MB", "50")),
             download_allowed_domains=parse_domains(os.getenv("DOWNLOAD_ALLOWED_DOMAINS")),
-            docling_timeout_s=int(os.getenv("DOCLING_TIMEOUT_S", "240")),
+            docling_timeout_s=int(os.getenv("DOCLING_TIMEOUT_S", "480")),
             docling_images_scale=float(os.getenv("DOCLING_IMAGES_SCALE", "2.0")),
             docling_table_mode=os.getenv("DOCLING_TABLE_MODE", "accurate").strip().lower(),
             parse_ocr=os.getenv("PARSE_OCR", "auto"),

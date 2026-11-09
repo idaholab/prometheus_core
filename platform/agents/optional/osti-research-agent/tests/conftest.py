@@ -42,11 +42,13 @@ def _no_network_synthesis(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _no_arxiv_spacing(monkeypatch):
-    """The arXiv request gap is 3 s in production; tests run without it."""
-    from research_agent import scholarly
+def _no_arxiv_spacing(monkeypatch, tmp_path):
+    """arXiv requests are spaced 3 s (API) and 15 s (PDFs) apart in
+    production; tests run without the gap, and with gate files of their own
+    so they never share one with a real agent on the same machine."""
+    from research_agent import osti_client, scholarly
 
-    monkeypatch.setattr(scholarly, "ARXIV_MIN_INTERVAL_S", 0.0)
-    monkeypatch.setattr(scholarly, "_ARXIV_RETRY_AFTER_S", 0.0)
-    monkeypatch.setattr(scholarly, "_arxiv_lock", None)
-    monkeypatch.setattr(scholarly, "_arxiv_last_request", 0.0)
+    monkeypatch.setenv("RATE_GATE_DIR", str(tmp_path / "gates"))
+    monkeypatch.setattr(scholarly.ARXIV_API_GATE, "interval_s", 0.0)
+    monkeypatch.setattr(osti_client.ARXIV_PDF_GATE, "interval_s", 0.0)
+    monkeypatch.setattr(scholarly, "_RETRY_AFTER_S", 0.0)

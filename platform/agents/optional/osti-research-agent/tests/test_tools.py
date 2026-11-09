@@ -52,7 +52,7 @@ def _tool(tools, name):
 
 
 def test_search_osti_maps_hits_and_records_them(monkeypatch):
-    def fake_search(query, max_results):
+    def fake_search(query, max_results, **kwargs):
         assert max_results == 8
         return [
             {
@@ -85,7 +85,7 @@ def test_search_osti_omits_hits_already_returned_by_another_query(monkeypatch):
     monkeypatch.setattr(
         osti_client,
         "search_osti",
-        lambda query, max_results: [
+        lambda query, max_results, **kwargs: [
             {
                 "osti_id": "123",
                 "title": "Creep of Titanium",
@@ -106,7 +106,7 @@ def test_search_osti_omits_hits_already_returned_by_another_query(monkeypatch):
 def test_search_osti_deduplicates_and_caps_queries(monkeypatch):
     calls = []
 
-    def fake_search(query, max_results):
+    def fake_search(query, max_results, **kwargs):
         calls.append(query)
         return []
 
@@ -486,3 +486,63 @@ def test_store_facts_handles_bad_json_without_raising():
     out = json.loads(asyncio.run(store.ainvoke({"facts_json": "not json"})))
     assert out["stored"] == 0
     assert "error" in out
+
+
+# --- failed searches do not use up the budget -------------------------------
+
+
+def _failing_osti(monkeypatch, calls):
+    def fake_search(query, max_results, **kwargs):
+        calls.append(query)
+        raise osti_client.OstiSearchFailed("HTTP 503")
+
+    monkeypatch.setattr(osti_client, "search_osti", fake_search)
+
+
+def test_a_failed_osti_search_is_given_back_and_reported(monkeypatch):
+    calls = []
+    _failing_osti(monkeypatch, calls)
+    ctx = _ctx(max_osti_searches=1)
+    search = _tool(build_osti_tools(ctx), "search_osti")
+
+    first = json.loads(asyncio.run(search.ainvoke({"query": "steel creep"})))
+    # The same query again: neither a duplicate nor over the limit of 1.
+    second = json.loads(asyncio.run(search.ainvoke({"query": "steel creep"})))
+
+    assert calls == ["steel creep", "steel creep"]
+    assert first["search_failed"] is True and first["search_refunded"] is True
+    assert "OSTI search failed: HTTP 503" in first["error"]
+    assert "not a sign that no papers exist" in first["instruction"]
+    assert second["search_refunded"] is True
+
+
+def test_failed_searches_are_given_back_at_most_twice(monkeypatch):
+    from research_agent.tools.context import MAX_REFUNDED_SEARCH_FAILURES
+
+    calls = []
+    _failing_osti(monkeypatch, calls)
+    ctx = _ctx(max_osti_searches=5)
+    search = _tool(build_osti_tools(ctx), "search_osti")
+
+    outs = [
+        json.loads(asyncio.run(search.ainvoke({"query": f"q{i}"}))) for i in range(4)
+    ]
+
+    refunded = [o["search_refunded"] for o in outs]
+    assert refunded == [True] * MAX_REFUNDED_SEARCH_FAILURES + [False] * (
+        4 - MAX_REFUNDED_SEARCH_FAILURES
+    )
+    assert "keeps failing and this search was counted" in outs[-1]["instruction"]
+    # The two counted failures still use up budget: 2 of 5 searches spent.
+    assert len(ctx.search_queries["OSTI"]) == 2
+
+
+def test_a_search_that_found_nothing_still_uses_up_a_search(monkeypatch):
+    monkeypatch.setattr(osti_client, "search_osti", lambda query, max_results, **kwargs: [])
+    ctx = _ctx(max_osti_searches=1)
+    search = _tool(build_osti_tools(ctx), "search_osti")
+
+    asyncio.run(search.ainvoke({"query": "steel creep"}))
+    second = json.loads(asyncio.run(search.ainvoke({"query": "other query"})))
+
+    assert "search limit reached (1)" in second["error"]

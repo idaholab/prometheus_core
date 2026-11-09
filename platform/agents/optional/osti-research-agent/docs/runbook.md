@@ -1,7 +1,8 @@
 # OSTI Research Agent — runbook
 
 Operational reference: budget tuning, cache keys/TTLs, and how to replay a run.
-Architecture is in `architecture.md`.
+Architecture is in `architecture.md`; how to evaluate a change is in
+`evaluation.md`.
 
 ## Config / tuning knobs
 
@@ -26,7 +27,7 @@ defaults.
 | `EMBEDDING_MODEL` | `embedding` | LiteLLM alias for the knowledge-store embeddings |
 | `MAX_PDF_MB` | `50` | maximum download size for arbitrary non-OSTI PDF URLs |
 | `DOWNLOAD_ALLOWED_DOMAINS` | built-in list | comma-separated hosts PDFs may be downloaded from (subdomains included). Others are never fetched, and search results only offer `oa_pdf_url` for them; a host that answers 401/403 is dropped for the rest of the run. The OSTI purl path is always allowed. Default list: `research_agent/download_policy.py` |
-| `DOCLING_TIMEOUT_S` | `240` | timeout for the isolated Docling conversion process |
+| `DOCLING_TIMEOUT_S` | `480` | timeout for the isolated Docling conversion process. Docling runs single-threaded at about 2-3 s a page, so this fits papers of roughly 150-180 pages; a longer paper falls back to PyMuPDF text (no tables or figures) |
 | `DOCLING_IMAGES_SCALE` | `2.0` | page-image render scale; memory grows with its square, so `1.0` needs about a quarter. Lower it if the worker is killed out of memory ("exited -9") |
 | `DOCLING_TABLE_MODE` | `accurate` | TableFormer mode, `accurate` or `fast` (less memory and time, rougher table structure) |
 | `PARSE_OCR` | `auto` | `on`/`off` force OCR for scanned PDFs |
@@ -35,7 +36,7 @@ defaults.
 | `MIN_FIGURE_AREA` | `10000` | skip smaller decorative images by pixel area |
 | `REDIS_URL` | — | unset ⇒ no memory/caching (everything degrades gracefully) |
 
-**Budget guidance.** Parsing costs ~1–3 min per paper. With the 900 s budget the
+**Budget guidance.** Parsing costs ~1–5 min per paper (about 2–3 s a page). With the 900 s budget the
 deepagent orchestrator is told (in `prompts/orchestrator.md`) it has ~13 minutes;
 `tools/context.BUDGET_FLOOR_S` (90 s) stops new expensive work early so synthesis
 and fact storage always run. If p90 latency creeps up, lower

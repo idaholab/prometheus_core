@@ -26,11 +26,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import time
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional
 
 import httpx
+
+from research_agent.rate_gate import RateGate
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,16 @@ _TIMEOUT = 30
 _USER_AGENT = "osti-research-agent/1.0 (+https://www.osti.gov)"
 
 _ATOM = "{http://www.w3.org/2005/Atom}"
+
+# A 429 (rate limited) or 503 (temporarily unavailable) is retried once,
+# after the server's Retry-After (capped) or this default.
+_RETRY_STATUSES = (429, 503)
+_RETRY_AFTER_S = 5.0
+_MAX_RETRY_AFTER_S = 30.0
+
+
+class SearchFailed(Exception):
+    """A scholarly source could not be searched (an error, not zero hits)."""
 
 
 def _doi_slug(doi: Optional[str]) -> Optional[str]:
@@ -101,8 +112,16 @@ def _openalex_hit(work: dict) -> dict:
 
 
 async def search_openalex(
-    query: str, k: int = 10, *, mailto: Optional[str] = None
+    query: str,
+    k: int = 10,
+    *,
+    mailto: Optional[str] = None,
+    raise_on_failure: bool = False,
 ) -> List[dict]:
+    """OpenAlex works matching ``query``; a 429 or 503 is retried once.
+
+    On failure returns ``[]``, or raises ``SearchFailed`` with
+    ``raise_on_failure`` so a caller can tell a failure from zero hits."""
     params = {"search": query, "per-page": max(1, min(k, 50))}
     if mailto:
         params["mailto"] = mailto
@@ -110,11 +129,17 @@ async def search_openalex(
         async with httpx.AsyncClient(
             timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT}
         ) as client:
-            resp = await client.get(OPENALEX_URL, params=params)
+
+            async def request() -> httpx.Response:
+                return await client.get(OPENALEX_URL, params=params)
+
+            resp = await _with_one_retry(request, "OpenAlex")
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:
         logger.warning("OpenAlex search failed: %s", _error_text(e))
+        if raise_on_failure:
+            raise SearchFailed(f"OpenAlex: {_error_text(e)}") from e
         return []
     return [_openalex_hit(w) for w in data.get("results", [])[:k]]
 
@@ -184,42 +209,46 @@ def _arxiv_entry(entry: ET.Element) -> dict:
     }
 
 
-# arXiv asks API clients for at most one request every 3 seconds and answers
-# 429 past that. Scholarly searches can run concurrently, so requests share
-# one gate per process.
+# arXiv asks API clients for at most one request every 3 seconds, one
+# connection at a time, across all of a client's machines, and answers 429
+# past that. The gate is shared by every process on the host (the agent
+# server and `python -m evals` run in the same container) and holds the lock
+# for the whole request, so requests never overlap.
 ARXIV_MIN_INTERVAL_S = 3.0
-_ARXIV_RETRY_AFTER_S = 5.0
-_arxiv_lock: Optional[asyncio.Lock] = None
-_arxiv_last_request = 0.0
+ARXIV_API_GATE = RateGate("arxiv-api", ARXIV_MIN_INTERVAL_S)
 
 
 async def _arxiv_get(client: httpx.AsyncClient, params: dict) -> httpx.Response:
-    """GET the arXiv API, spaced at least ARXIV_MIN_INTERVAL_S from the last
-    request in this process; one retry after a 429."""
-    global _arxiv_lock, _arxiv_last_request
-    if _arxiv_lock is None:
-        _arxiv_lock = asyncio.Lock()
-    for attempt in range(2):
-        async with _arxiv_lock:
-            wait = ARXIV_MIN_INTERVAL_S - (time.monotonic() - _arxiv_last_request)
-            if wait > 0:
-                await asyncio.sleep(wait)
-            try:
-                resp = await client.get(ARXIV_URL, params=params)
-            finally:
-                _arxiv_last_request = time.monotonic()
-        if resp.status_code != 429 or attempt == 1:
-            return resp
-        await asyncio.sleep(_retry_after(resp))
-    return resp  # pragma: no cover - the loop always returns
+    """GET the arXiv API through ARXIV_API_GATE; one retry after a 429/503."""
+
+    async def request() -> httpx.Response:
+        async with ARXIV_API_GATE.slot():
+            return await client.get(ARXIV_URL, params=params)
+
+    return await _with_one_retry(request, "arXiv")
+
+
+async def _with_one_retry(request, source: str) -> httpx.Response:
+    """Send ``request()``; on a 429 or 503, wait and send it once more."""
+    resp = await request()
+    if resp.status_code not in _RETRY_STATUSES:
+        return resp
+    wait = _retry_after(resp)
+    logger.info(
+        "%s answered %s; retrying once in %.0f s", source, resp.status_code, wait
+    )
+    await asyncio.sleep(wait)
+    return await request()
 
 
 def _retry_after(resp: httpx.Response) -> float:
+    """Retry-After in seconds (capped), or the default when absent or an
+    HTTP date, which these APIs do not send."""
     value = resp.headers.get("Retry-After", "")
     try:
-        return min(max(float(value), 0.0), 30.0)
+        return min(max(float(value), 0.0), _MAX_RETRY_AFTER_S)
     except ValueError:
-        return _ARXIV_RETRY_AFTER_S
+        return _RETRY_AFTER_S
 
 
 def _error_text(e: Exception) -> str:
@@ -227,7 +256,10 @@ def _error_text(e: Exception) -> str:
     return str(e).splitlines()[0] if str(e).strip() else type(e).__name__
 
 
-async def search_arxiv(query: str, k: int = 5) -> List[dict]:
+async def search_arxiv(
+    query: str, k: int = 5, *, raise_on_failure: bool = False
+) -> List[dict]:
+    """arXiv preprints matching ``query``; failure as for ``search_openalex``."""
     params = {
         "search_query": f"all:{query}",
         "start": 0,
@@ -242,6 +274,8 @@ async def search_arxiv(query: str, k: int = 5) -> List[dict]:
             root = ET.fromstring(resp.text)
     except Exception as e:
         logger.warning("arXiv search failed: %s", _error_text(e))
+        if raise_on_failure:
+            raise SearchFailed(f"arXiv: {_error_text(e)}") from e
         return []
     return [_arxiv_entry(e) for e in root.findall(f"{_ATOM}entry")][:k]
 
@@ -256,13 +290,24 @@ async def search_scholarly(
     query: str, k: int = 10, *, mailto: Optional[str] = None, arxiv: bool = True
 ) -> List[dict]:
     """OpenAlex first (comprehensive index), then arXiv preprints to fill in
-    (``arxiv=False`` skips it). Deduped by DOI/title, capped at ``k``."""
-    async def no_arxiv() -> List[dict]:
-        return []
+    (``arxiv=False`` skips it). Deduped by DOI/title, capped at ``k``.
 
-    openalex, arxiv_hits = await asyncio.gather(
-        search_openalex(query, k, mailto=mailto),
-        search_arxiv(query, max(3, k // 3)) if arxiv else no_arxiv(),
+    One source failing still returns the other's hits. Raises
+    ``SearchFailed`` only when every source searched failed, so the caller
+    can tell that apart from a search that found nothing."""
+    searches = [search_openalex(query, k, mailto=mailto, raise_on_failure=True)]
+    if arxiv:
+        searches.append(search_arxiv(query, max(3, k // 3), raise_on_failure=True))
+    outcomes = await asyncio.gather(*searches, return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException) and not isinstance(outcome, SearchFailed):
+            raise outcome
+    failures = [o for o in outcomes if isinstance(o, SearchFailed)]
+    if len(failures) == len(outcomes):
+        raise SearchFailed("; ".join(str(f) for f in failures))
+    openalex = outcomes[0] if not isinstance(outcomes[0], SearchFailed) else []
+    arxiv_hits = (
+        outcomes[1] if len(outcomes) > 1 and not isinstance(outcomes[1], SearchFailed) else []
     )
 
     merged: List[dict] = []

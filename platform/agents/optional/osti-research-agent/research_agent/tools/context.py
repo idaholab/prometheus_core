@@ -33,6 +33,7 @@ import redis
 
 from research_agent.core.config import AgentConfig
 from research_agent.core.events import Finding
+from research_agent.tools import progress
 from research_agent.core.llm import CompleteFn
 from research_agent.memory import ArtifactCache, PdfCache
 
@@ -43,6 +44,10 @@ if TYPE_CHECKING:
 # is left, so synthesis + fact storage always get to run. Mirrors the pipeline
 # engine's 60 s guard, with extra headroom for a paper still being analyzed.
 BUDGET_FLOOR_S = 90.0
+
+# Searches that fail with an API error (not zero hits) are given back to the
+# search budget this many times per provider per run.
+MAX_REFUNDED_SEARCH_FAILURES = 2
 
 
 @dataclass
@@ -79,6 +84,8 @@ class RunContext:
     parsed_papers: Dict[str, dict] = field(default_factory=dict)
     # Normalized queries already charged against each search provider's limit.
     search_queries: Dict[str, set[str]] = field(default_factory=dict)
+    # Failed searches given back per provider (see release_search).
+    search_failures_refunded: Dict[str, int] = field(default_factory=dict)
     # Findings captured as analyze_paper calls complete (the runner reads this
     # for the timeout_partial salvage path).
     findings: List[Finding] = field(default_factory=list)
@@ -143,3 +150,45 @@ class RunContext:
             return f"{provider} search limit reached ({limit})"
         seen.add(normalized)
         return None
+
+    def release_search(self, provider: str, query: str) -> bool:
+        """Give back a reservation whose search failed (an API error, not zero
+        hits), so the failure costs no budget and the query may be retried.
+
+        At most ``MAX_REFUNDED_SEARCH_FAILURES`` per provider per run: past
+        that, a source that keeps failing is charged as before, so a model
+        cannot loop on a source that is down. Returns whether it was given
+        back."""
+        refunded = self.search_failures_refunded.get(provider, 0)
+        if refunded >= MAX_REFUNDED_SEARCH_FAILURES:
+            return False
+        self.search_failures_refunded[provider] = refunded + 1
+        normalized = " ".join(query.casefold().split())
+        self.search_queries.get(provider, set()).discard(normalized)
+        return True
+
+
+def search_failed(ctx: RunContext, provider: str, query: str, error: str) -> dict:
+    """The tool result for a search the API failed: give the reservation back
+    when allowed, and say so, so the model neither reads it as zero hits nor
+    counts it as a spent search."""
+    refunded = ctx.release_search(provider, query)
+    progress.emit(
+        f"{provider} search failed ({error})"
+        + ("; it did not use up a search" if refunded else ""),
+        {"provider": provider, "refunded": refunded},
+    )
+    return {
+        "results": [],
+        "error": f"{provider} search failed: {error}",
+        "search_failed": True,
+        "search_refunded": refunded,
+        "instruction": (
+            "The search service failed; this is not a sign that no papers "
+            "exist. This search did not use up the budget: retry it once, or "
+            "use another search tool."
+            if refunded
+            else "The search service keeps failing and this search was "
+            "counted. Use another search tool or the results you already have."
+        ),
+    }

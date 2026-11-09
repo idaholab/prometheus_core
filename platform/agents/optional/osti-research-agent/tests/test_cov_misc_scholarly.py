@@ -61,10 +61,15 @@ def test_openalex_doi_lookup_without_any_pdf_returns_none():
 
 
 def _fake_sources(monkeypatch, openalex, arxiv):
-    async def fake_openalex(query, k, *, mailto=None):
+    """Fake both sources; a source given as an exception fails with it."""
+    async def fake_openalex(query, k, *, mailto=None, raise_on_failure=False):
+        if isinstance(openalex, BaseException):
+            raise openalex
         return openalex
 
-    async def fake_arxiv(query, k):
+    async def fake_arxiv(query, k, *, raise_on_failure=False):
+        if isinstance(arxiv, BaseException):
+            raise arxiv
         return arxiv
 
     monkeypatch.setattr(scholarly, "search_openalex", fake_openalex)
@@ -93,3 +98,110 @@ def test_search_scholarly_stops_at_k(monkeypatch):
     out = asyncio.run(scholarly.search_scholarly("creep", 2))
 
     assert [h["title"] for h in out] == ["Paper 0", "Paper 1"]
+
+
+# --- retries and failures ---------------------------------------------------
+
+
+@respx.mock
+def test_openalex_retries_once_after_a_429_or_503():
+    for status in (429, 503):
+        respx.reset()
+        route = respx.get(scholarly.OPENALEX_URL).mock(
+            side_effect=[
+                httpx.Response(status, headers={"Retry-After": "0"}),
+                httpx.Response(200, json={"results": [{"title": "Creep", "doi": None}]}),
+            ]
+        )
+
+        hits = asyncio.run(scholarly.search_openalex("creep", 5))
+
+        assert route.call_count == 2 and [h["title"] for h in hits] == ["Creep"]
+
+
+@respx.mock
+def test_openalex_gives_up_after_a_second_failure():
+    route = respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(503))
+
+    assert asyncio.run(scholarly.search_openalex("creep", 5)) == []
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_openalex_does_not_retry_other_errors():
+    route = respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(500))
+
+    asyncio.run(scholarly.search_openalex("creep", 5))
+
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_arxiv_retries_once_after_a_503():
+    route = respx.get(scholarly.ARXIV_URL).mock(
+        side_effect=[httpx.Response(503), httpx.Response(200, text="<feed/>")]
+    )
+
+    asyncio.run(scholarly.search_arxiv("creep", 5))
+
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_a_source_failure_can_be_raised_instead_of_returned_empty():
+    respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(500))
+    respx.get(scholarly.ARXIV_URL).mock(side_effect=httpx.ReadTimeout(""))
+
+    import pytest
+
+    with pytest.raises(scholarly.SearchFailed, match="OpenAlex"):
+        asyncio.run(scholarly.search_openalex("creep", 5, raise_on_failure=True))
+    with pytest.raises(scholarly.SearchFailed, match="arXiv: ReadTimeout"):
+        asyncio.run(scholarly.search_arxiv("creep", 5, raise_on_failure=True))
+
+
+def test_one_source_failing_still_returns_the_other(monkeypatch):
+    _fake_sources(monkeypatch, scholarly.SearchFailed("OpenAlex: 503"), [{"title": "Preprint"}])
+
+    out = asyncio.run(scholarly.search_scholarly("creep", 5))
+
+    assert [h["title"] for h in out] == ["Preprint"]
+
+
+def test_every_source_failing_raises(monkeypatch):
+    import pytest
+
+    _fake_sources(
+        monkeypatch,
+        scholarly.SearchFailed("OpenAlex: 503"),
+        scholarly.SearchFailed("arXiv: ReadTimeout"),
+    )
+
+    with pytest.raises(scholarly.SearchFailed) as raised:
+        asyncio.run(scholarly.search_scholarly("creep", 5))
+
+    assert "OpenAlex: 503" in str(raised.value) and "arXiv: ReadTimeout" in str(raised.value)
+
+
+def test_openalex_failing_with_arxiv_off_raises(monkeypatch):
+    import pytest
+
+    _fake_sources(monkeypatch, scholarly.SearchFailed("OpenAlex: 429"), [])
+
+    with pytest.raises(scholarly.SearchFailed, match="OpenAlex: 429"):
+        asyncio.run(scholarly.search_scholarly("creep", 5, arxiv=False))
+
+
+def test_a_found_nothing_search_is_not_a_failure(monkeypatch):
+    _fake_sources(monkeypatch, [], [])
+
+    assert asyncio.run(scholarly.search_scholarly("creep", 5)) == []
+
+
+def test_an_unexpected_error_is_not_swallowed(monkeypatch):
+    import pytest
+
+    _fake_sources(monkeypatch, ValueError("bug"), [])
+
+    with pytest.raises(ValueError, match="bug"):
+        asyncio.run(scholarly.search_scholarly("creep", 5))

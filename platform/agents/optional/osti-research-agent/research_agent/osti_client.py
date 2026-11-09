@@ -19,9 +19,13 @@ import json
 import logging
 import os
 import urllib.parse
+from contextlib import nullcontext
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 import requests
+
+from research_agent.download_policy import host_allowed, host_of
+from research_agent.rate_gate import RateGate
 
 if TYPE_CHECKING:
     # Only needed for the `cache` type hint below; deferred so this module
@@ -36,6 +40,19 @@ requests.packages.urllib3.disable_warnings()
 _USER_AGENT = "osti-research-agent/1.0 (+https://www.osti.gov)"
 _DEFAULT_MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
 _PDF_CACHE_TTL_S = 30 * 24 * 3600
+
+# arxiv.org's robots.txt sets "Crawl-delay: 15" for its pages, PDFs included.
+# Downloads from it (and its subdomains) go one at a time through a gate
+# shared by every process on the host, 15 s apart; other hosts are not gated.
+ARXIV_PDF_INTERVAL_S = 15.0
+ARXIV_PDF_GATE = RateGate("arxiv-pdf", ARXIV_PDF_INTERVAL_S)
+
+
+def _download_gate(url: str) -> Optional[RateGate]:
+    """The rate gate a download from ``url`` must go through, if any."""
+    if host_allowed(host_of(url), ("arxiv.org",)):
+        return ARXIV_PDF_GATE
+    return None
 
 
 def url_cache_key(url: str) -> str:
@@ -78,15 +95,17 @@ def download_pdf_from_url(
                 return dest_path
             return None
 
+    gate = _download_gate(url)
     try:
-        session = requests.Session()
-        resp = session.get(
-            url,
-            timeout=timeout,
-            allow_redirects=True,
-            headers={"User-Agent": _USER_AGENT},
-            verify=False,
-        )
+        with gate.slot_sync() if gate is not None else nullcontext():
+            session = requests.Session()
+            resp = session.get(
+                url,
+                timeout=timeout,
+                allow_redirects=True,
+                headers={"User-Agent": _USER_AGENT},
+                verify=False,
+            )
     except Exception as e:
         logger.warning(f"URL download failed for {url}: {e}")
         return None
@@ -134,13 +153,24 @@ def _write_pdf(dest_path: str, content: bytes) -> bool:
     return True
 
 
-def search_osti(search_query: str, max_results: int = 15) -> List[Dict[str, Any]]:
-    """Search OSTI API and retrieve abstracts."""
+class OstiSearchFailed(Exception):
+    """The OSTI API could not be searched at all (no page came back)."""
+
+
+def search_osti(
+    search_query: str, max_results: int = 15, *, raise_on_failure: bool = False
+) -> List[Dict[str, Any]]:
+    """Search OSTI API and retrieve abstracts.
+
+    A failure on a later page keeps the results already found. A failure on
+    the first page returns ``[]``, or with ``raise_on_failure`` raises
+    ``OstiSearchFailed``, so a caller can tell it apart from zero hits."""
     base_url = "https://www.osti.gov/api/v1/records"
     encoded_query = urllib.parse.quote_plus(search_query)
 
     results = []
     page = 0  # OSTI uses 0-based pagination
+    first_page_error: Optional[str] = None
 
     while len(results) < max_results:
         try:
@@ -160,6 +190,8 @@ def search_osti(search_query: str, max_results: int = 15) -> List[Dict[str, Any]
             if response.status_code != 200:
                 logger.warning(f"[OSTI API] Non-200 status: {response.status_code}")
                 logger.warning(f"[OSTI API] Response body: {response.text[:500]}")
+                if page == 0:
+                    first_page_error = f"HTTP {response.status_code}"
                 break
 
             # Log raw response for debugging
@@ -178,6 +210,8 @@ def search_osti(search_query: str, max_results: int = 15) -> List[Dict[str, Any]
                     e,
                     len(results),
                 )
+                if page == 0:
+                    first_page_error = "response was not JSON"
                 break
 
             if not data:
@@ -216,10 +250,14 @@ def search_osti(search_query: str, max_results: int = 15) -> List[Dict[str, Any]
 
         except Exception as e:
             logger.error(f"[OSTI API] Error searching OSTI: {e}", exc_info=True)
+            if page == 0:
+                first_page_error = str(e).splitlines()[0] if str(e).strip() else type(e).__name__
             break
 
     logger.info(f"[OSTI API] Total results found: {len(results)}")
 
+    if first_page_error and raise_on_failure:
+        raise OstiSearchFailed(first_page_error)
     return results
 
 

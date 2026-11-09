@@ -5,8 +5,10 @@ FROM ${PROMETHEUS_API_BASE_IMAGE_REPO}:${PROMETHEUS_API_BASE_IMAGE_HASH}
 
 WORKDIR /app
 
+# OpenCV (pulled in by Docling's RapidOCR) needs libGL, libxcb and GLib at
+# import time; without them `docling-tools models download` fails below.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgl1 libxcb1 \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV UV_PROJECT_ENVIRONMENT="/usr/local" \

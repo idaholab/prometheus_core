@@ -243,6 +243,20 @@ def _fallback_only(monkeypatch, precheck=(2, 500)):
     monkeypatch.setattr(pp, "_pymupdf_text", lambda p: "TEXT")
 
 
+def _docling_only(monkeypatch):
+    """A Docling parse that succeeds (only these are cached)."""
+    async def worker(pdf, outdir, options, timeout):
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        (outdir / "paper.md").write_text("DOCLING TEXT")
+        parsed = ParsedPaper(source_id=options["source_id"], method="docling")
+        parsed.write_meta(outdir)
+        return parsed
+
+    monkeypatch.setattr(pp, "_precheck", lambda p: (2, 500))
+    monkeypatch.setattr(pp, "_run_docling_worker", worker)
+
+
 def _recorder():
     messages = []
 
@@ -253,23 +267,59 @@ def _recorder():
 
 
 def test_cache_read_failure_reparses_and_still_writes_cache(tmp_path, monkeypatch):
-    _fallback_only(monkeypatch)
+    _docling_only(monkeypatch)
     cache = Cache(fail_get=True)
 
     parsed = asyncio.run(pp.parse_paper_pipeline("d.pdf", "7", _config(tmp_path), cache))
 
-    assert parsed.method == "pymupdf"
+    assert parsed.method == "docling"
     assert "7" in cache.blobs
 
 
 def test_corrupt_cached_blob_is_ignored_and_reparsed(tmp_path, monkeypatch):
-    _fallback_only(monkeypatch)
+    _docling_only(monkeypatch)
     cache = Cache(blob=b"not a tarball")
 
     parsed = asyncio.run(pp.parse_paper_pipeline("d.pdf", "7", _config(tmp_path), cache))
 
-    assert parsed.method == "pymupdf"
+    assert parsed.method == "docling"
     assert cache.blobs["7"] != b"not a tarball"  # replaced by the fresh parse
+
+
+def test_pymupdf_fallback_is_not_cached(tmp_path, monkeypatch, caplog):
+    # A Docling timeout must not leave a text-only copy (no tables or figures)
+    # in the cache for 30 days: the next run tries Docling again.
+    _fallback_only(monkeypatch)
+    cache = Cache()
+
+    with caplog.at_level("INFO", logger="research_agent.parsing.pipeline"):
+        parsed = asyncio.run(
+            pp.parse_paper_pipeline("d.pdf", "7", _config(tmp_path), cache)
+        )
+
+    assert parsed.method == "pymupdf"
+    assert cache.blobs == {}
+    assert "not cached: PyMuPDF fallback" in caplog.text
+
+
+def test_a_cached_fallback_from_before_is_still_served(tmp_path, monkeypatch):
+    # Text-only parses cached by an older version stay readable until their
+    # TTL expires; only new fallbacks are no longer written.
+    _fallback_only(monkeypatch)
+    first = Cache()
+    monkeypatch.setattr(pp, "_MAX_CACHE_BYTES", 10**9)
+    out = pp.paper_dir(tmp_path, "7")
+    out.mkdir(parents=True)
+    (out / "paper.md").write_text("OLD TEXT")
+    ParsedPaper(source_id="7", method="pymupdf").write_meta(out)
+    first.blobs["7"] = pp._tar_dir(out)
+
+    parsed = asyncio.run(
+        pp.parse_paper_pipeline("d.pdf", "7", _config(tmp_path / "run"), first)
+    )
+
+    assert parsed.method == "pymupdf"
+    assert (pp.paper_dir(tmp_path / "run", "7") / "paper.md").read_text() == "OLD TEXT"
 
 
 def test_scanned_pdf_emits_ocr_notice_and_requests_ocr(tmp_path, monkeypatch):
@@ -291,7 +341,7 @@ def test_scanned_pdf_emits_ocr_notice_and_requests_ocr(tmp_path, monkeypatch):
 
 
 def test_oversized_artifact_dir_is_not_cached(tmp_path, monkeypatch):
-    _fallback_only(monkeypatch)
+    _docling_only(monkeypatch)
     monkeypatch.setattr(pp, "_MAX_CACHE_BYTES", 1)
     cache = Cache()
 
@@ -301,13 +351,13 @@ def test_oversized_artifact_dir_is_not_cached(tmp_path, monkeypatch):
 
 
 def test_cache_write_failure_does_not_fail_the_parse(tmp_path, monkeypatch):
-    _fallback_only(monkeypatch)
+    _docling_only(monkeypatch)
 
     parsed = asyncio.run(
         pp.parse_paper_pipeline("d.pdf", "7", _config(tmp_path), Cache(fail_put=True))
     )
 
-    assert parsed.method == "pymupdf"
+    assert parsed.method == "docling"
 
 
 def _docling_with_figure(monkeypatch):

@@ -33,7 +33,7 @@ from langchain_core.tools import BaseTool, tool
 
 from research_agent import scholarly
 from research_agent.tools import progress
-from research_agent.tools.context import RunContext
+from research_agent.tools.context import RunContext, search_failed
 from research_agent.web_search import get_web_provider
 
 logger = logging.getLogger(__name__)
@@ -83,12 +83,16 @@ def build_search_tools(ctx: RunContext) -> List[BaseTool]:
             )
 
         progress.emit(f"Searching OpenAlex/arXiv for: {query}")
-        hits = await scholarly.search_scholarly(
-            query,
-            min(max_results, _MAX_SCHOLARLY_RESULTS),
-            mailto=ctx.config.openalex_mailto,
-            arxiv=ctx.config.scholarly_arxiv,
-        )
+        try:
+            hits = await scholarly.search_scholarly(
+                query,
+                min(max_results, _MAX_SCHOLARLY_RESULTS),
+                mailto=ctx.config.openalex_mailto,
+                arxiv=ctx.config.scholarly_arxiv,
+            )
+        except scholarly.SearchFailed as e:
+            # Every source failed; one source failing still returns hits.
+            return json.dumps(search_failed(ctx, "scholarly", query, str(e)))
         out = []
         for h in hits:
             source_id = str(h.get("source_id", ""))

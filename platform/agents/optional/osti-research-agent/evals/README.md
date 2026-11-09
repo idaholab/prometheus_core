@@ -1,13 +1,15 @@
 # Evaluation harness
 
 Runs the OSTI research agent over a fixed question set and scores the
-answers, so a change to answer quality is visible before it ships.
+answers, so a change to answer quality is visible before it ships. For the
+procedure around it (isolating the knowledge base, comparing a change against
+a baseline, tracing a failure to a step), see `docs/evaluation.md`.
 
 ## Layout
 
 | File | What |
 |------|------|
-| `questions.yaml` | 51 questions (core / scholarly / web / cache / adversarial) with optional expectations |
+| `questions.yaml` | 48 questions (core / scholarly / web / cache / adversarial / uq) with optional expectations |
 | `run.py` | runs each question through the agent, writes transcripts, scores |
 | `scoring.py` | pure, offline metrics (unit-tested in `tests/test_eval_scoring.py`) |
 | `report.py` | terminal summary and Markdown report (unit-tested in `tests/test_eval_report.py`) |
@@ -24,7 +26,7 @@ agent's model profile, credentials, Redis and Docling. From `platform/`:
 make up OPTIONAL_AGENTS=true          # once: start the stack with the OSTI agent
 make osti-eval                        # default: deepagent, first 3 questions
 make osti-eval OSTI_EVAL_LIMIT=10     # first 10 questions
-make osti-eval OSTI_EVAL_LIMIT=       # every question (51; takes hours)
+make osti-eval OSTI_EVAL_LIMIT=       # every question (48; takes hours)
 make osti-eval OSTI_EVAL_LIMIT= OSTI_EVAL_ARGS="--category uq"
 make osti-eval OSTI_EVAL_ARGS="--redis-db-base 14"   # isolate from the live cache
 make osti-eval-report                 # re-print the latest report
@@ -73,7 +75,7 @@ limit.)
 | `--questions <path>` | another question file |
 
 Each question can take up to `TOTAL_BUDGET_S` (900 s by default) and they run
-one at a time, so the full 51-question set takes hours. Start
+one at a time, so the full 48-question set takes hours. Start
 with a filter. Rebuild the image after editing `questions.yaml` or anything
 under `evals/` (`make up OPTIONAL_AGENTS=true`): the container runs the copy
 baked into it.
@@ -113,7 +115,7 @@ Three layers — the first two run automatically:
    - `judge_reference_agreement` — agreement with the reviewer notes: the
      "Ref:" literature-review values of the UQ block, or the expected behavior
      of the adversarial questions. Scored only when the notes say what a
-     right answer is (35 of the 51 questions); notes that only describe a
+     right answer is (31 of the 48 questions); notes that only describe a
      question's purpose ("exercises the arXiv path") are not graded. The
      `Access:` tag is never sent.
 

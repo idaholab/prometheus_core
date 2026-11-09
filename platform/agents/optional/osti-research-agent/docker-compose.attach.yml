@@ -1,0 +1,36 @@
+# Dev-only: run this agent on its own, attached to an already-running platform
+# stack (started with `make up` elsewhere). Layer it on the agent's compose file:
+#
+#   env -i HOME="$HOME" PATH="$PATH" \
+#   PROMETHEUS_API_BASE_IMAGE_REPO=prometheus_api PROMETHEUS_API_BASE_IMAGE_HASH=local \
+#   docker compose -p osti-dev --env-file <platform>/.env \
+#     -f docker-compose.yml -f docker-compose.attach.yml up -d --build
+#
+# `env -i` matters: compose lets shell-exported variables win over --env-file,
+# so a stale AGENT_SECRET in the shell (e.g. VS Code's python.terminal.useEnvFile
+# loading another .env) makes the backend and this agent reject each other (401).
+#
+# Stop the platform's own osti-research-agent container first: both would claim
+# the `osti-research-agent` DNS name on the shared network.
+services:
+  osti-research-agent:
+    # backend/redis belong to the other compose project, so they cannot be
+    # depends_on targets here; the platform is assumed to be up already.
+    depends_on: !reset {}
+
+networks:
+  agent-network:
+    external: true
+    name: ${PLATFORM_NETWORK:-prometheus_platform_agent-network}
+
+# Reuse the platform's model caches instead of downloading into fresh volumes.
+volumes:
+  osti-model-cache:
+    external: true
+    name: ${PLATFORM_PROJECT:-prometheus_platform}_osti-model-cache
+  huggingface-cache:
+    external: true
+    name: ${PLATFORM_PROJECT:-prometheus_platform}_huggingface-cache
+  torch-cache:
+    external: true
+    name: ${PLATFORM_PROJECT:-prometheus_platform}_torch-cache

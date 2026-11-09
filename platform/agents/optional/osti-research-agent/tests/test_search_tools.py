@@ -256,3 +256,28 @@ def test_store_facts_via_knowledge_resolves_title_url_from_search_hits():
     assert call["source_url"] == "https://doi.org/10.1234/abc"
     assert call["origin"] == "openalex"
     assert call["question"] == "how does titanium creep?"
+
+
+# --- failed scholarly searches ----------------------------------------------
+
+
+def test_a_failed_scholarly_search_is_given_back_and_reported(monkeypatch):
+    from research_agent import scholarly as scholarly_module
+
+    calls = []
+
+    async def failing(query, k, *, mailto=None, arxiv=True):
+        calls.append(query)
+        raise scholarly_module.SearchFailed("OpenAlex: 429; arXiv: ReadTimeout")
+
+    monkeypatch.setattr(search_tools.scholarly, "search_scholarly", failing)
+    ctx = _ctx(max_scholarly_searches=1)
+    scholarly = _tool(build_search_tools(ctx), "search_scholarly")
+
+    first = json.loads(asyncio.run(scholarly.ainvoke({"query": "steel creep"})))
+    second = json.loads(asyncio.run(scholarly.ainvoke({"query": "steel creep"})))
+
+    assert calls == ["steel creep", "steel creep"]
+    assert first["search_failed"] is True and first["search_refunded"] is True
+    assert "OpenAlex: 429" in first["error"]
+    assert "skipped" not in second.get("error", "")

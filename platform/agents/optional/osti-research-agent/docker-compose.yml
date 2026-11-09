@@ -57,7 +57,7 @@ services:
       MAX_PDF_MB: ${MAX_PDF_MB:-50}
       # Comma-separated hosts PDFs may be downloaded from; empty = built-in list.
       DOWNLOAD_ALLOWED_DOMAINS: ${DOWNLOAD_ALLOWED_DOMAINS:-}
-      DOCLING_TIMEOUT_S: ${DOCLING_TIMEOUT_S:-240}
+      DOCLING_TIMEOUT_S: ${DOCLING_TIMEOUT_S:-480}
       DOCLING_IMAGES_SCALE: ${DOCLING_IMAGES_SCALE:-2.0}
       DOCLING_TABLE_MODE: ${DOCLING_TABLE_MODE:-accurate}
       PARSE_OCR: ${PARSE_OCR:-auto}

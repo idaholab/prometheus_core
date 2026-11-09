@@ -335,8 +335,17 @@ async def parse_paper_pipeline(
             )
             parsed.write_meta(out)
 
-    # 5. Cache the whole artifact directory (size-capped).
-    if caches is not None:
+    # 5. Cache the whole artifact directory (size-capped). Only a Docling
+    # parse is cached: the PyMuPDF fallback (Docling timed out, crashed or ran
+    # out of memory) has no tables or figures, and caching it would serve that
+    # text-only copy for 30 days even after the cause is fixed.
+    if caches is not None and parsed.method == "pymupdf":
+        logger.info(
+            "[parse] %s not cached: PyMuPDF fallback; Docling is tried again "
+            "next time",
+            source_id,
+        )
+    elif caches is not None:
         try:
             blob = _tar_dir(out)
             if len(blob) <= _MAX_CACHE_BYTES:

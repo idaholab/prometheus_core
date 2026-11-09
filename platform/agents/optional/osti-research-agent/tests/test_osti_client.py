@@ -105,3 +105,49 @@ def test_xml_response_is_one_short_warning_and_keeps_earlier_results(caplog):
     message = problems[0].getMessage()
     assert "not JSON" in message and "application/xml" in message
     assert len(message) < 400  # no 1000-character dump of the response
+
+
+# --- failure vs. zero hits --------------------------------------------------
+
+
+def test_first_page_failure_raises_when_asked():
+    import pytest
+
+    for side_effect, expected in (
+        ([_response(status_code=503)], "HTTP 503"),
+        ([_response(text="<xml/>")], "not JSON"),
+        (ConnectionError("refused"), "refused"),
+    ):
+        with patch.object(osti_client.requests, "get", side_effect=side_effect):
+            with pytest.raises(osti_client.OstiSearchFailed, match=expected):
+                osti_client.search_osti("creep", 5, raise_on_failure=True)
+
+
+def test_first_page_failure_still_returns_empty_by_default():
+    with patch.object(osti_client.requests, "get", return_value=_response(status_code=503)):
+        assert osti_client.search_osti("creep", 5) == []
+
+
+def test_a_later_page_failure_keeps_earlier_results_and_does_not_raise():
+    page_one = json.dumps([{"osti_id": "1", "title": "T", "description": "D"}])
+    with patch.object(
+        osti_client.requests,
+        "get",
+        side_effect=[_response(text=page_one), _response(status_code=503)],
+    ):
+        results = osti_client.search_osti("creep", 5, raise_on_failure=True)
+
+    assert [r["osti_id"] for r in results] == ["1"]
+
+
+def test_zero_hits_is_not_a_failure():
+    with patch.object(osti_client.requests, "get", return_value=_response(text="[]")):
+        assert osti_client.search_osti("creep", 5, raise_on_failure=True) == []
+
+
+def test_an_exception_with_no_message_is_named_by_its_type():
+    import pytest
+
+    with patch.object(osti_client.requests, "get", side_effect=TimeoutError()):
+        with pytest.raises(osti_client.OstiSearchFailed, match="TimeoutError"):
+            osti_client.search_osti("creep", 5, raise_on_failure=True)

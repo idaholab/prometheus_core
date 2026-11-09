@@ -83,5 +83,7 @@ def render_orchestrator_prompt(config: AgentConfig) -> str:
         max_osti_searches=config.max_osti_searches,
         max_scholarly_searches=config.max_scholarly_searches,
         budget_min=budget_min,
-        parse_min="1-3",
+        # Measured: about 1.5 min for a 20-page paper, 3-4 min for 75 pages;
+        # a longer one can take up to the Docling timeout.
+        parse_min="1-5",
     )

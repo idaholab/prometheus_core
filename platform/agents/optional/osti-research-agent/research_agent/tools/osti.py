@@ -35,7 +35,7 @@ from research_agent import download_policy, osti_client, scholarly
 from research_agent.parsing import pipeline as parse_pipeline
 from research_agent.parsing.artifacts import ParsedPaper, _safe_source_id
 from research_agent.tools import progress
-from research_agent.tools.context import RunContext
+from research_agent.tools.context import RunContext, search_failed
 
 logger = logging.getLogger(__name__)
 
@@ -179,11 +179,15 @@ def build_osti_tools(ctx: RunContext) -> List[BaseTool]:
             )
 
         progress.emit(f"Searching OSTI for: {query}")
-        hits = await asyncio.to_thread(
-            osti_client.search_osti,
-            query,
-            min(max_results, _MAX_OSTI_RESULTS),
-        )
+        try:
+            hits = await asyncio.to_thread(
+                osti_client.search_osti,
+                query,
+                min(max_results, _MAX_OSTI_RESULTS),
+                raise_on_failure=True,
+            )
+        except osti_client.OstiSearchFailed as e:
+            return json.dumps(search_failed(ctx, "OSTI", query, str(e)))
         out = []
         for h in hits:
             osti_id = str(h.get("osti_id", ""))
