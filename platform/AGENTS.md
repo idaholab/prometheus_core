@@ -146,7 +146,8 @@ Boris Cherny (creator of Claude Code) keeps his team's file around 100 lines. Un
 ### Commands
 - Run locally: `make up` (detached, waits until healthy) or `make up-fg`
 - Test backend: `cd backend && uv run pytest`
-- Test backend single file: `cd backend && uv run pytest tests/test_api_surface.py`
+- Test backend single file: `cd backend && uv run pytest tests/test_health.py`
+- Regenerate the backend's OpenAPI document after an API change: `cd backend && uv run python scripts/export_openapi.py`
 - Lint and type-check backend: `cd backend && uv run ruff check && uv run ruff format --check && uv run mypy app/`
 - Test an agent: `cd agents/<name> && uv run pytest`
 - Lint and type-check frontend: `cd frontend && make check`

@@ -45,51 +45,27 @@ itself from its lifespan, and no longer does (see *Multi-worker* below). Skippin
 gives you a backend that starts and then fails on the first admin-plane query.
 `uv run pytest` needs no database — the suite runs against SQLite and `fakeredis`.
 
-### API surface snapshot
-
-`tests/snapshots/api_surface.json` is a written record of the backend's HTTP API:
-every URL and method, the parameters it reads, the status it returns on success, and
-the shape of its request and response bodies. It exists so that an API change can't
-slip through unnoticed. Renaming a response field from `title` to `name` passes every
-unit test while the frontend, which still reads `title`, breaks.
-
-**How it works.** `tests/test_api_surface.py` builds the same record from the running
-app and fails if it differs from the file, printing the diff. Adding, removing or
-changing an endpoint therefore fails the test until the file is updated. The record
-keeps only what a client can observe and drops documentation (summaries, descriptions,
-examples, tags, error responses), so editing a docstring never trips it.
-`tests/api_surface.py` defines exactly what is kept.
-
-**When it fails:**
-
-- If you didn't mean to change the API, the diff shows what moved. Fix the code.
-- If you did, regenerate the file and commit it alongside the change:
-
-  ```bash
-  uv run python -m tests.api_surface
-  ```
-
-  The JSON diff then shows up in the PR, so reviewers see exactly which endpoints
-  changed shape without digging through the code. A PR that leaves the file untouched
-  hasn't changed the API.
-
-Nobody needs to read the file itself; it is long because it lists every endpoint in
-full. Only its diff matters.
-
 ### OpenAPI document
 
-`openapi/openapi.json` is the OpenAPI document the backend serves at `/openapi.json`,
-committed so CI can lint it and so a PR shows how it changes the published API.
-Unlike the surface snapshot it includes the documentation, so editing a summary,
-description or example changes it too. Regenerate it after changing a route, a model
-or the API's documentation, and commit the diff:
+`openapi/openapi.json` is the OpenAPI document the backend serves at `/openapi.json`:
+every URL and method, the parameters it reads, the statuses it returns, the shape of
+its request and response bodies, and their documentation. It's committed so that an
+API change can't slip through unnoticed. Renaming a response field from `title` to
+`name` passes every unit test while the frontend, which still reads `title`, breaks.
+
+Regenerate it after changing a route, a model or the API's documentation, and commit
+the diff alongside the change:
 
 ```bash
 uv run python scripts/export_openapi.py
 ```
 
-If you change the API's behavior, regenerate the surface snapshot too. On a merge
-conflict in either file, regenerate it rather than resolving it by hand.
+The JSON diff then shows up in the PR, so reviewers see exactly which endpoints
+changed without digging through the code. Nobody needs to read the file itself; it's
+long because it lists every endpoint in full. Only its diff matters. Because it
+includes the documentation, editing a summary, description or example changes it
+too, so check whether a diff changes a field, a parameter or a status, or only its
+wording. On a merge conflict, regenerate it rather than resolving it by hand.
 
 CI's `platform: backend openapi` job regenerates the document and fails if that
 changes the committed file, printing the diff. It then checks that the document is
