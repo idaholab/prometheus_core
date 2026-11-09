@@ -48,6 +48,8 @@ dev = [
     # revocation (tests/conftest.py's `fake_redis`). Implements everything those use,
     # pub/sub and PUBSUB NUMSUB included, so none of it needs a live container.
     "fakeredis>=2.40.0",
+    # Validates the generated OpenAPI document (tests/test_openapi_spec.py)
+    "openapi-spec-validator>=0.9.0",
 ]
 
 [tool.uv.sources]
