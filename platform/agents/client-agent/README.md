@@ -190,6 +190,34 @@ Major functions:
 `invoke_skill()` is intentionally generic. Specialist-specific behavior should be
 expressed in agent-card metadata, schemas, workflow templates, or downstream agents.
 
+## Call Middleware: `orchestrator/hooks.py`
+
+Generic middleware around every specialist dispatch the orchestrator makes —
+one protocol covering the four interception points of a call:
+
+- `on_request(context, params) -> params` — orchestrator entering the agent (normalized params)
+- `on_event(context, message) -> message` — agent leaving progress to the orchestrator (in-flight stream)
+- `on_result(context, result) -> result` — agent returning to the orchestrator (parsed payload)
+- `on_error(context, error)` — dispatch raised instead of returning
+
+`AgentCallContext` (conversation, skill, agent, task-graph node) identifies the
+dispatch. Contract:
+
+- **Hooks never own the `_*` bookkeeping keys.** `strip_reserved`/`apply_reserved`
+  hide the framework's plumbing (`conversation_id`, task-graph resume ids, the
+  status/background/artifact callback handles) from hooks and re-apply it after
+  them — carried values win, so a hook can neither drop nor forge them.
+- **Hook failures degrade, never abort.** Every hook call is wrapped; a raising
+  hook is logged and the value passes through unchanged.
+- **`on_event` is sync by decision.** Progress events fire inside the
+  stream-consume loop, latency-sensitive and high-volume; an awaitable would
+  either backpressure the stream or need a side queue that does not exist.
+  `on_request`/`on_result`/`on_error` are async.
+
+`NoopCallHook` (the default) logs and changes nothing — the reference
+implementation real middleware extends. Install with
+`hooks.set_call_hook(hook)`; `hooks.set_call_hook(None)` restores the default.
+
 ## Slash Commands: `orchestrator/debug_commands.py`
 
 Implements deterministic debug commands that bypass the LLM.

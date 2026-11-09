@@ -22,7 +22,7 @@ from param_schema import (
     normalize_params_for_input_schema,
 )
 
-from . import runtime, task_tracking
+from . import hooks, runtime, task_tracking
 
 # The "'<skill>' failed: ..." status line is shown in the browser, so it carries a
 # short, single-line summary of the error. The full error stays in the tool result
@@ -105,6 +105,16 @@ async def _invoke_skill_impl(
     required_params = extract_required_param_paths(capability.input_schema) if capability else []
     material_ids = params.get("material_ids")
 
+    # Dispatch middleware context: one per dispatch attempt, resolved agent
+    # name included so hooks can attribute traffic without re-fetching the card.
+    agent_name = getattr(capability, "agent_name", None) or skill_id
+    call_context = hooks.AgentCallContext(
+        conversation_id=conversation_id,
+        skill_id=skill_id,
+        agent_name=str(agent_name),
+        node_id=tracker.node_id,
+    )
+
     async def invoke_once(single_params: Dict[str, Any]) -> Dict[str, Any]:
         input_schema = capability.input_schema if capability else None
         invoke_params = normalize_params_for_input_schema(dict(single_params), input_schema=input_schema)
@@ -114,7 +124,10 @@ async def _invoke_skill_impl(
         if capability and getattr(capability, "supports_streaming", False):
 
             async def _status_callback(message: str) -> None:
-                text = str(message or "").strip()
+                # Middleware on_event is sync by decision: progress events are
+                # latency-sensitive and fire inside the stream-consume loop, so
+                # the rewrite happens inline and cannot backpressure the stream.
+                text = hooks.run_on_event(call_context, str(message or "").strip())
                 if text:
                     tracker.progress(text)
                     runtime.store_status_update(conversation_id, f"[{skill_id}] {text}")
@@ -139,6 +152,9 @@ async def _invoke_skill_impl(
                 "error": f"Missing required parameters for '{skill_id}': {missing}",
                 "missing_required_params": missing,
             }
+        # Middleware on_request: normalized params entering the agent, with
+        # the framework's reserved ``_*`` keys stripped and re-applied.
+        invoke_params = await hooks.run_on_request(call_context, invoke_params)
         try:
             raw_result = await tool.ainvoke(invoke_params)
             if isinstance(raw_result, str):
@@ -149,11 +165,14 @@ async def _invoke_skill_impl(
             else:
                 result_data = raw_result
             if isinstance(result_data, dict) and result_data.get("status") == "input_required":
-                return {
-                    "input_required": result_data.get("input_required", {}),
-                    "_a2a_context_id": result_data.get("_a2a_context_id"),
-                    "_a2a_task_id": result_data.get("_a2a_task_id"),
-                }
+                return await hooks.run_on_result(
+                    call_context,
+                    {
+                        "input_required": result_data.get("input_required", {}),
+                        "_a2a_context_id": result_data.get("_a2a_context_id"),
+                        "_a2a_task_id": result_data.get("_a2a_task_id"),
+                    },
+                )
             if isinstance(result_data, dict) and result_data.get("error"):
                 missing = [param for param in required_params if not has_param_path(invoke_params, param)]
                 payload = {"error": str(result_data.get("error"))}
@@ -164,11 +183,12 @@ async def _invoke_skill_impl(
                     # comes back as an error *result* (call_agent catches it), and
                     # without this the status stream goes silent after "Invoking".
                     runtime.store_status_update(conversation_id, _failed_status(skill_id, payload["error"]))
-                return payload
+                return await hooks.run_on_result(call_context, payload)
             if emit_status:
                 runtime.store_status_update(conversation_id, f"'{skill_id}' completed.")
-            return {"result": result_data}
+            return await hooks.run_on_result(call_context, {"result": result_data})
         except Exception as e:
+            await hooks.run_on_error(call_context, e)
             if emit_status:
                 runtime.store_status_update(conversation_id, _failed_status(skill_id, e))
             return {"error": str(e)}
