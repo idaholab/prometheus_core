@@ -85,6 +85,19 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
+  # Redocly, which lints the backend's OpenAPI document. It's a CI tool with no
+  # effect on the app, so majors update here too and CI shows what they change
+  - package-ecosystem: npm
+    directory: /platform/backend/openapi
+    schedule:
+      interval: weekly
+    target-branch: devel
+    cooldown:
+      default-days: 7
+    groups:
+      openapi:
+        patterns: ["*"]
+
   # Base images pinned by tag and digest. The agent Dockerfiles build FROM the
   # prometheus_api base image through build args, which Dependabot can't
   # resolve; that hash is bumped by hand in platform/Makefile. Majors are

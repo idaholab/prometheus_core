@@ -186,6 +186,12 @@ regenerate the snapshot with `uv run python -m tests.api_surface` and explain th
 difference in the PR. The frontend mirrors the wire contract in TypeScript, so
 update both together.
 
+`platform/backend/openapi/openapi.json` is the backend's committed OpenAPI
+document, documentation included. After changing a route, a model or the API's
+documentation, regenerate it with `uv run python scripts/export_openapi.py` in
+`platform/backend` and commit the diff. CI's `platform: backend openapi` job fails
+if it's out of date. See "OpenAPI document" in `platform/backend/README.md`.
+
 ### SDK (`prometheus_api`)
 
 Agents outside this repository depend on the SDK, so:
