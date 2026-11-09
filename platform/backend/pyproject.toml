@@ -36,7 +36,7 @@ dev = [
     "pytest-asyncio>=1.4.1",
     "pytest-cov>=4.0.0",
     "ruff>=0.17.2",
-    "types-pyyaml>=6.0.12.20260906",
+    "types-pyyaml>=6.0.12.20261030",
     # Local dev/tests import prometheus_api.contract; in Docker the package is
     # installed from the repo's sdk/ by the Dockerfile (--no-dev skips this entry
     # at image build time).
