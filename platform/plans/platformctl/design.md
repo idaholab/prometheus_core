@@ -950,9 +950,11 @@ the docs stop teaching them. The user guide above is updated in every step.
   rebase over other slide work only needs `make build` again.
 
 - Every step file has a **Docs and slides** section listing what it changes.
-- Hackathon decks are edited in `hackathon/slides/slides/*.md`, then rebuilt
-  with `make build` in `hackathon/slides`, and the regenerated HTML is
-  committed (CI's slides job fails otherwise). Where a command gets simpler,
+- Hackathon decks are edited in `hackathon/slides/slides/*.md` (two-day) or
+  `hackathon/slides/one-day/slides/*.md`, then rebuilt with `make build` in
+  `hackathon/slides`. The deck HTML is generated and not committed; the
+  committed `index.html` files are rewritten by the build, so CI's slides job
+  fails if one is stale. Where a command gets simpler,
   the slide gets simpler too (e.g. no "restart your agent" callout once
   your agents restart themselves).
 - The hackathon knowledge base (`hackathon/.claude/skills/`) is updated in
