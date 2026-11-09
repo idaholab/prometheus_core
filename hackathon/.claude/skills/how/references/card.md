@@ -1,6 +1,6 @@
 # The agent card
 
-Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
+Facts as of `prometheus_core` `devel` 2026-10-31, after #310 and #322 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 Short paths: `base.py` and `registry.py` are in `prometheus_api/prometheus_api/agent/`; `orchestrator/...`,
 `capability_cache.py`, `tool_discovery.py`, `artifact_handling.py`, and `param_schema.py` are in
@@ -30,9 +30,10 @@ Sources: `capability_cache.py:250-271`; deck 04, A10-A11. Never put a `url` in t
 ## Naming rules
 
 1. **The route key** is the card `name` in lowercase, each space changed to a hyphen: "Neutron Table Plot
-   Agent" gives `neutron-table-plot-agent` (`registry.py:51-53`). The scaffolder appends " Agent".
-2. **The route key is unique.** At registration the agent deletes an entry with the same key
-   (`registry.py:123-130`). Two teams with the same name delete each other.
+   Agent" gives `neutron-table-plot-agent` (`AgentRegistryClient.agent_name`). The scaffolder appends " Agent".
+2. **The route key is unique.** A registration POST replaces the entry of the same name
+   (`AgentRegistryClient.register_once_async`), so a second agent with the same route key replaces the
+   first. Two teams with the same name replace each other.
 3. **The skill id is the tool name.** Use `[a-zA-Z0-9_-]`, at most 64 characters (deck 04, A4;
    `orchestrator/agent_loop.py:165-167`).
 4. **The skill id is unique on the platform.** A call routes by the raw id to the first agent that has it

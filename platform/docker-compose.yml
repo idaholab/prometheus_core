@@ -9,6 +9,8 @@ x-common-env: &common-env
   REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
   # The SDK sends LITELLM_MASTER_KEY as its registry token; the registry checks AGENT_SECRET.
   LITELLM_MASTER_KEY: ${AGENT_SECRET}
+  # Seconds between an agent's checks that the registry still lists it; empty means 5, 0 off.
+  REGISTRY_CHECK_INTERVAL_SECONDS: ${REGISTRY_CHECK_INTERVAL_SECONDS:-}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
   REDIS_PASSWORD: ${REDIS_PASSWORD}
   DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}

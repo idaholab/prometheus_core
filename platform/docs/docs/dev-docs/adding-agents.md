@@ -207,6 +207,7 @@ my-analysis-agent:
 The `healthcheck` is required. `make test-static` fails without it in any per-agent `agents/<name>/docker-compose.yml`, and `make up` waits on it to know that the agent is serving. It probes the base class's unauthenticated health endpoint on the container port with Python, since the image has no `curl`. It does not show that registration with the backend succeeded; `make up` then runs `make check`, which does.
 
 Once the container starts, it registers with the backend (`POST /v1/agents`). The client-agent discovers it automatically through the backend's agent registry, calls it through the backend's A2A gateway (`/a2a/{agent_name}`), and loads the full agent card from the specialist's well-known endpoint when needed.
+While it runs, the agent checks every `REGISTRY_CHECK_INTERVAL_SECONDS` (default 5) that the registry still lists it and registers again if not, so to remove a running agent from the registry, stop the agent first; a `DELETE /v1/agents/{agent_name}` alone is undone within seconds.
 The agent selects semantic model flavors such as `medium` in code; its selected
 YAML maps those flavors to provider model IDs.
 
