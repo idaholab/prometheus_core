@@ -122,11 +122,14 @@ updates:
   # The platform's service images. Majors are ignored: a postgres major needs
   # a data migration, and litellm and valkey majors need checking by hand.
   # docker-compose.deeplynx.yml is skipped: its images are pinned to the ones a
-  # DeepLynx release uses, so they move by hand with that release
+  # DeepLynx release uses, so they move by hand with that release. The pattern
+  # has the leading **/ because Dependabot matches it against the path from the
+  # repository root, not (as its documentation says) from the directory above:
+  # a bare filename matches nothing. test_dependabot.py checks it matches
   - package-ecosystem: docker-compose
     directory: /platform
     exclude-paths:
-      - docker-compose.deeplynx.yml
+      - "**/docker-compose.deeplynx.yml"
     schedule:
       interval: weekly
     target-branch: devel
