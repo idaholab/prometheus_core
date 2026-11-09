@@ -434,3 +434,21 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     # quote + newline stripped from the ascii name (.json appended for the inline body)
     assert 'filename="evilname.json"' in cd
     assert "filename*=UTF-8''" in cd  # RFC 5987 form carries the exact name
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"display": "panel"}, "panel"),
+        ({"display": "PANEL "}, "panel"),
+        ({"display": "inline"}, "inline"),
+        ({"display": "sidebar"}, "inline"),  # unknown values fall back
+        ({}, "inline"),
+        (None, "inline"),
+    ],
+)
+def test_artifact_display_comes_from_producer_metadata(metadata, expected) -> None:
+    meta = to_artifact_meta({"artifact_id": "a1", "name": "current.i", "mime_type": "text/plain", "metadata": metadata})
+    assert meta is not None
+    assert meta.display == expected
+    assert meta.render_hint == "code"  # display never changes how it renders

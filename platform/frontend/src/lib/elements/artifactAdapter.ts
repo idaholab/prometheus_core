@@ -207,3 +207,13 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
 export function artifactsToElements(artifacts: ArtifactMeta[]): AnyElement[] {
   return artifacts.map(artifactToElement);
 }
+
+/** True when the producer asked for the artifact to appear only in the side panel. */
+export function isPanelOnly(artifact: Pick<ArtifactMeta, "display">): boolean {
+  return artifact.display === "panel";
+}
+
+/** The artifacts a message renders in its body: everything not panel-only. */
+export function inlineArtifacts(artifacts: ArtifactMeta[]): ArtifactMeta[] {
+  return artifacts.filter((artifact) => !isPanelOnly(artifact));
+}
