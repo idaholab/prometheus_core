@@ -266,6 +266,7 @@ ENV_GOALS = {
     "deeplynx-setup",
     "build",
     "build-plain",
+    "up-e2e",
 }
 
 
