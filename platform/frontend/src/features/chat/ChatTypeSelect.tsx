@@ -15,7 +15,7 @@ import {
   CHAT_TYPES,
   CHAT_TYPE_DESCRIPTIONS,
   ChatType,
-} from "@/lib/useChatType";
+} from "./useChatType";
 
 export function ChatTypeSelect({
   value,

@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useRef, useState } from "react";
-import { Chat } from "../Chat";
+import { Chat } from "@/features/chat/Chat";
 import { StatusPanel } from "./StatusPanel";
 
 /**

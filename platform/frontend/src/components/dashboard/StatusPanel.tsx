@@ -15,7 +15,7 @@ import { Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
-import { useChatState } from "@/lib/store/chat";
+import { useChatState } from "@/features/chat/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
 
 type StatusTab = "jobs" | "artifacts";

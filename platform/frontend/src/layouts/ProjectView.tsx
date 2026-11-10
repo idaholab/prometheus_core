@@ -11,11 +11,11 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { chatStore } from "@/lib/store/chat";
+import { chatStore } from "@/features/chat/store/chat";
 import { useCurrentUser } from "@/lib/store/session";
-import { chatProfileName, useChatType } from "@/lib/useChatType";
+import { chatProfileName, useChatType } from "@/features/chat/useChatType";
 import { AdminSection } from "../components/admin/AdminSection";
-import { ChatHistory } from "../components/chat/ChatHistory";
+import { ChatHistory } from "@/features/chat/ChatHistory";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { Header } from "../components/Header";
 import { LeftPanel } from "../components/LeftPanel";

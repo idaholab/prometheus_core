@@ -13,11 +13,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Square, ChevronDown, ChevronRight, Wrench, Paperclip, X, FileText, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api/client";
-import { chatStore, useChatState } from "@/lib/store/chat";
-import type { ChatItem, NeedsInfoItem, PlanItem, ToolItem } from "@/lib/store/chat";
+import { chatStore, useChatState } from "./store/chat";
+import type { ChatItem, NeedsInfoItem, PlanItem, ToolItem } from "./store/chat";
 import type { UploadDescriptor } from "@/lib/api/types";
-import { FollowupForm } from "./chat/FollowupForm";
-import { WelcomeScreen } from "./chat/WelcomeScreen";
+import { FollowupForm } from "./FollowupForm";
+import { WelcomeScreen } from "./WelcomeScreen";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Markdown } from "@/components/ui/Markdown";

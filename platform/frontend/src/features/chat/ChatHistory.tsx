@@ -36,8 +36,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { api } from "@/lib/api/client";
-import { chatStore, useChatState } from "@/lib/store/chat";
-import { withPendingRow } from "@/lib/store/pendingHistoryRow";
+import { chatStore, useChatState } from "./store/chat";
+import { withPendingRow } from "./store/pendingHistoryRow";
 import type { ConversationSummary } from "@/lib/api/types";
 import { ChatHistoryItem } from "./ChatHistoryItem";
 

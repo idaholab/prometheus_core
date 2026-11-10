@@ -15,9 +15,9 @@ import { ProjectView } from "@/layouts/ProjectView";
 import { Login } from "@/components/Login";
 import { SetupWizard } from "@/components/SetupWizard";
 import { api, ApiError } from "@/lib/api/client";
-import { chatStore, useAuthLost } from "@/lib/store/chat";
+import { chatStore, useAuthLost } from "./features/chat/store/chat";
 import { setCurrentUser } from "@/lib/store/session";
-import { chatProfileName, useChatType } from "@/lib/useChatType";
+import { chatProfileName, useChatType } from "./features/chat/useChatType";
 
 /**
  * Boot sequence, in order: "loading" while the two probes below settle,

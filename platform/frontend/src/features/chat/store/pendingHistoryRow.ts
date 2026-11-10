@@ -24,7 +24,7 @@
  * and can only run inside Vite).
  */
 
-import type { ConversationSummary } from "../api/types.ts";
+import type { ConversationSummary } from "@/lib/api/types.ts";
 
 /** A Chat History row, as `GET /api/conversations/recent` returns it. */
 export type HistoryRowLike = ConversationSummary;

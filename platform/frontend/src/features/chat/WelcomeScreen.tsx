@@ -29,9 +29,9 @@ import {
   workflowSuggestions as fallbackSuggestions,
 } from "@/config";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { useChatType } from "@/lib/useChatType";
-import { useChatState } from "@/lib/store/chat";
-import { SuggestionCard } from "../dashboard/SuggestionCard";
+import { useChatType } from "./useChatType";
+import { useChatState } from "./store/chat";
+import { SuggestionCard } from "./SuggestionCard";
 
 // `config.workflow_suggestions` is a plain string[], so icons are decorative
 // and cycled positionally rather than carried by the data.
