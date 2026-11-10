@@ -5,6 +5,20 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.15.1
+
+### Resumed Tasks Return Their Resumed Result
+
+When a user answered an `INPUT_REQUIRED` form, the executor re-sent the stored task, still in
+`INPUT_REQUIRED`, as the first event of the resumed request. A blocking `SendMessage` caller
+returned on that event, so it got the old form back instead of the result of the resumed
+work. A resumed request now continues the stored task with status updates only; the initial
+`Task` is sent only for a new task (REQ-009-24).
+
+No migration steps. Agents that pause for input now have their resumed result reach the
+caller. Agents that override `execute(...)` and enqueue `context.current_task` themselves
+should stop doing so on resume.
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

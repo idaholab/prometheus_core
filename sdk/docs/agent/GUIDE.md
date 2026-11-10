@@ -11,7 +11,8 @@
 ```
 HTTP POST /  (A2A SendMessage or SendStreamingMessage)
   └─ PrometheusAgentExecutor.execute()
-      ├─ emits the initial Task required by A2A v1
+      ├─ emits the initial Task required by A2A v1 for a new task
+      │  (a resumed task continues the persisted Task instead)
       ├─ emits "working" status automatically
       ├─ extracts params from message JSON or text
       ├─ injects skill_id from message.metadata.skillId
@@ -23,9 +24,11 @@ HTTP POST /  (A2A SendMessage or SendStreamingMessage)
                        with your dict as the message payload
 ```
 
-The base class emits the initial `Task`, the first `working` status, and the
-terminal `completed` status automatically. You never call those yourself unless
-you have a specific reason to deviate.
+For a new request, the base class emits the initial `Task`. For a resumed
+`INPUT_REQUIRED` request, it continues the persisted task without emitting that
+snapshot again. The base class emits the first `working` status and terminal
+`completed` status automatically in both cases. You never call those yourself
+unless you have a specific reason to deviate.
 
 ---
 
