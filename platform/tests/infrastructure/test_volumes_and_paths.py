@@ -198,6 +198,22 @@ def test_frontend_prod_template_readable_by_nginx_user(project_root):
     assert "--chmod" not in copies[0]
 
 
+def test_frontend_node_modules_writable_without_recursive_chmod(project_root):
+    """Only the node_modules directory is made world-writable, not the tree under it.
+
+    frontend-dev runs as the developer's UID, and Vite creates node_modules/.vite in
+    that directory; it writes nothing inside the packages (checked by snapshotting
+    every path before and after a run). So the directory needs `chmod a+rwx`, and a
+    recursive chmod would only make 29k package files world-writable.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    chmods = [line.strip() for line in dockerfile.splitlines() if re.search(r"\bchmod\b", line)]
+    node_modules = [line for line in chmods if "/app/node_modules" in line]
+    assert len(node_modules) == 1, "expected one chmod of /app/node_modules"
+    assert "a+rwx /app/node_modules" in node_modules[0]
+    assert not re.search(r"\bchmod\s+-\w*R", node_modules[0]), "chmod of node_modules must not be recursive"
+
+
 def test_frontend_dev_runs_as_host_user(compose_data, project_root):
     """frontend-dev runs as the developer's UID, which the Makefile exports.
 

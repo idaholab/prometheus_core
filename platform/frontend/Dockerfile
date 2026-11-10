@@ -22,13 +22,15 @@ COPY frontend/package.json frontend/package-lock.json ./
 # Installed as root (the npm cache mount is root's), then handed to the image's
 # `node` user. The dev server writes its dependency cache to node_modules/.vite and
 # compose may run it as the developer's own UID instead (see frontend-dev), so
-# node_modules is also writable by any UID. In the same RUN so node_modules isn't
+# node_modules itself is writable by any UID. Only that directory: the server
+# creates .vite in it and writes nothing inside the packages, so there is no -R
+# and the packages keep their normal modes. In the same RUN so node_modules isn't
 # stored twice.
 RUN --mount=type=cache,id=prometheus-npm-cache,target=/root/.npm,sharing=locked \
     { npm ci --no-audit --no-fund --include=optional || \
       npm install --no-audit --no-fund --include=optional; } \
     && chown -R node:node /app \
-    && chmod -R a+rwX /app/node_modules
+    && chmod a+rwx /app/node_modules
 
 # ---- dev ----
 FROM deps AS dev
