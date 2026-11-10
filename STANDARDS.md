@@ -164,22 +164,8 @@ that one change re-runs as little as possible:
 
 ## Testing
 
-The PR-level rules (patch coverage, coverage floors, regression tests) are in
-[DEVELOPMENT.md](DEVELOPMENT.md#tests-and-checks). For writing the tests
-themselves:
-
-- **Use pytest** for Python and `node --test` for frontend unit tests (files
-  named `*.test.ts`).
-- **Test at the narrowest level that proves the behavior:** unit tests for
-  logic, route or app tests for HTTP and A2A behavior, integration tests (marked
-  `integration`) only for what needs a real external service.
-- **Keep unit tests hermetic.** No network, no real credentials, and no reliance
-  on test order or the wall clock. Unit tests must pass without a `.env` file.
-- **Name tests for the behavior** they check
-  (`test_expired_session_returns_401`), not the function they call.
-- The SDK traces tests to its specifications; follow
-  [sdk/docs/SDD_TESTING_STANDARD.md](sdk/docs/SDD_TESTING_STANDARD.md) and
-  [sdk/docs/SDD_SPEC_AUTHORING.md](sdk/docs/SDD_SPEC_AUTHORING.md) there.
+[TESTING.md](TESTING.md) has the rules: which kind of test a change needs, how
+much coverage is enough, and how every test is written.
 
 ## Security
 
