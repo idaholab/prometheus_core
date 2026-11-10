@@ -67,13 +67,12 @@ class TimeseriesResource(BaseResource):
                 ``DELETE``, ``DROP``, ``ALTER``, ``ATTACH``, ``CREATE`` of tables, views or
                 secrets, file-reading functions, or a ``;``, as a case-insensitive substring
                 match, so a column name such as ``updated`` can be rejected too.
-                Quote column names that contain dots, for example ``"a.b"``.
             limit: Maximum rows, 1 to 100000
             row_stride: Keep every Nth row (1 keeps all)
             start_row: First row to include; rows are numbered from 1 in file order
             stop_row: Last row to include
-            columns: Column names to keep. Names with dots or other symbols are rejected by
-                the server here; select them with ``sql_query`` instead.
+            columns: Column names to keep. The server rejects names with dots or other
+                symbols here.
 
         Returns:
             The column names and rows. A window past the end of the data is an empty result,

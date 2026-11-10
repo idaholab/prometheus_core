@@ -327,8 +327,7 @@ print(result.data[:3])  # rows as lists, in column order
 - Without `sql_query` you get the view's rows limited by `limit` (the server's default is 20).
 - A missing value can arrive as `{}`, and one column can mix numbers and `{}`; cells are not
   converted.
-- Quote column names that contain dots (`"a.b"`) inside `sql_query`. The `columns=` option
-  rejects them.
+- The `columns=` option rejects column names that contain dots or other symbols.
 - The server rejects statements containing words such as `UPDATE`, `COPY` or `ATTACH` anywhere,
   including inside a column name.
 - Each call can take many seconds on a large file; raise `ConnectionConfig.timeout` if needed.
