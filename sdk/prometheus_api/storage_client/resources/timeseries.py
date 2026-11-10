@@ -78,7 +78,9 @@ class TimeseriesResource(BaseResource):
         view, limited to ``limit`` rows (the server's default is 20).
 
         Args:
-            record_id: ID of the record that points at the tabular file or folder of parts
+            record_id: ID of the record that points at the tabular file or folder of parts. It is
+                converted with ``int()``, so a value that is not a whole number raises
+                ``ValueError`` before any request is sent.
             view_name: Name of the view the query refers to (letters, digits, underscore)
             sql_query: A single SQL ``SELECT`` over ``view_name``. The server rejects
                 statements containing ``COPY``, ``EXPORT``, ``IMPORT``, ``INSERT``, ``UPDATE``,
@@ -116,7 +118,7 @@ class TimeseriesResource(BaseResource):
         """
         response = self._client._request(
             "POST",
-            f"{self._base_path}/records/{record_id}/olap/query",
+            f"{self._base_path}/records/{int(record_id)}/olap/query",
             params={"viewName": view_name},
             json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )

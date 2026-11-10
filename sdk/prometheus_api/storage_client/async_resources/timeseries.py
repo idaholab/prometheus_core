@@ -40,7 +40,7 @@ class AsyncTimeseriesResource(AsyncBaseResource):
         """
         response = await self._client._request(
             "POST",
-            f"{self._base_path}/records/{record_id}/olap/query",
+            f"{self._base_path}/records/{int(record_id)}/olap/query",
             params={"viewName": view_name},
             json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )

@@ -158,6 +158,28 @@ async def test_query_rejects_a_response_that_is_not_a_json_object(payload):
         await AsyncTimeseriesResource(AsyncClient(payload)).query(1)
 
 
+async def test_query_accepts_a_numeric_string_record_id():
+    """Covers REQ-003-12: the record ID goes into the path as an integer."""
+    sync_client, async_client, _, _ = await run_both(QUERY_RESPONSE, "123")
+
+    assert sync_client.calls == async_client.calls
+    assert sync_client.calls[0][1] == "/organizations/1/projects/2/records/123/olap/query"
+
+
+@pytest.mark.parametrize("record_id", ["1/../../x", "abc", "1?viewName=x", None])
+async def test_query_rejects_a_record_id_that_is_not_a_whole_number(record_id):
+    """Covers REQ-003-12: a bad ID cannot change the request path; nothing is sent."""
+    sync_client = SyncClient(QUERY_RESPONSE)
+    async_client = AsyncClient(QUERY_RESPONSE)
+
+    with pytest.raises((ValueError, TypeError)):
+        TimeseriesResource(sync_client).query(record_id)
+    with pytest.raises((ValueError, TypeError)):
+        await AsyncTimeseriesResource(async_client).query(record_id)
+
+    assert sync_client.calls == [] and async_client.calls == []
+
+
 async def test_old_style_positional_query_is_rejected():
     """Covers REQ-003-12: the old ``query(data_source_id, sql_query)`` call fails loudly.
 
