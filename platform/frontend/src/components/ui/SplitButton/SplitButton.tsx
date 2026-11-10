@@ -12,7 +12,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { buttonClassName, type ButtonStyle } from "./buttonStyle";
+import { buttonClassName, type ButtonStyle } from "@/components/ui/Button";
 
 export interface SplitButtonOption {
   label: string;

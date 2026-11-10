@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Diamond } from "lucide-react";
-import { StatusPill } from "../ui/StatusPill";
+import { StatusPill } from "@/components/ui/StatusPill";
 import type { Checkpoint } from "./types";
 
 interface CheckpointCardProps {

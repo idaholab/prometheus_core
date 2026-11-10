@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { useId } from "react";
-import { Button } from "../ui/Button";
-import { SectionLabel } from "../ui/SectionLabel";
+import { Button } from "@/components/ui/Button";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
 
 export interface InspectorField {

@@ -11,9 +11,9 @@
 // SPDX-License-Identifier: MIT
 
 import { useId, useState } from "react";
-import { Button } from "../ui/Button";
-import { StatusPill } from "../ui/StatusPill";
-import { Tabs, type Tab } from "../ui/Tabs";
+import { Button } from "@/components/ui/Button";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { Tabs, type Tab } from "@/components/ui/Tabs";
 import { ArtifactPreview } from "./ArtifactPreview";
 import type { Checkpoint } from "./types";
 

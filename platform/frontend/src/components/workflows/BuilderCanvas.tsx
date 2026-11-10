@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Minus, Plus } from "lucide-react";
-import { Button } from "../ui/Button";
-import { ErrorToast } from "../ui/ErrorToast";
+import { Button } from "@/components/ui/Button";
+import { ErrorToast } from "@/components/ui/ErrorToast";
 import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
 
 interface BuilderCanvasProps {

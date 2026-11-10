@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Download, Grid3x3, Move, RotateCw, ZoomIn } from "lucide-react";
-import { Button } from "../ui/Button";
-import { SectionLabel } from "../ui/SectionLabel";
+import { Button } from "@/components/ui/Button";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { MetricCard } from "./MetricCard";
 import type { CheckpointArtifact } from "./types";
 

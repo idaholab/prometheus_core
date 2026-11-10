@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { SectionLabel } from "../ui/SectionLabel";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { WorkflowPlanner, type WorkflowPlan } from "./WorkflowPlanner";
 import { WorkflowTemplateCard, type WorkflowTemplate } from "./WorkflowTemplateCard";
 

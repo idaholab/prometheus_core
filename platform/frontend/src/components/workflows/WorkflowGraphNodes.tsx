@@ -12,7 +12,7 @@
 
 import type { ComponentProps } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { StatusPill } from "../ui/StatusPill";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
 
 export type WorkflowStepStatus = "done" | "queued" | "blocked";

@@ -12,8 +12,8 @@
 
 import { FileText } from "lucide-react";
 import type { ArtifactType } from "@/lib/store/dataManagement";
-import { DataTable, type DataTableColumn } from "../ui/DataTable";
-import { FilterChips } from "../ui/FilterChips";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { FilterChips } from "@/components/ui/FilterChips";
 
 /** One artifact row with its size already formatted for display. */
 export interface ArtifactRow {

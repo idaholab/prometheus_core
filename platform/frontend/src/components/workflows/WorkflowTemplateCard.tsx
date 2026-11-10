@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { Diamond, Zap } from "lucide-react";
-import { Button } from "../ui/Button";
-import { Tag } from "../ui/Tag";
+import { Button } from "@/components/ui/Button";
+import { Tag } from "@/components/ui/Tag";
 
 /** Shown as a neutral Tag: complexity is what a template is, not how it's doing. */
 export type WorkflowComplexity = "complex" | "moderate" | "simple";

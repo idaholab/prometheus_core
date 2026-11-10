@@ -10,8 +10,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { Button } from "../ui/Button";
-import { SectionLabel } from "../ui/SectionLabel";
+import { Button } from "@/components/ui/Button";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
 
 export interface WorkflowPlan {

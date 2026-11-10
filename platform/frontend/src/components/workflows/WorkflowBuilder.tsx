@@ -10,8 +10,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { Button } from "../ui/Button";
-import { SectionLabel } from "../ui/SectionLabel";
+import { Button } from "@/components/ui/Button";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BuilderCanvas } from "./BuilderCanvas";
 import { NodeInspector, type InspectedNode } from "./NodeInspector";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";

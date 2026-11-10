@@ -20,7 +20,7 @@ import { FollowupForm } from "./chat/FollowupForm";
 import { WelcomeScreen } from "./chat/WelcomeScreen";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { Markdown } from "./Markdown";
+import { Markdown } from "@/components/ui/Markdown";
 import { ElementList } from "./ElementRenderer";
 import { artifactsToElements } from "@/lib/elements/artifactAdapter";
 

@@ -10,8 +10,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { StatusPill, type StatusPillTone } from "../ui/StatusPill";
-import { Tag } from "../ui/Tag";
+import { StatusPill, type StatusPillTone } from "@/components/ui/StatusPill";
+import { Tag } from "@/components/ui/Tag";
 
 interface Props {
   /** Confluence connector_class, shown as the type tag. */

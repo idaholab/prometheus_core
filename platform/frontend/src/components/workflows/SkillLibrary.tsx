@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { GripVertical } from "lucide-react";
-import { SearchInput } from "../ui/SearchInput";
-import { SectionLabel } from "../ui/SectionLabel";
+import { SearchInput } from "@/components/ui/SearchInput";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
 
 export interface Skill {

@@ -14,8 +14,8 @@ import { formatBytes, storagePercent, type DataManagementState, type SourceStatu
 import { Database } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { Button } from "../ui/Button";
-import type { StatusPillTone } from "../ui/StatusPill";
+import { Button } from "@/components/ui/Button";
+import type { StatusPillTone } from "@/components/ui/StatusPill";
 import { SourceCard } from "./SourceCard";
 import { StoragePanel } from "./StoragePanel";
 

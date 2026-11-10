@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { SectionLabel } from "../ui/SectionLabel";
+import { SectionLabel } from "@/components/ui/SectionLabel";
 import { CheckpointCard } from "./CheckpointCard";
 import { CheckpointDetail } from "./CheckpointDetail";
 import { QueueSummary, type QueueCounter } from "./QueueSummary";
