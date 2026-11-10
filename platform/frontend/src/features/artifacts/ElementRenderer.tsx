@@ -21,7 +21,7 @@
  *
  * Also add to Chat.tsx imports:
  *   import { ElementList } from "./ElementRenderer";
- *   import type { AnyElement } from "../lib/elements/elements";
+ *   import type { AnyElement } from "./elements";
  *
  */
 
@@ -32,12 +32,12 @@ import {
   VIEWER_REGISTRY,
   type AnyElement,
   type ViewerProps,
-} from "../lib/elements/elements";
+} from "./elements";
 import {
   dedupeElements,
   elementKey,
-} from "../lib/elements/elementDeduplication";
-import { NoViewerFallback } from "../viewers/FileDownloadElement";
+} from "./elementDeduplication";
+import { NoViewerFallback } from "./viewers/FileDownloadElement";
 
 // ---------------------------------------------------------------------------
 // Error boundary

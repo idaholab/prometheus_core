@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 interface FollowUpSuggestionsProps {
   suggestions?: string[];

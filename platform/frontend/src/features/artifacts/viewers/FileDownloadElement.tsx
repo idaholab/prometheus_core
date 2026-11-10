@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { FileDown } from "lucide-react";
-import type { AnyElement, ViewerProps } from "../lib/elements/elements";
-import { artifactFilePresentation } from "../lib/elements/artifactPresentation";
+import type { AnyElement, ViewerProps } from "@/features/artifacts/elements";
+import { artifactFilePresentation } from "@/features/artifacts/artifactPresentation";
 
 /**
  * Shared artifact-label + download-button card. Two callers, one markup:

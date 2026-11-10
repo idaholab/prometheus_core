@@ -21,7 +21,7 @@
  */
 
 import { BookMarked, ExternalLink } from "lucide-react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 import type { Citation } from "@/lib/api/types";
 
 interface ReferenceProps {

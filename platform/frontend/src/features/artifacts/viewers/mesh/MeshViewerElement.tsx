@@ -37,7 +37,7 @@ import "./mesh.css";
 import MeshViewer, { MeshViewerHandles } from "./MeshViewer";
 import MeshViewerControls, { VariableOption } from "./MeshViewerControls";
 import type { ColorPreset, PickResult } from "./MeshViewerEngine";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 type MeshProps = {
   datasetId?: string;

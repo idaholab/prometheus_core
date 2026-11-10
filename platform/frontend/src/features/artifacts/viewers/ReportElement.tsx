@@ -24,7 +24,7 @@
 
 import { AlertCircle, FileDown, FileText } from "lucide-react";
 import { Markdown } from "@/components/ui/Markdown";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 import { useArtifactText } from "./useArtifactText";
 
 interface ReportProps {

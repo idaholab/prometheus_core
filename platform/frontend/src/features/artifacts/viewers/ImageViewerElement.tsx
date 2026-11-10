@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { FileDown } from "lucide-react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 function stringProp(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

@@ -22,7 +22,7 @@
  */
 
 import { FileDown } from "lucide-react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 export function PdfViewerElement({ element }: ViewerProps) {
   const url = element.url ?? null;

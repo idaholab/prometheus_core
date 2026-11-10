@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ViewerProps } from "../lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 // ---------------------------------------------------------------------------
 // Types

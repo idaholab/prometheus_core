@@ -12,8 +12,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, FileJson } from "lucide-react";
-import { toPrettyJson, tokenizeJsonLine, type JsonToken } from "../lib/viewers/jsonSyntax";
-import type { ViewerProps } from "../lib/elements/elements";
+import { toPrettyJson, tokenizeJsonLine, type JsonToken } from "./jsonSyntax";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 const TOKEN_CLASS: Record<JsonToken["type"], string> = {
   key: "text-primary",

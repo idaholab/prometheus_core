@@ -25,7 +25,7 @@
  */
 
 import { lazy, type ComponentType } from "react";
-import { normalizeMime } from "../mime";
+import { normalizeMime } from "@/lib/mime";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -145,8 +145,8 @@ export function classifyElement(el: AnyElement): ElementKind {
 // Both branches use import() (no static import), so prod DCEs the dev branch
 // and the IFC chunk split is preserved (verified in build).
 const IFCViewerElement = import.meta.env.DEV
-  ? (await import("../../viewers/ifc/IFCViewerElement")).default
-  : lazy(() => import("../../viewers/ifc/IFCViewerElement"));
+  ? (await import("./viewers/ifc/IFCViewerElement")).default
+  : lazy(() => import("./viewers/ifc/IFCViewerElement"));
 // @kitware/vtk.js is a comparably heavy dependency (bundle-only builds of vtk.js
 // itself run well over 1 MB) — same lazy-chunk / dev-HMR reasoning as IFC above.
 // vtk.js's own render-window lifecycle isn't WASM-worker-based like ThatOpen's,
@@ -161,26 +161,26 @@ const IFCViewerElement = import.meta.env.DEV
 // backend-side, at VTP conversion time (no per-cell block ID in the VTP
 // output). Both require a backend/pipeline change to fix, not a frontend one.
 const MeshViewerElement = import.meta.env.DEV
-  ? (await import("../../viewers/mesh/MeshViewerElement")).default
-  : lazy(() => import("../../viewers/mesh/MeshViewerElement"));
+  ? (await import("./viewers/mesh/MeshViewerElement")).default
+  : lazy(() => import("./viewers/mesh/MeshViewerElement"));
 // Lazy — the mermaid npm package plus its parser (~500KB+) shouldn't sit in
 // the main chunk when most sessions won't render a diagram. Unlike IFC/Mesh,
 // mermaid's render lifecycle is stateless per-call (no persistent WASM
 // worker, no long-lived render window), so re-suspending on HMR is harmless
 // here — no DEV/prod branch needed.
-const MermaidElement = lazy(() => import("../../viewers/MermaidElement"));
+const MermaidElement = lazy(() => import("./viewers/MermaidElement"));
 // Lazy so highlight.js and its grammars load only when a code artifact is shown.
-const CodeElement = lazy(() => import("../../viewers/CodeElement"));
-import { PdfViewerElement }                from "../../viewers/PdfViewerElement";
-import { FileDownloadElement }             from "../../viewers/FileDownloadElement";
-import { ImageViewerElement }              from "../../viewers/ImageViewerElement";
-import { JSONViewer }                      from "../../viewers/JSONViewer";
-import { FollowUpSuggestionsElement }      from "../../viewers/FollowUpSuggestionsElement";
-import { PlanViewerElement }               from "../../viewers/PlanViewerElement";
-import { ThermalAnalysisElement }          from "../../viewers/ThermalAnalysisElement";
-import { ReportElement }                   from "../../viewers/ReportElement";
-import { TableElement }                    from "../../viewers/TableElement";
-import { ReferenceElement }                from "../../viewers/ReferenceElement";
+const CodeElement = lazy(() => import("./viewers/CodeElement"));
+import { PdfViewerElement }                from "./viewers/PdfViewerElement";
+import { FileDownloadElement }             from "./viewers/FileDownloadElement";
+import { ImageViewerElement }              from "./viewers/ImageViewerElement";
+import { JSONViewer }                      from "./viewers/JSONViewer";
+import { FollowUpSuggestionsElement }      from "./viewers/FollowUpSuggestionsElement";
+import { PlanViewerElement }               from "./viewers/PlanViewerElement";
+import { ThermalAnalysisElement }          from "./viewers/ThermalAnalysisElement";
+import { ReportElement }                   from "./viewers/ReportElement";
+import { TableElement }                    from "./viewers/TableElement";
+import { ReferenceElement }                from "./viewers/ReferenceElement";
 
 export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null>> = {
   ifc:          IFCViewerElement,

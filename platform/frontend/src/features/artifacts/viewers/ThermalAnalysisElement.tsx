@@ -30,7 +30,7 @@
  * original plugin.
  */
 
-import type { ViewerProps } from "../lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 
 // ---------------------------------------------------------------------------
 // Formatting helpers

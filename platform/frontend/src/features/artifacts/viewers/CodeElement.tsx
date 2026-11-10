@@ -29,7 +29,7 @@
 
 import { useMemo } from "react";
 import { FileText } from "lucide-react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 import { highlightToHtml } from "@/lib/highlight";
 import { ArtifactTextCard } from "./ArtifactTextCard";
 import { useArtifactText } from "./useArtifactText";

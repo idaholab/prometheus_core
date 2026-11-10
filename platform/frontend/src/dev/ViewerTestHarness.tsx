@@ -28,8 +28,8 @@
  *   3. Remove the import and delete this file when done.
  */
 
-import { ElementList } from "../components/ElementRenderer";
-import type { AnyElement } from "../lib/elements/elements";
+import { ElementList } from "@/features/artifacts/ElementRenderer";
+import type { AnyElement } from "@/features/artifacts/elements";
 
 const FAKE_MERMAID_ELEMENT: AnyElement = {
   id: "test-mermaid-1",

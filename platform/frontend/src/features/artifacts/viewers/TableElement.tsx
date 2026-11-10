@@ -25,7 +25,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Table as TableIcon } from "lucide-react";
-import type { ViewerProps } from "@/lib/elements/elements";
+import type { ViewerProps } from "@/features/artifacts/elements";
 import { numericColumns, parseDelimited, sortRows } from "@/lib/table/csv";
 import { ArtifactTextCard } from "./ArtifactTextCard";
 import { useArtifactText } from "./useArtifactText";
