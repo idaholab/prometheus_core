@@ -22,13 +22,16 @@ after them.
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
 
 import runtime_stub  # noqa: F401  (installs prometheus_api.agent stubs)
 
-from orchestrator import hooks, runtime, skills
+from orchestrator import agent_loop, chat_flow, hooks, runtime, skills
+from orchestrator.models import ConversationRequest
+from prometheus_api.llm_client import ChatResponse, parse_finish_reason, parse_tool_calls
 
 CONV = "conv-hooks"
 
@@ -41,6 +44,7 @@ class _RecordingHook(hooks.NoopCallHook):
         self.seen_events = []
         self.seen_results = []
         self.seen_errors = []
+        self.seen_turns = []
         self.overrides = overrides
 
     async def on_request(self, context, params):
@@ -64,6 +68,9 @@ class _RecordingHook(hooks.NoopCallHook):
     async def on_error(self, context, error):
         self.seen_errors.append((context, error))
 
+    async def on_turn(self, context):
+        self.seen_turns.append(context)
+
 
 class _ExplodingHook(_RecordingHook):
     """Every hook raises; dispatches must still complete with original values."""
@@ -79,6 +86,9 @@ class _ExplodingHook(_RecordingHook):
 
     async def on_error(self, context, error):
         raise RuntimeError("on_error boom")
+
+    async def on_turn(self, context):
+        raise RuntimeError("on_turn boom")
 
 
 @pytest.fixture(autouse=True)
@@ -144,22 +154,24 @@ def test_hook_observes_all_four_interception_points(monkeypatch):
     _install_tool(monkeypatch, ainvoke)
 
     result = asyncio.run(
-        skills.invoke_skill("analyze_thermal", {"material_id": "SS316", "_input_sources": {"material_id": "model"}}, CONV)
+        skills.invoke_skill(
+            "analyze_thermal", {"material_id": "SS316", "_input_sources": {"material_id": "model"}}, CONV
+        )
     )
 
     assert result == {"skill_id": "analyze_thermal", "result": {"temperature_c": 42.0}}
     # on_request saw normalized params without any reserved _* keys...
-    (context, seen_params), = hook.seen_requests
+    ((context, seen_params),) = hook.seen_requests
     assert context.conversation_id == CONV
     assert context.skill_id == "analyze_thermal"
     assert context.agent_name == "thermal-agent"
     assert seen_params == {"material_id": "SS316"}
     # ...and the tool still received the callback handles + input sources.
     # on_event fired once per progress message, on_result saw the final payload.
-    (event_context, message), = hook.seen_events
+    ((event_context, message),) = hook.seen_events
     assert event_context.skill_id == "analyze_thermal"
     assert message == "halfway"
-    (result_context, seen_result), = hook.seen_results
+    ((result_context, seen_result),) = hook.seen_results
     assert seen_result == {"result": {"temperature_c": 42.0}}
     assert hook.seen_errors == []
 
@@ -232,7 +244,7 @@ def test_hook_sees_error_on_dispatch_failure(monkeypatch):
     result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
 
     assert result == {"skill_id": "analyze_thermal", "error": "refused"}
-    (context, error), = hook.seen_errors
+    ((context, error),) = hook.seen_errors
     assert context.skill_id == "analyze_thermal"
     assert isinstance(error, ConnectionError)
     assert hook.seen_results == []
@@ -271,3 +283,194 @@ def test_default_hook_is_noop_and_observed():
     # carried keys override the hook's values under the same names
     merged = hooks.apply_reserved({"_task_graph_node_id": "n"}, {"b": 2, "_task_graph_node_id": "evil"})
     assert merged == {"b": 2, "_task_graph_node_id": "n"}
+
+
+# --------------------------------------------------------------------------- #
+# on_turn — end-of-turn middleware (chat_flow.chat fire site)
+# --------------------------------------------------------------------------- #
+
+
+def _scripted_llm(monkeypatch, steps):
+    """Install a ``runtime.create_llm`` stand-in popping one raw response per step.
+
+    Mirrors ``ScriptedLLM`` in test_agent_loop.py: each step is a provider-shaped
+    raw dict (``{"choices": [{"message": ..., "finish_reason": ...}]}``).
+    """
+
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def medium(self, messages, **kwargs):
+            return _llm_medium(steps, messages, kwargs)
+
+        async def small(self, prompt, **kwargs):
+            return SimpleNamespace(text="Test title")
+
+    monkeypatch.setattr(runtime, "create_llm", lambda: _Client())
+
+
+def _llm_medium(steps, messages, kwargs):
+    raw = steps.pop(0)
+    return ChatResponse(
+        text=raw["choices"][0]["message"].get("content") or "",
+        model_alias="medium",
+        provider_model=None,
+        usage=None,
+        raw=raw,
+        tool_calls=parse_tool_calls(raw),
+        finish_reason=parse_finish_reason(raw),
+    )
+
+
+def _turn_harness(monkeypatch):
+    """Patch chat_flow.chat's collaborators so a full turn runs offline.
+
+    Fakes the conversation store (in-memory, JSON round-tripped like the real
+    one) and the capability catalog (empty — no skills, so the LLM script
+    fully controls the turn). ``begin_turn`` is NOT called: service.py owns
+    that, and the hook must tolerate running without a task-tracking turn
+    (turn_id/root_id=None), which is exactly what these tests exercise.
+    """
+    store = {}
+
+    def save(conv_id, state):
+        store[conv_id] = json.loads(json.dumps(state))
+
+    monkeypatch.setattr(chat_flow, "get_conversation", lambda conv_id: store.get(conv_id))
+    monkeypatch.setattr(chat_flow, "store_conversation", save)
+    monkeypatch.setattr(runtime, "ENABLE_WORKFLOW_LIBRARY", False)
+
+    async def get_capabilities():
+        return []
+
+    monkeypatch.setattr(agent_loop, "get_capability_cache", lambda: SimpleNamespace(get_capabilities=get_capabilities))
+    return store
+
+
+def _reply(text="", calls=()):
+    message = {"role": "assistant", "content": text or None}
+    if calls:
+        message["tool_calls"] = list(calls)
+    return {"choices": [{"message": message, "finish_reason": "stop"}]}
+
+
+def _tool_call(name, arguments, call_id):
+    return {"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(arguments)}}
+
+
+def _send(**kwargs):
+    return asyncio.run(chat_flow.chat(ConversationRequest(conversation_id=CONV, **kwargs)))
+
+
+def test_on_turn_fires_with_full_trajectory_on_final(monkeypatch):
+    """A turn ending in a final answer hands the hook the whole turn snapshot."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="The answer is 42.")])
+
+    response = _send(query="what is the answer?")
+
+    assert response.status == "answer"
+    (turn,) = hook.seen_turns
+    assert turn.conversation_id == CONV
+    assert turn.outcome == "final"
+    assert turn.message == "The answer is 42."
+    # The user message, the final assistant message: the whole turn, in order.
+    assert [m["role"] for m in turn.llm_messages] == ["user", "assistant"]
+    assert turn.llm_messages[0]["content"].startswith("what is the answer?")
+    assert turn.llm_messages[-1]["content"] == "The answer is 42."
+    assert dict(turn.tool_results) == {}
+    assert dict(turn.tool_inputs) == {}
+    # begin_turn was never called (service.py owns that): the hook tolerates a
+    # missing task-tracking turn.
+    assert turn.turn_id is None
+    assert turn.root_id is None
+
+
+def test_on_turn_pause_and_resume_are_two_events(monkeypatch):
+    """An ask_user pause and its follow-up answer are two on_turn fires."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _turn_harness(monkeypatch)
+    _scripted_llm(
+        monkeypatch,
+        [
+            _reply(
+                calls=[
+                    _tool_call(
+                        "ask_user",
+                        {"questions": [{"field": "size", "question": "what size?", "type": "text"}]},
+                        "c1",
+                    )
+                ]
+            ),
+        ],
+    )
+
+    first = _send(query="make a thing")
+    assert first.status == "needs_info"
+    (turn1,) = hook.seen_turns
+    assert turn1.outcome == "needs_info"
+    # The pending ask_user tool call is in the transcript the resume will see.
+    assert any(m.get("tool_calls") for m in turn1.llm_messages)
+    assert dict(turn1.tool_results) == {}
+
+    hook.seen_turns.clear()
+    _scripted_llm(monkeypatch, [_reply(text="Answer after info.")])
+    second = _send(followup_answers={"size": "5"}, query="size is 5")
+    assert second.status == "answer"
+    (turn2,) = hook.seen_turns
+    assert turn2.outcome == "final"
+    assert turn2.llm_messages[0]["role"] == "user"  # the resume starts a fresh user message
+    # The pause's ask_user question is answered in the resume's transcript.
+    assert any(m.get("role") == "tool" for m in turn2.llm_messages)
+
+
+def test_on_turn_snapshot_is_not_the_live_state(monkeypatch):
+    """The hook must see copies, not the AgentState another turn could mutate."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="done")])
+    _send(query="hello")
+
+    (turn,) = hook.seen_turns
+    messages = turn.llm_messages
+    assert isinstance(messages, tuple)
+
+    # Mutating what the store later holds must not reach the hook's snapshot
+    # (and the hook's retained dict is not the live AgentState either).
+    stored = chat_flow.get_conversation(CONV)
+    assert stored is not None
+    llm_list = stored["llm_messages"]
+    assert len(messages) == len(llm_list)
+    llm_list[-1]["content"] = "mutated after the fact"
+    assert messages[-1]["content"] == "done"
+
+
+def test_on_turn_failure_never_fails_the_turn(monkeypatch):
+    """A raising on_turn is logged and the response still returns."""
+    hooks.set_call_hook(_ExplodingHook())
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="still fine")])
+
+    response = _send(query="hello")
+
+    assert response.status == "answer"
+    assert response.message == "still fine"
+
+
+def test_on_turn_default_hook_is_harmless(monkeypatch):
+    """Without set_call_hook the NoopCallHook.on_turn logs and changes nothing."""
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="noop turn")])
+
+    response = _send(query="hello")
+
+    assert response.status == "answer"
+    assert response.message == "noop turn"

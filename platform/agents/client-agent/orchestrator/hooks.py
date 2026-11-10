@@ -23,6 +23,11 @@ One protocol covers the four interception points of a dispatch:
 - ``on_result`` — agent returning to the orchestrator (parsed payload)
 - ``on_error``  — dispatch raised instead of returning
 
+plus a fifth, turn-scoped point that brackets the whole dispatch sequence:
+
+- ``on_turn`` — one user turn finished at a loop outcome
+  (:func:`orchestrator.chat_flow._respond`)
+
 Contract, enforced by the framework code in ``skills.py``:
 
 - Hooks observe and may rewrite values (params dict / result dict / progress
@@ -44,9 +49,10 @@ Contract, enforced by the framework code in ``skills.py``:
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, Mapping, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +88,33 @@ class AgentCallContext:
     node_id: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class TurnContext:
+    """Immutable end-of-turn snapshot, passed to the ``on_turn`` middleware.
+
+    The whole turn in one value — what the orchestrator did (the trimmed
+    ``llm_messages`` transcript, including this turn's assistant messages with
+    tool-call ids/arguments and tool-result messages), what it produced
+    (``tool_results``/``tool_inputs``, reset by ``begin_user_turn`` so they are
+    this turn only), and how it stopped (the ``LoopOutcome``). Snapshots are
+    plain copies: the hook must not see (nor mutate) the live ``AgentState``,
+    which a sibling backgrounded turn can be writing concurrently.
+
+    One fire per *user reply*, not per logical task: an INPUT_REQUIRED pause and
+    its resume are two turns, two ``on_turn`` calls, sharing ``root_id``.
+    Consumers building one trajectory per task join on ``conversation_id``.
+    """
+
+    conversation_id: str
+    turn_id: Optional[str]
+    root_id: Optional[str]
+    outcome: str
+    message: str
+    llm_messages: Tuple[Dict[str, Any], ...]
+    tool_results: Mapping[str, Any]
+    tool_inputs: Mapping[str, Any]
+
+
 class CallHook(Protocol):
     """Middleware interface around one orchestrator -> specialist dispatch."""
 
@@ -99,6 +132,10 @@ class CallHook(Protocol):
 
     async def on_error(self, context: AgentCallContext, error: BaseException) -> None:
         """Observe a dispatch that raised instead of returning."""
+        ...
+
+    async def on_turn(self, context: TurnContext) -> None:
+        """Observe one finished user turn; read-only (there is no value to rewrite)."""
         ...
 
 
@@ -124,6 +161,9 @@ class NoopCallHook:
 
     async def on_error(self, context: AgentCallContext, error: BaseException) -> None:
         logger.debug("[hook] on_error %s: %s", context.skill_id, error)
+
+    async def on_turn(self, context: TurnContext) -> None:
+        logger.debug("[hook] on_turn %s: %s", context.conversation_id, context.outcome)
 
 
 _call_hook: CallHook = NoopCallHook()
@@ -219,3 +259,44 @@ async def run_on_error(
         await current_call_hook().on_error(context, error)
     except Exception:
         logger.warning("[hook] on_error failed for %s", context.skill_id, exc_info=True)
+
+
+async def run_on_turn(
+    conversation_id: str,
+    outcome_kind: str,
+    outcome_message: str,
+    llm_messages: Any,
+    tool_results: Any,
+    tool_inputs: Any,
+    turn_id: Optional[str] = None,
+    root_id: Optional[str] = None,
+) -> None:
+    """Run the middleware's ``on_turn`` with a deep-copied end-of-turn snapshot.
+
+    Hook errors are logged, never raised — a memory write must not fail a turn
+    that already succeeded. The snapshot is ``copy.deepcopy``-ed so the hook
+    can never observe or mutate the live ``AgentState``, which a sibling
+    backgrounded turn can be writing concurrently, and so later framework
+    mutations of the stored message dicts cannot reach a retained snapshot.
+    """
+    snapshot = copy.deepcopy(
+        dict(
+            llm_messages=llm_messages,
+            tool_results=tool_results,
+            tool_inputs=tool_inputs,
+        )
+    )
+    context = TurnContext(
+        conversation_id=str(conversation_id or ""),
+        turn_id=turn_id,
+        root_id=root_id,
+        outcome=str(outcome_kind or ""),
+        message=str(outcome_message or ""),
+        llm_messages=tuple(snapshot["llm_messages"]),
+        tool_results=snapshot["tool_results"],
+        tool_inputs=snapshot["tool_inputs"],
+    )
+    try:
+        await current_call_hook().on_turn(context)
+    except Exception:
+        logger.warning("[hook] on_turn failed for %s", context.conversation_id, exc_info=True)
