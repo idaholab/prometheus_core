@@ -27,7 +27,7 @@ const IN_SCOPE_FILES = [
   "features/chat/Chat.tsx",
   "features/chat/FollowupForm.tsx",
   "components/SettingsPanel.tsx",
-  "components/dashboard/StatusPanel.tsx",
+  "features/dashboard/StatusPanel.tsx",
   "features/chat/WelcomeScreen.tsx",
 ];
 
@@ -45,8 +45,8 @@ const BUTTON_IMPORT = /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s+["'](@\/compon
  */
 const RAW_BUTTON_ALLOWLIST: ReadonlyArray<{ file: string; marker: string; count: number; why: string }> = [
   { file: "features/chat/Chat.tsx", marker: "aria-label={`Remove ", count: 1, why: "attachment remove (blueprint Out of scope)" },
-  { file: "components/dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
-  { file: "components/dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
+  { file: "features/dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
+  { file: "features/dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
   { file: "features/chat/Chat.tsx", marker: "onClick={() => setOpen((v) => !v)}", count: 1, why: "tool-call history toggle, not a site" },
   { file: "components/LeftPanel.tsx", marker: "aria-current=", count: 1, why: "NavButton rail item, not a site" },
   { file: "components/Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },

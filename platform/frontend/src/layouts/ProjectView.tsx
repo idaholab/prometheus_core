@@ -19,7 +19,7 @@ import { ChatHistory } from "@/features/chat/ChatHistory";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { Header } from "../components/Header";
 import { LeftPanel } from "../components/LeftPanel";
-import { Home } from "../components/dashboard/Home";
+import { Home } from "@/features/dashboard/Home";
 import { ComingSoon } from "../components/dashboard/ComingSoon";
 import { navLabel, type NavId } from "../components/dashboard/nav";
 import { PageAgentRegistry } from "../pages/PageAgentRegistry";
