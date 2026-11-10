@@ -12,7 +12,7 @@
 
 import { Cpu } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { AgentsState } from "@/lib/store/agents";
+import type { AgentsState } from "./store/agents";
 import { AgentCard } from "./AgentCard";
 import { RegistryToolbar } from "./RegistryToolbar";
 

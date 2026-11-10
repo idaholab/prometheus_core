@@ -14,7 +14,7 @@ import type { ComponentProps } from "react";
 import { ArrowUp } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
-import type { Agent, AgentStatus } from "@/lib/store/agents";
+import type { Agent, AgentStatus } from "./store/agents";
 import { AGENT_ICONS } from "./agentIcons";
 import { formatLatency, formatRunTime, formatUptime, formatVersion } from "./format";
 
