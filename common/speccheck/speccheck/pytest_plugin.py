@@ -26,6 +26,7 @@ to it, and uses that for a test whose claims only a replacement worker, which di
 from __future__ import annotations
 
 import os
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -366,13 +367,35 @@ class Recorder:
     """When the session started, ISO 8601 UTC; set by `pytest_sessionstart`."""
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
-        """Note when the session started."""
+        """Note when the session started, and remove the results file an earlier run left (SPC-REQ-004-05).
+
+        A run that ends without writing one, such as a usage error, would otherwise leave that file for
+        `check` to read as this run's. Only the controller does it: a worker's session starts after it.
+        """
         self.started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        path = None if hasattr(self.config, "workerinput") else results_path(self.config)
+        if path is not None:
+            remove_older_file(path)
 
 
 def configured(config: pytest.Config) -> bool:
     """Whether the project set `speccheck_config` or the run asked for a results file."""
     return bool(config.getini("speccheck_config")) or results_path(config) is not None
+
+
+def remove_older_file(path: Path) -> None:
+    """Remove the regular file at `path`, if there is one.
+
+    A symlink or a folder is left alone, so a mistyped path costs nothing: the write that follows
+    reports it. A path that holds nothing, or sits under something that isn't a folder, is fine too.
+    """
+    try:
+        if stat.S_ISREG(os.lstat(path).st_mode):
+            path.unlink()
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    except OSError as exc:
+        raise pytest.UsageError(f"speccheck: can't write the results file: {exc}") from None
 
 
 def results_path(config: pytest.Config) -> Path | None:

@@ -578,6 +578,82 @@ class TestRecorder:
         self.recorder(tmp_path, option="r.jsonl", workerinput={}).pytest_sessionfinish(None, 0)
         assert list(tmp_path.iterdir()) == []
 
+    def test_the_session_start_removes_an_older_file(self, tmp_path: Path):
+        """The file at the asked-for path goes; one elsewhere stays."""
+        (tmp_path / "r.jsonl").write_text("old")
+        (tmp_path / "other.jsonl").write_text("mine")
+        self.recorder(tmp_path, option="r.jsonl").pytest_sessionstart(None)
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["other.jsonl"]
+
+    def test_the_session_start_removes_nothing_when_not_asked_or_on_a_worker(self, tmp_path: Path):
+        """Without a path, or on an xdist worker, which has `workerinput`, the older file stays."""
+        (tmp_path / "r.jsonl").write_text("old")
+        self.recorder(tmp_path).pytest_sessionstart(None)
+        self.recorder(tmp_path, option="r.jsonl", workerinput={}).pytest_sessionstart(None)
+        assert (tmp_path / "r.jsonl").read_text() == "old"
+
+
+class TestRemoveOlderFile:
+    """Only a regular file goes; anything else is left for the write to report."""
+
+    def test_a_file(self, tmp_path: Path):
+        """Removed."""
+        path = tmp_path / "r.jsonl"
+        path.write_text("old")
+        pytest_plugin.remove_older_file(path)
+        assert not path.exists()
+
+    def test_nothing_there(self, tmp_path: Path):
+        """A missing file, or a path under a missing folder, is fine."""
+        pytest_plugin.remove_older_file(tmp_path / "r.jsonl")
+        pytest_plugin.remove_older_file(tmp_path / "missing" / "r.jsonl")
+
+    def test_a_path_under_a_file(self, tmp_path: Path):
+        """`NotADirectoryError` is left for the write to report as it does today."""
+        (tmp_path / "blocker").write_text("a file")
+        pytest_plugin.remove_older_file(tmp_path / "blocker" / "r.jsonl")
+        assert (tmp_path / "blocker").read_text() == "a file"
+
+    def test_a_folder_is_kept_whole(self, tmp_path: Path):
+        """A mistyped path that names a folder costs nothing."""
+        (tmp_path / "r.jsonl").mkdir()
+        (tmp_path / "r.jsonl" / "keep.txt").write_text("mine")
+        pytest_plugin.remove_older_file(tmp_path / "r.jsonl")
+        assert (tmp_path / "r.jsonl" / "keep.txt").read_text() == "mine"
+
+    def test_a_symlink_is_kept_and_its_target_too(self, tmp_path: Path):
+        """The link itself isn't removed, and nothing it points at is touched."""
+        target = tmp_path / "target.jsonl"
+        target.write_text("mine")
+        link = tmp_path / "r.jsonl"
+        link.symlink_to(target)
+        pytest_plugin.remove_older_file(link)
+        assert link.is_symlink() and target.read_text() == "mine"
+
+    def test_a_file_that_cannot_be_removed_is_a_usage_error(self, tmp_path: Path):
+        """A read-only folder: pytest says why, as for a path that can't be written (skipped where it doesn't bite)."""
+        locked = tmp_path / "locked"
+        locked.mkdir()
+        (locked / "r.jsonl").write_text("old")
+        locked.chmod(0o500)
+        try:
+            if _can_write(locked):
+                pytest.skip("this user can write to a read-only folder")
+            with pytest.raises(pytest.UsageError, match="can't write the results file"):
+                pytest_plugin.remove_older_file(locked / "r.jsonl")
+        finally:
+            locked.chmod(0o700)
+
+
+def _can_write(folder: Path) -> bool:
+    """Whether a file can be created in `folder`, which is false for a read-only one unless the user is root."""
+    try:
+        (folder / "probe").write_text("x")
+    except OSError:
+        return False
+    (folder / "probe").unlink()
+    return True
+
 
 class TestResultsPath:
     """Where the file goes."""

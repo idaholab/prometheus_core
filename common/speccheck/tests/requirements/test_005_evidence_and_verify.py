@@ -330,17 +330,60 @@ def test_skipped_then_passing(project: Project, monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.covers(
     "SPC-REQ-005-09",
-    "verify on an empty folder, with and without --complete, and with no argument, exits 1 saying nothing is proven",
+    "verify on a folder holding no results file, with and without --complete, and with no argument, exits 1 with a no-results problem saying nothing is proven",
 )
 def test_verify_with_no_results_files_fails(project: Project):
-    """An empty folder, a folder with no results, and no argument at all: exit 1 and a problem, with or without --complete."""
+    """A folder with no results file, and no argument at all: exit 1 and a problem, with or without --complete."""
     project.spec("- T-REQ-001-01: One.")
     project.write("empty/note.txt", "not a results file")
     for argv in (["empty"], ["--complete", "empty"], []):
         run = project.speccheck("verify", *argv, "--json")
-        messages = [p["message"] for p in run.json()["problems"]]
+        found = [p for p in run.json()["problems"] if p["code"] == "no-results"]
         assert run.code == 1 and run.json()["ok"] is False, argv
-        assert any("no results files were read" in m and "nothing is proven" in m for m in messages), argv
+        assert len(found) == 1, argv
+        assert "no results files were read" in found[0]["message"] and "nothing is proven" in found[0]["message"], argv
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-09",
+    "check on a folder holding no results file, and with no argument, exits 1 with one no-results problem that says to collect with --collect-only and --speccheck-results",
+)
+def test_check_with_no_results_files_fails_saying_how_to_collect(project: Project):
+    """The same inputs as verify, but `check` says what to run, since it never looks at outcomes."""
+    project.spec("- T-REQ-001-01: One.")
+    project.write("empty/note.txt", "not a results file")
+    for argv in (["empty"], []):
+        run = project.speccheck("check", *argv, "--json")
+        problems = [p for p in run.json()["problems"] if p["code"] == "no-results"]
+        assert run.code == 1 and run.json()["ok"] is False, argv
+        assert len(problems) == 1, argv
+        assert "pytest --collect-only -q --speccheck-results=" in problems[0]["message"], argv
+        assert "nothing is proven" not in problems[0]["message"], argv
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-09",
+    "check on a folder with no results, over a requirement nobody claims, lists the no-results problem before the unclaimed one",
+)
+def test_check_names_the_missing_results_before_the_unclaimed_requirements(project: Project):
+    """Both problems stay, so the first line gives the cause and the rest follow from it."""
+    project.spec("- T-REQ-001-01: One.\n- T-REQ-001-02: Two.")
+    run = project.speccheck("check", "--json")
+    codes = [p["code"] for p in run.json()["problems"]]
+    assert codes[0] == "no-results"
+    assert codes.count("unclaimed") == 2
+
+
+@pytest.mark.covers(
+    "SPC-REQ-005-09",
+    "check on a spec whose only requirement is unimplemented, with no results file, still exits 1 with a no-results problem",
+)
+def test_check_with_no_results_fails_even_when_nothing_needs_a_claim(project: Project):
+    """Unconditional: nothing was checked against any run, so the missing file is the problem."""
+    project.spec("- T-REQ-001-01: Later. (unimplemented: step 2)")
+    run = project.speccheck("check", "--json")
+    assert run.code == 1
+    assert [p["code"] for p in run.json()["problems"]] == ["no-results"]
 
 
 @pytest.mark.covers(

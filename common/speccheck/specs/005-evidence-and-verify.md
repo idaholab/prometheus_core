@@ -27,8 +27,11 @@ Every requirement gets one status from the specs, the config and the results fil
   remove the suffix.
 - SPC-REQ-005-08: `check` MUST accept a collect-only run's results and MUST NOT look at outcomes: a
   claimed requirement is `claimed` whatever its results' outcomes are.
-- SPC-REQ-005-09: `verify` MUST fail when it read no results file, with or without `--complete`,
-  and the problem MUST say that nothing is proven.
+- SPC-REQ-005-09: `check` and `verify` MUST fail when they read no results file, with the problem
+  code `no-results`. `verify` MUST fail with or without `--complete`, and its problem MUST say
+  that nothing is proven. `check`'s problem MUST say to collect the tests into a results file, with
+  `pytest --collect-only -q --speccheck-results=FILE`, and MUST be listed before any `unclaimed`
+  problem, since with no results every requirement that needs a claim is unclaimed.
 - SPC-REQ-005-10: `check` and `verify` MUST fail when two claims have the same text
   (SPC-REQ-001-09), across every results file read and every `[ci.<job>]` entry. Claims from the
   same test or CI job (in another leg, producer or attempt) are one claim. The problem MUST name

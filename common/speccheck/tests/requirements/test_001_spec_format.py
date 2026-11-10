@@ -313,7 +313,7 @@ def test_a_plus_bullet_and_an_empty_one_are_malformed(project: Project, bullet: 
 def test_a_beh_bullet_is_a_requirement(project: Project):
     """BEH is the other form, beside REQ."""
     project.spec("- T-BEH-001-01: It behaves. (unimplemented: later)")
-    run = project.speccheck("check", "--json")
+    run = project.speccheck("check", str(project.collected()), "--json")
     assert run.json()["problems"] == []
     assert [r["id"] for r in run.json()["requirements"]] == ["T-BEH-001-01"]
     assert project.speccheck("lint").code == 0
@@ -541,7 +541,7 @@ def test_a_line_that_is_not_a_continuation_is_not_joined(project: Project, body:
 def test_the_unimplemented_suffix(project: Project, body: str, text: str, reason: str):
     """check shows the status, the text without the suffix, and the reason, and passes: nothing needs claiming."""
     project.spec(body)
-    run = project.speccheck("check", "--json")
+    run = project.speccheck("check", str(project.collected()), "--json")
     found = run.json()["requirements"][0]
     assert (found["status"], found["text"], found["reason"]) == ("unimplemented", text, reason)
     assert run.code == 0, run.err

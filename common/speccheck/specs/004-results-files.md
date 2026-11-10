@@ -22,7 +22,11 @@ runners and the checker, so other languages can write one too.
 - SPC-REQ-004-05: The plugin MUST write a file only when `--speccheck-results` or
   `SPECCHECK_RESULTS` asks for one, and only when the session ends. An interrupted session MUST
   NOT leave a file, partial or whole. A path that can't be written MUST end the run as a usage
-  error that says why.
+  error that says why. A run that asks for a file MUST remove the regular file already at that path when
+  its session starts, whatever way the run ends, so a run that ends without writing one, such as a
+  usage error from collection, leaves no file from an earlier run for `check` or `verify` to read. A
+  folder or a symlink at the path MUST be left alone. A run that fails before its session starts,
+  such as on an unknown option or a `conftest.py` that raises, MAY leave the earlier file.
 - SPC-REQ-004-06: Under pytest-xdist, the run MUST write one file that holds every worker's results.
 - SPC-REQ-004-07: A reader MUST refuse a results file larger than 16 MiB or with a line longer than
   64 KiB, and MUST NOT follow symlinks when it searches a folder.

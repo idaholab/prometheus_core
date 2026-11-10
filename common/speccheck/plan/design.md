@@ -130,7 +130,7 @@ a comment pointing at platformctl's copy, so an edit to one reminds the editor o
 | Command | Reads | Fails when |
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format (the #355 rules, minus `tests:` and citations) |
-| `check` | specs, config, results files (from a collect-only run or a real one) | a requirement that isn't unimplemented has no claim; a claim names an unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
+| `check` | specs, config, results files (from a collect-only run or a real one) | no results file read at all (`no-results`, listed first); a requirement that isn't unimplemented has no claim; a claim names an unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
 | `verify` | specs, config, the results files from a CI run | everything `check` fails on, plus: a claimed requirement with no passing result among the producers that reported; with `--complete`, a requirement no reported producer claims, or an expected producer that didn't report |
 | `report` | the same as `verify` | never, unless the inputs are malformed: it writes the full markdown report (`--output`) or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry; writes a results file with one passed result for each ID the job claims |
@@ -138,9 +138,13 @@ a comment pointing at platformctl's copy, so an edit to one reminds the editor o
 `check` is what you run locally:
 
 ```sh
-pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl
-speccheck check .speccheck/
+pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl && speccheck check .speccheck/
 ```
+
+A run that asks for a results file removes the one an earlier run left when its session starts, so a collect that
+stops on a claim error leaves nothing for `check` to read, and `check` says `no-results` instead of passing on the old
+file. A run that fails earlier (an unknown option, a `conftest.py` that raises) can leave the old file, so the `&&`
+matters.
 
 ## Config
 

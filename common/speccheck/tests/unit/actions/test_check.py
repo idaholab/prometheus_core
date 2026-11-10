@@ -43,7 +43,26 @@ def test_a_failed_claim_is_enough(tmp_path: Path):
 
 
 def test_clean(tmp_path: Path):
-    """Exit 0 with the summary line."""
+    """Exit 0 with the summary line, given a results file that claims nothing."""
+    results.write(tmp_path / "c.jsonl", results.ResultsFile(producer="unit", results=[]))
     ctx = make_ctx(tmp_path, specs_set=make_specs("It. (unimplemented: later)"))
-    assert check.run(ctx, namespace()) == 0
-    assert out(ctx) == "speccheck check: 1 requirement: 1 unimplemented\n"
+    assert check.run(ctx, namespace(inputs=["c.jsonl"])) == 0
+    assert out(ctx) == "speccheck check: 1 requirement: 1 unimplemented; reported: unit\n"
+
+
+def test_no_results_is_the_first_problem(tmp_path: Path):
+    """Nothing read: `no-results` comes before the unclaimed requirement, and says how to collect."""
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+    assert check.run(ctx, namespace()) == 1
+    lines = err(ctx).splitlines()
+    assert "no results files were read (no RESULTS given)" in lines[0]
+    assert "pytest --collect-only -q --speccheck-results=FILE" in lines[0]
+    assert "is not claimed" in lines[1]
+
+
+def test_an_empty_folder_is_no_results(tmp_path: Path):
+    """The folder is named in the message, and a spec with nothing to claim still fails."""
+    (tmp_path / "runs").mkdir()
+    ctx = make_ctx(tmp_path, specs_set=make_specs("It. (unimplemented: later)"))
+    assert check.run(ctx, namespace(inputs=["runs"])) == 1
+    assert "no results files were read (runs)" in err(ctx)

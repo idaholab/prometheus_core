@@ -801,6 +801,112 @@ def test_a_file_only_when_asked(project: Project, monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.covers(
     "SPC-REQ-004-05",
+    "a collect that wrote a results file, then an inner run that ends as a usage error over the same path, leaves no file there",
+)
+def test_a_run_that_ends_without_writing_leaves_no_older_file(project: Project):
+    """The usage error is a producer the config doesn't declare; without the removal the first run's file would stay."""
+    project.spec("- T-REQ-001-01: One.")
+    project.ini("speccheck_config = speccheck.toml\nspeccheck_producer = unit\n")
+    project.tests(PRODUCER_TEST)
+    first = project.pytest("--collect-only", "-q", "--speccheck-results=out/r.jsonl")
+    assert first.ret == pytest.ExitCode.OK
+    assert (project.root / "out" / "r.jsonl").is_file()
+    project.ini("speccheck_config = speccheck.toml\nspeccheck_producer = nobody\n")
+    second = project.pytest("--collect-only", "-q", "--speccheck-results=out/r.jsonl")
+    assert second.ret == pytest.ExitCode.USAGE_ERROR
+    assert not (project.root / "out" / "r.jsonl").exists()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "an older file at the path is already gone while the inner session's own test runs, so it is removed when the session starts and not at its end",
+)
+def test_the_older_file_is_gone_before_the_first_test_runs(project: Project):
+    """The inner test looks for the file itself: removal after the run, or only on an error, would leave it there."""
+    project.write("out/r.jsonl", "OLD")
+    project.tests(
+        "import pathlib, pytest\n"
+        '@pytest.mark.covers("T-REQ-001-01", "the older file is gone while this test runs")\n'
+        "def test_a():\n"
+        '    assert not pathlib.Path("out/r.jsonl").exists()\n'
+    )
+    run = project.pytest("--speccheck-results=out/r.jsonl")
+    run.assert_outcomes(passed=1)
+    assert project.results_lines("out/r.jsonl")[0]["schema"] == "speccheck-results/1"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "an inner run that ends as a usage error after a full, non-collect-only run wrote a file leaves no file, with the path given by SPECCHECK_RESULTS",
+)
+def test_a_usage_error_removes_the_older_file_of_a_real_run_asked_for_by_the_variable(
+    project: Project, monkeypatch: pytest.MonkeyPatch
+):
+    """The other way to ask for a file, and a run that executes its tests, not one that only collects."""
+    project.spec("- T-REQ-001-01: One.")
+    project.tests(PRODUCER_TEST)
+    project.ini("speccheck_config = speccheck.toml\nspeccheck_producer = unit\n")
+    monkeypatch.setenv("SPECCHECK_RESULTS", "out/env.jsonl")
+    assert project.pytest().ret == pytest.ExitCode.OK
+    assert (project.root / "out" / "env.jsonl").is_file()
+    project.ini("speccheck_config = speccheck.toml\nspeccheck_producer = nobody\n")
+    assert project.pytest().ret == pytest.ExitCode.USAGE_ERROR
+    assert not (project.root / "out" / "env.jsonl").exists()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "an inner run under -n 2 whose workers end it with a usage error is not a successful run, and leaves no older file at the path",
+)
+def test_xdist_removes_the_older_file_when_the_run_ends_without_writing(project: Project):
+    """xdist ends this run as an internal error (exit 3), not 4: its controller asserts when a worker fails in collection."""
+    project.spec("- T-REQ-001-01: One.")
+    project.tests(PRODUCER_TEST)
+    project.write("out/x.jsonl", "OLD")
+    project.ini("speccheck_config = speccheck.toml\nspeccheck_producer = nobody\n")
+    run = project.pytest("-p", "xdist", "-n", "2", "--speccheck-results=out/x.jsonl", subprocess=True)
+    assert run.ret != pytest.ExitCode.OK
+    assert not (project.root / "out" / "x.jsonl").exists()
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "an inner run, asked for a results path that is a symlink to a file, ends as a usage error while the test runs, with the link still there and the file it points to unchanged",
+)
+def test_a_symlink_at_the_path_is_left_alone_by_the_removal(project: Project):
+    """The link is not removed when the session starts, and the file behind it is never touched.
+
+    The inner test looks while it runs, after the removal and before the write, which replaces the link.
+    """
+    target = project.write("elsewhere/target.txt", "mine")
+    (project.root / "out").mkdir()
+    (project.root / "out" / "r.jsonl").symlink_to(target)
+    project.tests(
+        "import pathlib, pytest\n"
+        '@pytest.mark.covers("T-REQ-001-01", "the link is still there while this test runs")\n'
+        "def test_a():\n"
+        '    assert pathlib.Path("out/r.jsonl").is_symlink()\n'
+    )
+    project.pytest("--speccheck-results=out/r.jsonl").assert_outcomes(passed=1)
+    assert target.read_text() == "mine"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
+    "an inner run asked for a results path that holds a folder with a file in it ends as a usage error, and that file is still there",
+)
+def test_the_older_file_removed_is_only_ever_a_file(project: Project):
+    """A mistyped path must not cost a folder: only a regular file at the path is removed."""
+    project.tests(PRODUCER_TEST)
+    keep = project.write("out/r.jsonl/keep.txt", "mine")
+    run = project.pytest("--speccheck-results=out/r.jsonl")
+    assert run.ret == pytest.ExitCode.USAGE_ERROR
+    assert "speccheck: can't write the results file" in "\n".join(run.stderr.lines + run.stdout.lines)
+    assert keep.read_text() == "mine"
+
+
+@pytest.mark.covers(
+    "SPC-REQ-004-05",
     "a results path under a plain file ends the inner run as a usage error with a message and no traceback",
 )
 def test_an_unwritable_results_path_is_a_usage_error(project: Project):

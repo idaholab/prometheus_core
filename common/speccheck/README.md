@@ -161,9 +161,15 @@ A plain `pytest` checks the claims but writes no results. To check the spec fold
 collect into a results file and run `check` on it:
 
 ```sh
-pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl
-speccheck check .speccheck/
+pytest --collect-only -q --speccheck-results=.speccheck/collect.jsonl && speccheck check .speccheck/
 ```
+
+The `&&` matters: if pytest stops on an error, such as a claim the spec folder doesn't allow, it
+writes no results file, so `check` must not run. pytest removes the file an earlier run left once
+its session starts, which covers a claim error. A bad option or a `conftest.py` that raises fails
+before that, so an old file can remain, and only the `&&` keeps `check` from reading it. A
+`check` that reads no results file fails with `no-results`, and then lists every requirement as
+unclaimed because nothing claims it.
 
 With one requirement claimed and one not:
 
@@ -408,8 +414,8 @@ The details. The source of truth is speccheck's own specs, in [`specs/`](specs/0
 | Command | Reads | Fails (exit 1) when |
 |---|---|---|
 | `lint` | the spec folder | a spec breaks the format |
-| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | a requirement that isn't unimplemented has no claim; a claim names a malformed, unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
-| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result, and no results file read at all. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
+| `check [RESULTS...]` | specs, config, results files (a collect-only run is enough) | no results file read at all; a requirement that isn't unimplemented has no claim; a claim names a malformed, unknown or removed ID, or one its producer may not claim; a claimed requirement is still marked unimplemented |
+| `verify [RESULTS...]` | the same, from a real run | everything `check` fails on, plus a claimed requirement with no passing result. With `--complete`, also a producer that didn't report, and a requirement nothing that reported claims |
 | `report [RESULTS...]` | the same as `verify` | never on the requirements; writes the full markdown report to stdout or `--output FILE`, or `--json` |
 | `record` | config, the CI environment | the job has no `[ci.<job>]` entry (exit 2) |
 
@@ -497,7 +503,7 @@ Every code a problem can have. A rules test fails when the code gains one this t
 | `how-duplicate` | two claims give the same explanation |
 | `producer-undeclared` | a results file comes from a producer the config doesn't declare |
 | `producer-missing` | with `--complete`, a declared producer sent no results |
-| `no-results` | `verify` read no results file at all |
+| `no-results` | `check` or `verify` read no results file at all; `check` lists it before any `unclaimed` problem |
 | `results-missing` | an input path doesn't exist |
 | `results-symlink` | an input is a symlink, which isn't followed |
 | `results-unreadable` | an input can't be read |

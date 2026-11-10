@@ -198,6 +198,10 @@ class Repo:
         results.write(path, results_file)
         return path
 
+    def collected(self, name: str = "collected.jsonl") -> Path:
+        """A results file that claims nothing, so `check` has a run to read and reports only what the specs say."""
+        return self.results(name, "unit", [])
+
     def run(self, *argv: str, env: dict[str, str] | None = None) -> Run:
         """Run the CLI here and return its exit code and output."""
         out, err = io.StringIO(), io.StringIO()
