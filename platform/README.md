@@ -192,6 +192,8 @@ make clear-agent-registry  # stop services + delete only the agent registrations
 make clobber               # stop services + delete admin-db and Valkey (asks first)
 ```
 
+`make down` and the start targets remove the dev frontend container and its `node_modules` volume, so packages you `npm install` inside it don't survive. Add them to `package.json` instead; `make up` or `make restart` rebuilds the image with them.
+
 Reinstalling, or lost your `.env`? The old volumes still use the old database passwords, and their rows are encrypted with the old key. The backend can't connect, and the setup wizard doesn't run. `make clobber` deletes those volumes (all users, keys and history) so the next `make up` starts fresh.
 
 ### Log in
