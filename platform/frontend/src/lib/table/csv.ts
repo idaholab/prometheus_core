@@ -12,7 +12,7 @@
 
 /**
  * Delimited-text (CSV / TSV) parsing and sorting for the table viewer
- * (`viewers/TableElement.tsx`). Pure functions with no imports, so they are unit-tested
+ * (`features/artifacts/viewers/TableElement.tsx`). Pure functions with no imports, so they are unit-tested
  * directly with `node --test`.
  *
  * Parsing follows RFC 4180: fields may be quoted, `""` inside a quoted field is a literal
@@ -21,7 +21,7 @@
  * trailing newline, blank lines, and ragged rows.
  */
 
-import { normalizeMime } from "../mime.ts";
+import { normalizeMime } from "@/lib/mime";
 
 export interface ParsedTable {
   header: string[];

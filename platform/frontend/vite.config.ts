@@ -30,7 +30,7 @@ export default defineConfig({
     },
   },
   // mermaid is only reachable through a nested dynamic import inside a lazily
-  // loaded viewer (lib/elements/elements.ts -> viewers/MermaidElement.tsx ->
+  // loaded viewer (features/artifacts/elements.ts -> viewers/MermaidElement.tsx ->
   // `await import("mermaid")`), so on a cold cache Vite can miss it during
   // cold-start scanning, discover it when the first agent-rendered diagram
   // mounts, and then hard-reload the page ("optimized dependencies changed,
