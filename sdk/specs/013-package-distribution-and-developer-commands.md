@@ -1,7 +1,7 @@
 # 013 — Package distribution and developer commands
 
 status: implemented
-sources: pyproject.toml, Makefile, Dockerfile, ../common/certs/setup.sh, README.md, DEVELOPMENT.md, INSTALL.md, prometheus_api/__init__.py, tests/test_llm_fallback_tools.py
+sources: pyproject.toml, Makefile, Dockerfile, ../common/certs/setup.sh, README.md, DEVELOPMENT.md, INSTALL.md, prometheus_api/__init__.py, tests/unit/test_llm_fallback_tools.py
 depends-on: 004, 008
 
 ## Purpose

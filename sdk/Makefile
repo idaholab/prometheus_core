@@ -23,7 +23,7 @@ help: ##@ (Default) Print listing of key targets with their descriptions
 ##@ Checks
 ##@
 
-.PHONY: lint format typecheck check fix test test-unit test-integration test-all hooks
+.PHONY: lint format typecheck check fix test test-unit test-requirements test-integration test-all hooks
 
 lint: ##@ Run ruff linter (report only)
 	uv run ruff check .
@@ -34,17 +34,22 @@ format: ##@ Run ruff formatter (report only)
 typecheck: ##@ Run mypy type checker
 	uv run mypy prometheus_api/
 
-test: ##@ Run unit tests (default test target)
-test: test-unit
+test: ##@ Run the unit tests and the requirement tests (default test target)
+test: test-unit test-requirements
 
-test-unit: ##@ Run unit tests without integration tests
-	uv run pytest -m "not integration" --cov
+test-unit: ##@ Run unit tests without integration tests, under coverage
+	uv run pytest tests/unit -m "not integration" --cov
+
+test-requirements: ##@ Run the requirement tests, which prove specs/ (no coverage)
+	@# Exit 5 is "no tests collected": no requirement has a test yet
+	uv run pytest tests/requirements || [ $$? -eq 5 ]
 
 test-integration: ##@ Run integration tests (requires .env with DeepLynx credentials)
-	uv run pytest -m integration
+	uv run pytest tests/unit -m integration
 
 test-all: ##@ Run all tests, including integration tests
-	uv run pytest --cov
+test-all: test-requirements
+	uv run pytest tests/unit --cov
 
 fix: ##@ Auto-fix ruff lint issues and format
 	uv run ruff check --fix .

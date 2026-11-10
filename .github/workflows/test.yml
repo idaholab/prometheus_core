@@ -372,9 +372,26 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Sync environment
         run: uv sync --frozen
-      - name: Test
-        # Fails below fail_under in pyproject.toml on every version
-        run: uv run --frozen pytest --color=yes --cov --cov-report=xml
+      - name: Unit tests
+        # tests/unit, under coverage: fails below fail_under in pyproject.toml
+        # on every version
+        run: uv run --frozen pytest --color=yes tests/unit --cov --cov-report=xml
+      - name: Requirement tests
+        # tests/requirements, not under coverage: the results file is the
+        # evidence for specs/. Runs even when the unit tests failed
+        if: ${{ !cancelled() }}
+        env:
+          SPECCHECK_PRODUCER: sdk-python
+          SPECCHECK_RESULTS: ${{ github.workspace }}/.speccheck/sdk-python-${{ matrix.python }}.jsonl
+          # The `job` context is only available to steps, not to a job's own `env`
+          SPECCHECK_JOB_ID: ${{ job.check_run_id }}
+        # Exit 5 is "no tests collected": no requirement has a test yet
+        run: uv run --frozen pytest --color=yes tests/requirements || [ $? -eq 5 ]
+      - name: Upload speccheck results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: sdk-python-${{ matrix.python }}
       - name: Coverage
         # Report and upload only on 3.12, so the sdk reports once per commit
         if: ${{ !cancelled() && matrix.python == '3.12' }}
@@ -530,17 +547,74 @@ jobs:
           cache-from: type=registry,ref=${{ env.BUILD_CACHE }}_sdk-devel:${{ matrix.platform }}
       - name: Test
         # The image only has the installed package; mount the checkout for
-        # pyproject.toml, uv.lock, and the tests
+        # pyproject.toml, uv.lock, and the tests. The whole checkout, since the
+        # dev group installs speccheck from ../common/speccheck (its build
+        # writes there, so the mount isn't read-only). speccheck's variables
+        # and GitHub's are passed in, except GITHUB_WORKSPACE (a host path):
+        # SPECCHECK_ROOT says where pytest's root is in the repository
+        # instead. .speccheck/ is made on the host first, so the root
+        # container doesn't create it owned by root.
+        # The two suites run apart: tests/unit, then tests/requirements, whose
+        # results file is the evidence for specs/ (only that run writes it).
+        # The requirement tests run even when the unit tests fail, and the
+        # step fails if either did. Exit 5 is "no tests collected": no
+        # requirement has a test yet
+        env:
+          SPECCHECK_PRODUCER: sdk-docker
+          SPECCHECK_RESULTS: /src/sdk/.speccheck/sdk-docker-${{ matrix.platform }}.jsonl
+          SPECCHECK_ROOT: sdk
+          # The `job` context is only available to steps, not to a job's own `env`
+          SPECCHECK_JOB_ID: ${{ job.check_run_id }}
         run: |
+          mkdir -p .speccheck
           docker run --rm --platform linux/${{ matrix.platform }} \
-            -v "$PWD:/src" -w /src \
+            -v "$GITHUB_WORKSPACE:/src" -w /src/sdk \
+            -e SPECCHECK_PRODUCER -e SPECCHECK_RESULTS -e SPECCHECK_ROOT -e SPECCHECK_JOB_ID \
+            -e GITHUB_ACTIONS -e GITHUB_SERVER_URL -e GITHUB_REPOSITORY -e GITHUB_WORKFLOW \
+            -e GITHUB_JOB -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT -e GITHUB_SHA -e GITHUB_REF \
+            -e GITHUB_EVENT_NAME \
             sdk:${{ matrix.platform }} \
             bash -ec '
               uv export --frozen --only-dev > requirements.txt
               uv pip install -r requirements.txt
               rm requirements.txt
-              pytest --color=yes
+              rc=0
+              env -u SPECCHECK_RESULTS pytest --color=yes tests/unit || rc=1
+              pytest --color=yes tests/requirements || [ $? -eq 5 ] || rc=1
+              exit "$rc"
             '
+      - name: Upload speccheck results
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/speccheck-upload
+        with:
+          name: sdk-docker-${{ matrix.platform }}
+          path: sdk/.speccheck
+
+  speccheck-sdk:
+    # The final job for sdk/specs: reads every sdk results file, publishes the
+    # speccheck-sdk-report artifact, and fails unless every requirement passed. It
+    # runs even when a test job failed, so the report shows what was proven.
+    # See common/speccheck/README.md, "In CI"
+    name: "sdk: speccheck"
+    needs: [sdk-python, sdk-docker]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      # To look up the run's job names, so the report names each job
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify
+        uses: ./.github/actions/speccheck-verify
+        with:
+          config: sdk/pyproject.toml
+          report-name: speccheck-sdk-report
+          # On devel every producer must have reported
+          complete: ${{ github.event_name != 'pull_request' }}
 
   platform-frontend-npm:
     name: "platform: frontend npm"

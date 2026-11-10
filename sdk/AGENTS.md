@@ -18,14 +18,14 @@ authentication, and lifecycle behavior stay aligned.
 shape fallbacks. Preserve exact ProtoJSON `TASK_STATE_*` values in accumulated
 statuses and reject invalid state spellings instead of normalizing them.
 
-`tests/` contains pytest tests named `test_*.py`; integration coverage is concentrated in `tests/test_integration.py`. `examples/` has runnable usage examples and is excluded from ruff and mypy checks. `docs/` contains longer guides; update it when public behavior changes. `docs/agent/LLM_CLIENT_MIGRATION.md` guides people and AI coding assistants through replacing vendor-specific LLM utilities with `llm_client`.
+`tests/unit/` contains the unit tests, named `test_*.py`, and is the suite measured by coverage; integration coverage is concentrated in `tests/unit/test_integration.py`. `tests/requirements/` proves `specs/`, one file per spec, each test claiming what it proves with `@pytest.mark.covers(ID, how)`. `examples/` has runnable usage examples and is excluded from ruff and mypy checks. `docs/` contains longer guides; update it when public behavior changes. `docs/agent/LLM_CLIENT_MIGRATION.md` guides people and AI coding assistants through replacing vendor-specific LLM utilities with `llm_client`.
 
 ## Build, Test, and Development Commands
 
 Use the Makefile so tools run through the locked `uv` environment:
 
 ```bash
-make test          # run unit tests with project defaults
+make test          # run the unit tests (with coverage) and the requirement tests
 make lint          # run ruff check .
 make format        # verify ruff formatting
 make typecheck     # run mypy on prometheus_api/
@@ -38,7 +38,7 @@ make build-image IMAGE_TAG=dev
 `make test-install` creates its clean smoke-test environment with Python 3.12, the
 project's minimum supported version, so the result does not depend on a newer system Python.
 
-For targeted tests, use `uv run pytest tests/test_agent.py::TestPrometheusAgentExecutor`.
+For targeted tests, use `uv run pytest tests/unit/test_agent.py::TestPrometheusAgentExecutor`.
 
 ## Coding Style & Naming Conventions
 
@@ -82,12 +82,12 @@ Spec-impacting behavior changes should update `specs/` in the same change and fo
 Keep the A2A SDK dependency on the supported v1 range (`>=1.0.0,<2`), keep the
 directly imported `protobuf` runtime dependency aligned with the SDK's
 supported range (`>=5.29.5,<7`), and keep `types-protobuf` development-only. Keep
-protobuf migration coverage in `tests/test_agent.py`, `tests/test_a2a_payloads.py`,
-and `tests/test_task_store.py` aligned with agent behavior.
+protobuf migration coverage in `tests/unit/test_agent.py`, `tests/unit/test_a2a_payloads.py`,
+and `tests/unit/test_task_store.py` aligned with agent behavior.
 
 ## Testing Guidelines
 
-Pytest configuration lives in `pyproject.toml`. Test files, classes, and functions should follow `test_*.py`, `Test*`, and `test_*`. Async tests are supported through `asyncio_mode = "auto"`. Run unit tests with `uv run pytest -m "not integration"`. Integration tests require a configured `.env` based on `.env.example` with valid `DEEPLYNX_*` credentials.
+Pytest configuration lives in `pyproject.toml`. Test files, classes, and functions should follow `test_*.py`, `Test*`, and `test_*`. Async tests are supported through `asyncio_mode = "auto"`. Run unit tests with `uv run pytest tests/unit -m "not integration"`, and requirement tests with `uv run pytest tests/requirements`. Integration tests require a configured `.env` based on `.env.example` with valid `DEEPLYNX_*` credentials.
 
 ## Commit & Pull Request Guidelines
 

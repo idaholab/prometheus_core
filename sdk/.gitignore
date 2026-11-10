@@ -148,3 +148,6 @@ llm_config.local.yaml
 # AI stuff
 .claude
 .codegraph
+
+# speccheck results files (pytest --speccheck-results)
+.speccheck/

@@ -1,7 +1,7 @@
 # 009 — Agent execution, events, and workers
 
 status: implemented
-sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/worker.py, tests/test_agent.py, tests/test_a2a_payloads.py
+sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/worker.py, tests/unit/test_agent.py, tests/unit/test_a2a_payloads.py
 depends-on: none
 
 ## Purpose

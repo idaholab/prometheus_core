@@ -122,12 +122,12 @@ python test_connection.py
 ```bash
 ./run_integration_tests.sh
 # or
-pytest tests/test_integration.py -v
+pytest tests/unit/test_integration.py -v
 ```
 
 ### Unit Tests
 ```bash
-pytest tests/test_connection.py tests/test_models.py tests/test_exceptions.py -v
+pytest tests/unit/test_connection.py tests/unit/test_models.py tests/unit/test_exceptions.py -v
 ```
 
 ### All Tests

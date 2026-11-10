@@ -73,10 +73,10 @@ git clone https://github.com/idaholab/prometheus_core.git
 cd prometheus_core/sdk
 uv sync
 make check    # ruff + mypy
-make test     # pytest (unit only; integration tests need .env)
+make test     # unit and requirement tests (integration tests need .env)
 make hooks    # optional: install local pre-commit/pre-push checks
 ```
 
-`uv sync` creates `.venv/` and installs everything from `uv.lock`, including the `dev` dependency group. Run any tool through `uv run` (e.g., `uv run pytest tests/test_models.py`) or use the Makefile targets.
+`uv sync` creates `.venv/` and installs everything from `uv.lock`, including the `dev` dependency group. Run any tool through `uv run` (e.g., `uv run pytest tests/unit/test_models.py`) or use the Makefile targets.
 
 For architecture, conventions, and the full list of common commands, see [DEVELOPMENT.md](DEVELOPMENT.md).

@@ -193,7 +193,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) and [INSTALL.md](INSTALL.md#development) fo
 
 ```bash
 make check    # ruff + mypy
-make test     # pytest (unit only)
+make test     # unit and requirement tests
 make test-integration  # DeepLynx tests, requires .env
 make hooks    # install pre-commit/pre-push hooks
 make fix      # auto-fix lint and format

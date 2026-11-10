@@ -1,7 +1,7 @@
 # 001 — Storage configuration and authentication
 
 status: implemented
-sources: README.md, docs/storage-client/GUIDE.md, docs/ENV_SETUP.md, prometheus_api/storage_client/connection.py, prometheus_api/storage_client/client.py, prometheus_api/storage_client/async_client.py, prometheus_api/storage_client/auth.py, prometheus_api/storage_client/exceptions.py, tests/test_connection.py, tests/test_env_config.py, tests/test_exceptions.py, tests/test_client_errors.py
+sources: README.md, docs/storage-client/GUIDE.md, docs/ENV_SETUP.md, prometheus_api/storage_client/connection.py, prometheus_api/storage_client/client.py, prometheus_api/storage_client/async_client.py, prometheus_api/storage_client/auth.py, prometheus_api/storage_client/exceptions.py, tests/unit/test_connection.py, tests/unit/test_env_config.py, tests/unit/test_exceptions.py, tests/unit/test_client_errors.py
 depends-on: none
 
 ## Purpose
@@ -51,5 +51,5 @@ Provide a single typed contract for connecting to DeepLynx and a consistent sync
 - This spec does not require storage clients to be usable outside their context manager protocols.
 
 ## Open questions
-- Token refresh has no direct unit coverage (REQ-001-11); retry behavior and response error mapping are covered by `tests/test_client_errors.py`.
+- Token refresh has no direct unit coverage (REQ-001-11); retry behavior and response error mapping are covered by `tests/unit/test_client_errors.py`.
 - `ConnectionConfig` forbids extra fields through Pydantic config, but there is no explicit regression test for unknown fields.

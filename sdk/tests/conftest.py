@@ -10,20 +10,55 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""Pytest configuration for prometheus_api tests."""
+"""Pytest configuration for prometheus_api tests.
 
+The tests are two suites, kept apart:
+
+- `tests/unit/` tests the code, one module or feature at a time, and is the
+  suite measured by coverage (`fail_under`). Its tests claim no requirements.
+- `tests/requirements/` proves the specs in `specs/`, one file per spec. Every
+  test there claims what it proves with `@pytest.mark.covers(ID, how)`, and CI
+  uploads its speccheck results as the evidence. It isn't measured by coverage.
+"""
+
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from prometheus_api.agent import PrometheusAgent
 
+TESTS = Path(__file__).resolve().parent
+"""The tests folder."""
+
 
 def pytest_collection_modifyitems(config, items):
-    """Automatically mark tests in test_integration.py with the integration marker."""
+    """Mark integration tests, and keep the unit and requirements suites apart.
+
+    Collection fails on a unit test that claims a requirement, and on a
+    requirements test that claims none.
+    """
+    problems = []
     for item in items:
         if "test_integration" in str(item.fspath):
             item.add_marker(pytest.mark.integration)
+        path = Path(str(item.path)).resolve()
+        if TESTS not in path.parents:
+            continue
+        suite = path.relative_to(TESTS).parts[0]
+        claims = item.get_closest_marker("covers") is not None
+        if suite == "unit" and claims:
+            problems.append(
+                f"{item.nodeid}: a unit test claims no requirement; "
+                "prove requirements in tests/requirements/"
+            )
+        elif suite == "requirements" and not claims:
+            problems.append(
+                f"{item.nodeid}: a requirements test claims what it proves "
+                "with @pytest.mark.covers(ID, how)"
+            )
+    if problems:
+        raise pytest.UsageError("\n".join(problems))
 
 
 @pytest.fixture(autouse=True)

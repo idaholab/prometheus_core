@@ -1,7 +1,7 @@
 # 006 — LLM chat and embeddings
 
 status: implemented
-sources: README.md, docs/ENV_SETUP.md, prometheus_api/llm_client/client.py, prometheus_api/llm_client/models.py, prometheus_api/llm_client/normalization.py, prometheus_api/llm_client/tools.py, tests/test_llm_client.py
+sources: README.md, docs/ENV_SETUP.md, prometheus_api/llm_client/client.py, prometheus_api/llm_client/models.py, prometheus_api/llm_client/normalization.py, prometheus_api/llm_client/tools.py, tests/unit/test_llm_client.py
 depends-on: 005
 
 ## Purpose

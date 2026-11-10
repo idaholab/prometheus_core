@@ -1414,7 +1414,7 @@ Start from `sdk/llm_config.example.yaml`. Mount it into the container and set `L
 {.sm}
 1. Add `sdk/prometheus_api/llm_configs/<name>.yaml` with **all six** flavors
 2. Nothing to register: every `*.yaml` there is a profile (`list_llm_config_profiles()`)
-3. Update `tests/test_llm_configs.py`, `specs/005`, README/ENV_SETUP
+3. Update `tests/unit/test_llm_configs.py`, `specs/005`, README/ENV_SETUP
 4. Bump the version, and note it in `AGENT_MIGRATIONS.md`
 5. `make up` in `platform/` rebuilds `prometheus_api:local` with it
 6. Select it with `LLM_CONFIG_PROFILE=<name>`

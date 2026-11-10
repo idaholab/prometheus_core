@@ -1,7 +1,7 @@
 # 008 — Agent app, card, auth, and registry
 
 status: implemented
-sources: README.md, docs/agent/GUIDE.md, docs/agent/QUICK_START.md, docs/ENV_SETUP.md, prometheus_api/agent/base.py, prometheus_api/agent/middleware.py, prometheus_api/agent/registry.py, prometheus_api/agent/debug_routes.py, tests/test_agent.py, tests/test_a2a_payloads.py
+sources: README.md, docs/agent/GUIDE.md, docs/agent/QUICK_START.md, docs/ENV_SETUP.md, prometheus_api/agent/base.py, prometheus_api/agent/middleware.py, prometheus_api/agent/registry.py, prometheus_api/agent/debug_routes.py, tests/unit/test_agent.py, tests/unit/test_a2a_payloads.py
 depends-on: 009, 012
 
 ## Purpose

@@ -183,7 +183,7 @@ _REQUIREMENT_HEAD = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[([^\]]*
 def test_sdk_declares_litellm_mcp_extra():
     """Covers REQ-013-04: the runtime dependency on litellm carries its mcp extra."""
     pyproject = tomllib.loads(
-        (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+        (Path(__file__).parents[2] / "pyproject.toml").read_text(encoding="utf-8")
     )
 
     litellm_extras = []

@@ -1,7 +1,7 @@
 # 012 — Redis-backed state and degradation
 
 status: implemented
-sources: prometheus_api/redis_utils.py, prometheus_api/agent/task_store.py, prometheus_api/agent/base.py, tests/test_redis_utils.py, tests/test_task_store.py, tests/test_agent.py
+sources: prometheus_api/redis_utils.py, prometheus_api/agent/task_store.py, prometheus_api/agent/base.py, tests/unit/test_redis_utils.py, tests/unit/test_task_store.py, tests/unit/test_agent.py
 depends-on: none
 
 ## Purpose

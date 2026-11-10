@@ -54,7 +54,7 @@ Tool calling changes neither the message schema nor the model tier — it is an 
 parameter, and callers want the cross-product (tools with `small` for cheap extraction, with
 `large` for planning). The three existing consumers prove it: all three already pick a flavor
 (`large`, `medium`, `medium`) and pass `tools=` alongside. A flavor would also break a contract
-pinned in four places ([test_llm_configs.py:13](../../tests/test_llm_configs.py#L13) exact-set `==`,
+pinned in four places ([test_llm_configs.py:13](../../tests/unit/test_llm_configs.py#L13) exact-set `==`,
 `specs/005` REQ-005-16, `AGENTS.md:5`, `docs/ENV_SETUP.md:154`) and require a cross-repo LiteLLM
 deployment change this package can't ship — for zero gain, since every model the six profiles map
 to already supports tool calling.
@@ -67,13 +67,13 @@ fixed by this change.
 
 ## Phase 0 — green baseline (do first, separate commit)
 
-[tests/test_llm_client.py:224-232](../../tests/test_llm_client.py#L224-L232)
+[tests/unit/test_llm_client.py:224-232](../../tests/unit/test_llm_client.py#L224-L232)
 `test_local_development_example_config_parses` reads `llm_config.example.yaml`, which was deleted
 (not on disk, not in `git ls-files`). It fails today. You cannot use `make test-unit` as the
 acceptance gate for a new spec while a test in the file you're editing is red.
 
 1. Delete that test. Its claim is already covered by `test_fallback_yaml_parsing_resolves_env_refs`
-   ([tests/test_llm_client.py:213](../../tests/test_llm_client.py#L213)) and
+   ([tests/unit/test_llm_client.py:213](../../tests/unit/test_llm_client.py#L213)) and
    `test_provider_profiles_scaffold_every_flavor`. Do **not** restore the YAML — the installed
    profiles superseded it.
 2. Drop `llm_config.example.yaml` from the `sources:` line of `specs/005`.
@@ -215,7 +215,7 @@ Missing, `None`, or empty-string `content` is permitted **if and only if** `role
 
 Preserve the existing error **message strings** for the missing-role and missing-content cases —
 that way the parametrized matrix at
-[tests/test_llm_client.py:305-318](../../tests/test_llm_client.py#L305-L318) passes unchanged, including
+[tests/unit/test_llm_client.py:305-318](../../tests/unit/test_llm_client.py#L305-L318) passes unchanged, including
 its `([{"role": "user"}], ValueError)` row. Newly rejected cases to add to that matrix:
 `assistant` + `content: None` with no `tool_calls`; `assistant` + `tool_calls: []` (empty list is
 falsy); `role: "tool"` + `content: None` + `tool_calls`; and a message missing `role` entirely.
@@ -343,7 +343,7 @@ whitespace is only partially redacted.
 
 **Tracing — the exact-dict problem.** `_set_chat_trace_outputs`
 ([client.py:217-227](../../prometheus_api/llm_client/client.py#L217-L227)) builds exactly four keys, and
-[tests/test_llm_client.py:450-456](../../tests/test_llm_client.py#L450-L456) asserts both span inputs and
+[tests/unit/test_llm_client.py:450-456](../../tests/unit/test_llm_client.py#L450-L456) asserts both span inputs and
 outputs as **exact dicts** (pinned by REQ-007-11).
 
 Solution: add `tool_calls` and `finish_reason` to outputs **only when `response.tool_calls` is
@@ -383,7 +383,7 @@ via a `posted: list[dict]` closure, and stub the fallback path with `import lite
 body then `monkeypatch.setattr(litellm, "completion", fake)` returning **plain dicts**. Cite REQ/BEH
 IDs in a docstring or an inline comment above the assert. Line length 100.
 
-Added to `tests/test_llm_client.py`: normalization acceptance + the extended rejection matrix
+Added to `tests/unit/test_llm_client.py`: normalization acceptance + the extended rejection matrix
 (REQ-006-15, REQ-006-02, BEH-006-04); `tool_calls`/`finish_reason` populated from a proxy dict and
 from a LiteLLM object, **sync and async** (REQ-014-02, BEH-014-01); `tools`/`tool_choice` forwarded
 to the proxy payload and to the LiteLLM kwargs (REQ-006-17); `ToolDefinition` objects serialized;
@@ -391,7 +391,7 @@ flavor methods forward `tools`; `stream=True` rejected with no request sent (REQ
 BEH-006-05); the signature parity guard; redacted tool calls in span outputs and their absence
 without tool calls (REQ-007-13, BEH-007-04/05); debug logging with and without opt-in (REQ-007-14).
 
-New `tests/test_llm_tools.py`: both response shapes at the parser level; `ChatResponse`-or-raw
+New `tests/unit/test_llm_tools.py`: both response shapes at the parser level; `ChatResponse`-or-raw
 input; empty-tuple cases; JSON-string vs mapping arguments; `arguments_error` for malformed and for
 non-object JSON (BEH-014-02); `parse_finish_reason` both shapes; `assistant_message` preserves
 `content: None` and **explicitly asserts no `"Tool calls requested."`** (BEH-014-03); the
@@ -424,14 +424,14 @@ LiteLLM-object are each covered in both sync and async.
 # Run from the sdk/ directory.
 
 # Baseline — confirm exactly one pre-existing failure before Phase 0
-uv run pytest tests/test_llm_client.py tests/test_llm_configs.py -v
+uv run pytest tests/unit/test_llm_client.py tests/unit/test_llm_configs.py -v
 
 make format && make lint && make typecheck && make test-unit
 
-uv run pytest tests/test_llm_tools.py -v
-uv run pytest tests/test_llm_configs.py -v                 # 6-flavor contract untouched
-uv run pytest tests/test_llm_client.py -k "mlflow" -v      # exact-dict span contract holds
-uv run pytest tests/test_llm_client.py -k "normalize" -v   # REQ-006-02 rejections intact
+uv run pytest tests/unit/test_llm_tools.py -v
+uv run pytest tests/unit/test_llm_configs.py -v                 # 6-flavor contract untouched
+uv run pytest tests/unit/test_llm_client.py -k "mlflow" -v      # exact-dict span contract holds
+uv run pytest tests/unit/test_llm_client.py -k "normalize" -v   # REQ-006-02 rejections intact
 
 make check && make test-install
 ```

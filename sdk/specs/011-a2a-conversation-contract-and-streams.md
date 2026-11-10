@@ -1,7 +1,7 @@
 # 011 — A2A conversation contract and streams
 
 status: implemented
-sources: prometheus_api/contract.py, prometheus_api/a2a_stream.py, prometheus_api/agent/__init__.py, tests/test_contract.py, tests/test_a2a_stream.py, tests/test_a2a_payloads.py
+sources: prometheus_api/contract.py, prometheus_api/a2a_stream.py, prometheus_api/agent/__init__.py, tests/unit/test_contract.py, tests/unit/test_a2a_stream.py, tests/unit/test_a2a_payloads.py
 depends-on: 008, 009, 010
 
 ## Purpose
