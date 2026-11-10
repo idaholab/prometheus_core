@@ -116,6 +116,38 @@ async def test_login_endpoint_authenticates_against_db(monkeypatch, wire_db_sess
     assert bad.status_code == 401
 
 
+async def test_login_answers_as_its_openapi_entry_documents(monkeypatch, wire_db_session):
+    """Login accepts both documented body types and gives the documented errors.
+
+    The route reads its body itself, so its request body and 4xx responses are
+    declared by hand in app/routers/auth.py; this keeps them true.
+    """
+    from app import security
+    from app.db.models import User as UserRow
+    from app.main import app
+    from app.passwords import hash_password
+
+    monkeypatch.setattr(security.settings, "jwt_secret", "test-secret", raising=False)
+    wire_db_session.add(
+        UserRow(username="alice", password_hash=hash_password("s3cret"), role="admin", provider="credentials")
+    )
+    await wire_db_session.commit()
+
+    operation = app.openapi()["paths"]["/api/auth/login"]["post"]
+    assert set(operation["requestBody"]["content"]) == {"application/json", "application/x-www-form-urlencoded"}
+    assert {"401", "422"} <= set(operation["responses"])
+
+    client = TestClient(app)
+    form = client.post("/api/auth/login", data={"username": "alice", "password": "s3cret"})
+    assert form.status_code == 200
+
+    wrong = client.post("/api/auth/login", data={"username": "alice", "password": "wrong"})
+    assert (wrong.status_code, wrong.json()["detail"]) == (401, "Invalid credentials")
+
+    missing = client.post("/api/auth/login", json={"username": "alice"})
+    assert (missing.status_code, missing.json()["detail"]) == (422, "username and password required")
+
+
 # --------------------------------------------------------------------------- #
 # AU-5 — /api/config is authenticated
 # --------------------------------------------------------------------------- #
