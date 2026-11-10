@@ -312,6 +312,8 @@ Query one by the ID of its record. The server exposes the file as a temporary SQ
 `view_name`, and your query must mention that name:
 
 ```python
+from pathlib import Path
+
 stored = client.files.upload(Path("sensor_data.csv"))
 
 result = client.timeseries.query(
