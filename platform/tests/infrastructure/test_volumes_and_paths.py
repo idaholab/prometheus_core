@@ -251,9 +251,15 @@ def test_start_targets_drop_frontend_dev_node_modules(project_root):
 
 
 def _make_dry_run(project_root, target: str, profile: str) -> list[str]:
-    """The commands `make -n <target>` would run, for one PROFILE."""
+    """The commands `make -n <target>` would run, for one PROFILE.
+
+    Runs in the real platform folder, so Make reads the developer's own .env. Setting
+    LOCAL_DEEPLYNX=false on the command line beats it (and the environment): with
+    LOCAL_DEEPLYNX=true the start targets also run deeplynx-setup, a second
+    `docker compose ... up` line these tests aren't about.
+    """
     result = subprocess.run(
-        ["make", "-n", target, f"PROFILE={profile}", "CHECK=false"],
+        ["make", "-n", target, f"PROFILE={profile}", "CHECK=false", "LOCAL_DEEPLYNX=false"],
         cwd=project_root,
         capture_output=True,
         text=True,
