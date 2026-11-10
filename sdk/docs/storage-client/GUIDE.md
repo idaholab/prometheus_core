@@ -334,6 +334,13 @@ print(result.data[:3])  # rows as lists, in column order
   including inside a column name.
 - Each call can take many seconds on a large file; raise `ConnectionConfig.timeout` if needed.
 
+**Coming from `timeseries.upload` and the data-source `query`?** Version 0.16.0 removed them,
+because the routes they called no longer exist on the server. Upload the file with
+`client.files.upload(...)`, then pass the returned `id` (the file's record ID) as `record_id` to
+`timeseries.query`. `view_name` and `sql_query` are keyword-only, and the result is
+`TimeseriesResult(columns, data)`. The steps are in
+[AGENT_MIGRATIONS.md](../agent/AGENT_MIGRATIONS.md#0160).
+
 ## Error Handling
 
 The library provides custom exceptions for different error scenarios:
