@@ -24,7 +24,7 @@ The root `Makefile` drives the full Docker Compose stack. It picks `podman-compo
 ```bash
 make up              # generate + build + start everything (detached)
 make up-fg           # same, foreground
-make restart         # restart without rebuild (still re-runs generate)
+make restart         # restart without rebuild (still re-runs generate; PROFILE=dev rebuilds just frontend-dev)
 make ng-up           # skip the regenerate step (use existing docker-compose.agents.yml)
 make down            # stop services (add down-v to drop volumes)
 make clear-agent-registry # stop services + delete only the agent registrations from Valkey

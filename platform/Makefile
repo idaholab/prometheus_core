@@ -141,6 +141,14 @@ UP_ARGS ?=
 # A no-op when frontend-dev isn't running (e.g. PROFILE=prod).
 RM_FRONTEND_DEV = $(COMPOSE) $(COMPOSE_FILES_NG) --profile dev rm -fsv frontend-dev
 
+# That volume is refilled from whatever image frontend-dev already has, and the
+# restart targets don't pass --build (unlike up), so they rebuild just this image
+# first. Otherwise the first restart after an image change would refill it from the
+# old image: root-owned files the dev server can't write to, or the previous
+# dependencies. Every layer is cached unless package.json, the lockfile or the
+# Dockerfile changed. Empty (no build) unless PROFILE=dev.
+BUILD_FRONTEND_DEV = $(if $(filter dev,$(PROFILE)),$(COMPOSE) $(COMPOSE_FILES_NG) --profile dev build frontend-dev)
+
 # The detached start targets (up, restart, ng-up, ng-restart) wait for every
 # service with a healthcheck to report healthy (`docker compose up --wait`),
 # then run `make check`. Set CHECK=false to return as soon as the containers
@@ -349,15 +357,17 @@ up-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 up-fg: $(BASE_IMAGE_DEP) generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build
 
-restart: ##@ Clear agent registrations, then restart all services without rebuilding.
+restart: ##@ Clear agent registrations, then restart all services without rebuilding (except the dev frontend image).
 restart: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 restart: generate clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (foreground).
+restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (except the dev frontend image) (foreground).
 restart-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 restart-fg: generate clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up
 
 ng-up: ##@ Clear agent registrations, then start without regenerating agents compose.
@@ -369,13 +379,15 @@ ng-up-fg: ##@ Clear agent registrations, then start without regenerating (foregr
 ng-up-fg: $(BASE_IMAGE_DEP) clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build
 
-ng-restart: ##@ Clear agent registrations, then restart without rebuilding or regenerating.
+ng-restart: ##@ Clear agent registrations, then restart without rebuilding (except the dev frontend image) or regenerating.
 ng-restart: clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding or regenerating (foreground).
+ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding (except the dev frontend image) or regenerating (foreground).
 ng-restart-fg: clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up
 
 # The work is done by the .env rule at the top, which runs for this goal as for

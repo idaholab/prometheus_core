@@ -13,6 +13,7 @@
 """Validate volume mounts and filesystem paths."""
 
 import re
+import subprocess
 
 
 def _get_volumes(svc: dict) -> list[str]:
@@ -231,3 +232,54 @@ def test_start_targets_drop_frontend_dev_node_modules(project_root):
     for name in ("up", "up-fg", "restart", "restart-fg", "ng-up", "ng-up-fg", "ng-restart", "ng-restart-fg"):
         assert name in rules, f"no {name} recipe in Makefile"
         assert "clear-agent-registry" in rules[name][0], f"{name} must depend on clear-agent-registry"
+
+
+def _make_dry_run(project_root, target: str, profile: str) -> list[str]:
+    """The commands `make -n <target>` would run, for one PROFILE."""
+    result = subprocess.run(
+        ["make", "-n", target, f"PROFILE={profile}", "CHECK=false"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    return result.stdout.splitlines()
+
+
+def _compose_line(lines: list[str], verb: str) -> int:
+    """Index of the one `docker compose ... <verb> ...` line (not the redis helper)."""
+    hits = [
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("docker compose") and re.search(rf" {verb}( |$)", line) and "up -d redis" not in line
+    ]
+    assert len(hits) == 1, f"expected one compose {verb} line, got {len(hits)}"
+    return hits[0]
+
+
+RESTART_TARGETS = ("restart", "restart-fg", "ng-restart", "ng-restart-fg")
+
+
+def test_restart_targets_rebuild_frontend_dev_before_starting(project_root):
+    """With PROFILE=dev, every restart target builds frontend-dev, then starts the stack.
+
+    The volume cleanup refills node_modules from the image frontend-dev already has,
+    and restart doesn't pass --build, so without this the first restart after an image
+    change refills it from the old image (root-owned, or the previous dependencies).
+    """
+    for target in RESTART_TARGETS:
+        lines = _make_dry_run(project_root, target, "dev")
+        build = _compose_line(lines, "build")
+        assert lines[build].endswith("--profile dev build frontend-dev"), f"{target}: builds only frontend-dev"
+        assert build < _compose_line(lines, "up"), f"{target}: build must come before up"
+
+
+def test_restart_targets_skip_frontend_dev_build_without_dev_profile(project_root):
+    """PROFILE=prod and PROFILE= have no frontend-dev, so restart builds nothing."""
+    for target in RESTART_TARGETS:
+        for profile in ("prod", ""):
+            lines = _make_dry_run(project_root, target, profile)
+            assert not any(" build" in line and line.startswith("docker compose") for line in lines), (
+                f"{target} PROFILE={profile!r} must not build"
+            )
