@@ -84,8 +84,8 @@ async def test_query_sends_only_the_options_given_in_camel_case():
     sync_client, async_client, _, _ = await run_both(
         QUERY_RESPONSE,
         7,
-        "check_view",
-        'SELECT "a.b" FROM check_view',
+        view_name="check_view",
+        sql_query='SELECT "a.b" FROM check_view',
         limit=10,
         row_stride=2,
         start_row=5,
@@ -146,6 +146,18 @@ def test_timeseries_upload_was_removed():
     """Covers REQ-003-12: the removed upload route has no replacement method."""
     assert not hasattr(TimeseriesResource, "upload")
     assert not hasattr(AsyncTimeseriesResource, "upload")
+
+
+async def test_old_style_positional_query_is_rejected():
+    """Covers REQ-003-12: the old ``query(data_source_id, sql_query)`` call fails loudly.
+
+    ``sql_query`` used to be the second positional argument. Only ``record_id`` is positional now,
+    so a stale call cannot send its SQL as the view name.
+    """
+    with pytest.raises(TypeError):
+        TimeseriesResource(SyncClient(QUERY_RESPONSE)).query(456, "SELECT * FROM data")
+    with pytest.raises(TypeError):
+        await AsyncTimeseriesResource(AsyncClient(QUERY_RESPONSE)).query(456, "SELECT * FROM data")
 
 
 def test_clients_still_expose_the_timeseries_handlers():

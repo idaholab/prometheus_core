@@ -24,9 +24,9 @@ class AsyncTimeseriesResource(AsyncBaseResource):
     async def query(
         self,
         record_id: int,
+        *,
         view_name: str = "data",
         sql_query: Optional[str] = None,
-        *,
         limit: Optional[int] = None,
         row_stride: Optional[int] = None,
         start_row: Optional[int] = None,
