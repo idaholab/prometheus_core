@@ -566,11 +566,10 @@ class TestTimeseries:
             assert past_end.data == []
 
         finally:
+            # No try/except: a failed delete leaves test data behind and should fail the test.
+            # If an assertion above already failed, pytest shows both errors.
             if file_id:
-                try:
-                    client.files.delete(file_id)
-                except Exception as e:
-                    print(f"Warning: Failed to delete test file {file_id}: {e}")
+                client.files.delete(file_id)
 
 
 class TestDeeplynxFileSystem:
