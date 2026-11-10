@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 import { Atom, MessageSquarePlus, PanelLeft } from "lucide-react";
 import { useCurrentUser } from "@/features/auth/store/session";
 import { Button } from "@/components/ui/Button";
-import { NAV_ITEMS, ADMIN_NAV_ITEM, type NavId, type NavItem } from "./dashboard/nav";
+import { NAV_ITEMS, ADMIN_NAV_ITEM, type NavId, type NavItem } from "./nav";
 
 interface Props {
   isOpen: boolean;

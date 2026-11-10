@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { usePageHeader } from "@/lib/store/pageHeader";
+import { usePageHeader } from "@/features/shell/store/pageHeader";
 import { useProjectManagement } from "@/features/project-management/store/projectManagement";
 import { ProjectManagement } from "@/features/project-management/ProjectManagement";
 

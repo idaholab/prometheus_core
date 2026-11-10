@@ -20,13 +20,13 @@ import { test } from "vitest";
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
 
 const IN_SCOPE_FILES = [
-  "components/Header.tsx",
-  "components/LeftPanel.tsx",
+  "features/shell/Header.tsx",
+  "features/shell/LeftPanel.tsx",
   "features/auth/Login.tsx",
   "features/auth/SetupWizard.tsx",
   "features/chat/Chat.tsx",
   "features/chat/FollowupForm.tsx",
-  "components/SettingsPanel.tsx",
+  "features/shell/SettingsPanel.tsx",
   "features/dashboard/StatusPanel.tsx",
   "features/chat/WelcomeScreen.tsx",
 ];
@@ -48,10 +48,10 @@ const RAW_BUTTON_ALLOWLIST: ReadonlyArray<{ file: string; marker: string; count:
   { file: "features/dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
   { file: "features/dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
   { file: "features/chat/Chat.tsx", marker: "onClick={() => setOpen((v) => !v)}", count: 1, why: "tool-call history toggle, not a site" },
-  { file: "components/LeftPanel.tsx", marker: "aria-current=", count: 1, why: "NavButton rail item, not a site" },
-  { file: "components/Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },
-  { file: "components/Header.tsx", marker: "onClick={onToggleSettings}", count: 1, why: "user menu item, not a site" },
-  { file: "components/Header.tsx", marker: "onClick={onLogout}", count: 1, why: "user menu item, not a site" },
+  { file: "features/shell/LeftPanel.tsx", marker: "aria-current=", count: 1, why: "NavButton rail item, not a site" },
+  { file: "features/shell/Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },
+  { file: "features/shell/Header.tsx", marker: "onClick={onToggleSettings}", count: 1, why: "user menu item, not a site" },
+  { file: "features/shell/Header.tsx", marker: "onClick={onLogout}", count: 1, why: "user menu item, not a site" },
 ];
 
 /** Skips a quoted literal that opens at `start`; returns the index after it. */

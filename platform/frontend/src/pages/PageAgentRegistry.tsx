@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useAgents } from "@/features/agent-registry/store/agents";
-import { usePageHeader } from "@/lib/store/pageHeader";
+import { usePageHeader } from "@/features/shell/store/pageHeader";
 import { AgentRegistry } from "@/features/agent-registry/AgentRegistry";
 
 /**

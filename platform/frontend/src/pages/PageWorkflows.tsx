@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { usePageHeader } from "@/lib/store/pageHeader";
+import { usePageHeader } from "@/features/shell/store/pageHeader";
 import { WorkflowBuilder } from "@/features/workflows/WorkflowBuilder";
 import { WorkflowConsole } from "@/features/workflows/WorkflowConsole";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";

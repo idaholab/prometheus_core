@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { usePageHeader } from "@/lib/store/pageHeader";
+import { usePageHeader } from "@/features/shell/store/pageHeader";
 import { ApprovalQueue } from "@/features/approval-queue/ApprovalQueue";
 import type { QueueCounter } from "@/features/approval-queue/QueueSummary";
 import type { Checkpoint } from "@/features/approval-queue/types";

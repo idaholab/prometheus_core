@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useDataManagement } from "@/features/data-management/store/dataManagement";
-import { usePageHeader } from "@/lib/store/pageHeader";
+import { usePageHeader } from "@/features/shell/store/pageHeader";
 import { DataManagement } from "@/features/data-management/DataManagement";
 
 /**
