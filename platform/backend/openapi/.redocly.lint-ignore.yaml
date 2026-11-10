@@ -1,0 +1,67 @@
+# The lint problems openapi.json had when the lint was added, ignored so CI
+# passes while they're fixed. Each entry ignores one rule at one location, so a
+# new route or schema with the same problem still fails.
+#
+# Remove an entry when you fix its problem, or the whole file once they're all
+# fixed. Don't add to it: fix a new problem, or turn its rule off in
+# redocly.yaml with the reason. Redocly wrote this file with
+#
+#   npx redocly lint openapi.json --generate-ignore-file
+openapi.json:
+  info-license:
+    - '#/info'
+  operation-4xx-response:
+    - '#/paths/~1healthz/get/responses'
+    - '#/paths/~1readyz/get/responses'
+    - '#/paths/~1.well-known~1jwks.json/get/responses'
+    - '#/paths/~1api~1setup~1status/get/responses'
+    - '#/paths/~1api~1auth~1login/post/responses'
+    - '#/paths/~1api~1auth~1logout/post/responses'
+    - '#/paths/~1api~1auth~1providers/get/responses'
+    - '#/paths/~1v1~1agents/get/responses'
+  no-illogical-composition-keywords:
+    - '#/components/schemas/FormField/properties/default/anyOf/0'
+    - '#/components/schemas/ArtifactMeta/properties/json_body/anyOf/0'
+  security-defined:
+    - '#/paths/~1healthz/get'
+    - '#/paths/~1readyz/get'
+    - '#/paths/~1.well-known~1jwks.json/get'
+    - '#/paths/~1api~1setup~1status/get'
+    - '#/paths/~1api~1setup~1bootstrap/post'
+    - '#/paths/~1api~1auth~1login/post'
+    - '#/paths/~1api~1auth~1logout/post'
+    - '#/paths/~1api~1auth~1me/get'
+    - '#/paths/~1api~1auth~1providers/get'
+    - '#/paths/~1api~1auth~1login~1{provider_id}/get'
+    - '#/paths/~1api~1auth~1callback~1{provider}/get'
+    - '#/paths/~1api~1config/get'
+    - '#/paths/~1api~1sessions/post'
+    - '#/paths/~1api~1chat~1messages/post'
+    - '#/paths/~1api~1chat~1turns~1{turn_id}/get'
+    - '#/paths/~1api~1events/get'
+    - '#/paths/~1api~1uploads/post'
+    - '#/paths/~1api~1artifacts~1{artifact_id}~1content/get'
+    - '#/paths/~1api~1artifacts~1mesh~1{dataset_id}~1{filename}/get'
+    - '#/paths/~1api~1conversations~1recent/get'
+    - '#/paths/~1api~1conversations~1{conversation_id}/get'
+    - '#/paths/~1api~1conversations~1{conversation_id}/delete'
+    - '#/paths/~1api~1conversations~1{conversation_id}/patch'
+    - '#/paths/~1api~1conversations~1{conversation_id}~1tasks/get'
+    - '#/paths/~1api~1conversations~1{conversation_id}~1resume/post'
+    - '#/paths/~1api~1admin~1users/get'
+    - '#/paths/~1api~1admin~1users/post'
+    - '#/paths/~1api~1admin~1users~1{user_id}/delete'
+    - '#/paths/~1api~1admin~1users~1{user_id}/patch'
+    - '#/paths/~1api~1admin~1signing-keys/get'
+    - '#/paths/~1api~1admin~1signing-keys/post'
+    - '#/paths/~1api~1admin~1signing-keys~1{key_id}~1activate/post'
+    - '#/paths/~1api~1admin~1signing-keys~1{key_id}~1retire/post'
+    - '#/paths/~1api~1admin~1oidc-providers/get'
+    - '#/paths/~1api~1admin~1oidc-providers/post'
+    - '#/paths/~1api~1admin~1oidc-providers~1{provider_row_id}/delete'
+    - '#/paths/~1api~1admin~1oidc-providers~1{provider_row_id}/patch'
+    - '#/paths/~1v1~1agents/get'
+    - '#/paths/~1v1~1agents/post'
+    - '#/paths/~1v1~1agents~1{agent_id}/delete'
+    - '#/paths/~1a2a~1{agent_name}/get'
+    - '#/paths/~1a2a~1{agent_name}/post'

@@ -1,0 +1,20 @@
+# Redocly lint rules for openapi.json, the backend's OpenAPI document, which
+# ../scripts/export_openapi.py writes from the app. Run from this directory:
+#
+#   npm ci && npm run lint
+#
+# recommended-strict is the recommended ruleset with every warning raised to an
+# error, so new warnings fail CI instead of piling up. Turn a rule off below,
+# with the reason, rather than lowering its severity.
+#
+# Problems the document already had when the lint was added are listed in
+# .redocly.lint-ignore.yaml, which Redocly reads automatically. Remove entries
+# from it as they're fixed
+
+extends:
+  - recommended-strict
+
+rules:
+  # The backend is self-hosted, so there's no one server URL to list. Clients
+  # call the host they loaded the document from
+  no-empty-servers: off

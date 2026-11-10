@@ -1,0 +1,11 @@
+{
+  "name": "prometheus-backend-openapi",
+  "private": true,
+  "description": "Lints the backend's OpenAPI document with Redocly",
+  "scripts": {
+    "lint": "redocly lint openapi.json"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.72.1"
+  }
+}
