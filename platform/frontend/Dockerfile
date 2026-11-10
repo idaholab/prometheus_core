@@ -64,7 +64,11 @@ FROM nginxinc/nginx-unprivileged:1.31.7-alpine@sha256:b5047b9b76845eac124358373c
 # with no /api proxy or /healthz); conf.d/default.conf just includes the result.
 ENV BACKEND_UPSTREAM=http://backend:8000 \
     NGINX_ENVSUBST_OUTPUT_DIR=/tmp
-COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# --chown: COPY keeps the checkout's file mode (0600 under `umask 077`), and the
+# entrypoint now reads this as UID 101, not root. Owned by 101 it's readable at any
+# mode. Don't add --chmod: it also applies to the templates/ directory COPY creates,
+# and 0644 there drops the execute bit, so nginx can't open the file at all.
+COPY --chown=101:101 frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 # Pin the user rather than inheriting the base image's, so a base bump can't
 # change the UID the chart's runAsUser expects. 101 owns conf.d/, so the next
 # step needs no root; if a base bump changes that, the build fails here.

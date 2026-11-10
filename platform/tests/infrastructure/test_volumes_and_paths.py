@@ -181,6 +181,22 @@ def test_frontend_prod_renders_config_outside_conf_d(project_root):
     assert "include /tmp/default.conf;" in dockerfile
 
 
+def test_frontend_prod_template_readable_by_nginx_user(project_root):
+    """The nginx template is copied owned by the runtime user, with no --chmod.
+
+    COPY keeps the checkout's file mode, so under `umask 077` the template is 0600,
+    and the entrypoint reads it as UID 101 rather than root: unless 101 owns it, the
+    render fails and nginx never starts. --chmod is no substitute, because it also
+    sets the mode of the templates/ directory COPY creates (0644 drops the execute
+    bit, so the file can't be opened at all).
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    copies = [line for line in dockerfile.splitlines() if re.match(r"(?i)COPY\s.*default\.conf\.template", line)]
+    assert len(copies) == 1, "expected exactly one COPY of default.conf.template"
+    assert "--chown=101:101" in copies[0]
+    assert "--chmod" not in copies[0]
+
+
 def test_frontend_dev_runs_as_host_user(compose_data, project_root):
     """frontend-dev runs as the developer's UID, which the Makefile exports.
 
