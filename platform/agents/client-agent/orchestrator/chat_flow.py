@@ -22,7 +22,7 @@ from artifact_handling import merge_artifacts_into_context, summarize_artifacts_
 from conversation_store import get_conversation, store_conversation
 from workflow_library import find_workflow_by_command, get_workflow_registry
 
-from . import agent_loop, runtime
+from . import agent_loop, hooks, runtime, task_tracking
 from .debug_commands import (
     SUPPORTED_SLASH_COMMANDS,
     _maybe_handle_slash_command,
@@ -328,7 +328,23 @@ async def chat(request: ConversationRequest) -> ConversationResponse:
             return _error_response(conv_id, "A query is required.", "A query is required.")
 
         outcome = await agent_loop.advance(state, catalog)
-        return _respond(conv_id, state, outcome)
+        response = _respond(conv_id, state, outcome)
+        # End-of-turn middleware: the single funnel every non-crash outcome
+        # returns through (slash commands and the mid-loop crash path except).
+        # Fires after _respond persisted, so the hook sees the turn exactly as
+        # stored. Backgrounded turns run chat() to completion in the detached
+        # task, so this covers them too.
+        await hooks.run_on_turn(
+            conversation_id=conv_id,
+            outcome_kind=outcome.kind,
+            outcome_message=outcome.message,
+            llm_messages=state.get("llm_messages") or [],
+            tool_results=state.get("turn_tool_results") or {},
+            tool_inputs=state.get("turn_tool_inputs") or {},
+            turn_id=task_tracking.current_turn_id(),
+            root_id=task_tracking.current_root_id(),
+        )
+        return response
     except Exception as exc:
         logger.exception("Request failed for conversation %s", conv_id)
         # Keep completed tool calls and produced artifacts in the transcript.

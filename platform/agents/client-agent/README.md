@@ -193,12 +193,14 @@ expressed in agent-card metadata, schemas, workflow templates, or downstream age
 ## Call Middleware: `orchestrator/hooks.py`
 
 Generic middleware around every specialist dispatch the orchestrator makes —
-one protocol covering the four interception points of a call:
+one protocol covering the four interception points of a call, plus a fifth,
+turn-scoped point:
 
 - `on_request(context, params) -> params` — orchestrator entering the agent (normalized params)
 - `on_event(context, message) -> message` — agent leaving progress to the orchestrator (in-flight stream)
 - `on_result(context, result) -> result` — agent returning to the orchestrator (parsed payload)
 - `on_error(context, error)` — dispatch raised instead of returning
+- `on_turn(turn_context)` — one user turn finished at a loop outcome
 
 `AgentCallContext` (conversation, skill, agent, task-graph node) identifies the
 dispatch. Contract:
@@ -212,7 +214,17 @@ dispatch. Contract:
 - **`on_event` is sync by decision.** Progress events fire inside the
   stream-consume loop, latency-sensitive and high-volume; an awaitable would
   either backpressure the stream or need a side queue that does not exist.
-  `on_request`/`on_result`/`on_error` are async.
+  `on_request`/`on_result`/`on_error`/`on_turn` are async.
+- **`on_turn` is read-only and fires once per user reply.** It runs in
+  `chat_flow.chat` after `_respond` persisted the turn, so the hook sees the
+  turn exactly as stored — including backgrounded turns (the detached task
+  still runs `chat()` to completion). Its `TurnContext` carries a deep-copied
+  snapshot (the trimmed `llm_messages` transcript, this turn's
+  `tool_results`/`tool_inputs`, the loop outcome) — never the live
+  `AgentState`, which a sibling backgrounded turn can be writing concurrently.
+  An INPUT_REQUIRED pause and its resume are two `on_turn` fires sharing
+  `root_id`; join on `conversation_id` to rebuild one trajectory. Slash-command
+  replies and mid-loop crashes do not fire it.
 
 `NoopCallHook` (the default) logs and changes nothing — the reference
 implementation real middleware extends. Install with
