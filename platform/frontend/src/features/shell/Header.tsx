@@ -14,7 +14,7 @@ import { Fragment } from "react";
 import { Bell, ChevronDown, LogOut, Moon, Settings, Sun } from "lucide-react";
 import { usePageHeaderOverride } from "./store/pageHeader";
 import { useTheme } from "@/lib/useTheme";
-import { useCurrentUser } from "@/features/auth/store/session";
+import { useCurrentUser } from "@/features/auth";
 import { Button } from "@/components/ui/Button";
 
 interface Props {

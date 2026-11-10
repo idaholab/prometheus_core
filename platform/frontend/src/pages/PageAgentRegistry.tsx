@@ -10,9 +10,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useAgents } from "@/features/agent-registry/store/agents";
-import { usePageHeader } from "@/features/shell/store/pageHeader";
-import { AgentRegistry } from "@/features/agent-registry/AgentRegistry";
+import { useAgents } from "@/features/agent-registry";
+import { usePageHeader } from "@/features/shell";
+import { AgentRegistry } from "@/features/agent-registry";
 
 /**
  * Agent Registry section page: owns the page's data and header. Layout lives in

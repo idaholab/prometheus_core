@@ -10,9 +10,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { usePageHeader } from "@/features/shell/store/pageHeader";
-import { useProjectManagement } from "@/features/project-management/store/projectManagement";
-import { ProjectManagement } from "@/features/project-management/ProjectManagement";
+import { usePageHeader } from "@/features/shell";
+import { useProjectManagement } from "@/features/project-management";
+import { ProjectManagement } from "@/features/project-management";
 
 /**
  * Project Management section page: owns the page's data and header. Layout lives

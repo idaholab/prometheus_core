@@ -22,9 +22,9 @@
  * main.tsx loads this only in dev, so it never reaches the production build.
  */
 import { useState } from "react";
-import type { InspectedNode } from "@/features/workflows/NodeInspector";
-import { WorkflowBuilder } from "@/features/workflows/WorkflowBuilder";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
+import type { InspectedNode } from "@/features/workflows";
+import { WorkflowBuilder } from "@/features/workflows";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import { useTheme } from "@/lib/useTheme";
 import {
   BUILDER_NODES,
@@ -37,7 +37,7 @@ import {
   INVALID_NODES,
   INVALID_WIRES,
   SKILL_GROUPS,
-} from "@/features/workflows/builderPlaceholders";
+} from "@/features/workflows";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
 

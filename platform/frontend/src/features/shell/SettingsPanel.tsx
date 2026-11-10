@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { useChatType } from "@/features/chat/useChatType";
-import { ChatTypeSelect } from "@/features/chat/ChatTypeSelect";
+import { useChatType } from "@/features/chat";
+import { ChatTypeSelect } from "@/features/chat";
 import { Button } from "@/components/ui/Button";
 
 const MODELS = [

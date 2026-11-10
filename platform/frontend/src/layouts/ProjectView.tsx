@@ -11,17 +11,17 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { chatStore } from "@/features/chat/store/chat";
-import { useCurrentUser } from "@/features/auth/store/session";
-import { chatProfileName, useChatType } from "@/features/chat/useChatType";
-import { AdminSection } from "@/features/admin/AdminSection";
-import { ChatHistory } from "@/features/chat/ChatHistory";
-import { SettingsPanel } from "@/features/shell/SettingsPanel";
-import { Header } from "@/features/shell/Header";
-import { LeftPanel } from "@/features/shell/LeftPanel";
-import { Home } from "@/features/dashboard/Home";
-import { ComingSoon } from "@/features/shell/ComingSoon";
-import { navLabel, type NavId } from "@/features/shell/nav";
+import { chatStore } from "@/features/chat";
+import { useCurrentUser } from "@/features/auth";
+import { chatProfileName, useChatType } from "@/features/chat";
+import { AdminSection } from "@/features/admin";
+import { ChatHistory } from "@/features/chat";
+import { SettingsPanel } from "@/features/shell";
+import { Header } from "@/features/shell";
+import { LeftPanel } from "@/features/shell";
+import { Home } from "@/features/dashboard";
+import { ComingSoon } from "@/features/shell";
+import { navLabel, type NavId } from "@/features/shell";
 import { PageAgentRegistry } from "@/pages/PageAgentRegistry";
 import { PageApprovalQueue } from "@/pages/PageApprovalQueue";
 import { PageDataManagement } from "@/pages/PageDataManagement";

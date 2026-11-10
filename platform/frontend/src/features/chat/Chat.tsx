@@ -21,8 +21,8 @@ import { WelcomeScreen } from "./WelcomeScreen";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Markdown } from "@/components/ui/Markdown";
-import { ElementList } from "@/features/artifacts/ElementRenderer";
-import { artifactsToElements } from "@/features/artifacts/artifactAdapter";
+import { ElementList } from "@/features/artifacts";
+import { artifactsToElements } from "@/features/artifacts";
 
 // ---------------------------------------------------------------------------
 // Sub-components
