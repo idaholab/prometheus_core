@@ -14,7 +14,7 @@ import { useState } from "react";
 import { chatStore } from "@/features/chat/store/chat";
 import { useCurrentUser } from "@/features/auth/store/session";
 import { chatProfileName, useChatType } from "@/features/chat/useChatType";
-import { AdminSection } from "../components/admin/AdminSection";
+import { AdminSection } from "@/features/admin/AdminSection";
 import { ChatHistory } from "@/features/chat/ChatHistory";
 import { SettingsPanel } from "../components/SettingsPanel";
 import { Header } from "../components/Header";
