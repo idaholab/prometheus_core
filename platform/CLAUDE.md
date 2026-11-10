@@ -27,7 +27,7 @@ make up-fg           # same, foreground
 make restart         # restart without rebuild (still re-runs generate; PROFILE=dev rebuilds just frontend-dev)
 make ng-up           # skip the regenerate step (use existing docker-compose.agents.yml)
 make down            # stop services (add down-v to drop volumes)
-make clear-agent-registry # stop services + delete only the agent registrations from Valkey
+make clear-agent-registry # stop services (removing the dev frontend container and its node_modules) + delete the agent registrations from Valkey
 make logs SERVICE=client-agent
 make generate        # only (re)write docker-compose.agents.yml
 make clean-generated # delete the generated agents compose file
@@ -41,7 +41,7 @@ make check           # wait until the running platform answers on its host ports
 
 `make up` (and `restart`, `ng-up`, `ng-restart`) runs `docker compose up --wait` and then `make check` (`scripts/check_platform.py`), so it returns only once every healthcheck passes, the backend and frontend answer on their host ports, and every agent is registered with the backend (`/v1/agents` on `BACKEND_PORT`). `CHECK=false` skips both. CI's `platform: up` job runs `make up` and then `make test-integration` against that stack (stub LLM/DeepLynx credentials; see `tests/README.md`), so a service that never goes healthy, an agent that never registers, or a failing integration test fails the build.
 
-Every launch and restart target (`up`, `up-fg`, `restart`, `restart-fg`, `ng-*`) runs `make clear-agent-registry` first, so stale registrations from removed agents do not survive across platform launches. The rest of Valkey's state is left intact.
+Every launch and restart target (`up`, `up-fg`, `restart`, `restart-fg`, `ng-*`) runs `make clear-agent-registry` first, so stale registrations from removed agents do not survive across platform launches. It also removes the dev frontend container (`frontend-dev`) with its `node_modules` volume, so that is refilled from the image on every start. The rest of Valkey's state is left intact.
 
 To temporarily exclude an agent, remove (or rename) its `agents/<name>/docker-compose.yml` and re-run `make generate`. Heavy agents that most setups skip live in `agents/optional/<name>/` and are included only with `OPTIONAL_AGENTS=true` (same mechanism as `agents/debug-agents/` + `DEBUG_AGENTS`). `docker-compose.override.yml` is auto-included if present for local-only tweaks. `LOCAL_DEEPLYNX=true` adds a local DeepLynx (`docker-compose.deeplynx.yml`), set up by `make deeplynx-setup`.
 

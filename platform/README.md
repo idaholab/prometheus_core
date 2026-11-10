@@ -188,7 +188,7 @@ Services and host ports:
 
 ```bash
 make down                  # stop everything (down-v also drops volumes)
-make clear-agent-registry  # stop services + delete only the agent registrations from Valkey
+make clear-agent-registry  # stop services + delete the agent registrations from Valkey
 make clobber               # stop services + delete admin-db and Valkey (asks first)
 ```
 

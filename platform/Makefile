@@ -133,11 +133,12 @@ UP_ARGS ?=
 
 # frontend-dev's node_modules is an anonymous volume, filled from the image when it
 # is created. Compose keeps it across `up` (it only ever has the dependencies from
-# the first image), and neither `up --renew-anon-volumes` nor `down` delete it, so
-# each recreation leaves ~550 MB behind. clear-agent-registry (which every start
-# target runs first) and down remove the container together with its volume, so it is
-# refilled on every start (a few seconds): a rebuilt image's dependencies always
-# show up and a root-owned copy from an older image can't break the dev server.
+# the first image), and neither `up --renew-anon-volumes` nor compose's own `down`
+# delete it, so each recreation leaves ~550 MB behind. So make down and
+# clear-agent-registry (which every start target runs first) remove the container
+# together with its volume, so it is refilled on every start (a few seconds): a
+# rebuilt image's dependencies always show up and a root-owned copy from an older
+# image can't break the dev server.
 # A no-op when frontend-dev isn't running (e.g. PROFILE=prod).
 RM_FRONTEND_DEV = $(COMPOSE) $(COMPOSE_FILES_NG) --profile dev rm -fsv frontend-dev
 
@@ -399,7 +400,7 @@ init-env: ##@ Create .env from .env.example if missing (asking about the local S
 # which persists across restarts. Clearing it on every launch keeps an agent that
 # was removed (or renamed) from lingering as a tool. Valkey must be up to clear
 # it, so this starts only redis; the start target that follows reuses it.
-clear-agent-registry: ##@ Stop services and delete only the agent registrations from Valkey
+clear-agent-registry: ##@ Stop services (removing the dev frontend container and its node_modules) and delete the agent registrations from Valkey
 	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) down --remove-orphans
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) up -d redis
