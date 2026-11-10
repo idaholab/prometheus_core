@@ -529,8 +529,10 @@ A usage or config error isn't a problem: it is the `error` object, whose `code` 
   without the unimplemented suffix, ignoring case, whitespace and a trailing full stop).
 - **Unimplemented.** A requirement whose text ends with `(unimplemented: <reason>)` needs no claim
   yet; the reason, such as a plan step, is required. A full stop may come before or after the
-  suffix, and it may wrap with the bullet. Anywhere else in the text it is ordinary text, as is
-  any other trailing `(word: ...)`. Remove the suffix when a test claims the requirement.
+  suffix, and it may wrap with the bullet. The reason may hold parentheses if they pair up, as in
+  `(unimplemented: see (b))`. Anywhere else in the text it is ordinary text, as is any other
+  trailing `(word: ...)`: a quoted `(unimplemented: <reason>)` with more text after it, even
+  text in parentheses, does not count. Remove the suffix when a test claims the requirement.
 - **Removed.** A requirement that goes is deleted, not kept. List its ID on the spec's
   `removed:` header line, comma-separated, which may wrap like a bullet:
   `removed: SPC-REQ-003-05, SPC-REQ-003-11`. A listed ID must be of that spec, listed once, and

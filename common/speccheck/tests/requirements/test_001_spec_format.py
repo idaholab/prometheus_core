@@ -499,6 +499,43 @@ def test_a_line_that_is_not_a_continuation_is_not_joined(project: Project, body:
             marks=pytest.mark.covers("SPC-REQ-001-07", "a reason holding parentheses is kept whole"),
             id="parentheses",
         ),
+        pytest.param(
+            "- T-REQ-001-01: It works. (unimplemented: a (b (c)))",
+            "It works.",
+            "a (b (c))",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "a reason with parentheses nested two deep is kept whole, as its pairs close"
+            ),
+            id="nested-parentheses",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works.   (unimplemented: plan step 2)",
+            "It works.",
+            "plan step 2",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "the text before the suffix is trimmed of all the spaces between it and the suffix"
+            ),
+            id="spaces-before",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works. (unimplemented: plan step 2).",
+            "It works.",
+            "plan step 2",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07", "a full stop both before and after the suffix still leaves it at the end"
+            ),
+            id="stop-before-and-after",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It MUST print `(unimplemented: <reason>)` as written. (unimplemented: later)",
+            "It MUST print `(unimplemented: <reason>)` as written.",
+            "later",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "a quoted suffix earlier in the text does not hide the real one at the end, which is read as the suffix",
+            ),
+            id="quoted-then-real",
+        ),
     ],
 )
 def test_the_unimplemented_suffix(project: Project, body: str, text: str, reason: str):
@@ -521,9 +558,25 @@ def test_the_unimplemented_suffix(project: Project, body: str, text: str, reason
         pytest.param(
             "- T-REQ-001-01: It works. (unimplemented: step 2) Really.",
             marks=pytest.mark.covers(
-                "SPC-REQ-001-07", "the suffix followed by another sentence is not at the end, so it does not count"
+                "SPC-REQ-001-07", "the suffix followed by a whole sentence is not at the end, so it does not count"
             ),
             id="text-after",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works (unimplemented: see (b)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "a reason with a `(` that is never closed is not a suffix, so the requirement needs a claim",
+            ),
+            id="unclosed",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It works (unimplemented: see b))",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "a reason with a `)` it never opened is not a suffix, so the requirement needs a claim",
+            ),
+            id="unopened",
         ),
         pytest.param(
             "- T-REQ-001-01: It works. (Unimplemented: step 2)",
@@ -538,6 +591,22 @@ def test_the_unimplemented_suffix(project: Project, body: str, text: str, reason
                 "SPC-REQ-001-07", "another word in the same trailing form, such as `(default: 30s)`, is ordinary text"
             ),
             id="other-word",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: A user MUST log in. (unimplemented: <reason>) to the spec (see X)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "a bare suffix followed by text that ends in its own parentheses is not at the end, so the requirement needs a claim",
+            ),
+            id="text-after-in-parentheses",
+        ),
+        pytest.param(
+            "- T-REQ-001-01: It MUST print `(unimplemented: <reason>)` as written (see X)",
+            marks=pytest.mark.covers(
+                "SPC-REQ-001-07",
+                "a suffix quoted inside backticks, with more text and parentheses after the quote, does not make the requirement unimplemented",
+            ),
+            id="quoted",
         ),
     ],
 )

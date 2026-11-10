@@ -24,7 +24,9 @@ be found, has one ID, and says whether it is implemented yet.
   full stop before or after it, MUST be unimplemented, and its reason is the text after the colon,
   trimmed. Its text without the suffix MUST be what comes before the suffix, trimmed.
   `(unimplemented)` or an empty reason MUST be a problem that says a reason is required. The
-  suffix anywhere other than the end of the text MUST NOT count.
+  reason's parentheses MUST pair up, as in `(unimplemented: see (b))`: a `)` the reason does not
+  open, or a `(` it does not close, means the text does not end with the suffix. The suffix
+  anywhere other than the end of the text MUST NOT count.
 - SPC-REQ-001-08: Lines inside fenced code blocks MUST NOT be read as requirements or headers.
 - SPC-REQ-001-09: Two texts MUST count as the same text when they are equal after removing the
   unimplemented suffix (SPC-REQ-001-07), collapsing each run of whitespace to one space, trimming

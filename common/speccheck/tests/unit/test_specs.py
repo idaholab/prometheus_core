@@ -259,6 +259,8 @@ def test_collapse_and_comparable(text, collapsed, compared):
         ("It works (unimplemented: see (b))", "It works", "see (b)"),
         ("It works. (unimplemented)", "It works.", ""),
         ("It works. (unimplemented: )", "It works.", ""),
+        ("It works. (unimplemented:)", "It works.", ""),
+        ("It works.   (unimplemented: x).", "It works.", "x"),
         ("It works.", "It works.", None),
         ("It (unimplemented: step 2) works.", "It (unimplemented: step 2) works.", None),
         ("It works. (unimplemented: step 2) later", "It works. (unimplemented: step 2) later", None),
@@ -266,6 +268,25 @@ def test_collapse_and_comparable(text, collapsed, compared):
         ("It works. (Unimplemented: step 2)", "It works. (Unimplemented: step 2)", None),
         ("It works. (default: 30s)", "It works. (default: 30s)", None),
         ("It works. (unimplementedx: a)", "It works. (unimplementedx: a)", None),
+        ("It works (unimplemented: a (b (c)))", "It works", "a (b (c))"),
+        ("It works (unimplemented: a) and (unimplemented: b)", "It works (unimplemented: a) and", "b"),
+        (
+            "It MUST print `(unimplemented: <reason>)` as written. (unimplemented: later)",
+            "It MUST print `(unimplemented: <reason>)` as written.",
+            "later",
+        ),
+        (
+            "A user MUST log in. (unimplemented: <reason>) to the spec (see X)",
+            "A user MUST log in. (unimplemented: <reason>) to the spec (see X)",
+            None,
+        ),
+        (
+            "It MUST print `(unimplemented: <reason>)` as written (see X)",
+            "It MUST print `(unimplemented: <reason>)` as written (see X)",
+            None,
+        ),
+        ("It works (unimplemented: see (b)", "It works (unimplemented: see (b)", None),
+        ("It works (unimplemented: see b))", "It works (unimplemented: see b))", None),
     ],
 )
 def test_split_suffix(text, kept, reason):

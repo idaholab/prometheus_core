@@ -33,11 +33,12 @@ INDEX = "000-index.md"
 """The index file every spec folder has."""
 
 SUFFIX_START = "(unimplemented"
-"""Where the unimplemented suffix starts; the last one in a text is the one that may end it."""
+"""Where the unimplemented suffix starts; each one in a text is tried, earliest first, until one ends it."""
 
 SUFFIX = re.compile(r"\(unimplemented(?::(?P<reason>.*))?\)\.?", re.S)
 """The unimplemented suffix, `(unimplemented: <reason>)` with an optional full stop after it, matched with
-`fullmatch` from SUFFIX_START. The reason may hold parentheses; it ends at the text's last `)`."""
+`fullmatch` from SUFFIX_START, so it runs to the text's last `)`. It is a suffix only if the reason's
+parentheses pair up (`balanced`): a `)` the reason doesn't open means the suffix closed earlier, with text after it."""
 
 UNIMPLEMENTED_EXAMPLE = "(unimplemented: <reason>)"
 """The suffix as messages show it."""
@@ -62,17 +63,36 @@ def comparable(text: str) -> str:
     return text[:-1].rstrip() if text.endswith(".") else text
 
 
+def balanced(text: str) -> bool:
+    """Whether every `(` in `text` is closed by a later `)`, and no `)` comes without a `(` before it."""
+    depth = 0
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
 def split_suffix(text: str) -> tuple[str, str | None]:
     """`text` without its unimplemented suffix, and the suffix's reason (None when it has no suffix).
 
-    The suffix counts only at the very end, after one optional full stop. The reason is trimmed, and
-    is "" for `(unimplemented)` or an empty reason, which is a problem the caller reports.
+    The suffix counts only at the very end, after one optional full stop: its own `)` is the text's last,
+    so a quoted `(unimplemented: <reason>)` with more text after it does not count, even when that text
+    has parentheses of its own. The reason is trimmed, and is "" for `(unimplemented)` or an empty reason,
+    which is a problem the caller reports.
     """
-    start = text.rfind(SUFFIX_START)
-    match = SUFFIX.fullmatch(text.rstrip(), start) if start >= 0 else None
-    if match is None:
-        return text, None
-    return text[:start].rstrip(), (match.group("reason") or "").strip()
+    end = text.rstrip()
+    start = end.find(SUFFIX_START)
+    while start >= 0:
+        match = SUFFIX.fullmatch(end, start)
+        reason = (match.group("reason") or "") if match else ""
+        if match is not None and balanced(reason):
+            return text[:start].rstrip(), reason.strip()
+        start = end.find(SUFFIX_START, start + 1)
+    return text, None
 
 
 def plain(text: str) -> str:
