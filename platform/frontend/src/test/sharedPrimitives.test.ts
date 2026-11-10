@@ -16,19 +16,19 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "vitest";
 
-// Reads the screens as text; no .tsx module is imported.
-const COMPONENTS_DIR = fileURLToPath(new URL(".", import.meta.url));
+// Reads the screens as text; no .tsx module is imported. Paths are under src/
+const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
 
 const IN_SCOPE_FILES = [
-  "Header.tsx",
-  "LeftPanel.tsx",
-  "Login.tsx",
-  "SetupWizard.tsx",
-  "Chat.tsx",
-  "chat/FollowupForm.tsx",
-  "SettingsPanel.tsx",
-  "dashboard/StatusPanel.tsx",
-  "chat/WelcomeScreen.tsx",
+  "components/Header.tsx",
+  "components/LeftPanel.tsx",
+  "components/Login.tsx",
+  "components/SetupWizard.tsx",
+  "components/Chat.tsx",
+  "components/chat/FollowupForm.tsx",
+  "components/SettingsPanel.tsx",
+  "components/dashboard/StatusPanel.tsx",
+  "components/chat/WelcomeScreen.tsx",
 ];
 
 const LEFTOVER_CLASS = /className=.*[^A-Za-z0-9_-](btn|badge)([^A-Za-z0-9_]|$)/;
@@ -44,14 +44,14 @@ const BUTTON_IMPORT = /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s+["'](@\/compon
  * that file; any other raw `<button>` fails the test.
  */
 const RAW_BUTTON_ALLOWLIST: ReadonlyArray<{ file: string; marker: string; count: number; why: string }> = [
-  { file: "Chat.tsx", marker: "aria-label={`Remove ", count: 1, why: "attachment remove (blueprint Out of scope)" },
-  { file: "dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
-  { file: "dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
-  { file: "Chat.tsx", marker: "onClick={() => setOpen((v) => !v)}", count: 1, why: "tool-call history toggle, not a site" },
-  { file: "LeftPanel.tsx", marker: "aria-current=", count: 1, why: "NavButton rail item, not a site" },
-  { file: "Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },
-  { file: "Header.tsx", marker: "onClick={onToggleSettings}", count: 1, why: "user menu item, not a site" },
-  { file: "Header.tsx", marker: "onClick={onLogout}", count: 1, why: "user menu item, not a site" },
+  { file: "components/Chat.tsx", marker: "aria-label={`Remove ", count: 1, why: "attachment remove (blueprint Out of scope)" },
+  { file: "components/dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
+  { file: "components/dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
+  { file: "components/Chat.tsx", marker: "onClick={() => setOpen((v) => !v)}", count: 1, why: "tool-call history toggle, not a site" },
+  { file: "components/LeftPanel.tsx", marker: "aria-current=", count: 1, why: "NavButton rail item, not a site" },
+  { file: "components/Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },
+  { file: "components/Header.tsx", marker: "onClick={onToggleSettings}", count: 1, why: "user menu item, not a site" },
+  { file: "components/Header.tsx", marker: "onClick={onLogout}", count: 1, why: "user menu item, not a site" },
 ];
 
 /** Skips a quoted literal that opens at `start`; returns the index after it. */
@@ -130,7 +130,7 @@ test("in_scope_screens_use_shared_primitives", () => {
   const violations: string[] = [];
 
   for (const file of IN_SCOPE_FILES) {
-    const source = readFileSync(join(COMPONENTS_DIR, file), "utf8");
+    const source = readFileSync(join(SRC_DIR, file), "utf8");
 
     source.split("\n").forEach((text, index) => {
       if (LEFTOVER_CLASS.test(text)) {
