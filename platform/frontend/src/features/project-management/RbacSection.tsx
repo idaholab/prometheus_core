@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import type { Role, RoleId } from "@/lib/store/projectManagementModel";
+import type { Role, RoleId } from "./store/projectManagementModel";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { RoleCard } from "./RoleCard";
 

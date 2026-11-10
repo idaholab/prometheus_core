@@ -12,7 +12,7 @@
 
 import { Plus } from "lucide-react";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import type { MemberStatus, Role, TeamMember } from "@/lib/store/projectManagementModel";
+import type { MemberStatus, Role, TeamMember } from "./store/projectManagementModel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Button } from "@/components/ui/Button";

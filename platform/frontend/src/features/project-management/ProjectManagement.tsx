@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { countMembersByRole, type ProjectManagementState } from "@/lib/store/projectManagementModel";
+import { countMembersByRole, type ProjectManagementState } from "./store/projectManagementModel";
 import { Users } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RbacSection } from "./RbacSection";

@@ -18,7 +18,7 @@
  * setter yet.
  */
 import { useSyncExternalStore } from "react";
-import type { ProjectManagementState, Role, TeamMember } from "@/lib/store/projectManagementModel";
+import type { ProjectManagementState, Role, TeamMember } from "./projectManagementModel";
 
 // placeholder: replace with API (see PPLT-244)
 export const TEAM_MEMBERS: TeamMember[] = [

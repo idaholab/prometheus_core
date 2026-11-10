@@ -11,8 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 import { usePageHeader } from "@/lib/store/pageHeader";
-import { useProjectManagement } from "@/lib/store/projectManagement";
-import { ProjectManagement } from "../components/project-management/ProjectManagement";
+import { useProjectManagement } from "@/features/project-management/store/projectManagement";
+import { ProjectManagement } from "@/features/project-management/ProjectManagement";
 
 /**
  * Project Management section page: owns the page's data and header. Layout lives
