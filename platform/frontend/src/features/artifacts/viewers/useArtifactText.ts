@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/useArtifactText.ts
+ * src/features/artifacts/viewers/useArtifactText.ts
  *
  * Shared text loading for the inline-text viewers (`CodeElement`, `TableElement`,
  * `ReportElement`): use the inline `source` when the element carries one, otherwise

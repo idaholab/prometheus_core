@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/PdfViewerElement.tsx
+ * src/features/artifacts/viewers/PdfViewerElement.tsx
  *
  * Renders a Chainlit cl.Pdf element as an inline iframe.
  *

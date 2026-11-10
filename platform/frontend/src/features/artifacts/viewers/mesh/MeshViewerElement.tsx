@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/mesh/MeshViewerElement.tsx
+ * src/features/artifacts/viewers/mesh/MeshViewerElement.tsx
  *
  * Renders the `MeshViewer` Chainlit custom element via vtk.js — source-agnostic
  * across Exodus and STL, since both emit the same manifest.json + meta.json

@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/mesh/MeshViewerEngine.ts
+ * src/features/artifacts/viewers/mesh/MeshViewerEngine.ts
  *
  * Owns the vtk.js render lifecycle for VTP mesh datasets (Exodus, STL, …) —
  * mirrors IFCViewerEngine.ts's shape: a plain class with no React, holding the

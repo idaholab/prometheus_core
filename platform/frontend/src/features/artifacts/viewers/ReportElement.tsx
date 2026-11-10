@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/ReportElement.tsx
+ * src/features/artifacts/viewers/ReportElement.tsx
  *
  * Renders a `report` artifact (render_hint === "report") as inline markdown rather
  * than a download (frontend presentation-parity note A-1). Markdown/plain-text

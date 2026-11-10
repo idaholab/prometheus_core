@@ -22,7 +22,7 @@ type StatusTab = "jobs" | "artifacts";
 
 /** Every artifact in the open conversation's transcript, newest last, deduped
  * by id. A resumed conversation gives each assistant turn the artifacts it
- * produced (see `itemsFromTranscript` in `lib/store/chat.ts`), so this matches
+ * produced (see `itemsFromTranscript` in `features/chat/store/chat.ts`), so this matches
  * the live session. */
 function useConversationArtifacts(): ArtifactMeta[] {
   const { items } = useChatState();

@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/ArtifactTextCard.tsx
+ * src/features/artifacts/viewers/ArtifactTextCard.tsx
  *
  * The card shared by the inline-text viewers (`CodeElement`, `TableElement`): the
  * bordered shell and header (icon, name, optional badge and extra actions), the copy and

@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/MermaidElement.tsx
+ * src/features/artifacts/viewers/MermaidElement.tsx
  *
  * Renders cl.CustomElement(name="MermaidViewer") payloads.
  *

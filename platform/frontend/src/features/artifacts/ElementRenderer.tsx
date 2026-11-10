@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/components/ElementRenderer.tsx
+ * src/features/artifacts/ElementRenderer.tsx
  *
  * Dispatches an element to the right viewer, or shows a fallback.
  *

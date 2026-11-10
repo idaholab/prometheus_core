@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/CodeElement.tsx
+ * src/features/artifacts/viewers/CodeElement.tsx
  *
  * Renders a `code` artifact (render_hint === "code") as plain source text — YAML and
  * similar config/source formats that would be mangled by the Markdown renderer

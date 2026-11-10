@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/TableElement.tsx
+ * src/features/artifacts/viewers/TableElement.tsx
  *
  * Renders a `table` artifact (render_hint === "table") — CSV / TSV — as a sortable table
  * with a toggle to the raw text. Like `CodeElement`, the body comes from the inline

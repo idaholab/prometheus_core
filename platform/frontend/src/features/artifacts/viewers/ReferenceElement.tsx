@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/ReferenceElement.tsx
+ * src/features/artifacts/viewers/ReferenceElement.tsx
  *
  * Renders a `reference` artifact (render_hint === "reference") as a citation card.
  * Replaces the old Chainlit `_render_reference_artifact` inline citation markdown

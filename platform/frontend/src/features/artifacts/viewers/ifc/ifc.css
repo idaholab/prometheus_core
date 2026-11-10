@@ -1,5 +1,5 @@
 /**
- * src/viewers/ifc/ifc.css
+ * src/features/artifacts/viewers/ifc/ifc.css
  *
  * Styles owned by the IFC viewer. Imported from IFCViewerElement.tsx so it
  * rides along in the viewer's lazy chunk and only loads when the viewer does.

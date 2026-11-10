@@ -16,9 +16,9 @@
  * Fetches `GET /api/conversations/recent` (already user-scoped server-side —
  * see `backend/app/routers/conversations.py`) and re-fetches whenever
  * `historyVersion` changes (a turn completed, New Chat was clicked, or a past
- * chat was opened — see `lib/store/chat.ts`). Sending a new chat's first turn
+ * chat was opened — see `features/chat/store/chat.ts`). Sending a new chat's first turn
  * does not refetch: while that turn runs and the server list lacks the chat, a
- * local pending row stands in for it at the top (`lib/store/pendingHistoryRow.ts`),
+ * local pending row stands in for it at the top (`features/chat/store/pendingHistoryRow.ts`),
  * and the server row replaces it once a refetch lists it. Degrades to the
  * header alone when Redis is unavailable, matching the endpoint's
  * graceful-degrade shape.

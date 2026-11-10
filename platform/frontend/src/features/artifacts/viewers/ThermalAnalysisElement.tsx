@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * src/viewers/ThermalAnalysisElement.tsx
+ * src/features/artifacts/viewers/ThermalAnalysisElement.tsx
  *
  * Renders cl.CustomElement(name="ThermalAnalysisViewer") payloads.
  *
