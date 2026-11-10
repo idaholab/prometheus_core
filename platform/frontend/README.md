@@ -66,7 +66,7 @@ Tests use [Vitest](https://vitest.dev) and sit next to the code they test, in th
 
 A test file named any other way never runs, so `src/test/testFiles.test.ts` fails if a file under `src/` imports Vitest or Testing Library without a `.test.ts` or `.test.tsx` name. CI runs every test in `src/` through `npm run test:coverage`, wherever it sits.
 
-Not every change needs tests. Test shared components, non-trivial logic and flows that would hurt to break.
+[TESTING.md](../../TESTING.md) says which kind of test a change needs, when it needs none, and how much coverage is enough. This section covers how to write and run the frontend's tests.
 
 ### End-to-end tests
 
