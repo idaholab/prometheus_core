@@ -696,8 +696,31 @@ jobs:
           target: prod
           build-contexts: certs=common/certs
           platforms: linux/${{ matrix.platform }}
-          push: false
+          # Load the image into the runner's Docker so the next step can run it
+          load: true
+          tags: prometheus-frontend:ci
           cache-from: type=registry,ref=${{ env.BUILD_CACHE }}_frontend-devel:${{ matrix.platform }}
+      - name: Run the image with a read-only root
+        # As the chart runs it: a read-only root with only /tmp writable. The
+        # backend name has to resolve, because nginx exits at start when it
+        # can't resolve the proxy_pass host. Pointing it at localhost is enough:
+        # /api isn't called here (platform: up frontend prod covers it)
+        run: |
+          docker run -d --name frontend-ci --read-only --tmpfs /tmp \
+            --add-host backend:127.0.0.1 -p 8080:8080 prometheus-frontend:ci
+          for _ in $(seq 30); do
+            [ "$(curl -fsS http://localhost:8080/healthz 2>/dev/null)" = ok ] && break
+            sleep 1
+          done
+          test "$(curl -fsS http://localhost:8080/healthz)" = ok
+          test "$(docker exec frontend-ci id -u)" = 101
+          docker exec frontend-ci grep -q proxy_pass /tmp/default.conf
+      - name: Show the container's logs
+        if: ${{ failure() }}
+        run: docker logs frontend-ci
+      - name: Remove the container
+        if: ${{ always() }}
+        run: docker rm -f frontend-ci
 
   platform-backend-docker:
     name: "platform: backend docker ${{ matrix.platform }}"
