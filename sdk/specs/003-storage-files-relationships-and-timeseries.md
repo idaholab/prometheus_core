@@ -48,7 +48,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - `AsyncRelationshipsResource.create/get/delete/bulk_create/get_item_relationships/get_item_graph`
 - `RelationshipsResource.get_or_create_relationship_type(name: str) -> int` (async: awaitable)
 - `RelationshipsResource.find_edge(from_item_id: int, to_item_id: int) -> Relationship | None` (async: awaitable)
-- `TimeseriesResource.query(record_id: int, view_name: str = "data", sql_query: str | None = None, *, limit: int | None = None, row_stride: int | None = None, start_row: int | None = None, stop_row: int | None = None, columns: Sequence[str] | None = None) -> TimeseriesResult`
+- `TimeseriesResource.query(record_id: int, *, view_name: str = "data", sql_query: str | None = None, limit: int | None = None, row_stride: int | None = None, start_row: int | None = None, stop_row: int | None = None, columns: Sequence[str] | None = None) -> TimeseriesResult`
 - `TimeseriesResult(columns: list[str] = [], data: list[list[Any]] = [])`
 - `AsyncTimeseriesResource.query` with the same signature
 
