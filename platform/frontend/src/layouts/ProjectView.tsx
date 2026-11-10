@@ -32,9 +32,7 @@ interface Props {
   onLogout: () => void;
 }
 
-// Primary navigation lives in the left sidebar now (LeftPanel). The old
-// top-of-content tab bar was demoted; its pattern is preserved as the reusable
-// <TabBar> component for section sub-navigation (e.g. inside Admin).
+// Primary navigation lives in the left sidebar (LeftPanel).
 export function ProjectView({ onLogout }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("home");
   // Bumped on every sidebar click and used as the section page's key, so
