@@ -82,3 +82,17 @@ End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 
 Playwright builds and starts the app itself on every run, so the tests always check your current code. If something is already using port 5160, the run fails instead of testing it; stop that server first. When a test fails it keeps a trace and a screenshot in `test-results/`; open a trace with `npx playwright show-trace <path>/trace.zip`. In CI, the `platform: frontend e2e` job uploads them with the HTML report as the `frontend-e2e-report` artifact.
+
+#### Against the full platform
+
+The tests in `e2e/full/` run against the e2e stack: the whole platform, served by nginx, with nothing faked. They check what the faked tests can't: nginx's `/api` proxy, the real backend and its database.
+
+```bash
+make up-e2e              # in platform/: start the e2e stack, nginx on http://localhost:8090
+npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make test-e2e-full)
+make down-e2e            # in platform/: stop it and delete its data
+```
+
+The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does.
+
+Import `test` and `expect` from `e2e/full/fixtures.ts`. Nothing is faked there, but a test fails if the page throws or an `/api` call fails or returns a server error. Failed tests keep their trace in `test-results-full/`, and CI's `platform: frontend e2e full` job uploads them as `frontend-e2e-full-report`. That job reports on every pull request but isn't a required check yet.
