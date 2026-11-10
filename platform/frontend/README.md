@@ -52,6 +52,8 @@ e2e/          Playwright end-to-end tests, by user flow
 
 ## Testing
 
+[TESTING.md](../../TESTING.md) says which kind of test a change needs, when it needs none, and how much coverage is enough. This section covers how to write and run the frontend's tests.
+
 ```bash
 npm test             # run every test once (also: make test; make check runs lint + typecheck + test)
 npm run test:watch   # rerun on save
@@ -66,8 +68,6 @@ Tests use [Vitest](https://vitest.dev) and sit next to the code they test, in th
 
 A test file named any other way never runs, so `src/test/testFiles.test.ts` fails if a file under `src/` imports Vitest or Testing Library without a `.test.ts` or `.test.tsx` name. CI runs every test in `src/` through `npm run test:coverage`, wherever it sits.
 
-[TESTING.md](../../TESTING.md) says which kind of test a change needs, when it needs none, and how much coverage is enough. This section covers how to write and run the frontend's tests.
-
 ### End-to-end tests
 
 ```bash
@@ -77,7 +77,7 @@ npm run test:e2e:ui   # Playwright's UI mode, to step through a test and watch i
 
 The first run needs a browser: `npx playwright install chromium`.
 
-End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
+Write an end-to-end test only for a flow that crosses the frontend and backend; [TESTING.md](../../TESTING.md#which-test-a-change-needs) says when. End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 
