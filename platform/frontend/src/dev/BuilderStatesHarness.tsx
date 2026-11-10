@@ -22,9 +22,9 @@
  * main.tsx loads this only in dev, so it never reaches the production build.
  */
 import { useState } from "react";
-import type { InspectedNode } from "../components/workflows/NodeInspector";
-import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "../components/workflows/WorkflowGraph";
+import type { InspectedNode } from "@/features/workflows/NodeInspector";
+import { WorkflowBuilder } from "@/features/workflows/WorkflowBuilder";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
 import { useTheme } from "../lib/useTheme";
 import {
   BUILDER_NODES,

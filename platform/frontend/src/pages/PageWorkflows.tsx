@@ -12,11 +12,11 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/lib/store/pageHeader";
-import { WorkflowBuilder } from "../components/workflows/WorkflowBuilder";
-import { WorkflowConsole } from "../components/workflows/WorkflowConsole";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "../components/workflows/WorkflowGraph";
-import type { WorkflowPlan } from "../components/workflows/WorkflowPlanner";
-import type { WorkflowTemplate } from "../components/workflows/WorkflowTemplateCard";
+import { WorkflowBuilder } from "@/features/workflows/WorkflowBuilder";
+import { WorkflowConsole } from "@/features/workflows/WorkflowConsole";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
+import type { WorkflowPlan } from "@/features/workflows/WorkflowPlanner";
+import type { WorkflowTemplate } from "@/features/workflows/WorkflowTemplateCard";
 import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "./builderPlaceholders";
 
 // Placeholder graph for Comprehensive Material Analysis, laid out as in Figma D.1.
