@@ -22,8 +22,8 @@ const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
 const IN_SCOPE_FILES = [
   "components/Header.tsx",
   "components/LeftPanel.tsx",
-  "components/Login.tsx",
-  "components/SetupWizard.tsx",
+  "features/auth/Login.tsx",
+  "features/auth/SetupWizard.tsx",
   "features/chat/Chat.tsx",
   "features/chat/FollowupForm.tsx",
   "components/SettingsPanel.tsx",

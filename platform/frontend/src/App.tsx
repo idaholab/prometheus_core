@@ -12,11 +12,11 @@
 
 import { useEffect, useState } from "react";
 import { ProjectView } from "@/layouts/ProjectView";
-import { Login } from "@/components/Login";
-import { SetupWizard } from "@/components/SetupWizard";
+import { Login } from "./features/auth/Login";
+import { SetupWizard } from "./features/auth/SetupWizard";
 import { api, ApiError } from "@/lib/api/client";
 import { chatStore, useAuthLost } from "./features/chat/store/chat";
-import { setCurrentUser } from "@/lib/store/session";
+import { setCurrentUser } from "./features/auth/store/session";
 import { chatProfileName, useChatType } from "./features/chat/useChatType";
 
 /**

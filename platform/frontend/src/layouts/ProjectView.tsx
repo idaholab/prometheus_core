@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 import { chatStore } from "@/features/chat/store/chat";
-import { useCurrentUser } from "@/lib/store/session";
+import { useCurrentUser } from "@/features/auth/store/session";
 import { chatProfileName, useChatType } from "@/features/chat/useChatType";
 import { AdminSection } from "../components/admin/AdminSection";
 import { ChatHistory } from "@/features/chat/ChatHistory";

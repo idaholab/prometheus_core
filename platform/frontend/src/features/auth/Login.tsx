@@ -14,8 +14,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { api, ApiError } from "@/lib/api/client";
 import type { AuthProvider } from "@/lib/api/types";
-import { setCurrentUser } from "@/lib/store/session";
-import { AuthError, AuthField, AuthLayout } from "./AuthLayout";
+import { setCurrentUser } from "./store/session";
+import { AuthError, AuthField, AuthLayout } from "@/layouts/AuthLayout";
 
 interface Props {
   onSuccess: () => void;
