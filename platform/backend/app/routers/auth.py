@@ -22,7 +22,7 @@ React app's ``fetch("/user")`` probe. ``/login/{provider_id}`` and
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api_responses import AUTH_RESPONSES, ENCRYPTION_RESPONSES
+from app.api_responses import AUTH_RESPONSES, ENCRYPTION_RESPONSES, error
 from app.config import settings
 from app.db import get_db_session
 from app.db.models import OidcProvider
@@ -55,6 +55,41 @@ router = APIRouter(prefix="/api/auth", tags=[TAG_AUTH])
 
 class LoginResult(BaseModel):
     user: User
+
+
+class LoginRequest(BaseModel):
+    """The body of ``POST /api/auth/login``, as JSON or form-encoded fields.
+
+    Documentation only: :func:`_read_credentials` reads the body itself, so FastAPI
+    never parses it with this model.
+    """
+
+    username: str
+    password: str
+
+
+# Declared by hand because the handler reads the body itself (see _read_credentials),
+# so FastAPI can't infer it. The schema is inlined: a model only named here isn't in
+# components/schemas, so a $ref to it wouldn't resolve.
+_LOGIN_REQUEST_SCHEMA = LoginRequest.model_json_schema()
+_LOGIN_OPENAPI_EXTRA: dict[str, Any] = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": _LOGIN_REQUEST_SCHEMA},
+            "application/x-www-form-urlencoded": {"schema": _LOGIN_REQUEST_SCHEMA},
+        },
+    }
+}
+
+_LOGIN_RESPONSES = {
+    **error(status.HTTP_401_UNAUTHORIZED, "The username or password is wrong.", "Invalid credentials"),
+    **error(
+        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "The body has no username or no password.",
+        "username and password required",
+    ),
+}
 
 
 class ProviderInfo(BaseModel):
@@ -87,7 +122,7 @@ async def _read_credentials(request: Request) -> tuple[Optional[str], Optional[s
     )
 
 
-@router.post("/login", response_model=LoginResult)
+@router.post("/login", response_model=LoginResult, responses=_LOGIN_RESPONSES, openapi_extra=_LOGIN_OPENAPI_EXTRA)
 async def login(request: Request, response: Response, db: AsyncSession = Depends(get_db_session)) -> LoginResult:
     """Accept form-encoded or JSON ``{username, password}`` and set the cookie."""
     username, password = await _read_credentials(request)
