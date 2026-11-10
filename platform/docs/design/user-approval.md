@@ -4,7 +4,7 @@
 | --- | --- |
 | **Status** | Design, not built. Proposed 2026-11-10. |
 | **Approver** | Daniel Schwen |
-| **Jira** | Epic PPLT-5 (Initial Multi-Agent Workflow Orchestration); tasks in [section 10](#10-implementation-plan) |
+| **Jira** | Epic PPLT-5 (Initial Multi-Agent Workflow Orchestration); tasks PPLT-390 to PPLT-395 ([section 10](#10-implementation-plan)). PPLT-279 (passkey-signed approvals) is blocked by PPLT-390. |
 | **Related** | [User Proof Chain](user-proof-chain.md) (signed approvals build on this record), [Request-Scoped Agent Objects and Backend Task State][request-scoped], [background-tasks.md](../dev-docs/background-tasks.md) |
 | **Prior art** | June 2026 prototype, never merged: `prometheus_api` branch `user_approval` (commits `b0171ab`, `87bf797`, `ff2c989`) and platform branch `user_approval` (`b23ebbce`, `68f7fa7c`). See [section 3](#3-lessons-from-the-june-prototype). |
 
@@ -387,14 +387,14 @@ All tasks go under epic **PPLT-5**. Each merges on its own. The SDK helper is
 unused until the debug skill (task 5) calls it, so tasks 1–4 can merge in any
 state.
 
-| # | Task | Repo area | Depends on |
-| --- | --- | --- | --- |
-| 1 | Backend: interaction record, `/v1/interactions` (create, long-poll, cancel) and `/api/interactions` (list, answer), atomic resolve, expiry, ownership checks, tests | `backend/` | – |
-| 2 | Backend: `approval_requested` / `approval_resolved` SSE events, `user:sids` index and fan-out to all of the user's sessions, re-send on reconnect, cancel on lost specialist stream; `CONTRACT.md` | `backend/` | 1 |
-| 3 | SDK: `request_user_approval(message=..., timeout_seconds=900)`: create, non-final pause event, long-poll with retry, cancel on task cancellation; base-image bump | `sdk/` | 1 |
-| 4 | Frontend: approval card (markdown, Accept/Decline, 5-minute expiry notice, read-only result line), in-app toast and browser notification for background runs, reload of pending requests | `frontend/` | 2 |
-| 5 | client-agent: relay `metadata.interaction` status events upstream with skill attribution; debug skill `request_approval_demo` on artifact-debug-agent; end-to-end Playwright test (accept, decline, expiry with a short timeout) | `agents/` | 3, 4 |
-| 6 | Docs: agent-author guide for `request_user_approval`; update `user-proof-chain.md` to point at this record | `docs/`, `sdk/docs/` | 5 |
+| # | Jira | Task | Repo area | Depends on |
+| --- | --- | --- | --- | --- |
+| 1 | PPLT-390 | Backend: interaction record, `/v1/interactions` (create, long-poll, cancel) and `/api/interactions` (list, answer), atomic resolve, expiry, ownership checks, tests | `backend/` | – |
+| 2 | PPLT-391 | Backend: `approval_requested` / `approval_resolved` SSE events, `user:sids` index and fan-out to all of the user's sessions, re-send on reconnect, cancel on lost specialist stream; `CONTRACT.md` | `backend/` | 1 |
+| 3 | PPLT-392 | SDK: `request_user_approval(message=..., timeout_seconds=900)`: create, non-final pause event, long-poll with retry, cancel on task cancellation; base-image bump | `sdk/` | 1 |
+| 4 | PPLT-393 | Frontend: approval card (markdown, Accept/Decline, 5-minute expiry notice, read-only result line), in-app toast and browser notification for background runs, reload of pending requests | `frontend/` | 2 |
+| 5 | PPLT-394 | client-agent: relay `metadata.interaction` status events upstream with skill attribution; debug skill `request_approval_demo` on artifact-debug-agent; end-to-end Playwright test (accept, decline, expiry with a short timeout) | `agents/` | 3, 4 |
+| 6 | PPLT-395 | Docs: agent-author guide for `request_user_approval`; update `user-proof-chain.md` to point at this record | `docs/`, `sdk/docs/` | 5 |
 
 ```mermaid
 flowchart LR
