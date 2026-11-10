@@ -13,6 +13,7 @@
 """Timeseries resource for synchronous operations."""
 
 from typing import Any, Dict, Optional, Sequence
+from ..exceptions import StorageClientError
 from ..models.timeseries import TimeseriesResult
 from .base import BaseResource
 
@@ -35,6 +36,23 @@ def build_query_payload(
         "columns": list(columns) if columns is not None else None,
     }
     return {key: value for key, value in candidates.items() if value is not None}
+
+
+def parse_query_response(data: Any) -> TimeseriesResult:
+    """Turn the ``olap/query`` body into a result.
+
+    A missing or null ``columns`` or ``data`` (a window past the end of the file) is an empty
+    result. A body that is not a JSON object is a server fault and raises, so it is not mistaken
+    for an empty result.
+
+    Raises:
+        StorageClientError: If the body is not a JSON object
+    """
+    if not isinstance(data, dict):
+        raise StorageClientError(
+            f"Unexpected olap/query response: expected a JSON object, got {type(data).__name__}"
+        )
+    return TimeseriesResult(columns=data.get("columns") or [], data=data.get("data") or [])
 
 
 class TimeseriesResource(BaseResource):
@@ -81,6 +99,7 @@ class TimeseriesResource(BaseResource):
         Raises:
             ValidationError: If the server rejects the query or options
             ItemNotFoundError: If the record or its file does not exist
+            StorageClientError: If the server's answer is not a JSON object
 
         Note:
             Each call opens a fresh query engine on the server and can take many seconds on
@@ -102,8 +121,4 @@ class TimeseriesResource(BaseResource):
             json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )
 
-        data = response.json()
-        return TimeseriesResult(
-            columns=data.get("columns") or [],
-            data=data.get("data") or [],
-        )
+        return parse_query_response(response.json())

@@ -14,7 +14,7 @@
 
 from typing import Optional, Sequence
 from ..models.timeseries import TimeseriesResult
-from ..resources.timeseries import build_query_payload
+from ..resources.timeseries import build_query_payload, parse_query_response
 from .base import AsyncBaseResource
 
 
@@ -45,8 +45,4 @@ class AsyncTimeseriesResource(AsyncBaseResource):
             json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )
 
-        data = response.json()
-        return TimeseriesResult(
-            columns=data.get("columns") or [],
-            data=data.get("data") or [],
-        )
+        return parse_query_response(response.json())

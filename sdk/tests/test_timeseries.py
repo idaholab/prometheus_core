@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from prometheus_api.storage_client import AsyncStorageClient, StorageClient
+from prometheus_api.storage_client.exceptions import StorageClientError
 from prometheus_api.storage_client.async_resources.timeseries import AsyncTimeseriesResource
 from prometheus_api.storage_client.models.timeseries import TimeseriesResult
 from prometheus_api.storage_client.resources.timeseries import TimeseriesResource
@@ -146,6 +147,15 @@ def test_timeseries_upload_was_removed():
     """Covers REQ-003-12: the removed upload route has no replacement method."""
     assert not hasattr(TimeseriesResource, "upload")
     assert not hasattr(AsyncTimeseriesResource, "upload")
+
+
+@pytest.mark.parametrize("payload", [None, [1, 2], "text"])
+async def test_query_rejects_a_response_that_is_not_a_json_object(payload):
+    """Covers REQ-003-12: a body that is not an object is an error, not an empty result."""
+    with pytest.raises(StorageClientError, match="expected a JSON object"):
+        TimeseriesResource(SyncClient(payload)).query(1)
+    with pytest.raises(StorageClientError, match="expected a JSON object"):
+        await AsyncTimeseriesResource(AsyncClient(payload)).query(1)
 
 
 async def test_old_style_positional_query_is_rejected():
