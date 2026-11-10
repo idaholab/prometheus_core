@@ -55,6 +55,13 @@ export COMPOSE_PROJECT_NAME
 
 COMPOSE := docker compose -p $(COMPOSE_PROJECT_NAME)
 
+# frontend-dev runs as the developer's UID/GID so the Vite dev server can write
+# into the bind-mounted ./frontend (see docker-compose.yml). Not UID/GID: bash
+# has a read-only, unexported UID.
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
+export HOST_UID HOST_GID
+
 COMPOSE_BASE   := docker-compose.yml
 COMPOSE_AGENTS := docker-compose.agents.yml
 
@@ -123,6 +130,25 @@ PROFILE_FLAGS := $(if $(PROFILE),--profile $(PROFILE),)
 
 # Extra flags for `docker compose up` in `make up`.
 UP_ARGS ?=
+
+# frontend-dev's node_modules is an anonymous volume, filled from the image when it
+# is created. Compose keeps it across `up` (it only ever has the dependencies from
+# the first image), and neither `up --renew-anon-volumes` nor compose's own `down`
+# delete it, so each recreation leaves ~550 MB behind. So make down and
+# clear-agent-registry (which every start target runs first) remove the container
+# together with its volume, so it is refilled on every start (a few seconds): a
+# rebuilt image's dependencies always show up and a root-owned copy from an older
+# image can't break the dev server.
+# A no-op when frontend-dev isn't running (e.g. PROFILE=prod).
+RM_FRONTEND_DEV = $(COMPOSE) $(COMPOSE_FILES_NG) --profile dev rm -fsv frontend-dev
+
+# That volume is refilled from whatever image frontend-dev already has, and the
+# restart targets don't pass --build (unlike up), so they rebuild just this image
+# first. Otherwise the first restart after an image change would refill it from the
+# old image: root-owned files the dev server can't write to, or the previous
+# dependencies. Every layer is cached unless package.json, the lockfile or the
+# Dockerfile changed. Empty (no build) unless PROFILE=dev.
+BUILD_FRONTEND_DEV = $(if $(filter dev,$(PROFILE)),$(COMPOSE) $(COMPOSE_FILES_NG) --profile dev build frontend-dev)
 
 # The detached start targets (up, restart, ng-up, ng-restart) wait for every
 # service with a healthcheck to report healthy (`docker compose up --wait`),
@@ -332,15 +358,17 @@ up-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 up-fg: $(BASE_IMAGE_DEP) generate clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up --build
 
-restart: ##@ Clear agent registrations, then restart all services without rebuilding.
+restart: ##@ Clear agent registrations, then restart all services without rebuilding (except the dev frontend image).
 restart: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 restart: generate clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (foreground).
+restart-fg: ##@ Clear agent registrations, then restart all services without rebuilding (except the dev frontend image) (foreground).
 restart-fg: CLEAR_COMPOSE_FILES := $(COMPOSE_FILES) $(PROFILE_FLAGS)
 restart-fg: generate clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) up
 
 ng-up: ##@ Clear agent registrations, then start without regenerating agents compose.
@@ -352,13 +380,15 @@ ng-up-fg: ##@ Clear agent registrations, then start without regenerating (foregr
 ng-up-fg: $(BASE_IMAGE_DEP) clear-agent-registry $(DEEPLYNX_DEP)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up --build
 
-ng-restart: ##@ Clear agent registrations, then restart without rebuilding or regenerating.
+ng-restart: ##@ Clear agent registrations, then restart without rebuilding (except the dev frontend image) or regenerating.
 ng-restart: clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up -d $(UP_WAIT)
 	$(RUN_CHECK)
 
-ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding or regenerating (foreground).
+ng-restart-fg: ##@ Clear agent registrations, then restart without rebuilding (except the dev frontend image) or regenerating (foreground).
 ng-restart-fg: clear-agent-registry $(DEEPLYNX_DEP)
+	$(BUILD_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES_NG) $(PROFILE_FLAGS) up
 
 # The work is done by the .env rule at the top, which runs for this goal as for
@@ -370,7 +400,8 @@ init-env: ##@ Create .env from .env.example if missing (asking about the local S
 # which persists across restarts. Clearing it on every launch keeps an agent that
 # was removed (or renamed) from lingering as a tool. Valkey must be up to clear
 # it, so this starts only redis; the start target that follows reuses it.
-clear-agent-registry: ##@ Stop services and delete only the agent registrations from Valkey
+clear-agent-registry: ##@ Stop services (removing the dev frontend container and its node_modules) and delete the agent registrations from Valkey
+	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) down --remove-orphans
 	$(COMPOSE) $(CLEAR_COMPOSE_FILES) up -d redis
 	@$(COMPOSE) $(CLEAR_COMPOSE_FILES) exec -T redis sh -c '\
@@ -424,6 +455,7 @@ clobber: ##@ Stop services and delete the DB and Valkey volumes (users, keys, hi
 	done
 
 down: ##@ Stop all services
+	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down
 
 down-v: ##@ Stop all services and remove volumes
