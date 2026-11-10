@@ -292,6 +292,83 @@ jobs:
           k3d cluster list
           kubectl --context k3d-prometheus get nodes,pods -A -o wide || true
           kubectl --context k3d-prometheus describe pod smoke || true
+      - name: Collect diagnostics
+        if: ${{ failure() }}
+        # Cluster, node and host state for a failed run. This job's log is sometimes lost when it
+        # fails at "Check the registry", so the same output is uploaded below. Time-boxed to stay
+        # inside the job's 5 minute limit
+        timeout-minutes: 1
+        run: |
+          out="$RUNNER_TEMP/diag"
+          mkdir -p "$out"
+          node=k3d-prometheus-server-0
+          registry=k3d-prometheus-registry.localhost
+          kc=(kubectl --context k3d-prometheus)
+          # Appends a command and its output to the section's file. Each command is limited to 10
+          # seconds and none can fail the step, so a hung or failing one doesn't hide the rest
+          run() {
+            local section="$1"
+            shift
+            {
+              echo "\$ $*"
+              timeout 10 "$@" 2>&1 || echo "(exit $?)"
+              echo
+            } >> "$out/$section.txt"
+          }
+
+          # Why the smoke pod isn't running: its events, and what the node's containerd can pull
+          run cluster "${kc[@]}" get nodes,pods -A -o wide
+          run cluster "${kc[@]}" describe pod smoke
+          run cluster "${kc[@]}" get events -A --sort-by=.lastTimestamp
+          run cluster "${kc[@]}" describe nodes
+          run node docker exec "$node" crictl pull "$registry:5001/smoke:ci"
+          run node docker exec "$node" crictl images
+          run node docker exec "$node" crictl pods
+          run node docker exec "$node" crictl ps -a
+          run node docker exec "$node" cat /etc/rancher/k3s/registries.yaml /etc/hosts /etc/resolv.conf
+          # The registry listens on 5000 inside the Docker network and is published on 5001 for the
+          # host; try both from the node to see which one it can reach
+          run node docker exec "$node" wget -qO- -T 5 "http://$registry:5000/v2/_catalog"
+          run node docker exec "$node" wget -qO- -T 5 "http://$registry:5001/v2/_catalog"
+          run node-log docker logs --timestamps "$node"
+          run registry-log docker logs --timestamps "$registry"
+
+          run docker docker ps --all --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+          run docker docker stats --no-stream
+          run docker docker network inspect k3d-prometheus
+
+          # Whether the runner can reach the registries a pull might use, and how fast
+          run network ip -br addr
+          run network ip route
+          run network cat /etc/resolv.conf
+          for site in registry-1.docker.io mirror.gcr.io ghcr.io; do
+            run network curl -sS -o /dev/null --max-time 10 \
+              -w "$site: HTTP %{http_code} dns=%{time_namelookup}s tls=%{time_appconnect}s total=%{time_total}s\n" \
+              "https://$site/v2/"
+          done
+
+          # Is the runner itself starved or unhealthy
+          run host uptime
+          run host free -m
+          run host df -h
+          run host nproc
+          run host ps -eo pid,pcpu,pmem,etime,comm --sort=-pcpu
+          run host sudo -n dmesg -T --level=err,warn,crit,alert,emerg
+          run host sudo -n journalctl --no-pager -n 150 -u docker -u containerd
+
+          # The files hold everything; the log gets the end of each
+          for f in "$out"/*.txt; do
+            echo "::group::$(basename "$f")"
+            tail -n 300 "$f"
+            echo "::endgroup::"
+          done
+      - name: Upload diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: k3d-diagnostics
+          path: ${{ runner.temp }}/diag/
+          retention-days: 14
 
   hackathon-slides:
     name: "hackathon: slides"
