@@ -10,15 +10,27 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
-import { Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { useId, useState } from "react";
+import { Bot, Cpu, FolderOpen, PanelRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Tabs } from "@/components/ui/Tabs";
 import { Tag } from "@/components/ui/Tag";
+import { PerSampleList } from "../PerSampleList";
+import { splitPerSample } from "@/lib/artifacts/perSample";
 import { api } from "@/lib/api/client";
 import { useChatState } from "@/lib/store/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
+import { LiveAgentPanel } from "../LiveAgentPanel";
+import { ActiveJobsPanel } from "./ActiveJobsPanel";
 
-type StatusTab = "jobs" | "artifacts";
+type StatusTab = "agents" | "jobs" | "artifacts";
+
+/** Each tab panel's accessible name (the Agents tab is the Live Agents Arena). */
+const TAB_LABELS: Record<StatusTab, string> = {
+  agents: "Live Agents Arena",
+  jobs: "Active Jobs",
+  artifacts: "Artifacts",
+};
 
 /** Every artifact in the open conversation's transcript, newest last, deduped
  * by id. A resumed conversation gives each assistant turn the artifacts it
@@ -102,9 +114,10 @@ interface StatusPanelProps {
 }
 
 /**
- * Right-hand status rail for Home: a DaisyUI tab bar switching between Active
- * Jobs and Artifacts. Artifacts are live off the conversation transcript; job
- * cards get wired in as that data source lands.
+ * Right-hand status rail for Home: a DaisyUI tab bar switching between the Live
+ * Agents Arena (default, tab label "Agents"), Active Jobs and Artifacts. Agents and
+ * Artifacts are live off the conversation transcript; Active Jobs polls the
+ * backend's Task Graph.
  *
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
@@ -112,8 +125,12 @@ interface StatusPanelProps {
  * on Home's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
-  const [tab, setTab] = useState<StatusTab>("jobs");
+  const [tab, setTab] = useState<StatusTab>("agents");
   const artifacts = useConversationArtifacts();
+  const panelId = useId();
+  const { main, perSample } = splitPerSample(artifacts);
+  // The tab count shows what a person opens, not every per-sample file.
+  const mainCount = main.length;
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -126,12 +143,15 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           <PanelRight size={16} />
         </RailButton>
         <div className="h-2" aria-hidden />
+        <RailButton active={tab === "agents"} label="Live Agents Arena" onClick={() => openTo("agents")}>
+          <Bot size={20} />
+        </RailButton>
         <RailButton active={tab === "jobs"} label="Active Jobs" onClick={() => openTo("jobs")}>
           <Cpu size={20} />
         </RailButton>
         <RailButton
           active={tab === "artifacts"}
-          label={artifacts.length > 0 ? `Artifacts (${artifacts.length})` : "Artifacts"}
+          label={mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts"}
           onClick={() => openTo("artifacts")}
         >
           <FolderOpen size={20} />
@@ -143,46 +163,42 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between px-6 pt-6">
-        <div role="tablist" className="tabs tabs-border">
-          <button
-            role="tab"
-            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "jobs" ? "tab-active" : ""}`}
-            onClick={() => setTab("jobs")}
-          >
-            Active Jobs
-          </button>
-          <button
-            role="tab"
-            className={`tab text-xs font-bold uppercase tracking-wide ${tab === "artifacts" ? "tab-active" : ""}`}
-            onClick={() => setTab("artifacts")}
-          >
-            Artifacts{artifacts.length > 0 && ` (${artifacts.length})`}
-          </button>
-        </div>
+        <Tabs
+          tabs={[
+            { id: "agents", label: "Agents" },
+            { id: "jobs", label: "Active Jobs" },
+            { id: "artifacts", label: mainCount > 0 ? `Artifacts (${mainCount})` : "Artifacts" },
+          ]}
+          selected={tab}
+          onChange={setTab}
+          label="Status panel"
+          panelId={panelId}
+        />
         <RailButton size={32} label="Collapse status panel" onClick={onCollapse}>
           <PanelRight size={18} />
         </RailButton>
       </div>
 
-      {tab === "jobs" ? (
-        <EmptyState
-          icon={<Cpu size={32} />}
-          title="No Active Jobs"
-          hint="Assigned solver pipelines will display here"
-        />
-      ) : artifacts.length === 0 ? (
-        <EmptyState
-          icon={<FolderOpen size={32} />}
-          title="No Artifacts Yet"
-          hint="Generated artifacts will display here"
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
-          {artifacts.map((artifact) => (
-            <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
-          ))}
-        </div>
-      )}
+      <div id={panelId} role="tabpanel" aria-label={TAB_LABELS[tab]} className="flex min-h-0 flex-1 flex-col">
+        {tab === "agents" ? (
+          <LiveAgentPanel />
+        ) : tab === "jobs" ? (
+          <ActiveJobsPanel />
+        ) : artifacts.length === 0 ? (
+          <EmptyState
+            icon={<FolderOpen size={32} />}
+            title="No Artifacts Yet"
+            hint="Generated artifacts will display here"
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
+            {main.map((artifact) => (
+              <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
+            ))}
+            <PerSampleList artifacts={perSample} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
