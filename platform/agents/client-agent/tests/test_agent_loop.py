@@ -1822,16 +1822,63 @@ def test_failed_verbatim_call_keeps_the_request_for_the_retry(harness) -> None:
     assert retry == "2D channel flow with no-slip walls\ntry again"
 
 
-def test_user_request_text_is_bounded() -> None:
+def test_user_request_keeps_the_latest_messages() -> None:
     state: Dict[str, Any] = {}
     for i in range(30):
         agent_loop._note_user_words(state, f"part {i}")
     agent_loop._note_user_words(state, "part 29")  # repeated message is not stored twice
     parts = state[agent_loop.USER_REQUEST_PARTS]
     assert parts == [f"part {i}" for i in range(18, 30)]
+
+
+def test_a_long_paste_reaches_the_skill_whole(harness) -> None:
+    """A pasted input file or log is only useful complete: the default limit keeps it."""
+    assert agent_loop.MAX_USER_REQUEST_CHARS == agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "input"}, "c1")]), reply("Done.")])
+    pasted = "Why does this input fail?\n[Mesh]\n" + "  # line\n" * 3000 + "[]\nEND OF PASTE"
+
+    send(query=pasted)
+
+    assert harness.invocations[0][1]["message"] == pasted.strip()
+
+
+def test_text_over_the_limit_keeps_its_start_and_end(monkeypatch) -> None:
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 6000)
     text = agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["HEAD " + "x" * 9000 + " TAIL"]})
     assert len(text) == 6000
     assert text.startswith("HEAD ") and text.endswith(" TAIL") and "\n[...]\n" in text
+    # A limit too short for the marker keeps only the start.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 4)
+    assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["HEAD TAIL"]}) == "HEAD"
+    # No limit keeps everything.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", None)
+    words = "x" * 2_000_000
+    assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: [words]}) == words
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "warns"),
+    [
+        (None, agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, False),
+        ("  ", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, False),
+        ("50000", 50000, False),
+        ("0", None, False),
+        ("-5", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, True),
+        ("lots", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, True),
+    ],
+)
+def test_the_request_limit_comes_from_the_environment(
+    monkeypatch, caplog, raw: Optional[str], expected: Optional[int], warns: bool
+) -> None:
+    if raw is None:
+        monkeypatch.delenv(agent_loop.MAX_USER_REQUEST_CHARS_ENV, raising=False)
+    else:
+        monkeypatch.setenv(agent_loop.MAX_USER_REQUEST_CHARS_ENV, raw)
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        assert agent_loop.configured_max_user_request_chars() == expected
+    assert any(agent_loop.MAX_USER_REQUEST_CHARS_ENV in r.getMessage() for r in caplog.records) is warns
 
 
 def test_verbatim_fields_are_left_unset_without_user_words() -> None:
@@ -1919,15 +1966,22 @@ def test_marker_on_a_field_free_text_could_fail_is_ignored(
     assert params["_input_sources"] == {"value": "model"}
 
 
-def test_marker_accepts_nullable_and_long_string_fields() -> None:
+def test_marker_accepts_nullable_and_long_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 50_000)
     schema = {
         "type": "object",
         "properties": {
             "nullable": {"type": ["string", "null"], **MARKED},
-            "long": {"type": "string", "maxLength": 10000, "minLength": 1, **MARKED},
+            "long": {"type": "string", "maxLength": 50_000, "minLength": 1, **MARKED},
+            "short": {"type": "string", "maxLength": 49_999, **MARKED},
+            "malformed": True,
         },
     }
+    # A maxLength below the limit could reject a request the client-agent passes on.
     assert agent_loop._verbatim_field_names(schema) == ["nullable", "long"]
+    # With no limit, no maxLength is long enough.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", None)
+    assert agent_loop._verbatim_field_names(schema) == ["nullable"]
 
 
 def test_later_marked_call_in_the_same_request_gets_the_users_words(harness) -> None:

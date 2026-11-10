@@ -141,16 +141,20 @@ returns a result, even if your agent's result says `"status": "error"`. Later
 calls made before the user types again get the same text, and an answer to a
 client-agent question adds to it. The user's next typed message starts a new
 request. A failed call keeps the text, so a retry carries the whole request.
-Text over 6000 characters keeps its start and its end, with `[...]` in between.
-`inputSources` reports the field as `user`. The marker is dropped before the
-schema reaches the model, and the value isn't shown to the model afterwards.
+A request longer than 12 messages keeps its latest 12. Text over
+`PROMETHEUS_MAX_USER_REQUEST_CHARS` (default 1,000,000 characters, so a pasted
+input file or log arrives whole; `0` for no limit) keeps its start and its end,
+with `[...]` in between. `inputSources` reports the field as `user`. The marker
+is dropped before the schema reaches the model, and the value isn't shown to the
+model afterwards.
 
 You can mark more than one property; each gets the same text. The key may also
 be spelled `x_prometheus_source`. The user's words are free text, so the
 marker only works on a top-level property of type `string` (or
 `["string", "null"]`) whose other keywords are only `title`, `description`,
 `examples`, `default`, a `minLength` of at most 1, a `maxLength` of at least
-6000, and `x-`/`x_` keys. On any other top-level property, and for any value
+`PROMETHEUS_MAX_USER_REQUEST_CHARS` (none with the limit off), and `x-`/`x_`
+keys. On any other top-level property, and for any value
 other than `user_message`, the client-agent logs a warning and ignores the
 marker, and its model fills the field as usual. A marker on a nested property,
 or on a skill used as a workflow step, is ignored without a warning.

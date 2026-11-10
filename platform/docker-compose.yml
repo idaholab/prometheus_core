@@ -119,6 +119,7 @@ services:
       LLM_CONFIG_FILE: ${LLM_CONFIG_FILE:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      PROMETHEUS_MAX_USER_REQUEST_CHARS: ${PROMETHEUS_MAX_USER_REQUEST_CHARS:-}
     depends_on:
       backend:
         condition: service_healthy

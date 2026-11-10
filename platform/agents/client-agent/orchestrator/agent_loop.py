@@ -31,6 +31,7 @@ import contextlib
 import copy
 import json
 import logging
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -106,7 +107,38 @@ USER_REQUEST_PARTS = "user_request_parts"
 #: message still get the same request; that message starts a new one.
 USER_REQUEST_DELIVERED = "user_request_delivered"
 _MAX_REQUEST_PARTS = 12
-_MAX_REQUEST_CHARS = 6000
+MAX_USER_REQUEST_CHARS_ENV = "PROMETHEUS_MAX_USER_REQUEST_CHARS"
+#: Large enough for a pasted input file or log. The text goes only to the skill,
+#: never into the model's context; the limit just keeps a request below the
+#: agent's 10 MB A2A body limit.
+DEFAULT_MAX_USER_REQUEST_CHARS = 1_000_000
+
+
+def configured_max_user_request_chars() -> Optional[int]:
+    """The longest user request passed to a marked field, or ``None`` for no limit.
+
+    ``PROMETHEUS_MAX_USER_REQUEST_CHARS`` sets it; ``0`` turns the limit off. An
+    invalid value logs a warning and keeps the default rather than stop the agent.
+    """
+    raw = os.getenv(MAX_USER_REQUEST_CHARS_ENV, "").strip()
+    if not raw:
+        return DEFAULT_MAX_USER_REQUEST_CHARS
+    try:
+        value = int(raw)
+    except ValueError:
+        value = -1
+    if value < 0:
+        logger.warning(
+            "%s=%r is not a whole number >= 0; using %d",
+            MAX_USER_REQUEST_CHARS_ENV,
+            raw,
+            DEFAULT_MAX_USER_REQUEST_CHARS,
+        )
+        return DEFAULT_MAX_USER_REQUEST_CHARS
+    return value or None
+
+
+MAX_USER_REQUEST_CHARS = configured_max_user_request_chars()
 #: (skill_id, field, reason) already warned about; the catalog is rebuilt every turn.
 _logged_ignored_markers: set[Tuple[str, str, str]] = set()
 
@@ -264,6 +296,11 @@ def _advertised_parameters(input_schema: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
+def _fits_user_request(max_length: Any) -> bool:
+    """Whether a ``maxLength`` admits any user request the client-agent passes on."""
+    return MAX_USER_REQUEST_CHARS is not None and isinstance(max_length, int) and max_length >= MAX_USER_REQUEST_CHARS
+
+
 def _verbatim_markers(input_schema: Any) -> Dict[str, Optional[str]]:
     """Marked top-level properties: name -> None if it takes the user's words, else why not.
 
@@ -286,7 +323,7 @@ def _verbatim_markers(input_schema: Any) -> Dict[str, Optional[str]]:
         kind = prop.get("type")
         limits = [key for key in prop if key not in _VERBATIM_ALLOWED_KEYWORDS and not key.startswith(("x_", "x-"))]
         max_length, min_length = prop.get("maxLength"), prop.get("minLength")
-        if "maxLength" in prop and not (isinstance(max_length, int) and max_length >= _MAX_REQUEST_CHARS):
+        if "maxLength" in prop and not _fits_user_request(max_length):
             limits.append(f"maxLength {max_length}")
         if "minLength" in prop and not (isinstance(min_length, int) and min_length <= 1):
             limits.append(f"minLength {min_length}")
@@ -741,15 +778,18 @@ def _note_user_words(state: Dict[str, Any], text: Any, *, typed: bool = True) ->
 def user_request_text(state: Mapping[str, Any]) -> str:
     """The user's words for the request in progress, oldest first.
 
-    Text over the cap keeps its start, where a request usually states what it
-    wants, and its end, the latest words; the middle is cut.
+    Text over ``MAX_USER_REQUEST_CHARS`` keeps its start, where a request usually
+    states what it wants, and its end, the latest words; the middle is cut.
     """
     text = "\n".join(str(part) for part in state.get(USER_REQUEST_PARTS) or []).strip()
-    if len(text) <= _MAX_REQUEST_CHARS:
+    limit = MAX_USER_REQUEST_CHARS
+    if limit is None or len(text) <= limit:
         return text
     marker = "\n[...]\n"
-    head = (_MAX_REQUEST_CHARS - len(marker)) // 2
-    tail = _MAX_REQUEST_CHARS - len(marker) - head
+    if limit <= len(marker):
+        return text[:limit]
+    head = (limit - len(marker)) // 2
+    tail = limit - len(marker) - head
     return text[:head] + marker + text[-tail:]
 
 
