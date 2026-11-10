@@ -62,7 +62,7 @@ Tests use [Vitest](https://vitest.dev) and sit next to the code they test, in th
 
 - `*.test.ts` runs in Node, for logic: stores, parsers, formatters. `features/chat/store/chat.test.ts` sits beside `chat.ts`.
 - `*.test.tsx` runs in jsdom with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), for components. Name it `<Component>.dom.test.tsx`. Find elements by role and accessible name and act through `@testing-library/user-event`. `src/components/ui/FilterChips/FilterChips.dom.test.tsx` is the example.
-- A test for a screen as a whole sits beside the screen's main component, such as `features/workflows/NodeInspector.dom.test.tsx` beside `NodeInspector.tsx`.
+- A test for a screen as a whole sits beside the screen's main component, such as `features/approval-queue/ApprovalQueue.dom.test.tsx` beside `ApprovalQueue.tsx`.
 - A test that checks a rule across the app, rather than one file, goes in `src/test/`.
 
 A test file named any other way never runs, so `src/test/testFiles.test.ts` fails if a file under `src/` imports Vitest or Testing Library without a `.test.ts` or `.test.tsx` name. CI runs every test in `src/` through `npm run test:coverage`, wherever it sits.
