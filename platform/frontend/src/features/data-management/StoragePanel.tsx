@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { FileText } from "lucide-react";
-import type { ArtifactType } from "@/lib/store/dataManagement";
+import type { ArtifactType } from "./store/dataManagement";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { FilterChips } from "@/components/ui/FilterChips";
 

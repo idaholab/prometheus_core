@@ -10,9 +10,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useDataManagement } from "@/lib/store/dataManagement";
+import { useDataManagement } from "@/features/data-management/store/dataManagement";
 import { usePageHeader } from "@/lib/store/pageHeader";
-import { DataManagement } from "../components/dataManagement/DataManagement";
+import { DataManagement } from "@/features/data-management/DataManagement";
 
 /**
  * Data Management section page: owns the page's data and header. Layout lives in

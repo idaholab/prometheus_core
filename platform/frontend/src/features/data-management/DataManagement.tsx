@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { formatBytes, storagePercent, type DataManagementState, type SourceStatus } from "@/lib/store/dataManagement";
+import { formatBytes, storagePercent, type DataManagementState, type SourceStatus } from "./store/dataManagement";
 import { Database } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/SectionLabel";
