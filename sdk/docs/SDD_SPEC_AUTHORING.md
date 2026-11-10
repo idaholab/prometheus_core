@@ -1,5 +1,7 @@
 # SDD Spec Authoring Standard
 
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID", "how the test proves it")`; see [common/speccheck/README.md](../../common/speccheck/README.md). The sdk's tests now run under speccheck (`[tool.speccheck]` in `sdk/pyproject.toml`, the `sdk: speccheck` job in `test.yml`), but no test claims a requirement yet, so every requirement is unclaimed and that job fails until step 3 of `common/speccheck/plan/` lands.
+
 This document defines how to write and update specs in `specs/` for
 spec-driven development in `prometheus_api`. Use it when adding a capability,
 changing public behavior, or asking an AI assistant to draft a spec.

@@ -1,5 +1,7 @@
 # Prometheus API Specs Index
 
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID", "how the test proves it")`; see [common/speccheck/README.md](../../common/speccheck/README.md). The sdk's tests now run under speccheck (`[tool.speccheck]` in `sdk/pyproject.toml`, the `sdk: speccheck` job in `test.yml`), but no test claims a requirement yet, so every requirement is unclaimed and that job fails until step 3 of `common/speccheck/plan/` lands.
+
 This directory is the spec-driven-development contract for `prometheus_api`.
 Specs describe required behavior that future changes must preserve or update.
 

@@ -1,7 +1,7 @@
 # 007 — LLM security and tracing
 
 status: implemented
-sources: README.md, docs/ENV_SETUP.md, prometheus_api/llm_client/security.py, prometheus_api/llm_client/tracing.py, prometheus_api/llm_client/client.py, tests/test_llm_client.py
+sources: README.md, docs/ENV_SETUP.md, prometheus_api/llm_client/security.py, prometheus_api/llm_client/tracing.py, prometheus_api/llm_client/client.py, tests/unit/test_llm_client.py
 depends-on: 005, 006
 
 ## Purpose

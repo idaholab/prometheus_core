@@ -45,7 +45,11 @@ dev = [
     "pre-commit>=4.6.0",
     "types-protobuf>=6.30.2",
     "types-pyyaml>=6.0.12",
+    "prometheus-speccheck",
 ]
+
+[tool.uv.sources]
+prometheus-speccheck = { path = "../common/speccheck" }
 
 [project.urls]
 Homepage = "https://github.com/idaholab/prometheus_core/tree/devel/sdk"
@@ -88,6 +92,28 @@ markers = [
     "integration: Integration tests requiring .env file and database connection",
     "slow: Slow running tests",
 ]
+# Collection checks every covers(ID, how) claim against specs/ (see [tool.speccheck]). CI sets
+# SPECCHECK_PRODUCER for each job, which wins over this default
+speccheck_config = "pyproject.toml"
+speccheck_producer = "sdk-python"
+
+# speccheck: a requirement in specs/ is met only when a test that claims it with
+# @pytest.mark.covers(ID, how) ran and passed in CI. See ../common/speccheck/README.md
+[tool.speccheck]
+specs = "specs"
+# The IDs move to the SDK- prefix in their own commit (common/speccheck/plan/03-sdk-adopt.md)
+id-prefix = ""
+
+# pytest in the sdk-python job, every leg (test.yml)
+[tool.speccheck.producers.sdk-python]
+workflows = ["test"]
+
+# pytest inside the image in the sdk-docker job, every leg (test.yml)
+[tool.speccheck.producers.sdk-docker]
+workflows = ["test"]
+
+[tool.speccheck.report]
+title = "sdk requirements"
 
 [tool.coverage.run]
 source_pkgs = ["prometheus_api"]

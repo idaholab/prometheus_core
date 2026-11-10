@@ -74,7 +74,7 @@ The actual test suite is in `tests/`:
 
 ```bash
 pytest tests/                    # All tests
-pytest tests/test_integration.py # Integration tests
+pytest tests/unit/test_integration.py # Integration tests
 ./run_integration_tests.sh      # Run with nice output
 ```
 

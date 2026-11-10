@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1781,6 +1781,7 @@ dependencies = [
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
+    { name = "prometheus-speccheck" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1809,12 +1810,32 @@ requires-dist = [
 dev = [
     { name = "mypy", specifier = ">=1.0.0" },
     { name = "pre-commit", specifier = ">=4.6.0" },
+    { name = "prometheus-speccheck", directory = "../common/speccheck" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "ruff", specifier = ">=0.1.0" },
     { name = "types-protobuf", specifier = ">=6.30.2" },
     { name = "types-pyyaml", specifier = ">=6.0.12" },
+]
+
+[[package]]
+name = "prometheus-speccheck"
+version = "0.1.0"
+source = { directory = "../common/speccheck" }
+
+[package.metadata]
+requires-dist = [{ name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.1" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "coverage", specifier = ">=7.13.1" },
+    { name = "jsonschema", specifier = ">=4.26.0" },
+    { name = "linkify-it-py", specifier = ">=2.0.3" },
+    { name = "markdown-it-py", specifier = ">=3.0.0" },
+    { name = "pytest", specifier = ">=8.4.0" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "ruff", specifier = ">=0.16" },
 ]
 
 [[package]]

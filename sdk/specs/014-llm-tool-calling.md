@@ -1,7 +1,7 @@
 # 014 — LLM tool calling
 
 status: implemented
-sources: prometheus_api/llm_client/tools.py, prometheus_api/llm_client/client.py, prometheus_api/llm_client/models.py, prometheus_api/llm_client/normalization.py, prometheus_api/llm_client/exceptions.py, prometheus_api/llm_client/__init__.py, tests/test_llm_tools.py, tests/test_llm_client.py, docs/agent/LLM_CLIENT_MIGRATION.md, examples/llm_tool_calling_usage.py
+sources: prometheus_api/llm_client/tools.py, prometheus_api/llm_client/client.py, prometheus_api/llm_client/models.py, prometheus_api/llm_client/normalization.py, prometheus_api/llm_client/exceptions.py, prometheus_api/llm_client/__init__.py, tests/unit/test_llm_tools.py, tests/unit/test_llm_client.py, docs/agent/LLM_CLIENT_MIGRATION.md, examples/llm_tool_calling_usage.py
 depends-on: 005, 006, 007
 
 ## Purpose

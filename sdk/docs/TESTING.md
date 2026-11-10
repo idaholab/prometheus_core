@@ -9,7 +9,7 @@ Use the locked `uv` environment through the Makefile:
 
 ```bash
 uv sync
-make test             # unit tests only, no DeepLynx credentials required
+make test             # unit and requirement tests, no DeepLynx credentials required
 make test-integration # integration tests, requires .env credentials
 make test-all         # all tests, including integration
 ```
@@ -17,12 +17,15 @@ make test-all         # all tests, including integration
 For one-off commands, use `uv run`:
 
 ```bash
-uv run pytest -m "not integration"
-uv run pytest tests/test_agent.py::TestPrometheusAgentExecutor
-uv run pytest --cov=prometheus_api --cov-report=html
+uv run pytest tests/unit -m "not integration"
+uv run pytest tests/requirements
+uv run pytest tests/unit/test_agent.py::TestPrometheusAgentExecutor
+uv run pytest tests/unit --cov=prometheus_api --cov-report=html
 ```
 
 ## Test Organization
+
+The unit tests are in `tests/unit/` and are measured by coverage. The requirement tests are in `tests/requirements/`, one file per spec, and prove `specs/` with `@pytest.mark.covers(ID, how)`; they aren't measured by coverage.
 
 | File | Description | Marker |
 |------|-------------|--------|

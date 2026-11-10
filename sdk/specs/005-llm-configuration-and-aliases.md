@@ -1,7 +1,7 @@
 # 005 — LLM configuration and aliases
 
 status: implemented
-sources: README.md, docs/ENV_SETUP.md, llm_config.example.yaml, prometheus_api/llm_configs/, prometheus_api/llm_client/config.py, prometheus_api/llm_client/client.py, prometheus_api/llm_client/exceptions.py, tests/test_llm_client.py, tests/test_llm_configs.py
+sources: README.md, docs/ENV_SETUP.md, llm_config.example.yaml, prometheus_api/llm_configs/, prometheus_api/llm_client/config.py, prometheus_api/llm_client/client.py, prometheus_api/llm_client/exceptions.py, tests/unit/test_llm_client.py, tests/unit/test_llm_configs.py
 depends-on: none
 
 ## Purpose

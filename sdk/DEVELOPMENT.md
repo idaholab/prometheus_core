@@ -19,7 +19,7 @@ The project is `uv`-managed (see `uv.lock`). The Makefile wraps the common targe
 make lint        # ruff check .
 make format      # ruff format --check .
 make typecheck   # mypy prometheus_api/
-make test        # unit tests only (excludes integration), with the coverage floor
+make test        # unit tests (excludes integration, with the coverage floor) and requirement tests
 make test-integration # DeepLynx integration tests (requires .env)
 make test-all    # all tests, including integration
 make fix         # ruff check --fix . && ruff format .
@@ -32,13 +32,14 @@ make test-install # build wheel, install in clean venv, smoke-test imports
 
 ```bash
 make test                                                   # unit only (no .env required)
-uv run pytest -m "not integration"                            # unit only (no .env required)
+uv run pytest tests/unit -m "not integration"                 # unit only (no .env required)
+uv run pytest tests/requirements                              # requirement tests (prove specs/)
 make test-integration                                        # integration (requires .env w/ DeepLynx creds)
-uv run pytest tests/test_agent.py::TestPrometheusAgentExecutor::test_execute_calls_enqueue_event
+uv run pytest tests/unit/test_agent.py::TestPrometheusAgentExecutor::test_execute_calls_enqueue_event
 uv run pytest --cov --cov-report=html
 ```
 
-`make test`, `make test-all`, and CI fail if coverage drops below `fail_under` in `[tool.coverage.report]`, the lowest total across the supported Python versions. Raise it as coverage improves; never lower it. Running a subset of tests with `--cov` will fail the floor, so leave `--cov` off for targeted runs.
+`make test`, `make test-all`, and CI fail if the unit tests' coverage drops below `fail_under` in `[tool.coverage.report]`, the lowest total across the supported Python versions. Raise it as coverage improves; never lower it. Running a subset of tests with `--cov` will fail the floor, so leave `--cov` off for targeted runs.
 
 `pyproject.toml` sets `asyncio_mode = "auto"`, so async tests do **not** need `@pytest.mark.asyncio`. Tests in `test_integration.py` are auto-marked `integration` by `tests/conftest.py`.
 
@@ -92,9 +93,10 @@ Streaming (`message/stream`) is opt-in: set `"capabilities": {"streaming": true}
 Artifact metadata produced by helpers always carries `conversation_id`, `producer_agent_id` (normalized: lowercased, spaces → hyphens), and `created_at` (UTC ISO). When adding new helper paths that emit artifacts, route through `_build_artifact_metadata` to preserve this envelope.
 
 ### Tests
-- `test_*.py` files at the top level of `tests/` are unit tests.
+- `tests/unit/` holds the unit tests (`test_*.py`), the only suite measured by coverage. They claim no requirements.
+- `tests/requirements/` proves `specs/`, one file per spec. Every test there claims what it proves with `@pytest.mark.covers(ID, how)`, and isn't measured by coverage. `tests/conftest.py` fails collection on a unit test that claims a requirement, or a requirements test that claims none.
 - `test_integration.py` requires a `.env` with valid `DEEPLYNX_KEY`/`SECRET`/`ORG_ID`/`PROJECT_ID` and optionally `DEEPLYNX_DATA_SOURCE_ID` (without it, code that creates records will hit "DataSource with id 0 not found").
-- `tests/test_sync_async_parity.py` keeps sync and async resource handlers aligned for endpoint payloads and response parsing.
+- `tests/unit/test_sync_async_parity.py` keeps sync and async resource handlers aligned for endpoint payloads and response parsing.
 - `make test-install` builds a wheel, installs it into a clean venv, and imports every package under `prometheus_api/` from it. CI runs it as the `sdk: install` job.
 - `examples/verify_connection.py` is a manual DeepLynx smoke test; it is intentionally outside pytest discovery.
 

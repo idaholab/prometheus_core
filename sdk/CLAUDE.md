@@ -28,28 +28,30 @@ Use `uv run` (the project is uv-managed; see `uv.lock`). The Makefile wraps the 
 make lint             # ruff check .
 make format           # ruff format --check .
 make typecheck        # mypy prometheus_api/
-make test             # alias for `test-unit` (skips integration)
-make test-unit        # pytest -m "not integration" --cov (enforces the coverage floor)
-make test-integration # pytest -m integration (requires .env)
-make test-all         # pytest --cov (every marker, including integration)
+make test             # test-unit + test-requirements (skips integration)
+make test-unit        # pytest tests/unit -m "not integration" --cov (enforces the coverage floor)
+make test-requirements # pytest tests/requirements (proves specs/, no coverage)
+make test-integration # pytest tests/unit -m integration (requires .env)
+make test-all         # test-requirements + pytest tests/unit --cov (including integration)
 make fix              # ruff check --fix . && ruff format .
 make check            # lint + format + typecheck
 make hooks            # install pre-commit + pre-push hooks
 make test-install     # build wheel via `uv build`, install in clean venv, smoke-test imports
 ```
 
-`make test` is an alias for `make test-unit` — it does **not** run integration tests by default. Use `make test-all` to include them.
+`make test` runs `make test-unit` and `make test-requirements` — it does **not** run integration tests by default. Use `make test-all` to include them.
 
 ### Targeted test runs
 
 ```bash
-uv run pytest -m "not integration"                          # unit only (no .env required)
-uv run pytest -m integration                                # integration (requires .env w/ DeepLynx creds)
-uv run pytest tests/test_agent.py::TestPrometheusAgentExecutor::test_execute_calls_enqueue_event
-uv run pytest --cov --cov-report=html
+uv run pytest tests/unit -m "not integration"               # unit only (no .env required)
+uv run pytest tests/unit -m integration                     # integration (requires .env w/ DeepLynx creds)
+uv run pytest tests/requirements                            # requirement tests (prove specs/)
+uv run pytest tests/unit/test_agent.py::TestPrometheusAgentExecutor::test_execute_calls_enqueue_event
+uv run pytest tests/unit --cov --cov-report=html
 ```
 
-`make test`, `make test-all`, and CI fail if coverage drops below `fail_under` in `[tool.coverage.report]`, the lowest total across the supported Python versions. Raise it as coverage improves; never lower it. Running a subset of tests with `--cov` will fail the floor, so leave `--cov` off for targeted runs.
+`make test`, `make test-all`, and CI fail if the unit tests' coverage drops below `fail_under` in `[tool.coverage.report]`, the lowest total across the supported Python versions. Raise it as coverage improves; never lower it. Running a subset of tests with `--cov` will fail the floor, so leave `--cov` off for targeted runs.
 
 `pyproject.toml` sets `asyncio_mode = "auto"`, so async tests do **not** need `@pytest.mark.asyncio`. Tests in `test_integration.py` are auto-marked `integration` by `tests/conftest.py`.
 
@@ -98,7 +100,7 @@ Artifact metadata produced by helpers always carries `conversation_id`, `produce
 
 ### LLM client layout
 
-`LLMClient` (sync) and `AsyncLLMClient` (async) are **two fully independent implementations** in `llm_client/client.py`. Spec 006 requires they stay aligned for alias selection, fallback behavior, request payloads, response fields, and logging — so shared behavior belongs on `_ClientMixin`, not duplicated in both. `ChatResponse` is built only through `_ClientMixin._build_chat_response`; do not construct it inline (there are four call sites and they must not drift). `tests/test_llm_client.py::test_sync_and_async_chat_signatures_match` guards the signatures.
+`LLMClient` (sync) and `AsyncLLMClient` (async) are **two fully independent implementations** in `llm_client/client.py`. Spec 006 requires they stay aligned for alias selection, fallback behavior, request payloads, response fields, and logging — so shared behavior belongs on `_ClientMixin`, not duplicated in both. `ChatResponse` is built only through `_ClientMixin._build_chat_response`; do not construct it inline (there are four call sites and they must not drift). `tests/unit/test_llm_client.py::test_sync_and_async_chat_signatures_match` guards the signatures.
 
 Two dispatch paths hide behind one API. When the selected YAML has a reachable `proxy_url`, chat POSTs to `{proxy_url}/v1/chat/completions` and the response is a **plain dict**. Otherwise (or when the proxy raises a request-level error) it calls the LiteLLM SDK and the response is a **`ModelResponse` object**. Every response accessor must therefore tolerate both shapes — use `_get` from `llm_client/tools.py` rather than subscripting.
 
@@ -109,7 +111,9 @@ Flavors are deployment configuration and live in YAML; per-call capabilities liv
 Streaming is not supported: a truthy `stream` raises `LLMClientError` before any backend is contacted.
 
 ### Tests
-- `test_*.py` files at the top level of `tests/` are unit tests.
+- `tests/unit/` holds the unit tests (`test_*.py`), the only suite measured by coverage. They claim no requirements.
+- `tests/requirements/` proves `specs/`, one file per spec (`test_NNN_<spec name>.py`). Every test there claims what it proves with `@pytest.mark.covers(ID, how)`; CI uploads its speccheck results and the `sdk: speccheck` job verifies them. It isn't measured by coverage.
+- `tests/conftest.py` holds the fixtures both suites share, and fails collection on a unit test with a `covers` mark or a requirements test without one.
 - `test_integration.py` requires a `.env` with valid `DEEPLYNX_KEY`/`SECRET`/`ORG_ID`/`PROJECT_ID` and optionally `DEEPLYNX_DATA_SOURCE_ID` (without it, code that creates records will hit "DataSource with id 0 not found").
 - `make test-install` builds a wheel, installs it into a clean venv, and imports every package under `prometheus_api/` from it (`python -I`, so the source tree can't stand in). It fails if a package is missing from `[tool.setuptools] packages`. CI runs it as the `sdk: install` job. Use this rather than ad-hoc shell scripts.
 

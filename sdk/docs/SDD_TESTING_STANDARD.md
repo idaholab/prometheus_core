@@ -1,5 +1,7 @@
 # SDD Testing Standard
 
+> **Note:** a docstring or comment that cites an ID is not evidence under speccheck. Claim IDs with `@pytest.mark.covers("ID", "how the test proves it")`; see [common/speccheck/README.md](../../common/speccheck/README.md). The sdk's tests now run under speccheck (`[tool.speccheck]` in `sdk/pyproject.toml`, the `sdk: speccheck` job in `test.yml`), but no test claims a requirement yet, so every requirement is unclaimed and that job fails until step 3 of `common/speccheck/plan/` lands. Until the sdk adopts it (step 3 of `common/speccheck/plan/`), keep citing IDs in docstrings in `sdk/` as shown below; step 3 converts them to the marker.
+
 This document defines how tests should support the specs in `specs/`.
 Use it when adding requirements, removing `⚠ untested` markers, or reviewing
 whether implementation and specs still match.
@@ -66,11 +68,11 @@ in the spec's Open questions.
 
 ## Pytest Standards
 
-- Test files use `tests/test_*.py`.
+- Unit tests are `tests/unit/test_*.py`; requirement tests are `tests/requirements/test_NNN_<spec name>.py`, one per spec.
 - Test classes use `Test*`.
 - Test functions use `test_*`.
 - Async tests use the configured `asyncio_mode = "auto"`.
-- Unit tests should run with `uv run pytest -m "not integration"`.
+- Unit tests should run with `uv run pytest tests/unit -m "not integration"`, and requirement tests with `uv run pytest tests/requirements`.
 - Full test runs should use `make test`, `make check`, or the specific Makefile
   target that matches the change.
 - Integration tests require `.env` values based on `.env.example`, including

@@ -1,7 +1,7 @@
 # 004 — DeepLynx fsspec filesystem
 
 status: implemented
-sources: docs/storage-client/GUIDE.md, pyproject.toml, prometheus_api/storage_client/filesystem.py, tests/test_filesystem.py, tests/test_integration.py
+sources: docs/storage-client/GUIDE.md, pyproject.toml, prometheus_api/storage_client/filesystem.py, tests/unit/test_filesystem.py, tests/unit/test_integration.py
 depends-on: 001, 002, 003
 
 ## Purpose

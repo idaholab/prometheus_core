@@ -2644,6 +2644,7 @@ requires-dist = [
 dev = [
     { name = "mypy", specifier = ">=1.0.0" },
     { name = "pre-commit", specifier = ">=4.6.0" },
+    { name = "prometheus-speccheck", directory = "../../common/speccheck" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },

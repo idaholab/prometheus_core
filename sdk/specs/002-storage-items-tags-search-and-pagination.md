@@ -1,7 +1,7 @@
 # 002 — Storage items, tags, search, and pagination
 
 status: implemented
-sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/item.py, prometheus_api/storage_client/models/pagination.py, prometheus_api/storage_client/models/tag.py, prometheus_api/storage_client/models/metadata.py, prometheus_api/storage_client/resources/items.py, prometheus_api/storage_client/resources/tags.py, prometheus_api/storage_client/resources/search.py, prometheus_api/storage_client/async_resources/items.py, prometheus_api/storage_client/async_resources/tags.py, prometheus_api/storage_client/async_resources/search.py, tests/test_models.py, tests/test_tags.py, tests/test_sync_async_parity.py, tests/test_integration.py
+sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/item.py, prometheus_api/storage_client/models/pagination.py, prometheus_api/storage_client/models/tag.py, prometheus_api/storage_client/models/metadata.py, prometheus_api/storage_client/resources/items.py, prometheus_api/storage_client/resources/tags.py, prometheus_api/storage_client/resources/search.py, prometheus_api/storage_client/async_resources/items.py, prometheus_api/storage_client/async_resources/tags.py, prometheus_api/storage_client/async_resources/search.py, tests/unit/test_models.py, tests/unit/test_tags.py, tests/unit/test_sync_async_parity.py, tests/unit/test_integration.py
 depends-on: 001
 
 ## Purpose

@@ -241,7 +241,7 @@ def test_local_development_example_config_parses():
     This is the only client-side guard that the example YAML keeps the full
     six-flavor contract, including `vision`. Without it the template rots silently.
     """
-    config_path = Path(__file__).resolve().parents[1] / "llm_config.example.yaml"
+    config_path = Path(__file__).resolve().parents[2] / "llm_config.example.yaml"
     config = LLMConfig(config_file=config_path)
 
     models = config.load_fallback_models()

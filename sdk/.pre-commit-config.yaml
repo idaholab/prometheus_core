@@ -26,7 +26,14 @@ repos:
 
       - id: unit-tests
         name: unit tests
-        entry: uv run pytest -m "not integration" --cov
+        entry: uv run pytest tests/unit -m "not integration" --cov
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: requirement-tests
+        name: requirement tests
+        entry: make test-requirements
         language: system
         pass_filenames: false
         stages: [pre-push]

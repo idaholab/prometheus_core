@@ -13,7 +13,7 @@
 """Tests for RedisTaskStore.
 
 These run against the in-memory fallback path (forced via an unreachable Redis
-URL, mirroring tests/test_artifacts.py), so they validate the save/get/delete
+URL, mirroring tests/unit/test_artifacts.py), so they validate the save/get/delete
 round-trip and Task (de)serialization without a live Redis.
 """
 

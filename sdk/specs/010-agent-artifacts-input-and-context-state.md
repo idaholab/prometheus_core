@@ -1,7 +1,7 @@
 # 010 — Agent artifacts, input, and context state
 
 status: implemented
-sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/context_state.py, prometheus_api/agent/events.py, tests/test_agent.py, tests/test_artifacts.py
+sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/context_state.py, prometheus_api/agent/events.py, tests/unit/test_agent.py, tests/unit/test_artifacts.py
 depends-on: 008, 009, 012
 
 ## Purpose
