@@ -25,7 +25,7 @@ import { useState } from "react";
 import type { InspectedNode } from "@/features/workflows/NodeInspector";
 import { WorkflowBuilder } from "@/features/workflows/WorkflowBuilder";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
-import { useTheme } from "../lib/useTheme";
+import { useTheme } from "@/lib/useTheme";
 import {
   BUILDER_NODES,
   BUILDER_WIRES,
@@ -37,7 +37,7 @@ import {
   INVALID_NODES,
   INVALID_WIRES,
   SKILL_GROUPS,
-} from "../pages/builderPlaceholders";
+} from "@/features/workflows/builderPlaceholders";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
 

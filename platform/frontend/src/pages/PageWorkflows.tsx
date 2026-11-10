@@ -17,7 +17,7 @@ import { WorkflowConsole } from "@/features/workflows/WorkflowConsole";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
 import type { WorkflowPlan } from "@/features/workflows/WorkflowPlanner";
 import type { WorkflowTemplate } from "@/features/workflows/WorkflowTemplateCard";
-import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "./builderPlaceholders";
+import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "@/features/workflows/builderPlaceholders";
 
 // Placeholder graph for Comprehensive Material Analysis, laid out as in Figma D.1.
 const EXAMPLE_NODES: WorkflowGraphNode[] = [

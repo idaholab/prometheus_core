@@ -13,9 +13,9 @@
 /* Placeholder content for the Workflow Builder, from Figma D.2 to D.6, until
  * workflows come from the backend. Shared by PageWorkflows (D.2) and the
  * dev review page for the other states (src/dev/BuilderStatesHarness.tsx). */
-import type { InspectedNode } from "@/features/workflows/NodeInspector";
-import type { SkillGroup } from "@/features/workflows/SkillLibrary";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/WorkflowGraph";
+import type { InspectedNode } from "./NodeInspector";
+import type { SkillGroup } from "./SkillLibrary";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
 // Placeholder skill library for the Builder, from Figma D.2.
 export const SKILL_GROUPS: SkillGroup[] = [

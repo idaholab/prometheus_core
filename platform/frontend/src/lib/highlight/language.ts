@@ -21,7 +21,7 @@
  * `backend/app/services/artifacts.py`; keep the two in step when adding a language.
  */
 
-import { normalizeMime } from "../mime.ts";
+import { normalizeMime } from "@/lib/mime";
 
 // MIME → language. Checked before the file name (an explicit MIME wins over a guessed
 // one from the filename). `application/json` is deliberately absent: JSON artifacts use

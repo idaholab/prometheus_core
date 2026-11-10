@@ -21,7 +21,7 @@
  * trailing newline, blank lines, and ragged rows.
  */
 
-import { normalizeMime } from "../mime.ts";
+import { normalizeMime } from "@/lib/mime";
 
 export interface ParsedTable {
   header: string[];

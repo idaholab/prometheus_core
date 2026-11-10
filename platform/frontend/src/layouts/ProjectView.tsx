@@ -22,11 +22,11 @@ import { LeftPanel } from "@/features/shell/LeftPanel";
 import { Home } from "@/features/dashboard/Home";
 import { ComingSoon } from "@/features/shell/ComingSoon";
 import { navLabel, type NavId } from "@/features/shell/nav";
-import { PageAgentRegistry } from "../pages/PageAgentRegistry";
-import { PageApprovalQueue } from "../pages/PageApprovalQueue";
-import { PageDataManagement } from "../pages/PageDataManagement";
-import { PageProjectManagement } from "../pages/PageProjectManagement";
-import { PageWorkflows } from "../pages/PageWorkflows";
+import { PageAgentRegistry } from "@/pages/PageAgentRegistry";
+import { PageApprovalQueue } from "@/pages/PageApprovalQueue";
+import { PageDataManagement } from "@/pages/PageDataManagement";
+import { PageProjectManagement } from "@/pages/PageProjectManagement";
+import { PageWorkflows } from "@/pages/PageWorkflows";
 
 interface Props {
   onLogout: () => void;
