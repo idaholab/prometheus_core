@@ -58,5 +58,4 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 
 ## Open questions
 - Chunked upload, relationship parser error paths and graph wrapping need focused unit tests.
-- The timeseries tests use a fake transport shaped like a recorded `olap/query` response (from a 0.7.2 server); the route has not been called from this repository against 0.8.0 or a newer server.
 - The sync/async parity suite currently covers item and search behavior more directly than file/relationship/timeseries behavior.
