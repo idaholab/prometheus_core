@@ -13,8 +13,8 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import { artifactToElement } from "./artifactAdapter.ts";
 import type { ArtifactMeta } from "@/lib/api/types";
+import { artifactToElement } from "./artifactAdapter.ts";
 
 // Minimal ArtifactMeta factory — only the fields the adapter reads.
 function meta(overrides: Partial<ArtifactMeta>): ArtifactMeta {
@@ -87,4 +87,34 @@ test("a UQ artifact without a report gets no report URL", () => {
 
 test("a UQ artifact with no name gets a default notebook filename", () => {
   assert.equal(artifactToElement(meta({ name: "" })).props?.filename, "uq_result.ipynb");
+});
+
+function jsonArtifact(overrides: Partial<ArtifactMeta>): ArtifactMeta {
+  return {
+    artifact_id: "art-1",
+    name: "result.json",
+    mime_type: "application/json",
+    description: "",
+    tags: [],
+    json_body: null,
+    render_hint: "json",
+    ...overrides,
+  };
+}
+
+test("json artifact without an inline body points CollapsibleJson at the content URL", () => {
+  const element = artifactToElement(jsonArtifact({ artifact_id: "a b", json_body: null }));
+
+  assert.equal(element.name, "CollapsibleJson");
+  assert.equal(element.props?.url, "/api/artifacts/a%20b/content");
+  assert.equal(element.props?.data, null);
+});
+
+test("json artifact with an inline body keeps it as CollapsibleJson data", () => {
+  const body = { status: "ok", values: [1, 2, 3], nested: { flag: true } };
+  const element = artifactToElement(jsonArtifact({ json_body: body }));
+
+  assert.equal(element.name, "CollapsibleJson");
+  assert.deepEqual(element.props?.data, { status: "ok", values: [1, 2, 3], nested: { flag: true } });
+  assert.equal(element.props?.url, "/api/artifacts/art-1/content");
 });

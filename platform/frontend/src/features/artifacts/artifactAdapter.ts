@@ -126,7 +126,8 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
         ...base,
         type: "custom",
         name: "CollapsibleJson",
-        props: { data: artifact.json_body, name: artifact.name },
+        // Inline body when present; otherwise JSONViewer fetches the JSON from `url`.
+        props: { data: artifact.json_body, name: artifact.name, url },
       };
 
     case "thermal":

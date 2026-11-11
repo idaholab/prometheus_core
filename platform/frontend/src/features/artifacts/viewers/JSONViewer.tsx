@@ -11,9 +11,14 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, FileJson } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, ChevronRight, Copy, FileJson } from "lucide-react";
 import { toPrettyJson, tokenizeJsonLine, type JsonToken } from "./jsonSyntax";
 import type { ViewerProps } from "@/features/artifacts/elements";
+import { useArtifactText } from "./useArtifactText";
+
+// Above this size the lines render as plain text: tokenizing every line of a very large
+// body would stall the UI thread.
+const MAX_HIGHLIGHT_CHARS = 1_000_000;
 
 const TOKEN_CLASS: Record<JsonToken["type"], string> = {
   key: "text-primary",
@@ -37,15 +42,23 @@ export function JSONViewer({ element }: ViewerProps) {
   const name = element.name ?? "JSON";
   const defaultCollapsed = Boolean(props.defaultCollapsed);
   const maxHeight = typeof props.maxHeight === "number" ? props.maxHeight : 400;
+  const url = typeof props.url === "string" ? props.url : "";
+
+  // A file-backed JSON artifact carries no inline body, only the content proxy URL:
+  // fetch it then, and only then, so the inline path makes no network call.
+  const hasInline = data !== undefined && data !== null;
+  const { text: fetched, loadState } = useArtifactText("", hasInline ? "" : url);
+  const source = hasInline ? data : fetched;
 
   const [expanded, setExpanded] = useState(!defaultCollapsed);
   const [copied, setCopied] = useState(false);
 
-  const { text, valid } = useMemo(() => toPrettyJson(data), [data]);
+  const { text, valid } = useMemo(() => toPrettyJson(source), [source]);
+  const ready = loadState === "idle" && text !== "";
   const lines = useMemo(() => text.split("\n"), [text]);
   const lineTokens = useMemo(
-    () => (valid ? lines.map((line) => tokenizeJsonLine(line)) : null),
-    [lines, valid],
+    () => (valid && text.length <= MAX_HIGHLIGHT_CHARS ? lines.map((line) => tokenizeJsonLine(line)) : null),
+    [lines, valid, text],
   );
 
   const handleCopy = useCallback(async () => {
@@ -70,23 +83,43 @@ export function JSONViewer({ element }: ViewerProps) {
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <FileJson size={14} className="text-base-content/50" />
           <span className="font-medium">{name}</span>
-          <span className="badge badge-sm badge-ghost">{lines.length} lines</span>
-          {!valid && (
+          {ready && <span className="badge badge-sm badge-ghost">{lines.length} lines</span>}
+          {ready && !valid && (
             <span className="badge badge-sm badge-warning badge-outline">unparsed</span>
           )}
         </button>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="btn btn-ghost btn-xs gap-1"
-          aria-label="Copy JSON"
-        >
-          {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+        {ready && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="btn btn-ghost btn-xs gap-1"
+            aria-label="Copy JSON"
+          >
+            {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        )}
       </div>
 
-      {expanded && (
+      {expanded && loadState === "loading" && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
+          <span className="text-xs text-base-content/50">Loading…</span>
+        </div>
+      )}
+      {expanded && loadState === "error" && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
+          <span className="text-xs text-error inline-flex items-center gap-1.5">
+            <AlertCircle size={13} />
+            Couldn't load this file.
+          </span>
+        </div>
+      )}
+      {expanded && loadState === "idle" && text === "" && (
+        <div className="bg-base-100 px-4 py-3 text-sm">
+          <span className="text-xs text-base-content/50">Empty file</span>
+        </div>
+      )}
+      {expanded && ready && (
         <div className="overflow-y-auto overflow-x-hidden font-mono leading-relaxed" style={{ maxHeight }}>
           {lines.map((line, i) => (
             <div key={i} className="flex items-start px-3 hover:bg-base-300/20">

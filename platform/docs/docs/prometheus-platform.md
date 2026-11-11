@@ -118,6 +118,8 @@ The client-agent maintains conversation state in Redis. Each turn can:
 
 ### File upload
 
+To attach files to a message, click the paperclip button. You can also drop files from the desktop onto the chat composer.
+
 Uploads are sent to the backend; the frontend renders each type with the matching viewer:
 
 - `.e` / `.exo` (Exodus) -- rendered client-side with MeshViewer (VTK.js)

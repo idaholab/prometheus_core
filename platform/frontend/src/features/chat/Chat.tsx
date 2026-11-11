@@ -138,6 +138,11 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// A drag of text or a link carries no "Files" type, so it never shows the drop target.
+function hasFiles(dt: DataTransfer | null | undefined): boolean {
+  return Array.from(dt?.types ?? []).includes("Files");
+}
+
 // ---------------------------------------------------------------------------
 // Main Chat component
 // ---------------------------------------------------------------------------
@@ -169,6 +174,10 @@ export function Chat({ scrollContainerRef }: ChatProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  // Counts dragenter minus dragleave, so the target stays steady while the
+  // pointer crosses the textarea and the buttons inside the composer.
+  const dragDepthRef = useRef(0);
   const uploadingCount = attachments.filter((a) => a.uploading).length;
   const readyDescriptors = attachments
     .filter((a) => a.descriptor && !a.error)
@@ -176,9 +185,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
 
   const handlePickFiles = () => fileInputRef.current?.click();
 
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
+  const addFiles = (files: File[]) => {
     if (!files.length) return;
 
     const next: Attachment[] = [];
@@ -208,6 +215,12 @@ export function Chat({ scrollContainerRef }: ChatProps) {
         });
     }
     setAttachments((prev) => [...prev, ...next]);
+  };
+
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    addFiles(files);
   };
 
   const removeAttachment = (localId: string) =>
@@ -241,6 +254,64 @@ export function Chat({ scrollContainerRef }: ChatProps) {
   // empty conversation from one still being fetched — without this the welcome
   // screen flashed for the whole round trip.
   const resuming = resumingConversationId !== null;
+  // An upload is staged under the session's current conversation, which is still
+  // the previous one until the resume returns; the paperclip and the drop share this rule.
+  const uploadDisabled = awaiting || resuming;
+  // Derived, so the target hides when the composer turns disabled during a drag.
+  const showDropTarget = dragActive && !uploadDisabled;
+
+  const resetDrag = useCallback(() => {
+    dragDepthRef.current = 0;
+    setDragActive(false);
+  }, []);
+
+  // Stop the browser from opening or downloading a file dropped outside the composer.
+  useEffect(() => {
+    const blockFileDrop = (e: DragEvent) => {
+      // A composer drag was already handled by its own React handler.
+      if (!hasFiles(e.dataTransfer) || e.defaultPrevented) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      blockFileDrop(e);
+      resetDrag();
+    };
+    window.addEventListener("dragover", blockFileDrop);
+    window.addEventListener("drop", onWindowDrop);
+    window.addEventListener("dragend", resetDrag);
+    return () => {
+      window.removeEventListener("dragover", blockFileDrop);
+      window.removeEventListener("drop", onWindowDrop);
+      window.removeEventListener("dragend", resetDrag);
+    };
+  }, [resetDrag]);
+
+  const handleComposerDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e.dataTransfer)) return;
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  };
+
+  const handleComposerDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = uploadDisabled ? "none" : "copy";
+  };
+
+  const handleComposerDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e.dataTransfer)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragActive(false);
+  };
+
+  const handleComposerDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    resetDrag();
+    if (uploadDisabled) return;
+    addFiles(Array.from(e.dataTransfer.files));
+  };
 
   // Disabling the textarea for a resume drops its focus (a reload mounts it
   // enabled, so `autoFocus` fires first); give it back once the transcript lands.
@@ -566,7 +637,19 @@ export function Chat({ scrollContainerRef }: ChatProps) {
             className="hidden"
             onChange={handleFilesSelected}
           />
-          <div className="rounded-3xl border border-base-300 bg-base-200 shadow-sm focus-within:border-primary/60 focus-within:shadow-md transition-all">
+          <div
+            className={`relative rounded-3xl border shadow-sm focus-within:shadow-md transition-all ${
+              showDropTarget
+                ? "border-primary bg-primary/10"
+                : "border-base-300 bg-base-200 focus-within:border-primary/60"
+            }`}
+            role="group"
+            aria-label="Message composer"
+            onDragEnter={handleComposerDragEnter}
+            onDragOver={handleComposerDragOver}
+            onDragLeave={handleComposerDragLeave}
+            onDrop={handleComposerDrop}
+          >
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 px-3 pt-3">
                 {attachments.map((a) => (
@@ -577,7 +660,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                     }`}
                     title={a.error ?? `${a.file.name} (${formatBytes(a.file.size)})`}
                   >
-                    {a.uploading ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                    {a.uploading ? <Loader2 size={12} className="animate-spin" role="img" aria-label="Uploading" /> : <FileText size={12} />}
                     <span className="max-w-45 truncate">{a.file.name}</span>
                     <span className="text-base-content/50">{formatBytes(a.file.size)}</span>
                     <button
@@ -601,9 +684,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                   ariaLabel="Attach files"
                   tooltipPlacement="right"
                   onClick={handlePickFiles}
-                  // An upload is staged under the session's current conversation, which
-                  // is still the previous one until the resume returns.
-                  disabled={awaiting || resuming}
+                  disabled={uploadDisabled}
                 />
               </div>
               <textarea
@@ -614,6 +695,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Message..."
+                aria-label="Message"
                 autoFocus
                 // Until the resume returns, the server session is still bound to the
                 // PREVIOUS conversation, so a turn sent now lands in the wrong one.
@@ -633,6 +715,11 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                 />
               </div>
             </div>
+            {showDropTarget && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-3xl">
+                <span className="text-sm font-medium text-primary">Drop files to attach</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
