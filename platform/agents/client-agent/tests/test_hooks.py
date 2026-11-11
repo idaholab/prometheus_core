@@ -346,6 +346,27 @@ def test_default_hook_is_noop_and_observed():
     assert merged == {"b": 2, "_task_graph_node_id": "n"}
 
 
+def test_set_call_hook_rejects_wrong_sync_async_shape():
+    """A sync/async mismatch is rejected at install time, not silently ignored later."""
+
+    class _AsyncEventHook(hooks.NoopCallHook):
+        async def on_event(self, context, message):
+            return message
+
+    class _SyncRequestHook(hooks.NoopCallHook):
+        def on_request(self, context, params):
+            return params
+
+    with pytest.raises(ValueError, match="on_event"):
+        hooks.set_call_hook(_AsyncEventHook())
+    with pytest.raises(ValueError, match="on_request"):
+        hooks.set_call_hook(_SyncRequestHook())
+    # The failed installs changed nothing; a well-shaped hook installs.
+    assert isinstance(hooks.current_call_hook(), hooks.NoopCallHook)
+    hooks.set_call_hook(_RecordingHook())
+    assert isinstance(hooks.current_call_hook(), _RecordingHook)
+
+
 # --------------------------------------------------------------------------- #
 # on_turn — end-of-turn middleware (chat_flow.chat fire site)
 # --------------------------------------------------------------------------- #
