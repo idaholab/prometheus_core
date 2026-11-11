@@ -45,6 +45,7 @@ agents/client-agent/
     chat_flow.py                   Maps requests onto the loop, outcomes onto responses
     agent_loop.py                  Tool-calling orchestration loop
     skills.py                      Skill lookup and invocation
+    hooks.py                       Call middleware around skill dispatches
     debug_commands.py              Slash command handlers
     utils.py                       Pure parsing/formatting helpers
   artifact_handling.py             Artifact catalog normalization, artifact-ref schema paths

@@ -43,9 +43,10 @@ Contract, enforced by the framework code in ``skills.py``:
   fire from inside the stream-consume loop, so an awaitable would either
   backpressure the stream or need a side queue that does not exist. Sync-only
   keeps the event path allocation-free and honest.
-- At most one hook is registered per process (``set_call_hook``); the current
-  hook is read once per dispatch (``current_call_hook``), so swaps are cheap
-  and visible on the next dispatch.
+- At most one hook is registered per process (``set_call_hook``). Each
+  interception point resolves the current hook at call time
+  (``current_call_hook``), so a swap is visible no later than the next hook
+  call — including between the points of a single dispatch.
 """
 
 from __future__ import annotations
