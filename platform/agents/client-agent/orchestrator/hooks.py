@@ -111,11 +111,14 @@ class AgentCallContext:
 class TurnContext:
     """Immutable end-of-turn snapshot, passed to the ``on_turn`` middleware.
 
-    The whole turn in one value — what the orchestrator did (the trimmed
-    ``llm_messages`` transcript, including this turn's assistant messages with
-    tool-call ids/arguments and tool-result messages), what it produced
-    (``tool_results``/``tool_inputs``, reset by ``begin_user_turn`` so they are
-    this turn only), and how it stopped (the ``LoopOutcome``). Snapshots are
+    One fire's worth of context. What the orchestrator did: the **trimmed**
+    ``llm_messages`` transcript — the whole bounded history, *not* a per-turn
+    delta; this turn's assistant messages (tool-call ids/arguments and
+    tool-result messages) sit at the end. What it produced:
+    ``tool_results``/``tool_inputs`` — reset by ``begin_user_turn`` for a
+    fresh query, but a resumed turn (follow-up answers) skips that reset and
+    keeps the paused turn's results, so its snapshot repeats them. How it
+    stopped (the ``LoopOutcome``). Snapshots are
     plain copies: the hook must not see (nor mutate) the live ``AgentState``,
     which a sibling backgrounded turn can be writing concurrently.
 

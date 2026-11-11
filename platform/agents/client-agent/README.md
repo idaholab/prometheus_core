@@ -223,8 +223,10 @@ dispatch. Contract:
   `chat_flow.chat` after `_respond` persisted the turn, so the hook sees the
   turn exactly as stored — including backgrounded turns (the detached task
   still runs `chat()` to completion). Its `TurnContext` carries a deep-copied
-  snapshot (the trimmed `llm_messages` transcript, this turn's
-  `tool_results`/`tool_inputs`, the loop outcome) — never the live
+  snapshot (the trimmed `llm_messages` transcript — the whole bounded history,
+  not a per-turn delta; `tool_results`/`tool_inputs` — repeated as-is on a
+  resumed turn, since the resume path skips `begin_user_turn`; the loop
+  outcome) — never the live
   `AgentState`, which a sibling backgrounded turn can be writing concurrently.
   An INPUT_REQUIRED pause and its resume are two `on_turn` fires sharing
   `root_id`; join on `conversation_id` to rebuild one trajectory. It does not
