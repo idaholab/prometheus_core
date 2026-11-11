@@ -211,6 +211,25 @@ def test_osti_record_without_pdf_uses_the_open_access_copy(monkeypatch, tmp_path
     assert out["ok"] is True and fetched == ["https://europepmc.org/x.pdf"]
 
 
+def test_open_access_lookup_sends_the_openalex_key(monkeypatch, tmp_path):
+    from research_agent import scholarly
+
+    monkeypatch.setattr(osti_client, "download_paper", lambda sid, cache: None)
+    keys = []
+
+    async def lookup(doi, *, mailto=None, api_key=None):
+        keys.append(api_key)
+        return None
+
+    monkeypatch.setattr(scholarly, "openalex_oa_pdf_url", lookup)
+    ctx = _ctx(tmp_path, openalex_api_key="oa-key")
+    ctx.search_hits["3729583"] = {"title": "T", "doi": "10.1016/j.jnucmat.2020.1"}
+    download = _tool(build_osti_tools(ctx), "download_paper")
+    asyncio.run(download.ainvoke({"source_id": "3729583"}))
+
+    assert keys == ["oa-key"]
+
+
 def test_open_access_copy_on_a_disallowed_host_is_not_fetched(monkeypatch, tmp_path):
     ctx = _osti_record_ctx(tmp_path, monkeypatch, "https://www.mdpi.com/x.pdf")
 

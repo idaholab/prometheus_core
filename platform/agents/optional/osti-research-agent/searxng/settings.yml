@@ -1,0 +1,51 @@
+# SearXNG settings for the OSTI agent's search_web tool. Only the agent calls
+# this instance, over the internal Docker network, asking for JSON.
+#
+# Everything not set here comes from SearXNG's own defaults
+# (searx/settings.yml in the image).
+use_default_settings:
+  engines:
+    # The engines the agent's queries reach. search_web sends no category,
+    # so SearXNG queries every enabled "general" engine.
+    #
+    # Chosen by testing materials queries from INL's network (2026-11-10):
+    # Startpage and Yahoo returned relevant results (ScienceDirect, OSTI,
+    # ORNL, ANL, INL digital library), and Mojeek and Wikipedia added a few.
+    # DuckDuckGo answered with a CAPTCHA, Google and Qwant denied access, and
+    # Brave refused with "too many requests", so they are left out. Scholarly
+    # engines are left out as well: search_scholarly already covers OpenAlex
+    # and arXiv, and Crossref/Semantic Scholar mostly return DOI links that
+    # can't be downloaded.
+    keep_only:
+      - startpage
+      - yahoo
+      - mojeek
+      - wikipedia
+
+engines:
+  # Yahoo is disabled by default, and Startpage and Mojeek are inactive.
+  - name: yahoo
+    disabled: false
+  - name: startpage
+    inactive: false
+  - name: mojeek
+    inactive: false
+
+outgoing:
+  # SearXNG's 3 s default is too short through INL's TLS inspection, where
+  # Startpage and Yahoo were measured at 3-10 s; an engine that times out
+  # repeatedly is suspended for a while. Engines run in parallel, so a search
+  # takes about this long at worst, inside search_web's 30 s HTTP timeout.
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+
+server:
+  # The limiter blocks bot-like traffic, which here is every request.
+  limiter: false
+  image_proxy: false
+
+search:
+  # search_web asks for format=json, which SearXNG refuses unless listed.
+  formats:
+    - html
+    - json

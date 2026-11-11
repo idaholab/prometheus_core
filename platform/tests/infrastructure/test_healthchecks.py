@@ -97,20 +97,20 @@ def test_client_agent_has_healthcheck(compose_data):
     _assert_agent_healthcheck(_get_healthcheck(compose_data, "client-agent"), "client-agent")
 
 
-def test_agent_compose_files_have_healthchecks(project_root):
-    """Same probe for every per-agent file make generate includes."""
-    import yaml
+def test_agent_compose_files_have_healthchecks(agent_compose_services):
+    """Same probe for every agent in the per-agent files make generate includes."""
+    assert agent_compose_services["agents"], "no agent services found"
+    for where, svc in agent_compose_services["agents"]:
+        _assert_agent_healthcheck(svc.get("healthcheck"), where)
 
-    paths = (
-        sorted(project_root.glob("agents/*/docker-compose.yml"))
-        + sorted(project_root.glob("agents/debug-agents/*/docker-compose.yml"))
-        + sorted(project_root.glob("agents/optional/*/docker-compose.yml"))
-    )
-    assert paths, "no per-agent compose files found"
-    for path in paths:
-        data = yaml.safe_load(path.read_text()) or {}
-        for name, svc in (data.get("services") or {}).items():
-            _assert_agent_healthcheck(svc.get("healthcheck"), f"{path.relative_to(project_root)}: {name}")
+
+def test_agent_helper_services_have_healthchecks(agent_compose_services):
+    """Helper services in agent compose files (not agents themselves) still need
+    a healthcheck with a start_period, so `make up --wait` covers them too."""
+    for where, svc in agent_compose_services["helpers"]:
+        hc = svc.get("healthcheck")
+        assert hc is not None, f"{where} should define a healthcheck"
+        assert "start_period" in hc, f"{where} healthcheck should have start_period"
 
 
 def test_frontend_prod_has_healthcheck(compose_data):

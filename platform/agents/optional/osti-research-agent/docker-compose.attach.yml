@@ -34,3 +34,6 @@ volumes:
   torch-cache:
     external: true
     name: ${PLATFORM_PROJECT:-prometheus_platform}_torch-cache
+  # SearXNG's cache is disposable; keep it in this project rather than
+  # requiring the platform to have created one.
+  osti-searxng-cache: {}

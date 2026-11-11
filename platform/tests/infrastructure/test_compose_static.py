@@ -100,6 +100,24 @@ def test_osti_optional_compose_preserves_platform_contract(project_root):
         assert environment[key] == expected
 
 
+def test_osti_searxng_is_internal_and_wired_to_the_agent(project_root):
+    """The SearXNG helper is reachable only over agent-network, trusts the
+    platform's CA certs, and is the agent's default SEARXNG_URL; web search
+    itself stays off unless WEB_SEARCH_PROVIDER=searxng."""
+    path = project_root / "agents" / "optional" / "osti-research-agent" / "docker-compose.yml"
+    services = yaml.safe_load(path.read_text(encoding="utf-8"))["services"]
+    searxng = services["osti-searxng"]
+
+    assert "ports" not in searxng, "osti-searxng must not publish a host port"
+    assert searxng["networks"] == ["agent-network"]
+    assert searxng["build"]["additional_contexts"] == {"certs": "../../../../common/certs"}
+    assert (path.parent / searxng["build"]["context"] / "Dockerfile").is_file()
+
+    agent_env = services["osti-research-agent"]["environment"]
+    assert agent_env["SEARXNG_URL"] == "${SEARXNG_URL:-http://osti-searxng:8080}"
+    assert agent_env["WEB_SEARCH_PROVIDER"] == "${WEB_SEARCH_PROVIDER:-none}"
+
+
 def test_osti_agent_remains_gated_by_optional_agents(project_root):
     makefile = (project_root / "Makefile").read_text(encoding="utf-8")
     optional_block = makefile.split("ifeq ($(OPTIONAL_AGENTS),true)", 1)[1].split("endif", 1)[0]
@@ -159,15 +177,16 @@ def test_compose_has_volumes_section(compose_data):
     assert "litellm-db-data" in volumes, "Missing 'litellm-db-data' named volume"
 
 
-def test_every_agent_sets_external_agent_url(project_root, compose_data):
+def test_every_agent_sets_external_agent_url(agent_compose_services, compose_data):
     """Each agent registers http://<service-name>:8000, not a hostname-derived URL.
 
     PrometheusAgent's hostname fallback only works under Compose (hostname ==
     service name); on Kubernetes the hostname is the pod name, which isn't routable.
+    Helper services in agent compose files don't register, so they are skipped.
     """
     services = {"client-agent": compose_data["services"]["client-agent"]}
-    for path in project_root.glob("agents/**/docker-compose.yml"):
-        services.update(yaml.safe_load(path.read_text())["services"])
+    for where, svc in agent_compose_services["agents"]:
+        services[where.rsplit(": ", 1)[1]] = svc
 
     wrong = {
         name: svc.get("environment", {}).get("EXTERNAL_AGENT_URL")

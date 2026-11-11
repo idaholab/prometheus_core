@@ -72,8 +72,12 @@ class AgentConfig(BaseModel):
     web_search_provider: Literal["none", "tavily", "searxng"] = "none"
     tavily_api_key: Optional[str] = None
     searxng_url: Optional[str] = None
-    # OpenAlex asks callers to identify themselves via a mailto for the polite
-    # pool; harmless when unset.
+    # OpenAlex works without a key, on a small daily budget shared by everyone
+    # calling from the same IP; a free key raises it tenfold. Sent as a Bearer
+    # header, never in a URL. See docs/openalex-api-key.md.
+    openalex_api_key: Optional[str] = Field(default=None, repr=False)
+    # Contact address sent as ``mailto``; harmless when unset. With today's
+    # key-based limits it no longer raises them.
     openalex_mailto: Optional[str] = None
     # arXiv rate-limits API clients hard (HTTP 429 even 3 s apart) and adds
     # little for engineering-materials questions; turn it off to save the calls.
@@ -155,6 +159,7 @@ class AgentConfig(BaseModel):
             web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", "none"),
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
             searxng_url=os.getenv("SEARXNG_URL"),
+            openalex_api_key=os.getenv("OPENALEX_API_KEY", "").strip() or None,
             openalex_mailto=os.getenv("OPENALEX_MAILTO"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "embedding"),
         )

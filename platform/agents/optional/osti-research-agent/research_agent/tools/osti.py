@@ -102,7 +102,9 @@ async def _download_url(ctx: RunContext, source_id: str, url: str) -> Optional[s
 async def _open_access_copy(ctx: RunContext, source_id: str, doi: str) -> Optional[str]:
     """OSTI has a record but no full text: try the open-access copy OpenAlex
     lists for the record's DOI, if its host is on the download allowlist."""
-    url = await scholarly.openalex_oa_pdf_url(doi, mailto=ctx.config.openalex_mailto)
+    url = await scholarly.openalex_oa_pdf_url(
+        doi, mailto=ctx.config.openalex_mailto, **ctx.openalex_key_kwargs()
+    )
     if not url:
         progress.emit(
             f"OSTI #{source_id} has no full text and no open-access copy of DOI {doi}",

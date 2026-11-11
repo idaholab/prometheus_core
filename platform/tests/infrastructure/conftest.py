@@ -82,6 +82,44 @@ def infrastructure_services() -> set[str]:
     return {"litellm-db", "litellm", "redis", "backend", "client-agent"}
 
 
+def _is_agent_service(compose_file: Path, svc: dict) -> bool:
+    """An agent service builds from a directory holding an ``agent_card.json``.
+
+    Per-agent compose files may also carry helper services an agent calls (such
+    as the OSTI agent's SearXNG); those are not agents and don't serve /healthz
+    or register with the registry.
+    """
+    build = svc.get("build")
+    context = build if isinstance(build, str) else (build or {}).get("context")
+    return context is not None and (compose_file.parent / context / "agent_card.json").is_file()
+
+
+@pytest.fixture(scope="session")
+def is_agent_service():
+    """``is_agent_service(compose_file, service) -> bool``; see ``_is_agent_service``."""
+    return _is_agent_service
+
+
+@pytest.fixture(scope="session")
+def agent_compose_services(project_root: Path) -> dict[str, list[tuple[str, dict]]]:
+    """Services in the per-agent compose files ``make generate`` includes, split
+    into ``"agents"`` and ``"helpers"`` as ``(where, service)`` pairs, where
+    ``where`` is ``"<file>: <service name>"``."""
+    paths = (
+        sorted(project_root.glob("agents/*/docker-compose.yml"))
+        + sorted(project_root.glob("agents/debug-agents/*/docker-compose.yml"))
+        + sorted(project_root.glob("agents/optional/*/docker-compose.yml"))
+    )
+    assert paths, "no per-agent compose files found"
+    split: dict[str, list[tuple[str, dict]]] = {"agents": [], "helpers": []}
+    for path in paths:
+        data = yaml.safe_load(path.read_text()) or {}
+        for name, svc in (data.get("services") or {}).items():
+            kind = "agents" if _is_agent_service(path, svc) else "helpers"
+            split[kind].append((f"{path.relative_to(project_root)}: {name}", svc))
+    return split
+
+
 def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
     """Extract all ${VAR}, ${VAR:-default} and ${VAR:?error} references from compose file.
 

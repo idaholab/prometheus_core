@@ -2,7 +2,7 @@
 
 Operational reference: budget tuning, cache keys/TTLs, and how to replay a run.
 Architecture is in `architecture.md`; how to evaluate a change is in
-`evaluation.md`.
+`evaluation.md`; setting up an OpenAlex key is in `openalex-api-key.md`.
 
 ## Config / tuning knobs
 
@@ -19,10 +19,12 @@ defaults.
 | `ANALYZER_TOOL_CALL_LIMIT` | `12` | maximum filesystem-tool calls per paper-analyzer run |
 | `VERIFIER_MODEL_CALL_LIMIT` | `10` | maximum model calls per paper-verifier run; raise it if logs show "Verifier model-call limit reached" |
 | `VERIFIER_TOOL_CALL_LIMIT` | `12` | maximum filesystem-tool calls per paper-verifier run |
-| `WEB_SEARCH_PROVIDER` | `none` | `tavily` (needs `TAVILY_API_KEY`) or `searxng` (needs `SEARXNG_URL`); scholarly search is always on |
+| `WEB_SEARCH_PROVIDER` | `none` | `searxng` (the bundled `osti-searxng` service, see [Web search](#web-search-searxng)) or `tavily` (needs `TAVILY_API_KEY`); scholarly search is always on |
 | `TAVILY_API_KEY` | — | credential for Tavily web search |
-| `SEARXNG_URL` | — | base URL for a self-hosted SearXNG instance |
-| `OPENALEX_MAILTO` | — | identifies the caller to OpenAlex's polite pool |
+| `SEARXNG_URL` | `http://osti-searxng:8080` | base URL of the SearXNG instance; the default is the bundled service |
+| `SEARXNG_SECRET` | generated per start | `server.secret_key` for the bundled SearXNG; only signs its UI cookies, so the generated one is fine |
+| `OPENALEX_API_KEY` | — | free OpenAlex key; raises its daily limit from about 100 to about 1,000 searches. See [`openalex-api-key.md`](openalex-api-key.md) |
+| `OPENALEX_MAILTO` | — | contact address sent to OpenAlex; no longer changes its limits |
 | `SCHOLARLY_ARXIV` | `true` | also search arXiv; `false` skips it (arXiv answers 429 to frequent API clients and has little engineering-materials data) |
 | `EMBEDDING_MODEL` | `embedding` | LiteLLM alias for the knowledge-store embeddings |
 | `MAX_PDF_MB` | `50` | maximum download size for arbitrary non-OSTI PDF URLs |
@@ -49,6 +51,33 @@ are omitted. If every candidate is lost to verifier infrastructure or model
 errors, the run returns `error`; timeout recovery includes previously verified
 findings only. Each parsed source is analyzed at most once per run; duplicate
 delegations reuse its terminal result.
+
+## Web search (SearXNG)
+
+`search_web` is off by default. The agent's compose file also starts
+`osti-searxng`, a SearXNG metasearch instance built from `searxng/`, and the
+agent's `SEARXNG_URL` already points at it. To turn web search on, set this in
+the platform `.env` and restart the agent:
+
+```
+WEB_SEARCH_PROVIDER=searxng
+```
+
+- **Reachable only by the agent.** It has no host port, so the only way to it
+  is over `agent-network`. To query it by hand:
+  `docker exec osti-research-agent python -c "import urllib.request; print(urllib.request.urlopen('http://osti-searxng:8080/search?q=Alloy+709+creep&format=json').read()[:500])"`.
+- **Engines.** `searxng/settings.yml` lists them and says why each was chosen
+  (Startpage, Yahoo, Mojeek, Wikipedia). They scrape public search sites, which
+  can start answering with a CAPTCHA or "too many requests" without notice; an
+  engine that does appears in the JSON's `unresponsive_engines` and adds no
+  results. Change the list there and rebuild (`make up` rebuilds it).
+- **Results are leads, not evidence.** Only hosts on
+  `DOWNLOAD_ALLOWED_DOMAINS` are downloadable, so many web hits come back
+  `downloadable: false`. Web searches have no per-run budget.
+- **TLS inspection.** The image installs `common/certs` like the other
+  Prometheus images, so it works behind INL's Zscaler.
+- **Upgrading.** The base image is pinned in `searxng/Dockerfile`. SearXNG
+  changes its engines often, so re-run a few queries after bumping it.
 
 ## Redis keys and TTLs
 

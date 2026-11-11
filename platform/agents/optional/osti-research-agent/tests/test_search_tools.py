@@ -42,6 +42,21 @@ def _tool(tools, name):
 # --- search_scholarly -----------------------------------------------------
 
 
+def test_search_scholarly_passes_the_openalex_key_only_when_set(monkeypatch):
+    seen = []
+
+    async def fake_scholarly(query, k, **kwargs):
+        seen.append(kwargs.get("api_key"))
+        return []
+
+    monkeypatch.setattr(search_tools.scholarly, "search_scholarly", fake_scholarly)
+    for key in ("oa-key", None):
+        tool = _tool(build_search_tools(_ctx(openalex_api_key=key)), "search_scholarly")
+        asyncio.run(tool.ainvoke({"query": f"creep {key}"}))
+
+    assert seen == ["oa-key", None]
+
+
 def test_search_scholarly_records_hits_with_oa_pdf(monkeypatch):
     async def fake_scholarly(query, k, *, mailto=None, arxiv=True):
         assert k == 6

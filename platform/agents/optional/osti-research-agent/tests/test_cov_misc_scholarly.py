@@ -9,7 +9,7 @@
 # https://github.com/idaholab/prometheus_core/blob/main/LICENSE
 #
 # SPDX-License-Identifier: MIT
-"""OpenAlex/arXiv edge cases: empty DOIs, mailto, failed lookups, merge caps."""
+"""OpenAlex/arXiv edge cases: empty DOIs, mailto, API key, failed lookups, merge caps."""
 
 import asyncio
 
@@ -38,6 +38,97 @@ def test_openalex_search_sends_mailto():
     assert route.calls.last.request.url.params["mailto"] == "me@example.org"
 
 
+# --- OpenAlex API key -------------------------------------------------------
+
+_KEY = "oa-test-key-123"
+
+
+@respx.mock
+def test_openalex_api_key_goes_in_the_header_never_the_url():
+    search = respx.get(scholarly.OPENALEX_URL).mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+    lookup = respx.get(f"{scholarly.OPENALEX_URL}/doi:10.1/abc").mock(
+        return_value=httpx.Response(200, json={"best_oa_location": None})
+    )
+
+    asyncio.run(scholarly.search_openalex("creep", 5, api_key=_KEY))
+    asyncio.run(scholarly.openalex_oa_pdf_url("10.1/abc", api_key=_KEY))
+
+    for route in (search, lookup):
+        request = route.calls.last.request
+        assert request.headers["Authorization"] == f"Bearer {_KEY}"
+        assert _KEY not in str(request.url)
+
+
+@respx.mock
+def test_search_scholarly_passes_the_key_to_openalex():
+    route = respx.get(scholarly.OPENALEX_URL).mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+
+    asyncio.run(scholarly.search_scholarly("creep", 5, api_key=_KEY, arxiv=False))
+
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+
+
+@respx.mock
+def test_without_a_key_no_authorization_header_is_sent():
+    route = respx.get(scholarly.OPENALEX_URL).mock(
+        return_value=httpx.Response(200, json={"results": []})
+    )
+
+    asyncio.run(scholarly.search_openalex("creep", 5))
+
+    assert "Authorization" not in route.calls.last.request.headers
+
+
+@respx.mock
+def test_a_rejected_key_says_so_without_leaking_it(caplog):
+    respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(401))
+    respx.get(f"{scholarly.OPENALEX_URL}/doi:10.1/abc").mock(
+        return_value=httpx.Response(403)
+    )
+
+    try:
+        asyncio.run(
+            scholarly.search_openalex("creep", 5, api_key=_KEY, raise_on_failure=True)
+        )
+    except scholarly.SearchFailed as e:
+        message = str(e)
+    else:
+        raise AssertionError("a 401 should raise SearchFailed")
+    assert asyncio.run(scholarly.openalex_oa_pdf_url("10.1/abc", api_key=_KEY)) is None
+
+    assert "OpenAlex rejected OPENALEX_API_KEY" in message
+    assert caplog.text.count("OpenAlex rejected OPENALEX_API_KEY") == 2
+    assert _KEY not in message and _KEY not in caplog.text
+
+
+@respx.mock
+def test_a_401_without_a_key_does_not_blame_the_key(caplog):
+    respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(401))
+
+    asyncio.run(scholarly.search_openalex("creep", 5))
+
+    assert "OpenAlex search failed" in caplog.text
+    assert "OPENALEX_API_KEY" not in caplog.text
+
+
+def test_the_key_is_read_from_the_environment_and_kept_out_of_repr(monkeypatch):
+    from research_agent.core.config import AgentConfig
+
+    monkeypatch.setenv("OPENALEX_API_KEY", f"  {_KEY}\n")
+    config = AgentConfig.from_env()
+    assert config.openalex_api_key == _KEY
+    assert _KEY not in repr(config)
+
+    monkeypatch.setenv("OPENALEX_API_KEY", "   ")
+    assert AgentConfig.from_env().openalex_api_key is None
+    monkeypatch.delenv("OPENALEX_API_KEY")
+    assert AgentConfig.from_env().openalex_api_key is None
+
+
 @respx.mock
 def test_openalex_doi_lookup_failure_returns_none(caplog):
     respx.get(f"{scholarly.OPENALEX_URL}/doi:10.1/boom").mock(
@@ -62,7 +153,7 @@ def test_openalex_doi_lookup_without_any_pdf_returns_none():
 
 def _fake_sources(monkeypatch, openalex, arxiv):
     """Fake both sources; a source given as an exception fails with it."""
-    async def fake_openalex(query, k, *, mailto=None, raise_on_failure=False):
+    async def fake_openalex(query, k, *, mailto=None, api_key=None, raise_on_failure=False):
         if isinstance(openalex, BaseException):
             raise openalex
         return openalex

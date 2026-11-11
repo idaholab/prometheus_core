@@ -12,8 +12,10 @@
 
 """Scholarly search over OpenAlex (works index) and arXiv (preprints).
 
-Both are keyless HTTP APIs, so ``search_scholarly`` is always available - it's
-the fallback when OSTI is thin or the topic is outside DOE scope. Returns
+Both work without a key, so ``search_scholarly`` is always available - it's
+the fallback when OSTI is thin or the topic is outside DOE scope. An optional
+OpenAlex API key (``OPENALEX_API_KEY``) raises OpenAlex's daily budget; see
+docs/openalex-api-key.md. Returns
 normalized hit dicts carrying an ``oa_pdf_url`` when an open-access PDF exists,
 which the generalized downloader can fetch directly.
 
@@ -51,6 +53,36 @@ _MAX_RETRY_AFTER_S = 30.0
 
 class SearchFailed(Exception):
     """A scholarly source could not be searched (an error, not zero hits)."""
+
+
+def _openalex_request_parts(
+    mailto: Optional[str], api_key: Optional[str]
+) -> tuple[dict, dict]:
+    """Query params and headers that identify the caller to OpenAlex.
+
+    The key goes in an ``Authorization: Bearer`` header, which OpenAlex treats
+    the same as an ``api_key`` query parameter, so it never appears in a URL:
+    httpx puts the full request URL in its error messages, and those are
+    logged and shown to the model."""
+    params = {"mailto": mailto} if mailto else {}
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    return params, headers
+
+
+def _openalex_error_text(e: Exception, api_key: Optional[str]) -> str:
+    """``_error_text``, plus what to do when a key was sent and refused: an
+    invalid key fails every call, including ones that work without a key."""
+    text = _error_text(e)
+    if (
+        api_key
+        and isinstance(e, httpx.HTTPStatusError)
+        and e.response.status_code in (401, 403)
+    ):
+        text += (
+            " (OpenAlex rejected OPENALEX_API_KEY; check it or unset it to search"
+            " without a key)"
+        )
+    return text
 
 
 def _doi_slug(doi: Optional[str]) -> Optional[str]:
@@ -116,18 +148,18 @@ async def search_openalex(
     k: int = 10,
     *,
     mailto: Optional[str] = None,
+    api_key: Optional[str] = None,
     raise_on_failure: bool = False,
 ) -> List[dict]:
     """OpenAlex works matching ``query``; a 429 or 503 is retried once.
 
     On failure returns ``[]``, or raises ``SearchFailed`` with
     ``raise_on_failure`` so a caller can tell a failure from zero hits."""
-    params = {"search": query, "per-page": max(1, min(k, 50))}
-    if mailto:
-        params["mailto"] = mailto
+    auth_params, auth_headers = _openalex_request_parts(mailto, api_key)
+    params = {"search": query, "per-page": max(1, min(k, 50)), **auth_params}
     try:
         async with httpx.AsyncClient(
-            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT}
+            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT, **auth_headers}
         ) as client:
 
             async def request() -> httpx.Response:
@@ -137,15 +169,15 @@ async def search_openalex(
             resp.raise_for_status()
             data = resp.json()
     except Exception as e:
-        logger.warning("OpenAlex search failed: %s", _error_text(e))
+        logger.warning("OpenAlex search failed: %s", _openalex_error_text(e, api_key))
         if raise_on_failure:
-            raise SearchFailed(f"OpenAlex: {_error_text(e)}") from e
+            raise SearchFailed(f"OpenAlex: {_openalex_error_text(e, api_key)}") from e
         return []
     return [_openalex_hit(w) for w in data.get("results", [])[:k]]
 
 
 async def openalex_oa_pdf_url(
-    doi: str, *, mailto: Optional[str] = None
+    doi: str, *, mailto: Optional[str] = None, api_key: Optional[str] = None
 ) -> Optional[str]:
     """The best open-access PDF OpenAlex knows for ``doi``, or None."""
     doi = (doi or "").strip()
@@ -155,18 +187,22 @@ async def openalex_oa_pdf_url(
             break
     if not doi:
         return None
-    params = {"mailto": mailto} if mailto else None
+    params, auth_headers = _openalex_request_parts(mailto, api_key)
     try:
         async with httpx.AsyncClient(
-            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT}
+            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT, **auth_headers}
         ) as client:
-            resp = await client.get(f"{OPENALEX_URL}/doi:{doi}", params=params)
+            resp = await client.get(f"{OPENALEX_URL}/doi:{doi}", params=params or None)
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
             work = resp.json()
     except Exception as e:
-        logger.warning("OpenAlex DOI lookup failed for %s: %s", doi, _error_text(e))
+        logger.warning(
+            "OpenAlex DOI lookup failed for %s: %s",
+            doi,
+            _openalex_error_text(e, api_key),
+        )
         return None
     locations = [work.get("best_oa_location") or {}]
     locations += [loc or {} for loc in work.get("oa_locations") or []]
@@ -287,7 +323,12 @@ def _dedupe_key(hit: dict) -> str:
 
 
 async def search_scholarly(
-    query: str, k: int = 10, *, mailto: Optional[str] = None, arxiv: bool = True
+    query: str,
+    k: int = 10,
+    *,
+    mailto: Optional[str] = None,
+    api_key: Optional[str] = None,
+    arxiv: bool = True,
 ) -> List[dict]:
     """OpenAlex first (comprehensive index), then arXiv preprints to fill in
     (``arxiv=False`` skips it). Deduped by DOI/title, capped at ``k``.
@@ -295,7 +336,11 @@ async def search_scholarly(
     One source failing still returns the other's hits. Raises
     ``SearchFailed`` only when every source searched failed, so the caller
     can tell that apart from a search that found nothing."""
-    searches = [search_openalex(query, k, mailto=mailto, raise_on_failure=True)]
+    searches = [
+        search_openalex(
+            query, k, mailto=mailto, api_key=api_key, raise_on_failure=True
+        )
+    ]
     if arxiv:
         searches.append(search_arxiv(query, max(3, k // 3), raise_on_failure=True))
     outcomes = await asyncio.gather(*searches, return_exceptions=True)

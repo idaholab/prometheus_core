@@ -289,7 +289,8 @@ raising tool would crash the orchestrator loop; `test_tools.py` pins this).
   `download_paper(source_id, url=None)` fetches an arbitrary URL when given one
   (or an `oa_pdf_url` recorded in `search_hits`), else the OSTI purl.
 - **`tools/search.py`** — `search_scholarly` (OpenAlex + arXiv, keyless, always
-  on) and `search_web` (provider-backed, off unless configured).
+  on) and `search_web` (provider-backed, off unless configured; the compose
+  file ships a SearXNG service for it, see the runbook's "Web search").
 - **`tools/memory.py`** — `search_knowledge_base` and `store_facts` over the
   embedding-backed `KnowledgeStore`.
 - **`tools/evidence.py`** — `record_abstract_evidence` and `record_estimate`,

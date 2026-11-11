@@ -118,6 +118,12 @@ class RunContext:
     # the FinalResult).
     facts_stored: int = 0
 
+    def openalex_key_kwargs(self) -> Dict[str, str]:
+        """``{"api_key": ...}`` for the OpenAlex calls when a key is
+        configured, else ``{}``, so keyless calls look as they did before."""
+        key = self.config.openalex_api_key
+        return {"api_key": key} if key else {}
+
     def can_download(self, url: str) -> bool:
         """``url`` is on the allowlist and its host hasn't refused us this run."""
         from research_agent.download_policy import host_of, url_allowed

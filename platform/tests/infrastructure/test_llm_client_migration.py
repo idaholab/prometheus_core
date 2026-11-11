@@ -75,12 +75,15 @@ def test_agent_dependencies_do_not_install_provider_sdks(project_root):
     assert not violations, "Provider dependencies remain:\n" + "\n".join(violations)
 
 
-def test_llm_agent_compose_files_receive_selectable_profiles(project_root):
+def test_llm_agent_compose_files_receive_selectable_profiles(project_root, is_agent_service):
     for relative_path in LLM_AGENT_COMPOSE_FILES:
-        compose_data = yaml.safe_load((project_root / relative_path).read_text(encoding="utf-8"))
-        services = compose_data["services"]
-        assert len(services) == 1
-        environment = next(iter(services.values()))["environment"]
+        path = project_root / relative_path
+        compose_data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        # A file may also hold helper services (e.g. the OSTI agent's SearXNG);
+        # exactly one of its services is the agent.
+        agents = [svc for svc in compose_data["services"].values() if is_agent_service(path, svc)]
+        assert len(agents) == 1, f"{relative_path}: expected one agent service, found {len(agents)}"
+        environment = agents[0]["environment"]
 
         assert environment["REGISTRY_URL"] == "${REGISTRY_URL:-http://backend:8000}"
         assert environment["LLM_CONFIG_PROFILE"] == "${LLM_CONFIG_PROFILE:?set LLM_CONFIG_PROFILE in .env}"
