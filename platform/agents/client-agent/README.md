@@ -223,8 +223,10 @@ dispatch. Contract:
   `tool_results`/`tool_inputs`, the loop outcome) — never the live
   `AgentState`, which a sibling backgrounded turn can be writing concurrently.
   An INPUT_REQUIRED pause and its resume are two `on_turn` fires sharing
-  `root_id`; join on `conversation_id` to rebuild one trajectory. Slash-command
-  replies and mid-loop crashes do not fire it.
+  `root_id`; join on `conversation_id` to rebuild one trajectory. It does not
+  fire for anything that returns before or beside the loop: slash-command
+  replies, `plan_rejected`, workflow-unavailable, nothing-awaiting, and
+  empty-query error returns, plus a mid-loop crash.
 
 `NoopCallHook` (the default) logs and changes nothing — the reference
 implementation real middleware extends. Install with
