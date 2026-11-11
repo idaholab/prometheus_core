@@ -289,25 +289,30 @@ async def run_on_turn(
     can never observe or mutate the live ``AgentState``, which a sibling
     backgrounded turn can be writing concurrently, and so later framework
     mutations of the stored message dicts cannot reach a retained snapshot.
+
+    Snapshot construction sits inside the ``try``: a copy failure (an
+    un-deepcopyable object in the state) must not fail a turn ``_respond``
+    already persisted — ``chat()`` would otherwise report an error for a turn
+    that succeeded.
     """
-    snapshot = copy.deepcopy(
-        dict(
-            llm_messages=llm_messages,
-            tool_results=tool_results,
-            tool_inputs=tool_inputs,
-        )
-    )
-    context = TurnContext(
-        conversation_id=str(conversation_id or ""),
-        turn_id=turn_id,
-        root_id=root_id,
-        outcome=str(outcome_kind or ""),
-        message=str(outcome_message or ""),
-        llm_messages=tuple(snapshot["llm_messages"]),
-        tool_results=snapshot["tool_results"],
-        tool_inputs=snapshot["tool_inputs"],
-    )
     try:
+        snapshot = copy.deepcopy(
+            dict(
+                llm_messages=llm_messages,
+                tool_results=tool_results,
+                tool_inputs=tool_inputs,
+            )
+        )
+        context = TurnContext(
+            conversation_id=str(conversation_id or ""),
+            turn_id=turn_id,
+            root_id=root_id,
+            outcome=str(outcome_kind or ""),
+            message=str(outcome_message or ""),
+            llm_messages=tuple(snapshot["llm_messages"]),
+            tool_results=snapshot["tool_results"],
+            tool_inputs=snapshot["tool_inputs"],
+        )
         await current_call_hook().on_turn(context)
     except Exception:
-        logger.warning("[hook] on_turn failed for %s", context.conversation_id, exc_info=True)
+        logger.warning("[hook] on_turn failed for %s", str(conversation_id or ""), exc_info=True)
