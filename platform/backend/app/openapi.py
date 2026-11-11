@@ -22,6 +22,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi.security import APIKeyCookie
+
+from app.config import settings
+
 API_TITLE = "Prometheus Backend"
 
 # Hard-coded rather than read from package metadata: the image installs
@@ -77,6 +81,16 @@ Every payload is defined by the Pydantic models in `app/contract.py` and explain
 with examples, in `CONTRACT.md` alongside this service.
 """
 
+# The session cookie as an OpenAPI security scheme, for a router's ``dependencies=``.
+# Documentation only: ``auto_error=False`` makes it a no-op at request time, and
+# ``app.security.current_claims`` still answers every 401.
+SESSION_COOKIE = APIKeyCookie(
+    name=settings.cookie_name,
+    scheme_name="sessionCookie",
+    description="The session cookie set by a successful login.",
+    auto_error=False,
+)
+
 # Tag names, shared by the routers and :data:`TAGS` so the two cannot drift.
 TAG_HEALTH = "health"
 TAG_IDENTITY = "identity"
@@ -93,6 +107,7 @@ TAG_ADMIN_USERS = "admin-users"
 TAG_ADMIN_OIDC_PROVIDERS = "admin-oidc-providers"
 TAG_ADMIN_SIGNING_KEYS = "admin-signing-keys"
 TAG_AGENT_REGISTRY = "agent-registry"
+TAG_AGENTS = "agents"
 
 TAGS: list[dict[str, Any]] = [
     {"name": TAG_HEALTH, "description": "Liveness probe for load balancers and orchestrators."},
@@ -168,6 +183,13 @@ TAGS: list[dict[str, Any]] = [
         "description": (
             "Agent self-registration and the A2A gateway the orchestrator calls agents through. "
             "Authenticated with the shared agent secret, not the session cookie."
+        ),
+    },
+    {
+        "name": TAG_AGENTS,
+        "description": (
+            "The registered agents and their live status: when each one registered, its skills, "
+            "and whether the backend can reach it now."
         ),
     },
 ]

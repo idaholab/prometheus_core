@@ -98,6 +98,8 @@ The FastAPI backend (`backend/app/routers/agent_registry.py`) serves as the shar
 
 Every registry route requires `Authorization: Bearer <AGENT_SECRET>`. The client-agent still fetches each specialist's direct well-known agent-card endpoint when it needs full per-skill metadata (`inputSchema` etc.), because the registry listing can be a lossy summary.
 
+The browser reads the registry through `GET /api/agents` and `GET /api/agents/{agent_name}` (`backend/app/routers/agents.py`). These routes use the session cookie and add a live `reachable` check per agent. `backend/CONTRACT.md` describes the payloads. `make up` and `make restart` clear `prometheus:agent-registry`, so an agent is absent from this view until it registers again (GitHub #321).
+
 ### Redis
 
 Serves three purposes:
