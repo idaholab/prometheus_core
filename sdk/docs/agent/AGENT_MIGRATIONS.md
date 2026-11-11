@@ -18,6 +18,18 @@ the task's existing record (REQ-009-23).
 No migration steps. Agents that pause for input start receiving the resumed request;
 `self.execution_record_id` is the same ID on the first request and on every resume.
 
+### Answering a Form Returns the Agent's Next State
+
+A resumed task's event stream used to begin with the task as stored, still
+`INPUT_REQUIRED` with the form the user had just answered. A blocking `SendMessage`
+returns at the first interrupted task, so the caller got that old form back at once
+while the resumed work went on unseen, and each later answer received the previous
+step's result. The executor now emits the initial task only for a new task
+(REQ-009-24). A resumed stream begins with the `working` status.
+
+No migration steps. Streaming callers that read the initial task event of a resumed
+stream get the task ID and context ID from the status events instead.
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

@@ -1373,6 +1373,8 @@ workflows:
         """Covers REQ-009-23: with no existing item, the failure is not masked."""
         from prometheus_api.storage_client.exceptions import APIError
 
+        worked = False
+
         class Items:
             async def create(self, item):
                 raise APIError("DeepLynx is down")
@@ -1384,12 +1386,42 @@ workflows:
                 return
                 yield
 
-        client = SimpleNamespace(items=Items())
-        found = asyncio.run(
-            PrometheusAgent._find_execution_record(client, "prometheus-execution:a:b")
-        )
-        assert found is None
-        assert asyncio.run(PrometheusAgent._find_execution_record(client, None)) is None
+        class Client:
+            def __init__(self, config):
+                self.items = Items()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                return SimpleNamespace(
+                    value={"org_id": 1, "project_id": 3, "key": "k", "secret": "s"}
+                )
+
+            async def _execute(self, params, context, event_queue):
+                nonlocal worked
+                worked = True
+                return {"ok": True}
+
+        monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", Client)
+        agent = Agent(agent_name="Record Agent")
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-down"
+        context.context_id = "context-down"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = "{}"
+
+        with pytest.raises(APIError, match="DeepLynx is down"):
+            asyncio.run(agent.create_executor().execute(context, AsyncMock(spec=EventQueue)))
+
+        assert worked is False
+        assert agent.execution_record_id is None
+        assert asyncio.run(PrometheusAgent._find_execution_record(Client(None), None)) is None
 
     def test_execution_record_name_without_skill(self):
         agent = PrometheusAgent(agent_name="Record Agent")
