@@ -211,7 +211,10 @@ dispatch. Contract:
   status/background/artifact callback handles) from hooks and re-apply it after
   them — carried values win, so a hook can neither drop nor forge them.
 - **Hook failures degrade, never abort.** Every hook call is wrapped; a raising
-  hook is logged and the value passes through unchanged.
+  hook is logged and the value passes through unchanged. Async hook calls are
+  bounded by a per-call timeout (`hooks._HOOK_TIMEOUT_SECONDS`, 10 s) — a
+  timed-out hook is cancelled and logged. All hook failures surface only as
+  warnings in the client-agent container log; nothing else observes them.
 - **`on_event` is sync by decision.** Progress events fire inside the
   stream-consume loop, latency-sensitive and high-volume; an awaitable would
   either backpressure the stream or need a side queue that does not exist.

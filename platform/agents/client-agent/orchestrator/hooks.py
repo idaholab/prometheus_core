@@ -37,7 +37,9 @@ Contract, enforced by the framework code in ``skills.py``:
   ``_task_graph_root_id``, ``_a2a_context_id``, ``_a2a_task_id``, and the
   ``_status_callback``/``_background_callback``/``_artifact_callback`` handles).
 - Hook failures degrade, never abort: the framework catches every hook call,
-  logs it, and passes the value through unchanged.
+  logs it, and passes the value through unchanged. Async hook calls are also
+  bounded by ``_HOOK_TIMEOUT_SECONDS`` (10 s): a hook that exceeds it is
+  cancelled and treated as a failure. ``on_event`` (sync) must not block.
 - ``on_request``/``on_result`` are async (they may await); ``on_event`` is
   sync by decision — progress events are latency-sensitive, high-volume, and
   fire from inside the stream-consume loop, so an awaitable would either
@@ -51,6 +53,7 @@ Contract, enforced by the framework code in ``skills.py``:
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import inspect
 import logging
@@ -59,6 +62,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
+
+# A hung async hook must not hang the turn (or eat the background deadline):
+# each async interception point is awaited under this ceiling and a timeout is
+# treated like any other hook failure (logged, value passes through).
+_HOOK_TIMEOUT_SECONDS: float = 10.0
 
 
 def _is_reserved_key(key: str) -> bool:
@@ -244,7 +252,7 @@ async def run_on_request(
     hook = current_call_hook()
     base = strip_reserved(params)
     try:
-        rewritten = await hook.on_request(context, base)
+        rewritten = await asyncio.wait_for(hook.on_request(context, base), _HOOK_TIMEOUT_SECONDS)
     except Exception:
         logger.warning("[hook] on_request failed for %s; passing params through", context.skill_id, exc_info=True)
         return dict(params)
@@ -274,7 +282,7 @@ async def run_on_result(
     hook = current_call_hook()
     base = strip_reserved(result)
     try:
-        rewritten = await hook.on_result(context, base)
+        rewritten = await asyncio.wait_for(hook.on_result(context, base), _HOOK_TIMEOUT_SECONDS)
     except Exception:
         logger.warning("[hook] on_result failed for %s; passing result through", context.skill_id, exc_info=True)
         return dict(result)
@@ -289,7 +297,7 @@ async def run_on_error(
 ) -> None:
     """Run the middleware's ``on_error``; hook errors are logged, never raised."""
     try:
-        await current_call_hook().on_error(context, error)
+        await asyncio.wait_for(current_call_hook().on_error(context, error), _HOOK_TIMEOUT_SECONDS)
     except Exception:
         logger.warning("[hook] on_error failed for %s", context.skill_id, exc_info=True)
 
@@ -335,6 +343,6 @@ async def run_on_turn(
             tool_results=snapshot["tool_results"],
             tool_inputs=snapshot["tool_inputs"],
         )
-        await current_call_hook().on_turn(context)
+        await asyncio.wait_for(current_call_hook().on_turn(context), _HOOK_TIMEOUT_SECONDS)
     except Exception:
         logger.warning("[hook] on_turn failed for %s", str(conversation_id or ""), exc_info=True)
