@@ -428,11 +428,12 @@ def test_default_hook_is_noop_and_observed(monkeypatch):
 
     # A dispatch under the default hook is an identity pass-through: the tool
     # receives the params exactly as invoke_skill built them, reserved keys included.
-    _install_capability(monkeypatch)
+    _install_capability(monkeypatch, streaming=True)
     seen_by_tool = []
 
     async def ainvoke(params):
         seen_by_tool.append(dict(params))
+        await params["_status_callback"]("halfway")
         return {"temperature_c": 42.0}
 
     _install_tool(monkeypatch, ainvoke)
@@ -447,6 +448,7 @@ def test_default_hook_is_noop_and_observed(monkeypatch):
     assert seen_by_tool[0]["material_id"] == "SS316"
     assert seen_by_tool[0]["_input_sources"] == {"material_id": "model"}
     assert callable(seen_by_tool[0]["_artifact_callback"])
+    assert callable(seen_by_tool[0]["_status_callback"])
     assert isinstance(hooks.current_call_hook(), hooks.NoopCallHook)
 
 
@@ -733,3 +735,69 @@ def test_on_turn_does_not_fire_on_mid_loop_crash(monkeypatch):
 
     assert response.status == "error"
     assert hook.seen_turns == []
+
+
+def test_noop_hook_methods_are_safe():
+    """The default hook's methods log and pass every value through, at every point."""
+    noop = hooks.NoopCallHook()
+    context = hooks.AgentCallContext(conversation_id=CONV, skill_id="s", agent_id="a", agent_name="A")
+    params = {"material_id": "m"}
+
+    assert asyncio.run(noop.on_request(context, params)) is params
+    assert noop.on_event(context, "text") == "text"
+    assert asyncio.run(noop.on_result(context, {"r": 1})) == {"r": 1}
+    asyncio.run(noop.on_error(context, RuntimeError("x")))
+    asyncio.run(
+        noop.on_turn(
+            hooks.TurnContext(
+                conversation_id=CONV,
+                turn_id=None,
+                root_id=None,
+                outcome="final",
+                message="m",
+                llm_messages=(),
+                tool_results={},
+                tool_inputs={},
+            )
+        )
+    )
+
+
+@pytest.mark.parametrize("junk", [None, 42, "junk", ["not", "a", "dict"]])
+@pytest.mark.parametrize("point", ["request", "result", "event"])
+def test_hook_returning_junk_degrades_to_original(monkeypatch, point, junk):
+    """A hook returning junk at any interception point degrades to the original value."""
+    hooks.set_call_hook(_RecordingHook(**{point: junk}))
+    _install_capability(monkeypatch, streaming=(point == "event"))
+    seen_by_tool = []
+
+    async def ainvoke(params):
+        seen_by_tool.append(dict(params))
+        callback = params.get("_status_callback")
+        if callback is not None:
+            await callback("halfway")
+        return {"temperature_c": 42.0}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert result == {"skill_id": "analyze_thermal", "result": {"temperature_c": 42.0}}
+    if point == "request":
+        # The original params reached the tool untouched.
+        assert seen_by_tool[0]["material_id"] == "SS316"
+
+
+def test_on_error_degrades_when_the_hook_raises(monkeypatch):
+    """A raising on_error cannot fail the dispatch; the error result still returns."""
+    hooks.set_call_hook(_ExplodingHook())
+    _install_capability(monkeypatch)
+
+    async def ainvoke(params):
+        return {"error": "agent unreachable"}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert result == {"skill_id": "analyze_thermal", "error": "agent unreachable"}
