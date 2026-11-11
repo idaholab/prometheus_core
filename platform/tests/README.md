@@ -37,11 +37,20 @@ that stack. It then runs the other start targets against the stack (`make restar
 tests again, and always runs `make down-v`. If the job fails, the container
 logs (one file per service plus a combined one) are uploaded as the
 `platform-up-logs` artifact. It runs on every pull request and every push to
-`devel`, like the rest of the workflow; the whole job takes a few minutes.
+`devel`, like the rest of the workflow; the whole job takes a few minutes. It
+runs the dev frontend (`PROFILE=dev`, the default of `make up`), as does every
+job that starts the stack except the next one.
 
-The `platform: up deeplynx` job does the same with `LOCAL_DEEPLYNX=true`
-(see `../docs/docs/local-deeplynx.md`), with only the default agents and no
-frontend: DeepLynx runs next to the platform from its published images, and
+The `platform: up frontend prod` job starts only the production frontend, the
+nginx image, with the services it needs and no agents (`make up
+UP_ARGS=frontend-prod CHECK=false`). It then runs `scripts/check_platform.py`
+for the backend, the frontend and the frontend's `/api` proxy. `make check`
+can't be used, because it waits for the client agent to register. Its logs are
+uploaded as `platform-up-frontend-prod-logs`.
+
+The `platform: up deeplynx` job does the same as `platform: up` with
+`LOCAL_DEEPLYNX=true` (see `../docs/docs/local-deeplynx.md`), with only the
+default agents: DeepLynx runs next to the platform from its published images, and
 `make deeplynx-setup` gives the services a real project and API key for it.
 `test_integration_deeplynx.py` stores an item and a file through the backend's
 storage client and reads them back; without the local DeepLynx those tests are

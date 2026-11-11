@@ -11,30 +11,28 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from "react";
-import { chatStore } from "@/lib/store/chat";
-import { useCurrentUser } from "@/lib/store/session";
-import { chatProfileName, useChatType } from "@/lib/useChatType";
-import { AdminSection } from "../components/admin/AdminSection";
-import { ChatHistory } from "../components/chat/ChatHistory";
-import { SettingsPanel } from "../components/SettingsPanel";
-import { Header } from "../components/Header";
-import { LeftPanel } from "../components/LeftPanel";
-import { Home } from "../components/dashboard/Home";
-import { ComingSoon } from "../components/dashboard/ComingSoon";
-import { navLabel, type NavId } from "../components/dashboard/nav";
-import { PageAgentRegistry } from "../pages/PageAgentRegistry";
-import { PageApprovalQueue } from "../pages/PageApprovalQueue";
-import { PageDataManagement } from "../pages/PageDataManagement";
-import { PageProjectManagement } from "../pages/PageProjectManagement";
-import { PageWorkflows } from "../pages/PageWorkflows";
+import { chatStore } from "@/features/chat";
+import { useCurrentUser } from "@/features/auth";
+import { chatProfileName, useChatType } from "@/features/chat";
+import { AdminSection } from "@/features/admin";
+import { ChatHistory } from "@/features/chat";
+import { SettingsPanel } from "@/features/shell";
+import { Header } from "@/features/shell";
+import { LeftPanel } from "@/features/shell";
+import { Home } from "@/features/dashboard";
+import { ComingSoon } from "@/features/shell";
+import { navLabel, type NavId } from "@/features/shell";
+import { PageAgentRegistry } from "@/pages/PageAgentRegistry";
+import { PageApprovalQueue } from "@/pages/PageApprovalQueue";
+import { PageDataManagement } from "@/pages/PageDataManagement";
+import { PageProjectManagement } from "@/pages/PageProjectManagement";
+import { PageWorkflows } from "@/pages/PageWorkflows";
 
 interface Props {
   onLogout: () => void;
 }
 
-// Primary navigation lives in the left sidebar now (LeftPanel). The old
-// top-of-content tab bar was demoted; its pattern is preserved as the reusable
-// <TabBar> component for section sub-navigation (e.g. inside Admin).
+// Primary navigation lives in the left sidebar (LeftPanel).
 export function ProjectView({ onLogout }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("home");
   // Bumped on every sidebar click and used as the section page's key, so

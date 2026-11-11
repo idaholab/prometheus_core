@@ -10,7 +10,7 @@ The `frontend/` is a Node/TypeScript app (React + Vite). The `backend/` runs Pyt
 
 ## Frontend: FastAPI backend + React app
 
-The frontend is a standalone FastAPI **`backend/`** service (its own JSON/SSE contract) plus an in-house React app in **`frontend/`** (React + Vite) whose element/viewer plumbing lives in `frontend/src/lib/elements/`.
+The frontend is a standalone FastAPI **`backend/`** service (its own JSON/SSE contract) plus an in-house React app in **`frontend/`** (React + Vite) whose element/viewer plumbing lives in `frontend/src/features/artifacts/`.
 
 - Design: `plan.md` (reconstructed brief + ordered work plan) and `backend/CONTRACT.md` (frozen wire contract).
 - Ordered steps + live status: `tasks/README.md` — steps 00–09 done (skeleton, contract, auth/sessions, lifted utils, chat turn, SSE events, uploads, artifacts content proxy + `render_hint`, conversation history, docker/compose/nginx); only 10 (end-to-end verify) still pending. The `backend` service is in the root `docker-compose.yml` (host port 8600 → container 8000), built from `backend/Dockerfile` on a pinned uv/Python image, with `prometheus_api` installed from the checked-out `../sdk` via the `sdk` and `certs` named build contexts (not FROM the prometheus_api base image, so `PROMETHEUS_API_BASE_IMAGE_*` and `LOCAL_SDK` don't affect it); it comes up with `make up` regardless of `PROFILE`.
@@ -24,10 +24,10 @@ The root `Makefile` drives the full Docker Compose stack. It picks `podman-compo
 ```bash
 make up              # generate + build + start everything (detached)
 make up-fg           # same, foreground
-make restart         # restart without rebuild (still re-runs generate)
+make restart         # restart without rebuild (still re-runs generate; PROFILE=dev rebuilds just frontend-dev)
 make ng-up           # skip the regenerate step (use existing docker-compose.agents.yml)
 make down            # stop services (add down-v to drop volumes)
-make clear-agent-registry # stop services + delete only the agent registrations from Valkey
+make clear-agent-registry # stop services (removing the dev frontend container and its node_modules) + delete the agent registrations from Valkey
 make logs SERVICE=client-agent
 make generate        # only (re)write docker-compose.agents.yml
 make clean-generated # delete the generated agents compose file
@@ -41,7 +41,7 @@ make check           # wait until the running platform answers on its host ports
 
 `make up` (and `restart`, `ng-up`, `ng-restart`) runs `docker compose up --wait` and then `make check` (`scripts/check_platform.py`), so it returns only once every healthcheck passes, the backend and frontend answer on their host ports, and every agent is registered with the backend (`/v1/agents` on `BACKEND_PORT`). `CHECK=false` skips both. CI's `platform: up` job runs `make up` and then `make test-integration` against that stack (stub LLM/DeepLynx credentials; see `tests/README.md`), so a service that never goes healthy, an agent that never registers, or a failing integration test fails the build.
 
-Every launch and restart target (`up`, `up-fg`, `restart`, `restart-fg`, `ng-*`) runs `make clear-agent-registry` first, so stale registrations from removed agents do not survive across platform launches. The rest of Valkey's state is left intact.
+Every launch and restart target (`up`, `up-fg`, `restart`, `restart-fg`, `ng-*`) runs `make clear-agent-registry` first, so stale registrations from removed agents do not survive across platform launches. It also removes the dev frontend container (`frontend-dev`) with its `node_modules` volume, so that is refilled from the image on every start. The rest of Valkey's state is left intact.
 
 To temporarily exclude an agent, remove (or rename) its `agents/<name>/docker-compose.yml` and re-run `make generate`. Heavy agents that most setups skip live in `agents/optional/<name>/` and are included only with `OPTIONAL_AGENTS=true` (same mechanism as `agents/debug-agents/` + `DEBUG_AGENTS`). `docker-compose.override.yml` is auto-included if present for local-only tweaks. `LOCAL_DEEPLYNX=true` adds a local DeepLynx (`docker-compose.deeplynx.yml`), set up by `make deeplynx-setup`.
 
@@ -109,11 +109,11 @@ Specialist agents currently in tree: `client-agent`, `corrosion-agent`, `radiati
 
 ### Artifacts
 
-Artifacts are conversation-scoped, tracked in Valkey (with in-memory fallback) by `ArtifactReference` records (`artifact_id`, `uri`, `mime_type`, `tags`, etc.). The backend serves artifact content and attaches a `render_hint`; the React frontend routes each artifact by `render_hint`/`mime_type`/`tags` to the matching viewer in `frontend/src/viewers/` (MeshViewer for Exodus/STL, IFC, Mermaid, PDF, image, JSON, citation/reference, or a file download). Returning a plain dict from `process_analysis()` is auto-wrapped as JSON; for richer artifacts emit them explicitly via the event queue. See `docs/docs/dev-docs/artifacts.md`.
+Artifacts are conversation-scoped, tracked in Valkey (with in-memory fallback) by `ArtifactReference` records (`artifact_id`, `uri`, `mime_type`, `tags`, etc.). The backend serves artifact content and attaches a `render_hint`; the React frontend routes each artifact by `render_hint`/`mime_type`/`tags` to the matching viewer in `frontend/src/features/artifacts/viewers/` (MeshViewer for Exodus/STL, IFC, Mermaid, PDF, image, JSON, citation/reference, or a file download). Returning a plain dict from `process_analysis()` is auto-wrapped as JSON; for richer artifacts emit them explicitly via the event queue. See `docs/docs/dev-docs/artifacts.md`.
 
 ### Visualization plugins
 
-The React viewers live in `frontend/src/viewers/` (`mesh/MeshViewer` for Exodus/STL, `ifc/`, Mermaid, PDF, image, JSON, PlanViewer, FollowUpSuggestions, Report, ThermalAnalysis, Reference); some older custom-element JSX also lives in `frontend/public/elements/`. They are driven by the backend's artifact/event payloads (via `render_hint`). Exodus/STL meshes are rendered client-side by the VTK.js-based engine in `frontend/src/viewers/mesh/MeshViewerEngine.ts` (supporting bundles in `frontend/public/js/`). See `docs/docs/dev-docs/visualization-plugins.md`.
+The React viewers live in `frontend/src/features/artifacts/viewers/` (`mesh/MeshViewer` for Exodus/STL, `ifc/`, Mermaid, PDF, image, JSON, PlanViewer, FollowUpSuggestions, Report, ThermalAnalysis, Reference); some older custom-element JSX also lives in `frontend/public/elements/`. They are driven by the backend's artifact/event payloads (via `render_hint`). Exodus/STL meshes are rendered client-side by the VTK.js-based engine in `frontend/src/features/artifacts/viewers/mesh/MeshViewerEngine.ts` (supporting bundles in `frontend/public/js/`). See `docs/docs/dev-docs/visualization-plugins.md`.
 
 ### Shared protocol types
 
@@ -147,7 +147,7 @@ All services share the `agent-network` bridge. No service sets `container_name`,
 - **Every agent's compose service needs a healthcheck** probing the base class's health endpoint on the container port (`/healthz`) (copy the block from any existing agent or `agent-template/`). `tests/infrastructure/test_healthchecks.py` enforces it, and `make up` waits on it. The health endpoint does not reflect registry registration — that's what `make check` checks.
 - **Keep Dockerfiles cache-friendly.** Order layers least to most volatile, install dependencies from the lockfile in their own layer, `COPY` only what the image uses, and keep a `.dockerignore` (with `**/` patterns) in every build context. A new module in an agent needs its own `COPY` line, after the dependency install. See "Container images" in the root `STANDARDS.md`.
 - The React `frontend/` uses **ESLint + TypeScript** (`npm run lint`, `npm run typecheck`). The Python `backend/` and agents use **Ruff** + **mypy** (`uv run ruff check`, `uv run mypy app/`). Match the toolchain of whichever tree you touch.
-- Tests are split: `tests/` (infra/integration of the whole stack), `backend/tests/` (backend units + contract), `frontend/src/**/*.test.ts` (React unit tests), `agents/<name>/tests/` (per-agent unit tests). The infra suite uses the `integration` pytest marker for tests that need running containers.
+- Tests are split: `tests/` (infra/integration of the whole stack), `backend/tests/` (backend units + contract), `frontend/src/**/*.test.{ts,tsx}` (React unit and component tests, next to the code they test), `agents/<name>/tests/` (per-agent unit tests). The infra suite uses the `integration` pytest marker for tests that need running containers.
 - Agents choose semantic model flavors in code; deployment configuration must not override that choice.
 
 ## Further reading (in repo)

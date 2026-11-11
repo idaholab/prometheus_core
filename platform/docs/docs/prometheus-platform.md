@@ -129,7 +129,7 @@ Uploads are sent to the backend; the frontend renders each type with the matchin
 
 ### Viewers and custom elements
 
-React viewers live in `frontend/src/viewers/`; some custom-element JSX remains in `frontend/public/elements/`. They are driven by the backend's artifact/event payloads (no Chainlit `cl.CustomElement` coupling):
+React viewers live in `frontend/src/features/artifacts/viewers/`; some custom-element JSX remains in `frontend/public/elements/`. They are driven by the backend's artifact/event payloads (no Chainlit `cl.CustomElement` coupling):
 
 | Component | Purpose |
 |-----------|---------|

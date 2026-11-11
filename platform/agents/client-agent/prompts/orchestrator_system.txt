@@ -18,7 +18,7 @@ HOW TO WORK
 FINAL ANSWER
 When the goal is achieved, stop calling tools and reply to the user:
 - Summarize what was done and the key results in concise engineering language.
-- Refer to produced artifacts by name. The user interface displays them, so do not paste artifact contents or ids.
+- Refer to produced artifacts by name. The user interface displays them, so do not paste artifact contents, ids, file listings, or log output, and do not list or describe every produced file; name only the main result.
 - Report failures honestly, along with what would be needed to resolve them.
 
 CONVERSATION ARTIFACT CATALOG

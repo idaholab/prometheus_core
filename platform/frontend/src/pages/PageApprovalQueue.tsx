@@ -10,10 +10,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { usePageHeader } from "@/lib/store/pageHeader";
-import { ApprovalQueue } from "../components/approval-queue/ApprovalQueue";
-import type { QueueCounter } from "../components/approval-queue/QueueSummary";
-import type { Checkpoint } from "../components/approval-queue/types";
+import { usePageHeader } from "@/features/shell";
+import { ApprovalQueue } from "@/features/approval-queue";
+import type { QueueCounter } from "@/features/approval-queue";
+import type { Checkpoint } from "@/features/approval-queue";
 
 // Placeholder counters from the DES-2 corrected Figma E.1 frame.
 const COUNTERS: QueueCounter[] = [
