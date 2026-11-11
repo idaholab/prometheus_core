@@ -52,6 +52,7 @@ Contract, enforced by the framework code in ``skills.py``:
 from __future__ import annotations
 
 import copy
+import inspect
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -180,9 +181,30 @@ _call_hook: CallHook = NoopCallHook()
 
 
 def set_call_hook(hook: Optional[CallHook]) -> None:
-    """Install the process-wide dispatch middleware (None restores default)."""
+    """Install the process-wide dispatch middleware (None restores default).
+
+    Raises ``ValueError`` when a provided method has the wrong sync/async
+    shape: only ``on_event`` is sync (by decision — see the module
+    docstring). An ``async def on_event`` is silently ignored at call time,
+    and a sync ``on_request``/``on_result``/``on_error``/``on_turn`` fails
+    with a TypeError at call time; both are install-time errors instead.
+    Methods a hook omits (via duck typing) still degrade per point.
+    """
     global _call_hook
+    if hook is not None:
+        _validate_hook_shape(hook)
     _call_hook = hook if hook is not None else NoopCallHook()
+
+
+def _validate_hook_shape(hook: CallHook) -> None:
+    """Reject hooks whose methods would be silently ignored or fail at call time."""
+    for name in ("on_request", "on_result", "on_error", "on_turn"):
+        method = getattr(hook, name, None)
+        if method is not None and not inspect.iscoroutinefunction(method):
+            raise ValueError(f"hook.{name} must be an async def (only on_event is sync)")
+    on_event = getattr(hook, "on_event", None)
+    if on_event is not None and inspect.iscoroutinefunction(on_event):
+        raise ValueError("hook.on_event must be a plain def (sync by decision; see the module docstring)")
 
 
 def current_call_hook() -> CallHook:
