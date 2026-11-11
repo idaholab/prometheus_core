@@ -53,7 +53,8 @@ from __future__ import annotations
 
 import copy
 import logging
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
@@ -82,12 +83,19 @@ class DispatchError(RuntimeError):
 
 @dataclass(frozen=True)
 class AgentCallContext:
-    """Immutable identity of one specialist dispatch, passed to every hook."""
+    """Immutable identity of one specialist dispatch, passed to every hook.
+
+    ``agent_id`` is the registry routing key; ``agent_name`` is the card's
+    display name. ``call_id`` is fresh per construction — one per dispatch
+    attempt — so parallel calls and per-material batch attempts can be paired.
+    """
 
     conversation_id: str
     skill_id: str
+    agent_id: str
     agent_name: str
     node_id: Optional[str] = None
+    call_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 @dataclass(frozen=True)
