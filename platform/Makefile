@@ -463,9 +463,13 @@ down: ##@ Stop all services
 # The e2e stack: the platform for the frontend's full-stack tests
 # (frontend/e2e/full/), served by nginx (PROFILE=prod). It's its own compose
 # project on its own host ports, so it runs beside a dev stack without touching
-# it, and it skips DeepLynx and the debug and optional agents. up-e2e prepares
-# .env itself, so the make it starts only reads it (ENV_READY=true).
+# it, and it skips DeepLynx and the debug and optional agents. Those agent
+# settings change which agents `generate` lists, so the stack gets its own
+# generated agents file: a dev stack in the same checkout keeps
+# docker-compose.agents.yml, with its debug agents. up-e2e prepares .env itself,
+# so the make it starts only reads it (ENV_READY=true).
 E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
+	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
 	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
 	REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
 
