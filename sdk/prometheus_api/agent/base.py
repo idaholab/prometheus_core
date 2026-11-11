@@ -252,9 +252,9 @@ class PrometheusAgentExecutor(AgentExecutor):
             tracked_queue = _TrackedEventQueue(event_queue)
 
             # A2A v1 task streams must begin with the Task before any updates.
-            # A resumed request already has that persisted task and continues it
-            # directly with status updates.
-            if getattr(context, "current_task", None) is None:
+            # A follow-up to an existing task already has that persisted task and
+            # continues it directly with status updates.
+            if context.current_task is None:
                 await tracked_queue.enqueue_event(build_initial_task(context))
 
             # Verify the caller's user identity (from message.metadata["userToken"]).
