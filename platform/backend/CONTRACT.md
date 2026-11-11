@@ -518,3 +518,90 @@ the serving agent; the client-agent does not record it yet, so it is `null`.
   ]
 }
 ```
+
+## Agents
+
+A read view of the agent registry for the browser (`app/routers/agents.py`). The
+registry is the Valkey hash `prometheus:agent-registry` that `POST /v1/agents` writes.
+These routes use the session cookie (OpenAPI scheme `sessionCookie`), not the
+`AGENT_SECRET` bearer token of the `/v1/agents` routes. A request without a valid
+session answers `401`. The card `url` and the `static_headers` never reach this wire.
+
+Each row carries the card's `name`, `description`, `version` and `skills`. A skill
+keeps only `id`, `name`, `description` and `tags`; a missing string is `""` and missing
+`tags` are `[]`. `registered_at` is the ISO 8601 UTC time of the agent's last
+registration, with a `+00:00` suffix. It is `null` for an entry stored before the
+backend recorded it. `GET /v1/agents` does not return `registered_at`.
+A stored card whose fields fail validation (for example, a non-string `version`, a skill
+without an `id`, or `skills` that is not a list) does not fail the request. Both routes keep
+the row with its `agent_name`, `registered_at` and probed `reachable`, return empty card
+fields (`name`, `description` and `version` are `""`, `skills` is `[]`), and log a warning.
+
+`reachable` is computed live on each request: it is true when `GET /healthz` on the
+origin of the card `url` answers 2xx within 2 s. The probes of a list request run
+concurrently. Nothing is cached or stored. `checked_at` is the ISO 8601 UTC time of the
+request, also with a `+00:00` suffix.
+
+**Registry reset.** Every launch and restart target (`make up`, `make restart`, `ng-*`) runs
+`make clear-agent-registry`, which deletes `prometheus:agent-registry`. An agent that
+the reset removes is absent from both routes until it registers again (GitHub #321). A re-registration overwrites the
+entry, so `registered_at` moves to the new registration time.
+
+### `GET /api/agents` → `AgentListResponse`
+
+Every registered agent, sorted by `agent_name`. The list has one `checked_at` for all
+rows, and `checked_at` on each row is `null`. When Valkey is unreachable, the route
+still answers `200` with `available: false` and an empty `agents`, as
+`GET /api/conversations/recent` does.
+
+```json
+{
+  "available": true,
+  "checked_at": "2026-11-09T14:05:12.481203+00:00",
+  "agents": [
+    {
+      "agent_name": "alpha-agent",
+      "name": "Alpha Agent",
+      "description": "Thermal analysis.",
+      "version": "1.2.0",
+      "registered_at": "2026-11-01T08:30:00+00:00",
+      "reachable": true,
+      "checked_at": null,
+      "skills": [
+        { "id": "analyze_thermal", "name": "Analyze thermal", "description": "Runs a thermal analysis.", "tags": ["thermal"] }
+      ]
+    },
+    {
+      "agent_name": "beta-agent",
+      "name": "Beta Agent",
+      "description": "Summaries.",
+      "version": "0.3.1",
+      "registered_at": null,
+      "reachable": false,
+      "checked_at": null,
+      "skills": [{ "id": "summarize", "name": "", "description": "", "tags": [] }]
+    }
+  ]
+}
+```
+
+### `GET /api/agents/{agent_name}` → `AgentStatus`
+
+One registered agent, probed live, with its own `checked_at`. An unknown `agent_name`
+answers `404` with `{"detail": "Agent '<name>' is not registered"}`. When Valkey is
+unreachable, the route answers `503` with `{"detail": "Agent registry is unavailable"}`.
+
+```json
+{
+  "agent_name": "alpha-agent",
+  "name": "Alpha Agent",
+  "description": "Thermal analysis.",
+  "version": "1.2.0",
+  "registered_at": "2026-11-01T08:30:00+00:00",
+  "reachable": true,
+  "checked_at": "2026-11-09T14:05:12.481203+00:00",
+  "skills": [
+    { "id": "analyze_thermal", "name": "Analyze thermal", "description": "Runs a thermal analysis.", "tags": ["thermal"] }
+  ]
+}
+```

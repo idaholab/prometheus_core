@@ -1699,6 +1699,221 @@
         }
       }
     },
+    "/api/agents": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "List Agent Status",
+        "description": "Every registered agent with its live reachability, sorted by ``agent_name``.",
+        "operationId": "list_agent_status_api_agents_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents/{agent_name}": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Get Agent Status",
+        "description": "One registered agent with its live reachability and the time it was checked.",
+        "operationId": "get_agent_status_api_agents__agent_name__get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Name"
+            }
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prometheus Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No agent is registered under this name.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent '<name>' is not registered",
+                    "value": {
+                      "detail": "Agent '<name>' is not registered"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent registry (Valkey) is unreachable.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent registry is unavailable",
+                    "value": {
+                      "detail": "Agent registry is unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "tags": [
@@ -3413,6 +3628,32 @@
         "title": "AdminUserUpdate",
         "description": "Partial update -- every field is optional; only the ones sent are applied."
       },
+      "AgentListResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "checked_at": {
+            "type": "string",
+            "title": "Checked At"
+          },
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentStatus"
+            },
+            "type": "array",
+            "title": "Agents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "checked_at"
+        ],
+        "title": "AgentListResponse",
+        "description": "Returned by ``GET /api/agents``, sorted by ``agent_name``.\n\n``available`` is ``False`` when Valkey is unreachable: the endpoint degrades to an\nempty list with a 200, as ``GET /api/conversations/recent`` does."
+      },
       "AgentRegistration": {
         "properties": {
           "agent_name": {
@@ -3439,6 +3680,100 @@
           "agent_card_params"
         ],
         "title": "AgentRegistration"
+      },
+      "AgentSkillSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "AgentSkillSummary",
+        "description": "One skill of a registered agent's card. ``inputSchema`` and the other card\nfields are dropped; a skill without ``tags`` has ``[]``."
+      },
+      "AgentStatus": {
+        "properties": {
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered At"
+          },
+          "reachable": {
+            "type": "boolean",
+            "title": "Reachable"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/AgentSkillSummary"
+            },
+            "type": "array",
+            "title": "Skills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent_name",
+          "reachable"
+        ],
+        "title": "AgentStatus",
+        "description": "One agent registry entry and its live reachability.\n\n``agent_name`` is the registry key. ``registered_at`` is the ISO 8601 UTC time of\nthe agent's last registration, ``None`` for an entry stored before the backend\nrecorded it. ``reachable`` is true when the agent's ``GET /healthz`` answered 2xx\nwithin 2 s during this request. ``checked_at`` is set on the one-agent route only;\nthe list carries one ``checked_at`` for all rows. ``static_headers`` and the card\n``url`` are never returned."
       },
       "ArtifactMeta": {
         "properties": {
@@ -4963,6 +5298,14 @@
         ],
         "title": "ValidationError"
       }
+    },
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "description": "The session cookie set by a successful login.",
+        "in": "cookie",
+        "name": "prometheus_session"
+      }
     }
   },
   "tags": [
@@ -5025,6 +5368,10 @@
     {
       "name": "agent-registry",
       "description": "Agent self-registration and the A2A gateway the orchestrator calls agents through. Authenticated with the shared agent secret, not the session cookie."
+    },
+    {
+      "name": "agents",
+      "description": "The registered agents and their live status: when each one registered, its skills, and whether the backend can reach it now."
     }
   ]
 }

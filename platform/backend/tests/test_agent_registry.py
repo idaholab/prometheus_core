@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -104,6 +106,28 @@ def test_reregistration_overwrites(client):
 
     listed = client.get("/v1/agents", headers=AUTH).json()
     assert [e["agent_card_params"]["url"] for e in listed] == ["http://elsewhere:8000/"]
+
+
+def test_registry_stamps_registered_at(client, fake_redis):
+    def stored_registered_at() -> datetime:
+        raw = asyncio.run(fake_redis.hget(registry_mod.REGISTRY_KEY, "thermal-agent"))
+        return datetime.fromisoformat(json.loads(raw)["registered_at"])
+
+    before = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
+    after = datetime.now(timezone.utc)
+
+    first = stored_registered_at()
+    assert first.utcoffset() == timedelta(0)
+    assert before <= first <= after
+
+    before_again = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
+    assert before_again <= stored_registered_at() <= datetime.now(timezone.utc)
+
+    # Stored for the backend's own status view only; the LiteLLM-compatible list is unchanged.
+    listed = client.get("/v1/agents", headers=AUTH).json()
+    assert [set(entry) for entry in listed] == [{"agent_id", "agent_name", "agent_card_params"}]
 
 
 def test_get_card(client):

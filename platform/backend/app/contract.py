@@ -581,3 +581,55 @@ class CreateSessionRequest(BaseModel):
 
     profile: Optional[str] = None
     bind_seq: Optional[int] = None
+
+
+# --------------------------------------------------------------------------- #
+# Agent status (GET /api/agents, GET /api/agents/{agent_name})
+# --------------------------------------------------------------------------- #
+
+
+class AgentSkillSummary(BaseModel):
+    """One skill of a registered agent's card. ``inputSchema`` and the other card
+    fields are dropped; a skill without ``tags`` has ``[]``."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str = ""
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class AgentStatus(BaseModel):
+    """One agent registry entry and its live reachability.
+
+    ``agent_name`` is the registry key. ``registered_at`` is the ISO 8601 UTC time of
+    the agent's last registration, ``None`` for an entry stored before the backend
+    recorded it. ``reachable`` is true when the agent's ``GET /healthz`` answered 2xx
+    within 2 s during this request. ``checked_at`` is set on the one-agent route only;
+    the list carries one ``checked_at`` for all rows. ``static_headers`` and the card
+    ``url`` are never returned.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    agent_name: str
+    name: str = ""
+    description: str = ""
+    version: str = ""
+    registered_at: Optional[str] = None
+    reachable: bool
+    checked_at: Optional[str] = None
+    skills: list[AgentSkillSummary] = Field(default_factory=list)
+
+
+class AgentListResponse(BaseModel):
+    """Returned by ``GET /api/agents``, sorted by ``agent_name``.
+
+    ``available`` is ``False`` when Valkey is unreachable: the endpoint degrades to an
+    empty list with a 200, as ``GET /api/conversations/recent`` does.
+    """
+
+    available: bool
+    checked_at: str
+    agents: list[AgentStatus] = Field(default_factory=list)
