@@ -250,6 +250,9 @@ async def run_on_request(
     Degrades to the original params when the hook raises or returns junk.
     """
     hook = current_call_hook()
+    if type(hook) is NoopCallHook:
+        # Default hook: identical values — skip the strip/apply work entirely.
+        return dict(params)
     base = strip_reserved(params)
     try:
         rewritten = await asyncio.wait_for(hook.on_request(context, base), _HOOK_TIMEOUT_SECONDS)
@@ -266,8 +269,11 @@ def run_on_event(
     message: str,
 ) -> str:
     """Run the middleware's sync ``on_event``; degrades to the original text."""
+    hook = current_call_hook()
+    if type(hook) is NoopCallHook:
+        return str(message or "")
     try:
-        rewritten = current_call_hook().on_event(context, str(message or ""))
+        rewritten = hook.on_event(context, str(message or ""))
     except Exception:
         logger.warning("[hook] on_event failed for %s; passing message through", context.skill_id, exc_info=True)
         return message
@@ -280,6 +286,8 @@ async def run_on_result(
 ) -> Dict[str, Any]:
     """Run the middleware's ``on_result``, reserved keys re-applied last."""
     hook = current_call_hook()
+    if type(hook) is NoopCallHook:
+        return dict(result)
     base = strip_reserved(result)
     try:
         rewritten = await asyncio.wait_for(hook.on_result(context, base), _HOOK_TIMEOUT_SECONDS)
@@ -325,6 +333,9 @@ async def run_on_turn(
     already persisted — ``chat()`` would otherwise report an error for a turn
     that succeeded.
     """
+    if type(current_call_hook()) is NoopCallHook:
+        # Default hook: nothing observes the turn — skip the event-loop deepcopy.
+        return
     try:
         snapshot = copy.deepcopy(
             dict(

@@ -358,14 +358,37 @@ def test_reserved_keys_survive_hook_rewrites(monkeypatch):
     assert seen_by_tool[0].get("_status_callback") is None  # non-streaming: framework never set it
 
 
-def test_default_hook_is_noop_and_observed():
-    """Without set_call_hook the NoopCallHook default is installed and harmless."""
+def test_default_hook_is_noop_and_observed(monkeypatch):
+    """Without set_call_hook the NoopCallHook default is installed, cheap, and harmless."""
     assert isinstance(hooks.current_call_hook(), hooks.NoopCallHook)
     assert hooks.current_call_hook() is hooks.current_call_hook()
     assert hooks.strip_reserved({"a": 1, "_task_graph_node_id": "n"}) == {"a": 1}
     # carried keys override the hook's values under the same names
     merged = hooks.apply_reserved({"_task_graph_node_id": "n"}, {"b": 2, "_task_graph_node_id": "evil"})
     assert merged == {"b": 2, "_task_graph_node_id": "n"}
+
+    # A dispatch under the default hook is an identity pass-through: the tool
+    # receives the params exactly as invoke_skill built them, reserved keys included.
+    _install_capability(monkeypatch)
+    seen_by_tool = []
+
+    async def ainvoke(params):
+        seen_by_tool.append(dict(params))
+        return {"temperature_c": 42.0}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(
+        skills.invoke_skill(
+            "analyze_thermal", {"material_id": "SS316", "_input_sources": {"material_id": "model"}}, CONV
+        )
+    )
+
+    assert result == {"skill_id": "analyze_thermal", "result": {"temperature_c": 42.0}}
+    assert seen_by_tool[0]["material_id"] == "SS316"
+    assert seen_by_tool[0]["_input_sources"] == {"material_id": "model"}
+    assert callable(seen_by_tool[0]["_artifact_callback"])
+    assert isinstance(hooks.current_call_hook(), hooks.NoopCallHook)
 
 
 def test_set_call_hook_rejects_wrong_sync_async_shape():
