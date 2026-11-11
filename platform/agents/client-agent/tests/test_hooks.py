@@ -105,8 +105,9 @@ def _reset_hook():
     hooks.set_call_hook(None)
 
 
-def _install_capability(monkeypatch, *, streaming=False, agent_name="thermal-agent"):
+def _install_capability(monkeypatch, *, streaming=False, agent_id="thermal-agent", agent_name="Thermal Analysis Agent"):
     capability = SimpleNamespace(
+        agent_id=agent_id,
         agent_name=agent_name,
         input_schema={
             "type": "object",
@@ -165,7 +166,10 @@ def test_hook_observes_all_four_interception_points(monkeypatch):
     ((context, seen_params),) = hook.seen_requests
     assert context.conversation_id == CONV
     assert context.skill_id == "analyze_thermal"
-    assert context.agent_name == "thermal-agent"
+    # agent_id is the registry routing key; agent_name is the card's display name.
+    assert context.agent_id == "thermal-agent"
+    assert context.agent_name == "Thermal Analysis Agent"
+    assert context.call_id
     assert seen_params == {"material_id": "SS316"}
     # ...and the tool still received the callback handles + input sources.
     # on_event fired once per progress message, on_result saw the final payload.

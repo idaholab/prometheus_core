@@ -105,17 +105,20 @@ async def _invoke_skill_impl(
     required_params = extract_required_param_paths(capability.input_schema) if capability else []
     material_ids = params.get("material_ids")
 
-    # Dispatch middleware context: one per dispatch attempt, resolved agent
-    # name included so hooks can attribute traffic without re-fetching the card.
+    # Dispatch middleware identity: routing id and display name resolved here;
+    # the AgentCallContext itself is built per dispatch attempt (invoke_once),
+    # so batch materials and parallel calls each get their own call_id.
+    agent_id = getattr(capability, "agent_id", None) or skill_id
     agent_name = getattr(capability, "agent_name", None) or skill_id
-    call_context = hooks.AgentCallContext(
-        conversation_id=conversation_id,
-        skill_id=skill_id,
-        agent_name=str(agent_name),
-        node_id=tracker.node_id,
-    )
 
     async def invoke_once(single_params: Dict[str, Any]) -> Dict[str, Any]:
+        call_context = hooks.AgentCallContext(
+            conversation_id=conversation_id,
+            skill_id=skill_id,
+            agent_id=str(agent_id),
+            agent_name=str(agent_name),
+            node_id=tracker.node_id,
+        )
         input_schema = capability.input_schema if capability else None
         invoke_params = normalize_params_for_input_schema(dict(single_params), input_schema=input_schema)
         invoke_params["conversation_id"] = conversation_id
