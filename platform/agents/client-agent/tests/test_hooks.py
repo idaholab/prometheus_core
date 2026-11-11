@@ -29,6 +29,7 @@ import pytest
 
 import runtime_stub  # noqa: F401  (installs prometheus_api.agent stubs)
 
+import tool_discovery
 from orchestrator import agent_loop, chat_flow, hooks, runtime, skills
 from orchestrator.models import ConversationRequest
 from prometheus_api.llm_client import ChatResponse, parse_finish_reason, parse_tool_calls
@@ -231,7 +232,7 @@ def test_hook_failures_degrade_never_abort(monkeypatch):
 
 
 def test_hook_sees_error_on_dispatch_failure(monkeypatch):
-    """A raising tool fires on_error and the error result still returns."""
+    """An orchestrator-side exception inside ainvoke (e.g. schema validation) fires on_error."""
     hook = _RecordingHook()
     hooks.set_call_hook(hook)
     _install_capability(monkeypatch)
@@ -248,6 +249,62 @@ def test_hook_sees_error_on_dispatch_failure(monkeypatch):
     assert context.skill_id == "analyze_thermal"
     assert isinstance(error, ConnectionError)
     assert hook.seen_results == []
+
+
+def test_hook_sees_error_result_on_both_points(monkeypatch):
+    """An error *result* — how call_agent reports real agent failures — fires on_error AND on_result."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _install_capability(monkeypatch)
+
+    async def ainvoke(params):
+        return {"error": "agent unreachable"}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert result == {"skill_id": "analyze_thermal", "error": "agent unreachable"}
+    ((error_context, error),) = hook.seen_errors
+    assert isinstance(error, hooks.DispatchError)
+    assert str(error) == "agent unreachable"
+    ((result_context, seen_result),) = hook.seen_results
+    assert seen_result == {"error": "agent unreachable"}
+
+
+def test_on_error_fires_through_a_real_tool_on_dead_port(monkeypatch):
+    """End to end: a real StructuredTool against an unreachable agent fires on_error."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _install_capability(monkeypatch)
+
+    real_tool = asyncio.run(
+        tool_discovery.create_tool_from_skill(
+            "http://127.0.0.1:1",
+            {
+                "id": "analyze_thermal",
+                "description": "dead-port probe",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"material_id": {"type": "string"}},
+                    "required": ["material_id"],
+                },
+            },
+        )
+    )
+
+    async def _find_tool(*args, **kwargs):
+        return real_tool
+
+    monkeypatch.setattr(skills, "find_tool_for_skill", _find_tool)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert "error" in result
+    ((_, error),) = hook.seen_errors
+    assert isinstance(error, hooks.DispatchError)
+    ((_, seen_result),) = hook.seen_results
+    assert "error" in seen_result
 
 
 def test_reserved_keys_survive_hook_rewrites(monkeypatch):

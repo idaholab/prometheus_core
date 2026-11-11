@@ -21,7 +21,8 @@ One protocol covers the four interception points of a dispatch:
 - ``on_request`` — orchestrator entering the agent (normalized params)
 - ``on_event``  — agent leaving progress to the orchestrator (in-flight stream)
 - ``on_result`` — agent returning to the orchestrator (parsed payload)
-- ``on_error``  — dispatch raised instead of returning
+- ``on_error``  — dispatch failed: raised locally, or returned as an error
+  *result* (``DispatchError``; the same payload also reaches ``on_result``)
 
 plus a fifth, turn-scoped point that brackets the whole dispatch sequence:
 
@@ -78,6 +79,16 @@ _RESERVED_RESULT_KEYS = (
 )
 
 
+class DispatchError(RuntimeError):
+    """A dispatch that failed without raising: the transport's error *result*.
+
+    ``tool_discovery.call_agent`` catches every agent failure (unreachable
+    agent, timeout, HTTP error) and returns ``{"error": ...}``, so ``skills``
+    wraps that error string in this class when it fires ``on_error``. The same
+    payload also reaches ``on_result`` (rewritable).
+    """
+
+
 @dataclass(frozen=True)
 class AgentCallContext:
     """Immutable identity of one specialist dispatch, passed to every hook."""
@@ -131,7 +142,7 @@ class CallHook(Protocol):
         ...
 
     async def on_error(self, context: AgentCallContext, error: BaseException) -> None:
-        """Observe a dispatch that raised instead of returning."""
+        """Observe a failed dispatch: raised locally, or returned as an error result (``DispatchError``)."""
         ...
 
     async def on_turn(self, context: TurnContext) -> None:
