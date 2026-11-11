@@ -75,7 +75,7 @@ imports from `llm_client/client.py`, and subclass new tool errors from
 
 Keep task status event construction in `agent/events.py` and route public helper methods through those helpers instead of duplicating `TaskStatusUpdateEvent` boilerplate.
 
-New A2A tasks emit one initial `Task`; resumed `INPUT_REQUIRED` requests must continue the persisted task with status updates and must not enqueue the existing task snapshot again.
+New A2A tasks emit one initial `Task`; a follow-up to an existing task (`context.current_task` set, for example resuming `INPUT_REQUIRED` or `AUTH_REQUIRED`) must continue the persisted task with status updates and must not enqueue the existing task snapshot again.
 
 Base-agent behavior changes that downstream agents may need to react to should be documented in `docs/agent/AGENT_MIGRATIONS.md` under a version heading, with each migration as a short subheading followed by migration steps and a compact code example.
 
