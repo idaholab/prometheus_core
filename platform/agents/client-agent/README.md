@@ -197,6 +197,11 @@ Generic middleware around every specialist dispatch the orchestrator makes —
 one protocol covering the four interception points of a call, plus a fifth,
 turn-scoped point:
 
+Hooks run in the **client-agent orchestrator process** — not in your agent;
+they observe and may rewrite orchestrator-side values. `on_event` fires only
+for agents whose card declares `capabilities.streaming: true` (the template
+ships `false`); without it an agent produces no progress events.
+
 - `on_request(context, params) -> params` — orchestrator entering the agent (normalized params)
 - `on_event(context, message) -> message` — agent leaving progress to the orchestrator (in-flight stream)
 - `on_result(context, result) -> result` — agent returning to the orchestrator (parsed payload)
