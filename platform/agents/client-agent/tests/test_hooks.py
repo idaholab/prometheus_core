@@ -211,7 +211,7 @@ def test_hook_rewrite_reaches_tool_and_result(monkeypatch):
 
     # on_request rewrite reached the tool (with framework keys re-applied).
     assert seen_by_tool[0]["extra"] == "injected"
-    assert "conversation_id" in seen_by_tool[0] or True  # framework keys are reserved, not stripped from the tool
+    assert "conversation_id" in seen_by_tool[0]  # re-applied after the hook saw params without it
     # on_event rewrite reached the status stream.
     assert "[analyze_thermal] rewritten event" in statuses
     # on_result rewrite is what invoke_skill returned to the agent loop.
@@ -413,6 +413,8 @@ def test_reserved_keys_survive_hook_rewrites(monkeypatch):
     # The framework re-applies its own _artifact_callback over the forgery.
     assert callable(seen_by_tool[0]["_artifact_callback"])
     assert seen_by_tool[0].get("_status_callback") is None  # non-streaming: framework never set it
+    # The forged task-graph node id is stripped and nothing re-applies it.
+    assert seen_by_tool[0].get("_task_graph_node_id") is None
 
 
 def test_default_hook_is_noop_and_observed(monkeypatch):
