@@ -183,6 +183,10 @@ async def _invoke_skill_impl(
                     # comes back as an error *result* (call_agent catches it), and
                     # without this the status stream goes silent after "Invoking".
                     runtime.store_status_update(conversation_id, _failed_status(skill_id, payload["error"]))
+                # A real dispatch failure is an error *result* (call_agent catches
+                # every exception), so on_error fires here too; on_result still
+                # receives the payload so a hook can rewrite it.
+                await hooks.run_on_error(call_context, hooks.DispatchError(payload["error"]))
                 return await hooks.run_on_result(call_context, payload)
             if emit_status:
                 runtime.store_status_update(conversation_id, f"'{skill_id}' completed.")
