@@ -329,11 +329,14 @@ async def chat(request: ConversationRequest) -> ConversationResponse:
 
         outcome = await agent_loop.advance(state, catalog)
         response = _respond(conv_id, state, outcome)
-        # End-of-turn middleware: the single funnel every non-crash outcome
-        # returns through (slash commands and the mid-loop crash path except).
-        # Fires after _respond persisted, so the hook sees the turn exactly as
-        # stored. Backgrounded turns run chat() to completion in the detached
-        # task, so this covers them too.
+        # End-of-turn middleware: fires for every turn that ran the loop to an
+        # outcome (final, needs_info, needs_approval, or a loop-level error).
+        # It does NOT fire for paths that return before or beside the loop:
+        # slash-command replies, plan_rejected, workflow-unavailable,
+        # nothing-awaiting, empty-query, and a mid-loop crash (the except
+        # below). Fires after _respond persisted, so the hook sees the turn
+        # exactly as stored. Backgrounded turns run chat() to completion in
+        # the detached task, so this covers them too.
         await hooks.run_on_turn(
             conversation_id=conv_id,
             outcome_kind=outcome.kind,
