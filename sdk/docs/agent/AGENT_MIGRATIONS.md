@@ -5,6 +5,43 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.16.0
+
+### Timeseries Queries Go Through the OLAP Route, Keyed by Record ID
+
+`client.timeseries` called Nexus routes that no longer exist (`.../datasources/{id}/timeseries`
+and `.../timeseries/query`), so `upload` and `query` failed with HTTP 400 on current servers.
+`query` now calls `POST .../records/{record_id}/olap/query`, and `upload` is removed. This
+affects agents that use `StorageClient.timeseries` or `AsyncStorageClient.timeseries`; agents
+that never call it need no change.
+
+Migration steps:
+
+1. Replace `timeseries.upload(...)` with `files.upload(...)`. The server detects csv and parquet
+   files by itself, so no separate upload call is needed.
+2. Pass the uploaded file's `id` (its record ID) to `timeseries.query` as `record_id`, instead of
+   a data source ID.
+3. Pass everything after `record_id` as keyword arguments. `view_name` and `sql_query` are
+   keyword-only, so an old call such as `query(456, "SELECT ...")` raises `TypeError` and does not
+   send the SQL as the view name.
+4. Refer to the view by its `view_name` (default `"data"`) in `sql_query`, for example
+   `SELECT * FROM data`.
+5. Read `result.columns` and `result.data`. `TimeseriesResult` is now `(columns, data)`; the old
+   `(data, metadata)` fields and the `file_type` argument are gone.
+6. Delete imports of `TimeseriesQuery`. It is no longer exported.
+
+```python
+from pathlib import Path
+
+stored = client.files.upload(Path("sensor_data.csv"))
+result = client.timeseries.query(
+    record_id=stored.id,
+    sql_query="SELECT * FROM data WHERE Timestamp > '2024-01-01'",
+    limit=1000,
+)
+print(result.columns, result.data[:3])
+```
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM
