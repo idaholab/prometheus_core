@@ -5,6 +5,61 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+## 0.16.0
+
+### Opt In to `LangGraphPrometheusAgent` for LangGraph Skills
+
+The base package now depends on `langchain`, `langgraph`, `langgraph-checkpoint-postgres` and
+`psycopg[binary]`, so every image built on `prometheus_api` carries them. The new package
+`prometheus_api.langgraph` adds `LangGraphPrometheusAgent`, a `PrometheusAgent` subclass that runs
+each card skill as a `langchain.agents.create_agent` graph. It is opt-in and a prototype. Agents
+that subclass `PrometheusAgent` need no change.
+
+Migration steps (only for an agent that moves to LangGraph):
+
+1. Subclass `LangGraphPrometheusAgent` instead of `PrometheusAgent`.
+2. Override `skill_tools()` to map each card skill ID to its tools. Startup fails with `ValueError`
+   when a card skill has no tools or a tool list has no card skill.
+3. Optionally set `model_alias` (default `"default"`), `approval_tools`, and `system_prompt(skill_id)`.
+4. In each tool, add the parameter `runtime: ToolRuntime[PrometheusContext]`.
+5. In the tool, save output with `save_artifact(runtime, filename, data, mime_type)`.
+6. Set `LANGGRAPH_CHECKPOINT_DB_URL` to a psycopg Postgres URL. Without it, checkpoints stay in
+   memory, a task cannot resume after a restart, and the agent logs one warning.
+
+```python
+from langchain.tools import ToolRuntime, tool
+from prometheus_api.langgraph import LangGraphPrometheusAgent, PrometheusContext, save_artifact
+
+
+@tool
+async def create_report(title: str, runtime: ToolRuntime[PrometheusContext]) -> dict:
+    """Save a text report as a DeepLynx artifact."""
+    saved = await save_artifact(runtime, "report.txt", title.encode(), "text/plain")
+    return {"status": "success", "uri": saved.uri, "version": saved.version}
+
+
+class ReportAgent(LangGraphPrometheusAgent):
+    model_alias = "small"
+
+    def skill_tools(self):
+        return {"create_report": [create_report]}
+```
+
+### Upload In-Memory Bytes with `files.upload_bytes`
+
+`StorageClient.files` and `AsyncStorageClient.files` have a new method
+`upload_bytes(data, name, description=None)`. It uploads bytes as one file without a temporary
+file and returns `FileMetadata`. Existing upload calls need no change.
+
+Migration steps (only for code that writes bytes to a temporary file to upload them):
+
+1. Remove the temporary file and its `files.upload(...)` call.
+2. Call `files.upload_bytes(data, name, description)` with the bytes.
+
+```python
+meta = await client.files.upload_bytes(b'{"ok": true}', name="result.json")
+```
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM
