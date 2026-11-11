@@ -687,3 +687,49 @@ def test_on_turn_default_hook_is_harmless(monkeypatch):
 
     assert response.status == "answer"
     assert response.message == "noop turn"
+
+
+def test_on_turn_does_not_fire_for_slash_command(monkeypatch):
+    """A slash command is answered before the loop; on_turn does not fire."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="unreachable — the LLM must not be consulted")])
+
+    response = _send(query="/help")
+
+    assert response.status == "answer"
+    assert response.message_metadata["slash_command"] == "help"
+    assert hook.seen_turns == []
+
+
+def test_on_turn_does_not_fire_for_plan_rejected(monkeypatch):
+    """plan_rejected persists the turn and returns before the loop; on_turn does not fire."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    store = _turn_harness(monkeypatch)
+    store[CONV] = {"pending_calls": [{"id": "call-1", "status": "needs_approval"}], "awaiting_approval": True}
+    _scripted_llm(monkeypatch, [_reply(text="unreachable — the LLM must not be consulted")])
+
+    response = _send(plan_rejected=True)
+
+    assert response.status == "answer"
+    assert response.message == "Plan rejected. Tell me how you'd like to proceed."
+    assert hook.seen_turns == []
+
+
+def test_on_turn_does_not_fire_on_mid_loop_crash(monkeypatch):
+    """A crash inside advance() is a documented non-firing path; on_turn does not fire."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _turn_harness(monkeypatch)
+    _scripted_llm(monkeypatch, [_reply(text="unreachable — the LLM must not be consulted")])
+
+    async def _boom(state, catalog):
+        raise RuntimeError("loop exploded")
+
+    monkeypatch.setattr(agent_loop, "advance", _boom)
+    response = _send(query="hello")
+
+    assert response.status == "error"
+    assert hook.seen_turns == []
