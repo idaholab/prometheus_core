@@ -1465,7 +1465,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
-          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.agents.yml \
+          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.agents.e2e.yml \
             --profile prod logs --no-color --timestamps > "$RUNNER_TEMP/logs/all.log"
           docker ps --all > "$RUNNER_TEMP/logs/ps.txt"
       - name: Upload logs
