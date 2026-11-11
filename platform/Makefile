@@ -468,9 +468,16 @@ down: ##@ Stop all services
 # generated agents file: a dev stack in the same checkout keeps
 # docker-compose.agents.yml, with its debug agents. up-e2e prepares .env itself,
 # so the make it starts only reads it (ENV_READY=true).
+# Every SDK agent checks at startup that DeepLynx has credentials and a project,
+# and exits if not, but .env.example leaves them blank. The tests never reach
+# DeepLynx, so the stack sets made-up ones (a command-line value beats .env), and
+# blanks the JWT token, which the check refuses to combine with a key. A
+# developer's real DeepLynx credentials stay out of this stack.
 E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
 	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
 	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
+	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
+	DEEPLYNX_ORG_ID=1 DEEPLYNX_PROJECT_ID=1 \
 	REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
 
 up-e2e: ##@ Start the e2e stack for the frontend's full-stack tests (nginx on http://localhost:8090), beside any dev stack
