@@ -5,8 +5,6 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
-## 0.15.1
-
 ### Resumed Tasks Reuse Their Execution Record
 
 When a user answers an `INPUT_REQUIRED` form, the task resumes with the same task ID. The
