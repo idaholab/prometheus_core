@@ -235,6 +235,28 @@ def test_hook_failures_degrade_never_abort(monkeypatch):
     assert result == {"skill_id": "analyze_thermal", "result": {"temperature_c": 42.0}}
 
 
+def test_hook_call_times_out_and_degrades(monkeypatch):
+    """A hung async hook is cancelled at the timeout; the dispatch still completes."""
+    monkeypatch.setattr(hooks, "_HOOK_TIMEOUT_SECONDS", 0.01)
+
+    class _HangingHook(hooks.NoopCallHook):
+        async def on_request(self, context, params):
+            await asyncio.sleep(5)
+            return params
+
+    hooks.set_call_hook(_HangingHook())
+    _install_capability(monkeypatch)
+
+    async def ainvoke(params):
+        return {"temperature_c": 42.0}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert result == {"skill_id": "analyze_thermal", "result": {"temperature_c": 42.0}}
+
+
 def test_hook_sees_error_on_dispatch_failure(monkeypatch):
     """An orchestrator-side exception inside ainvoke (e.g. schema validation) fires on_error."""
     hook = _RecordingHook()
