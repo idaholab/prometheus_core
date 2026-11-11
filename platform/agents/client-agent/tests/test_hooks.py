@@ -333,6 +333,63 @@ def test_on_error_fires_through_a_real_tool_on_dead_port(monkeypatch):
     assert "error" in seen_result
 
 
+def test_input_required_ids_survive_hook_that_drops_them(monkeypatch):
+    """The _a2a_* resume ids survive a hook rewriting the input_required payload."""
+    hook = _RecordingHook(result={"input_required": {"field": "size"}})  # drops the _a2a_* ids
+    hooks.set_call_hook(hook)
+    _install_capability(monkeypatch)
+
+    async def ainvoke(params):
+        return {
+            "status": "input_required",
+            "input_required": {"field": "size"},
+            "_a2a_context_id": "c-123",
+            "_a2a_task_id": "t-456",
+        }
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
+
+    assert result["input_required"] == {"field": "size"}
+    assert result["_a2a_context_id"] == "c-123"
+    assert result["_a2a_task_id"] == "t-456"
+    ((_, seen_result),) = hook.seen_results
+    assert seen_result == {"input_required": {"field": "size"}}  # the hook itself saw no ids
+
+
+def test_batch_dispatches_fire_the_hook_per_material(monkeypatch):
+    """material_ids batches run one dispatch attempt per material, each with its own context."""
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    _install_capability(monkeypatch)
+    seen_by_tool = []
+
+    async def ainvoke(params):
+        seen_by_tool.append(dict(params))
+        return {"temperature_c": 42.0, "material": params["material_id"]}
+
+    _install_tool(monkeypatch, ainvoke)
+
+    result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_ids": ["m-1", "m-2"]}, CONV))
+
+    assert result == {
+        "skill_id": "analyze_thermal",
+        "result": {
+            "materials": ["m-1", "m-2"],
+            "by_material": {
+                "m-1": {"temperature_c": 42.0, "material": "m-1"},
+                "m-2": {"temperature_c": 42.0, "material": "m-2"},
+            },
+        },
+    }
+    # one AgentCallContext per dispatch attempt: fresh call_ids, shared identity
+    ((context1, params1), (context2, params2)) = hook.seen_requests
+    assert context1.skill_id == context2.skill_id == "analyze_thermal"
+    assert context1.call_id != context2.call_id
+    assert params1["material_id"] == "m-1" and params2["material_id"] == "m-2"
+
+
 def test_reserved_keys_survive_hook_rewrites(monkeypatch):
     """A hook that drops or forges _* keys cannot break task-graph resume."""
     _install_capability(monkeypatch)
