@@ -14,8 +14,8 @@
  *
  * Unlike ../fixtures.ts, nothing is faked: /api reaches the real backend. What
  * this adds is the same "fail on what nobody checked" idea: a test fails if
- * the page throws, or if an /api request fails or returns a server error,
- * even when the screen still looks fine. */
+ * the page throws, or if an /api request fails or is refused (any status of 400
+ * or more), even when the screen still looks fine. */
 import { expect, test as base, type Page } from "@playwright/test";
 
 /** A 401 before signing in, and an unknown chat's /resume, are expected answers, not faults. */
@@ -34,7 +34,8 @@ function watch(page: Page): string[] {
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (!url.pathname.startsWith("/api/") || EXPECTED.some((pattern) => pattern.test(url.pathname))) return;
-    if (response.status() >= 500) problems.push(`server error: ${response.status()} ${url.pathname}`);
+    const status = response.status();
+    if (status >= 400) problems.push(`${status >= 500 ? "server error" : "request refused"}: ${status} ${response.request().method()} ${url.pathname}`);
   });
   return problems;
 }

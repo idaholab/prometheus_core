@@ -32,4 +32,12 @@ test("a user signs in through the sign-in form and the app opens as them", async
   await expect(page.getByText(E2E_ADMIN.username, { exact: true })).toBeVisible();
   // Only an admin sees Admin, so this also checks the role came from the backend
   await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
+
+  // The checks above can pass from the login response alone. A reload makes the
+  // app ask /api/auth/me, which only answers if the browser kept the session
+  // cookie and sent it back through nginx
+  await page.reload();
+  await expect(page.getByPlaceholder("Message...")).toBeVisible();
+  await expect(page.getByText(E2E_ADMIN.username, { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
 });
