@@ -197,17 +197,19 @@ def strip_reserved(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def apply_reserved(source: Dict[str, Any], target: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a copy of ``target`` with ``_*`` keys carried over from ``source``.
+    """Return a copy of ``target`` with the framework's reserved keys re-applied.
 
     The framework re-applies its bookkeeping after hooks run, so a rewriting
     hook (e.g. redaction) can never drop the task-graph resume ids or the
     status/background/artifact callback handles by accident — nor forge them:
-    carried keys override anything the hook itself put under those names.
+    the hook's reserved keys are always stripped from ``target`` first, and the
+    source's own reserved keys (param or result bookkeeping) are carried back
+    over the result. A source with no reserved keys therefore still yields a
+    stripped target — a hook cannot inject ``_a2a_task_id`` & co.
     """
-    carried = {key: source[key] for key in _RESERVED_PARAM_KEYS if key in source}
-    if not carried:
-        return target
-    stripped_target = {key: value for key, value in target.items() if key not in _RESERVED_PARAM_KEYS}
+    reserved = (*_RESERVED_PARAM_KEYS, *_RESERVED_RESULT_KEYS)
+    carried = {key: source[key] for key in reserved if key in source}
+    stripped_target = {key: value for key, value in target.items() if key not in reserved}
     return {**stripped_target, **carried}
 
 
