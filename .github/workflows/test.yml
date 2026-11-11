@@ -1390,14 +1390,13 @@ jobs:
         working-directory: platform
     env:
       LOCAL_SDK: "true"
-      # Placeholders: the agents check these at startup but only call a model
-      # or DeepLynx while handling a chat turn, which these tests don't send
+      # Placeholders: `make init-env` and compose require a profile and its key,
+      # but a model is only called while handling a chat turn, which these tests
+      # don't send. There are no DeepLynx values here: `make up-e2e` sets its own
+      # made-up ones, so this job starts from the blank DEEPLYNX_* lines of a
+      # fresh clone's .env
       LLM_CONFIG_PROFILE: anthropic
       LLM_API_KEY: sk-ant-test-not-real
-      DEEPLYNX_KEY: ci-test-key
-      DEEPLYNX_SECRET: ci-test-secret
-      DEEPLYNX_ORG_ID: "1"
-      DEEPLYNX_PROJECT_ID: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1411,15 +1410,7 @@ jobs:
       - name: Use the containerd image store
         uses: ./.github/actions/containerd-image-store
       - name: Create .env
-        run: |
-          make init-env
-          sed -i.bak \
-            -e "s|^DEEPLYNX_KEY=.*|DEEPLYNX_KEY=$DEEPLYNX_KEY|" \
-            -e "s|^DEEPLYNX_SECRET=.*|DEEPLYNX_SECRET=$DEEPLYNX_SECRET|" \
-            -e "s|^DEEPLYNX_ORG_ID=.*|DEEPLYNX_ORG_ID=$DEEPLYNX_ORG_ID|" \
-            -e "s|^DEEPLYNX_PROJECT_ID=.*|DEEPLYNX_PROJECT_ID=$DEEPLYNX_PROJECT_ID|" \
-            .env
-          rm .env.bak
+        run: make init-env
       - name: Start the e2e stack
         run: make up-e2e
       - name: Install Node

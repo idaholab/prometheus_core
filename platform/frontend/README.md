@@ -93,6 +93,8 @@ npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make te
 make down-e2e            # in platform/: stop it and delete its data
 ```
 
+`make up-e2e` needs a `platform/.env` with an LLM profile and its key, as every stack does; on the first run it creates `.env` and asks for them. It needs nothing for DeepLynx: the stack sets made-up DeepLynx credentials of its own, because every agent refuses to start without some, and the tests never reach DeepLynx. Your real `DEEPLYNX_*` values in `.env` don't reach this stack.
+
 The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does (through the form) and `e2e/full/sign-in-api.spec.ts` does (through the API, including a wrong password and a stack that already has its admin).
 
 Import `test` and `expect` from `e2e/full/fixtures.ts`. Nothing is faked there, but a test fails if the page throws or an `/api` call fails or is refused (any status of 400 or more, except the answers the fixture expects). Each run writes to its own folder under `test-results-full/` (set `E2E_RUN_ID` to name it), so two runs at once don't delete each other's files; a failed test keeps its trace in that folder, and `rm -rf test-results-full` clears the old ones. CI's `platform: frontend e2e full` job uploads them as `frontend-e2e-full-report`. That job reports on every pull request but isn't a required check yet.
