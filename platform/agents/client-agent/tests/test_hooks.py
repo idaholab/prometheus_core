@@ -30,7 +30,7 @@ import pytest
 import runtime_stub  # noqa: F401  (installs prometheus_api.agent stubs)
 
 import tool_discovery
-from orchestrator import agent_loop, chat_flow, hooks, runtime, skills
+from orchestrator import agent_loop, chat_flow, hooks, runtime, skills, task_tracking
 from orchestrator.models import ConversationRequest
 from prometheus_api.llm_client import ChatResponse, parse_finish_reason, parse_tool_calls
 
@@ -558,26 +558,53 @@ def test_on_turn_pause_and_resume_are_two_events(monkeypatch):
     assert any(m.get("role") == "tool" for m in turn2.llm_messages)
 
 
-def test_on_turn_snapshot_is_not_the_live_state(monkeypatch):
-    """The hook must see copies, not the AgentState another turn could mutate."""
+def test_on_turn_carries_task_tracking_ids(monkeypatch):
+    """With a task-tracking turn open, TurnContext carries its turn/root ids."""
     hook = _RecordingHook()
     hooks.set_call_hook(hook)
     _turn_harness(monkeypatch)
-    _scripted_llm(monkeypatch, [_reply(text="done")])
-    _send(query="hello")
+    _scripted_llm(monkeypatch, [_reply(text="The answer is 42.")])
+    # service.py opens the turn before dispatching into chat(); replicate that
+    # so turn_id/root_id are non-None (the other tests cover the None case).
+    task_tracking.begin_turn(CONV, "hook ids")
+    try:
+        _send(query="what is the answer?")
+
+        (turn,) = hook.seen_turns
+        assert turn.turn_id == task_tracking.current_turn_id()
+        assert turn.turn_id
+        assert turn.root_id == task_tracking.current_root_id()
+        assert turn.root_id
+    finally:
+        # Contextvars persist across tests in this thread; drop the turn.
+        task_tracking._turn.set(None)
+
+
+def test_on_turn_snapshot_is_deep_copied():
+    """The hook sees a deep copy: mutating the live state after the fire cannot reach it.
+
+    Drives run_on_turn directly. The chat-level version of this test asserted
+    isolation against the store's JSON round-trip, which aliases nothing and
+    so could not fail even under an identity "deepcopy"; here the objects
+    run_on_turn actually receives are mutated.
+    """
+    hook = _RecordingHook()
+    hooks.set_call_hook(hook)
+    live_messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "done"},
+    ]
+    live_results = {"analyze_thermal": {"temperature_c": 42.0}}
+
+    asyncio.run(hooks.run_on_turn(CONV, "final", "done", live_messages, live_results, {}))
 
     (turn,) = hook.seen_turns
-    messages = turn.llm_messages
-    assert isinstance(messages, tuple)
-
-    # Mutating what the store later holds must not reach the hook's snapshot
-    # (and the hook's retained dict is not the live AgentState either).
-    stored = chat_flow.get_conversation(CONV)
-    assert stored is not None
-    llm_list = stored["llm_messages"]
-    assert len(messages) == len(llm_list)
-    llm_list[-1]["content"] = "mutated after the fact"
-    assert messages[-1]["content"] == "done"
+    assert isinstance(turn.llm_messages, tuple)
+    # A shallow (or absent) copy would share these dicts and flip both asserts.
+    live_messages[-1]["content"] = "mutated after the fact"
+    live_results["analyze_thermal"]["temperature_c"] = 0.0
+    assert turn.llm_messages[-1]["content"] == "done"
+    assert turn.tool_results["analyze_thermal"] == {"temperature_c": 42.0}
 
 
 def test_on_turn_failure_never_fails_the_turn(monkeypatch):
