@@ -57,26 +57,16 @@ from typing import Any, Dict, Mapping, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
-_CARRIER_KEYS = (
-    "_status_callback",
-    "_background_callback",
-    "_artifact_callback",
-)
-_RESERVED_PARAM_KEYS = (
-    "conversation_id",
-    "_task_graph_node_id",
-    "_task_graph_root_id",
-    "_a2a_context_id",
-    "_a2a_task_id",
-    "_prefer_streaming",
-    "_input_sources",
-) + _CARRIER_KEYS
-_RESERVED_RESULT_KEYS = (
-    "_task_graph_node_id",
-    "_task_graph_root_id",
-    "_a2a_context_id",
-    "_a2a_task_id",
-)
+
+def _is_reserved_key(key: str) -> bool:
+    """The framework's reserved keys: ``conversation_id`` and every ``_``-prefixed key.
+
+    The ``_`` prefix is the framework's convention (``tool_discovery.call_agent``
+    and ``skills`` both use it for plumbing), so hooks never see — nor can they
+    drop or forge — any such key, including ones added after this file was
+    written. ``conversation_id`` is reserved without the prefix.
+    """
+    return key == "conversation_id" or key.startswith("_")
 
 
 class DispatchError(RuntimeError):
@@ -192,8 +182,8 @@ def current_call_hook() -> CallHook:
 
 
 def strip_reserved(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a copy of ``params`` without the framework's ``_*`` keys."""
-    return {key: value for key, value in params.items() if key not in _RESERVED_PARAM_KEYS}
+    """Return a copy of ``params`` without the framework's reserved keys."""
+    return {key: value for key, value in params.items() if not _is_reserved_key(key)}
 
 
 def apply_reserved(source: Dict[str, Any], target: Dict[str, Any]) -> Dict[str, Any]:
@@ -203,13 +193,12 @@ def apply_reserved(source: Dict[str, Any], target: Dict[str, Any]) -> Dict[str, 
     hook (e.g. redaction) can never drop the task-graph resume ids or the
     status/background/artifact callback handles by accident — nor forge them:
     the hook's reserved keys are always stripped from ``target`` first, and the
-    source's own reserved keys (param or result bookkeeping) are carried back
-    over the result. A source with no reserved keys therefore still yields a
-    stripped target — a hook cannot inject ``_a2a_task_id`` & co.
+    source's own reserved keys are carried back over the result. A source with
+    no reserved keys therefore still yields a stripped target — a hook cannot
+    inject ``_a2a_task_id`` & co.
     """
-    reserved = (*_RESERVED_PARAM_KEYS, *_RESERVED_RESULT_KEYS)
-    carried = {key: source[key] for key in reserved if key in source}
-    stripped_target = {key: value for key, value in target.items() if key not in reserved}
+    carried = {key: source[key] for key in source if _is_reserved_key(key)}
+    stripped_target = {key: value for key, value in target.items() if not _is_reserved_key(key)}
     return {**stripped_target, **carried}
 
 
