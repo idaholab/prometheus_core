@@ -205,7 +205,7 @@ ships `false`); without it an agent produces no progress events.
 - `on_request(context, params) -> params` — orchestrator entering the agent (normalized params)
 - `on_event(context, message) -> message` — agent leaving progress to the orchestrator (in-flight stream)
 - `on_result(context, result) -> result` — agent returning to the orchestrator (parsed payload)
-- `on_error(context, error)` — dispatch raised instead of returning
+- `on_error(context, error)` — dispatch failed: raised locally, or returned as an error result (`DispatchError`).
 - `on_turn(turn_context)` — one user turn finished at a loop outcome
 
 `AgentCallContext` (conversation, skill, agent, task-graph node) identifies the
