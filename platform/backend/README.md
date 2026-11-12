@@ -88,6 +88,9 @@ cd openapi && npm ci && npm run lint
 
 ### Documenting a route
 
+This covers the backend's FastAPI routes. An agent's own HTTP routes aren't in the
+document; its agent card describes them.
+
 The document is generated from the code, so each piece of a route's documentation is
 written once, in the place FastAPI reads it:
 
