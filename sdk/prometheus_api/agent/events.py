@@ -14,7 +14,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple, cast
+from typing import Any, Dict, Optional, Tuple
 
 from a2a.helpers import new_task
 from a2a.server.agent_execution.context import RequestContext
@@ -82,11 +82,7 @@ def context_id(context: RequestContext) -> str:
 
 
 def build_initial_task(context: RequestContext) -> Task:
-    """Build the initial task required before any v1.0 task update events."""
-    current_task = getattr(context, "current_task", None)
-    if current_task is not None:
-        return cast(Task, current_task)
-
+    """Build the initial task a new task's v1.0 event stream must begin with."""
     message = getattr(context, "message", None)
     history = [message] if message is not None else []
     return new_task(

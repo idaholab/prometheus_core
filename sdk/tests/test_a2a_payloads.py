@@ -42,7 +42,7 @@ from a2a.types import (
 from google.protobuf.json_format import MessageToDict
 from starlette.applications import Starlette
 
-from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
+from prometheus_api.agent import EventQueue, MissingInput, PrometheusAgent, RequestContext
 from prometheus_api.agent.middleware import A2AContentSizeLimitMiddleware, BearerTokenMiddleware
 
 
@@ -276,8 +276,12 @@ def _payload_agent_card() -> AgentCard:
     )
 
 
-def _build_payload_agent_app(*, max_content_length: int | None = DEFAULT_A2A_MAX_CONTENT_LENGTH):
-    agent = PayloadEchoAgent(agent_name="Payload Echo Agent")
+def _build_payload_agent_app(
+    *,
+    max_content_length: int | None = DEFAULT_A2A_MAX_CONTENT_LENGTH,
+    agent_class: type[PrometheusAgent] = PayloadEchoAgent,
+):
+    agent = agent_class(agent_name="Payload Echo Agent")
     agent_card = _payload_agent_card()
     request_handler = DefaultRequestHandler(
         agent_executor=agent.create_executor(),
@@ -783,3 +787,114 @@ async def _send_streaming_text_message(
         status_events=status_events,
         artifact_events=artifact_events,
     )
+
+
+class TwoFormAgent(PrometheusAgent):
+    """Asks the user to approve a plan, then, once answered, to approve a run.
+
+    The work between the two forms takes a moment, like a real agent's.
+    """
+
+    async def _execute(
+        self,
+        params: dict[str, Any],
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -> dict[str, Any]:
+        if "plan_action" not in params:
+            await self._ask(context, event_queue, "plan_action", "Approve the plan?")
+            return {}
+        await asyncio.sleep(0.2)
+        await self._ask(context, event_queue, "run_action", "Run it?")
+        return {}
+
+    async def _ask(self, context, event_queue, field: str, question: str) -> None:
+        await self.send_input_required(
+            context,
+            event_queue,
+            missing_inputs=[
+                MissingInput(name=field, description=question, user_prompt=question, type="string")
+            ],
+            hint=question,
+        )
+
+
+def _form_request(params: dict[str, Any], *, task_id: str = "") -> dict[str, Any]:
+    """A blocking SendMessage, as the client-agent sends to a non-streaming agent."""
+    message: dict[str, Any] = {
+        "messageId": str(uuid.uuid4()),
+        "role": "ROLE_USER",
+        "parts": [{"text": json.dumps(params)}],
+        "contextId": "form-conversation",
+        "metadata": {"skillId": "payload_echo"},
+    }
+    if task_id:
+        message["taskId"] = task_id
+    return {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": "SendMessage",
+        "params": {"message": message, "configuration": {"returnImmediately": False}},
+    }
+
+
+def _form_hint(task: dict[str, Any]) -> str:
+    return task["status"]["message"]["parts"][0]["data"]["hint"]
+
+
+async def test_answering_a_form_returns_the_agents_next_state() -> None:
+    """Covers REQ-009-24 and BEH-009-11: a blocking send that answers an
+    INPUT_REQUIRED form waits for the resumed work and returns its result, not
+    the task as it was stored when the form was sent."""
+    app = _build_payload_agent_app(agent_class=TwoFormAgent)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        first = await client.post(
+            "/", json=_form_request({"message": "plan it"}), headers=AUTHORIZED_A2A_HEADERS
+        )
+        plan_task = first.json()["result"]["task"]
+        answered = await client.post(
+            "/",
+            json=_form_request(
+                {"message": "plan it", "plan_action": "approve"}, task_id=plan_task["id"]
+            ),
+            headers=AUTHORIZED_A2A_HEADERS,
+        )
+
+    run_task = answered.json()["result"]["task"]
+    assert plan_task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+    assert _form_hint(plan_task) == "Approve the plan?"
+    assert run_task["id"] == plan_task["id"]
+    assert run_task["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+    assert _form_hint(run_task) == "Run it?"
+
+
+async def test_answering_a_form_over_a_stream_streams_the_resumed_work() -> None:
+    """Covers REQ-009-24: a resumed stream starts at the resumed work, with no
+    copy of the stored task, and ends at the agent's next state."""
+    app = _build_payload_agent_app(agent_class=TwoFormAgent)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        first = await client.post(
+            "/", json=_form_request({"message": "plan it"}), headers=AUTHORIZED_A2A_HEADERS
+        )
+        task_id = first.json()["result"]["task"]["id"]
+        request = _form_request({"message": "plan it", "plan_action": "approve"}, task_id=task_id)
+        request["method"] = "SendStreamingMessage"
+        async with client.stream(
+            "POST", "/", json=request, headers=AUTHORIZED_A2A_HEADERS
+        ) as stream:
+            events = [
+                json.loads(line[len("data:") :])["result"]
+                async for line in stream.aiter_lines()
+                if line.startswith("data:")
+            ]
+
+    assert "task" not in events[0]
+    assert events[0]["statusUpdate"]["status"]["state"] == "TASK_STATE_WORKING"
+    final = events[-1]["statusUpdate"]
+    assert final["taskId"] == task_id
+    assert final["status"]["state"] == "TASK_STATE_INPUT_REQUIRED"
+    assert final["status"]["message"]["parts"][0]["data"]["hint"] == "Run it?"
