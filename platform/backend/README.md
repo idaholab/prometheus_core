@@ -107,7 +107,9 @@ written once, in the place FastAPI reads it:
 | Streams, files and redirects | `response_class=`, plus the right content type in `responses=` |
 | Tag | One, from the catalog in `app/openapi.py` |
 
-For example:
+For example, `GET /api/conversations/recent` would look like this. Most routes
+don't follow the standard yet; [PPLT-340](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-340) brings them in line, including
+rewriting docstrings that are written for developers rather than API consumers:
 
 ```python
 @router.get(
