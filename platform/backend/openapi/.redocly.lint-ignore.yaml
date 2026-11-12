@@ -1,6 +1,8 @@
 # The lint problems openapi.json had when the lint, or one of its rules, was
 # added, ignored so CI passes while they're fixed. Each entry ignores one rule
 # at one location, so a new route or schema with the same problem still fails.
+# Parameters are located by position (parameters/N), so when a new parameter is
+# added to a route with ignored ones, the error may name its neighbour instead.
 #
 # Remove an entry when you fix its problem, or the whole file once they're all
 # fixed. Don't add to it: fix a new problem, or turn its rule off in
