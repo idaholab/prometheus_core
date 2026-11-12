@@ -97,7 +97,7 @@ written once, in the place FastAPI reads it:
 | Request and response bodies | Pydantic models, with `response_model=`. Don't parse the raw `Request` |
 | Model fields | `Field(description="…")`, plus `examples=` on request bodies that aren't trivial |
 | Errors | `responses=` built from the shared entries in `app/api_responses.py`, plus the route's own errors |
-| Authentication | Security dependencies (`APIKeyCookie`, `HTTPBearer`), so they show up as security schemes |
+| Authentication | `Depends(current_claims)`, `current_user` or `require_admin` from `app/security.py`, or `require_agent_secret` on the agent registry. Never a bare `APIKeyCookie` or `HTTPBearer`: those only check that a credential is present, not that it's valid. Until these dependencies declare security schemes ([PPLT-339](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-339)), a new route fails `security-defined` |
 | Streams, files and redirects | `response_class=`, plus the right content type in `responses=` |
 | Tag | One, from the catalog in `app/openapi.py` |
 
@@ -128,7 +128,8 @@ them, so they repeat the signature and drift out of date.
 
 The lint checks the parts of this it can: a unique operationId, a description, a
 description on every parameter and model field, a schema on every success response,
-one declared tag, and authentication. It also checks the naming rules below.
+one declared tag, and a declared security scheme. It also checks the naming rules
+below.
 Reviewers check the rest:
 
 - **Summary.** FastAPI makes one from the function name when `summary=` is missing,
