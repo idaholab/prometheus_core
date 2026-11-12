@@ -4,6 +4,7 @@
 | --- | --- |
 | **Status** | Design, not built. Proposed 2026-11-12. |
 | **Approver** | Daniel Schwen |
+| **Jira** | Not created yet. The tasks in [section 10](#10-implementation-plan) will go under epic PPLT-358. |
 | **Builds on** | [Viewer Registry and Agent-Provided Viewers](viewer-registry.md) (PPLT-358), [Request-Scoped Agent Objects and Backend Task State](request-scoped-agent.md) |
 | **Related** | [Mid-execution user approval](user-approval.md), [Credential Plane for Agents](credential-plane.md) |
 
@@ -329,7 +330,8 @@ grants bound to the session id instead (open question Q-3).
 
 ## 10. Implementation plan
 
-Each step merges on its own. Phase 1 (steps 1–6) is useful without phase 2.
+Each step merges on its own. Phase 1 (steps 1–6) is useful without phase 2. Each
+step becomes one Jira task under PPLT-358 once this design is approved.
 
 | Step | Change | Where | Depends on |
 | --- | --- | --- | --- |
