@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.crypto import EncryptionError
 from app.db import get_session_factory
-from app.openapi import API_DESCRIPTION, API_LICENSE, API_TITLE, API_VERSION, TAGS
+from app.openapi import API_DESCRIPTION, API_LICENSE, API_TITLE, API_VERSION, TAGS, operation_id
 from app.routers import (
     admin_keys,
     admin_oidc,
@@ -102,6 +102,7 @@ app = FastAPI(
     description=API_DESCRIPTION,
     license_info=API_LICENSE,
     openapi_tags=TAGS,
+    generate_unique_id_function=operation_id,
     lifespan=lifespan,
 )
 

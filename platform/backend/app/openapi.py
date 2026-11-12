@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi.routing import APIRoute
+
 API_TITLE = "Prometheus Backend"
 
 # Hard-coded rather than read from package metadata: the image installs
@@ -35,6 +37,18 @@ API_LICENSE: dict[str, str] = {
     "identifier": "MIT",
     "url": "https://github.com/idaholab/prometheus_core/blob/main/LICENSE",
 }
+
+
+def operation_id(route: APIRoute) -> str:
+    """A route's operationId: its handler's function name, such as
+    ``get_recent_conversations``.
+
+    FastAPI's default appends the path and method, so every rename of a path changes
+    it. Handler names must be unique across routers for this to work; the lint's
+    ``operation-operationId-unique`` rule fails if two collide.
+    """
+    return route.name
+
 
 API_DESCRIPTION = """\
 The JSON/SSE API behind the Prometheus Platform's React frontend. The backend

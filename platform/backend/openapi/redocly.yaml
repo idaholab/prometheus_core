@@ -84,3 +84,108 @@ rules:
           defined: true
     message: Operation must have at least one `4XX` response.
     severity: error
+
+  # The route documentation standard in ../README.md, "Documenting a route".
+  # recommended-strict already requires a summary, an operationId and tag
+  # descriptions; these check the rest of what a linter can
+
+  # The docstring, written for API consumers
+  operation-description: error
+
+  # description= on Query(), Path(), Header() and Cookie()
+  parameter-description: error
+
+  # Field(description=...) on every field of the backend's models. FastAPI's own
+  # validation error schemas are skipped because no model of ours defines them.
+  # A field that's only a reference to another model passes, because Redocly
+  # reads the referenced model's description
+  rule/schema-property-description:
+    subject:
+      type: Schema
+      property: description
+    where:
+      - subject:
+          type: NamedSchemas
+        assertions:
+          defined: true
+      - subject:
+          type: Schema
+          filterOutParentKeys:
+            - HTTPValidationError
+            - ValidationError
+        assertions:
+          defined: true
+      - subject:
+          type: SchemaProperties
+        assertions:
+          defined: true
+    assertions:
+      defined: true
+    message: Model fields must have a description. Set Field(description=...)
+    severity: error
+
+  # A success response says what it returns: response_model= for JSON, or
+  # response_class= and its content type for a stream, file or redirect.
+  # FastAPI writes an empty schema for a route with neither
+  rule/typed-response:
+    subject:
+      type: Schema
+    where:
+      - subject:
+          type: Response
+          filterInParentKeys:
+            - "200"
+            - "201"
+            - "202"
+            - "203"
+            - "206"
+        assertions:
+          defined: true
+      - subject:
+          type: MediaType
+        assertions:
+          defined: true
+    assertions:
+      requireAny:
+        - type
+        - anyOf
+        - oneOf
+        - allOf
+        - const
+        - enum
+    message: >-
+      Success responses must have a schema. Set response_model=, or
+      response_class= and its content type in responses=
+    severity: error
+
+  # Exactly one tag per route, from the catalog in app/openapi.py
+  operation-tag-defined: error
+  operation-singular-tag: error
+
+  # Zalando's naming rules: kebab-case paths, snake_case fields and parameters
+  paths-kebab-case: error
+
+  rule/property-snake-case:
+    subject:
+      type: SchemaProperties
+    assertions:
+      casing: snake_case
+    message: Field names must be snake_case.
+    severity: error
+
+  rule/parameter-snake-case:
+    subject:
+      type: Parameter
+      property: name
+    where:
+      - subject:
+          type: Parameter
+          property: in
+        assertions:
+          enum:
+            - path
+            - query
+    assertions:
+      casing: snake_case
+    message: Path and query parameter names must be snake_case.
+    severity: error

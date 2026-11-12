@@ -127,13 +127,15 @@ async def _get_or_404(db: AsyncSession, provider_row_id: uuid.UUID) -> OidcProvi
 
 
 @router.get("", response_model=list[OidcProviderOut])
-async def list_providers(db: AsyncSession = Depends(get_db_session)) -> list[OidcProviderOut]:
+async def list_oidc_providers(db: AsyncSession = Depends(get_db_session)) -> list[OidcProviderOut]:
     rows = (await db.scalars(select(OidcProvider).order_by(OidcProvider.display_name))).all()
     return [_out(row) for row in rows]
 
 
 @router.post("", response_model=OidcProviderOut, status_code=status.HTTP_201_CREATED, responses=ENCRYPTION_RESPONSES)
-async def create_provider(payload: OidcProviderCreate, db: AsyncSession = Depends(get_db_session)) -> OidcProviderOut:
+async def create_oidc_provider(
+    payload: OidcProviderCreate, db: AsyncSession = Depends(get_db_session)
+) -> OidcProviderOut:
     provider_id = payload.provider_id.strip()
     if len(provider_id) > _SLUG_MAX_LEN or not _SLUG_RE.match(provider_id):
         raise HTTPException(
@@ -166,7 +168,7 @@ async def create_provider(payload: OidcProviderCreate, db: AsyncSession = Depend
 
 
 @router.patch("/{provider_row_id}", response_model=OidcProviderOut, responses=ENCRYPTION_RESPONSES)
-async def update_provider(
+async def update_oidc_provider(
     provider_row_id: uuid.UUID, payload: OidcProviderUpdate, db: AsyncSession = Depends(get_db_session)
 ) -> OidcProviderOut:
     row = await _get_or_404(db, provider_row_id)
@@ -199,7 +201,7 @@ async def update_provider(
 
 
 @router.delete("/{provider_row_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_provider(provider_row_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)) -> None:
+async def delete_oidc_provider(provider_row_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)) -> None:
     row = await _get_or_404(db, provider_row_id)
     provider_id = row.provider_id
     await db.delete(row)
