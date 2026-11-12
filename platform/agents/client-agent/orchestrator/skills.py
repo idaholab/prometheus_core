@@ -117,7 +117,7 @@ async def _invoke_skill_impl(
             skill_id=skill_id,
             agent_id=str(agent_id),
             agent_name=str(agent_name),
-            node_id=tracker.node_id,
+            node_id=tracker.node_id or None,
         )
         input_schema = capability.input_schema if capability else None
         invoke_params = normalize_params_for_input_schema(dict(single_params), input_schema=input_schema)
