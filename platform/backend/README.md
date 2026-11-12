@@ -93,7 +93,7 @@ written once, in the place FastAPI reads it:
 
 | What | Where it goes |
 |------|---------------|
-| operationId | The handler's function name, such as `get_recent_conversations`, so name it for what the route does. `app.openapi.operation_id` sets it, and handler names must be unique across routers |
+| operationId | The handler's function name, such as `get_recent_conversations`, so name it for what the route does. `operation_id` in `app/openapi.py` sets it, and handler names must be unique across routers |
 | Summary | `summary="List recent conversations"` on the route decorator: short and imperative |
 | Description | The handler's docstring: what the route does, its side effects, and how it orders with other calls, written for API consumers. Notes for backend developers go after a `\f` line, which FastAPI leaves out of the document |
 | Parameters | `Annotated[int, Query(ge=1, le=100, description="…")]`, with the limits as constraints rather than prose |
