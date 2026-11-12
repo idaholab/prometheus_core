@@ -86,7 +86,7 @@ Inside `_execute`, use the helpers rather than constructing A2A events manually:
 - `send_artifact_reference(...)` — URI-backed file artifact (e.g. `deeplynx://...`)
 - `send_json_artifact(..., catalog_artifact=True)` — reusable inline JSON artifact
 - `send_conversation_message(...)` — durable chat-visible message
-- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel
+- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel. The resume reuses the task's execution item (REQ-009-23) and does not re-emit the stored task (REQ-009-24 above), so a blocking caller gets the resumed work's result
 - `get_input_sources(context)` — who supplied each param (`"model"` / `"user"` / `"context"`), from `inputSources` message metadata
 - `load_context_state(...)` / `save_context_state(...)` — per-`contextId` resumable state via `ContextStateStore`
 

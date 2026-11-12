@@ -19,16 +19,32 @@ ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
 # ---- deps ----
 FROM base AS deps
 COPY frontend/package.json frontend/package-lock.json ./
+# Installed as root (the npm cache mount is root's), then handed to the image's
+# `node` user. The dev server writes its dependency cache to node_modules/.vite and
+# compose may run it as the developer's own UID instead (see frontend-dev), so
+# node_modules itself is writable by any UID. Only that directory: the server
+# creates .vite in it and writes nothing inside the packages, so there is no -R
+# and the packages keep their normal modes. In the same RUN so node_modules isn't
+# stored twice.
 RUN --mount=type=cache,id=prometheus-npm-cache,target=/root/.npm,sharing=locked \
-    npm ci --no-audit --no-fund --include=optional || \
-    npm install --no-audit --no-fund --include=optional
+    { npm ci --no-audit --no-fund --include=optional || \
+      npm install --no-audit --no-fund --include=optional; } \
+    && chown -R node:node /app \
+    && chmod a+rwx /app/node_modules
 
 # ---- dev ----
 FROM deps AS dev
 # No source COPY: docker-compose.yml bind-mounts ./frontend over /app (keeping the
 # image's node_modules), so source edits never need an image rebuild
 EXPOSE 5150
-ENV HOST=0.0.0.0
+# HOME=/tmp: a developer UID with no passwd entry gets HOME=/, which npm can't write
+# its logs and cache to. With a read-only root, /tmp must allow exec (tmpfs
+# /tmp:exec, or a Kubernetes emptyDir): @swc/core unpacks its native addon into
+# $HOME/.cache and loads it from there, and refuses a noexec mount.
+ENV HOST=0.0.0.0 \
+    HOME=/tmp
+# The node image's `node` user, by number (hadolint DL3066)
+USER 1000:1000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5150"]
 
 # ---- build (prod) ----
@@ -41,11 +57,25 @@ COPY frontend/src ./src
 RUN npm run build
 
 # ---- prod ----
-FROM nginx:1.31.8-alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606 AS prod
-# The nginx image renders /etc/nginx/templates/*.template into conf.d/ at start,
-# substituting ${BACKEND_UPSTREAM}.
-ENV BACKEND_UPSTREAM=http://backend:8000
-COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# The unprivileged variant runs as UID 101 and keeps its pid and temp files in
+# /tmp, so it works with a read-only root filesystem.
+FROM nginx/nginx-unprivileged:1.31.8-alpine@sha256:26277f4923331a5ecda9096c0e378de65a30a5037129a8036c3ef5d9feee833d AS prod
+# The nginx image renders /etc/nginx/templates/*.template at start, substituting
+# ${BACKEND_UPSTREAM}. It renders into /tmp rather than conf.d/, which isn't
+# writable with a read-only root (nginx would then start on the stock config,
+# with no /api proxy or /healthz); conf.d/default.conf just includes the result.
+ENV BACKEND_UPSTREAM=http://backend:8000 \
+    NGINX_ENVSUBST_OUTPUT_DIR=/tmp
+# --chown: COPY keeps the checkout's file mode (0600 under `umask 077`), and the
+# entrypoint now reads this as UID 101, not root. Owned by 101 it's readable at any
+# mode. Don't add --chmod: it also applies to the templates/ directory COPY creates,
+# and 0644 there drops the execute bit, so nginx can't open the file at all.
+COPY --chown=101:101 frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# Pin the user rather than inheriting the base image's, so a base bump can't
+# change the UID the chart's runAsUser expects. 101 owns conf.d/, so the next
+# step needs no root; if a base bump changes that, the build fails here.
+USER 101:101
+RUN echo 'include /tmp/default.conf;' > /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

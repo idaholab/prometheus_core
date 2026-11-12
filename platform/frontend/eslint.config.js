@@ -10,12 +10,35 @@
 //
 // SPDX-License-Identifier: MIT
 
+import { readdirSync } from "node:fs";
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+
+/* Folder rules (see the README's "Where code and tests go"):
+ * - code outside a feature imports it only through its index.ts, so
+ *   @/features/chat is fine and @/features/chat/store/chat is not
+ * - anything outside the importer's own folder is imported with @/, never ../
+ * A file inside a feature may import that feature's own files directly. */
+const FEATURES = readdirSync(new URL("./src/features", import.meta.url), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+const NO_PARENT_IMPORTS = {
+  group: ["../*"],
+  message: "Import code outside this folder with @/ instead of ../",
+};
+
+/** Deep imports into every feature except `own`, which may import its own files. */
+function featureBoundary(own) {
+  return FEATURES.filter((name) => name !== own).map((name) => ({
+    group: [`@/features/${name}/*`],
+    message: `Import from @/features/${name} (its index.ts); the files inside it are internal to that feature`,
+  }));
+}
 
 export default defineConfig([
   globalIgnores(["dist", "coverage", "public", "test-results", "playwright-report", "blob-report"]),
@@ -37,6 +60,18 @@ export default defineConfig([
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [NO_PARENT_IMPORTS, ...featureBoundary(null)] }],
+    },
+  },
+  ...FEATURES.map((name) => ({
+    files: [`src/features/${name}/**/*.{ts,tsx}`],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [NO_PARENT_IMPORTS, ...featureBoundary(name)] }],
+    },
+  })),
   // Playwright tests and their config run in Node, not the browser
   {
     files: ["e2e/**/*.ts", "playwright.config.ts"],

@@ -82,7 +82,7 @@ def context_id(context: RequestContext) -> str:
 
 
 def build_initial_task(context: RequestContext) -> Task:
-    """Build the initial ``Task`` for a new request, required before any v1 task update events."""
+    """Build the initial task a new task's v1.0 event stream must begin with."""
     message = getattr(context, "message", None)
     history = [message] if message is not None else []
     return new_task(

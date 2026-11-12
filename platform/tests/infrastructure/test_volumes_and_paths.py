@@ -12,6 +12,9 @@
 
 """Validate volume mounts and filesystem paths."""
 
+import re
+import subprocess
+
 
 def _get_volumes(svc: dict) -> list[str]:
     """Get volume strings from a service definition."""
@@ -143,3 +146,162 @@ def test_backend_mesh_cache_owned_by_app_user(project_root):
     """
     dockerfile = (project_root / "backend" / "Dockerfile").read_text()
     assert "mkdir -p /cache/prometheus-mesh && chown -R 10001:10001 /cache" in dockerfile
+
+
+def _stage_user(dockerfile: str, stage: str) -> str | None:
+    """The last USER in one stage of a multi-stage Dockerfile."""
+    stages = re.split(r"(?im)^FROM\s", dockerfile)
+    for body in stages[1:]:
+        if re.match(rf"\S+\s+AS\s+{stage}\s*$", body.splitlines()[0], re.IGNORECASE):
+            return _final_user(body)
+    raise AssertionError(f"no '{stage}' stage in Dockerfile")
+
+
+def test_frontend_images_run_as_non_root(project_root):
+    """Both frontend targets end on a fixed, numeric, non-root user (k8s plan P1-11).
+
+    Numeric so hadolint DL3066 passes, and pinned here rather than inherited from the
+    base image, so a base bump can't change the UID the chart expects. dev is the node
+    image's `node` user; prod is nginx-unprivileged's 101, and never switches to root.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    assert _stage_user(dockerfile, "dev") == "1000:1000"
+    assert _stage_user(dockerfile, "prod") == "101:101"
+    prod = re.split(r"(?im)^FROM\s", dockerfile)[-1]
+    assert not re.search(r"(?im)^USER\s+(0|root)\b", prod), "prod must not switch to root"
+
+
+def test_frontend_prod_renders_config_outside_conf_d(project_root):
+    """nginx's rendered config goes to /tmp, so a read-only root still gets it.
+
+    With a read-only root and the default output dir, the template step fails to
+    write conf.d/ and nginx starts on the stock config: no /api proxy, no /healthz.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    assert "NGINX_ENVSUBST_OUTPUT_DIR=/tmp" in dockerfile
+    assert "include /tmp/default.conf;" in dockerfile
+
+
+def test_frontend_prod_template_readable_by_nginx_user(project_root):
+    """The nginx template is copied owned by the runtime user, with no --chmod.
+
+    COPY keeps the checkout's file mode, so under `umask 077` the template is 0600,
+    and the entrypoint reads it as UID 101 rather than root: unless 101 owns it, the
+    render fails and nginx never starts. --chmod is no substitute, because it also
+    sets the mode of the templates/ directory COPY creates (0644 drops the execute
+    bit, so the file can't be opened at all).
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    copies = [line for line in dockerfile.splitlines() if re.match(r"(?i)COPY\s.*default\.conf\.template", line)]
+    assert len(copies) == 1, "expected exactly one COPY of default.conf.template"
+    assert "--chown=101:101" in copies[0]
+    assert "--chmod" not in copies[0]
+
+
+def test_frontend_node_modules_writable_without_recursive_chmod(project_root):
+    """Only the node_modules directory is made world-writable, not the tree under it.
+
+    frontend-dev runs as the developer's UID, and Vite creates node_modules/.vite in
+    that directory; it writes nothing inside the packages (checked by snapshotting
+    every path before and after a run). So the directory needs `chmod a+rwx`, and a
+    recursive chmod would only make 29k package files world-writable.
+    """
+    dockerfile = (project_root / "frontend" / "Dockerfile").read_text()
+    chmods = [line.strip() for line in dockerfile.splitlines() if re.search(r"\bchmod\b", line)]
+    node_modules = [line for line in chmods if "/app/node_modules" in line]
+    assert len(node_modules) == 1, "expected one chmod of /app/node_modules"
+    assert "a+rwx /app/node_modules" in node_modules[0]
+    assert not re.search(r"\bchmod\s+-\w*R", node_modules[0]), "chmod of node_modules must not be recursive"
+
+
+def test_frontend_dev_runs_as_host_user(compose_data, project_root):
+    """frontend-dev runs as the developer's UID, which the Makefile exports.
+
+    Vite writes into the bind-mounted ./frontend, owned by whoever checked it out,
+    so a fixed UID breaks the dev server for anyone who isn't UID 1000.
+    """
+    assert compose_data["services"]["frontend-dev"]["user"] == "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    makefile = (project_root / "Makefile").read_text()
+    assert "export HOST_UID HOST_GID" in makefile
+
+
+def test_start_targets_drop_frontend_dev_node_modules(project_root):
+    """down and clear-agent-registry remove frontend-dev with its volume, before stopping.
+
+    Its node_modules is an anonymous volume: compose would otherwise keep an old one
+    (stale dependencies, or root-owned from an older image) and leave ~550 MB behind
+    each time the container is recreated. Every start target runs clear-agent-registry
+    first, so that one removal covers all of them.
+    """
+    makefile = (project_root / "Makefile").read_text()
+    # target -> (prerequisites, recipe lines); the target-specific variable lines
+    # (`up: VAR := ...`) have no recipe and are skipped.
+    rules = {
+        name: (prereqs.split(), recipe.splitlines())
+        for name, prereqs, recipe in re.findall(
+            r"(?m)^([a-z-]+):(?! [A-Z_]+ :?=)([^\n#]*)(?:#[^\n]*)?\n((?:\t[^\n]*\n)+)", makefile
+        )
+    }
+    for name in ("down", "clear-agent-registry"):
+        assert name in rules, f"no {name} recipe in Makefile"
+        assert rules[name][1][0].strip() == "$(RM_FRONTEND_DEV)", f"{name} must remove frontend-dev first"
+    for name in ("up", "up-fg", "restart", "restart-fg", "ng-up", "ng-up-fg", "ng-restart", "ng-restart-fg"):
+        assert name in rules, f"no {name} recipe in Makefile"
+        assert "clear-agent-registry" in rules[name][0], f"{name} must depend on clear-agent-registry"
+
+
+def _make_dry_run(project_root, target: str, profile: str) -> list[str]:
+    """The commands `make -n <target>` would run, for one PROFILE.
+
+    Runs in the real platform folder, so Make reads the developer's own .env. Setting
+    LOCAL_DEEPLYNX=false on the command line beats it (and the environment): with
+    LOCAL_DEEPLYNX=true the start targets also run deeplynx-setup, a second
+    `docker compose ... up` line these tests aren't about.
+    """
+    result = subprocess.run(
+        ["make", "-n", target, f"PROFILE={profile}", "CHECK=false", "LOCAL_DEEPLYNX=false"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    return result.stdout.splitlines()
+
+
+def _compose_line(lines: list[str], verb: str) -> int:
+    """Index of the one `docker compose ... <verb> ...` line (not the redis helper)."""
+    hits = [
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("docker compose") and re.search(rf" {verb}( |$)", line) and "up -d redis" not in line
+    ]
+    assert len(hits) == 1, f"expected one compose {verb} line, got {len(hits)}"
+    return hits[0]
+
+
+RESTART_TARGETS = ("restart", "restart-fg", "ng-restart", "ng-restart-fg")
+
+
+def test_restart_targets_rebuild_frontend_dev_before_starting(project_root):
+    """With PROFILE=dev, every restart target builds frontend-dev, then starts the stack.
+
+    The volume cleanup refills node_modules from the image frontend-dev already has,
+    and restart doesn't pass --build, so without this the first restart after an image
+    change refills it from the old image (root-owned, or the previous dependencies).
+    """
+    for target in RESTART_TARGETS:
+        lines = _make_dry_run(project_root, target, "dev")
+        build = _compose_line(lines, "build")
+        assert lines[build].endswith("--profile dev build frontend-dev"), f"{target}: builds only frontend-dev"
+        assert build < _compose_line(lines, "up"), f"{target}: build must come before up"
+
+
+def test_restart_targets_skip_frontend_dev_build_without_dev_profile(project_root):
+    """PROFILE=prod and PROFILE= have no frontend-dev, so restart builds nothing."""
+    for target in RESTART_TARGETS:
+        for profile in ("prod", ""):
+            lines = _make_dry_run(project_root, target, profile)
+            assert not any(" build" in line and line.startswith("docker compose") for line in lines), (
+                f"{target} PROFILE={profile!r} must not build"
+            )

@@ -227,6 +227,10 @@ services:
       additional_contexts:
         certs: ../common/certs
     extra_hosts: *host-gateway
+    # Run as the developer's own UID (the Makefile exports HOST_UID/HOST_GID from
+    # `id`): Vite writes into the bind-mounted ./frontend, which is owned by them,
+    # not by the image's `node` user (1000). Falls back to 1000 when they're unset.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       # Keep the default in sync with FRONTEND_DEV_PORT in the Makefile (make check)
       - "${FRONTEND_DEV_PORT:-5150}:5150"
@@ -265,7 +269,7 @@ services:
       backend:
         condition: service_healthy
     # Probes nginx's own /healthz, not /api/, so a slow backend doesn't mark the
-    # frontend unhealthy. nginx:alpine ships busybox wget, not python.
+    # frontend unhealthy. nginx-unprivileged:alpine ships busybox wget, not python.
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 15s

@@ -63,7 +63,7 @@ It creates nothing when `USER_IDENTITY_PRIVATE_KEY` is set, and it leaves
 inactive and retired rows untouched.
 
 An admin can generate, activate, and retire RS256 keys from **Admin > Signing
-Keys** (`frontend/src/components/admin/AdminSigningKeys.tsx`) — no `.env` edit
+Keys** (`frontend/src/features/admin/AdminSigningKeys.tsx`) — no `.env` edit
 or container restart needed. Once a key is active, Postgres is
 authoritative: `backend/app/identity.py::mint_for_user()` prefers admin-db's
 active `SigningKey` row (private key Fernet-encrypted at rest,
@@ -188,7 +188,7 @@ dedicated Postgres database (`admin-db`; see
 (`backend/app/passwords.py`), never stored or compared in cleartext.
 
 On first run (no `users` row exists yet), the React app shows a setup wizard
-(`frontend/src/components/SetupWizard.tsx`) instead of the login screen — it
+(`frontend/src/features/auth/SetupWizard.tsx`) instead of the login screen — it
 creates the first account, always `role: "admin"`, and logs it in immediately.
 Backing endpoints: `GET /api/setup/status` reports whether setup is still
 needed (`frontend/src/App.tsx`'s boot sequence checks this before deciding
@@ -204,14 +204,14 @@ gated by `app.security.require_admin` (403 for non-admins). It refuses any
 change that would leave zero active admins (demoting, deactivating, or
 deleting the last one all `409`). The React app surfaces this as an **Admin**
 tab (`frontend/src/layouts/ProjectView.tsx`), visible only when the logged-in
-user's `role` is `"admin"` (tracked in `frontend/src/lib/store/session.ts`) —
-`frontend/src/components/admin/AdminUsers.tsx` is the users table + create/edit
+user's `role` is `"admin"` (tracked in `frontend/src/features/auth/store/session.ts`) —
+`frontend/src/features/admin/AdminUsers.tsx` is the users table + create/edit
 forms.
 
 ### OIDC identity providers (Okta or any generic OIDC issuer)
 
 Configured entirely through **Admin > Identity Providers**
-(`frontend/src/components/admin/AdminOidcProviders.tsx`) — no `.env` vars, no
+(`frontend/src/features/admin/AdminOidcProviders.tsx`) — no `.env` vars, no
 restart. Backend CRUD: `GET/POST /api/admin/oidc-providers`,
 `PATCH/DELETE /api/admin/oidc-providers/{id}` (`backend/app/routers/admin_oidc.py`),
 same `require_admin` gate as the users/keys admin APIs. `client_secret` is
