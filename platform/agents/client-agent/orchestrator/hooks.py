@@ -81,12 +81,13 @@ def _is_reserved_key(key: str) -> bool:
 
 
 class DispatchError(RuntimeError):
-    """A dispatch that failed without raising: the transport's error *result*.
+    """A dispatch that ended in an error *result* instead of raising.
 
-    ``tool_discovery.call_agent`` catches every agent failure (unreachable
-    agent, timeout, HTTP error) and returns ``{"error": ...}``, so ``skills``
-    wraps that error string in this class when it fires ``on_error``. The same
-    payload also reaches ``on_result`` (rewritable).
+    ``tool_discovery.call_agent`` catches every transport failure (unreachable
+    agent, timeout, HTTP error) and returns ``{"error": ...}``, and a specialist
+    that completes with ``{"status": "error", "error": ...}`` reaches the same
+    branch, so ``skills`` wraps either error string in this class when it fires
+    ``on_error``. The same payload also reaches ``on_result`` (rewritable).
     """
 
 
