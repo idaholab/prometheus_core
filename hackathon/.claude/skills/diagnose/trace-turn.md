@@ -54,7 +54,7 @@ The last 300 entries, UTC (`runtime.py:139-161`). A turn starts at "Processing o
 | `Invoking '<skill_id>'.` | the call to the agent starts (`skills.py`) |
 | `Capability '<skill_id>' is currently unavailable.` / `Missing required parameters for '<skill_id>': ...` | no dispatch tool, also after a refresh / a required field is empty: no call (`skills.py`) |
 | `[<skill_id>] <text>` / `[<skill_id>] running in the background.` | a status line / `declare_long_running` (`skills.py`) |
-| `'<skill_id>' completed.` / `'<skill_id>' failed: <error>` | a result without `error` / the wrapper raised (`skills.py`) |
+| `'<skill_id>' completed.` / `'<skill_id>' failed: <error>` | a result without `error` / a result with `error`, or the wrapper raised (`skills.py`) |
 
 "Invoking" with no "completed" or "failed" after it: the agent asked for input, or returned an
 A2A error or crashed, which writes no status line (`client-agent/tool_discovery.py:631-643`). A
