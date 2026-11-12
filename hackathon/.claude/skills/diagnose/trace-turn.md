@@ -56,9 +56,9 @@ The last 300 entries, UTC (`runtime.py:139-161`). A turn starts at "Processing o
 | `[<skill_id>] <text>` / `[<skill_id>] running in the background.` | a status line / `declare_long_running` (`skills.py`) |
 | `'<skill_id>' completed.` / `'<skill_id>' failed: <error>` | a result without `error` / a result with `error`, or the wrapper raised (`skills.py`) |
 
-"Invoking" with no "completed" or "failed" after it: the agent asked for input, or returned an
-A2A error or crashed, which writes no status line (`client-agent/tool_discovery.py:631-643`). A
-call rejected before the dispatch has no "Next step": its error is only in the document (step 4).
+"Invoking" with no "completed" or "failed" after it: the agent asked for input, or crashed, which
+writes no status line (`client-agent/orchestrator/skills.py:170-178`). A call rejected before the
+dispatch has no "Next step": its error is only in the document (step 4).
 
 ## 4. Read the conversation document
 
