@@ -95,7 +95,8 @@ rules:
   # description= on Query(), Path(), Header() and Cookie()
   parameter-description: error
 
-  # Field(description=...) on every field of the backend's models. FastAPI's own
+  # Field(description=...) on every top-level field of the backend's named
+  # models; an inline nested object's fields aren't checked. FastAPI's own
   # validation error schemas are skipped because no model of ours defines them.
   # A field that's only a reference to another model passes, because Redocly
   # reads the referenced model's description
