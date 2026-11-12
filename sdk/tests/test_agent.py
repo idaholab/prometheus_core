@@ -1306,6 +1306,123 @@ workflows:
             == expected
         )
 
+    @pytest.mark.parametrize("server_filters", [True, False])
+    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, server_filters):
+        """Covers REQ-009-23 and BEH-009-10: answering an INPUT_REQUIRED form
+        resumes the same task id, whose record already exists; the request
+        must run, reusing that record."""
+        from prometheus_api.storage_client.exceptions import APIError
+
+        original_id = "prometheus-execution:record-agent:task-9"
+        observed = {}
+        others = [SimpleNamespace(id=n, original_id=f"other-{n}") for n in range(3)]
+        mine = SimpleNamespace(id=55, original_id=original_id)
+
+        class Items:
+            async def create(self, item):
+                raise APIError("duplicate key value violates unique constraint")
+
+            async def list(self, page=1, page_size=100, filters=None):
+                hits = [mine] if server_filters else others
+                return SimpleNamespace(items=hits)
+
+            async def iter_all(self, page_size=100, filters=None):
+                for record in [*others, mine]:
+                    yield record
+
+        class Client:
+            def __init__(self, config):
+                self.items = Items()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                return SimpleNamespace(
+                    value={"org_id": 1, "project_id": 3, "key": "k", "secret": "s"}
+                )
+
+            async def _execute(self, params, context, event_queue):
+                observed["record_id"] = self.execution_record_id
+                return {"ok": True}
+
+        monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", Client)
+        monkeypatch.setattr(
+            PrometheusAgentExecutor,
+            "_extract_identity",
+            lambda self, context: UserIdentity(user_id="u", claims={}, raw_token="t"),
+        )
+        agent = Agent(agent_name="Record Agent")
+        agent.agent_card = _test_agent_card()
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-9"
+        context.context_id = "context-8"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = json.dumps({"skill_id": "test_skill"})
+
+        asyncio.run(agent.create_executor().execute(context, MagicMock(enqueue_event=AsyncMock())))
+
+        assert observed["record_id"] == 55
+
+    def test_record_create_failure_without_a_match_still_fails(self, monkeypatch):
+        """Covers REQ-009-23: with no existing item, the failure is not masked."""
+        from prometheus_api.storage_client.exceptions import APIError
+
+        worked = False
+
+        class Items:
+            async def create(self, item):
+                raise APIError("DeepLynx is down")
+
+            async def list(self, page=1, page_size=100, filters=None):
+                return SimpleNamespace(items=[])
+
+            async def iter_all(self, page_size=100, filters=None):
+                return
+                yield
+
+        class Client:
+            def __init__(self, config):
+                self.items = Items()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class Agent(PrometheusAgent):
+            async def get_credential(self, resource, scope=None):
+                return SimpleNamespace(
+                    value={"org_id": 1, "project_id": 3, "key": "k", "secret": "s"}
+                )
+
+            async def _execute(self, params, context, event_queue):
+                nonlocal worked
+                worked = True
+                return {"ok": True}
+
+        monkeypatch.setattr("prometheus_api.agent.base.AsyncStorageClient", Client)
+        agent = Agent(agent_name="Record Agent")
+        context = MagicMock(spec=RequestContext)
+        context.task_id = "task-down"
+        context.context_id = "context-down"
+        context.current_task = None
+        context.message = None
+        context.get_user_input.return_value = "{}"
+
+        with pytest.raises(APIError, match="DeepLynx is down"):
+            asyncio.run(agent.create_executor().execute(context, AsyncMock(spec=EventQueue)))
+
+        assert worked is False
+        assert agent.execution_record_id is None
+        assert asyncio.run(PrometheusAgent._find_execution_record(Client(None), None)) is None
+
     def test_execution_record_name_without_skill(self):
         agent = PrometheusAgent(agent_name="Record Agent")
 
