@@ -126,13 +126,19 @@ async def _get_or_404(db: AsyncSession, provider_row_id: uuid.UUID) -> OidcProvi
     return row
 
 
-@router.get("", response_model=list[OidcProviderOut])
+@router.get("", summary="List OIDC providers", response_model=list[OidcProviderOut])
 async def list_oidc_providers(db: AsyncSession = Depends(get_db_session)) -> list[OidcProviderOut]:
     rows = (await db.scalars(select(OidcProvider).order_by(OidcProvider.display_name))).all()
     return [_out(row) for row in rows]
 
 
-@router.post("", response_model=OidcProviderOut, status_code=status.HTTP_201_CREATED, responses=ENCRYPTION_RESPONSES)
+@router.post(
+    "",
+    summary="Create an OIDC provider",
+    response_model=OidcProviderOut,
+    status_code=status.HTTP_201_CREATED,
+    responses=ENCRYPTION_RESPONSES,
+)
 async def create_oidc_provider(
     payload: OidcProviderCreate, db: AsyncSession = Depends(get_db_session)
 ) -> OidcProviderOut:
@@ -167,7 +173,12 @@ async def create_oidc_provider(
     return _out(row)
 
 
-@router.patch("/{provider_row_id}", response_model=OidcProviderOut, responses=ENCRYPTION_RESPONSES)
+@router.patch(
+    "/{provider_row_id}",
+    summary="Update an OIDC provider",
+    response_model=OidcProviderOut,
+    responses=ENCRYPTION_RESPONSES,
+)
 async def update_oidc_provider(
     provider_row_id: uuid.UUID, payload: OidcProviderUpdate, db: AsyncSession = Depends(get_db_session)
 ) -> OidcProviderOut:
@@ -200,7 +211,7 @@ async def update_oidc_provider(
     return _out(row)
 
 
-@router.delete("/{provider_row_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{provider_row_id}", summary="Delete an OIDC provider", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_oidc_provider(provider_row_id: uuid.UUID, db: AsyncSession = Depends(get_db_session)) -> None:
     row = await _get_or_404(db, provider_row_id)
     provider_id = row.provider_id

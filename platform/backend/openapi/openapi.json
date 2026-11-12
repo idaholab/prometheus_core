@@ -2702,7 +2702,7 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "List Oidc Providers",
+        "summary": "List OIDC providers",
         "operationId": "list_oidc_providers",
         "parameters": [
           {
@@ -2803,7 +2803,7 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Create Oidc Provider",
+        "summary": "Create an OIDC provider",
         "operationId": "create_oidc_provider",
         "parameters": [
           {
@@ -2942,7 +2942,7 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Update Oidc Provider",
+        "summary": "Update an OIDC provider",
         "operationId": "update_oidc_provider",
         "parameters": [
           {
@@ -3089,7 +3089,7 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Delete Oidc Provider",
+        "summary": "Delete an OIDC provider",
         "operationId": "delete_oidc_provider",
         "parameters": [
           {
