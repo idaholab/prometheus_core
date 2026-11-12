@@ -126,7 +126,8 @@ rules:
 
   # A success response says what it returns: response_model= for JSON, or
   # response_class= and its content type for a stream, file or redirect.
-  # FastAPI writes an empty schema for a route with neither
+  # FastAPI writes an empty schema for a route with neither. A response with no
+  # content, or a content type with no schema, isn't checked
   rule/typed-response:
     subject:
       type: Schema

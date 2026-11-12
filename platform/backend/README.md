@@ -135,7 +135,8 @@ Don't list parameters, types or return values in the docstring. FastAPI doesn't 
 them, so they repeat the signature and drift out of date.
 
 The lint checks the parts of this it can: a unique operationId, a description, a
-description on every parameter and model field, a schema on every success response,
+description on every parameter and model field, a non-empty schema on every success
+response that declares a content type,
 one declared tag, and a declared security scheme. It also checks the naming rules
 below.
 Reviewers check the rest:
