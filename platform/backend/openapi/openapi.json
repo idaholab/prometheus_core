@@ -301,8 +301,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -518,8 +520,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -598,8 +602,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -694,8 +700,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -812,8 +820,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -910,8 +920,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -987,8 +999,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -1085,8 +1099,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1181,8 +1197,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1270,8 +1288,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1358,8 +1378,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1444,8 +1466,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -1541,8 +1565,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1623,8 +1649,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1712,8 +1740,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2023,8 +2053,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2122,8 +2154,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2239,8 +2273,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2354,8 +2390,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2444,8 +2482,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2544,8 +2584,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2682,8 +2724,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2790,8 +2834,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2887,8 +2933,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2986,8 +3034,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -3133,8 +3183,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -3278,8 +3330,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
