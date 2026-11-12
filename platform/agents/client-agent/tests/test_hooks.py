@@ -25,6 +25,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 import runtime_stub  # noqa: F401  (installs prometheus_api.agent stubs)
@@ -298,18 +299,35 @@ def test_hook_sees_error_result_on_both_points(monkeypatch):
     assert seen_result == {"error": "agent unreachable"}
 
 
-def test_on_error_fires_through_a_real_tool_on_dead_port(monkeypatch):
-    """End to end: a real StructuredTool against an unreachable agent fires on_error."""
+def test_on_error_fires_through_a_real_tool_on_transport_failure(monkeypatch):
+    """End to end: a real StructuredTool whose HTTP POST fails with ConnectError fires on_error."""
     hook = _RecordingHook()
     hooks.set_call_hook(hook)
     _install_capability(monkeypatch)
+
+    class _UnreachableClient:
+        """httpx.AsyncClient stand-in that fails the POST without touching a socket."""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def post(self, *args, **kwargs):
+            raise httpx.ConnectError("agent unreachable")
+
+    monkeypatch.setattr(tool_discovery.httpx, "AsyncClient", _UnreachableClient)
 
     real_tool = asyncio.run(
         tool_discovery.create_tool_from_skill(
             "http://127.0.0.1:1",
             {
                 "id": "analyze_thermal",
-                "description": "dead-port probe",
+                "description": "transport-failure probe",
                 "inputSchema": {
                     "type": "object",
                     "properties": {"material_id": {"type": "string"}},
@@ -326,11 +344,12 @@ def test_on_error_fires_through_a_real_tool_on_dead_port(monkeypatch):
 
     result = asyncio.run(skills.invoke_skill("analyze_thermal", {"material_id": "SS316"}, CONV))
 
-    assert "error" in result
+    assert result == {"skill_id": "analyze_thermal", "error": "agent unreachable"}
     ((_, error),) = hook.seen_errors
     assert isinstance(error, hooks.DispatchError)
+    assert str(error) == "agent unreachable"
     ((_, seen_result),) = hook.seen_results
-    assert "error" in seen_result
+    assert seen_result == {"error": "agent unreachable"}
 
 
 def test_input_required_ids_survive_hook_that_drops_them(monkeypatch):
