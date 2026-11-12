@@ -27,7 +27,7 @@ One protocol covers the four interception points of a dispatch:
 plus a fifth, turn-scoped point that brackets the whole dispatch sequence:
 
 - ``on_turn`` — one user turn finished at a loop outcome
-  (:func:`orchestrator.chat_flow._respond`)
+  (:func:`orchestrator.chat_flow.chat`, after ``_respond`` persisted it)
 
 Contract, enforced by the framework code in ``skills.py``:
 
