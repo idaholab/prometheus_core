@@ -251,10 +251,16 @@ class TestPrometheusAgentExecutor:
         payload_text = second_event.status.message.parts[0].text
         assert json.loads(payload_text) == {"status": "success", "data": "test data"}
 
-    def test_execute_resume_continues_existing_task_with_status_update(
-        self, mock_context, mock_event_queue
+    @pytest.mark.parametrize(
+        "stored_state",
+        [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_AUTH_REQUIRED],
+        ids=["input_required", "auth_required"],
+    )
+    def test_execute_follow_up_continues_existing_task_with_status_update(
+        self, mock_context, mock_event_queue, stored_state
     ):
-        """Covers REQ-009-24 and BEH-009-11."""
+        """Covers REQ-009-24: any follow-up to an existing task, not only an
+        answered INPUT_REQUIRED form, continues it without re-emitting the Task."""
 
         class ResumingExecutor(PrometheusAgentExecutor):
             async def _execute(self, params, context, event_queue):
@@ -263,7 +269,7 @@ class TestPrometheusAgentExecutor:
         mock_context.current_task = Task(
             id=mock_context.task_id,
             context_id=mock_context.context_id,
-            status=TaskStatus(state=TaskState.TASK_STATE_INPUT_REQUIRED),
+            status=TaskStatus(state=stored_state),
         )
 
         asyncio.run(

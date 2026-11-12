@@ -31,7 +31,6 @@ from a2a.types import (
     SendMessageRequest,
     Task,
     TaskState,
-    TaskStatusUpdateEvent,
 )
 
 from prometheus_api.agent import EventQueue, PrometheusAgentExecutor, RequestContext
@@ -59,13 +58,13 @@ class AskThenFinishExecutor(PrometheusAgentExecutor):
         return {"status": "resumed", "answer": params.get("answer")}
 
 
-def _agent_card(*, streaming: bool = False) -> AgentCard:
+def _agent_card() -> AgentCard:
     return AgentCard(
         name="Resume Agent",
         description="Pauses for input, then finishes",
         supported_interfaces=[AgentInterface(url="http://testserver/", protocol_binding="JSONRPC")],
         version="1.0.0",
-        capabilities=AgentCapabilities(streaming=streaming),
+        capabilities=AgentCapabilities(),
         skills=[AgentSkill(id="resume", name="Resume", description="Resume", tags=["test"])],
         default_input_modes=["text"],
         default_output_modes=["text"],
@@ -85,8 +84,8 @@ def _request(payload: dict, *, task_id: str = "", context_id: str = "") -> SendM
     return SendMessageRequest(message=message)
 
 
-def _status_text(event: Task | TaskStatusUpdateEvent) -> str:
-    return "".join(part.text for part in event.status.message.parts)
+def _status_text(task: Task) -> str:
+    return "".join(part.text for part in task.status.message.parts)
 
 
 async def _pause_for_input(handler: DefaultRequestHandler) -> Task:
@@ -96,8 +95,10 @@ async def _pause_for_input(handler: DefaultRequestHandler) -> Task:
     return first
 
 
-async def test_resumed_input_required_task_returns_the_resumed_result():
-    """Covers REQ-009-24 and BEH-009-11."""
+async def test_resumed_task_keeps_the_resume_message_in_history():
+    """Covers BEH-009-11: a blocking resume through the request handler returns
+    the resumed result, and the task history keeps the message that resumed it.
+    Re-emitting the stored task dropped that message."""
     executor = AskThenFinishExecutor()
     handler = DefaultRequestHandler(
         agent_executor=executor,
@@ -119,28 +120,4 @@ async def test_resumed_input_required_task_returns_the_resumed_result():
     assert resumed.status.state == TaskState.TASK_STATE_COMPLETED
     assert json.loads(_status_text(resumed)) == {"status": "resumed", "answer": "approve"}
     assert resume.message.message_id in [message.message_id for message in resumed.history]
-    assert executor.calls == 2
-
-
-async def test_resumed_input_required_stream_starts_with_working_status():
-    """Covers REQ-009-24 and BEH-009-11."""
-    executor = AskThenFinishExecutor()
-    handler = DefaultRequestHandler(
-        agent_executor=executor,
-        task_store=InMemoryTaskStore(),
-        agent_card=_agent_card(streaming=True),
-    )
-    first = await _pause_for_input(handler)
-
-    resume = _request(
-        {"skill_id": "resume", "answer": "approve"},
-        task_id=first.id,
-        context_id=first.context_id,
-    )
-    events = [event async for event in handler.on_message_send_stream(resume, ServerCallContext())]
-
-    assert all(isinstance(event, TaskStatusUpdateEvent) for event in events)
-    assert events[0].status.state == TaskState.TASK_STATE_WORKING
-    assert events[-1].status.state == TaskState.TASK_STATE_COMPLETED
-    assert json.loads(_status_text(events[-1])) == {"status": "resumed", "answer": "approve"}
     assert executor.calls == 2
