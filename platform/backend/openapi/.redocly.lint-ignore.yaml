@@ -9,9 +9,11 @@
 # redocly.yaml with the reason. The one exception is a rule newly added to
 # redocly.yaml, whose existing problems go here so it checks new routes right
 # away. Never add a security-defined entry: a public route declares
-# `security: []` instead. Redocly wrote this file with
+# `security: []` instead.
 #
-#   npx redocly lint openapi.json --generate-ignore-file
+# When the lint fails, Redocly suggests --generate-ignore-file. Don't run it to
+# make a route pass: it ignores the new problems and replaces this header. Run
+# it only when adding a rule, then restore this header.
 openapi.json:
   operation-description:
     - '#/paths/~1healthz/get/description'
