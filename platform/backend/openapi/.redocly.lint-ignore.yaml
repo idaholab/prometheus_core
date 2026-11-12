@@ -8,7 +8,8 @@
 # fixed. Don't add to it: fix a new problem, or turn its rule off in
 # redocly.yaml with the reason. The one exception is a rule newly added to
 # redocly.yaml, whose existing problems go here so it checks new routes right
-# away. Redocly wrote this file with
+# away. Never add a security-defined entry: a public route declares
+# `security: []` instead. Redocly wrote this file with
 #
 #   npx redocly lint openapi.json --generate-ignore-file
 openapi.json:
