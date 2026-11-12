@@ -76,8 +76,9 @@ complete, such as that every route declares its authentication, by linting it wi
 apply turned off and the reason given. The problems the document had when the lint
 was added are listed in `openapi/.redocly.lint-ignore.yaml`, one rule at one location
 each, so new problems still fail. Remove an entry when you fix it; don't add new ones,
-except for the existing problems of a rule you add to `redocly.yaml`. To run it locally
-(needs Node):
+except for the existing problems of a rule you add to `redocly.yaml`. Never add a
+`security-defined` entry: a route that's meant to be public declares `security: []`
+instead. To run it locally (needs Node):
 
 ```bash
 cd openapi && npm ci && npm run lint
