@@ -12,25 +12,27 @@
 
 import { FilterChips } from "@/components/ui/FilterChips";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { ALL } from "@/lib/listFilter";
+import { AGENT_DOMAINS } from "./store/agents";
 
-// The C.1 domain chips; visual only until AR-4 adds filtering.
-const DOMAIN_CHIPS = [
-  { id: "all", label: "All" },
-  { id: "plant-systems", label: "Plant & Systems" },
-  { id: "core-fuel", label: "Core & Fuel" },
-  { id: "structural-seismic", label: "Structural & Seismic" },
-  { id: "licensing-regulatory", label: "Licensing & Regulatory" },
-  { id: "data-knowledge", label: "Data & Knowledge" },
-];
+// The C.1 domain chips; each id is the domain it filters on.
+const DOMAIN_CHIPS = [{ id: ALL, label: "All" }, ...AGENT_DOMAINS.map((d) => ({ id: d, label: d }))];
+
+type Props = {
+  query: string;
+  onQueryChange: (query: string) => void;
+  selected: string;
+  onSelect: (id: string) => void;
+};
 
 /** Search bar and domain chips of the Agent Registry. Props only, no state. */
-export function RegistryToolbar({ selected }: { selected: string }) {
+export function RegistryToolbar({ query, onQueryChange, selected, onSelect }: Props) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
       <div className="w-full md:w-96">
-        <SearchInput placeholder="Search agents..." label="Search agents" />
+        <SearchInput placeholder="Search agents..." label="Search agents" value={query} onChange={onQueryChange} />
       </div>
-      <FilterChips chips={DOMAIN_CHIPS} selected={selected} label="Agent domains" />
+      <FilterChips chips={DOMAIN_CHIPS} selected={selected} label="Agent domains" onSelect={onSelect} />
     </div>
   );
 }
