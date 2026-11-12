@@ -401,7 +401,11 @@ def set_session_cookie(response: Response, token: str) -> None:
 
 async def current_claims(
     request: Request,
-    session_cookie: Optional[str] = Cookie(default=None, alias=settings.cookie_name),
+    session_cookie: Optional[str] = Cookie(
+        default=None,
+        alias=settings.cookie_name,
+        description="The session token that login sets. Browsers send it automatically.",
+    ),
 ) -> TokenClaims:
     """Dependency: verify the session cookie and return its claims, or 401.
 
