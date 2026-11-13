@@ -15,7 +15,7 @@ The orchestrator LLM decides from the card alone whether to call your agent, and
 |---|---|---|
 | `name` (agent) | no | gives the route key |
 | `description`, `version` (agent) | no | for people and the A2A card |
-| `capabilities.streaming` | no | `true`: streaming call; status lines show live, `declare_long_running` works (`orchestrator/skills.py:98-116`). Template: `false` (deck 04, slide 11) |
+| `capabilities.streaming` | no | `true`: streaming call; status lines show live, `declare_long_running` works (`orchestrator/skills.py`). Template: `false` (deck 04, slide 11) |
 | `skills[].id` | yes, as the tool name | arrives as `params["skill_id"]` |
 | `skills[].name` | only when `description` is empty | the plan card label |
 | `skills[].description`, `usage_notes` | yes | the tool description |
