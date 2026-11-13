@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
-import { useAgents } from "./agents.ts";
+import { AGENT_DOMAINS, useAgents } from "./agents.ts";
 
 /* The real agents store, with React stubbed out so that
  * useSyncExternalStore(sub, get) returns get(). */
@@ -43,4 +43,22 @@ test("useAgents serves the eight placeholder agents with every card field", () =
 
 test("useAgents returns the same snapshot object on every call", () => {
   assert.equal(useAgents(), useAgents());
+});
+
+test("agent domains cover every chip: each of the five domains has an agent and no agent has another", () => {
+  assert.deepEqual(
+    [...AGENT_DOMAINS],
+    ["Plant & Systems", "Core & Fuel", "Structural & Seismic", "Licensing & Regulatory", "Data & Knowledge"],
+  );
+  const { agents } = useAgents();
+  const domains: readonly string[] = AGENT_DOMAINS;
+  for (const a of agents) {
+    assert.ok(domains.includes(a.domain), `${a.id}: domain ${a.domain} is not one of AGENT_DOMAINS`);
+  }
+  for (const d of AGENT_DOMAINS) {
+    assert.ok(
+      agents.some((a) => a.domain === d),
+      `${d}: no agent carries this domain`,
+    );
+  }
 });
