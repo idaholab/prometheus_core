@@ -25,13 +25,30 @@ const STATUS_TONE: Record<SourceStatus, StatusPillTone> = {
   disconnected: "error",
 };
 
+interface Props extends DataManagementState {
+  /** The selected artifact type chip: ALL or an artifact type. */
+  artifactType: string;
+  onArtifactTypeChange: (type: string) => void;
+  /** True when artifacts exist but none has the selected type. */
+  noMatchingArtifacts: boolean;
+  onToggleSource: (id: string) => void;
+}
+
 /**
  * Data Management = the connected data sources on the left and the artifact
  * storage panel on the right (Figma G.1), stacked below `lg:`. Display only;
  * PageDataManagement supplies the data. Passes display strings to the parts.
  */
-export function DataManagement({ status, sources, storage, artifacts }: DataManagementState) {
-
+export function DataManagement({
+  status,
+  sources,
+  storage,
+  artifacts,
+  artifactType,
+  onArtifactTypeChange,
+  noMatchingArtifacts,
+  onToggleSource,
+}: Props) {
   if (status === "loading") {
     return <div className="flex-1 min-w-0 p-4 text-sm text-base-content/50">Loading...</div>;
   }
@@ -72,6 +89,7 @@ export function DataManagement({ status, sources, storage, artifacts }: DataMana
               enabled={source.enabled}
               lastSync={source.last_sync}
               volume={formatBytes(source.volume_bytes)}
+              onToggle={() => onToggleSource(source.id)}
             />
           ))}
         </section>
@@ -88,6 +106,9 @@ export function DataManagement({ status, sources, storage, artifacts }: DataMana
               size: formatBytes(artifact.size_bytes),
               created: artifact.created,
             }))}
+            selectedType={artifactType}
+            onSelectType={onArtifactTypeChange}
+            noMatches={noMatchingArtifacts}
           />
         </section>
       </div>

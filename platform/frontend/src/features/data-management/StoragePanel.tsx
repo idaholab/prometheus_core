@@ -14,6 +14,7 @@ import { FileText } from "lucide-react";
 import type { ArtifactType } from "./store/dataManagement";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { FilterChips } from "@/components/ui/FilterChips";
+import { ALL } from "@/lib/listFilter";
 
 /** One artifact row with its size already formatted for display. */
 export interface ArtifactRow {
@@ -30,16 +31,20 @@ interface Props {
   totalLabel: string;
   percent: number;
   artifacts: ArtifactRow[];
+  /** The selected chip id: ALL or an artifact type. */
+  selectedType: string;
+  onSelectType: (type: string) => void;
+  /** True when artifacts exist but none has the selected type. */
+  noMatches: boolean;
 }
 
-/** The type chips; `type` is null for All. The chips do not filter yet (DM-4). */
-const ARTIFACT_CHIPS: readonly { label: string; type: ArtifactType | null }[] = [
-  { label: "All", type: null },
-  { label: "Reports", type: "report" },
-  { label: "Meshes", type: "mesh" },
-  { label: "Results", type: "result" },
+/** The category chips; each id is an artifact category (the placeholder `type`), ALL for every category. */
+const CHIPS: { id: typeof ALL | ArtifactType; label: string }[] = [
+  { id: ALL, label: "All" },
+  { id: "report", label: "Reports" },
+  { id: "mesh", label: "Meshes" },
+  { id: "result", label: "Results" },
 ];
-const CHIPS = ARTIFACT_CHIPS.map((chip) => ({ id: chip.label, label: chip.label }));
 
 const COLUMNS: DataTableColumn<ArtifactRow>[] = [
   {
@@ -83,9 +88,9 @@ const COLUMNS: DataTableColumn<ArtifactRow>[] = [
 
 /**
  * The artifact storage bar and the generated artifacts registry. Props only;
- * the chips and the run IDs look interactive and do nothing yet (DM-4).
+ * the chips report the selected artifact type, and the run IDs do nothing yet.
  */
-export function StoragePanel({ usedLabel, totalLabel, percent, artifacts }: Props) {
+export function StoragePanel({ usedLabel, totalLabel, percent, artifacts, selectedType, onSelectType, noMatches }: Props) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="card min-w-0 bg-base-200 border border-base-300">
@@ -108,9 +113,15 @@ export function StoragePanel({ usedLabel, totalLabel, percent, artifacts }: Prop
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-semibold text-base-content/60">GENERATED ARTIFACTS REGISTRY</span>
-          <FilterChips chips={CHIPS} selected="All" label="Artifact types" />
+          <FilterChips chips={CHIPS} selected={selectedType} label="Artifact types" onSelect={onSelectType} />
         </div>
-        <DataTable columns={COLUMNS} data={artifacts} rowId={(row) => row.id} label="Generated artifacts" />
+        <DataTable
+          columns={COLUMNS}
+          data={artifacts}
+          rowId={(row) => row.id}
+          label="Generated artifacts"
+          empty={noMatches ? "No matching artifacts." : undefined}
+        />
       </div>
     </div>
   );
