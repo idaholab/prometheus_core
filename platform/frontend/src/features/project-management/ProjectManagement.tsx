@@ -10,28 +10,43 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { countMembersByRole, type ProjectManagementState } from "./store/projectManagementModel";
+import { countMembersByRole, type ProjectManagementState, type TeamMember } from "./store/projectManagementModel";
 import { Users } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RbacSection } from "./RbacSection";
 import { TeamMembersRegistry } from "./TeamMembersRegistry";
 
-type ProjectManagementProps = ProjectManagementState;
+type ProjectManagementProps = ProjectManagementState & {
+  /** The members that match the search and role; the RBAC counts read all members. */
+  visibleMembers: TeamMember[];
+  query: string;
+  onQueryChange: (query: string) => void;
+  role: string;
+  onRoleChange: (role: string) => void;
+  /** Members exist but none matches the search and role. */
+  noMatches: boolean;
+};
 
 /**
  * Project Management layout (Access Control & Team Hub): the team members
  * registry and the role-based access control schema. Display only;
  * PageProjectManagement supplies the data and the header title.
  */
-export function ProjectManagement({ status, members, roles }: ProjectManagementProps) {
-  return <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{renderBody(status, members, roles)}</div>;
+export function ProjectManagement(props: ProjectManagementProps) {
+  return <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{renderBody(props)}</div>;
 }
 
-function renderBody(
-  status: ProjectManagementState["status"],
-  members: ProjectManagementState["members"],
-  roles: ProjectManagementState["roles"],
-) {
+function renderBody({
+  status,
+  members,
+  roles,
+  visibleMembers,
+  query,
+  onQueryChange,
+  role,
+  onRoleChange,
+  noMatches,
+}: ProjectManagementProps) {
   if (status === "loading") {
     return <p className="m-0 px-6 py-6 text-sm text-base-content/60">Loading team...</p>;
   }
@@ -49,7 +64,15 @@ function renderBody(
   }
   return (
     <div className="flex flex-col gap-8 px-6 py-6">
-      <TeamMembersRegistry members={members} roles={roles} />
+      <TeamMembersRegistry
+        members={visibleMembers}
+        roles={roles}
+        query={query}
+        onQueryChange={onQueryChange}
+        role={role}
+        onRoleChange={onRoleChange}
+        noMatches={noMatches}
+      />
       <RbacSection roles={roles} counts={countMembersByRole(members, roles)} />
     </div>
   );
