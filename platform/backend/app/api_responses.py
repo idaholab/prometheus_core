@@ -63,6 +63,22 @@ ADMIN_RESPONSES: Responses = {
     **error(status.HTTP_403_FORBIDDEN, "The signed-in user does not have the `admin` role.", "Admin role required"),
 }
 
+# app.routers.agent_registry.require_agent_secret, applied router-wide to the agent
+# registry and A2A gateway. Those routes authenticate with the shared agent secret,
+# not the session cookie.
+AGENT_SECRET_RESPONSES: Responses = {
+    **error(
+        status.HTTP_401_UNAUTHORIZED,
+        "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+        "Invalid or missing agent credentials",
+    ),
+    **error(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+        "AGENT_SECRET is not configured on the backend",
+    ),
+}
+
 # app.main's EncryptionError handler. Attach only to routes whose code path encrypts or
 # decrypts an admin-plane secret without catching the error: signing-key creation, OIDC
 # provider create/update (client secret) and the OIDC callback (token exchange).

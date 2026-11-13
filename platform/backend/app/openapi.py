@@ -28,6 +28,14 @@ API_TITLE = "Prometheus Backend"
 # dependencies with --no-install-project, so there is no distribution to query.
 API_VERSION = "0.1.0"
 
+# The repository's license. OpenAPI 3.1 takes an SPDX identifier, and the URL is the
+# same LICENSE every source file's header points at.
+API_LICENSE: dict[str, str] = {
+    "name": "MIT",
+    "identifier": "MIT",
+    "url": "https://github.com/idaholab/prometheus_core/blob/main/LICENSE",
+}
+
 API_DESCRIPTION = """\
 The JSON/SSE API behind the Prometheus Platform's React frontend. The backend
 authenticates users, holds per-browser session state, relays chat turns to the
