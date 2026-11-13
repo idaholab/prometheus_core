@@ -13,4 +13,4 @@
 // What the rest of the app may import from features/data-management. Anything else
 // in this folder is internal to it.
 export { DataManagement } from "./DataManagement";
-export { useDataManagement } from "./store/dataManagement";
+export { ARTIFACT_FILTER, toggleSource, useDataManagement } from "./store/dataManagement";

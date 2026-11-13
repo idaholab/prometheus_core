@@ -22,14 +22,16 @@ interface Props {
   enabled: boolean;
   lastSync: string;
   volume: string;
+  /** Flips the enable toggle; without it the toggle is read-only. */
+  onToggle?: () => void;
 }
 
 /**
- * One connected data source: the type tag, the name, the status pill and a
- * read-only enable toggle, then the last sync and the volume. Same DaisyUI
- * card shape as SuggestionCard; the toggle does nothing yet (DM-4).
+ * One connected data source: the type tag, the name, the status pill and
+ * an enable toggle, then the last sync and the volume. Same DaisyUI card shape
+ * as SuggestionCard.
  */
-export function SourceCard({ connectorClass, name, statusTone, statusLabel, enabled, lastSync, volume }: Props) {
+export function SourceCard({ connectorClass, name, statusTone, statusLabel, enabled, lastSync, volume, onToggle }: Props) {
   return (
     <div className="card w-full min-w-0 bg-base-200 border border-base-300">
       <div className="card-body gap-2.5 p-4">
@@ -42,7 +44,8 @@ export function SourceCard({ connectorClass, name, statusTone, statusLabel, enab
               type="checkbox"
               className="toggle toggle-primary"
               checked={enabled}
-              readOnly
+              onChange={onToggle}
+              readOnly={!onToggle}
               aria-label={`Enable ${name}`}
             />
           </div>

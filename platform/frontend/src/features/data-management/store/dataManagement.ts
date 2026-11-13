@@ -15,10 +15,12 @@
  * artifact storage usage and the generated artifacts. Same
  * useSyncExternalStore pattern as store/session.ts.
  *
- * The data is placeholder only and nothing changes it; PPLT-244 replaces the
- * constants below with an api call in this file.
+ * The data is placeholder only; only toggleSource() changes it, in memory, and
+ * a reload restores the constants. PPLT-244 replaces the constants below with
+ * an api call in this file.
  */
 import { useSyncExternalStore } from "react";
+import type { ListFilterConfig } from "@/lib/listFilter";
 
 export type SourceStatus = "connected" | "syncing" | "disconnected";
 export type ArtifactType = "report" | "mesh" | "result";
@@ -52,9 +54,9 @@ export interface Artifact {
 
 export interface DataManagementState {
   status: DataStatus;
-  sources: DataSource[];
+  sources: readonly DataSource[];
   storage: StorageUsage;
-  artifacts: Artifact[];
+  artifacts: readonly Artifact[];
 }
 
 // placeholder: replace with API (see PPLT-244)
@@ -176,17 +178,31 @@ const ARTIFACTS: Artifact[] = [
   },
 ];
 
-export function derive(sources: DataSource[], artifacts: Artifact[]): DataStatus {
+export function derive(sources: readonly DataSource[], artifacts: readonly Artifact[]): DataStatus {
   return sources.length === 0 && artifacts.length === 0 ? "empty" : "ready";
 }
 
-const state: DataManagementState = {
+let state: DataManagementState = {
   status: derive(SOURCES, ARTIFACTS),
   sources: SOURCES,
   storage: STORAGE,
   artifacts: ARTIFACTS,
 };
 const listeners = new Set<() => void>();
+
+function emit(): void {
+  for (const l of listeners) l();
+}
+
+/** Flips one source's enable toggle, in memory only. A page reload restores the placeholder. */
+export function toggleSource(id: string): void {
+  if (!state.sources.some((s) => s.id === id)) return;
+  state = {
+    ...state,
+    sources: state.sources.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
+  };
+  emit();
+}
 
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
@@ -200,6 +216,9 @@ function getSnapshot(): DataManagementState {
 export function useDataManagement(): DataManagementState {
   return useSyncExternalStore(subscribe, getSnapshot);
 }
+
+/** The Generated Artifacts Registry chips: one facet, the artifact category (placeholder `type`); no search. */
+export const ARTIFACT_FILTER: ListFilterConfig<Artifact> = { facetOf: (a) => a.type };
 
 /** Used storage as a whole percentage of the total (36 for the placeholder). */
 export function storagePercent(s: StorageUsage): number {
