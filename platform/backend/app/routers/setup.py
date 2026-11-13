@@ -60,7 +60,7 @@ async def _user_count(db: AsyncSession) -> int:
 
 
 @router.get("/status", response_model=SetupStatus)
-async def status_(db: AsyncSession = Depends(get_db_session)) -> SetupStatus:
+async def get_setup_status(db: AsyncSession = Depends(get_db_session)) -> SetupStatus:
     """``needs_setup`` is true iff no ``users`` row exists yet."""
     return SetupStatus(needs_setup=await _user_count(db) == 0)
 

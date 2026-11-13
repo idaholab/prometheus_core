@@ -75,12 +75,84 @@ complete, such as that every route declares its authentication, by linting it wi
 `recommended-strict` set, which fails on warnings too, with each rule that doesn't
 apply turned off and the reason given. The problems the document had when the lint
 was added are listed in `openapi/.redocly.lint-ignore.yaml`, one rule at one location
-each, so new problems still fail. Remove an entry when you fix it; don't add new ones.
-To run it locally (needs Node):
+each, so new problems still fail. Remove an entry when you fix it; don't add new ones,
+except for the existing problems of a rule you add to `redocly.yaml`. Never add a
+`security-defined` entry: a route that's meant to be public declares `security: []`
+instead. When the lint fails, Redocly suggests `--generate-ignore-file`; don't run it
+to make a route pass, since it ignores the new problems too. To run the lint locally
+(needs Node):
 
 ```bash
 cd openapi && npm ci && npm run lint
 ```
+
+### Documenting a route
+
+This covers the backend's FastAPI routes. An agent's own HTTP routes aren't in the
+document; its agent card describes them.
+
+The document is generated from the code, so each piece of a route's documentation is
+written once, in the place FastAPI reads it:
+
+| What | Where it goes |
+|------|---------------|
+| operationId | The handler's function name, such as `get_recent_conversations`, so name it for what the route does. `operation_id` in `app/openapi.py` sets it, and handler names must be unique across routers |
+| Summary | `summary="List recent conversations"` on the route decorator: short and imperative |
+| Description | The handler's docstring: what the route does, its side effects, and how it orders with other calls, written for API consumers. Notes for backend developers go after a `\f` line, which FastAPI leaves out of the document. Everything above it is public, since the document is served without authentication: keep secrets, key material, hostnames and internal fallbacks below it |
+| Parameters | `Annotated[int, Query(ge=1, le=100, description="…")]`, with the limits as constraints rather than prose |
+| Request and response bodies | Pydantic models, with `response_model=`. Don't parse the raw `Request` |
+| Model fields | `Field(description="…")`, plus `examples=` on request bodies that aren't trivial |
+| Errors | `responses=` built from the shared entries in `app/api_responses.py`, plus the route's own errors |
+| Authentication | `Depends(current_claims)`, `current_user` or `require_admin` from `app/security.py`, or `require_agent_secret` on the agent registry. Never a bare `APIKeyCookie` or `HTTPBearer`: those only check that a credential is present, not that it's valid. Until these dependencies declare security schemes ([PPLT-339](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-339)), a new route fails `security-defined` |
+| Streams, files and redirects | `response_class=`, plus the right content type in `responses=` |
+| Tag | One, from the catalog in `app/openapi.py` |
+
+For example, `GET /api/conversations/recent` would look like this. Most routes
+don't follow the standard yet; [PPLT-340](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-340) brings them in line, including
+rewriting docstrings that are written for developers rather than API consumers:
+
+```python
+@router.get(
+    "/conversations/recent",
+    summary="List recent conversations",
+    response_model=ConversationHistoryResponse,
+    responses=AUTH_RESPONSES,
+)
+async def get_recent_conversations(
+    limit: Annotated[int, Query(ge=1, le=100, description="Most conversations to return.")] = 20,
+    claims: TokenClaims = Depends(current_claims),
+) -> ConversationHistoryResponse:
+    """The caller's most recent conversations, newest first.
+
+    When conversation history is unavailable, answers 200 with `available: false`
+    and no conversations, rather than an error.
+    \f
+    Reads ConversationStateClient in a worker thread because it's synchronous.
+    """
+```
+
+Don't list parameters, types or return values in the docstring. FastAPI doesn't read
+them, so they repeat the signature and drift out of date.
+
+The lint checks the parts of this it can: a unique operationId, a description, a
+description on every parameter and on every top-level field of a named model, a non-empty schema on every success
+response that declares a content type,
+one declared tag, and a declared security scheme. It also checks the naming rules
+below.
+Reviewers check the rest:
+
+- **Summary.** FastAPI makes one from the function name when `summary=` is missing,
+  so the lint can't tell a written summary from a generated one.
+- **Errors.** The lint can't see which errors a handler raises, so it can't check that
+  `responses=` lists them all.
+- **Response shape.** The lint only sees the declared response, so it can't check that
+  the route really returns it.
+
+New routes follow the [Zalando RESTful API
+guidelines](https://opensource.zalando.com/restful-api-guidelines/), which match the
+existing API: kebab-case paths (`/api/admin/signing-keys`), and snake_case field and
+parameter names. Existing routes aren't being redesigned to fit the guide; a change to
+one goes through the same review as any other API change.
 
 ## Configuration
 

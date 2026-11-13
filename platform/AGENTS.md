@@ -148,6 +148,7 @@ Boris Cherny (creator of Claude Code) keeps his team's file around 100 lines. Un
 - Test backend: `cd backend && uv run pytest`
 - Test backend single file: `cd backend && uv run pytest tests/test_health.py`
 - Regenerate the backend's OpenAPI document after an API change: `cd backend && uv run python scripts/export_openapi.py`
+- Lint the backend's OpenAPI document against the route standard ("Documenting a route" in `backend/README.md`): `cd backend/openapi && npm ci && npm run lint`
 - Lint and type-check backend: `cd backend && uv run ruff check && uv run ruff format --check && uv run mypy app/`
 - Test an agent: `cd agents/<name> && uv run pytest`
 - Lint and type-check frontend: `cd frontend && make check`
