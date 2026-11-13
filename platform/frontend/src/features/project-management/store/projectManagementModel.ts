@@ -13,10 +13,11 @@
 /**
  * Types and pure helpers for the Project Management page.
  *
- * Kept as a leaf module with no imports, so it is unit-testable under
+ * Kept as a leaf module with no runtime imports, so it is unit-testable under
  * `node --test` (`projectManagement.ts` pulls in React and can only run
  * inside Vite).
  */
+import type { ListFilterConfig } from "@/lib/listFilter";
 
 export type MemberStatus = "active" | "invited" | "suspended";
 
@@ -37,6 +38,12 @@ export interface TeamMember {
   status: MemberStatus;
   lastActive: string;
 }
+
+/** The team search (name, email) and role facet of the Team Members Registry. */
+export const TEAM_FILTER: ListFilterConfig<TeamMember> = {
+  searchFields: [(m) => m.name, (m) => m.email],
+  facetOf: (m) => m.role,
+};
 
 export interface Role {
   id: RoleId;
