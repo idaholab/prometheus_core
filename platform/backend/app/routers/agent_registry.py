@@ -16,7 +16,8 @@ Wire-compatible with the subset of LiteLLM's agent API that ``prometheus_api``'s
 ``AgentRegistryClient`` and the client-agent's ``tool_discovery`` use, so neither
 needs to change when ``REGISTRY_URL`` points here instead of at LiteLLM:
 
-- ``POST /v1/agents`` -- register ``{agent_name, agent_card_params, static_headers?}``
+- ``POST /v1/agents`` -- register ``{agent_name, agent_card_params, static_headers?}``; the
+  backend also stores ``registered_at`` (ISO 8601 UTC, set at write time, never returned)
 - ``GET /v1/agents`` -- a bare list of ``{agent_id, agent_name, agent_card_params}``
 - ``DELETE /v1/agents/{agent_id}``
 - ``GET /a2a/{agent_name}`` -- the registered card
@@ -37,6 +38,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, cast
 
 import httpx
@@ -104,9 +106,16 @@ async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
     return cast(Dict[str, Any], json.loads(raw))
 
 
+async def _load_all(redis: RedisClient) -> List[Dict[str, Any]]:
+    """Every stored registration, sorted by agent name."""
+    entries = await redis.hgetall(REGISTRY_KEY)
+    return [cast(Dict[str, Any], json.loads(raw)) for _, raw in sorted(entries.items())]
+
+
 @router.post("/v1/agents")
 async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(get_redis)) -> Dict[str, Any]:
     stored = body.model_dump()
+    stored["registered_at"] = datetime.now(timezone.utc).isoformat()
     await redis.hset(REGISTRY_KEY, body.agent_name, json.dumps(stored))
     logger.info("Registered agent '%s' at %s", body.agent_name, body.agent_card_params.get("url", ""))
     return _public_entry(stored)
@@ -114,8 +123,7 @@ async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(g
 
 @router.get("/v1/agents")
 async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str, Any]]:
-    entries = await redis.hgetall(REGISTRY_KEY)
-    return [_public_entry(json.loads(raw)) for _, raw in sorted(entries.items())]
+    return [_public_entry(stored) for stored in await _load_all(redis)]
 
 
 @router.delete("/v1/agents/{agent_id}")
