@@ -205,19 +205,21 @@ def _feed_input(monkeypatch, answers):
 
 def test_collect_agent_info_uses_command_line_name_and_output_dir(monkeypatch):
     """Both positional arguments are used as given and are not prompted for."""
-    # description, slug, class, skill id, skill name, skill description, trim, confirm
-    prompts = _feed_input(monkeypatch, ["", "", "", "", "", "", "", "yes"])
+    # description, slug, class, skill id, skill name, skill description,
+    # use suggested pattern, framework, trim, confirm
+    prompts = _feed_input(monkeypatch, ["", "", "", "", "", "", "", "", "", "yes"])
 
     info = setup_agent.collect_agent_info("Plant Analysis", "./plant-agent")
 
     assert info["TEMPLATE_NAME"] == "Plant Analysis"
     assert info["TEMPLATE_SLUG"] == "plant-analysis"
     assert info["OUTPUT_DIR"] == "./plant-agent"
+    assert info["FRAMEWORK"] == "native"
     assert not any("Agent name" in p or "Output directory" in p for p in prompts)
 
 
 def test_collect_agent_info_prompts_for_output_dir_when_only_name_given(monkeypatch):
-    prompts = _feed_input(monkeypatch, ["", "", "", "", "", "", "", "", "yes"])
+    prompts = _feed_input(monkeypatch, ["", "", "", "", "", "", "", "", "", "", "yes"])
 
     info = setup_agent.collect_agent_info("Data Validator")
 
@@ -231,15 +233,25 @@ def test_main_passes_positional_arguments_through(monkeypatch):
     monkeypatch.setattr(
         setup_agent,
         "collect_agent_info",
-        lambda agent_name, output_dir, assume_defaults: (
-            received.update(name=agent_name, out=output_dir, yes=assume_defaults) or {}
+        lambda agent_name, output_dir, assume_defaults, pattern, framework, use_llm: (
+            received.update(
+                name=agent_name, out=output_dir, yes=assume_defaults, pattern=pattern, framework=framework, llm=use_llm
+            )
+            or {}
         ),
     )
     monkeypatch.setattr(setup_agent, "create_agent", lambda replacements, assume_defaults: None)
 
     setup_agent.main(["Plant Analysis", "./plant-agent"])
 
-    assert received == {"name": "Plant Analysis", "out": "./plant-agent", "yes": False}
+    assert received == {
+        "name": "Plant Analysis",
+        "out": "./plant-agent",
+        "yes": False,
+        "pattern": None,
+        "framework": None,
+        "llm": False,
+    }
 
 
 def test_platform_env_path_points_at_monorepo_platform_dir():
