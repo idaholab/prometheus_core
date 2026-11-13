@@ -207,7 +207,9 @@ One model covers every `status`; only the status-relevant fields are populated.
       "json_body": null,
       "render_hint": "mesh",
       "producer_agent_id": "thermal-agent",
-      "created_at": "2026-08-10T12:00:00Z"
+      "created_at": "2026-08-10T12:00:00Z",
+      "links": [],
+      "has_report": false
     }
   ],
   "recommended_materials": ["SS316", "SS347"],
@@ -256,6 +258,7 @@ lockstep). Note two folds: SVG (`image/svg+xml`) classifies as `image`, and the
 | `mesh` | MeshViewer | Exodus (`application/x-exodus`, `.exo`/`.e`), STL |
 | `mermaid` | MermaidViewer | `text/x-mermaid` |
 | `thermal` | ThermalAnalysisViewer | `json_type == prometheus.thermal_analysis.result.v1` |
+| `uq` | UQNotebookElement (baked notebook report, `.ipynb` download) | `json_type == prometheus.uq.result.v1` |
 | `report` | markdown (rendered inline) | `text/markdown`, `text/plain`, `.md` |
 | `code` | source text, syntax-highlighted (rendered inline, not Markdown) | YAML (`application/yaml`, `application/x-yaml`, `text/yaml`, `text/x-yaml`, `.yaml`/`.yml`); MOOSE input (`.i` or the vendor `text/x-moose` MIME); and source/config files by MIME or extension: Python, TOML, INI/`.cfg`/`.conf`, XML (`.xml`/`.xsd`/`.xdmf`), C/C++, Fortran, CMake, Makefile, shell, Dockerfile, SQL, JavaScript/TypeScript, diff/patch, `.jsonc`. Whole file names `Dockerfile`, `Containerfile`, `Makefile`, `GNUmakefile`, `CMakeLists.txt` also route here. A source name or extension wins over `text/plain`/`text/markdown` (which would otherwise be `report`), except the generic `.txt`/`.log` names: those reach `code` only when the MIME type does not decide (no MIME, or a generic or unrecognized one), so default-named text replies (`artifact.txt`) stay `report`. `application/json` / `.json` stay `json`. |
 | `table` | sortable table with a raw-text toggle (first 1000 rows shown; the full file via download) | `text/csv`, `application/csv`, `text/tab-separated-values`, `.csv`/`.tsv` (also wins over `report` when `text/plain` or `text/markdown` is paired with a `.csv`/`.tsv` name; the MIME wins over a `data` tag) |
@@ -280,6 +283,32 @@ For `reference` artifacts, `ArtifactMeta.citation` carries `{source, section, pa
   "render_hint": "reference",
   "citation": { "source": "ASME BPVC", "section": "II-D", "page": "42" }
 }
+```
+
+Two more `ArtifactMeta` fields are always present:
+
+- `links`: buttons the producing agent attaches (raw `metadata.links`), each
+  `{label, url}`, opened in a new tab. At most 5, labels up to 80 characters.
+  A raw entry is one of:
+  - `{label, url}`: an absolute `http`/`https` URL with a host (e.g. the job that
+    produced the artifact), passed through as is.
+  - `{label, path}`: a page the producing agent serves itself, such as an interactive
+    dashboard (`"/console/?run=7"`). Its `url` here is the same-origin
+    `/api/artifacts/{artifact_id}/links/{n}`, which proxies the page through the
+    platform, so it works wherever the agent runs (see below). The path must be
+    absolute and inside a directory (`/console/…`, not `/x`), with no `..`.
+
+  Anything else (including a URL that does not parse) is dropped. Default `[]`.
+- `has_report`: `true` when the producer attached a baked HTML report in DeepLynx
+  (`metadata.report.uri` is `deeplynx://…/items/{item_id}`), served by
+  `GET /api/artifacts/{artifact_id}/report`. Default `false`.
+
+```json
+"links": [
+  { "label": "Pipeline", "url": "https://gitlab.example/group/project/-/pipelines/4242" },
+  { "label": "Open interactive dashboard", "url": "/api/artifacts/uq-7/links/1" }
+],
+"has_report": true
 ```
 
 ---
@@ -368,6 +397,41 @@ Resolves `deeplynx://` / remote URIs and streams the artifact bytes with the
 correct `Content-Type` (task 07). Replaces the frontend's old
 `_render_pdf_artifact` / `_render_remote_file_artifact` / `_render_download_artifact`
 download paths.
+
+## `GET /api/artifacts/{artifact_id}/report`
+
+Streams the baked HTML report a producer attached in `metadata.report`
+(`ArtifactMeta.has_report`). Only a `deeplynx://organizations/{org}/projects/{proj}/items/{item_id}`
+URI is served, and the DeepLynx file is the URI's item id; `http(s)`/`file://`
+URIs and any producer-supplied `deeplynx_file_id` are ignored. Served inline as
+`text/html` with `Content-Security-Policy: sandbox allow-scripts allow-popups; connect-src 'none'`
+(the report's scripts run in an opaque origin), `X-Content-Type-Options: nosniff`
+and `Cache-Control: private, max-age=300`. `404` when the artifact is not in the
+session's catalog or has no DeepLynx report; `502` when storage cannot serve it or
+the report exceeds 64 MiB. Both failures answer with a short fixed HTML notice (same
+CSP, `Cache-Control: no-store`, no URI echoed), because the viewer's frame is the
+only request for the report and shows whatever the route returns.
+
+## `GET /api/artifacts/{artifact_id}/links/{n}`
+
+Opens the `n`-th link of an artifact when it is a page the producing agent serves
+(a `{label, path}` entry). Session cookie required. `303` to
+`/api/agent-pages/{grant}/{rest}`, where `grant` is a token signed for this session,
+artifact and link that expires after an hour; `404` when the artifact is not in the
+session's catalog or that link is not a path link.
+
+`GET /api/agent-pages/{grant}/{rest}` forwards the request to the producing agent
+(`producer_agent_id`, looked up in the agent registry) at the link's directory joined
+with `rest`, with the agent's own registered credentials, the way `POST /a2a/{agent_name}`
+does. The page's relative URLs (scripts, data) resolve under the grant path, so they
+go the same way without the session cookie. Every request re-checks the grant, that
+the session is not logged out and the artifact is still in its catalog, and that
+`rest` stays inside the directory; any failure is `404`. The agent's redirects are not
+followed (`502`), and only its `Content-Type`, `ETag` and `Last-Modified` are relayed.
+Responses carry `Content-Security-Policy: sandbox allow-scripts allow-popups`
+(the page runs in an opaque origin, away from the platform's cookies and DOM),
+`Referrer-Policy: no-referrer`, `nosniff` and `Cache-Control: private, no-store`.
+Not in the OpenAPI schema: the browser follows the redirect, no client calls it.
 
 ## Chat history
 

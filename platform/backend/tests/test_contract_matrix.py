@@ -205,6 +205,8 @@ _ARTIFACT_MATRIX = [
     ("reference", {"artifact_id": "ref1", "tags": ["reference"]}, "reference"),
     ("citation", {"artifact_id": "ref2", "tags": ["citation"]}, "reference"),
     ("thermal", {"artifact_id": "t1", "json_type": "prometheus.thermal_analysis.result.v1"}, "thermal"),
+    ("uq", {"artifact_id": "uq1", "json_type": "prometheus.uq.result.v1"}, "uq"),
+    ("uq-metadata", {"artifact_id": "uq2", "metadata": {"json_type": "prometheus.uq.result.v1"}}, "uq"),
     ("image", {"artifact_id": "img1", "mime_type": "image/png"}, "image"),
     ("unknown", {"artifact_id": "u1", "mime_type": "application/x-proprietary"}, "unknown"),
     ("empty", {"artifact_id": "u2"}, "unknown"),
