@@ -12,7 +12,7 @@
 
 """Asynchronous storage client."""
 
-from typing import Optional
+from typing import Dict, Optional
 import httpx
 from .connection import ConnectionConfig
 from .auth import AsyncAuthHandler
@@ -68,6 +68,8 @@ class AsyncStorageClient:
         self._items: Optional[AsyncItemsResource] = None
         self._files: Optional[AsyncFilesResource] = None
         self._relationships: Optional[AsyncRelationshipsResource] = None
+        # Relationship-type name -> project relationship ID (see relationships resource).
+        self._relationship_type_ids: Dict[str, int] = {}
         self._search: Optional[AsyncSearchResource] = None
         self._tags: Optional[AsyncTagsResource] = None
         self._timeseries: Optional[AsyncTimeseriesResource] = None
