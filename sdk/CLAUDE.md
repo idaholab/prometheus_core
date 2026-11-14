@@ -69,6 +69,8 @@ Default `IMAGE_TAG` is `git rev-parse --short HEAD`.
 ### StorageClient layout
 `StorageClient` (sync) and `AsyncStorageClient` (async) are thin lifecycle managers; all real work lives in **resource handlers** lazy-loaded as properties (`client.items`, `.files`, `.relationships`, `.search`, `.tags`, `.timeseries`). The sync and async resource trees are kept as parallel modules — `storage_client/resources/` and `storage_client/async_resources/` — and must be edited together when adding/changing endpoints. Models (`storage_client/models/`) are shared between both.
 
+DeepLynx edges carry no name of their own: an edge's type is a `relationship_id` pointing at a project-level relationship type, and an edge naming a missing type is rejected. So `relationships.create`/`bulk_create` resolve `relationship_type` to that ID (creating the type on first use, caching IDs on the client) rather than sending the name, and parsed edges read the name back from `relationshipName` (spec 003, REQ-003-15). DeepLynx allows only one edge per ordered pair of records.
+
 `ConnectionConfig` is a frozen Pydantic model that requires either (`api_key` + `api_secret`) **or** `jwt_token`, never both. It validates at construction. Use `ConnectionConfig.from_env()` to load from `DEEPLYNX_*` env vars (see `.env.example`). The default `base_url` is `https://deeplynx.inl.gov/api/v1`.
 
 `DeepLynxFileSystem` (fsspec) maps `deeplynx://` URIs to DeepLynx file records, storing object keys in record metadata rather than building a separate index. It's wired up automatically via the `[project.entry-points."fsspec.specs"]` declaration in `pyproject.toml`.
@@ -79,6 +81,8 @@ Subclasses override `async _execute(self, params, context: RequestContext, event
 Before `_execute`, the standard executor uses a just-in-time `deeplynx` credential to create a mandatory execution item. It records the agent, task, context, verified user, and effective parameters. The item name uses the invoked skill's agent-card name (falling back to its ID or a general execution name) and never includes the task ID; task correlation remains in the description, properties, and `original_id`. Parameters are recursively redacted and stored as JSON in the scalar `parameters_json` property to avoid DeepLynx's properties-depth limit; decode them with `json.loads(...)`. If record creation fails, the task fails before subclass work begins.
 
 During `_execute`, `self.execution_record_id` provides the request-scoped item ID and returns `None` outside that invocation. The executor injects the verified identity into `params["user_id"]` only when the request does not already contain that parameter; execution-record identity metadata always uses the verified identity. Deployments require valid DeepLynx credentials and either `DEEPLYNX_DATA_SOURCE_ID` or a project default data source.
+
+The execution item is the hub of a lineage graph (spec 009, REQ-009-25/26): `get_artifact_file_path(...)` links each fetched `deeplynx://…/items/{id}` artifact `input_to` the execution item (once per item per execution; inline and non-DeepLynx artifacts are skipped), and `send_deeplynx_artifact(...)` links the execution item `generated` its uploaded item. Both edges are best-effort: a failure is logged and never fails the fetch or the emit. Artifacts an agent reads without `get_artifact_file_path` are not linked.
 
 Inside `_execute`, use the helpers rather than constructing A2A events manually:
 
