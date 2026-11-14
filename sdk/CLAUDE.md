@@ -74,7 +74,7 @@ Default `IMAGE_TAG` is `git rev-parse --short HEAD`.
 `DeepLynxFileSystem` (fsspec) maps `deeplynx://` URIs to DeepLynx file records, storing object keys in record metadata rather than building a separate index. It's wired up automatically via the `[project.entry-points."fsspec.specs"]` declaration in `pyproject.toml`.
 
 ### PrometheusAgent contract
-Subclasses override `async _execute(self, params, context: RequestContext, event_queue: EventQueue) -> dict`. The base class emits the returned dict as the terminal `TaskStatusUpdateEvent`.
+Subclasses override `async _execute(self, params, context: RequestContext, event_queue: EventQueue) -> dict`. The base class emits the returned dict as the terminal `TaskStatusUpdateEvent`. The executor emits the initial A2A `Task` only for a new task; a follow-up to an existing task (`context.current_task` set, for example resuming `INPUT_REQUIRED` or `AUTH_REQUIRED`) continues the stored task with status updates, because re-sending the stale snapshot makes a blocking `SendMessage` return the old form, starts a stream with it, and drops the resume message from task history (REQ-009-24).
 
 Before `_execute`, the standard executor uses a just-in-time `deeplynx` credential to create a mandatory execution item. It records the agent, task, context, verified user, and effective parameters. The item name uses the invoked skill's agent-card name (falling back to its ID or a general execution name) and never includes the task ID; task correlation remains in the description, properties, and `original_id`. Parameters are recursively redacted and stored as JSON in the scalar `parameters_json` property to avoid DeepLynx's properties-depth limit; decode them with `json.loads(...)`. If record creation fails, the task fails before subclass work begins.
 
@@ -86,7 +86,7 @@ Inside `_execute`, use the helpers rather than constructing A2A events manually:
 - `send_artifact_reference(...)` — URI-backed file artifact (e.g. `deeplynx://...`)
 - `send_json_artifact(..., catalog_artifact=True)` — reusable inline JSON artifact
 - `send_conversation_message(...)` — durable chat-visible message
-- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel. The resume reuses the task's execution item, and its stream does not re-emit the stored task (still at the answered form), so a blocking caller gets the resumed work's result
+- `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel. The resume reuses the task's execution item (REQ-009-23) and does not re-emit the stored task (REQ-009-24 above), so a blocking caller gets the resumed work's result
 - `get_input_sources(context)` — who supplied each param (`"model"` / `"user"` / `"context"`), from `inputSources` message metadata
 - `load_context_state(...)` / `save_context_state(...)` — per-`contextId` resumable state via `ContextStateStore`
 

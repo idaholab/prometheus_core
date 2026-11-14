@@ -253,10 +253,10 @@ class PrometheusAgentExecutor(AgentExecutor):
             tracked_queue = _TrackedEventQueue(event_queue)
 
             # A2A v1 task streams must begin with the Task before any updates. A
-            # resumed task (an answered INPUT_REQUIRED form) is already stored: its
-            # stream continues from there. Re-sending the stored task, still
-            # INPUT_REQUIRED, would end a blocking send at once with the old form.
-            if getattr(context, "current_task", None) is None:
+            # follow-up to an existing task (e.g. an answered INPUT_REQUIRED form) is
+            # already stored and continues with status updates. Re-sending the stored
+            # task would end a blocking send at once with the old form.
+            if context.current_task is None:
                 await tracked_queue.enqueue_event(build_initial_task(context))
 
             # Verify the caller's user identity (from message.metadata["userToken"]).
