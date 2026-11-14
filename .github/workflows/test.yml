@@ -1376,6 +1376,100 @@ jobs:
         if: ${{ always() }}
         run: make down-v
 
+  platform-frontend-e2e-full:
+    # The frontend's full-stack e2e tests (frontend/e2e/full/) against the e2e
+    # stack: the whole platform, served by nginx. The tests don't send a chat
+    # turn, so no LLM key or DeepLynx is needed. Not a required check yet; the
+    # team will decide when it blocks merges (PPLT-321)
+    name: "platform: frontend e2e full"
+    needs: [gitleaks, platform-compose]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: platform
+    env:
+      LOCAL_SDK: "true"
+      # Placeholders: `make init-env` and compose require a profile and its key,
+      # but a model is only called while handling a chat turn, which these tests
+      # don't send. There are no DeepLynx values here: `make up-e2e` sets its own
+      # made-up ones, so this job starts from the blank DEEPLYNX_* lines of a
+      # fresh clone's .env
+      LLM_CONFIG_PROFILE: anthropic
+      LLM_API_KEY: sk-ant-test-not-real
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+      - name: Use the containerd image store
+        uses: ./.github/actions/containerd-image-store
+      - name: Create .env
+        run: make init-env
+      - name: Start the e2e stack
+        run: make up-e2e
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # Matches the node image in frontend/Dockerfile
+          node-version: "22.23.3"
+          cache: npm
+          cache-dependency-path: platform/frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: platform/frontend
+        run: npm ci --no-audit --no-fund
+      - name: Playwright version
+        id: playwright
+        working-directory: platform/frontend
+        run: |
+          version=$(node -p 'require("./package-lock.json").packages["node_modules/playwright"].version')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+      - name: Install browser
+        working-directory: platform/frontend
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Tests
+        working-directory: platform/frontend
+        run: npm run test:e2e:full
+      # The repo is public, so anyone signed in to GitHub can download these.
+      # The e2e stack only holds made-up credentials and data
+      - name: Upload report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-e2e-full-report
+          path: |
+            platform/frontend/playwright-report-full/
+            platform/frontend/test-results-full/
+          retention-days: 14
+      - name: Collect logs
+        if: ${{ failure() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.agents.e2e.yml \
+            --profile prod logs --no-color --timestamps > "$RUNNER_TEMP/logs/all.log"
+          docker ps --all > "$RUNNER_TEMP/logs/ps.txt"
+      - name: Upload logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-e2e-full-logs
+          path: ${{ runner.temp }}/logs/
+          retention-days: 14
+      - name: Stop
+        if: ${{ always() }}
+        run: make down-e2e
+
   platform-up-deeplynx:
     # platform: up with LOCAL_DEEPLYNX=true: DeepLynx from its published images
     # next to the platform, which make deeplynx-setup points DEEPLYNX_* at, so
