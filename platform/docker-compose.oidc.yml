@@ -1,0 +1,110 @@
+# A local Keycloak next to the platform, so the login page's "Sign in with ..."
+# button has an identity provider to talk to without reaching a real one. Start
+# it with `make oidc-up`, then register it once through Admin -> Identity
+# Providers. See docs/docs/local-oidc.md.
+#
+# Unlike docker-compose.deeplynx.yml this file is not added to the Makefile's
+# COMPOSE_FILES, and `make oidc-up` runs it as its own compose project. Nothing
+# in the platform depends on it, and keeping it out of the platform's project
+# means `make restart` and `make down`, which pass --remove-orphans, leave it
+# running instead of silently deleting it.
+#
+# The realm, its client and its test user are fixed and public (keycloak/
+# realm-prometheus.json), and the admin password defaults to "admin". Only for
+# local use: never point a deployment at this file.
+
+networks:
+  # The platform's own network, created by `make up`, joined rather than
+  # defined here so the backend can reach keycloak by name across the two
+  # compose projects. The Makefile exports PLATFORM_NETWORK.
+  agent-network:
+    external: true
+    name: ${PLATFORM_NETWORK:-prometheus_platform_agent-network}
+
+volumes:
+  keycloak-db-data:
+
+services:
+
+  # Keycloak's own store. Its realm, client and users live here, so the
+  # provider survives a restart and only `make oidc-reset` starts over.
+  keycloak-db:
+    # The same Postgres the local DeepLynx uses, already pinned and (when
+    # LOCAL_DEEPLYNX=true) already pulled, so this adds no download. The
+    # pgvector extension is simply unused here
+    image: pgvector/pgvector:0.8.6-pg18@sha256:2ba9ca5f2e7daa0f0e7723cba1ee9167bab54efd3640516a44ac1a928dd67e7a
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      POSTGRES_DB: keycloak
+    volumes:
+      # pg18 keeps its data in a versioned directory under /var/lib/postgresql
+      - keycloak-db-data:/var/lib/postgresql
+    networks:
+      - agent-network
+    # No host port: only keycloak talks to it, over the compose network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # The identity provider. The browser reaches it at localhost:8180; the
+  # backend reaches it at keycloak:8080 over the compose network.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6@sha256:0aae0de7fca85525f727d3354df17896092de8bb26ae4c12d89c77e5df8cbce4
+    # start-dev: HTTP without TLS and no hostname strictness, which is what a
+    # loopback-only dev provider wants. --import-realm reads the mount below,
+    # and is a no-op once the realm exists in the database
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    ports:
+      # 8180, because 8080 is the prod frontend (FRONTEND_PROD_PORT). Loopback
+      # only: the admin password is a published default, so nothing else on the
+      # network may reach it
+      - "127.0.0.1:${KEYCLOAK_PORT:-8180}:8080"
+    networks:
+      - agent-network
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      # The two settings that make one provider work for both the browser and
+      # the backend. KC_HOSTNAME pins the *frontchannel* URLs -- the issuer and
+      # authorization_endpoint the browser follows -- to localhost, which is
+      # the only name the browser can resolve. BACKCHANNEL_DYNAMIC then lets
+      # the *backchannel* URLs -- token_endpoint and jwks_uri, which only the
+      # backend container fetches -- come back as whatever host asked for the
+      # discovery document, i.e. keycloak:8080. backend/app/oidc.py takes the
+      # expected `iss` from the discovery document rather than from the
+      # configured issuer_url, so the two halves line up
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      # Serves /health/ready on the management port (9000) for the healthcheck
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      # The image has neither curl nor wget, like the DeepLynx server's
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000
+          && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3
+          && grep -q UP <&3
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      # Keycloak builds its config and runs its migrations on first start
+      start_period: 45s
+    restart: unless-stopped
