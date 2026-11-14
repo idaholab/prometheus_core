@@ -198,6 +198,7 @@ Tips:
 - Use `"description"` on every property — these descriptions are read by the LLM when constructing calls.
 - Use `"enum"` for fixed-value fields to prevent the orchestrator from guessing.
 - Add `"x_input_source": "runtime"` to a property whose value will be provided by a previous agent's output rather than by the user directly.
+- Add `"x-prometheus-source": "user_message"` to a top-level `string` property that should get what the user typed, not the orchestrator's rewording. It works only on a plain string: with an `enum`, `pattern`, `format` or other constraint the marker is ignored (with a warning in the client-agent log), and the orchestrator fills the field as usual. See "Receiving the user's own words" in the platform's `adding-agents.md`.
 
 **Fill in the specifics.** If you used `setup_agent.py`, the name, skill id, and skill name are already set — you still need to refine the `description`, `usage_notes`, `output_format`, and the `inputSchema` properties for your agent. If you copied the template by hand, replace the `TEMPLATE_*` placeholders too.
 

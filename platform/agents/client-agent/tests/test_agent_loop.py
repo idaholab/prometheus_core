@@ -154,6 +154,13 @@ class _ScriptedClient:
         return SimpleNamespace(text="Test title")
 
 
+@pytest.fixture(autouse=True)
+def _fresh_marker_warnings():
+    agent_loop._logged_ignored_markers.clear()
+    yield
+    agent_loop._logged_ignored_markers.clear()
+
+
 @pytest.fixture
 def harness(monkeypatch):
     store: Dict[str, Any] = {}
@@ -1699,3 +1706,430 @@ def test_early_store_failure_keeps_the_turn(harness, monkeypatch, caplog) -> Non
     ]
     warnings = [r for r in caplog.records if r.name == "orchestrator.chat_flow" and r.levelno == logging.WARNING]
     assert any(CONV in r.getMessage() for r in warnings), "no warning names the conversation id"
+
+
+DOCS_QA = _capability(
+    "docs_qa",
+    {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "The user's question.",
+                agent_loop.VERBATIM_SOURCE_KEY: agent_loop.VERBATIM_USER_MESSAGE,
+            },
+            "topic": {"type": "string"},
+        },
+        "required": ["message"],
+    },
+)
+
+
+def test_verbatim_field_is_hidden_from_the_model() -> None:
+    parameters = agent_loop._skill_spec("docs_qa", DOCS_QA).parameters
+    assert set(parameters["properties"]) == {"topic"}
+    assert "required" not in parameters
+
+
+def test_verbatim_field_receives_the_users_message_not_the_models(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "SMP is the default."}})
+    rewritten = "Explain MOOSE preconditioners in detail, with example syntax."
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {"message": rewritten, "topic": "solvers"}, "c1")]),
+            reply("SMP is the default."),
+        ]
+    )
+
+    response = send(query="tell me about MOOSE preconditioner")
+
+    assert response.status == "completed"
+    params = harness.invocations[0][1]
+    assert params["message"] == "tell me about MOOSE preconditioner"
+    assert params["topic"] == "solvers"
+    assert params["_input_sources"] == {"message": "user", "topic": "model"}
+
+
+def test_unmarked_fields_keep_the_models_arguments(harness) -> None:
+    harness.results.update(create_svg_artifact=lambda params: {"result": {"ok": True}})
+    harness.script([reply(calls=[tool_call("create_svg_artifact", {"word": "Hi"}, "c1")]), reply("Done.")])
+
+    send(query="make an svg that says hi please")
+
+    assert harness.invocations[0][1]["word"] == "Hi"
+
+
+def test_verbatim_field_gets_the_whole_request_across_turns_and_forms(harness) -> None:
+    # Replays a real conversation: the request is spread over two typed
+    # messages, a "yes", and an ask_user form. The skill must receive all of
+    # the user's words, not just "yes", and none of the model's rewording.
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "Here is the input."}})
+    form = {
+        "questions": [
+            {"field": "dimension", "question": "Is the problem 2D or 3D?", "type": "select", "options": ["2D", "3D"]},
+            {"field": "problem_description", "question": "Describe the case:", "type": "text"},
+        ]
+    }
+    harness.script(
+        [
+            reply("Which module do you want to use?"),
+            reply("Shall I generate a Navier-Stokes input?"),
+            reply(calls=[tool_call("ask_user", form, "c1")]),
+            reply(calls=[tool_call("docs_qa", {"message": "Generate an INSFV channel flow input."}, "c2")]),
+            reply("Here is the input."),
+        ]
+    )
+
+    send(query="Generate a MOOSE flow input")
+    send(query="Navier Stokes module")
+    asked = send(query="yes")
+    assert asked.status == "needs_info"
+    done = send(followup_answers={"dimension": "2D", "problem_description": "2D channel flow with no-slip walls"})
+
+    assert done.status == "completed"
+    message = harness.invocations[0][1]["message"]
+    assert message == (
+        "Generate a MOOSE flow input\n"
+        "Navier Stokes module\n"
+        "yes\n"
+        "Is the problem 2D or 3D? 2D\n"
+        "Describe the case: 2D channel flow with no-slip walls"
+    )
+    # Delivered: the next request starts from the user's next words.
+    assert harness.store[CONV][agent_loop.USER_REQUEST_DELIVERED] is True
+
+
+def test_failed_verbatim_call_keeps_the_request_for_the_retry(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    outcomes = iter([{"error": "backend down"}, {"result": {"answer": "ok"}}])
+    harness.results.update(docs_qa=lambda params: next(outcomes))
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {"message": "x"}, "c1")]),
+            reply("It failed."),
+            reply(calls=[tool_call("docs_qa", {"message": "x"}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    send(query="2D channel flow with no-slip walls")
+    send(query="try again")
+
+    first, retry = harness.invocations[0][1]["message"], harness.invocations[1][1]["message"]
+    assert first == "2D channel flow with no-slip walls"
+    assert retry == "2D channel flow with no-slip walls\ntry again"
+
+
+def test_user_request_keeps_the_latest_messages() -> None:
+    state: Dict[str, Any] = {}
+    for i in range(30):
+        agent_loop._note_user_words(state, f"part {i}")
+    agent_loop._note_user_words(state, "part 29")  # repeated message is not stored twice
+    parts = state[agent_loop.USER_REQUEST_PARTS]
+    assert parts == [f"part {i}" for i in range(18, 30)]
+
+
+def test_a_long_paste_reaches_the_skill_whole(harness) -> None:
+    """A pasted input file or log is only useful complete: the default limit keeps it."""
+    assert agent_loop.MAX_USER_REQUEST_CHARS == agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "input"}, "c1")]), reply("Done.")])
+    pasted = "Why does this input fail?\n[Mesh]\n" + "  # line\n" * 3000 + "[]\nEND OF PASTE"
+
+    send(query=pasted)
+
+    assert harness.invocations[0][1]["message"] == pasted.strip()
+
+
+def test_text_over_the_limit_keeps_its_start_and_end(monkeypatch) -> None:
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 6000)
+    text = agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["HEAD " + "x" * 9000 + " TAIL"]})
+    assert len(text) == 6000
+    assert text.startswith("HEAD ") and text.endswith(" TAIL") and "\n[...]\n" in text
+    # A limit too short for the marker keeps only the start.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 4)
+    assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: ["HEAD TAIL"]}) == "HEAD"
+    # No limit keeps everything.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", None)
+    words = "x" * 2_000_000
+    assert agent_loop.user_request_text({agent_loop.USER_REQUEST_PARTS: [words]}) == words
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected", "warns"),
+    [
+        (None, agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, False),
+        ("  ", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, False),
+        ("50000", 50000, False),
+        ("0", None, False),
+        ("-5", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, True),
+        ("lots", agent_loop.DEFAULT_MAX_USER_REQUEST_CHARS, True),
+    ],
+)
+def test_the_request_limit_comes_from_the_environment(
+    monkeypatch, caplog, raw: Optional[str], expected: Optional[int], warns: bool
+) -> None:
+    if raw is None:
+        monkeypatch.delenv(agent_loop.MAX_USER_REQUEST_CHARS_ENV, raising=False)
+    else:
+        monkeypatch.setenv(agent_loop.MAX_USER_REQUEST_CHARS_ENV, raw)
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        assert agent_loop.configured_max_user_request_chars() == expected
+    assert any(agent_loop.MAX_USER_REQUEST_CHARS_ENV in r.getMessage() for r in caplog.records) is warns
+
+
+def test_verbatim_fields_are_left_unset_without_user_words() -> None:
+    spec = agent_loop._skill_spec("docs_qa", DOCS_QA)
+    words = {agent_loop.USER_REQUEST_PARTS: ["hello"]}
+    assert agent_loop._verbatim_user_fields(spec, {}) == {}
+    no_properties = agent_loop.ToolSpec(**{**spec.__dict__, "input_schema": {"type": "object"}})
+    assert agent_loop._verbatim_user_fields(no_properties, words) == {}
+    assert agent_loop._verbatim_user_fields(spec, words) == {"message": "hello"}
+
+
+MARKED = {agent_loop.VERBATIM_SOURCE_KEY: agent_loop.VERBATIM_USER_MESSAGE}
+
+
+def test_every_marked_string_field_gets_the_users_words(harness) -> None:
+    both = _capability(
+        "docs_qa",
+        {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", **MARKED},
+                "query": {"type": "string", **MARKED},
+                "topic": {"type": "string"},
+            },
+            "required": ["message", "query"],
+        },
+    )
+    assert set(agent_loop._skill_spec("docs_qa", both).parameters["properties"]) == {"topic"}
+    harness.capabilities.append(both)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]), reply("Done.")])
+
+    send(query="tell me about MOOSE preconditioner")
+
+    params = harness.invocations[0][1]
+    assert params["message"] == params["query"] == "tell me about MOOSE preconditioner"
+    assert params["_input_sources"] == {"message": "user", "query": "user", "topic": "model"}
+
+
+@pytest.mark.parametrize(
+    ("prop", "model_value"),
+    [
+        ({"type": "integer"}, 3),
+        ({"type": "array", "items": {"type": "string"}}, ["3D"]),
+        ({"type": "string", "enum": ["2D", "3D"]}, "3D"),
+        ({"type": "string", "pattern": "^[0-9]D$"}, "3D"),
+        ({"type": "string", "maxLength": 20}, "3D"),
+        ({"type": "string", "minLength": 20}, "3D or maybe 2D, either is fine"),
+        ({"type": "string", "format": "date"}, "2026-11-06"),
+        ({"type": "string", "anyOf": [{"enum": ["2D"]}, {"enum": ["3D"]}]}, "3D"),
+        ({"type": "string", "not": {"const": "2D"}}, "3D"),
+        ({"$ref": "#/$defs/dimension"}, "3D"),
+    ],
+)
+def test_marker_on_a_field_free_text_could_fail_is_ignored(
+    harness, caplog, prop: Dict[str, Any], model_value: Any
+) -> None:
+    capability = _capability(
+        "set_option",
+        {
+            "type": "object",
+            "properties": {"value": {**prop, **MARKED}},
+            "required": ["value"],
+            "$defs": {"dimension": {"type": "string", "enum": ["2D", "3D"]}},
+        },
+    )
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        spec = agent_loop._skill_spec("set_option", capability)
+        agent_loop._skill_spec("set_option", capability)  # the catalog is rebuilt every turn
+    warnings = [r.getMessage() for r in caplog.records if r.name == "orchestrator.agent_loop"]
+    assert len(warnings) == 1 and "set_option" in warnings[0] and "'value'" in warnings[0]
+    # The model sees and fills the field as usual.
+    assert "value" in spec.parameters["properties"]
+    assert agent_loop.VERBATIM_SOURCE_KEY not in spec.parameters["properties"]["value"]
+    assert spec.parameters["required"] == ["value"]
+
+    harness.capabilities.append(capability)
+    harness.results.update(set_option=lambda params: {"result": {"ok": True}})
+    harness.script([reply(calls=[tool_call("set_option", {"value": model_value}, "c1")]), reply("Done.")])
+
+    send(query="use the second option please, the 3D one")
+
+    params = harness.invocations[0][1]
+    assert params["value"] == model_value
+    assert params["_input_sources"] == {"value": "model"}
+
+
+def test_marker_accepts_nullable_and_long_string_fields(monkeypatch) -> None:
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", 50_000)
+    schema = {
+        "type": "object",
+        "properties": {
+            "nullable": {"type": ["string", "null"], **MARKED},
+            "long": {"type": "string", "maxLength": 50_000, "minLength": 1, **MARKED},
+            "short": {"type": "string", "maxLength": 49_999, **MARKED},
+            "malformed": True,
+        },
+    }
+    # A maxLength below the limit could reject a request the client-agent passes on.
+    assert agent_loop._verbatim_field_names(schema) == ["nullable", "long"]
+    # With no limit, no maxLength is long enough.
+    monkeypatch.setattr(agent_loop, "MAX_USER_REQUEST_CHARS", None)
+    assert agent_loop._verbatim_field_names(schema) == ["nullable"]
+
+
+def test_later_marked_call_in_the_same_request_gets_the_users_words(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]),
+            reply(calls=[tool_call("docs_qa", {"topic": "examples"}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    response = send(query="tell me about MOOSE preconditioner")
+
+    assert response.status == "completed"
+    assert [call[1]["message"] for call in harness.invocations] == ["tell me about MOOSE preconditioner"] * 2
+
+
+def test_the_users_next_words_start_a_new_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply("SMP is the default."),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Use PJFNK."),
+        ]
+    )
+
+    send(query="tell me about MOOSE preconditioner")
+    send(query="and which solve type?")
+
+    assert [call[1]["message"] for call in harness.invocations] == [
+        "tell me about MOOSE preconditioner",
+        "and which solve type?",
+    ]
+
+
+def test_marker_honours_the_underscore_spelling_and_warns_on_an_unknown_value(caplog) -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "x_prometheus_source": "user_message"},
+            "note": {"type": "string", "x-prometheus-source": "user-message"},
+        },
+    }
+    with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):
+        spec = agent_loop._skill_spec("docs_qa", _capability("docs_qa", schema))
+    assert set(spec.parameters["properties"]) == {"note"}
+    warnings = [r.getMessage() for r in caplog.records if r.name == "orchestrator.agent_loop"]
+    assert len(warnings) == 1 and "'note'" in warnings[0] and "'user-message'" in warnings[0]
+
+
+def test_an_unrelated_skill_call_ends_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(
+        create_svg_artifact=lambda params: {"result": {"ok": True}},
+        docs_qa=lambda params: {"result": {"answer": "PJFNK."}},
+    )
+    harness.script(
+        [
+            reply(calls=[tool_call("create_svg_artifact", {"word": "Hi"}, "c1")]),
+            reply("Done."),
+            reply("You're welcome."),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("PJFNK."),
+        ]
+    )
+
+    send(query="make an svg that says Hi")
+    send(query="thanks, you are great")
+    send(query="what is the default MOOSE solve type?")
+
+    docs = [params for skill, params in harness.invocations if skill == "docs_qa"]
+    # Small talk after the svg call stays with the next request; the svg request does not.
+    assert docs[0]["message"] == "thanks, you are great\nwhat is the default MOOSE solve type?"
+
+
+def test_a_typed_reply_to_a_form_is_part_of_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    form = {"questions": [{"field": "dimension", "question": "2D or 3D?", "type": "text"}]}
+    harness.script(
+        [
+            reply(calls=[tool_call("ask_user", form, "c1")]),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="make a mesh").status == "needs_info"
+    send(query="just 3D please, quad elements")
+
+    assert harness.invocations[0][1]["message"] == "make a mesh\njust 3D please, quad elements"
+
+
+def test_a_typed_reply_during_approval_is_part_of_the_request(harness) -> None:
+    approved_docs = _capability("docs_qa", DOCS_QA.input_schema, requires_approval=True)
+    harness.capabilities.append(approved_docs)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply(calls=[tool_call("docs_qa", {}, "c2")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="explain the SMP preconditioner").status == "plan_ready"
+    assert send(query="also cover FDP").status == "plan_ready"
+    send(plan_approved=True)
+
+    assert harness.invocations[0][1]["message"] == "explain the SMP preconditioner\nalso cover FDP"
+
+
+def test_an_ask_user_answer_after_a_call_continues_the_request(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    form = {"questions": [{"field": "dimension", "question": "2D or 3D?", "type": "text"}]}
+    harness.script(
+        [
+            reply(calls=[tool_call("docs_qa", {}, "c1")]),
+            reply(calls=[tool_call("ask_user", form, "c2")]),
+            reply(calls=[tool_call("docs_qa", {}, "c3")]),
+            reply("Done."),
+        ]
+    )
+
+    assert send(query="generate a channel flow input").status == "needs_info"
+    send(followup_answers={"dimension": "2D"})
+
+    first, second = (params["message"] for _, params in harness.invocations)
+    assert first == "generate a channel flow input"
+    assert second == "generate a channel flow input\n2D or 3D? 2D"
+
+
+def test_the_hidden_field_is_not_echoed_back_to_the_model(harness) -> None:
+    harness.capabilities.append(DOCS_QA)
+    harness.results.update(docs_qa=lambda params: {"result": {"answer": "ok"}})
+    harness.script([reply(calls=[tool_call("docs_qa", {"topic": "solvers"}, "c1")]), reply("Done.")])
+
+    send(query="tell me about MOOSE preconditioner")
+
+    state = harness.store[CONV]
+    tool_result = next(m for m in state["llm_messages"] if m["role"] == "tool")
+    assert "tell me about MOOSE preconditioner" not in tool_result["content"]
+    catalog = asyncio.run(agent_loop.build_tool_catalog())
+    digest = "\n".join(agent_loop.recent_skill_inputs(state, catalog))
+    assert "docs_qa" in digest and "solvers" in digest and "preconditioner" not in digest

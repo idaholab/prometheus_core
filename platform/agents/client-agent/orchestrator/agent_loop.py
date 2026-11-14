@@ -31,6 +31,7 @@ import contextlib
 import copy
 import json
 import logging
+import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -86,6 +87,60 @@ DIGEST_INPUT_CHARS = 400
 ASK_USER_TOOL = "ask_user"
 # Attached by the orchestrator on every invocation; never model-authored.
 ORCHESTRATOR_PARAMS = {"artifacts", "conversation_id"}
+
+#: Input-schema property extension: a skill marks a top-level string field with
+#: ``"x-prometheus-source": "user_message"`` to receive the user's message for the
+#: turn exactly as typed, instead of the orchestrator model's rewording of it.
+VERBATIM_SOURCE_KEY = "x-prometheus-source"
+#: Spellings accepted for the key, as for ``x_input_source`` / ``x-input-source``.
+_VERBATIM_SOURCE_KEYS = (VERBATIM_SOURCE_KEY, "x_prometheus_source")
+VERBATIM_USER_MESSAGE = "user_message"
+#: The only keywords a marked property may carry: anything else (``minLength``,
+#: ``format``, ``anyOf``, ...) could reject free text the model cannot correct.
+_VERBATIM_ALLOWED_KEYWORDS = {"type", "title", "description", "examples", "default", "maxLength", "minLength"}
+#: The user's own words for the request in progress: every typed message and
+#: ``ask_user`` answer since the last successful skill call. A request often
+#: spans turns ("Navier Stokes module" / "yes" / a form), so the last message
+#: alone ("yes") is not the request.
+USER_REQUEST_PARTS = "user_request_parts"
+#: Set once any skill call succeeds: later calls before the user's next typed
+#: message still get the same request; that message starts a new one.
+USER_REQUEST_DELIVERED = "user_request_delivered"
+_MAX_REQUEST_PARTS = 12
+MAX_USER_REQUEST_CHARS_ENV = "PROMETHEUS_MAX_USER_REQUEST_CHARS"
+#: Large enough for a pasted input file or log. The text goes only to the skill,
+#: never into the model's context; the limit just keeps a request below the
+#: agent's 10 MB A2A body limit.
+DEFAULT_MAX_USER_REQUEST_CHARS = 1_000_000
+
+
+def configured_max_user_request_chars() -> Optional[int]:
+    """The longest user request passed to a marked field, or ``None`` for no limit.
+
+    ``PROMETHEUS_MAX_USER_REQUEST_CHARS`` sets it; ``0`` turns the limit off. An
+    invalid value logs a warning and keeps the default rather than stop the agent.
+    """
+    raw = os.getenv(MAX_USER_REQUEST_CHARS_ENV, "").strip()
+    if not raw:
+        return DEFAULT_MAX_USER_REQUEST_CHARS
+    try:
+        value = int(raw)
+    except ValueError:
+        value = -1
+    if value < 0:
+        logger.warning(
+            "%s=%r is not a whole number >= 0; using %d",
+            MAX_USER_REQUEST_CHARS_ENV,
+            raw,
+            DEFAULT_MAX_USER_REQUEST_CHARS,
+        )
+        return DEFAULT_MAX_USER_REQUEST_CHARS
+    return value or None
+
+
+MAX_USER_REQUEST_CHARS = configured_max_user_request_chars()
+#: (skill_id, field, reason) already warned about; the catalog is rebuilt every turn.
+_logged_ignored_markers: set[Tuple[str, str, str]] = set()
 
 _TOOL_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 _SCHEMA_MAP_KEYS = {"properties", "patternProperties", "$defs", "definitions"}
@@ -225,9 +280,11 @@ def _advertised_parameters(input_schema: Dict[str, Any]) -> Dict[str, Any]:
             else "artifact_id of an existing conversation artifact."
         )
         prop["description"] = f"{prop.get('description', '')} {hint}".strip()
+    # Fields filled with the user's message verbatim are not the model's to write.
+    verbatim = set(_verbatim_field_names(schema))
     schema = _clean_schema(schema)
     properties = dict(schema.get("properties") or {})
-    for name in ORCHESTRATOR_PARAMS:
+    for name in ORCHESTRATOR_PARAMS | verbatim:
         properties.pop(name, None)
     schema["type"] = "object"
     schema["properties"] = properties
@@ -239,8 +296,68 @@ def _advertised_parameters(input_schema: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
+def _fits_user_request(max_length: Any) -> bool:
+    """Whether a ``maxLength`` admits any user request the client-agent passes on."""
+    return MAX_USER_REQUEST_CHARS is not None and isinstance(max_length, int) and max_length >= MAX_USER_REQUEST_CHARS
+
+
+def _verbatim_markers(input_schema: Any) -> Dict[str, Optional[str]]:
+    """Marked top-level properties: name -> None if it takes the user's words, else why not.
+
+    The user's words are free text, so only a plain string property can take them.
+    On any other the marker is ignored and the model fills the field as usual.
+    """
+    properties = input_schema.get("properties") if isinstance(input_schema, dict) else None
+    if not isinstance(properties, dict):
+        return {}
+    markers: Dict[str, Optional[str]] = {}
+    for name, prop in properties.items():
+        if not isinstance(prop, dict):
+            continue
+        source = next((prop[key] for key in _VERBATIM_SOURCE_KEYS if key in prop), None)
+        if source is None:
+            continue
+        if source != VERBATIM_USER_MESSAGE:
+            markers[name] = f"its value {source!r} is not {VERBATIM_USER_MESSAGE!r}"
+            continue
+        kind = prop.get("type")
+        limits = [key for key in prop if key not in _VERBATIM_ALLOWED_KEYWORDS and not key.startswith(("x_", "x-"))]
+        max_length, min_length = prop.get("maxLength"), prop.get("minLength")
+        if "maxLength" in prop and not _fits_user_request(max_length):
+            limits.append(f"maxLength {max_length}")
+        if "minLength" in prop and not (isinstance(min_length, int) and min_length <= 1):
+            limits.append(f"minLength {min_length}")
+        if kind != "string" and not (isinstance(kind, list) and "string" in kind):
+            markers[name] = f"its type is {kind!r}, not 'string'"
+        elif limits:
+            markers[name] = f"the user's words could fail its {', '.join(limits)}"
+        else:
+            markers[name] = None
+    return markers
+
+
+def _verbatim_field_names(input_schema: Any) -> List[str]:
+    """Top-level properties that take the user's own words."""
+    return [name for name, problem in _verbatim_markers(input_schema).items() if problem is None]
+
+
+def _warn_ignored_markers(skill_id: str, input_schema: Any) -> None:
+    for field_name, problem in _verbatim_markers(input_schema).items():
+        if problem is None or (skill_id, field_name, problem) in _logged_ignored_markers:
+            continue
+        _logged_ignored_markers.add((skill_id, field_name, problem))
+        logger.warning(
+            "Skill %s: ignoring %s on '%s' because %s; the model fills it instead.",
+            skill_id,
+            VERBATIM_SOURCE_KEY,
+            field_name,
+            problem,
+        )
+
+
 def _skill_spec(name: str, capability: AgentCapability) -> ToolSpec:
     input_schema = capability.input_schema if isinstance(capability.input_schema, dict) else {}
+    _warn_ignored_markers(capability.skill_id, input_schema)
     # Users never type artifact ids: a missing artifact reference is the model's to fill.
     artifact_paths = extract_artifact_field_paths(input_schema)
     user_required = [
@@ -400,6 +517,7 @@ def begin_user_turn(
     messages = state.setdefault("llm_messages", [])
     messages.append({"role": "user", "content": content or "(empty message)"})
     state["llm_messages"] = trim_transcript(messages)
+    _note_user_words(state, query)
     state["pending_calls"] = []
     state["pending_note"] = ""
     state["turn_tool_results"] = {}
@@ -537,7 +655,8 @@ def recent_skill_inputs(state: Dict[str, Any], catalog: Mapping[str, ToolSpec]) 
         for key in sorted(tool_inputs, key=_repeat_index, reverse=True):
             skill_id = key.split("#", 1)[0]
             if skill_id not in newest and skill_id in schemas and isinstance(tool_inputs[key], dict):
-                inputs = {name: value for name, value in tool_inputs[key].items() if name not in ORCHESTRATOR_PARAMS}
+                hidden = ORCHESTRATOR_PARAMS | set(_verbatim_field_names(schemas[skill_id]))
+                inputs = {name: value for name, value in tool_inputs[key].items() if name not in hidden}
                 newest[skill_id] = _restrict_to_schema(inputs, schemas[skill_id])
         if len(newest) >= MAX_DIGEST_SKILLS:
             break
@@ -640,6 +759,46 @@ def _normalize_questions(raw: Any) -> List[Dict[str, Any]]:
     return questions
 
 
+def _note_user_words(state: Dict[str, Any], text: Any, *, typed: bool = True) -> None:
+    """Add one piece of the user's own wording to the request in progress.
+
+    A typed message after a successful skill call starts a new request. An
+    answer to the orchestrator's own question (``typed=False``) belongs to the
+    request it was asked for, so it is added to that one.
+    """
+    if typed and state.pop(USER_REQUEST_DELIVERED, False):
+        state[USER_REQUEST_PARTS] = []
+    words = str(text or "").strip()
+    parts = list(state.get(USER_REQUEST_PARTS) or [])
+    if not words or (parts and parts[-1] == words):
+        return
+    state[USER_REQUEST_PARTS] = [*parts, words][-_MAX_REQUEST_PARTS:]
+
+
+def user_request_text(state: Mapping[str, Any]) -> str:
+    """The user's words for the request in progress, oldest first.
+
+    Text over ``MAX_USER_REQUEST_CHARS`` keeps its start, where a request usually
+    states what it wants, and its end, the latest words; the middle is cut.
+    """
+    text = "\n".join(str(part) for part in state.get(USER_REQUEST_PARTS) or []).strip()
+    limit = MAX_USER_REQUEST_CHARS
+    if limit is None or len(text) <= limit:
+        return text
+    marker = "\n[...]\n"
+    if limit <= len(marker):
+        return text[:limit]
+    head = (limit - len(marker)) // 2
+    tail = limit - len(marker) - head
+    return text[:head] + marker + text[-tail:]
+
+
+def _verbatim_user_fields(spec: ToolSpec, state: Mapping[str, Any]) -> Dict[str, str]:
+    """Top-level fields of ``spec`` that take the user's own words, filled in."""
+    text = user_request_text(state)
+    return {name: text for name in _verbatim_field_names(spec.input_schema)} if text else {}
+
+
 def _new_call(
     tool_call: Dict[str, Any],
     catalog: Mapping[str, ToolSpec],
@@ -674,13 +833,19 @@ def _new_call(
         call["questions"] = questions
         call["status"] = "needs_answer"
         return call
+    verbatim: Dict[str, str] = {}
     if spec.kind == "skill":
         call["arguments"] = normalize_params_for_input_schema(call["arguments"], spec.input_schema)
+        verbatim = _verbatim_user_fields(spec, state)
+        call["arguments"].update(verbatim)
     problem = _validation_problem(spec, call["arguments"], state)
     if problem:
         _finish(call, {"status": "failed", "error": problem})
         return call
     call["input_sources"] = {key: source for key in call["arguments"]}
+    call["input_sources"].update({key: "user" for key in verbatim})
+    if verbatim:
+        call["verbatim_fields"] = sorted(verbatim)
     _refresh_status(call, spec)
     return call
 
@@ -751,6 +916,12 @@ def apply_answers(
                 if question["field"] in answers
             }
             if provided:
+                labels = {q["field"]: q.get("question") or q["field"] for q in call.get("questions") or []}
+                _note_user_words(
+                    state,
+                    "\n".join(f"{labels[field]} {value}" for field, value in provided.items()),
+                    typed=False,
+                )
                 _finish(call, {"status": "answered", "answers": provided})
         elif status == "waiting_input":
             provided: Dict[str, Any] = {}
@@ -778,6 +949,7 @@ def apply_reply(
     received_files: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """A free-text reply answers ask_user and supersedes every other unfinished call."""
+    _note_user_words(state, text)
     text += upload_note(state, uploaded_artifact_ids, received_files)
     for call in state.get("pending_calls") or []:
         if call["status"] == "done":
@@ -858,6 +1030,9 @@ def _result_key(state: Dict[str, Any], base: str) -> str:
 
 
 def _record_result(state: Dict[str, Any], key: str, arguments: Dict[str, Any], result: Any) -> None:
+    # Any skill that ran ends the request in progress: later calls before the
+    # user's next message get the same words, and that message starts a new one.
+    state[USER_REQUEST_DELIVERED] = True
     artifacts = result.get("artifacts") if isinstance(result, dict) else None
     state["context"] = merge_artifacts_into_context(state.get("context") or {}, artifacts or [])
     state.setdefault("turn_tool_results", {})[key] = result
@@ -960,7 +1135,12 @@ async def _settle_skill_item(
     # must see them and who supplied each, or it credits the skill with the
     # user's choice. Its own arguments are already in the tool call.
     sources = call.get("input_sources") or {}
-    supplied = {name: call["arguments"][name] for name, source in sources.items() if source != "model"}
+    # A verbatim field is hidden from the model and is the user's own message,
+    # which the model already has; echoing it back only costs tokens.
+    hidden = set(call.get("verbatim_fields") or [])
+    supplied = {
+        name: call["arguments"][name] for name, source in sources.items() if source != "model" and name not in hidden
+    }
     if supplied:
         encoded = json.dumps(supplied, default=str)
         payload["inputs"] = (
