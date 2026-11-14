@@ -1,0 +1,33 @@
+name: speccheck upload
+description: Upload a job's speccheck results files as one speccheck-results-<name> artifact
+
+# Use it after the step that runs the claiming tests (or `speccheck record`), with
+# `if: ${{ !cancelled() }}`, so a failed test step still uploads what it proved and what it didn't.
+# A job that should have written results and didn't fails here, instead of quietly showing up as
+# a missing producer later. See common/speccheck/README.md, "In CI"
+
+inputs:
+  name:
+    description: >-
+      Artifact name after the `speccheck-results-` prefix, unique in the run (for a matrix job,
+      include the matrix values, such as `sdk-python-3.12`)
+    required: true
+  path:
+    description: The results file, or a folder of them
+    required: false
+    default: .speccheck
+
+runs:
+  using: composite
+  steps:
+    - name: Upload speccheck results
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: speccheck-results-${{ inputs.name }}
+        path: ${{ inputs.path }}
+        include-hidden-files: true
+        if-no-files-found: error
+        # A re-run of a job in the same run uploads the same name again; the new attempt replaces
+        # the old one, so speccheck-verify never merges stale results
+        overwrite: true
+        retention-days: 30
