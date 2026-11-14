@@ -1,30 +1,29 @@
-# React + TypeScript + Vite
+# Prometheus frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React app for the Prometheus platform: chat with the agents, view the
+artifacts they produce, and manage workflows, agents, data and projects. It's
+built with React, TypeScript, Vite, Tailwind and DaisyUI, and talks to the
+FastAPI backend over its JSON/SSE contract
+([`../backend/CONTRACT.md`](../backend/CONTRACT.md); the TypeScript side is
+described in [`AGENT-CONTRACT.md`](AGENT-CONTRACT.md)).
 
-Currently, two official plugins are available:
+## Running it
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The dev server proxies `/api` to the backend at `VITE_BACKEND_URL`
+(default `http://localhost:8600`), so start the backend first, for example
+with `make up` in `platform/`.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top-level `parserOptions` property like this:
-
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
+```bash
+make install     # npm install
+make dev         # Vite dev server with hot reload, on port 5150
+make build       # production bundle in dist/
+make check       # lint, type-check and the Vitest tests
+make test-e2e    # the Playwright end-to-end tests
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+In Docker, the `frontend-dev` service (compose profile `dev`) runs the dev
+server with this folder mounted, and `frontend-prod` serves the production
+build with nginx.
 
 ## Where code and tests go
 
@@ -52,6 +51,8 @@ e2e/          Playwright end-to-end tests, by user flow
 
 ## Testing
 
+[TESTING.md](../../TESTING.md) says which kind of test a change needs, when it needs none, and how much coverage is enough. This section covers how to write and run the frontend's tests.
+
 ```bash
 npm test             # run every test once (also: make test; make check runs lint + typecheck + test)
 npm run test:watch   # rerun on save
@@ -61,12 +62,10 @@ Tests use [Vitest](https://vitest.dev) and sit next to the code they test, in th
 
 - `*.test.ts` runs in Node, for logic: stores, parsers, formatters. `features/chat/store/chat.test.ts` sits beside `chat.ts`.
 - `*.test.tsx` runs in jsdom with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), for components. Name it `<Component>.dom.test.tsx`. Find elements by role and accessible name and act through `@testing-library/user-event`. `src/components/ui/FilterChips/FilterChips.dom.test.tsx` is the example.
-- A test for a screen as a whole sits beside the screen's main component, such as `features/workflows/NodeInspector.dom.test.tsx` beside `NodeInspector.tsx`.
+- A test for a screen as a whole sits beside the screen's main component, such as `features/approval-queue/ApprovalQueue.dom.test.tsx` beside `ApprovalQueue.tsx`.
 - A test that checks a rule across the app, rather than one file, goes in `src/test/`.
 
 A test file named any other way never runs, so `src/test/testFiles.test.ts` fails if a file under `src/` imports Vitest or Testing Library without a `.test.ts` or `.test.tsx` name. CI runs every test in `src/` through `npm run test:coverage`, wherever it sits.
-
-Not every change needs tests. Test shared components, non-trivial logic and flows that would hurt to break.
 
 ### End-to-end tests
 
@@ -77,7 +76,7 @@ npm run test:e2e:ui   # Playwright's UI mode, to step through a test and watch i
 
 The first run needs a browser: `npx playwright install chromium`.
 
-End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
+Write an end-to-end test only for a flow that crosses the frontend and backend; [TESTING.md](../../TESTING.md#which-test-a-change-needs) says when. End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 

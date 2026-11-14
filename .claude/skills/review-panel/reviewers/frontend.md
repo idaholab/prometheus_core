@@ -20,8 +20,8 @@ You own the React app in `platform/frontend/` (React 18, Vite, TypeScript, Tailw
 5. **Safety:** no `dangerouslySetInnerHTML` or unsanitized Markdown/HTML from agent output, no
    tokens in `localStorage` or URLs, and `/api` calls through `src/lib/api/client.ts`.
 6. **Checks:** unless the `platform: frontend npm` CI job passed on this commit, run `cd platform/frontend && npm ci && npm run lint && npm run typecheck &&
-   node --test --experimental-strip-types $(find src -name '*.test.ts') && npm run build`. Say
-   which logic changed without a unit test, and name the simplest test that would cover it.
+   npm test && npm run build`. Against [TESTING.md](../../../../TESTING.md), say which change
+   needed a test and has none, and name the simplest test that would cover it.
 
 If you can run the dev server against a backend, look at the changed screens yourself. Report
 what you saw, or say that you only read the code.
