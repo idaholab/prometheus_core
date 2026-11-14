@@ -1,0 +1,73 @@
+[project]
+name = "prometheus-speccheck"
+version = "0.1.0"
+description = "Check SDD specs against the test runs that prove them"
+readme = "README.md"
+requires-python = ">=3.10"
+# Standard library only, plus tomli where tomllib is missing. pytest is not a dependency:
+# the plugin module is imported only by pytest, through the pytest11 entry point
+dependencies = ['tomli>=2.0.1; python_version < "3.11"']
+
+[project.scripts]
+speccheck = "speccheck.cli:main"
+
+[project.entry-points.pytest11]
+speccheck = "speccheck.pytest_plugin"
+
+[dependency-groups]
+dev = [
+    "coverage>=7.13.1",
+    "jsonschema>=4.26.0",
+    "linkify-it-py>=2.0.3",
+    "markdown-it-py>=3.0.0",
+    "pytest>=8.4.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.16",
+]
+
+[build-system]
+# Pinned exactly: speccheck-install builds this in the job that holds the run's downloaded
+# artifacts, so the build backend shouldn't change under it. setuptools builds wheels itself
+# (since 70.1), so `wheel` isn't needed. uv.lock doesn't cover build requirements, so
+# build-constraints.txt pins it by hash for speccheck-install; a bump changes both files
+# (tests/rules checks they agree)
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["speccheck*"]
+
+[tool.setuptools.package-data]
+speccheck = ["schema/*.json"]
+
+[tool.pytest.ini_options]
+# `pytest` alone runs every suite. CI runs them apart: tests/unit under coverage, tests/rules
+# beside it, and tests/requirements writing the results file that proves speccheck's specs
+# (see tests/conftest.py)
+testpaths = ["tests/unit", "tests/rules", "tests/requirements"]
+pythonpath = ["."]
+addopts = ["-p", "pytester", "--strict-markers"]
+# speccheck checks its own claims at collection, like any project that uses it
+speccheck_config = "speccheck.toml"
+speccheck_producer = "speccheck-requirements"
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["speccheck"]
+relative_files = true
+# pytester's subprocess runs and xdist's workers load the plugin too; trace them, then combine
+patch = ["subprocess"]
+parallel = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_also = ['if __name__ == "__main__":']
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

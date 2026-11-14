@@ -81,6 +81,7 @@ jobs:
             platform/scripts:../tests
             platform/agents
             agent-template
+            common/speccheck
           )
           failed=()
           for entry in "${projects[@]}"; do
