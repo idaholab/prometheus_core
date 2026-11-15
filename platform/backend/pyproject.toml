@@ -19,7 +19,7 @@ dependencies = [
     "vtk>=9.7.1",
     # Admin plane: local users, OIDC provider config, RS256 signing keys
     # (app/db.py, app/db/models.py, app/routers/admin_*.py, app/routers/setup.py).
-    "sqlalchemy[asyncio]>=2.1.6",
+    "sqlalchemy[asyncio]>=2.1.8",
     "asyncpg>=0.32.0",
     "alembic>=1.20.1",
     "bcrypt>=4.0",
