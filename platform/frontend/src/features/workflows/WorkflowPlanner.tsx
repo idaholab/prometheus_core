@@ -12,6 +12,8 @@
 
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { SplitButton } from "@/components/ui/SplitButton";
+import { BUILDER_MODES, type BuilderMode } from "./builderMode";
 import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
 
 export interface WorkflowPlan {
@@ -26,6 +28,8 @@ export interface WorkflowPlan {
   pipelineTime: string;
   /** Display string, e.g. "2 Active". */
   checkpoints: string;
+  /** The plan's workflow template, e.g. "Comprehensive Material Analysis", named in Modify Plan's menu. */
+  templateName: string;
   inputs: string[];
   outputs: string[];
 }
@@ -58,10 +62,23 @@ function FileList({ label, files }: { label: string; files: string[] }) {
  * - Below lg (1024px) the graph keeps its D.1 size and scrolls sideways in its
  *   own area instead of shrinking to fit.
  *
- * DOM order follows the stacked order. "Modify Plan" calls `onModifyPlan`;
- * "Approve & Execute Pipeline" has no handler yet.
+ * DOM order follows the stacked order. "Modify Plan" is a split button
+ * (PPLT-409 D.1): its main click calls `onModifyPlan("run")` and its menu
+ * offers both modes. "Approve & Execute Pipeline" has no handler yet.
  */
-export function WorkflowPlanner({ plan, onModifyPlan }: { plan: WorkflowPlan; onModifyPlan?: () => void }) {
+export function WorkflowPlanner({
+  plan,
+  onModifyPlan,
+}: {
+  plan: WorkflowPlan;
+  onModifyPlan?: (mode: BuilderMode) => void;
+}) {
+  const modifyOptions = (["run", "template"] as const).map((mode) => ({
+    label: BUILDER_MODES[mode].option,
+    description: BUILDER_MODES[mode].description(plan.templateName),
+    onClick: () => onModifyPlan?.(mode),
+  }));
+
   return (
     <div className="grid grid-cols-1 overflow-hidden rounded-lg border border-base-content/10 bg-base-200 xl:grid-cols-[minmax(0,1fr)_340px] xl:grid-rows-[auto_1fr]">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-5 uppercase xl:col-start-1 xl:row-start-1 xl:pb-4">
@@ -101,7 +118,13 @@ export function WorkflowPlanner({ plan, onModifyPlan }: { plan: WorkflowPlan; on
         <FileList label="Expected Outputs" files={plan.outputs} />
         <div className="grid gap-2.5 md:col-span-3 md:grid-cols-2 xl:grid-cols-1 xl:pt-5">
           <Button label="Approve & Execute Pipeline" variant="primary" wide />
-          <Button label="Modify Plan" outline wide onClick={onModifyPlan} />
+          <SplitButton
+            label="Modify Plan"
+            outline
+            wide
+            onClick={() => onModifyPlan?.("run")}
+            options={modifyOptions}
+          />
         </div>
       </aside>
 

@@ -12,6 +12,7 @@
 
 // What the rest of the app may import from features/workflows. Anything else
 // in this folder is internal to it.
+export type { BuilderMode } from "./builderMode";
 export type { InspectedNode } from "./NodeInspector";
 export { WorkflowBuilder } from "./WorkflowBuilder";
 export { WorkflowConsole } from "./WorkflowConsole";

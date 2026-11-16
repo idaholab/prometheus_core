@@ -14,7 +14,7 @@ import { useState } from "react";
 import { usePageHeader } from "@/features/shell";
 import { WorkflowBuilder } from "@/features/workflows";
 import { WorkflowConsole } from "@/features/workflows";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
+import type { BuilderMode, WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import type { WorkflowPlan } from "@/features/workflows";
 import type { WorkflowTemplate } from "@/features/workflows";
 import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "@/features/workflows";
@@ -114,32 +114,50 @@ const EXAMPLE_PLAN: WorkflowPlan = {
   agents: 5,
   pipelineTime: "3hr 40s",
   checkpoints: "2 Active",
+  templateName: "Comprehensive Material Analysis",
   inputs: ["RC-7_assembly.step", "inlet_velocity_vector.config"],
   outputs: ["TH_validation_report.pdf", "velocity_vectors.vtu"],
 };
 
 const SELECTED_TEMPLATE_NAME = TEMPLATES.find((t) => t.id === SELECTED_TEMPLATE_ID)?.name ?? "";
 
-type WorkflowsView = "console" | "builder";
+// Placeholder versions of the selected template, from Figma PPLT-409 D.2a and D.2b.
+const TEMPLATE_VERSION = "v1.2.0";
+const NEXT_TEMPLATE_VERSION = "v1.3.0";
+
+/** What the Builder opens on: the selected template, or a new workflow's empty canvas (D.3). */
+type BuilderStart = { mode: BuilderMode; isNew: boolean };
 
 /**
  * Workflows section page: owns the page's data and header, and which view is
- * showing: the Workflow Console, or the Builder opened from its "Modify Plan".
- * Layout lives in WorkflowConsole and WorkflowBuilder.
+ * showing: the Workflow Console, or the Builder opened from its "Modify Plan"
+ * (in either mode) or "+ New Workflow". Layout lives in WorkflowConsole and
+ * WorkflowBuilder.
  *
  * Until the router lands (RT-1), the Builder is a view here rather than its
  * own route. ProjectView remounts this page on every sidebar click, so
  * clicking Workflows from the Builder returns to the Console.
  */
 export function PageWorkflows() {
-  const [view, setView] = useState<WorkflowsView>("console");
+  const [builder, setBuilder] = useState<BuilderStart | null>(null);
 
-  if (view === "builder") return <BuilderView />;
-  return <ConsoleView onModifyPlan={() => setView("builder")} />;
+  if (builder) return <BuilderView start={builder} />;
+  return (
+    <ConsoleView
+      onModifyPlan={(mode) => setBuilder({ mode, isNew: false })}
+      onNewWorkflow={() => setBuilder({ mode: "template", isNew: true })}
+    />
+  );
 }
 
 /** Each view sets its own header, so the header switches with the view. */
-function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
+function ConsoleView({
+  onModifyPlan,
+  onNewWorkflow,
+}: {
+  onModifyPlan: (mode: BuilderMode) => void;
+  onNewWorkflow: () => void;
+}) {
   usePageHeader({ title: "Workflow Console" });
   return (
     <WorkflowConsole
@@ -147,19 +165,26 @@ function ConsoleView({ onModifyPlan }: { onModifyPlan: () => void }) {
       selectedId={SELECTED_TEMPLATE_ID}
       plan={EXAMPLE_PLAN}
       onModifyPlan={onModifyPlan}
+      onNewWorkflow={onNewWorkflow}
     />
   );
 }
 
-function BuilderView() {
+function BuilderView({ start }: { start: BuilderStart }) {
   usePageHeader({ trail: ["Workflow Builder"] });
+  const [mode, setMode] = useState(start.mode);
   return (
     <WorkflowBuilder
+      // Placeholder name until naming a new workflow is designed. D.3 keeps the template's.
       name={SELECTED_TEMPLATE_NAME}
+      mode={mode}
+      onModeChange={setMode}
+      version={TEMPLATE_VERSION}
+      nextVersion={NEXT_TEMPLATE_VERSION}
       skillGroups={SKILL_GROUPS}
-      nodes={BUILDER_NODES}
-      wires={BUILDER_WIRES}
-      inspected={INSPECTED_NODE}
+      nodes={start.isNew ? [] : BUILDER_NODES}
+      wires={start.isNew ? [] : BUILDER_WIRES}
+      inspected={start.isNew ? null : INSPECTED_NODE}
     />
   );
 }
