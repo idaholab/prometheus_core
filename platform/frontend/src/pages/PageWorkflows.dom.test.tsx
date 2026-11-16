@@ -15,8 +15,15 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { PageWorkflows } from "./PageWorkflows.tsx";
 
-// React Flow measures its container and watches it for resizes; jsdom has neither.
+// React Flow measures its container and watches it for resizes, and jsdom has
+// neither, nor modal dialogs: showModal and close just set the open attribute.
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute("open");
+  };
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -45,7 +52,7 @@ test("Modify Plan's main click opens the Builder changing this run", async () =>
   expect(screen.getByRole("region", { name: "Canvas" })).not.toHaveTextContent("Drag a skill here to begin");
 });
 
-test("Edit the template opens the Builder changing the template, and the badge switches modes", async () => {
+test("Edit the template opens the Builder changing the template, and switching to this run asks first", async () => {
   const user = userEvent.setup();
   render(<PageWorkflows />);
 
@@ -63,6 +70,37 @@ test("Edit the template opens the Builder changing the template, and the badge s
 
   await user.click(screen.getByRole("button", { name: /Changing:/ }));
   await user.click(screen.getByRole("menuitemradio", { name: /Change this run/ }));
+  const dialog = screen.getByRole("dialog", { name: "Switch to changing this run?" });
+  expect(dialog).toHaveTextContent("(1 node added, 2 wires changed)");
+  await user.click(within(dialog).getByRole("button", { name: "Discard and switch" }));
+  expect(commitButtons()).toEqual(["Save as variant", "Propose new version", "Run once"]);
+
+  // The changes are gone, so going back to the template and out again doesn't ask.
+  await user.click(screen.getByRole("button", { name: /Changing:/ }));
+  await user.click(screen.getByRole("menuitemradio", { name: /Edit the template/ }));
+  await user.click(screen.getByRole("button", { name: /Changing:/ }));
+  await user.click(screen.getByRole("menuitemradio", { name: /Change this run/ }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(commitButtons()).toEqual(["Save as variant", "Propose new version", "Run once"]);
+});
+
+test("from this run or a new workflow, switching to this run doesn't ask", async () => {
+  const user = userEvent.setup();
+  const { unmount } = render(<PageWorkflows />);
+
+  await user.click(screen.getByRole("button", { name: "Modify Plan" }));
+  await user.click(screen.getByRole("button", { name: /Changing:/ }));
+  await user.click(screen.getByRole("menuitemradio", { name: /Edit the template/ }));
+  await user.click(screen.getByRole("button", { name: /Changing:/ }));
+  await user.click(screen.getByRole("menuitemradio", { name: /Change this run/ }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  unmount();
+
+  render(<PageWorkflows />);
+  await user.click(screen.getByRole("button", { name: "New Workflow" }));
+  await user.click(screen.getByRole("button", { name: /Changing:/ }));
+  await user.click(screen.getByRole("menuitemradio", { name: /Change this run/ }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(commitButtons()).toEqual(["Save as variant", "Propose new version", "Run once"]);
 });
 

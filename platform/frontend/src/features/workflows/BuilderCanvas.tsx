@@ -20,6 +20,12 @@ interface BuilderCanvasProps {
   wires: WorkflowGraphWire[];
   /** Shown as an error toast in the bottom right, e.g. for an invalid connection (D.6). */
   error?: string;
+  /**
+   * Changing this run (PPLT-409 D.2a): the structure can't change, so the
+   * wiring affordances go (the connect endpoint, a wire being connected, the
+   * insert menu) and an empty canvas says so instead of inviting a drop.
+   */
+  locked?: boolean;
 }
 
 /** D.2's canvas dot grid, from the theme's text colour so it shows in both themes. */
@@ -60,7 +66,15 @@ function EmptyCanvasPrompt() {
  * zoom buttons have no handlers yet, and the graph can't be selected, dragged
  * or connected.
  */
-export function BuilderCanvas({ nodes, wires, error }: BuilderCanvasProps) {
+export function BuilderCanvas({ nodes, wires, error, locked = false }: BuilderCanvasProps) {
+  if (locked) {
+    nodes = nodes.filter((node) => node.type !== "connect");
+    const ids = new Set(nodes.map((node) => node.id));
+    wires = wires
+      .filter((wire) => !wire.dashed && ids.has(wire.from) && ids.has(wire.to))
+      .map((wire) => ({ ...wire, insertMenu: false }));
+  }
+
   return (
     <div className="relative h-full min-h-130 bg-base-300">
       <div className="absolute inset-0 overflow-auto">
@@ -69,7 +83,13 @@ export function BuilderCanvas({ nodes, wires, error }: BuilderCanvasProps) {
           style={{ backgroundImage: CANVAS_DOTS }}
         >
           {nodes.length === 0 ? (
-            <EmptyCanvasPrompt />
+            locked ? (
+              <p className="absolute inset-0 m-0 flex items-center justify-center text-xs text-base-content/50">
+                No steps yet. Switch to "the template" to add some.
+              </p>
+            ) : (
+              <EmptyCanvasPrompt />
+            )
           ) : (
             <WorkflowGraph
               nodes={nodes}

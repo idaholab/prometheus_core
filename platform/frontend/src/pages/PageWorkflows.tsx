@@ -17,7 +17,15 @@ import { WorkflowConsole } from "@/features/workflows";
 import type { BuilderMode, WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import type { WorkflowPlan } from "@/features/workflows";
 import type { WorkflowTemplate } from "@/features/workflows";
-import { BUILDER_NODES, BUILDER_WIRES, INSPECTED_NODE, SKILL_GROUPS } from "@/features/workflows";
+import {
+  BUILDER_NODES,
+  BUILDER_WIRES,
+  INSPECTED_NODE,
+  RUN_NODES,
+  SKILL_GROUPS,
+  TWEAKED_STEP,
+  UNSAVED_CHANGES,
+} from "@/features/workflows";
 
 // Placeholder graph for Comprehensive Material Analysis, laid out as in Figma D.1.
 const EXAMPLE_NODES: WorkflowGraphNode[] = [
@@ -173,18 +181,31 @@ function ConsoleView({
 function BuilderView({ start }: { start: BuilderStart }) {
   usePageHeader({ trail: ["Workflow Builder"] });
   const [mode, setMode] = useState(start.mode);
+  // Nothing can change the structure yet, so the template opened from "Edit
+  // the template" starts with placeholder unsaved changes, and switching to
+  // this run asks first (D.2d). Switching drops or saves them, so it asks once.
+  const [unsaved, setUnsaved] = useState(start.mode === "template" && !start.isNew);
+  const changeMode = (next: BuilderMode) => {
+    setMode(next);
+    if (next === "run") setUnsaved(false);
+  };
   return (
     <WorkflowBuilder
       // Placeholder name until naming a new workflow is designed. D.3 keeps the template's.
       name={SELECTED_TEMPLATE_NAME}
       mode={mode}
-      onModeChange={setMode}
+      onModeChange={changeMode}
+      unsavedChanges={unsaved ? UNSAVED_CHANGES : undefined}
       version={TEMPLATE_VERSION}
       nextVersion={NEXT_TEMPLATE_VERSION}
       skillGroups={SKILL_GROUPS}
-      nodes={start.isNew ? [] : BUILDER_NODES}
+      // Selection isn't interactive yet, so each mode shows its frame's
+      // selected node: Corrosion changing this run (D.2a), Radiation Damage
+      // changing the template (D.2b).
+      nodes={start.isNew ? [] : mode === "run" ? RUN_NODES : BUILDER_NODES}
       wires={start.isNew ? [] : BUILDER_WIRES}
       inspected={start.isNew ? null : INSPECTED_NODE}
+      tweaked={start.isNew ? null : TWEAKED_STEP}
     />
   );
 }

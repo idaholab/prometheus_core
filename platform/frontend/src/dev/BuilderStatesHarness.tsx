@@ -37,6 +37,7 @@ import {
   INVALID_NODES,
   INVALID_WIRES,
   SKILL_GROUPS,
+  TWEAKED_STEP,
 } from "@/features/workflows";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
@@ -101,6 +102,7 @@ export function BuilderStatesHarness() {
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}
+        tweaked={TWEAKED_STEP}
         canvasError={state.canvasError}
       />
     </div>

@@ -10,6 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { BuilderCanvas } from "./BuilderCanvas";
@@ -17,6 +18,8 @@ import { BuilderModeBadge } from "./BuilderModeBadge";
 import { BUILDER_MODES, type BuilderMode } from "./builderMode";
 import { NodeInspector, type InspectedNode } from "./NodeInspector";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
+import { SwitchToRunDialog } from "./SwitchToRunDialog";
+import { TweakStepInspector, type TweakedStep } from "./TweakStepInspector";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
 interface WorkflowBuilderProps {
@@ -35,8 +38,15 @@ interface WorkflowBuilderProps {
   /** The workflow's graph, drawn on the canvas. */
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
-  /** The node shown in the inspector, or null for its empty state. */
+  /** The node shown in the inspector when changing the template, or null for its empty state. */
   inspected: InspectedNode | null;
+  /** The step shown in the inspector when changing this run, or null for its empty state. */
+  tweaked?: TweakedStep | null;
+  /**
+   * Unsaved structural changes to the template, summed up, e.g. "1 node
+   * added, 2 wires changed". Switching to this run then asks first (D.2d).
+   */
+  unsavedChanges?: string;
   /** An error shown as a toast on the canvas, e.g. an invalid connection (D.6). */
   canvasError?: string;
 }
@@ -68,6 +78,12 @@ function modeMessage(mode: BuilderMode, name: string, version: string, nextVersi
  * - From lg (1024px) the columns sit side by side, at D.2's widths from xl.
  * - Below lg they stack, library first, and the page scrolls vertically.
  *
+ * Changing this run can't change the workflow's structure (D.2a): the Skill
+ * Library is locked, the canvas drops its wiring affordances, and the
+ * inspector is the Tweak Step panel, with no Remove Node. Switching there
+ * from the template with `unsavedChanges` asks first (D.2d); "Save template
+ * first" and "Discard and switch" both switch, since saving isn't built yet.
+ *
  * The commit buttons have no handlers yet.
  */
 export function WorkflowBuilder({
@@ -80,10 +96,23 @@ export function WorkflowBuilder({
   nodes,
   wires,
   inspected,
+  tweaked = null,
+  unsavedChanges,
   canvasError,
 }: WorkflowBuilderProps) {
+  const [confirming, setConfirming] = useState(false);
   const { tone } = BUILDER_MODES[mode];
   const actions = COMMIT_ACTIONS[mode];
+  const locked = mode === "run";
+
+  const changeMode = (next: BuilderMode) => {
+    if (next === "run" && unsavedChanges) setConfirming(true);
+    else onModeChange?.(next);
+  };
+  const switchToRun = () => {
+    setConfirming(false);
+    onModeChange?.("run");
+  };
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto lg:overflow-hidden">
@@ -94,7 +123,7 @@ export function WorkflowBuilder({
             <p className="m-0 text-sm font-semibold text-base-content">{name}</p>
           </div>
           <div aria-hidden="true" className="hidden h-7 w-px bg-base-content/10 sm:block" />
-          <BuilderModeBadge mode={mode} workflowName={name} onChange={onModeChange} />
+          <BuilderModeBadge mode={mode} workflowName={name} onChange={changeMode} />
         </div>
         <div role="group" aria-label="Workflow actions" className="flex flex-wrap gap-3">
           {actions.map((label, i) => (
@@ -115,20 +144,30 @@ export function WorkflowBuilder({
           aria-label="Skill library"
           className="border-b border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-r lg:border-b-0"
         >
-          <SkillLibrary groups={skillGroups} />
+          <SkillLibrary groups={skillGroups} locked={locked} />
         </aside>
 
         <section aria-label="Canvas" className="min-w-0 lg:min-h-0">
-          <BuilderCanvas nodes={nodes} wires={wires} error={canvasError} />
+          <BuilderCanvas nodes={nodes} wires={wires} error={canvasError} locked={locked} />
         </section>
 
         <aside
           aria-label="Node inspector"
           className="border-t border-base-content/10 bg-base-200 p-4 lg:overflow-y-auto lg:border-t-0 lg:border-l"
         >
-          <NodeInspector node={inspected} />
+          {locked ? <TweakStepInspector step={tweaked} /> : <NodeInspector node={inspected} />}
         </aside>
       </div>
+
+      {unsavedChanges && (
+        <SwitchToRunDialog
+          open={confirming}
+          changes={unsavedChanges}
+          onCancel={() => setConfirming(false)}
+          onSaveFirst={switchToRun}
+          onDiscard={switchToRun}
+        />
+      )}
     </div>
   );
 }
