@@ -19,7 +19,7 @@ import pytest
 
 from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
 from prometheus_api.agent.artifacts import ArtifactReference
-from prometheus_api.agent.base import _deeplynx_item_id
+from prometheus_api.agent.base import _deeplynx_item_ref
 from prometheus_api.agent.identity import UserIdentity, identity_scope
 from prometheus_api.storage_client.connection import ConnectionConfig
 
@@ -135,16 +135,20 @@ async def _in_execution(agent, body):
 @pytest.mark.parametrize(
     ("uri", "expected"),
     [
-        (_uri(42), 42),
+        (_uri(42), (ORG, PROJECT, 42)),
+        ("deeplynx://organizations/7/projects/8/items/9", (7, 8, 9)),
         ("deeplynx://organizations/1/projects/2/items/x", None),
+        ("deeplynx://organizations/x/projects/2/items/1", None),
+        ("deeplynx://organizations/1/projects/2/files/1", None),
+        ("deeplynx://organizations/1/projects/2/items", None),
         ("deeplynx://session-abc/moose/input.i", None),
         ("memory://organizations/1/projects/2/items/42", None),
         ("", None),
         (None, None),
     ],
 )
-def test_deeplynx_item_id(uri, expected):
-    assert _deeplynx_item_id(uri) == expected
+def test_deeplynx_item_ref(uri, expected):
+    assert _deeplynx_item_ref(uri) == expected
 
 
 async def test_fetched_artifacts_are_linked_input_to_once(storage):
@@ -204,6 +208,26 @@ async def test_input_link_failure_is_logged_and_retried(storage, caplog):
     assert storage.edges == [(11, "input_to", RECORD_ID)]
 
 
+async def test_input_from_another_project_is_not_linked(storage, caplog):
+    """Covers REQ-009-27: an input in another DeepLynx project is skipped and logged."""
+    agent = _agent(
+        _reference("same", _uri(11)),
+        _reference("other-project", f"deeplynx://organizations/{ORG}/projects/99/items/12"),
+        _reference("other-org", f"deeplynx://organizations/98/projects/{PROJECT}/items/13"),
+    )
+
+    async def body():
+        for artifact_id in ("same", "other-project", "other-org"):
+            await agent.get_artifact_file_path(artifact_id, conversation_id="conv")
+
+    await _in_execution(agent, body)
+
+    assert storage.edges == [(11, "input_to", RECORD_ID)]
+    assert "Not linking artifact other-project input_to execution record 500" in caplog.text
+    assert "org 1 project 99, the record in org 1 project 2" in caplog.text
+    assert "Not linking artifact other-org" in caplog.text
+
+
 async def test_linked_inputs_reset_between_executions(storage):
     """Covers BEH-009-12: each execution links its own fetches."""
     agent = _agent(_reference("a", _uri(11)))
@@ -217,17 +241,17 @@ async def test_linked_inputs_reset_between_executions(storage):
     assert storage.edges == [(11, "input_to", RECORD_ID)] * 2
 
 
-def _storage_config():
+def _storage_config(project_id=PROJECT):
     return ConnectionConfig(
         base_url="https://deeplynx.test/api/v1",
         organization_id=ORG,
-        project_id=PROJECT,
+        project_id=project_id,
         api_key="k",
         api_secret="s",
     )
 
 
-async def _send(agent, tmp_path):
+async def _send(agent, tmp_path, project_id=PROJECT):
     source = tmp_path / "out.txt"
     source.write_text("out")
     return await agent.send_deeplynx_artifact(
@@ -236,7 +260,7 @@ async def _send(agent, tmp_path):
         file_path=source,
         name="out.txt",
         description="output",
-        storage_config=_storage_config(),
+        storage_config=_storage_config(project_id),
     )
 
 
@@ -277,4 +301,20 @@ async def test_generated_link_failure_is_logged_and_artifact_still_sent(storage,
     await _in_execution(agent, body)
 
     assert "Failed to link execution record 500 generated artifact item 900" in caplog.text
+    agent.send_artifact_reference.assert_awaited_once()
+
+
+async def test_upload_to_another_project_is_not_linked_generated(storage, tmp_path, caplog):
+    """Covers REQ-009-27: an artifact uploaded to another project is not linked."""
+    agent = _agent()
+    agent.send_artifact_reference = AsyncMock()
+
+    async def body():
+        await _send(agent, tmp_path, project_id=99)
+
+    await _in_execution(agent, body)
+
+    assert storage.edges == []
+    assert "Not linking execution record 500 generated artifact item 900" in caplog.text
+    assert "org 1 project 2, the artifact in org 1 project 99" in caplog.text
     agent.send_artifact_reference.assert_awaited_once()

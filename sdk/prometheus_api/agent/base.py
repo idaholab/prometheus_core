@@ -119,18 +119,19 @@ INPUT_TO_RELATIONSHIP = "input_to"
 GENERATED_RELATIONSHIP = "generated"
 
 
-def _deeplynx_item_id(uri: Optional[str]) -> Optional[int]:
-    """Return the item ID of a ``deeplynx://organizations/{o}/projects/{p}/items/{id}`` URI."""
+def _deeplynx_item_ref(uri: Optional[str]) -> Optional[tuple[int, int, int]]:
+    """Return ``(org_id, project_id, item_id)`` of a ``deeplynx://`` item URI, else ``None``.
+
+    Item URIs have the form ``deeplynx://organizations/{o}/projects/{p}/items/{id}``.
+    """
     parsed = urlparse(str(uri or "").strip())
     if parsed.scheme != "deeplynx":
         return None
     parts = [parsed.netloc, *parsed.path.strip("/").split("/")]
-    if len(parts) != 6 or parts[0] != "organizations" or parts[2] != "projects":
-        return None
-    if parts[4] != "items":
+    if len(parts) != 6 or parts[0::2] != ["organizations", "projects", "items"]:
         return None
     try:
-        return int(parts[5])
+        return int(parts[1]), int(parts[3]), int(parts[5])
     except ValueError:
         return None
 
@@ -729,6 +730,12 @@ class PrometheusAgent:
         # DeepLynx items already linked ``input_to`` the active execution record.
         self._linked_input_items: ContextVar[Optional[set[int]]] = ContextVar(
             f"prometheus_linked_input_items_{id(self)}",
+            default=None,
+        )
+        # (organization_id, project_id) of the active execution record: the DeepLynx
+        # project bound to this run. Lineage edges never leave it.
+        self._execution_record_project: ContextVar[Optional[tuple[int, int]]] = ContextVar(
+            f"prometheus_execution_record_project_{id(self)}",
             default=None,
         )
         self.artifact_registry = ArtifactRegistry()
@@ -1336,12 +1343,14 @@ class PrometheusAgent:
         """Link a fetched DeepLynx artifact ``input_to`` the active execution record.
 
         Each item is linked at most once per execution. Artifacts without a
-        DeepLynx item (inline or local files) are skipped. Failures are logged and
+        DeepLynx item (inline or local files) are skipped, and so are items in a
+        different DeepLynx project than the execution record. Failures are logged and
         never fail the fetch.
         """
         record_id = self.execution_record_id
         linked = self._linked_input_items.get()
-        if record_id is None or linked is None:
+        record_project = self._execution_record_project.get()
+        if record_id is None or linked is None or record_project is None:
             return
         try:
             reference = self.artifact_resolver._resolve_artifact_for_retrieval(
@@ -1349,8 +1358,23 @@ class PrometheusAgent:
                 artifact_id=str(artifact_id).strip(),
                 artifacts=artifacts,
             )
-            item_id = _deeplynx_item_id(reference.uri if reference else None)
-            if item_id is None or item_id in linked:
+            item_ref = _deeplynx_item_ref(reference.uri if reference else None)
+            if item_ref is None:
+                return
+            org_id, project_id, item_id = item_ref
+            if item_id in linked:
+                return
+            if (org_id, project_id) != record_project:
+                logger.warning(
+                    "Not linking artifact %s %s execution record %s: the artifact is in "
+                    "DeepLynx org %s project %s, the record in org %s project %s",
+                    artifact_id,
+                    INPUT_TO_RELATIONSHIP,
+                    record_id,
+                    org_id,
+                    project_id,
+                    *record_project,
+                )
                 return
             credential = await self.get_credential("deeplynx")
             config = ConnectionConfig.from_credential(credential)
@@ -1680,9 +1704,13 @@ class PrometheusAgent:
 
         token = self._execution_record_id.set(item.id)
         linked_token = self._linked_input_items.set(set())
+        project_token = self._execution_record_project.set(
+            (config.organization_id, config.project_id)
+        )
         try:
             yield
         finally:
+            self._execution_record_project.reset(project_token)
             self._linked_input_items.reset(linked_token)
             self._execution_record_id.reset(token)
 
@@ -2111,24 +2139,9 @@ class PrometheusAgent:
             if tags:
                 await client.items.add_tags(file_meta.id, list(tags))
 
-            record_id = self.execution_record_id
-            if record_id is not None:
-                try:
-                    await client.relationships.create(
-                        RelationshipCreate(
-                            from_item_id=record_id,
-                            to_item_id=file_meta.id,
-                            relationship_type=GENERATED_RELATIONSHIP,
-                        )
-                    )
-                except Exception:
-                    logger.warning(
-                        "Failed to link execution record %s %s artifact item %s",
-                        record_id,
-                        GENERATED_RELATIONSHIP,
-                        file_meta.id,
-                        exc_info=True,
-                    )
+            await self._link_generated_artifact(
+                client, item_id=file_meta.id, storage_config=storage_config
+            )
 
         uri = (
             f"deeplynx://organizations/{storage_config.organization_id}"
@@ -2151,6 +2164,51 @@ class PrometheusAgent:
                 "deeplynx_file_id": file_meta.id,
             },
         )
+
+    async def _link_generated_artifact(
+        self,
+        client: AsyncStorageClient,
+        *,
+        item_id: int,
+        storage_config: ConnectionConfig,
+    ) -> None:
+        """Link the active execution record ``generated`` an uploaded DeepLynx item.
+
+        Skipped outside an execution, and when the upload went to a different DeepLynx
+        project than the execution record. Failures are logged and never fail the emit.
+        """
+        record_id = self.execution_record_id
+        record_project = self._execution_record_project.get()
+        if record_id is None or record_project is None:
+            return
+        artifact_project = (storage_config.organization_id, storage_config.project_id)
+        if artifact_project != record_project:
+            logger.warning(
+                "Not linking execution record %s %s artifact item %s: the record is in "
+                "DeepLynx org %s project %s, the artifact in org %s project %s",
+                record_id,
+                GENERATED_RELATIONSHIP,
+                item_id,
+                *record_project,
+                *artifact_project,
+            )
+            return
+        try:
+            await client.relationships.create(
+                RelationshipCreate(
+                    from_item_id=record_id,
+                    to_item_id=item_id,
+                    relationship_type=GENERATED_RELATIONSHIP,
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Failed to link execution record %s %s artifact item %s",
+                record_id,
+                GENERATED_RELATIONSHIP,
+                item_id,
+                exc_info=True,
+            )
 
     async def send_text_artifact(
         self,

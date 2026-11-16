@@ -254,6 +254,30 @@ def test_type_created_concurrently_is_looked_up_instead_of_failing():
     assert client.edge_bodies()[0]["relationship_id"] == 99
 
 
+async def test_async_type_created_concurrently_is_looked_up_instead_of_failing():
+    """Covers REQ-003-15 for the async client: losing the create race reuses the type."""
+    from prometheus_api.storage_client.exceptions import APIError
+
+    client = AsyncRoutedClient(create_error=APIError("already exists", status_code=500))
+
+    await AsyncRelationshipsResource(client).create(_named())
+
+    assert client.edge_bodies()[0]["relationship_id"] == 99
+
+
+async def test_async_type_create_failure_propagates_when_type_still_missing():
+    from prometheus_api.storage_client.exceptions import APIError
+
+    class Failing(AsyncRoutedClient):
+        async def _request(self, method, path, **kwargs):
+            if method == "POST" and path.endswith("/relationships"):
+                raise APIError("boom", status_code=500)
+            return RoutedClient._request(self, method, path, **kwargs)
+
+    with pytest.raises(APIError):
+        await AsyncRelationshipsResource(Failing()).create(_named())
+
+
 def test_type_create_failure_propagates_when_type_still_missing():
     from prometheus_api.storage_client.exceptions import APIError
 
