@@ -3,15 +3,15 @@ title: The challenge
 footer: One day · The challenge · https://idaholab.github.io/prometheus_core/hackathon/one-day
 accent: agt
 index:
-  time: '10:40'
+  time: '20 + 100 min'
   heading: The challenge
   color: var(--orange)
   blurb: 'Build a table plotter in four checkpoints: route to a skill, read and publish artifacts, extract a table with an LLM, and plot it with a second skill. Goal, test prompt, done-when and hints for each, plus a stretch goal.'
 ---
 
-# The challenge {.title kicker="Agent developer hackathon · One day · 10:40 am" pills="Brief, then reference | 4 checkpoints | about 100 minutes"}
+# The challenge {.title kicker="Agent developer hackathon · One day" pills="Brief, then reference | 4 checkpoints | about 100 minutes"}
 One agent, two skills: pull a table out of a Markdown report, then plot it. Four checkpoints, each building on the last.
-Note: Present the first two slides as the 20-minute brief and take questions. The checkpoint slides are the reference for the hands-on stretch after lunch. They give the goal, a test prompt, a done-when list and hints, and no solutions.
+Note: Present the first two slides as the 20-minute brief and take questions. The checkpoint slides are the reference for the hands-on checkpoints after setup. They give the goal, a test prompt, a done-when list and hints, and no solutions.
 
 ---
 

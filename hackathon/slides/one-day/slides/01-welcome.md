@@ -3,15 +3,15 @@ title: Welcome & Prometheus
 footer: One day · Welcome & Prometheus · https://idaholab.github.io/prometheus_core/hackathon/one-day
 accent: welcome
 index:
-  time: '8:30'
+  time: '60 min'
   heading: Welcome &amp; Prometheus
   color: var(--navy)
   blurb: 'The agenda and what you will leave with, a short primer on LLMs and agents, and how Prometheus works from an agent author''s view: the platform at a glance, one chat turn, eight terms, how your card and code plug in, what the platform does for you.'
 ---
 
-# Welcome & Prometheus {.title kicker="Agent developer hackathon · One day · 8:30 am" pills="All participants | 60 min | Press N for notes · O for overview"}
+# Welcome & Prometheus {.title kicker="Agent developer hackathon · One day" pills="All participants | 60 min | Press N for notes · O for overview"}
 What we will build today, what AI can and cannot do, and how Prometheus fits the pieces together.
-Note: Welcome first (15 minutes): agenda, outcomes, links. Then the AI primer and the Prometheus overview (45 minutes). The live demo follows at 9:30.
+Note: Welcome first (15 minutes): agenda, outcomes, links. Then the AI primer and the Prometheus overview (45 minutes). The live demo follows.
 
 ---
 
@@ -45,14 +45,12 @@ Note: Point out that the slide URL is also in the footer of every slide in this 
 ## The day {eyebrow="Agenda" content-style="gap:0"}
 
 ::: agenda
-- 8:30 | Welcome and Prometheus | Agenda · what AI can and cannot do · how Prometheus works {.now}
-- 9:30 | Live demo | An agent built from scratch, step by step. Follow along or just watch.
-- 10:30 | Break
-- 10:40 | The challenge | What you will build today, and questions
-- 11:00 | Setting up (hands-on) | Start the platform and DeepLynx, try the debug agents, scaffold your agent. Lunch at noon while it runs.
-- 1:00 | Challenge checkpoints (hands-on) | A new skill · files in and out · an LLM call · a second skill that plots. Mentors circulate.
-- 1:45 | Break (10 min, then back to the checkpoints)
-- 2:50 | Close out | What you built, and where to go next
+- 60 min | Welcome and Prometheus | Agenda · what AI can and cannot do · how Prometheus works {.now}
+- 60 min | Live demo | An agent built from scratch, step by step. Follow along or just watch.
+- 20 min | The challenge | What you will build today, and questions
+- 60 min | Setting up (hands-on) | Start the platform and DeepLynx, try the debug agents, scaffold your agent.
+- 100 min | Challenge checkpoints (hands-on) | A new skill · files in and out · an LLM call · a second skill that plots. Mentors circulate.
+- 10 min | Close out | What you built, and where to go next
 :::
 
 ---
@@ -477,5 +475,5 @@ Stored in DeepLynx, passed by id.
 ::::
 
 ::: callout good
-Next: the live demo at 9:30.
+Next: the live demo.
 :::
