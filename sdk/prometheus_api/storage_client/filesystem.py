@@ -34,6 +34,7 @@ from fsspec.utils import glob_translate
 from .client import StorageClient
 from .connection import ConnectionConfig
 from .models.item import Item, ItemUpdate
+from .uri import parse_item_uri
 
 
 class DeepLynxFileSystem(AbstractFileSystem):
@@ -406,7 +407,7 @@ class DeepLynxFileSystem(AbstractFileSystem):
         return str(self._strip_protocol(path))
 
     def _parse_item_uri_key(self, key: str) -> Optional[int]:
-        """Parse ``organizations/{org}/projects/{project}/items/{item}`` URIs.
+        """Return the item ID of an ``organizations/{org}/projects/{project}/items/{item}`` key.
 
         ``send_deeplynx_artifact`` emits item-addressed URIs for durable
         artifacts, while this filesystem also supports logical object keys used
@@ -414,31 +415,18 @@ class DeepLynxFileSystem(AbstractFileSystem):
         configuration so a configured project cannot accidentally read another
         project's item through a copied URI.
         """
-        parts = str(key or "").strip("/").split("/")
-        is_item_uri = (
-            len(parts) == 6
-            and parts[0] == "organizations"
-            and parts[2] == "projects"
-            and parts[4] == "items"
-        )
-        if not is_item_uri:
+        ref = parse_item_uri(key)
+        if ref is None:
             return None
-        try:
-            organization_id = int(parts[1])
-            project_id = int(parts[3])
-            item_id = int(parts[5])
-        except ValueError:
-            return None
-
         config = getattr(self._client, "config", None)
         if config is not None:
-            if organization_id != int(config.organization_id) or project_id != int(
+            if ref.organization_id != int(config.organization_id) or ref.project_id != int(
                 config.project_id
             ):
                 raise ValueError(
                     "DeepLynx item URI does not match the configured organization/project"
                 )
-        return item_id
+        return ref.item_id
 
     def _join_keys(self, *parts: str) -> str:
         """Join non-empty path fragments into a normalized POSIX key."""

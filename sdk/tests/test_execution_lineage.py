@@ -12,6 +12,7 @@
 
 """Execution-record lineage edges: ``input_to`` for fetched, ``generated`` for emitted."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -19,9 +20,9 @@ import pytest
 
 from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
 from prometheus_api.agent.artifacts import ArtifactReference
-from prometheus_api.agent.base import _deeplynx_item_ref
 from prometheus_api.agent.identity import UserIdentity, identity_scope
 from prometheus_api.storage_client.connection import ConnectionConfig
+from prometheus_api.storage_client.exceptions import APIError
 
 RECORD_ID = 500
 ORG, PROJECT = 1, 2
@@ -33,13 +34,19 @@ class FakeStorage:
     def __init__(self):
         self.edges = []
         self.fail_edges = False
+        self.lookups = 0
+        self.record_ids = {}
 
     def client_class(self):
         storage = self
 
         class Items:
             async def create(self, item):
-                return SimpleNamespace(id=RECORD_ID)
+                # A resumed task reuses its record (same original_id); a new task does not.
+                key = item.original_id
+                if key not in storage.record_ids:
+                    storage.record_ids[key] = RECORD_ID + len(storage.record_ids)
+                return SimpleNamespace(id=storage.record_ids[key])
 
             async def get(self, item_id):
                 return SimpleNamespace(properties={}, class_id=None, original_id=None)
@@ -58,6 +65,10 @@ class FakeStorage:
             async def create(self, relationship):
                 if storage.fail_edges:
                     raise RuntimeError("edge endpoint down")
+                pair = (relationship.from_item_id, relationship.to_item_id)
+                if any((origin, dest) == pair for origin, _, dest in storage.edges):
+                    # DeepLynx's unique index on (project, origin, destination)
+                    raise APIError("23505: duplicate key value", status_code=500)
                 storage.edges.append(
                     (
                         relationship.from_item_id,
@@ -65,6 +76,13 @@ class FakeStorage:
                         relationship.to_item_id,
                     )
                 )
+
+            async def find_edge(self, from_item_id, to_item_id):
+                storage.lookups += 1
+                for origin, name, dest in storage.edges:
+                    if (origin, dest) == (from_item_id, to_item_id):
+                        return SimpleNamespace(relationship_type=name)
+                return None
 
         class Client:
             def __init__(self, config):
@@ -125,30 +143,13 @@ def _context():
     return context
 
 
-async def _in_execution(agent, body):
+async def _in_execution(agent, body, task_id="task-1"):
     identity = UserIdentity(user_id="user", claims={}, raw_token="token")
+    context = _context()
+    context.task_id = task_id
     with identity_scope(identity):
-        async with agent._create_execution_record({}, _context()):
+        async with agent._create_execution_record({}, context):
             await body()
-
-
-@pytest.mark.parametrize(
-    ("uri", "expected"),
-    [
-        (_uri(42), (ORG, PROJECT, 42)),
-        ("deeplynx://organizations/7/projects/8/items/9", (7, 8, 9)),
-        ("deeplynx://organizations/1/projects/2/items/x", None),
-        ("deeplynx://organizations/x/projects/2/items/1", None),
-        ("deeplynx://organizations/1/projects/2/files/1", None),
-        ("deeplynx://organizations/1/projects/2/items", None),
-        ("deeplynx://session-abc/moose/input.i", None),
-        ("memory://organizations/1/projects/2/items/42", None),
-        ("", None),
-        (None, None),
-    ],
-)
-def test_deeplynx_item_ref(uri, expected):
-    assert _deeplynx_item_ref(uri) == expected
 
 
 async def test_fetched_artifacts_are_linked_input_to_once(storage):
@@ -228,6 +229,72 @@ async def test_input_from_another_project_is_not_linked(storage, caplog):
     assert "Not linking artifact other-org" in caplog.text
 
 
+async def test_resumed_execution_refetching_an_input_is_not_a_failure(storage, caplog):
+    """Covers REQ-009-25 and BEH-009-14: a resumed task finds its edge already there."""
+    agent = _agent(_reference("a", _uri(11)))
+
+    async def body():
+        await agent.get_artifact_file_path("a", conversation_id="conv")
+
+    await _in_execution(agent, body)
+    await _in_execution(agent, body)  # resume: same record, fresh linked set
+
+    assert storage.edges == [(11, "input_to", RECORD_ID)]
+    assert storage.lookups == 1
+    assert "Failed to link" not in caplog.text
+
+
+async def test_parallel_fetches_of_one_input_link_it_once_quietly(storage, caplog):
+    """Covers BEH-009-14: two fetches racing past the linked check in one run."""
+    agent = _agent(_reference("a", _uri(11)))
+
+    async def body():
+        await asyncio.gather(
+            agent.get_artifact_file_path("a", conversation_id="conv"),
+            agent.get_artifact_file_path("a", conversation_id="conv"),
+        )
+
+    await _in_execution(agent, body)
+
+    assert storage.edges == [(11, "input_to", RECORD_ID)]
+    assert "Failed to link" not in caplog.text
+
+
+async def test_failed_create_without_an_existing_edge_still_warns(storage, caplog, monkeypatch):
+    """Covers REQ-009-25: a real failure is still logged when no edge exists."""
+    agent = _agent(_reference("a", _uri(11)))
+
+    async def refuse(self, relationship):
+        raise APIError("server error", status_code=500)
+
+    async def body():
+        Client = storage.client_class()
+        monkeypatch.setattr(
+            "prometheus_api.agent.base.AsyncStorageClient",
+            type(
+                "Refusing",
+                (Client,),
+                {
+                    "__init__": lambda self, config: (
+                        (
+                            Client.__init__(self, config),
+                            setattr(
+                                self.relationships, "create", refuse.__get__(self.relationships)
+                            ),
+                        )
+                        and None
+                    )
+                },
+            ),
+        )
+        await agent.get_artifact_file_path("a", conversation_id="conv")
+
+    await _in_execution(agent, body)
+
+    assert storage.edges == []
+    assert "Failed to link artifact a input_to execution record 500" in caplog.text
+
+
 async def test_linked_inputs_reset_between_executions(storage):
     """Covers BEH-009-12: each execution links its own fetches."""
     agent = _agent(_reference("a", _uri(11)))
@@ -235,10 +302,10 @@ async def test_linked_inputs_reset_between_executions(storage):
     async def body():
         await agent.get_artifact_file_path("a", conversation_id="conv")
 
-    await _in_execution(agent, body)
-    await _in_execution(agent, body)
+    await _in_execution(agent, body, task_id="task-1")
+    await _in_execution(agent, body, task_id="task-2")
 
-    assert storage.edges == [(11, "input_to", RECORD_ID)] * 2
+    assert storage.edges == [(11, "input_to", RECORD_ID), (11, "input_to", RECORD_ID + 1)]
 
 
 def _storage_config(project_id=PROJECT):

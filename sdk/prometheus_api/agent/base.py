@@ -97,9 +97,10 @@ from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
 from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
-from ..storage_client.exceptions import APIError
+from ..storage_client.exceptions import APIError, StorageClientError
 from ..storage_client.models.item import ItemCreate, ItemUpdate
 from ..storage_client.models.relationship import RelationshipCreate
+from ..storage_client.uri import item_uri, parse_item_uri
 from ..llm_client.security import redact_secrets
 import uvicorn
 
@@ -117,23 +118,6 @@ _UNSET_EXECUTION_RECORD = object()
 # ``generated`` each artifact it emitted.
 INPUT_TO_RELATIONSHIP = "input_to"
 GENERATED_RELATIONSHIP = "generated"
-
-
-def _deeplynx_item_ref(uri: Optional[str]) -> Optional[tuple[int, int, int]]:
-    """Return ``(org_id, project_id, item_id)`` of a ``deeplynx://`` item URI, else ``None``.
-
-    Item URIs have the form ``deeplynx://organizations/{o}/projects/{p}/items/{id}``.
-    """
-    parsed = urlparse(str(uri or "").strip())
-    if parsed.scheme != "deeplynx":
-        return None
-    parts = [parsed.netloc, *parsed.path.strip("/").split("/")]
-    if len(parts) != 6 or parts[0::2] != ["organizations", "projects", "items"]:
-        return None
-    try:
-        return int(parts[1]), int(parts[3]), int(parts[5])
-    except ValueError:
-        return None
 
 
 class _TrackedEventQueue:
@@ -1318,28 +1302,19 @@ class PrometheusAgent:
         if not resolved_conversation_id:
             raise ValueError("conversation_id or context is required")
 
-        path = await self.artifact_resolver.get_artifact_file_path(
-            artifact_id,
-            conversation_id=resolved_conversation_id,
-            artifacts=artifacts,
+        reference = self.artifact_resolver.require_reference(
+            artifact_id, conversation_id=resolved_conversation_id, artifacts=artifacts
+        )
+        path = await self.artifact_resolver.get_reference_file_path(
+            reference,
             cache_dir=cache_dir,
             allowed_file_roots=allowed_file_roots,
             force_download=force_download,
         )
-        await self._link_input_artifact(
-            artifact_id,
-            conversation_id=resolved_conversation_id,
-            artifacts=artifacts,
-        )
+        await self._link_input_artifact(reference)
         return path
 
-    async def _link_input_artifact(
-        self,
-        artifact_id: str,
-        *,
-        conversation_id: str,
-        artifacts: Optional[Sequence[Mapping[str, Any]]],
-    ) -> None:
+    async def _link_input_artifact(self, reference: ArtifactReference) -> None:
         """Link a fetched DeepLynx artifact ``input_to`` the active execution record.
 
         Each item is linked at most once per execution. Artifacts without a
@@ -1352,13 +1327,9 @@ class PrometheusAgent:
         record_project = self._execution_record_project.get()
         if record_id is None or linked is None or record_project is None:
             return
+        artifact_id = reference.artifact_id
         try:
-            reference = self.artifact_resolver._resolve_artifact_for_retrieval(
-                conversation_id=conversation_id,
-                artifact_id=str(artifact_id).strip(),
-                artifacts=artifacts,
-            )
-            item_ref = _deeplynx_item_ref(reference.uri if reference else None)
+            item_ref = parse_item_uri(reference.uri)
             if item_ref is None:
                 return
             org_id, project_id, item_id = item_ref
@@ -1379,13 +1350,20 @@ class PrometheusAgent:
             credential = await self.get_credential("deeplynx")
             config = ConnectionConfig.from_credential(credential)
             async with AsyncStorageClient(config) as client:
-                await client.relationships.create(
-                    RelationshipCreate(
-                        from_item_id=item_id,
-                        to_item_id=record_id,
-                        relationship_type=INPUT_TO_RELATIONSHIP,
+                try:
+                    await client.relationships.create(
+                        RelationshipCreate(
+                            from_item_id=item_id,
+                            to_item_id=record_id,
+                            relationship_type=INPUT_TO_RELATIONSHIP,
+                        )
                     )
-                )
+                except StorageClientError:
+                    # DeepLynx allows one edge per ordered pair. A resumed task, or two
+                    # fetches racing in one run, finds the edge already there: that is
+                    # linked, not failed.
+                    if await client.relationships.find_edge(item_id, record_id) is None:
+                        raise
             linked.add(item_id)
         except Exception:
             logger.warning(
@@ -2143,11 +2121,7 @@ class PrometheusAgent:
                 client, item_id=file_meta.id, storage_config=storage_config
             )
 
-        uri = (
-            f"deeplynx://organizations/{storage_config.organization_id}"
-            f"/projects/{storage_config.project_id}"
-            f"/items/{file_meta.id}"
-        )
+        uri = item_uri(storage_config.organization_id, storage_config.project_id, file_meta.id)
         return await self.send_artifact_reference(
             context=context,
             event_queue=event_queue,

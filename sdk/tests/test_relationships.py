@@ -329,3 +329,44 @@ def test_listed_edges_read_relationship_name():
 
     assert edge.relationship_type == "generated"
     assert (edge.from_item_id, edge.to_item_id) == (58, 59)
+
+
+async def test_find_edge_returns_the_edge_in_sync_and_async():
+    """Covers REQ-003-16: an edge is looked up by its ordered pair."""
+    sync_client = SyncClient(edge_payload())
+    found = RelationshipsResource(sync_client).find_edge(58, 59)
+    async_client = AsyncClient(edge_payload())
+    found_async = await AsyncRelationshipsResource(async_client).find_edge(58, 59)
+
+    for edge, client in ((found, sync_client), (found_async, async_client)):
+        assert (edge.from_item_id, edge.to_item_id) == (58, 59)
+        method, path, kwargs = client.calls[-1]
+        assert (method, path) == ("GET", "/organizations/1/projects/2/edges/by-relationship")
+        assert kwargs["params"] == {"originId": 58, "destinationId": 59}
+
+
+async def test_find_edge_returns_none_when_deeplynx_has_no_such_edge():
+    """Covers REQ-003-16: DeepLynx answers a missing edge with an error, not an empty body."""
+    from prometheus_api.storage_client.exceptions import APIError
+
+    class Missing(SyncClient):
+        def _request(self, method, path, **kwargs):
+            raise APIError("Edge not found", status_code=500)
+
+    class AsyncMissing(AsyncClient):
+        async def _request(self, method, path, **kwargs):
+            raise APIError("Edge not found", status_code=500)
+
+    assert RelationshipsResource(Missing(None)).find_edge(1, 2) is None
+    assert await AsyncRelationshipsResource(AsyncMissing(None)).find_edge(1, 2) is None
+
+
+async def test_find_edge_unwraps_a_value_envelope_in_sync_and_async():
+    """Covers REQ-003-16 for endpoints that wrap the edge in ``value``."""
+    payload = {"value": edge_payload()}
+
+    edge = RelationshipsResource(SyncClient(payload)).find_edge(58, 59)
+    edge_async = await AsyncRelationshipsResource(AsyncClient(payload)).find_edge(58, 59)
+
+    assert edge.model_dump() == edge_async.model_dump()
+    assert (edge.from_item_id, edge.to_item_id) == (58, 59)

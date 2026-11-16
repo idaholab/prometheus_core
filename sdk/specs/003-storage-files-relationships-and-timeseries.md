@@ -23,6 +23,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - REQ-003-13: Sync and async file, chunked upload, relationship, and timeseries resource pairs SHOULD remain behaviorally aligned. ⚠ untested
 - REQ-003-14: `Relationship` MUST accept `properties` as the JSON-encoded string (or `null`) that DeepLynx edge endpoints return, decoding it to a dict; a string that is not valid JSON or does not decode to an object MUST become an empty dict.
 - REQ-003-15: Relationship `create` and `bulk_create` MUST send a nonblank `relationship_type` as the `relationship_id` of the project's relationship type with that name, creating the type at `/projects/{project_id}/relationships` when no unarchived type has that name, and MUST NOT send the name in a field the edge endpoint ignores. Type IDs MUST be cached per client. If creating the type fails, the type MUST be looked up again and reused when present; otherwise the failure MUST propagate. An empty `relationship_type` sends no `relationship_id`. Parsed relationships MUST read the type name from `relationshipName`.
+- REQ-003-16: `find_edge(from_item_id, to_item_id)` MUST return the edge for that ordered pair from `/edges/by-relationship`, and MUST return `None` when the lookup fails, because DeepLynx answers a missing edge with an error rather than an empty result.
 
 ## Behavior
 - BEH-003-01: GIVEN a file path that does not exist WHEN upload is requested THEN `ValueError` is raised before any API request.
@@ -46,6 +47,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - `RelationshipsResource.create/get/delete/bulk_create/get_item_relationships/get_item_graph`
 - `AsyncRelationshipsResource.create/get/delete/bulk_create/get_item_relationships/get_item_graph`
 - `RelationshipsResource.get_or_create_relationship_type(name: str) -> int` (async: awaitable)
+- `RelationshipsResource.find_edge(from_item_id: int, to_item_id: int) -> Relationship | None` (async: awaitable)
 - `TimeseriesResource.upload(file_path: Path, data_source_id: int, description: str | None = None) -> dict`
 - `TimeseriesResource.query(data_source_id: int, sql_query: str, file_type: str = "json") -> dict`
 - `TimeseriesQuery(data_source_id: int, sql_query: str, file_type: str | None = "json")`
@@ -57,6 +59,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - Chunked upload does not define resumability; cancellation is best-effort cleanup only.
 - Timeseries SQL validation and execution are backend responsibilities.
 - DeepLynx allows at most one edge per ordered (origin, destination) pair in a project, whatever its type.
+- Deleting a relationship type clears it from every edge that used it: those edges keep their endpoints but lose their name. Do not delete a type that is in use.
 
 ## Out of scope / Non-goals
 - This package does not implement local file locking, checksum verification, or automatic MIME detection.

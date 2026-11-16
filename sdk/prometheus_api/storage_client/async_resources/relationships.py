@@ -91,6 +91,26 @@ class AsyncRelationshipsResource(AsyncBaseResource):
     def _relationship_types_path(self) -> str:
         return f"/projects/{self._client.config.project_id}/relationships"
 
+    async def find_edge(self, from_item_id: int, to_item_id: int) -> Optional[Relationship]:
+        """Return the edge from *from_item_id* to *to_item_id*, or ``None`` if there is none.
+
+        DeepLynx allows one edge per ordered pair of records, so the pair names at most
+        one edge. DeepLynx answers a missing edge with an error rather than an empty
+        result, so any failed lookup returns ``None``: the edge could not be confirmed.
+        """
+        try:
+            response = await self._client._request(
+                "GET",
+                f"{self._base_path}/edges/by-relationship",
+                params={"originId": from_item_id, "destinationId": to_item_id},
+            )
+        except StorageClientError:
+            return None
+        data = response.json()
+        if isinstance(data, dict) and "value" in data:
+            data = data["value"]
+        return self._parse_relationship(data) if isinstance(data, dict) else None
+
     async def get(self, relationship_id: int) -> Relationship:
         """Get a relationship by ID asynchronously."""
         response = await self._client._request("GET", f"{self._base_path}/edges/{relationship_id}")

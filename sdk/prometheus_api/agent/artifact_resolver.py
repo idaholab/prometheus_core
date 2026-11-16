@@ -60,17 +60,38 @@ class ArtifactResolver:
         force_download: bool = False,
     ) -> Path:
         """Resolve an artifact ID to a reachable local file path."""
+        reference = self.require_reference(
+            artifact_id, conversation_id=conversation_id, artifacts=artifacts
+        )
+        return await self.get_reference_file_path(
+            reference,
+            cache_dir=cache_dir,
+            allowed_file_roots=allowed_file_roots,
+            force_download=force_download,
+        )
+
+    def require_reference(
+        self,
+        artifact_id: str,
+        *,
+        conversation_id: str,
+        artifacts: Optional[Sequence[Mapping[str, Any]]] = None,
+    ) -> ArtifactReference:
+        """Return the catalog reference for *artifact_id*, raising when it is unknown.
+
+        Raises:
+            ValueError: When *artifact_id* or *conversation_id* is blank.
+            FileNotFoundError: When the conversation has no such artifact.
+        """
         normalized_artifact_id = str(artifact_id or "").strip()
         if not normalized_artifact_id:
             raise ValueError("artifact_id is required")
-
         resolved_conversation_id = str(conversation_id or "").strip()
         if not resolved_conversation_id:
             raise ValueError("conversation_id is required")
-
-        reference = self._resolve_artifact_for_retrieval(
+        reference = self.resolve_reference(
+            normalized_artifact_id,
             conversation_id=resolved_conversation_id,
-            artifact_id=normalized_artifact_id,
             artifacts=artifacts,
         )
         if reference is None:
@@ -78,7 +99,35 @@ class ArtifactResolver:
                 f"Artifact '{normalized_artifact_id}' was not found in conversation "
                 f"'{resolved_conversation_id}'."
             )
+        return reference
 
+    def resolve_reference(
+        self,
+        artifact_id: str,
+        *,
+        conversation_id: str,
+        artifacts: Optional[Sequence[Mapping[str, Any]]] = None,
+    ) -> Optional[ArtifactReference]:
+        """Return the catalog reference for *artifact_id*, or ``None`` when it is unknown.
+
+        Looks in the conversation's registry first, then in the provided catalog,
+        caching a catalog hit in the registry.
+        """
+        return self._resolve_artifact_for_retrieval(
+            conversation_id=conversation_id,
+            artifact_id=artifact_id,
+            artifacts=artifacts,
+        )
+
+    async def get_reference_file_path(
+        self,
+        reference: ArtifactReference,
+        *,
+        cache_dir: Optional[Path] = None,
+        allowed_file_roots: Optional[Sequence[Path | str]] = None,
+        force_download: bool = False,
+    ) -> Path:
+        """Resolve an already-found artifact reference to a reachable local file path."""
         root = self._artifact_cache_root(cache_dir)
         uri = str(reference.uri or "").strip()
         if uri:
