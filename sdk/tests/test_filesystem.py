@@ -440,3 +440,36 @@ def test_entry_point_registers_deeplynx_protocol():
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_recent_failure_is_logged_and_lookup_falls_back_to_full_scan(tmp_path, caplog):
+    """A failing search.recent is logged, not mistaken for 'not found'; the scan still runs."""
+    target = make_item(
+        77,
+        {
+            "_deeplynx_fs_managed": True,
+            "_deeplynx_fs_path": "session/out/result.e",
+            "_deeplynx_fs_version_ns": 1000,
+        },
+    )
+
+    files = Mock()
+    items = Mock()
+    items.iter_all.return_value = [target]
+    search = Mock()
+    search.advanced_query.side_effect = RuntimeError("advanced unavailable")
+    search.query.side_effect = RuntimeError("query unavailable")
+    search.recent.side_effect = ValueError("recent route returned a malformed body")
+    client = SimpleNamespace(files=files, items=items, search=search, config=make_config())
+
+    fs = DeepLynxFileSystem(client=client)
+    output_dir = tmp_path / "download"
+    output_dir.mkdir()
+
+    with caplog.at_level("WARNING", logger="prometheus_api.storage_client.filesystem"):
+        with pytest.warns(RuntimeWarning):
+            fs.get("deeplynx://session/out/result.e", str(output_dir))
+
+    record = next(r for r in caplog.records if "search.recent failed" in r.getMessage())
+    assert "malformed body" in str(record.exc_info[1])
+    files.download.assert_called_once_with(77, output_dir / "result.e")

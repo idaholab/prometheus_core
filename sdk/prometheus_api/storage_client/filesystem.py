@@ -17,6 +17,7 @@ This module exposes a :class:`DeepLynxFileSystem` implementation that maps
 ``prometheus_api.storage_client`` high-level resources.
 """
 
+import logging
 import os
 import re
 import posixpath
@@ -35,6 +36,8 @@ from .client import StorageClient
 from .connection import ConnectionConfig
 from .models.item import Item, ItemUpdate
 from .uri import parse_item_uri
+
+logger = logging.getLogger(__name__)
 
 
 class DeepLynxFileSystem(AbstractFileSystem):
@@ -705,7 +708,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -724,7 +728,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -736,6 +741,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
         try:
             return list(self._client.search.recent(limit=self._recent_limit))
         except Exception:
+            # A failure here (a route error, a malformed body) otherwise looks like
+            # "file not found" to the caller.
+            logger.warning("search.recent failed during a deeplynx:// lookup", exc_info=True)
             return []
 
     def _scan_all_items(self) -> List[Item]:
