@@ -12,7 +12,7 @@
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
@@ -103,6 +103,18 @@ def _redis_url(data: dict[str, Any]) -> str:
     return _with_redis_password(os.environ.get("REDIS_URL", data.get("redis-url", "redis://localhost:6379")))
 
 
+def _agent_identity_source(data: dict[str, Any]) -> Literal["trusted-name", "istio"]:
+    """``AGENT_IDENTITY_SOURCE`` / ``agent-identity-source``: ``trusted-name`` or ``istio``.
+
+    See :mod:`app.agent_identity`. An unknown value fails at startup rather than
+    silently falling back to the weaker mode.
+    """
+    raw = (os.environ.get("AGENT_IDENTITY_SOURCE") or data.get("agent-identity-source") or "trusted-name").strip()
+    if raw not in ("trusted-name", "istio"):
+        raise ValueError(f"AGENT_IDENTITY_SOURCE must be 'trusted-name' or 'istio', got {raw!r}")
+    return cast(Literal["trusted-name", "istio"], raw)
+
+
 def _cookie_secure(data: dict) -> bool:
     """Whether to mark auth cookies ``Secure``, derived from the browser-facing scheme.
 
@@ -143,6 +155,8 @@ class Settings(BaseSettings):
     agent_url: str = os.environ.get("CLIENT_AGENT_URL", data.get("agent-url", "http://localhost:8001"))
     agent_secret: str = os.environ.get("AGENT_SECRET", data.get("agent-secret", ""))
     redis_url: str = _redis_url(data)
+    # How /v1 routes tell agents apart (app/agent_identity.py).
+    agent_identity_source: Literal["trusted-name", "istio"] = _agent_identity_source(data)
 
     # ``BaseSettings`` also reads the ``REDIS_URL`` env var into this field, which
     # replaces the default above and would skip the ``REDIS_PASSWORD`` folding.

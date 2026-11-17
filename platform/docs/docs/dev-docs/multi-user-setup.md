@@ -328,6 +328,38 @@ distribution table, key generation steps, and rotation guide.
 
 ---
 
+## Agent workload identity (which agent is calling)
+
+Every agent presents the same `Bearer <AGENT_SECRET>`. That proves *some* agent is
+calling, but not *which* one. Backend routes that need to know (the `/v1`
+service-to-service routes) read the agent name from the source that
+`AGENT_IDENTITY_SOURCE` (`agent-identity-source` in `backend/app/config.yml`) selects:
+
+| Value | Where | Agent name comes from |
+| --- | --- | --- |
+| `trusted-name` (default) | Docker Compose | The `X-Agent-Name` request header. Any agent can claim any name. |
+| `istio` | Kubernetes with Istio sidecars | The SPIFFE ID in the sidecar's `x-forwarded-client-cert` header, looked up in the agent registry. The request's own name claim is ignored. |
+
+In `istio` mode an agent's registration (`POST /v1/agents`) binds its SPIFFE ID
+(`spiffe://<trust-domain>/ns/<ns>/sa/<service-account>`) to its name. Only the same
+workload can re-register or delete that entry, and one workload can register only one
+name. Requests that arrive without a verified identity get 401. Requests from a
+workload that hasn't registered get 403.
+
+The header can be trusted only under these conditions. Set them up before you switch
+to `istio`:
+
+- **STRICT mTLS** on the backend's namespace (`PeerAuthentication` with
+  `mtls.mode: STRICT`). Istio's sidecar then replaces any client-supplied
+  `x-forwarded-client-cert` with the verified one.
+- **No sidecar bypass.** Add a NetworkPolicy that admits only sidecar traffic, or bind
+  the backend to the pod's loopback, so no pod can reach the backend port directly and
+  set the header itself.
+- **One ServiceAccount per agent.** The certificate identifies the workload. Agents
+  that share a ServiceAccount look identical to the backend.
+
+---
+
 ## Mesh/IFC dataset isolation (decision: no per-user path namespacing)
 
 `GET /api/artifacts/mesh/{dataset_id}/{filename}` (`backend/app/routers/artifacts.py`)
