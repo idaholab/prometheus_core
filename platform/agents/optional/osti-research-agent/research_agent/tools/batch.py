@@ -20,6 +20,10 @@ The run reads at most ``max_papers_analyzed`` papers (6: two batches of 3).
 
 The download, parse and analyze steps are the existing tools, called from
 code, so their budget, allowlist and bookkeeping rules all still apply.
+
+Every result carries ``packages``: each finding verified so far in the run,
+numbered ``Paper N`` (``RunContext.analysis_packages``). The orchestrator
+writes the answer from those packages only (``tools/answer.py``).
 """
 
 from __future__ import annotations
@@ -90,8 +94,9 @@ async def _read_one(
     if analyzed.get("answered") is False:
         return {"source_id": source_id, "read": True, "answered": False,
                 "reason": analyzed.get("reason", "")}
+    # The finding itself is in the result's ``packages``.
     return {"source_id": source_id, "read": True, "answered": True,
-            "match": analyzed.get("match", "exact"), "answer": analyzed.get("answer", "")}
+            "match": analyzed.get("match", "exact")}
 
 
 async def read_top_candidates(
@@ -103,7 +108,8 @@ async def read_top_candidates(
     """Read the next batch of top-ranked papers. See the module docstring."""
     reason = stop_reason(ctx)
     if reason:
-        return {"read": [], "stop": True, "reason": reason}
+        return {"read": [], "stop": True, "reason": reason,
+                "packages": ctx.analysis_packages()}
 
     ranked = await ctx.ranked_unread_hits()
     queue = [(sid, hit) for sid, hit, _ in ranked if shares_a_question_term(ctx.question, hit)]
@@ -116,6 +122,7 @@ async def read_top_candidates(
             "stop": False,
             "reason": "no unread search result shares a word with the question",
             "instruction": "Search again with a reformulated query, then call this again.",
+            "packages": ctx.analysis_packages(),
         }
 
     progress.emit(
@@ -155,6 +162,11 @@ async def read_top_candidates(
     after = stop_reason(ctx)
     # Papers finish in any order; report them in rank order.
     results.sort(key=lambda r: rank_of.get(r["source_id"], len(rank_of)))
+    packages = ctx.analysis_packages()
+    paper_of = {p["source_id"]: p["paper"] for p in packages}
+    for result in results:
+        if result.get("answered") and result["source_id"] in paper_of:
+            result["paper"] = paper_of[result["source_id"]]
     return {
         "read": results,
         "skipped_unrelated": skipped,
@@ -163,4 +175,5 @@ async def read_top_candidates(
         "paper_budget": ctx.config.max_papers_analyzed,
         "stop": after is not None,
         "reason": after or "budget left; another batch can be read",
+        "packages": packages,
     }

@@ -1,5 +1,7 @@
 # Dev-only: run this agent on its own, attached to an already-running platform
-# stack (started with `make up` elsewhere). Layer it on the agent's compose file:
+# stack (started with `make up` elsewhere). `./dev-attach.sh` runs the command
+# below with the platform's .env found for you (--logs, --down). By hand,
+# layer it on the agent's compose file:
 #
 #   env -i HOME="$HOME" PATH="$PATH" \
 #   PROMETHEUS_API_BASE_IMAGE_REPO=prometheus_api PROMETHEUS_API_BASE_IMAGE_HASH=local \

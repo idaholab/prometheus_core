@@ -41,8 +41,8 @@ defaults.
 
 **Budget guidance.** Parsing costs ~1–5 min per paper (about 2–3 s a page). With the 900 s budget the
 deepagent orchestrator is told (in `prompts/orchestrator.md`) it has ~13 minutes;
-`tools/context.BUDGET_FLOOR_S` (90 s) stops new expensive work early so synthesis
-and fact storage always run. If p90 latency creeps up, lower
+`tools/context.BUDGET_FLOOR_S` (90 s) stops new expensive work early so writing
+and grading the answer, and fact storage, always run. If p90 latency creeps up, lower
 `max_papers_analyzed` before raising `total_budget_s`.
 
 The source-artifact verifier uses the semantic `verifier` model role, which
@@ -107,6 +107,20 @@ After importing legacy records, run
 `scripts/backfill_atomic_fact_embeddings.py` to embed records that do not
 already have embeddings. The script is safe to re-run; lazy backfill covers any
 remaining records on read.
+
+## Developing against a running platform
+
+To try this checkout's agent in a platform stack that is already up (for
+example one started from another worktree), run `./dev-attach.sh` from the
+agent's directory. It rebuilds the agent, starts it on the platform's network
+with that platform's `.env`, and waits until it is healthy; the agent
+registers itself on start. The platform is found from its running backend
+container, or set `PLATFORM_DIR`. Stop the platform's own
+`osti-research-agent` container first (the script refuses to start while it
+runs), since both would answer to the same name. `./dev-attach.sh --logs`
+follows the agent's logs and `./dev-attach.sh --down` removes it. Relaunching
+the platform with `make up` or `make restart` starts its own agent again and
+clears the registrations: stop it again, then rerun the script.
 
 ## Replaying / debugging a run
 

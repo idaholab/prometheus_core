@@ -80,31 +80,6 @@ def test_translate_update_skips_non_dicts_and_emits_todo_updates():
     assert events[0].detail == {"todos": todos}
 
 
-def test_message_text_handles_part_lists_and_other_content():
-    parts = AIMessage(
-        content=["Ti ", {"type": "text", "text": "creeps"}, {"type": "image", "url": "x"}]
-    )
-    assert deep_runner._message_text(parts) == "Ti creeps"
-
-    class _Odd:
-        content = 42
-
-    class _Empty:
-        content = None
-
-    assert deep_runner._message_text(_Odd()) == "42"
-    assert deep_runner._message_text(_Empty()) == ""
-
-
-def test_last_ai_text_ignores_non_dict_chunks_and_nodes():
-    assert deep_runner._last_ai_text("not a dict") is None
-    chunk = {
-        "skip": None,
-        "model": {"messages": [AIMessage(content="first"), AIMessage(content="  ")]},
-    }
-    assert deep_runner._last_ai_text(chunk) == "first"
-
-
 def test_weaker_provenance_lists_each_abstract_once():
     ctx = _ctx()
     item = {"source_id": "55", "title": "T", "url": "https://u", "quote": "q" * 600}

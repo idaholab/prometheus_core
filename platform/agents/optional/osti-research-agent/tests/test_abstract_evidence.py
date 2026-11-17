@@ -125,7 +125,7 @@ def _final(ctx, monkeypatch):
 
     monkeypatch.setattr(llm_steps, "suggest_followup_from_findings", no_followups)
     return asyncio.run(
-        deep_runner.build_final_result("q", json.dumps({"findings": []}), ctx)
+        deep_runner.build_final_result("q", ctx)
     )
 
 

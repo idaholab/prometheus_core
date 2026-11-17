@@ -211,6 +211,13 @@ def test_completeness_has_an_explicit_scale_for_nearest_data():
     assert "not a reason for a higher score" in text
 
 
+def test_the_unused_papers_section_is_left_out_of_groundedness():
+    text = " ".join(judge._PROMPT.template.split())
+
+    assert 'A "Papers read without a usable finding" section' in text
+    assert "leave it out of groundedness" in text
+
+
 class _Sequence:
     """Returns each reply in turn, one per call."""
 

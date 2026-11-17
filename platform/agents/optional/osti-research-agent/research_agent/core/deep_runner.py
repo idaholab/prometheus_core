@@ -20,12 +20,15 @@ so the A2A executor and CLI are unchanged.
   tool-call statuses and todo updates. The ``analyze_paper`` tool returns only
   verified Findings, which are captured into ``ctx.findings`` so the
   runner can salvage a ``timeout_partial`` if the outer budget fires.
-- The orchestrator's final JSON is parsed into a ``FinalResult`` with linkified
-  provenance, reusing ``citations`` and ``llm_steps`` from the pipeline engine.
+- The answer is the one the orchestrator submitted through ``submit_answer``
+  and the grader accepted (``tools/answer.py``), written from the verified
+  analysis packages; without one, the verified findings are rendered per
+  paper. Either way the ``FinalResult`` gets linkified provenance.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import uuid
@@ -34,7 +37,6 @@ from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from research_agent import citations, llm_steps
-from research_agent.core import synthesis
 from research_agent.core.config import AgentConfig
 from research_agent.core.deep_agent import build_research_agent
 from research_agent.core.events import AgentEvent, FinalResult, Finding, ProgressEvent
@@ -61,6 +63,7 @@ _TOOL_STATUS = {
     "write_todos": "Updating plan...",
     "record_abstract_evidence": "Checking a statement against an abstract...",
     "record_estimate": "Checking and computing a best-effort estimate...",
+    "submit_answer": "Checking the answer against the analysis packages...",
 }
 
 
@@ -133,40 +136,6 @@ def translate_update(chunk: Dict, ctx: RunContext) -> Iterator[ProgressEvent]:
                     _capture_finding(content, ctx)
 
 
-def _message_text(msg) -> str:
-    """Extract plain text from a message's ``content`` (str, or a list of content
-    parts), independent of langchain_core version niceties like ``.text()``."""
-    content = getattr(msg, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for part in content:
-            if isinstance(part, str):
-                parts.append(part)
-            elif isinstance(part, dict) and part.get("type") == "text":
-                parts.append(part.get("text", ""))
-        return "".join(parts)
-    return str(content or "")
-
-
-def _last_ai_text(chunk: Dict) -> Optional[str]:
-    """The most recent non-empty AI message text in an updates chunk, if any -
-    tracked across the stream to recover the orchestrator's final message."""
-    if not isinstance(chunk, dict):
-        return None
-    latest = None
-    for node_out in chunk.values():
-        if not isinstance(node_out, dict):
-            continue
-        for msg in node_out.get("messages", []) or []:
-            if isinstance(msg, AIMessage):
-                text = _message_text(msg).strip()
-                if text:
-                    latest = text
-    return latest
-
-
 def _findings_to_answers(findings: List[Finding], search_hits: Dict) -> List[Dict]:
     """Shape findings like the pipeline's ``answers_found`` dicts so the existing
     provenance/linkify helpers work unchanged; titles/urls come from the search
@@ -192,15 +161,20 @@ def _findings_to_answers(findings: List[Finding], search_hits: Dict) -> List[Dic
 
 
 def _render_grounded_answer(answers: List[Dict]) -> str:
-    """Render only claims already present in paper-analyzer findings."""
+    """Render only claims already present in verified findings: each
+    finding's answer (its values) and then its evidence (where they are in
+    the paper). The verifier checked both against the paper."""
     sections = ["## Evidence-grounded findings"]
     for index, answer in enumerate(answers, 1):
         title = str(answer.get("title", "") or "").strip()
         heading = f"### Paper {index}"
         if title:
             heading += f": {title}"
+        found = str(answer.get("answer", "") or "").strip()
         evidence = str(answer.get("evidence", "") or "").strip()
-        grounded_text = evidence or str(answer.get("answer", "")).strip()
+        grounded_text = " ".join(
+            part for part in (found, f"Evidence: {evidence}" if evidence else "") if part
+        )
         if answer.get("match") == "nearest":
             grounded_text = (
                 "Nearest data reported (not at the exact conditions asked): "
@@ -232,14 +206,33 @@ def _link(title: str, url: str, source_id: str) -> str:
 
 
 def _render_weaker_evidence(ctx: RunContext) -> str:
-    """Abstract evidence, rendered after the verified findings and clearly
-    labelled; every line was checked in code (tools/evidence.py)."""
+    """Abstract evidence, estimates and the papers read without a finding,
+    rendered after the verified findings and clearly labelled."""
     sections = []
     if ctx.abstract_evidence:
         sections.append(_render_abstract_evidence(ctx))
     for estimate in ctx.estimates:
         sections.append(_render_estimate(estimate, ctx))
+    if ctx.unused_papers:
+        sections.append(_render_unused_papers(ctx))
     return "\n\n".join(sections)
+
+
+def _render_unused_papers(ctx: RunContext) -> str:
+    """Each paper read without a usable finding and why, built by code so the
+    answer itself stays on the verified packages. The reason is the
+    analyzer's or verifier's, not checked against the paper again."""
+    lines = [
+        "## Papers read without a usable finding",
+        "These papers were read but gave no verified finding. The reason is "
+        "the analyzer's or verifier's summary, not checked evidence.",
+    ]
+    for source_id, item in ctx.unused_papers.items():
+        lines.append(
+            f"- {_source_label(ctx, source_id)} (not used by the {item['by']}): "
+            f"{item['reason']}"
+        )
+    return "\n\n".join(lines[:2]) + "\n\n" + "\n".join(lines[2:])
 
 
 def _render_abstract_evidence(ctx: RunContext) -> str:
@@ -319,38 +312,25 @@ def _weaker_provenance(ctx: RunContext) -> List[Dict]:
     return out
 
 
-async def build_final_result(
-    question: str, final_text: str, ctx: RunContext
-) -> FinalResult:
-    """Parse the orchestrator's final JSON into a FinalResult with linkified
-    provenance. Falls back to ``status="error"`` (keeping the raw text) if the
-    final message isn't parseable JSON."""
-    parsed = llm_steps.extract_json_from_text(final_text or "")
-    # The orchestrator now ends with {"findings": [...]}; "answer" is still
-    # accepted from older prompts. Neither key's content is used below.
-    if not isinstance(parsed, dict) or not ({"findings", "answer"} & set(parsed)):
-        logger.warning("[deep] final message was not parseable result JSON")
-        return FinalResult(
-            status="error",
-            question=question,
-            answer=(final_text or "The agent did not produce a final answer.").strip(),
-            findings=list(ctx.findings),
-            papers_analyzed=len(ctx.paper_analysis_results),
-            searched_papers=dict(ctx.search_hits),
-        )
-
-    # Only engine-verified findings are authoritative. The orchestrator's final
-    # array is deliberately ignored because it can contain cached or invented
-    # entries that never passed source-artifact verification.
+async def build_final_result(question: str, ctx: RunContext) -> FinalResult:
+    """Build the FinalResult from the verified findings, with linkified
+    provenance. The answer is the orchestrator's graded one (``submit_answer``)
+    when the grader accepted it and no finding was verified after it; otherwise
+    the findings rendered per paper."""
+    # Only engine-verified findings are authoritative: the orchestrator's own
+    # messages are never parsed for evidence.
     findings = list(ctx.findings)
     answers = _findings_to_answers(findings, ctx.search_hits)
     if answers:
-        # A cross-paper synthesis is used only when its grader is satisfied
-        # and the code checks pass; otherwise render the findings verbatim.
-        synthesized = await synthesis.synthesize(
-            question, answers, ctx.config, seconds_left=ctx.seconds_left()
-        )
-        answer_text = synthesized or _render_grounded_answer(answers)
+        graded = ctx.accepted_answer
+        if graded is not None and ctx.accepted_answer_papers != len(answers):
+            logger.info(
+                "[answer] accepted answer covers %d of %d findings; using per-paper answer",
+                ctx.accepted_answer_papers,
+                len(answers),
+            )
+            graded = None
+        answer_text = graded or _render_grounded_answer(answers)
         status = "completed"
     elif ctx.verification_errors:
         answer_text = (
@@ -402,6 +382,7 @@ async def build_final_result(
         facts_stored=ctx.facts_stored,
         suggested_queries=suggested_queries,
         searched_papers=dict(ctx.search_hits),
+        answer_drafts=list(ctx.answer_drafts),
     )
 
 
@@ -434,8 +415,8 @@ async def keep_going_nudge(ctx: RunContext) -> Optional[str]:
     lines.append(
         "Call `read_top_candidates` now to read the next batch of them, in "
         "this order. A paper with the asked quantity for this material at any "
-        'conditions is a useful `match: "nearest"` finding. Emit the final JSON '
-        "only when it returns `stop: true`."
+        'conditions is a useful `match: "nearest"` finding. Write and submit '
+        "the answer only when it returns `stop: true`."
     )
     return "\n".join(lines)
 
@@ -465,8 +446,38 @@ def estimate_nudge(ctx: RunContext) -> Optional[str]:
         "plus a stress exponent and an activation energy, or coefficients of a "
         "fitted law - call record_estimate once now with the cited inputs, a "
         "low/high range, the method and every assumption, including how far "
-        "it extrapolates. If they don't, do not estimate. Then emit the final "
-        "JSON again."
+        "it extrapolates. If they don't, do not estimate. Then finish as "
+        "before: submit the answer if it was not accepted yet, else end with a "
+        "one-line message. The estimate is shown in its own section, so leave "
+        "it out of the answer."
+    )
+
+
+# A graded answer needs time for one model turn plus the grader call.
+_ANSWER_MIN_SECONDS = 60.0
+
+
+def answer_nudge(ctx: RunContext) -> Optional[str]:
+    """A follow-up instruction when there are verified findings but no
+    accepted answer covers all of them, an answer attempt is left, and there
+    is time; else None. The packages are repeated so the answer can be
+    written from this message alone."""
+    from research_agent.tools.answer import MAX_ANSWER_ATTEMPTS, MAX_CODE_REFUSALS
+
+    if not ctx.findings or ctx.answer_attempts >= MAX_ANSWER_ATTEMPTS:
+        return None
+    if ctx.code_refusals >= MAX_CODE_REFUSALS:
+        return None
+    if ctx.accepted_answer is not None and ctx.accepted_answer_papers == len(ctx.findings):
+        return None
+    if ctx.seconds_left() < _ANSWER_MIN_SECONDS:
+        return None
+    packages = ctx.analysis_packages()
+    return (
+        f"You stopped without an accepted answer, but {len(packages)} analysis "
+        "package(s) are verified. Write the answer from these packages alone, "
+        "as WRITING THE ANSWER says, and call submit_answer with it now:\n"
+        f"{json.dumps(packages, indent=2)}"
     )
 
 
@@ -536,12 +547,14 @@ async def run_deep(
 
         agent = build_research_agent(config, ctx)
 
-        final_text = ""
         # The graph has no checkpointer, so a follow-up round restarts from the
         # whole conversation so far plus the nudge.
         messages: List[Any] = [HumanMessage(content=question)]
-        estimate_nudged = False
-        for round_no in range(MAX_NUDGES + 1):
+        # Each kind of nudge has its own limit: keep-going MAX_NUDGES times,
+        # the estimate and the answer nudge once each.
+        keep_going_left, estimate_nudged, answer_nudged = MAX_NUDGES, False, False
+        round_no = 0
+        while True:
             round_messages: List[Any] = []
             async for mode, chunk in agent.astream(
                 {"messages": messages},
@@ -558,15 +571,12 @@ async def run_deep(
                         )
                 elif mode == "updates":
                     round_messages.extend(_update_messages(chunk))
-                    text = _last_ai_text(chunk)
-                    if text:
-                        final_text = text
                     for event in translate_update(chunk, ctx):
                         yield event
-            if round_no == MAX_NUDGES:
-                break
-            nudge = await keep_going_nudge(ctx)
+            round_no += 1
+            nudge = await keep_going_nudge(ctx) if keep_going_left else None
             if nudge is not None:
+                keep_going_left -= 1
                 status = (
                     "No verified findings yet; reading unread results "
                     f"({ctx.config.max_papers_analyzed - ctx.papers_attempted} "
@@ -575,16 +585,15 @@ async def run_deep(
             elif not estimate_nudged and (nudge := estimate_nudge(ctx)):
                 estimate_nudged = True
                 status = "Findings are only nearest data; asking for a cited estimate"
+            elif not answer_nudged and (nudge := answer_nudge(ctx)):
+                answer_nudged = True
+                status = "No accepted answer yet; asking for one from the verified packages"
             else:
                 break
             yield ProgressEvent(message=status)
             messages = [*messages, *round_messages, HumanMessage(content=nudge)]
 
-        if ctx.findings:
-            yield ProgressEvent(
-                message="Synthesizing across papers and checking it against the findings..."
-            )
-        yield await build_final_result(question, final_text, ctx)
+        yield await build_final_result(question, ctx)
     finally:
         # Parsed papers are per-run scratch; durable state lives in Redis.
         shutil.rmtree(run_workdir, ignore_errors=True)

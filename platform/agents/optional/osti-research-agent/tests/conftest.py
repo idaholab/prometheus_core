@@ -27,18 +27,18 @@ if str(AGENT_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _no_network_synthesis(request, monkeypatch):
-    """Keep the graded synthesis from calling a real model in every test that
-    builds a final result; tests marked ``real_synthesis`` drive it with fake
-    chat models instead."""
-    if request.node.get_closest_marker("real_synthesis"):
+def _no_network_grader(request, monkeypatch):
+    """Keep submit_answer's grader from calling a real model: unless a test is
+    marked ``real_grader`` (it drives the grader with a fake chat model), the
+    grader rejects every answer, so the per-paper rendering is used."""
+    if request.node.get_closest_marker("real_grader"):
         return
-    from research_agent.core import synthesis
+    from research_agent.tools import answer
 
-    async def no_synthesis(*args, **kwargs):
-        return None
+    async def no_grader(ctx, packages, text):
+        raise answer.GraderError("no grader in tests")
 
-    monkeypatch.setattr(synthesis, "synthesize", no_synthesis)
+    monkeypatch.setattr(answer, "grade", no_grader)
 
 
 @pytest.fixture(autouse=True)

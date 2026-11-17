@@ -36,7 +36,7 @@ from research_agent.parsing.artifacts import ParsedPaper
 logger = logging.getLogger(__name__)
 
 # Stop launching new VLM calls when fewer than this many seconds of budget
-# remain, so figure analysis can never eat the synthesis step's time.
+# remain, so figure analysis can never eat the answer step's time.
 _DEADLINE_GUARD_S = 60
 _CACHE_TTL_S = 30 * 24 * 3600
 

@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from research_agent.knowledge import KnowledgeStore
 
 # Stop launching new expensive work (downloads, parses) once this little time
-# is left, so synthesis + fact storage always get to run. Mirrors the pipeline
+# is left, so the graded answer + fact storage always get to run. Mirrors the pipeline
 # engine's 60 s guard, with extra headroom for a paper still being analyzed.
 BUDGET_FLOOR_S = 90.0
 
@@ -123,6 +123,40 @@ class RunContext:
     # Discrete facts written to the knowledge base via store_facts (reported in
     # the FinalResult).
     facts_stored: int = 0
+    # The orchestrator's answer once the grader accepted it (tools/answer.py),
+    # and how many packages it was written from: findings verified after it
+    # make it stale, and the answer falls back to the per-paper rendering.
+    accepted_answer: Optional[str] = None
+    accepted_answer_papers: int = 0
+    # Answers the grader judged so far, accepted or not (at most
+    # MAX_ANSWER_ATTEMPTS). Code-check refusals are counted apart, in
+    # code_refusals (at most MAX_CODE_REFUSALS), so they leave the revision.
+    answer_attempts: int = 0
+    code_refusals: int = 0
+    # Every submitted answer with what became of it, for the evaluation's
+    # transcript: {answer, outcome, gaps}.
+    answer_drafts: List[dict] = field(default_factory=list)
+
+    def analysis_packages(self) -> List[dict]:
+        """Each verified finding as the package the answer is written from,
+        numbered the way the answer cites it (``Paper N``). ``findings`` only
+        grows, so a package keeps its number for the whole run; the final
+        answer's provenance is built in the same order."""
+        packages = []
+        for number, finding in enumerate(self.findings, 1):
+            hit = self.search_hits.get(finding.source_id, {})
+            packages.append(
+                {
+                    "paper": number,
+                    "source_id": finding.source_id,
+                    "title": " ".join(str(hit.get("title") or "").split()),
+                    "match": finding.match,
+                    "answer": finding.answer,
+                    "evidence": finding.evidence,
+                    "excerpt": finding.excerpt or "",
+                }
+            )
+        return packages
 
     def unread_hits(self) -> List[Tuple[str, dict]]:
         """Search hits that could still be read, in the order found: not yet

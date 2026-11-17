@@ -23,8 +23,9 @@ cites, evaluates the formula itself (a small arithmetic evaluator, never
 ``eval``), and recomputes the low/high bounds; the method and assumptions
 must be stated.
 
-These never enter ``RunContext.findings``, synthesis, or fact storage; the
-final answer shows them in their own sections, after the verified findings.
+These never enter ``RunContext.findings``, the analysis packages, or fact
+storage; the final answer shows them in their own sections, after the
+verified findings.
 """
 
 from __future__ import annotations

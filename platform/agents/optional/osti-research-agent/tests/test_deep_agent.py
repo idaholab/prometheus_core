@@ -80,6 +80,19 @@ class _ToolBindingFakeChatModel(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=self.responses.pop(0))])
 
 
+GRADED_ANSWER = "Titanium creeps above 800 C (Paper 1).\n\nLimitations: one paper."
+
+
+def _satisfied_verdict():
+    from research_agent.tools.answer import RUBRIC_CRITERIA
+
+    return {
+        "result": "satisfied",
+        "explanation": "ok",
+        "criteria": [{"name": f"c{i}", "passed": True} for i in range(RUBRIC_CRITERIA)],
+    }
+
+
 class _FakeKnowledgeStore:
     async def search_facts(self, query, k=8):
         return []
@@ -928,6 +941,7 @@ def test_timeout_during_verification_never_exposes_candidate(tmp_path):
     assert context.verification_errors == []
 
 
+@pytest.mark.real_grader
 def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
     tmp_path,
     monkeypatch,
@@ -986,19 +1000,21 @@ def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
                 ],
             ),
             AIMessage(
-                content=json.dumps(
+                content="",
+                tool_calls=[
                     {
-                        "answer": "Titanium creeps above 800 C.",
-                        "findings": [
-                            {
-                                "source_id": "123",
-                                "answer": "unverified orchestrator copy",
-                            }
-                        ],
+                        "name": "submit_answer",
+                        "args": {"answer": GRADED_ANSWER},
+                        "id": "answer",
+                        "type": "tool_call",
                     }
-                )
+                ],
             ),
+            AIMessage(content="Answer submitted."),
         ]
+    )
+    grader = _ToolBindingFakeChatModel(
+        responses=[AIMessage(content=json.dumps(_satisfied_verdict()))]
     )
     monkeypatch.setattr(
         "research_agent.core.deep_agent.chat_model",
@@ -1007,6 +1023,11 @@ def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
             "analyzer": analyzer,
             "verifier": verifier,
         }[role],
+    )
+    # The grader is its own call on the verifier route, not the verifier graph.
+    monkeypatch.setattr(
+        "research_agent.tools.answer.chat_model",
+        lambda config, role: {"verifier": grader}[role],
     )
     context = _verification_context(tmp_path)
     context.knowledge = _FakeKnowledgeStore()
@@ -1031,18 +1052,31 @@ def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
         "research_agent.llm_steps.suggest_followup_from_findings",
         no_followups,
     )
-    final = asyncio.run(
-        build_final_result(
-            "Does titanium creep?",
-            graph_result["messages"][-1].content,
-            context,
-        )
-    )
+    final = asyncio.run(build_final_result("Does titanium creep?", context))
 
+    assert graph_result["messages"][-1].content == "Answer submitted."
     assert final.status == "completed"
     assert final.findings[0].answer == "Titanium creeps above 800 C."
-    assert "unverified orchestrator copy" not in final.answer
+    # The orchestrator's graded answer, linkified to the verified source.
+    assert final.answer == (
+        "Titanium creeps above 800 C ([Paper 1](https://www.osti.gov/biblio/123)).\n\n"
+        "Limitations: one paper."
+    )
+    # The submitted draft is kept, unlinkified, for the evaluation transcript.
+    assert [d["outcome"] for d in final.answer_drafts] == ["accepted"]
+    assert final.answer_drafts[0]["answer"].startswith("Titanium creeps above 800 C (Paper 1)")
+    assert "answer_drafts" not in final.model_dump(mode="json")
     assert "confidence" not in context.findings[0].model_dump()
     assert any(message.type == "tool" for message in analyzer.seen[-1])
     assert any(message.type == "tool" for message in verifier.seen[-1])
-    assert any(message.type == "tool" for message in orchestrator.seen[-1])
+    # The orchestrator saw the package in read_top_candidates' result.
+    read_result = next(
+        json.loads(m.content) for m in orchestrator.seen[1] if m.type == "tool"
+    )
+    assert read_result["packages"][0]["paper"] == 1
+    assert read_result["packages"][0]["answer"] == "Titanium creeps above 800 C."
+    assert read_result["read"][0]["paper"] == 1
+    # The grader saw only the question, the packages and the answer.
+    graded = grader.seen[0][-1].content
+    assert "Analysis packages" in graded and GRADED_ANSWER in graded
+    assert "read_top_candidates" not in graded

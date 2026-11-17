@@ -37,7 +37,9 @@ Give three scores, each an integer from 1 to 5:
   reported). Judge those against what they say they are: a quoted abstract
   claim is supported by its quote, and an estimate is grounded when its inputs
   are cited and its method and assumptions are stated. An estimate presented
-  as a reported or measured value is unsupported.
+  as a reported or measured value is unsupported. A "Papers read without a
+  usable finding" section only lists papers that gave no finding and why;
+  it makes no claim about the question, so leave it out of groundedness.
 - completeness: how much of what the question asks the answer delivers.
   Score by the best thing it delivers:
   5 = the asked value at the asked conditions, from an "exact" finding.

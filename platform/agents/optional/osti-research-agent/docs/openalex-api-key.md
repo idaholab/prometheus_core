@@ -61,10 +61,7 @@ Then recreate the agent container so it picks the variable up:
 make up OPTIONAL_AGENTS=true
 
 # or just the agent, from the agent's directory, for the dev attach setup
-env -i HOME="$HOME" PATH="$PATH" \
-  PROMETHEUS_API_BASE_IMAGE_REPO=prometheus_api PROMETHEUS_API_BASE_IMAGE_HASH=local \
-  docker compose -p osti-dev --env-file <platform>/.env \
-  -f docker-compose.yml -f docker-compose.attach.yml up -d osti-research-agent
+./dev-attach.sh
 ```
 
 `docker restart` is not enough: it keeps the container's old environment.

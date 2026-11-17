@@ -53,8 +53,7 @@ Code also enforces every budget: searches, papers, and time.
 | orchestrator | deepagents graph | `core/deep_agent.build_research_agent` | `orchestrator` | the agent's tools (`tools/`) plus deepagents' filesystem tools |
 | paper analyzer | deepagents graph, called from `read_top_candidates` | `core/deep_agent._build_analyzer_and_verifier` | `analyzer` | read-only `/papers/**` |
 | paper verifier | deepagents graph, called from `read_top_candidates` | `core/deep_agent.build_paper_verifier` | `verifier` | read-only `/papers/**` |
-| synthesizer | `langchain` agent, no tools | `core/synthesis._build_synthesizer` | `orchestrator` | nothing |
-| answer grader | `RubricMiddleware` on the synthesizer | `core/synthesis._build_synthesizer` | `verifier` | `read_verified_findings` |
+| answer grader | one completion, called from `submit_answer` | `tools/answer.grade` | `verifier` | the question, the analysis packages and the answer |
 | follow-up suggester | one completion | `llm_steps.suggest_followup_from_findings` | `complete` passed in by `agent.py` | nothing |
 | figure VLM (off by default) | one completion per figure | `parsing/figures.py` | `vlm` | the figure image |
 | Docling worker | subprocess, no LLM | `parsing/docling_worker.py` | - | the PDF |
@@ -90,13 +89,13 @@ flowchart TD
         MEM["1 · Memory<br/>search_knowledge_base<br/>(hints only)"]
         SEARCH["2 · Search<br/>search_osti · search_scholarly · search_web"]
         EXTRA["4 · Weaker evidence and facts<br/>record_abstract_evidence · record_estimate<br/>store_facts"]
-        FINISH["5 · Final message: {findings}"]
+        FINISH["5 · Write the answer from the packages<br/>submit_answer → grader"]
     end
 
     subgraph CODE ["Code"]
         READ[["3 · Read<br/>read_top_candidates<br/>ranks all unread results, reads the top 3"]]
         NUDGE{"Nudge?"}
-        FINAL["6 · build_final_result<br/>synthesizer + grader → answer"]
+        FINAL["6 · build_final_result<br/>graded answer, or findings per paper"]
     end
 
     MEM --> SEARCH
@@ -118,9 +117,9 @@ flowchart TD
 | 3 Read | code | Picks and reads papers; see [The read step](#the-read-step). |
 | 2 again | orchestrator | When a batch returns `stop: false`, the orchestrator searches again using what each paper reported instead (for example "data at 600 °C only"), then reads the second batch. |
 | 4 Weaker evidence | orchestrator, checked by code | Abstract quotes from unreadable papers, and estimates computed from cited values. Never findings. |
-| 5 Final message | orchestrator | Lists the findings. Its prose is ignored: the answer is built in code. |
-| Nudge | code (`core/deep_runner.py`) | A run that stops with nothing verified, while papers and time remain, is sent back to read. A run with only `nearest` findings is asked once for an estimate (step 4). At most 2 extra rounds. |
-| 6 Final result | code | Synthesizes the answer from verified findings only; see [Answer and status](#answer-and-status). |
+| 5 Answer | orchestrator, checked by code and the grader | Writes the answer from the analysis packages only and submits it with `submit_answer`; see [Answer and status](#answer-and-status). Its final message is ignored. |
+| Nudge | code (`core/deep_runner.py`) | A run that stops with nothing verified, while papers and time remain, is sent back to read (at most twice). A run with only `nearest` findings is asked once for an estimate (step 4). A run with verified findings but no accepted answer is asked once to submit one, with the packages repeated. |
+| 6 Final result | code | The graded answer, or the verified findings rendered per paper; see [Answer and status](#answer-and-status). |
 
 ### The read step
 
@@ -150,7 +149,10 @@ flowchart TD
 - **Parse:** Docling in a subprocess writes `/papers/<id>/` (`paper.md`,
   `tables/`, `figures/`); PyMuPDF text if Docling fails or times out.
 - **Stop:** code stops reading once two papers give an `exact` finding. Whether
-  their values agree is left to the synthesizer.
+  their values agree is for the answer to say, and the grader checks it.
+- **Packages:** every result carries `packages`, each finding verified so far
+  in the run, numbered `Paper N` (`RunContext.analysis_packages`). The
+  orchestrator writes the answer from these.
 
 ### Analyzing one paper
 
@@ -182,24 +184,28 @@ flowchart TD
 | validate | Known verdict, `source_id` unchanged, answer and evidence present; every cited file is in this paper's directory, exists, and was read by the verifier; `paper.md` was read and cited. |
 
 A paper not used by the analyzer or verifier is logged in `ctx.unused_papers`
-with the reason; an analyzer, verifier or path failure goes to
+with the reason, and listed after the answer in a section code builds
+("Papers read without a usable finding"); an analyzer, verifier or path failure goes to
 `ctx.verification_errors`, which can make the run's status `error`.
 
 ### Answer and status
 
 ```
-ctx.findings → synthesizer (cites "Paper N", ≤ 3000 chars asked)
-            → grader (7 rubric criteria, one revision allowed)
-            → code: grader satisfied, ≤ MAX_ANSWER_CHARS, every Paper N in range
-              yes → synthesized answer
-              no, or timeout → findings rendered per paper
+ctx.findings → analysis packages (Paper N: title, match, answer, evidence, excerpt)
+            → orchestrator writes the answer from them, calls submit_answer
+            → code: ≤ MAX_ANSWER_CHARS, every Paper N names a package
+              (a refusal here does not use up the revision; 3 at most)
+            → grader (7 criteria in prompts/answer_grader.md; sees only the
+              question, the packages and the answer; one revision allowed)
+              accepted, and no finding verified since → the orchestrator's answer
+              otherwise (graded twice and refused, grader error, timeout) → findings per paper
 ```
 
 | Status | When |
 |---|---|
 | `completed` | at least one verified finding |
 | `no_results` | nothing verified, and no `verification_errors` |
-| `error` | nothing verified and at least one `verification_errors` entry (an analyzer, verifier or source-path failure), or the final message was not JSON |
+| `error` | nothing verified and at least one `verification_errors` entry (an analyzer, verifier or source-path failure) |
 | `timeout_partial` | the runner's outer deadline fired |
 
 ### Where each kind of check happens
@@ -216,8 +222,8 @@ ctx.findings → synthesizer (cites "Paper N", ≤ 3000 chars asked)
 | abstract quote verbatim, numbers in the quote | code | `tools/evidence.record_abstract_evidence` |
 | estimate inputs cited, formula evaluated safely | code | `tools/evidence.check_estimate` |
 | fact source has a verified finding | code | `tools/memory.store_facts` |
-| answer follows the findings | grader | `prompts/synthesis_rubric.md` |
-| answer length and `Paper N` range | code | `synthesis.citations_valid`, `MAX_ANSWER_CHARS` |
+| answer follows the packages | grader | `prompts/answer_grader.md`, `tools/answer.parse_verdict` |
+| answer length and `Paper N` range | code | `tools/answer.code_check` |
 
 ### Search hits and ranking
 
@@ -271,7 +277,7 @@ word with the question (a BM25 score of 0): the ranking orders candidates but
 never says that none of them fit. The orchestrator calls it at most twice,
 `MAX_PAPERS_ANALYZED` = 6 papers in all, and searches again between the two
 batches using what each paper reported instead. It stops once two papers give
-an `exact` finding; whether those agree is left to the synthesizer. The
+an `exact` finding; whether those agree is for the answer to say. The
 orchestrator has no `download_paper`, `parse_paper` or `analyze_paper` tool.
 The keep-going nudge lists unread hits in the same ranked order. On the
 `ss316-creep-400c` question's real searches, the five papers about creep of
@@ -348,16 +354,27 @@ verified; evidence-based rejections produce `no_results`.
 
 ### Final answer
 
-The orchestrator ends with `{"findings": [...]}`, which the runner ignores in
-favour of the verified findings it captured itself. `core/synthesis.py` then
-writes the cross-paper answer: a tool-less agent on the orchestrator route
-drafts it from those findings only, and a `RubricMiddleware` grader on the
-verifier route checks it against `prompts/synthesis_rubric.md`, allowing one
-revision. The grader's transcript is cut at 4000 characters per message, so it
-reads the findings through a `read_verified_findings` tool, and an answer
-longer than `MAX_ANSWER_CHARS` is rejected. The synthesis is used only when the
-grader ends `satisfied` and every `Paper N` citation is in range; otherwise the
-answer is the findings rendered per paper, as before.
+The orchestrator writes the answer itself, from the analysis packages
+`read_top_candidates` returned, and submits it with `submit_answer`
+(`tools/answer.py`). Code refuses an answer longer than `MAX_ANSWER_CHARS` or
+one that cites a `Paper N` with no package. A separate grader, one call on the
+verifier route, then checks it against the 7 criteria in
+`prompts/answer_grader.md`. The grader is given only the question, the
+packages and the answer, not the orchestrator's transcript, search results or
+abstracts, so anything in the answer that is not in a package fails. A
+`satisfied` verdict must pass every criterion. One `Paper N` covers its
+paragraph or list item, so a sentence needs its own citation only when it
+draws on another package. On `needs_revision`, the gaps go back to the
+orchestrator, which can submit once more (`MAX_ANSWER_ATTEMPTS` = 2 graded
+answers). A code-check refusal does not use up that revision; it has its own
+limit (`MAX_CODE_REFUSALS` = 3). The accepted answer is used if no finding
+was verified after it; otherwise, or after a grader error, the answer is the
+findings rendered per paper: each finding's answer, then its evidence, both
+checked by the verifier. A statement that the packages do not report
+something needs no package to say so. The orchestrator's final message is
+not parsed. Every submitted answer is kept with its outcome and the grader's
+gaps (`FinalResult.answer_drafts`, left out of the result JSON) for the
+evaluation transcript.
 
 ### Literature artifacts
 

@@ -76,9 +76,12 @@ def render_verifier_prompt(model_call_limit: int, tool_call_limit: int) -> str:
 
 
 def render_orchestrator_prompt(config: AgentConfig) -> str:
+    from research_agent.tools.answer import PROMPT_MAX_CHARS
+
     template = (_PROMPTS_DIR / "orchestrator.md").read_text(encoding="utf-8")
     budget_min = max(round(config.total_budget_s / 60), 1)
     return template.format(
+        answer_max_chars=PROMPT_MAX_CHARS,
         max_papers=config.max_papers_analyzed,
         max_osti_searches=config.max_osti_searches,
         max_scholarly_searches=config.max_scholarly_searches,

@@ -172,8 +172,8 @@ def build_osti_tools(ctx: RunContext) -> List[BaseTool]:
                         "This search tool is used up for this run. Do not call it "
                         "again: download and analyze the most promising unread "
                         "results you already have, or use another search tool. "
-                        "Emit the final JSON only when no promising result is "
-                        "left or the paper or time budget is reached."
+                        "Write and submit the answer only when no promising "
+                        "result is left or the paper or time budget is reached."
                         if exhausted
                         else "Use the earlier results instead of repeating this query."
                     ),

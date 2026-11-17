@@ -76,6 +76,9 @@ class FinalResult(BaseModel):
     searched_papers: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict, exclude=True
     )
+    # Every answer submitted to submit_answer, with its outcome and the
+    # grader's gaps, for the evaluation's transcript. Also excluded.
+    answer_drafts: List[Dict[str, Any]] = Field(default_factory=list, exclude=True)
 
 
 AgentEvent = Union[ProgressEvent, FinalResult]

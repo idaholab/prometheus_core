@@ -32,6 +32,7 @@ __all__ = ["RunContext", "build_tools"]
 def build_tools(ctx: RunContext) -> List:
     """All orchestrator-facing tools: OSTI search/download/parse, web + scholarly
     search, and the knowledge base."""
+    from research_agent.tools.answer import build_answer_tools
     from research_agent.tools.evidence import build_evidence_tools
     from research_agent.tools.memory import build_memory_tools
     from research_agent.tools.osti import build_osti_tools
@@ -44,4 +45,5 @@ def build_tools(ctx: RunContext) -> List:
         + build_rank_tools(ctx)
         + build_memory_tools(ctx)
         + build_evidence_tools(ctx)
+        + build_answer_tools(ctx)
     )

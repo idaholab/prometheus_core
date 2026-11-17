@@ -153,13 +153,15 @@ def test_finding_captured_from_analyze_paper_toolmessage(monkeypatch):
     assert final.findings[0].source_id == "123"
 
 
-def test_malformed_final_falls_back_to_error(monkeypatch):
-    events = _run([], monkeypatch, "Sorry, I was unable to produce a JSON answer.")
+def test_the_orchestrators_final_text_is_never_the_answer(monkeypatch):
+    # Prose (or JSON) in the last message is not parsed for evidence or used
+    # as the answer: only a graded submit_answer is.
+    events = _run([], monkeypatch, "Titanium creeps at 2000 C (Paper 1).")
 
     final = [e for e in events if isinstance(e, FinalResult)][0]
-    assert final.status == "error"
-    assert "unable to produce" in final.answer
-    # findings captured off the stream are still preserved for the caller
+    assert final.status == "completed"
+    assert "2000 C" not in final.answer
+    assert "Table 1 reports creep rates" in final.answer  # the per-paper rendering
     assert len(final.findings) == 1
 
 
@@ -174,28 +176,24 @@ def test_final_answer_uses_captured_findings_only(monkeypatch):
         complete=_fake_complete,
         question="does titanium creep?",
     )
+    # A Finding is the verifier's accepted output: its answer (the values)
+    # and evidence (where they are) were both checked against the paper.
     context.findings.append(
         deep_runner.Finding(
             source_id="123",
-            answer="Unsupported analyzer explanation",
+            answer="The minimum creep rate is 0.019 %/h at 725 C.",
             evidence="Table 1 reports the measured value",
         )
     )
-    final_text = json.dumps(
-        {
-            "answer": "Unsupported estimate from search snippets.",
-            "findings": [json.loads(_finding_json())],
-        }
-    )
-
     final = asyncio.run(
-        deep_runner.build_final_result("does titanium creep?", final_text, context)
+        deep_runner.build_final_result("does titanium creep?", context)
     )
 
-    assert "Unsupported estimate" not in final.answer
     assert "Titanium creeps above 800C" not in final.answer
-    assert "Unsupported analyzer explanation" not in final.answer
-    assert "Table 1 reports the measured value" in final.answer
+    assert (
+        "The minimum creep rate is 0.019 %/h at 725 C. "
+        "Evidence: Table 1 reports the measured value"
+    ) in final.answer
     assert "[Paper 1](https://www.osti.gov/biblio/123)" in final.answer
 
 
@@ -209,20 +207,12 @@ def test_orchestrator_findings_cannot_bypass_verification(monkeypatch):
         complete=_fake_complete,
         question="does titanium creep?",
     )
-    final_text = json.dumps(
-        {
-            "answer": "Unsupported cached answer.",
-            "findings": [json.loads(_finding_json())],
-        }
-    )
-
     final = asyncio.run(
-        deep_runner.build_final_result("does titanium creep?", final_text, context)
+        deep_runner.build_final_result("does titanium creep?", context)
     )
 
     assert final.status == "no_results"
     assert final.findings == []
-    assert "Unsupported cached answer" not in final.answer
     assert "No source-verified findings" in final.answer
 
 
@@ -241,7 +231,6 @@ def test_total_verifier_failure_returns_error(monkeypatch):
     final = asyncio.run(
         deep_runner.build_final_result(
             "does titanium creep?",
-            json.dumps({"answer": "Unsupported candidate.", "findings": []}),
             context,
         )
     )
@@ -273,7 +262,6 @@ def test_verified_findings_survive_other_verifier_failures(monkeypatch):
     final = asyncio.run(
         deep_runner.build_final_result(
             "does titanium creep?",
-            json.dumps({"answer": "orchestrator output", "findings": []}),
             context,
         )
     )
@@ -353,9 +341,7 @@ def test_papers_analyzed_counts_every_analysis_not_just_findings(monkeypatch):
         "1": {"source_id": "1", "answer": "a"},
         "2": {"answered": False, "reason": "not supported"},
     }
-    final_text = json.dumps({"findings": [], "answer": ""})
-
-    final = asyncio.run(deep_runner.build_final_result("q", final_text, context))
+    final = asyncio.run(deep_runner.build_final_result("q", context))
 
     assert final.papers_analyzed == 2
 
@@ -381,8 +367,7 @@ def _final_with_knowledge(monkeypatch, *, with_finding):
         context.findings.append(
             deep_runner.Finding(source_id="123", answer="a", evidence="Table 1")
         )
-    final_text = json.dumps({"findings": [], "answer": ""})
-    final = asyncio.run(deep_runner.build_final_result("q", final_text, context))
+    final = asyncio.run(deep_runner.build_final_result("q", context))
     return final, context.knowledge.cached
 
 
@@ -400,37 +385,39 @@ def test_no_results_answer_is_not_cached(monkeypatch):
     assert cached == []
 
 
-def _final_for_synthesis(monkeypatch, synthesized):
-    from research_agent.core import synthesis
-
+def _final_with_accepted_answer(monkeypatch, accepted, papers=1):
     async def no_followups(**kwargs):
         return []
 
-    async def fake_synthesize(question, answers, config, *, seconds_left):
-        assert [a["osti_id"] for a in answers] == ["123"]
-        return synthesized
-
     monkeypatch.setattr(llm_steps, "suggest_followup_from_findings", no_followups)
-    monkeypatch.setattr(synthesis, "synthesize", fake_synthesize)
     context = deep_runner.RunContext(
         config=_config(), complete=_fake_complete, question="q"
     )
     context.findings.append(
         deep_runner.Finding(source_id="123", answer="a", evidence="Table 1 value")
     )
-    final_text = json.dumps({"findings": [json.loads(_finding_json())]})
-    return asyncio.run(deep_runner.build_final_result("q", final_text, context))
+    context.accepted_answer = accepted
+    context.accepted_answer_papers = papers
+    return asyncio.run(deep_runner.build_final_result("q", context))
 
 
-def test_graded_synthesis_becomes_the_linkified_answer(monkeypatch):
-    final = _final_for_synthesis(monkeypatch, "Ti creeps (Paper 1).")
+def test_the_graded_answer_becomes_the_linkified_answer(monkeypatch):
+    final = _final_with_accepted_answer(monkeypatch, "Ti creeps (Paper 1).")
 
     assert final.status == "completed"
     assert final.answer == "Ti creeps ([Paper 1](https://www.osti.gov/biblio/123))."
 
 
-def test_findings_only_final_message_falls_back_to_per_paper_answer(monkeypatch):
-    final = _final_for_synthesis(monkeypatch, None)
+def test_without_a_graded_answer_the_findings_are_rendered_per_paper(monkeypatch):
+    final = _final_with_accepted_answer(monkeypatch, None, papers=0)
 
     assert final.status == "completed"
+    assert "Table 1 value" in final.answer
+
+
+def test_an_answer_older_than_the_last_finding_is_not_used(monkeypatch):
+    # Accepted with 0 packages' worth of findings, then one more was verified.
+    final = _final_with_accepted_answer(monkeypatch, "Old answer (Paper 1).", papers=0)
+
+    assert "Old answer" not in final.answer
     assert "Table 1 value" in final.answer

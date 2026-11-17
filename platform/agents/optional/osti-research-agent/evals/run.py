@@ -181,6 +181,9 @@ async def _run_engine(
         )
         result["_engine"] = engine
         result["_wall_s"] = round(wall_s, 2)
+        # Kept out of the agent's JSON; saved here so a refused answer can be
+        # read with the grader's full gaps.
+        result["_answer_drafts"] = final.answer_drafts if final else []
 
         # Persist the full transcript for the manual spot-check.
         out_dir = workdir / engine / qid

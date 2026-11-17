@@ -141,7 +141,9 @@ that drops the original makes the repeat a cold run.
 report.md                    summary, failures with reasons, every question, judge notes
 report.json                  the same as data ("complete": false if the run stopped early)
 out/deepagent/<qid>/
-  result.json                the FinalResult: answer, findings, provenance, status
+  result.json                the FinalResult: answer, findings, provenance, status,
+                             plus _answer_drafts: each submitted answer, its outcome
+                             and the grader's full gaps
   progress.log               every progress message, with seconds since the start
 ```
 
@@ -207,7 +209,8 @@ of the run caused it, read `progress.log` against the run flow in
 | `Paper <id> not used (verifier): ...`, `Rejected unsupported finding` | verify | whether the paper really supports the candidate; `prompts/verifier.md` |
 | `Verifier model-call limit reached`, `Verifier returned an invalid verdict` | verify | `VERIFIER_MODEL_CALL_LIMIT`; a status of `error` |
 | `Findings are only nearest data; asking for a cited estimate` | estimate nudge | whether the findings had the inputs an estimate needs |
-| an answer headed `## Evidence-grounded findings` | synthesis | the grader did not pass the synthesized answer, so the per-paper fallback was used |
+| `The grader asked for a revision: ...`, `Answer refused by the code check: ...` | answer | the gaps it lists; `prompts/orchestrator.md` (WRITING THE ANSWER) and `prompts/answer_grader.md` |
+| an answer headed `## Evidence-grounded findings` | answer | no answer was accepted (graded twice and refused, a grader error, or none submitted), so the per-paper fallback was used; `_answer_drafts` in `result.json` has each draft and why it was refused |
 | status `timeout_partial` | budget | `TOTAL_BUDGET_S`, slow parses, too many papers |
 
 `result.json` has the verified `findings` (with `match`), `provenance`,

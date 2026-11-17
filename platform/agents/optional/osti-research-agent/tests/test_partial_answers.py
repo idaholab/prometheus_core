@@ -154,12 +154,61 @@ def test_nearest_findings_are_labelled_in_the_fallback_answer(monkeypatch):
     )
 
     final = asyncio.run(
-        deep_runner.build_final_result("q", json.dumps({"findings": []}), ctx)
+        deep_runner.build_final_result("q", ctx)
     )
 
     assert final.status == "completed"
-    assert "Nearest data reported (not at the exact conditions asked): Table 1" in final.answer
+    assert (
+        "Nearest data reported (not at the exact conditions asked): "
+        "1e-8 /s at 425 C Evidence: Table 1"
+    ) in final.answer
     assert "reported at other conditions" in final.answer
+
+
+def _final_with_unused(monkeypatch, cached):
+    async def no_followups(**kwargs):
+        return []
+
+    class Knowledge:
+        async def cache_answer(self, question, answer, sources):
+            cached.append(answer)
+
+    monkeypatch.setattr(llm_steps, "suggest_followup_from_findings", no_followups)
+    ctx = deep_runner.RunContext(
+        config=AgentConfig(litellm_base_url="http://unused"), complete=None, question="q"
+    )
+    ctx.knowledge = Knowledge()
+    ctx.search_hits["456"] = {"title": "Creep of [347H]", "origin": "osti"}
+    ctx.search_hits["doi_x"] = {"title": "Alloy 625", "url": "https://doi.org/x"}
+    ctx.findings.append(Finding(source_id="123", answer="a", evidence="Table 1"))
+    deep_agent._not_used("456", "Covers 347H only.", ctx, by="analyzer")
+    deep_agent._not_used("doi_x", "No 316 data.", ctx, by="verifier")
+    return asyncio.run(deep_runner.build_final_result("q", ctx))
+
+
+def test_papers_read_without_a_finding_get_their_own_section(monkeypatch, emitted):
+    cached = []
+
+    final = _final_with_unused(monkeypatch, cached)
+
+    section = final.answer.split("## Papers read without a usable finding", 1)[1]
+    assert "not checked evidence" in section
+    assert (
+        "- [Creep of (347H)](https://www.osti.gov/biblio/456) "
+        "(not used by the analyzer): Covers 347H only."
+    ) in section
+    assert "- [Alloy 625](https://doi.org/x) (not used by the verifier): No 316 data." in section
+    # After the verified answer, and never cached as part of it.
+    assert final.answer.index("## Limitations") < final.answer.index("## Papers read without")
+    assert cached and "Papers read without" not in cached[0]
+
+
+def test_no_unused_papers_no_section(monkeypatch):
+    ctx = deep_runner.RunContext(
+        config=AgentConfig(litellm_base_url="http://unused"), complete=None, question="q"
+    )
+
+    assert deep_runner._render_weaker_evidence(ctx) == ""
 
 
 # --- prompts ---------------------------------------------------------------
@@ -323,10 +372,13 @@ def test_empty_rounds_are_sent_back_at_most_twice(monkeypatch):
     assert events[-1].status == "no_results"
 
 
-def test_a_round_that_finds_something_ends_the_run(monkeypatch):
+def test_a_round_that_finds_something_stops_the_keep_going_nudge(monkeypatch):
     events, graph = _run_rounds(monkeypatch, find_on_round=2)
 
-    assert len(graph.inputs) == 2
+    # The fake orchestrator never submits an answer, so the round after the
+    # finding is the answer nudge, not another keep-going one.
+    assert len(graph.inputs) == 3
+    assert "submit_answer" in graph.inputs[2][-1].content
     assert events[-1].status == "completed"
 
 
@@ -396,8 +448,10 @@ def test_a_nearest_only_run_is_asked_for_an_estimate_once(monkeypatch):
 
     events = asyncio.run(go())
 
-    assert len(graphs[0].inputs) == 2  # one estimate round, not two
+    # One estimate round, not two; then the answer nudge, once.
+    assert len(graphs[0].inputs) == 3
     assert "record_estimate" in graphs[0].inputs[1][-1].content
+    assert "submit_answer" in graphs[0].inputs[2][-1].content
     assert any("asking for a cited estimate" in getattr(e, "message", "") for e in events)
 
 

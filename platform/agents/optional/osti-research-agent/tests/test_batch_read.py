@@ -109,7 +109,7 @@ def test_two_batches_read_six_papers_then_stop():
     assert first["stop"] is False and second["stop"] is True
     assert "paper budget reached (6/6 papers)" in second["reason"]
     assert steps.order == [str(1000 + i) for i in range(6)]  # no paper read twice
-    assert third == {"read": [], "stop": True, "reason": second["reason"]}
+    assert third == {"read": [], "stop": True, "reason": second["reason"], "packages": []}
 
 
 def test_a_failed_download_is_replaced_by_the_next_ranked_paper():

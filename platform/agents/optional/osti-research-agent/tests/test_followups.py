@@ -13,7 +13,6 @@
 """Follow-up suggestions in the deep engine come from verified findings only."""
 
 import asyncio
-import json
 
 from research_agent import llm_steps
 from research_agent.core import deep_runner
@@ -94,9 +93,7 @@ def test_final_result_suggestions_come_from_verified_findings():
         complete,
         [Finding(source_id="123", answer="creeps above 800 C", evidence="Table 1 onset")],
     )
-    final_text = json.dumps({"findings": []})
-
-    final = asyncio.run(deep_runner.build_final_result("Does Ti creep?", final_text, ctx))
+    final = asyncio.run(deep_runner.build_final_result("Does Ti creep?", ctx))
 
     assert final.suggested_queries == [{"suggested_query": "creep of Ti at 900 C"}]
     assert "Table 1 onset" in complete.prompts[-1]
@@ -107,7 +104,7 @@ def test_no_results_run_gets_no_suggestions():
     complete = _RecordingComplete()
     final = asyncio.run(
         deep_runner.build_final_result(
-            "Does Ti creep?", json.dumps({"findings": []}), _context(complete, [])
+            "Does Ti creep?", _context(complete, [])
         )
     )
 

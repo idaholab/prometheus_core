@@ -796,11 +796,12 @@ def build_read_top_candidates_tool(
         to download or parse is replaced by the next one in rank order. The run
         reads at most {max_papers} papers, so call this at most twice.
 
-        Returns JSON {read: [{source_id, read, answered, match, answer | reason
-        | error}], stop, reason}. Verified findings are recorded for you. When
-        ``stop`` is false and no two exact findings agree, search again with
-        what the ``reason`` of each paper says it reports instead, or call this
-        again for the next batch."""
+        Returns JSON {read: [{source_id, read, answered, match, paper | reason
+        | error}], stop, reason, packages}. ``packages`` holds every finding
+        verified so far, numbered ``paper`` N: write the answer from them only,
+        citing ``Paper N``, and submit it with submit_answer. When ``stop`` is
+        false, search again with what the ``reason`` of each paper says it
+        reports instead, or call this again for the next batch."""
         return json.dumps(await batch.read_top_candidates(ctx, download, parse, analyze))
 
     read_top_candidates.description = read_top_candidates.description.replace(

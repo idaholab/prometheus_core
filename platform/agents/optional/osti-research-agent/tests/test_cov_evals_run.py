@@ -128,7 +128,11 @@ class _Runner:
     async def run(self, question, *, run_id):
         yield ProgressEvent(message="Searching OSTI")
         yield ProgressEvent(message="Reading paper 1")
-        yield FinalResult(status="completed", question=question, answer="done")
+        yield FinalResult(status="completed", question=question, answer="done",
+                          answer_drafts=[DRAFT])
+
+
+DRAFT = {"answer": "x (Paper 1)", "outcome": "needs revision", "gaps": ["cite it"]}
 
 
 def test_run_one_logs_progress_and_forwards_it(monkeypatch):
@@ -172,6 +176,8 @@ def test_run_engine_uses_its_own_empty_redis_database(tmp_path, monkeypatch):
     assert records[0]["id"] == "one"
     saved = json.loads((tmp_path / "deepagent" / "one" / "result.json").read_text())
     assert saved["_engine"] == "deepagent" and saved["answer"] == "done"
+    # Saved for the transcript, but not part of the agent's own JSON.
+    assert saved["_answer_drafts"] == [DRAFT] and "answer_drafts" not in saved
     log = (tmp_path / "deepagent" / "one" / "progress.log").read_text()
     assert "Searching OSTI" in log
 
