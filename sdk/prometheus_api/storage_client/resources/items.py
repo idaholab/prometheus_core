@@ -15,7 +15,7 @@
 from typing import Dict, Iterator, List, Optional, Any
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
 from ..models.pagination import Page, PageInfo
-from .base import BaseResource
+from .base import BaseResource, check_paginated_body
 
 # Query parameters ``GET .../records/paginated`` accepts besides the paging ones. The server
 # ignores any other parameter without an error, so an unknown filter would silently return
@@ -326,6 +326,7 @@ class ItemsResource(BaseResource):
         The server returns ``items: null`` for an empty result, so a missing or null ``items``
         is an empty page. The server's own paging numbers are used when present.
         """
+        data = check_paginated_body(data, "records/paginated")
         items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
         total_count = data.get("totalCount", len(items))
         page_info = PageInfo(

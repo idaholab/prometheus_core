@@ -23,6 +23,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-13: Sync and async item create/update payloads and search query parsing MUST remain aligned.
 - REQ-002-14: Sync and async advanced query MUST accept a list of structured filters and project IDs, optionally accept text search, validate page numbers and page sizes, POST matching payloads to `/organizations/{org}/query/records/advanced/paginated`, and parse server pagination into `Page[Item]`.
 - REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected, `hasNext` is false or a page has no items; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`.
+- REQ-002-16: `items.list`, `items.iter_all`, `search.recent` and `search.advanced_query`, sync and async, MUST raise `StorageClientError` naming the route and the received type when a paginated route answers with a body that is not a JSON object, instead of failing with an `AttributeError`.
 
 ## Behavior
 - BEH-002-01: GIVEN a tag list with duplicate and blank names WHEN IDs are resolved THEN each non-empty normalized name is resolved once.

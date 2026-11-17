@@ -15,6 +15,7 @@
 from typing import Any, Dict, List, Optional
 from ..models.item import Item, Tag
 from ..models.pagination import Page, PageInfo
+from ..resources.base import check_paginated_body
 from .base import AsyncBaseResource
 
 
@@ -155,6 +156,7 @@ class AsyncSearchResource(AsyncBaseResource):
 
     def _parse_paginated_results(self, data: Dict[str, Any]) -> Page[Item]:
         """Parse a PaginatedResponse<QueryRecordViewResponseDto> payload."""
+        data = check_paginated_body(data, "query/records/paginated")
         items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
 
         page_info = PageInfo(

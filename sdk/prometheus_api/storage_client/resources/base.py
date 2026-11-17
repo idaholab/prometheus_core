@@ -12,10 +12,25 @@
 
 """Base resource class for synchronous API operations."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
+
+from ..exceptions import StorageClientError
 
 if TYPE_CHECKING:
     from ..client import StorageClient
+
+
+def check_paginated_body(data: Any, route: str) -> Dict[str, Any]:
+    """Return ``data`` if it is a JSON object, else raise ``StorageClientError``.
+
+    A paginated route that answers 200 with a list, a string or an HTML page would otherwise
+    fail later with an ``AttributeError`` that hides which route misbehaved.
+    """
+    if not isinstance(data, dict):
+        raise StorageClientError(
+            f"Unexpected {route} response: expected a JSON object, got {type(data).__name__}"
+        )
+    return data
 
 
 class BaseResource:

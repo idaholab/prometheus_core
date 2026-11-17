@@ -577,3 +577,29 @@ async def test_items_iter_all_stops_on_an_empty_page_that_claims_a_next_one():
     assert list(ItemsResource(sync_client).iter_all(page_size=2)) == []
     assert [i async for i in AsyncItemsResource(async_client).iter_all(page_size=2)] == []
     assert len(sync_client.calls) == len(async_client.calls) == 1
+
+
+@pytest.mark.parametrize("body", [[], "<html>502 Bad Gateway</html>", None, 7])
+async def test_paginated_routes_reject_a_body_that_is_not_a_json_object(body):
+    """Covers REQ-002-16: a non-object body is a StorageClientError, not an AttributeError."""
+    from prometheus_api.storage_client.exceptions import StorageClientError
+
+    kind = type(body).__name__
+    for route, call in [
+        ("records/paginated", lambda c: ItemsResource(c).list()),
+        ("records/paginated", lambda c: list(ItemsResource(c).iter_all())),
+        ("query/records/paginated", lambda c: SearchResource(c).recent(limit=5)),
+        ("query/records/paginated", lambda c: SearchResource(c).advanced_query([], [2])),
+    ]:
+        with pytest.raises(StorageClientError, match=f"Unexpected {route} response.*got {kind}"):
+            call(SyncClient(body))
+
+    async_client = AsyncClient(body)
+    with pytest.raises(StorageClientError, match=f"Unexpected records/paginated response.*{kind}"):
+        await AsyncItemsResource(async_client).list()
+    with pytest.raises(StorageClientError, match=f"Unexpected records/paginated response.*{kind}"):
+        [i async for i in AsyncItemsResource(async_client).iter_all()]
+    with pytest.raises(StorageClientError, match=f"Unexpected query/records.*response.*{kind}"):
+        await AsyncSearchResource(async_client).recent(limit=5)
+    with pytest.raises(StorageClientError, match=f"Unexpected query/records.*response.*{kind}"):
+        await AsyncSearchResource(async_client).advanced_query([], [2])

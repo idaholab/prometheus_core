@@ -15,7 +15,7 @@
 from typing import Any, Dict, List, Optional
 from ..models.item import Item
 from ..models.pagination import Page, PageInfo
-from .base import BaseResource
+from .base import BaseResource, check_paginated_body
 
 
 # GET /organizations/{org}/query/records/paginated: the server caps PageSize at 500, and
@@ -237,6 +237,7 @@ class SearchResource(BaseResource):
         Returns:
             Paginated results
         """
+        data = check_paginated_body(data, "query/records/paginated")
         items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
 
         page_info = PageInfo(

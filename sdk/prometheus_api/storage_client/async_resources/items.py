@@ -17,6 +17,7 @@ from typing import AsyncIterator, Dict, List, Optional, Any
 from importlib.metadata import version as pkg_version
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
 from ..models.pagination import Page, PageInfo
+from ..resources.base import check_paginated_body
 from ..resources.items import check_list_filters, check_page_size
 from .base import AsyncBaseResource
 
@@ -186,6 +187,7 @@ class AsyncItemsResource(AsyncBaseResource):
         The server returns ``items: null`` for an empty result, so a missing or null ``items``
         is an empty page. The server's own paging numbers are used when present.
         """
+        data = check_paginated_body(data, "records/paginated")
         items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
         total_count = data.get("totalCount", len(items))
         page_info = PageInfo(
