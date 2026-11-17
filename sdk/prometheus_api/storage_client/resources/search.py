@@ -163,7 +163,7 @@ class SearchResource(BaseResource):
             ```
         """
         if limit < 1:
-            raise ValueError("limit must be 1 or greater")
+            raise ValueError(f"limit must be 1 or greater for search.recent, got {limit}")
 
         page_size = min(limit, paging.MAX_PAGE_SIZE)
         items: List[Item] = []

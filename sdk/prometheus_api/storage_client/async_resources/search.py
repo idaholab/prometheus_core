@@ -101,7 +101,7 @@ class AsyncSearchResource(AsyncBaseResource):
             ValueError: If ``limit`` is less than 1
         """
         if limit < 1:
-            raise ValueError("limit must be 1 or greater")
+            raise ValueError(f"limit must be 1 or greater for search.recent, got {limit}")
 
         page_size = min(limit, paging.MAX_PAGE_SIZE)
         items: List[Item] = []

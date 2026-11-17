@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import re
+
 import pytest
 
 from prometheus_api.storage_client.async_resources.items import AsyncItemsResource
@@ -399,9 +401,10 @@ async def test_search_recent_rejects_non_positive_limit_in_sync_and_async(limit)
     sync_client = PagedSearchSync({})
     async_client = PagedSearchAsync({})
 
-    with pytest.raises(ValueError, match="limit must be 1 or greater"):
+    match = rf"limit must be 1 or greater for search\.recent, got {limit}"
+    with pytest.raises(ValueError, match=match):
         SearchResource(sync_client).recent(limit=limit)
-    with pytest.raises(ValueError, match="limit must be 1 or greater"):
+    with pytest.raises(ValueError, match=match):
         await AsyncSearchResource(async_client).recent(limit=limit)
 
     assert sync_client.calls == [] and async_client.calls == []
