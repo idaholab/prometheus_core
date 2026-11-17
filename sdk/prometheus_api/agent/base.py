@@ -1606,7 +1606,11 @@ class PrometheusAgent:
         if not original_id:
             return None
         # ``items.list`` cannot filter on ``original_id`` (the paginated route ignores unknown
-        # parameters, so the SDK rejects them), so scan the records.
+        # parameters, so the SDK rejects them). A resumed task's record is recent, so check
+        # the newest records in one request before falling back to a full scan.
+        for candidate in await client.search.recent(limit=500):
+            if candidate.original_id == original_id:
+                return candidate
         async for candidate in client.items.iter_all(page_size=200):
             if candidate.original_id == original_id:
                 return candidate
