@@ -603,3 +603,44 @@ async def test_paginated_routes_reject_a_body_that_is_not_a_json_object(body):
         await AsyncSearchResource(async_client).recent(limit=5)
     with pytest.raises(StorageClientError, match=f"Unexpected query/records.*response.*{kind}"):
         await AsyncSearchResource(async_client).advanced_query([], [2])
+
+
+@pytest.mark.parametrize(
+    "missing", ["pageNumber", "pageSize", "totalCount", "hasNext", "hasPrevious"]
+)
+async def test_paginated_routes_reject_a_body_that_lacks_a_paging_field(missing):
+    """Covers REQ-002-17: a missing paging field is an error, not a silent one-page listing."""
+    from prometheus_api.storage_client.exceptions import StorageClientError
+
+    body = paginated_payload([item_payload(id=1)])
+    del body[missing]
+    match = f"Unexpected .*paginated response: missing {missing}"
+
+    for call in (
+        lambda c: ItemsResource(c).list(),
+        lambda c: list(ItemsResource(c).iter_all()),
+        lambda c: SearchResource(c).recent(limit=5),
+        lambda c: SearchResource(c).advanced_query([], [2]),
+    ):
+        with pytest.raises(StorageClientError, match=match):
+            call(SyncClient(body))
+
+    async_client = AsyncClient(body)
+    with pytest.raises(StorageClientError, match=match):
+        await AsyncItemsResource(async_client).list()
+    with pytest.raises(StorageClientError, match=match):
+        [i async for i in AsyncItemsResource(async_client).iter_all()]
+    with pytest.raises(StorageClientError, match=match):
+        await AsyncSearchResource(async_client).recent(limit=5)
+    with pytest.raises(StorageClientError, match=match):
+        await AsyncSearchResource(async_client).advanced_query([], [2])
+
+
+async def test_paginated_routes_accept_a_body_without_items():
+    """Covers REQ-002-17: ``items`` may be absent or null, as for an empty project."""
+    body = paginated_payload(None, hasNext=False, totalCount=0)
+    del body["items"]
+
+    assert ItemsResource(SyncClient(body)).list().items == []
+    assert (await AsyncItemsResource(AsyncClient(body)).list()).items == []
+    assert SearchResource(SyncClient(body)).recent(limit=5) == []
