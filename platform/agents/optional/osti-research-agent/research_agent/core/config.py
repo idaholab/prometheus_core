@@ -52,7 +52,8 @@ class AgentConfig(BaseModel):
 
     workdir: Path = Path("/tmp/research_agent")
     total_budget_s: int = 900
-    max_papers_analyzed: int = 5
+    # Two batches of read_top_candidates (tools/batch.py, BATCH_SIZE = 3).
+    max_papers_analyzed: int = 6
     # Unique queries per search tool per run. When they run out the agent can
     # only read results it already has, so too few ends a run early.
     max_osti_searches: int = Field(default=5, ge=1)
@@ -82,6 +83,10 @@ class AgentConfig(BaseModel):
     # arXiv rate-limits API clients hard (HTTP 429 even 3 s apart) and adds
     # little for engineering-materials questions; turn it off to save the calls.
     scholarly_arxiv: bool = True
+    # Also run OpenAlex semantic (embedding) search, RRF-fused with keyword
+    # search. A second OpenAlex call per search, so it halves how many
+    # searches the keyless daily budget covers (about 100 -> 50).
+    scholarly_semantic: bool = True
     # LiteLLM alias for the embedding model backing the knowledge store's
     # semantic atomic-fact and answer retrieval.
     embedding_model: str = "embedding"
@@ -139,7 +144,7 @@ class AgentConfig(BaseModel):
             redis_url=os.getenv("REDIS_URL"),
             redis_password=os.getenv("REDIS_PASSWORD"),
             total_budget_s=int(os.getenv("TOTAL_BUDGET_S", "900")),
-            max_papers_analyzed=int(os.getenv("MAX_PAPERS_ANALYZED", "5")),
+            max_papers_analyzed=int(os.getenv("MAX_PAPERS_ANALYZED", "6")),
             max_osti_searches=int(os.getenv("MAX_OSTI_SEARCHES", "5")),
             max_scholarly_searches=int(os.getenv("MAX_SCHOLARLY_SEARCHES", "4")),
             analyzer_model_call_limit=int(os.getenv("ANALYZER_MODEL_CALL_LIMIT", "8")),
@@ -154,6 +159,7 @@ class AgentConfig(BaseModel):
             parse_ocr=os.getenv("PARSE_OCR", "auto"),
             analyze_figures=_env_bool("ANALYZE_FIGURES", default=False),
             scholarly_arxiv=_env_bool("SCHOLARLY_ARXIV", default=True),
+            scholarly_semantic=_env_bool("SCHOLARLY_SEMANTIC", default=True),
             max_figures=int(os.getenv("MAX_FIGURES", "12")),
             min_figure_area=int(os.getenv("MIN_FIGURE_AREA", "10000")),
             web_search_provider=os.getenv("WEB_SEARCH_PROVIDER", "none"),

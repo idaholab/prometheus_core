@@ -143,6 +143,45 @@ def _openalex_hit(work: dict) -> dict:
     }
 
 
+async def _openalex_works(
+    source: str,
+    search_params: dict,
+    k: int,
+    *,
+    mailto: Optional[str],
+    api_key: Optional[str],
+    raise_on_failure: bool,
+    gate: Optional[RateGate] = None,
+) -> List[dict]:
+    """GET OpenAlex /works with ``search_params``; shared by the keyword and
+    semantic searches. A 429 or 503 is retried once, through ``gate`` if
+    given. On failure returns ``[]``, or raises ``SearchFailed`` (named after
+    ``source``) with ``raise_on_failure``."""
+    auth_params, auth_headers = _openalex_request_parts(mailto, api_key)
+    params = {**search_params, "per-page": max(1, min(k, 50)), **auth_params}
+    try:
+        async with httpx.AsyncClient(
+            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT, **auth_headers}
+        ) as client:
+
+            async def request() -> httpx.Response:
+                if gate is None:
+                    return await client.get(OPENALEX_URL, params=params)
+                async with gate.slot():
+                    return await client.get(OPENALEX_URL, params=params)
+
+            resp = await _with_one_retry(request, source)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        text = _openalex_error_text(e, api_key)
+        logger.warning("%s search failed: %s", source, text)
+        if raise_on_failure:
+            raise SearchFailed(f"{source}: {text}") from e
+        return []
+    return [_openalex_hit(w) for w in data.get("results", [])[:k]]
+
+
 async def search_openalex(
     query: str,
     k: int = 10,
@@ -151,29 +190,53 @@ async def search_openalex(
     api_key: Optional[str] = None,
     raise_on_failure: bool = False,
 ) -> List[dict]:
-    """OpenAlex works matching ``query``; a 429 or 503 is retried once.
+    """OpenAlex works matching ``query`` by keyword (OpenAlex's relevance
+    score: stemmed text match plus a capped citation boost).
 
     On failure returns ``[]``, or raises ``SearchFailed`` with
     ``raise_on_failure`` so a caller can tell a failure from zero hits."""
-    auth_params, auth_headers = _openalex_request_parts(mailto, api_key)
-    params = {"search": query, "per-page": max(1, min(k, 50)), **auth_params}
-    try:
-        async with httpx.AsyncClient(
-            timeout=_TIMEOUT, headers={"User-Agent": _USER_AGENT, **auth_headers}
-        ) as client:
+    return await _openalex_works(
+        "OpenAlex",
+        {"search": query},
+        k,
+        mailto=mailto,
+        api_key=api_key,
+        raise_on_failure=raise_on_failure,
+    )
 
-            async def request() -> httpx.Response:
-                return await client.get(OPENALEX_URL, params=params)
 
-            resp = await _with_one_retry(request, "OpenAlex")
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        logger.warning("OpenAlex search failed: %s", _openalex_error_text(e, api_key))
-        if raise_on_failure:
-            raise SearchFailed(f"OpenAlex: {_openalex_error_text(e, api_key)}") from e
-        return []
-    return [_openalex_hit(w) for w in data.get("results", [])[:k]]
+# OpenAlex semantic search allows 1 request a second (keyword search allows
+# 10). A run can search in parallel and an eval run shares the IP, so requests
+# go through a gate shared by every process on the host, as arXiv's do.
+OPENALEX_SEMANTIC_INTERVAL_S = 1.1
+OPENALEX_SEMANTIC_GATE = RateGate("openalex-semantic", OPENALEX_SEMANTIC_INTERVAL_S)
+
+
+async def search_openalex_semantic(
+    query: str,
+    k: int = 10,
+    *,
+    mailto: Optional[str] = None,
+    api_key: Optional[str] = None,
+    raise_on_failure: bool = False,
+) -> List[dict]:
+    """OpenAlex works whose embeddings are closest in meaning to ``query``,
+    open-access only.
+
+    Finds papers worded differently from the query, which keyword search
+    misses. Without the open-access filter most hits have no PDF to download:
+    in testing, 2 of 25 did, against 17 of 25 with it. Semantic search returns
+    at most 50 works and accepts only a few filters; ``open_access.is_oa`` is
+    one. Failure as for ``search_openalex``."""
+    return await _openalex_works(
+        "OpenAlex semantic",
+        {"search.semantic": query, "filter": "open_access.is_oa:true"},
+        k,
+        mailto=mailto,
+        api_key=api_key,
+        raise_on_failure=raise_on_failure,
+        gate=OPENALEX_SEMANTIC_GATE,
+    )
 
 
 async def openalex_oa_pdf_url(
@@ -322,6 +385,48 @@ def _dedupe_key(hit: dict) -> str:
     return "title:" + "".join(c for c in hit.get("title", "").lower() if c.isalnum())
 
 
+# Reciprocal rank fusion (Cormack et al., 2009): a hit scores
+# sum(1 / (RRF_K + rank)) over every list it appears in. It uses ranks only,
+# so lists whose scores aren't comparable (OpenAlex keyword scores run around
+# 60, semantic ones around 1) still merge fairly; 60 is the paper's constant.
+RRF_K = 60
+
+
+def rrf_merge(ranked_lists: List[List[dict]], k: int) -> List[dict]:
+    """Fuse ranked hit lists with RRF, deduped by DOI/title, capped at ``k``.
+
+    Untitled hits and repeats within one list are skipped. Ties keep the order
+    in which hits were first seen, earlier lists first, and a merged hit is
+    the first copy seen."""
+    scores: Dict[str, float] = {}
+    hits: Dict[str, dict] = {}
+    for ranked in ranked_lists:
+        seen_here = set()
+        for hit in ranked:
+            key = _dedupe_key(hit)
+            if not hit.get("title") or key in seen_here:
+                continue
+            seen_here.add(key)
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + len(seen_here))
+            hits.setdefault(key, hit)
+    order = sorted(hits, key=lambda key: -scores[key])  # stable: ties keep first-seen
+    return [hits[key] for key in order[:k]]
+
+
+def _fill(hits: List[dict], extra: List[dict], k: int) -> List[dict]:
+    """``hits`` followed by the titled ``extra`` hits not already in it, up to ``k``."""
+    out = list(hits)
+    seen = {_dedupe_key(h) for h in out}
+    for hit in extra:
+        if len(out) >= k:
+            break
+        key = _dedupe_key(hit)
+        if hit.get("title") and key not in seen:
+            seen.add(key)
+            out.append(hit)
+    return out
+
+
 async def search_scholarly(
     query: str,
     k: int = 10,
@@ -329,18 +434,25 @@ async def search_scholarly(
     mailto: Optional[str] = None,
     api_key: Optional[str] = None,
     arxiv: bool = True,
+    semantic: bool = True,
 ) -> List[dict]:
-    """OpenAlex first (comprehensive index), then arXiv preprints to fill in
-    (``arxiv=False`` skips it). Deduped by DOI/title, capped at ``k``.
+    """OpenAlex keyword and semantic search (``semantic=False`` skips the
+    latter) fused with RRF (``rrf_merge``), then arXiv preprints to fill any
+    slots left (``arxiv=False`` skips it), capped at ``k``. All run in
+    parallel.
 
-    One source failing still returns the other's hits. Raises
-    ``SearchFailed`` only when every source searched failed, so the caller
-    can tell that apart from a search that found nothing."""
-    searches = [
-        search_openalex(
-            query, k, mailto=mailto, api_key=api_key, raise_on_failure=True
-        )
-    ]
+    Keyword and semantic search tend to find different papers (none in common
+    in the top 6 for the queries tested), so fusing them puts both kinds in
+    front of the model. arXiv is not fused: for engineering queries it often
+    returns nothing relevant, and RRF would rank its first hit level with
+    OpenAlex's first. One source failing still returns the others' hits.
+    Raises ``SearchFailed`` only when every source searched failed, so the
+    caller can tell that apart from a search that found nothing."""
+    auth = {"mailto": mailto, "api_key": api_key, "raise_on_failure": True}
+    searches = [search_openalex(query, k, **auth)]
+    if semantic:
+        searches.append(search_openalex_semantic(query, k, **auth))
+    n_openalex = len(searches)
     if arxiv:
         searches.append(search_arxiv(query, max(3, k // 3), raise_on_failure=True))
     outcomes = await asyncio.gather(*searches, return_exceptions=True)
@@ -350,19 +462,6 @@ async def search_scholarly(
     failures = [o for o in outcomes if isinstance(o, SearchFailed)]
     if len(failures) == len(outcomes):
         raise SearchFailed("; ".join(str(f) for f in failures))
-    openalex = outcomes[0] if not isinstance(outcomes[0], SearchFailed) else []
-    arxiv_hits = (
-        outcomes[1] if len(outcomes) > 1 and not isinstance(outcomes[1], SearchFailed) else []
-    )
-
-    merged: List[dict] = []
-    seen = set()
-    for hit in openalex + arxiv_hits:
-        key = _dedupe_key(hit)
-        if key in seen or not hit.get("title"):
-            continue
-        seen.add(key)
-        merged.append(hit)
-        if len(merged) >= k:
-            break
-    return merged
+    lists = [[] if isinstance(o, SearchFailed) else o for o in outcomes]
+    fused = rrf_merge(lists[:n_openalex], k)
+    return _fill(fused, [h for extra in lists[n_openalex:] for h in extra], k)

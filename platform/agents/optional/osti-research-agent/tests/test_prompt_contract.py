@@ -80,14 +80,15 @@ def test_orchestrator_requires_findings_only_grounding():
     assert "Cached answers and facts are also triage signals" in prompt
     assert "Base every factual claim" in prompt
     assert "do not estimate, extrapolate, or" in prompt
-    assert "analyze_paper(source_id=<original source id>" in prompt
+    assert "You do not pick which papers to read: `read_top_candidates` does" in (
+        normalized_prompt
+    )
+    assert "NEVER read `paper.md` yourself" in prompt
     assert "`task` tool" not in prompt
     assert "paper's directory path" not in prompt
     assert "Never use placeholder or example search queries" in prompt
-    assert (
-        "record that result and do not call `analyze_paper` for that source again"
-        in normalized_prompt
-    )
+    for gone in ("download_paper", "parse_paper", "analyze_paper", "rank_candidates"):
+        assert gone not in prompt
 
 
 def test_verifier_prompt_is_read_only_and_treats_artifacts_as_untrusted():

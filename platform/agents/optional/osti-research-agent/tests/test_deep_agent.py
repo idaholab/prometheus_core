@@ -206,9 +206,13 @@ def test_real_graph_exposes_structured_paper_analysis_tool(tmp_path):
     graph = build_research_agent(config, context)
     tools = graph.nodes["tools"].bound._tools_by_name
 
-    assert "analyze_paper" in tools
+    # Code picks the papers: the orchestrator reads them only through
+    # read_top_candidates, never one by one.
+    assert "read_top_candidates" in tools
+    assert not {"download_paper", "parse_paper", "analyze_paper", "rank_candidates"} & set(tools)
     assert "task" not in tools
-    assert set(tools["analyze_paper"].args) == {"source_id", "question"}
+    assert tools["read_top_candidates"].args == {}
+    assert "at most 6 papers" in tools["read_top_candidates"].description
 
 
 def test_paper_analyzer_has_bounded_model_and_tool_calls():
@@ -974,11 +978,8 @@ def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
                 content="",
                 tool_calls=[
                     {
-                        "name": "analyze_paper",
-                        "args": {
-                            "source_id": "123",
-                            "question": "Does titanium creep?",
-                        },
+                        "name": "read_top_candidates",
+                        "args": {},
                         "id": "analysis-task",
                         "type": "tool_call",
                     }
@@ -1009,7 +1010,13 @@ def test_real_compiled_task_reads_artifacts_and_returns_verified_finding(
     )
     context = _verification_context(tmp_path)
     context.knowledge = _FakeKnowledgeStore()
+    # read_top_candidates picks paper 123 from the search hits; it is already
+    # downloaded and parsed, so the real download/parse tools return at once
+    # and the real analyzer and verifier graphs read it.
+    context.question = "Does titanium creep?"
+    context.search_hits["123"] = {"title": "Creep of titanium", "origin": "osti"}
     graph = build_research_agent(context.config, context)
+    context.pdf_paths["123"] = str(tmp_path / "123.pdf")
     graph_result = asyncio.run(
         graph.ainvoke(
             {"messages": [HumanMessage(content="Does titanium creep?")]},

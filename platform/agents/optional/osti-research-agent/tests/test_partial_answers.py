@@ -174,8 +174,10 @@ def test_prompts_tell_each_role_about_nearest_findings():
     assert '"match"' in prompts.render_finding_schema()
     assert 'match: "nearest"' in analyzer and "Never adjust, interpolate" in analyzer
     assert 'A `match: "nearest"` candidate is not wrong' in verifier
-    assert "DON'T GIVE UP EARLY" in orchestrator
-    assert "does not use up the paper budget" in orchestrator
+    assert "READING PAPERS" in orchestrator
+    # A failed download or parse is replaced by the next paper in rank order.
+    assert "replaced by the next in rank order" in orchestrator
+    assert 'A `match: "nearest"` finding is a useful partial answer' in orchestrator
 
 
 # --- search limits ---------------------------------------------------------
@@ -219,7 +221,9 @@ def test_orchestrator_states_the_limits_and_keeps_reading_after_searches_run_out
     orchestrator = " ".join(prompts.render_orchestrator_prompt(config).split())
 
     assert "You have 7 OSTI and 3 scholarly searches per run" in orchestrator
-    assert "Running out of searches is not a reason to stop" in orchestrator
+    # Searching again before the second batch, not stopping early.
+    assert "then call `read_top_candidates` for the second batch" in orchestrator
+    assert "Do not call it a third time" in orchestrator
     assert "up to 3 times" not in orchestrator
 
 
@@ -247,14 +251,15 @@ def _nudge_ctx(**config):
         "10.1_y": {"title": "Paywalled", "origin": "openalex", "oa_pdf_url": None},
         "read": {"title": "Already read", "origin": "osti"},
     }
-    ctx.pdf_paths["read"] = "/tmp/read.pdf"
+    ctx.paper_analysis_results["read"] = {"answered": False}
     return ctx
 
 
 def test_nudge_lists_only_unread_downloadable_results():
-    nudge = deep_runner.keep_going_nudge(_nudge_ctx())
+    nudge = asyncio.run(deep_runner.keep_going_nudge(_nudge_ctx()))
 
-    assert "5 paper slot(s)" in nudge
+    assert "6 paper slot(s)" in nudge
+    assert "Call `read_top_candidates` now" in nudge
     assert "706175: Creep of 316 at 500-871 C" in nudge and "10.1_x: OA paper" in nudge
     assert "Paywalled" not in nudge and "Already read" not in nudge
 
@@ -268,7 +273,7 @@ def test_no_nudge_once_there_is_a_finding_or_no_budget():
     nothing_left.search_hits = {}
 
     for ctx in (with_finding, out_of_slots, nothing_left):
-        assert deep_runner.keep_going_nudge(ctx) is None
+        assert asyncio.run(deep_runner.keep_going_nudge(ctx)) is None
 
 
 class _RoundGraph:

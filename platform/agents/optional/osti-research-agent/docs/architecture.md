@@ -35,19 +35,24 @@ a2a layer (agent.py)                 <- the ONLY file that may import prometheus
 
 ## Design structure
 
-One question is one run. An LLM orchestrator decides which tool to call next;
-there is no fixed pipeline order, only the strategy in
-`prompts/orchestrator.md`. Code in the tools enforces budgets and checks, and
-two independent LLM reviews (a per-paper verifier and an answer grader) decide
-what may reach the answer.
+One question is one run. The work is split between an LLM and code:
+
+- **The orchestrator LLM searches.** It decides what to search for, rewrites
+  its queries, and decides when to read, following `prompts/orchestrator.md`.
+- **Code decides which papers to read.** `read_top_candidates` ranks every
+  search result against the question and reads the best ones, in that order.
+- **Two independent LLM reviews decide what reaches the answer:** a verifier
+  per paper, and a grader for the final answer. Code checks both.
+
+Code also enforces every budget: searches, papers, and time.
 
 ### Components
 
 | Component | Kind | Built in | Model route | Can use |
 |---|---|---|---|---|
 | orchestrator | deepagents graph | `core/deep_agent.build_research_agent` | `orchestrator` | the agent's tools (`tools/`) plus deepagents' filesystem tools |
-| paper analyzer | deepagents graph, called from `analyze_paper` | `core/deep_agent.build_analyze_paper_tool` | `analyzer` | read-only `/papers/**` |
-| paper verifier | deepagents graph, called from `analyze_paper` | `core/deep_agent.build_paper_verifier` | `verifier` | read-only `/papers/**` |
+| paper analyzer | deepagents graph, called from `read_top_candidates` | `core/deep_agent._build_analyzer_and_verifier` | `analyzer` | read-only `/papers/**` |
+| paper verifier | deepagents graph, called from `read_top_candidates` | `core/deep_agent.build_paper_verifier` | `verifier` | read-only `/papers/**` |
 | synthesizer | `langchain` agent, no tools | `core/synthesis._build_synthesizer` | `orchestrator` | nothing |
 | answer grader | `RubricMiddleware` on the synthesizer | `core/synthesis._build_synthesizer` | `verifier` | `read_verified_findings` |
 | follow-up suggester | one completion | `llm_steps.suggest_followup_from_findings` | `complete` passed in by `agent.py` | nothing |
@@ -60,70 +65,125 @@ Every role uses the `medium` flavor unless a model profile maps it elsewhere
 **The analyzer and verifier are not deepagents subagents.** The orchestrator
 has no `task` tool (`_register_runtime_profiles` turns off the general-purpose
 subagent, and `tests/test_deep_agent.py` checks `"task"` is absent). Both are
-separate graphs held inside the `analyze_paper` tool, which Python code runs
-as analyzer → check → verifier → validate. So the orchestrator cannot write
-the analyzer's task, skip the verifier, or see an unverified candidate; it
-gets back only a verified Finding or a reason the paper was not used.
-`build_paper_analyzer` still returns a dict in the deepagents subagent-spec
-shape, but its `name` and `description` are not used.
+separate graphs that `read_top_candidates` runs from Python code, as
+analyzer → check → verifier → validate, for each paper it reads. So the
+orchestrator cannot choose a paper, write the analyzer's task, skip the
+verifier, or see an unverified candidate; it gets back only a verified Finding
+or a reason the paper was not used. `build_paper_analyzer` still returns a dict
+in the deepagents subagent-spec shape, but its `name` and `description` are
+not used.
 
 ### Run flow
 
-```
-A2A request (question)
-   │
-agent.py ─► ResearchRunner             outer deadline TOTAL_BUDGET_S - 30 s
-   │                                    fires → cancel, return timeout_partial
-   ▼
-run_deep: the orchestrator picks the next tool each turn
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  1 memory     search_knowledge_base → cached_answer + facts (hints only)     │
-│  2 search     search_osti / search_scholarly / search_web → ctx.search_hits  │
-│                 code refuses duplicate and over-limit queries                │
-│  3 rephrase   the orchestrator rewrites its query when hits are off-topic or │
-│               analyze_paper reports what a paper covers instead (prompt only)│
-│  4 triage     the orchestrator reads titles + abstracts, picks ≤ 5 papers    │
-│  5 download   download_paper   code: URL came from a search, host allowlisted│
-│  6 parse      parse_paper      Docling → /papers/<id>/ (no LLM)              │
-│  7 analyze    analyze_paper    analyzer → check → verifier → validate        │
-│  8 weaker     record_abstract_evidence, record_estimate (checked in code)    │
-│  9 store      store_facts      only for sources with a verified finding      │
-│ 10 end        final message {"findings": [...]} (content ignored)            │
-└──────────────────────────────────────────────────────────────────────────────┘
-   │
-nudges (core/deep_runner.py, at most 2 extra rounds)
-   no findings, budget left, unread hits → "download and analyze these"
-   every finding only `nearest`          → "try record_estimate" (once)
-   │
-build_final_result
-   synthesizer + grader → linkify → abstract/estimate sections → follow-ups
-   → cache the verified part in the knowledge base (status completed only)
-   │
-FinalResult → agent.py → result JSON, searched_papers.md, citation cards
+One run, from the A2A request to the result. The orchestrator LLM searches,
+code reads, and the two take turns until `read_top_candidates` returns
+`stop: true` (at most 6 papers, in two batches). Everything after the final
+message is code. `ResearchRunner` (`agent.py` → `core/runner.py`) wraps the
+whole run in a deadline of `TOTAL_BUDGET_S` − 30 s; if it fires, the run is
+cancelled and returns `timeout_partial` with the findings verified so far.
+
+```mermaid
+flowchart TD
+    REQ(["A2A request: the question"]) --> MEM
+
+    subgraph LLM ["Orchestrator LLM"]
+        MEM["1 · Memory<br/>search_knowledge_base<br/>(hints only)"]
+        SEARCH["2 · Search<br/>search_osti · search_scholarly · search_web"]
+        EXTRA["4 · Weaker evidence and facts<br/>record_abstract_evidence · record_estimate<br/>store_facts"]
+        FINISH["5 · Final message: {findings}"]
+    end
+
+    subgraph CODE ["Code"]
+        READ[["3 · Read<br/>read_top_candidates<br/>ranks all unread results, reads the top 3"]]
+        NUDGE{"Nudge?"}
+        FINAL["6 · build_final_result<br/>synthesizer + grader → answer"]
+    end
+
+    MEM --> SEARCH
+    SEARCH --> READ
+    READ -- "stop: false<br/>(rephrase, search again)" --> SEARCH
+    READ -- "stop: true" --> EXTRA
+    EXTRA --> FINISH
+    FINISH --> NUDGE
+    NUDGE -- "nothing verified,<br/>papers and time left" --> READ
+    NUDGE -- "only nearest findings<br/>(once)" --> EXTRA
+    NUDGE -- "no" --> FINAL
+    FINAL --> OUT(["FinalResult: result JSON,<br/>searched_papers.md, citation cards"])
 ```
 
-### Inside `analyze_paper`
+| Step | Who | What it does |
+|---|---|---|
+| 1 Memory | orchestrator | Looks up earlier runs. Cached answers and facts only point to sources; they are never evidence. |
+| 2 Search | orchestrator | Writes the queries. Code refuses repeated queries and searches past the per-run limit (`MAX_OSTI_SEARCHES`, `MAX_SCHOLARLY_SEARCHES`). |
+| 3 Read | code | Picks and reads papers; see [The read step](#the-read-step). |
+| 2 again | orchestrator | When a batch returns `stop: false`, the orchestrator searches again using what each paper reported instead (for example "data at 600 °C only"), then reads the second batch. |
+| 4 Weaker evidence | orchestrator, checked by code | Abstract quotes from unreadable papers, and estimates computed from cited values. Never findings. |
+| 5 Final message | orchestrator | Lists the findings. Its prose is ignored: the answer is built in code. |
+| Nudge | code (`core/deep_runner.py`) | A run that stops with nothing verified, while papers and time remain, is sent back to read. A run with only `nearest` findings is asked once for an estimate (step 4). At most 2 extra rounds. |
+| 6 Final result | code | Synthesizes the answer from verified findings only; see [Answer and status](#answer-and-status). |
 
+### The read step
+
+`read_top_candidates` (`tools/batch.py`) is the only way a paper gets read. Each
+call reads one batch:
+
+```mermaid
+flowchart TD
+    CALL([read_top_candidates]) --> BUDGET{"paper or time budget used,<br/>or 2 exact findings?"}
+    BUDGET -- yes --> STOPPED([stop: true, nothing read])
+    BUDGET -- no --> RANK["Rank every unread search result against the question<br/>BM25 + embedding similarity, fused by RRF"]
+    RANK --> GUARD["Skip results that share no word with the question"]
+    GUARD --> TOP["Take the top 3"]
+    TOP --> P1["paper 1"] & P2["paper 2"] & P3["paper 3"]
+    P1 & P2 & P3 --> EACH[["For each, in parallel:<br/>download → parse → analyze and verify"]]
+    EACH -- "download or parse failed" --> NEXT["Start the next paper in rank order<br/>(a failed paper uses no budget)"]
+    NEXT --> EACH
+    EACH -- "read" --> RESULT(["Results in rank order:<br/>a Finding, or the reason it was not used<br/>stop: true | false"])
 ```
-analyze_paper(source_id, question)
- ├─ check (code): non-empty ids, DOI ↔ OSTI-id alias, paper parsed,
- │     directory under /papers/
- │     not parsed → {terminal: false, required_action: download + parse}
- ├─ per-source lock and result cache: each paper is analyzed once per run
- ├─ analyzer   reads meta.json, headings, sections, tables, figure JSON
- │     → candidate Finding (match exact | nearest) or answered: false
- ├─ check (code): JSON, Finding schema, same source_id as asked
- │     answered: false → ctx.unused_papers (by analyzer)
- ├─ verifier   rereads paper.md and the cited tables; treats the candidate as
- │     untrusted → supported | corrected | rejected
- ├─ validate (code): known verdict, source_id unchanged, answer and evidence
- │     present; every cited file is in this paper's directory, exists, and
- │     was read by the verifier (read_file, or grep in content mode);
- │     paper.md read and cited
- │     rejected → ctx.unused_papers (by verifier)
- │     analyzer, verifier or path failure → ctx.verification_errors
- └─ supported | corrected → ctx.findings, the only evidence the answer uses
+
+- **Ranking:** see [Search hits and ranking](#search-hits-and-ranking).
+- **Budget:** at most `MAX_PAPERS_ANALYZED` (6) papers per run, so two batches.
+  A paper counts once its parse starts; a failed download or parse gives the
+  slot back. No new paper starts with under 90 s left (`BUDGET_FLOOR_S`).
+- **Download:** OSTI results through OSTI; other results only from a PDF link a
+  search returned, on a host in `DOWNLOAD_ALLOWED_DOMAINS`.
+- **Parse:** Docling in a subprocess writes `/papers/<id>/` (`paper.md`,
+  `tables/`, `figures/`); PyMuPDF text if Docling fails or times out.
+- **Stop:** code stops reading once two papers give an `exact` finding. Whether
+  their values agree is left to the synthesizer.
+
+### Analyzing one paper
+
+Every paper the read step parses goes through the same analysis
+(`_analyze_paper` in `core/deep_agent.py`). Each paper is analyzed at most once
+per run.
+
+```mermaid
+flowchart TD
+    IN(["parsed paper + question"]) --> C1{"check 1<br/>(code)"}
+    C1 -- fails --> NOTREADY(["not read"])
+    C1 -- passes --> AN["Analyzer LLM<br/>→ candidate Finding<br/>(exact or nearest)"]
+    AN -- "nothing relevant" --> UNUSED1(["not used, by analyzer:<br/>what the paper reports instead"])
+    AN -- candidate --> C2{"check 2<br/>(code)"}
+    C2 -- fails --> ERR(["verification error"])
+    C2 -- passes --> VER["Verifier LLM<br/>rereads the paper;<br/>trusts nothing in the candidate"]
+    VER -- rejected --> UNUSED2(["not used, by verifier"])
+    VER -- "supported or corrected" --> VAL{"validate<br/>(code)"}
+    VAL -- fails --> ERR
+    VAL -- passes --> FIND(["verified Finding:<br/>the only evidence the answer uses"])
 ```
+
+| Step | Checks |
+|---|---|
+| check 1 | The paper was parsed and its directory is under `/papers/`; a DOI and its OSTI id resolve to the same paper. |
+| Analyzer | Reads `meta.json`, headings, sections, tables and figure files. |
+| check 2 | The output is a valid Finding for the same `source_id` that was asked. |
+| Verifier | Rereads `paper.md` and the cited tables, and treats the candidate as untrusted: supported, corrected, or rejected. |
+| validate | Known verdict, `source_id` unchanged, answer and evidence present; every cited file is in this paper's directory, exists, and was read by the verifier; `paper.md` was read and cited. |
+
+A paper not used by the analyzer or verifier is logged in `ctx.unused_papers`
+with the reason; an analyzer, verifier or path failure goes to
+`ctx.verification_errors`, which can make the run's status `error`.
 
 ### Answer and status
 
@@ -147,9 +207,9 @@ ctx.findings → synthesizer (cites "Paper N", ≤ 3000 chars asked)
 | Check | By | Where |
 |---|---|---|
 | search limits, duplicate queries | code | `RunContext.reserve_search` |
-| paper and time budget (refuse with < 90 s left) | code | `RunContext.budget_reason`, called by download/parse |
+| paper and time budget (refuse with < 90 s left) | code | `RunContext.budget_reason`, called by read_top_candidates and download/parse |
 | download URL came from a search, host allowlisted | code | `tools/osti.download_paper`, `download_policy.py` |
-| paper relevance | orchestrator | its reading of titles and abstracts |
+| which papers are read, in what order | code | `tools/batch.read_top_candidates`, ranking in `rerank.py` |
 | candidate answers the question from the paper | analyzer | `prompts/analyzer.md` |
 | candidate is supported by the paper | verifier | `prompts/verifier.md` |
 | verifier output well formed, cites files it read | code | `_validated_finding`, `_validated_artifacts` |
@@ -161,21 +221,63 @@ ctx.findings → synthesizer (cites "Paper N", ≤ 3000 chars asked)
 
 ### Search hits and ranking
 
-The agent does not score search results. Each API ranks its own results and
-the tools keep them in that order:
+The agent does not score search results itself. Each API ranks its own
+results; only scholarly search combines two rankings:
 
 - **OSTI** (`osti_client.search_osti`): the API's keyword ranking; records
   without an abstract are dropped; at most 8 per search.
-- **Scholarly** (`scholarly.search_scholarly`): OpenAlex then arXiv, no
-  re-ranking; deduplicated by DOI, or by normalized title; at most 6.
+- **Scholarly** (`scholarly.search_scholarly`): three searches run in
+  parallel, at most 6 results in all:
+  1. OpenAlex keyword search (`search=`): stemmed text match on title,
+     abstract and full text, plus a capped citation boost.
+  2. OpenAlex semantic search (`search.semantic=`, open-access only): papers
+     whose embeddings are closest in meaning to the query. Off with
+     `SCHOLARLY_SEMANTIC=false`. Limited to 1 request a second, enforced by
+     `OPENALEX_SEMANTIC_GATE` across every process on the host.
+  3. arXiv preprints.
+
+  Lists 1 and 2 are fused by reciprocal rank fusion (`scholarly.rrf_merge`):
+  each paper scores Σ 1/(60 + rank) over the lists it appears in, so a paper
+  both find ranks first, and the lists' incompatible scores (about 60 for
+  keyword, about 1 for semantic) don't matter. The two rarely overlap (no
+  paper in common in the top 6 for the queries tested), so fusion puts both
+  kinds in front of the orchestrator. arXiv results only fill the slots left
+  after that: for engineering queries arXiv often returns nothing relevant
+  (particle-physics papers for "316 stainless steel creep"), and fused, its
+  first hit would rank level with OpenAlex's. Duplicates are matched by DOI,
+  or by normalized title.
 - **Web**: the provider's order.
 
 A source already in `ctx.search_hits` is not returned again, so a reworded
-query shows the orchestrator only papers it has not seen. Relevance is the
-orchestrator's judgment from the title and the first 600 characters of the
-abstract.
+query shows the orchestrator only papers it has not seen.
 
-The knowledge base is the only place that computes a score
+Before reading, `read_top_candidates` (`tools/batch.py`, ranking in
+`rerank.py`) ranks every unread, downloadable hit from all searches so far
+against the research question, which no single search's ranking does. Two signals over title +
+abstract, fused by RRF (Σ 1/(60 + rank)):
+
+- **BM25** over the candidates themselves (k1 = 1.2, b = 0.75; stopwords
+  dropped, numbers kept): rewards exact terms such as `316` or `400`.
+- **Embedding cosine similarity** to the question, with the run's embedding
+  model (the knowledge base's): rewards papers worded differently.
+  Embeddings are cached per paper for the run, so a later call only embeds
+  new hits. If embedding fails or takes over 20 s, BM25 alone ranks.
+
+**Code, not the model, picks the papers.** `read_top_candidates` reads the
+top 3 in that order in parallel (download, parse, analyze and verify, through
+the same tools and checks as before). A paper whose download or parse fails
+gives its place to the next one in rank order. It skips hits that share no
+word with the question (a BM25 score of 0): the ranking orders candidates but
+never says that none of them fit. The orchestrator calls it at most twice,
+`MAX_PAPERS_ANALYZED` = 6 papers in all, and searches again between the two
+batches using what each paper reported instead. It stops once two papers give
+an `exact` finding; whether those agree is left to the synthesizer. The
+orchestrator has no `download_paper`, `parse_paper` or `analyze_paper` tool.
+The keep-going nudge lists unread hits in the same ranked order. On the
+`ss316-creep-400c` question's real searches, the five papers about creep of
+316 itself were found 21st to 26th of 26 and ranked 1st to 5th.
+
+Apart from this ranking, the knowledge base is the only place that computes a score
 (`knowledge.RedisKnowledgeStore`), by cosine similarity of embeddings:
 
 - **facts**: score ≥ 0.15, top 8; the score is not passed to the orchestrator.
@@ -187,7 +289,7 @@ Both scan at most the first 1000 keys `SCAN` returns.
 ### Run state
 
 `RunContext` (`tools/context.py`) holds one run's state, shared by the tools,
-`analyze_paper` and the runner:
+`read_top_candidates` and the runner:
 
 - inputs: config, question, `complete`, Redis caches, knowledge store,
   `run_workdir`, deadline
@@ -226,11 +328,12 @@ paper directories, facts and cached answers persist in Redis (see
 ## The engine
 
 `core/deep_runner.py` runs a `deepagents.create_deep_agent` orchestrator
-(LangGraph under the hood) whose `analyze_paper` tool holds the analyzer and
-verifier graphs. The tool first analyzes one parsed paper, then independently
-verifies the candidate against that paper's artifacts before returning
-anything to the orchestrator (see "Design structure" above). The orchestrator
-decides what to search, download, and analyze; the strategy lives in
+(LangGraph under the hood) whose `read_top_candidates` tool holds the analyzer
+and verifier graphs. For each paper it reads, the tool first analyzes the
+parsed paper, then independently verifies the candidate against that paper's
+artifacts before returning anything to the orchestrator (see "Design
+structure" above). The orchestrator decides what to search for and when to
+read; code decides which papers. The strategy lives in
 `prompts/orchestrator.md`.
 
 The agent's original fixed pipeline (search, assess abstracts, download,
@@ -291,13 +394,22 @@ raising tool would crash the orchestrator loop; `test_tools.py` pins this).
 - **`tools/search.py`** — `search_scholarly` (OpenAlex + arXiv, keyless, always
   on) and `search_web` (provider-backed, off unless configured; the compose
   file ships a SearXNG service for it, see the runbook's "Web search").
+- **`tools/rank.py`** — `rank_candidates`: every unread hit ranked against the
+  question by BM25 + embedding similarity, fused by RRF (see "Search hits and
+  ranking"). Built, but not given to the orchestrator: `read_top_candidates`
+  ranks for itself.
+- **`tools/batch.py`** — the `read_top_candidates` logic: rank, then read the
+  top 3 in parallel with refill on failure.
 - **`tools/memory.py`** — `search_knowledge_base` and `store_facts` over the
   embedding-backed `KnowledgeStore`.
 - **`tools/evidence.py`** — `record_abstract_evidence` and `record_estimate`,
   weaker evidence checked in code and kept out of `findings`.
 
-`core/deep_agent.build_research_agent` appends `analyze_paper`
-(`build_analyze_paper_tool`), and deepagents adds its own filesystem tools.
+`core/deep_agent.build_research_agent` removes `download_paper`, `parse_paper`
+and `rank_candidates` from the orchestrator's tools and appends
+`read_top_candidates` (`build_read_top_candidates_tool`), which calls them and
+the analyzer/verifier from code; deepagents adds its own filesystem tools.
+`build_analyze_paper_tool` still builds `analyze_paper` for direct use.
 
 ### Adding a tool
 

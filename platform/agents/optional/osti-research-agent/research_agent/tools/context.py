@@ -27,7 +27,7 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Dict, List, Optional, Tuple
 
 import redis
 
@@ -64,6 +64,9 @@ class RunContext:
     # Embedding-backed fact/answer store; None (no Redis) makes the memory
     # tools no-ops.
     knowledge: Optional["KnowledgeStore"] = None
+    # Batch text embedder for ranking search hits (rank_candidates); None
+    # ranks by BM25 alone.
+    embed_batch: Optional[Callable[[List[str]], Awaitable[List[List[float]]]]] = None
     run_workdir: Path = field(default_factory=lambda: Path("/tmp/research_agent/run"))
     # time.monotonic() value after which no new expensive work should start.
     deadline: float = field(default_factory=lambda: time.monotonic() + 900.0)
@@ -110,6 +113,9 @@ class RunContext:
     # Code-checked estimates computed from cited values (tools/evidence.py).
     # Never findings.
     estimates: List[dict] = field(default_factory=list)
+    # Embeddings computed while ranking search hits, by source_id, so a later
+    # ranking only embeds new hits.
+    hit_embeddings: Dict[str, List[float]] = field(default_factory=dict, repr=False)
     # Papers whose parse was attempted, counted before parsing so a PDF that
     # keeps failing to parse still uses up its slot. This is the paper budget;
     # FinalResult.papers_analyzed reports analyses instead.
@@ -117,6 +123,35 @@ class RunContext:
     # Discrete facts written to the knowledge base via store_facts (reported in
     # the FinalResult).
     facts_stored: int = 0
+
+    def unread_hits(self) -> List[Tuple[str, dict]]:
+        """Search hits that could still be read, in the order found: not yet
+        analyzed, not failed to download or parse, and downloadable (an OSTI
+        id, or an allowed PDF link). A paper already downloaded or parsed but
+        not analyzed still counts: reading it costs no new download."""
+        unread = []
+        for source_id, hit in self.search_hits.items():
+            if source_id in self.paper_analysis_results:
+                continue
+            if source_id in self.download_failures or source_id in self.parse_failures:
+                continue
+            osti = source_id.isdigit() or str(hit.get("origin") or "osti") == "osti"
+            if osti or hit.get("oa_pdf_url"):
+                unread.append((source_id, hit))
+        return unread
+
+    async def ranked_unread_hits(self) -> List[Tuple[str, dict, dict]]:
+        """``unread_hits`` ranked against the question, best first, as
+        ``(source_id, hit, rank)`` where ``rank`` is ``rerank.rank_hits``'s
+        entry (fused score and each signal's rank)."""
+        from research_agent.rerank import rank_hits
+
+        unread = self.unread_hits()
+        ranks = await rank_hits(
+            self.question, unread, self.embed_batch, self.hit_embeddings
+        )
+        hits = dict(unread)
+        return [(r["source_id"], hits[r["source_id"]], r) for r in ranks]
 
     def openalex_key_kwargs(self) -> Dict[str, str]:
         """``{"api_key": ...}`` for the OpenAlex calls when a key is

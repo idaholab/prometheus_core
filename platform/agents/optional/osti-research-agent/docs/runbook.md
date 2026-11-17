@@ -12,7 +12,7 @@ defaults.
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `TOTAL_BUDGET_S` | `900` | hard wall-clock ceiling; runner cancels at `budget-30s` and salvages `timeout_partial` |
-| `MAX_PAPERS_ANALYZED` | `5` | download/parse budget; tools refuse past it |
+| `MAX_PAPERS_ANALYZED` | `6` | papers read per run: `read_top_candidates` reads them in rank order, 3 at a time, so 6 is two batches |
 | `MAX_OSTI_SEARCHES` | `5` | unique OSTI queries per run |
 | `MAX_SCHOLARLY_SEARCHES` | `4` | unique OpenAlex/arXiv queries per run |
 | `ANALYZER_MODEL_CALL_LIMIT` | `8` | maximum model calls per paper-analyzer run |
@@ -23,9 +23,10 @@ defaults.
 | `TAVILY_API_KEY` | — | credential for Tavily web search |
 | `SEARXNG_URL` | `http://osti-searxng:8080` | base URL of the SearXNG instance; the default is the bundled service |
 | `SEARXNG_SECRET` | generated per start | `server.secret_key` for the bundled SearXNG; only signs its UI cookies, so the generated one is fine |
-| `OPENALEX_API_KEY` | — | free OpenAlex key; raises its daily limit from about 100 to about 1,000 searches. See [`openalex-api-key.md`](openalex-api-key.md) |
+| `OPENALEX_API_KEY` | — | free OpenAlex key; raises its daily limit from about 50 to about 500 searches. See [`openalex-api-key.md`](openalex-api-key.md) |
 | `OPENALEX_MAILTO` | — | contact address sent to OpenAlex; no longer changes its limits |
 | `SCHOLARLY_ARXIV` | `true` | also search arXiv; `false` skips it (arXiv answers 429 to frequent API clients and has little engineering-materials data) |
+| `SCHOLARLY_SEMANTIC` | `true` | also run OpenAlex semantic (embedding) search, open-access only, and fuse it with keyword search by reciprocal rank fusion. It's a second OpenAlex call per search, so the keyless daily budget covers about 50 searches instead of 100 (with a key, 500 instead of 1,000); `false` skips it |
 | `EMBEDDING_MODEL` | `embedding` | LiteLLM alias for the knowledge-store embeddings |
 | `MAX_PDF_MB` | `50` | maximum download size for arbitrary non-OSTI PDF URLs |
 | `DOWNLOAD_ALLOWED_DOMAINS` | built-in list | comma-separated hosts PDFs may be downloaded from (subdomains included). Others are never fetched, and search results only offer `oa_pdf_url` for them; a host that answers 401/403 is dropped for the rest of the run. The OSTI purl path is always allowed. Default list: `research_agent/download_policy.py` |

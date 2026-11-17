@@ -57,6 +57,22 @@ def test_search_scholarly_passes_the_openalex_key_only_when_set(monkeypatch):
     assert seen == ["oa-key", None]
 
 
+def test_search_scholarly_skips_semantic_search_when_turned_off(monkeypatch):
+    seen = []
+
+    async def fake_scholarly(query, k, **kwargs):
+        seen.append(kwargs.get("semantic", True))
+        return []
+
+    monkeypatch.setattr(search_tools.scholarly, "search_scholarly", fake_scholarly)
+    for on in (True, False):
+        ctx = _ctx(scholarly_semantic=on)
+        tool = _tool(build_search_tools(ctx), "search_scholarly")
+        asyncio.run(tool.ainvoke({"query": f"creep {on}"}))
+
+    assert seen == [True, False]
+
+
 def test_search_scholarly_records_hits_with_oa_pdf(monkeypatch):
     async def fake_scholarly(query, k, *, mailto=None, arxiv=True):
         assert k == 6

@@ -80,7 +80,7 @@ def test_from_env_phase2_defaults(monkeypatch):
     assert cfg.verifier_model_call_limit == 10
     assert cfg.verifier_tool_call_limit == 12
     assert cfg.total_budget_s == 900
-    assert cfg.max_papers_analyzed == 5
+    assert cfg.max_papers_analyzed == 6  # two read_top_candidates batches of 3
     assert cfg.max_pdf_mb == 50
     assert cfg.docling_timeout_s == 480
     assert cfg.docling_images_scale == 2.0

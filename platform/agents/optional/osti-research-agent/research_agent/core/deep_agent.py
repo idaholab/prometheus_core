@@ -742,14 +742,10 @@ async def _analyze_paper(
     )
 
 
-def build_analyze_paper_tool(
-    config: AgentConfig,
-    ctx: RunContext,
-    backend,
-) -> Any:
-    """Build the structured analyzer/verifier tool exposed to the orchestrator."""
+def _build_analyzer_and_verifier(config: AgentConfig, backend) -> tuple:
+    """The compiled paper analyzer and verifier, shared by analyze_paper and
+    read_top_candidates."""
     from deepagents import create_deep_agent
-    from langchain_core.tools import tool
 
     _register_runtime_profiles(config)
     analyzer_spec = build_paper_analyzer(config)
@@ -762,7 +758,66 @@ def build_analyze_paper_tool(
         middleware=analyzer_spec["middleware"],
         name="paper-analysis-candidate",
     )
-    verifier = build_paper_verifier(config, backend)
+    return analyzer, build_paper_verifier(config, backend)
+
+
+def build_read_top_candidates_tool(
+    config: AgentConfig,
+    ctx: RunContext,
+    backend,
+    osti_tools: dict,
+) -> Any:
+    """Build ``read_top_candidates`` (tools/batch.py): code picks the papers in
+    rank order and reads them through the existing download/parse tools and
+    the analyzer/verifier."""
+    from langchain_core.tools import tool
+
+    from research_agent.tools import batch
+
+    analyzer, verifier = _build_analyzer_and_verifier(config, backend)
+
+    async def download(args: dict) -> str:
+        return await osti_tools["download_paper"].ainvoke(args)
+
+    async def parse(args: dict) -> str:
+        return await osti_tools["parse_paper"].ainvoke(args)
+
+    async def analyze(args: dict) -> str:
+        result = await _analyze_paper(
+            args["source_id"], args["question"], analyzer=analyzer, verifier=verifier, ctx=ctx
+        )
+        return json.dumps(result)
+
+    @tool
+    async def read_top_candidates() -> str:
+        """Read the next batch of papers: ranks every unread search result
+        against the research question (keyword match + meaning), then downloads,
+        parses, analyzes and verifies the top 3 in parallel. A paper that fails
+        to download or parse is replaced by the next one in rank order. The run
+        reads at most {max_papers} papers, so call this at most twice.
+
+        Returns JSON {read: [{source_id, read, answered, match, answer | reason
+        | error}], stop, reason}. Verified findings are recorded for you. When
+        ``stop`` is false and no two exact findings agree, search again with
+        what the ``reason`` of each paper says it reports instead, or call this
+        again for the next batch."""
+        return json.dumps(await batch.read_top_candidates(ctx, download, parse, analyze))
+
+    read_top_candidates.description = read_top_candidates.description.replace(
+        "{max_papers}", str(config.max_papers_analyzed)
+    )
+    return read_top_candidates
+
+
+def build_analyze_paper_tool(
+    config: AgentConfig,
+    ctx: RunContext,
+    backend,
+) -> Any:
+    """Build the structured analyzer/verifier tool exposed to the orchestrator."""
+    from langchain_core.tools import tool
+
+    analyzer, verifier = _build_analyzer_and_verifier(config, backend)
 
     @tool
     async def analyze_paper(
@@ -799,6 +854,11 @@ def build_analyze_paper_tool(
     return analyze_paper
 
 
+# Tools only read_top_candidates calls: the orchestrator never picks a paper.
+# rank_candidates is dropped too; read_top_candidates ranks for itself.
+_CODE_PICKS_PAPERS = frozenset({"download_paper", "parse_paper", "rank_candidates"})
+
+
 def build_research_agent(config: AgentConfig, ctx: RunContext) -> Any:
     """Compile the orchestrator with its mandatory verified paper tool."""
     from deepagents import create_deep_agent
@@ -806,7 +866,11 @@ def build_research_agent(config: AgentConfig, ctx: RunContext) -> Any:
     _register_runtime_profiles(config)
     backend = _build_backend(ctx.run_workdir)
     tools = build_tools(ctx)
-    tools.append(build_analyze_paper_tool(config, ctx, backend))
+    # Code picks which papers to read (read_top_candidates, in rank order), so
+    # the orchestrator gets no per-paper download/parse/analyze tools.
+    by_name = {t.name: t for t in tools}
+    tools = [t for t in tools if t.name not in _CODE_PICKS_PAPERS]
+    tools.append(build_read_top_candidates_tool(config, ctx, backend, by_name))
     return create_deep_agent(
         model=chat_model(config, "orchestrator"),
         tools=tools,

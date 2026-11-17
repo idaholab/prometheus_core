@@ -12,17 +12,18 @@ UTC. Measured from its response headers on 2026-11-10:
 
 | | Daily budget | `search_scholarly` calls a day |
 |---|---|---|
-| No key (shared by everything calling from your IP) | $0.10 | about 100 |
-| Free key | $1.00 | about 1,000 |
+| No key (shared by everything calling from your IP) | $0.10 | about 50 |
+| Free key | $1.00 | about 500 |
 
-- **A search costs $0.001.** That's one `search_scholarly` call, which also
-  sends one arXiv request that OpenAlex doesn't count.
+- **A search costs $0.002.** One `search_scholarly` call sends a keyword and
+  a semantic search to OpenAlex at $0.001 each, plus an arXiv request that
+  OpenAlex doesn't count. With `SCHOLARLY_SEMANTIC=false` it's $0.001.
 - **A DOI lookup is free.** That's what `download_paper` sends when looking for
   an open-access copy.
 - **What runs out.** A run makes at most `MAX_SCHOLARLY_SEARCHES` (4) searches,
-  so the keyless budget covers about 25 runs a day. A full `make osti-eval`
-  (48 questions) can use 150 or more, and so can anything else calling OpenAlex
-  from the same IP.
+  so the keyless budget covers about 12 runs a day. A full `make osti-eval`
+  (48 questions) can use 150 or more searches ($0.30), three times the keyless
+  budget, and so can anything else calling OpenAlex from the same IP.
 - **What happens when it runs out.** OpenAlex answers `429 Too Many Requests`.
   The agent retries once, then reports "scholarly search failed" to the model,
   and the run carries on with OSTI alone.

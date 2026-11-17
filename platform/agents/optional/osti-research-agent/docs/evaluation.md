@@ -199,7 +199,7 @@ of the run caused it, read `progress.log` against the run flow in
 | `progress.log` shows | Step | Look at |
 |---|---|---|
 | `Found 0 papers in OSTI`, the same query repeated, only off-topic titles | search / rephrase | `prompts/orchestrator.md` (query strategy), the question's wording |
-| `OpenAlex search failed: ... 429 Too Many Requests` partway through a full run | search | OpenAlex's keyless daily budget (about 100 searches) ran out: set `OPENALEX_API_KEY` ([`openalex-api-key.md`](openalex-api-key.md)) |
+| `OpenAlex search failed: ... 429 Too Many Requests` partway through a full run | search | OpenAlex's keyless daily budget (about 50 searches) ran out: set `OPENALEX_API_KEY` ([`openalex-api-key.md`](openalex-api-key.md)) |
 | downloads soon after `Checking knowledge base...`, with no search finding the papers | memory | the knowledge base was not isolated: use `--redis-db-base` |
 | `Skipping <id>: ... not on the download allowlist`, `refused the download` | download | `DOWNLOAD_ALLOWED_DOMAINS`, `download_policy.py` |
 | `Docling failed ... falling back to PyMuPDF text`, `Parsed ...: 0 table(s)` | parse | Docling memory and timeout settings (`runbook.md`); a table-only answer cannot be found from PyMuPDF text |

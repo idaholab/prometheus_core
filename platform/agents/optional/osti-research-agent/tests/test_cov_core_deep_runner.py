@@ -125,7 +125,7 @@ def test_unread_results_skip_parse_failures_and_analyzed_papers():
     ctx.parse_failures["1"] = "bad pdf"
     ctx.paper_analysis_results["2"] = {"answered": False}
 
-    assert [sid for sid, _ in deep_runner._unread_results(ctx)] == ["3"]
+    assert [sid for sid, _ in ctx.unread_hits()] == ["3"]
 
 
 def test_run_deep_shares_caller_findings_and_search_hits(monkeypatch):

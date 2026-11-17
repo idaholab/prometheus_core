@@ -50,5 +50,6 @@ def _no_arxiv_spacing(monkeypatch, tmp_path):
 
     monkeypatch.setenv("RATE_GATE_DIR", str(tmp_path / "gates"))
     monkeypatch.setattr(scholarly.ARXIV_API_GATE, "interval_s", 0.0)
+    monkeypatch.setattr(scholarly.OPENALEX_SEMANTIC_GATE, "interval_s", 0.0)
     monkeypatch.setattr(osti_client.ARXIV_PDF_GATE, "interval_s", 0.0)
     monkeypatch.setattr(scholarly, "_RETRY_AFTER_S", 0.0)

@@ -35,11 +35,13 @@ def build_tools(ctx: RunContext) -> List:
     from research_agent.tools.evidence import build_evidence_tools
     from research_agent.tools.memory import build_memory_tools
     from research_agent.tools.osti import build_osti_tools
+    from research_agent.tools.rank import build_rank_tools
     from research_agent.tools.search import build_search_tools
 
     return (
         build_osti_tools(ctx)
         + build_search_tools(ctx)
+        + build_rank_tools(ctx)
         + build_memory_tools(ctx)
         + build_evidence_tools(ctx)
     )

@@ -51,6 +51,8 @@ _TOOL_STATUS = {
     "search_osti": "Searching OSTI database...",
     "search_scholarly": "Searching open literature (OpenAlex/arXiv)...",
     "search_web": "Searching the web...",
+    "rank_candidates": "Ranking search results against the question...",
+    "read_top_candidates": "Reading the top-ranked papers...",
     "download_paper": "Downloading paper...",
     "parse_paper": "Parsing paper (tables + figures)...",
     "analyze_paper": "Analyzing and verifying paper...",
@@ -410,43 +412,30 @@ MAX_NUDGES = 2
 _NUDGE_RESULTS = 8
 
 
-def _unread_results(ctx: RunContext) -> List[tuple]:
-    """Search hits that could still be read: not yet downloaded or failed,
-    and downloadable (an OSTI id, or an allowed PDF link)."""
-    unread = []
-    for source_id, hit in ctx.search_hits.items():
-        if source_id in ctx.pdf_paths or source_id in ctx.download_failures:
-            continue
-        if source_id in ctx.parse_failures or source_id in ctx.paper_analysis_results:
-            continue
-        osti = source_id.isdigit() or str(hit.get("origin") or "osti") == "osti"
-        if osti or hit.get("oa_pdf_url"):
-            unread.append((source_id, hit))
-    return unread
-
-
-def keep_going_nudge(ctx: RunContext) -> Optional[str]:
+async def keep_going_nudge(ctx: RunContext) -> Optional[str]:
     """A follow-up instruction when the orchestrator stopped with nothing
-    verified but could still read more, else None."""
+    verified but could still read more, else None. Lists the unread results
+    ranked against the question (``RunContext.ranked_unread_hits``), best
+    first."""
     if ctx.findings or ctx.budget_reason() is not None:
         return None
-    unread = _unread_results(ctx)
-    if not unread:
+    if not ctx.unread_hits():
         return None
+    ranked = await ctx.ranked_unread_hits()
     slots = ctx.config.max_papers_analyzed - ctx.papers_attempted
     lines = [
         f"You stopped with no verified findings, but {slots} paper slot(s) and "
         f"about {int(ctx.seconds_left() // 60)} minute(s) remain, and these "
-        "search results are unread:",
+        "search results are unread, most relevant to the question first:",
     ]
-    for source_id, hit in unread[:_NUDGE_RESULTS]:
+    for source_id, hit, _ in ranked[:_NUDGE_RESULTS]:
         title = " ".join(str(hit.get("title") or "").split())[:140]
         lines.append(f"- {source_id}: {title}")
     lines.append(
-        "Download, parse and analyze the most promising of them now. A paper "
-        "with the asked quantity for this material at any conditions is a "
-        'useful `match: "nearest"` finding. Emit the final JSON only when none '
-        "of them could bear on the question or the paper budget is used."
+        "Call `read_top_candidates` now to read the next batch of them, in "
+        "this order. A paper with the asked quantity for this material at any "
+        'conditions is a useful `match: "nearest"` finding. Emit the final JSON '
+        "only when it returns `stop: true`."
     )
     return "\n".join(lines)
 
@@ -538,6 +527,8 @@ async def run_deep(
             embedding_route.model,
         )
         ctx.knowledge = RedisKnowledgeStore(redis_client, embedder.embed)
+        # The same embedder ranks search hits for rank_candidates and the nudge.
+        ctx.embed_batch = embedder.embed_batch
         if findings is not None:
             ctx.findings = findings  # share the list so the runner can salvage it
         if search_hits is not None:
@@ -574,7 +565,7 @@ async def run_deep(
                         yield event
             if round_no == MAX_NUDGES:
                 break
-            nudge = keep_going_nudge(ctx)
+            nudge = await keep_going_nudge(ctx)
             if nudge is not None:
                 status = (
                     "No verified findings yet; reading unread results "

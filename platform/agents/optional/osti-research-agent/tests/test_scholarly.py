@@ -109,7 +109,7 @@ def test_arxiv_entry_parsing_and_pdf_link():
 
 @respx.mock
 def test_search_scholarly_merges_both_sources():
-    respx.get(scholarly.OPENALEX_URL).mock(
+    openalex = respx.get(scholarly.OPENALEX_URL).mock(
         return_value=httpx.Response(200, json=_OPENALEX_PAYLOAD)
     )
     respx.get(scholarly.ARXIV_URL).mock(
@@ -118,7 +118,10 @@ def test_search_scholarly_merges_both_sources():
     hits = asyncio.run(scholarly.search_scholarly("materials", 10))
     origins = {h["origin"] for h in hits}
     assert origins == {"openalex", "arxiv"}
+    # Keyword and semantic search both return the same work here; RRF merges it.
     assert len(hits) == 2
+    sent = [set(call.request.url.params) for call in openalex.calls]
+    assert any("search" in p for p in sent) and any("search.semantic" in p for p in sent)
 
 
 @respx.mock

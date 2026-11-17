@@ -53,7 +53,10 @@ def build_search_tools(ctx: RunContext) -> List[BaseTool]:
     async def search_scholarly(query: str, max_results: int = 10) -> str:
         """Search the open scientific literature via OpenAlex (comprehensive
         index) and arXiv (preprints). Use when OSTI has few relevant hits or the
-        topic is outside DOE/nuclear scope. Returns a JSON list of {source_id,
+        topic is outside DOE/nuclear scope. Results are ranked by combining
+        keyword matches with matches by meaning, so a query phrased as the
+        property and conditions asked about also finds papers worded
+        differently. Returns a JSON list of {source_id,
         title, authors, year, abstract, doi, url, oa_pdf_url, origin};
         ``oa_pdf_url`` is present only when an open-access PDF exists on a host
         the agent may download from - pass it to download_paper(source_id,
@@ -90,6 +93,7 @@ def build_search_tools(ctx: RunContext) -> List[BaseTool]:
                 mailto=ctx.config.openalex_mailto,
                 arxiv=ctx.config.scholarly_arxiv,
                 **ctx.openalex_key_kwargs(),
+                **({} if ctx.config.scholarly_semantic else {"semantic": False}),
             )
         except scholarly.SearchFailed as e:
             # Every source failed; one source failing still returns hits.

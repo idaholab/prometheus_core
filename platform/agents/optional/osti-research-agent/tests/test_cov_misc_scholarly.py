@@ -151,19 +151,25 @@ def test_openalex_doi_lookup_without_any_pdf_returns_none():
     assert asyncio.run(scholarly.openalex_oa_pdf_url("10.1/nopdf")) is None
 
 
-def _fake_sources(monkeypatch, openalex, arxiv):
-    """Fake both sources; a source given as an exception fails with it."""
-    async def fake_openalex(query, k, *, mailto=None, api_key=None, raise_on_failure=False):
-        if isinstance(openalex, BaseException):
-            raise openalex
-        return openalex
+def _fake_sources(monkeypatch, openalex, arxiv, semantic=()):
+    """Fake every source; a source given as an exception fails with it.
+    Semantic search defaults to finding nothing."""
+
+    def fake(result):
+        async def search(query, k, *, mailto=None, api_key=None, raise_on_failure=False):
+            if isinstance(result, BaseException):
+                raise result
+            return list(result)
+
+        return search
 
     async def fake_arxiv(query, k, *, raise_on_failure=False):
         if isinstance(arxiv, BaseException):
             raise arxiv
         return arxiv
 
-    monkeypatch.setattr(scholarly, "search_openalex", fake_openalex)
+    monkeypatch.setattr(scholarly, "search_openalex", fake(openalex))
+    monkeypatch.setattr(scholarly, "search_openalex_semantic", fake(semantic))
     monkeypatch.setattr(scholarly, "search_arxiv", fake_arxiv)
 
 
@@ -188,7 +194,140 @@ def test_search_scholarly_stops_at_k(monkeypatch):
 
     out = asyncio.run(scholarly.search_scholarly("creep", 2))
 
+    # arXiv only fills slots OpenAlex leaves; here there are none.
     assert [h["title"] for h in out] == ["Paper 0", "Paper 1"]
+
+
+# --- OpenAlex semantic search and RRF ---------------------------------------
+
+
+def _hits(*names):
+    return [{"title": n, "doi": f"10.1/{n}"} for n in names]
+
+
+def test_rrf_puts_a_paper_both_lists_found_first():
+    keyword = _hits("A", "B", "C")
+    semantic = _hits("D", "C", "E")
+
+    out = scholarly.rrf_merge([keyword, semantic], 10)
+
+    # C: 1/63 + 1/62 beats any single first place (1/61); A and D tie at 1/61,
+    # and the tie keeps the earlier list first.
+    assert [h["title"] for h in out] == ["C", "A", "D", "B", "E"]
+
+
+def test_rrf_scores_match_the_formula():
+    out = scholarly.rrf_merge([_hits("A", "B"), _hits("B")], 10)
+
+    k = scholarly.RRF_K
+    assert [h["title"] for h in out] == ["B", "A"]
+    assert 1 / (k + 2) + 1 / (k + 1) > 1 / (k + 1)  # B (in both) > A (one list)
+
+
+def test_rrf_counts_a_repeat_within_one_list_once_and_caps_at_k():
+    out = scholarly.rrf_merge([_hits("A", "A", "B"), _hits("B")], 1)
+
+    # The repeated A is skipped, so B is still rank 2 in the first list and
+    # rank 1 in the second.
+    assert [h["title"] for h in out] == ["B"]
+
+
+def test_search_scholarly_fuses_keyword_and_semantic_results(monkeypatch):
+    _fake_sources(monkeypatch, _hits("A", "B"), [], semantic=_hits("B", "C"))
+
+    out = asyncio.run(scholarly.search_scholarly("creep", 10))
+
+    assert [h["title"] for h in out] == ["B", "A", "C"]
+
+
+def test_arxiv_fills_in_after_the_fused_openalex_results(monkeypatch):
+    # arXiv's top hit would tie OpenAlex's top hit under RRF; it isn't fused,
+    # so it comes after every OpenAlex result, and a duplicate is dropped.
+    _fake_sources(
+        monkeypatch,
+        _hits("A", "B"),
+        [{"title": "Preprint"}, {"title": "b", "doi": "10.1/B"}, {"title": ""}],
+        semantic=_hits("C"),
+    )
+
+    out = asyncio.run(scholarly.search_scholarly("creep", 10))
+
+    assert [h["title"] for h in out] == ["A", "C", "B", "Preprint"]
+
+
+def test_semantic_search_can_be_skipped(monkeypatch):
+    calls = []
+
+    async def must_not_run(*args, **kwargs):
+        calls.append(args)
+        return []
+
+    _fake_sources(monkeypatch, _hits("A"), [])
+    monkeypatch.setattr(scholarly, "search_openalex_semantic", must_not_run)
+
+    out = asyncio.run(scholarly.search_scholarly("creep", 5, semantic=False))
+
+    assert [h["title"] for h in out] == ["A"] and calls == []
+
+
+def test_one_semantic_failure_still_returns_keyword_hits(monkeypatch):
+    _fake_sources(
+        monkeypatch,
+        _hits("A"),
+        [],
+        semantic=scholarly.SearchFailed("OpenAlex semantic: 429"),
+    )
+
+    assert [h["title"] for h in asyncio.run(scholarly.search_scholarly("q", 5))] == ["A"]
+
+
+@respx.mock
+def test_semantic_search_request_is_open_access_and_gated(monkeypatch):
+    route = respx.get(scholarly.OPENALEX_URL).mock(
+        return_value=httpx.Response(200, json={"results": [{"title": "Creep", "doi": None}]})
+    )
+    entered = []
+
+    class Gate:
+        def slot(self):
+            import contextlib
+
+            @contextlib.asynccontextmanager
+            async def slot():
+                entered.append(True)
+                yield
+
+            return slot()
+
+    monkeypatch.setattr(scholarly, "OPENALEX_SEMANTIC_GATE", Gate())
+
+    hits = asyncio.run(scholarly.search_openalex_semantic("creep of 316", 7, api_key=_KEY))
+
+    params = route.calls.last.request.url.params
+    assert params["search.semantic"] == "creep of 316"
+    assert params["filter"] == "open_access.is_oa:true"
+    assert params["per-page"] == "7" and "search" not in params
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+    assert entered == [True] and [h["title"] for h in hits] == ["Creep"]
+
+
+@respx.mock
+def test_semantic_search_failures_name_semantic_search(caplog):
+    import pytest
+
+    respx.get(scholarly.OPENALEX_URL).mock(return_value=httpx.Response(500))
+
+    with pytest.raises(scholarly.SearchFailed, match="^OpenAlex semantic: "):
+        asyncio.run(scholarly.search_openalex_semantic("q", 5, raise_on_failure=True))
+    assert "OpenAlex semantic search failed" in caplog.text
+
+
+def test_scholarly_semantic_setting(monkeypatch):
+    from research_agent.core.config import AgentConfig
+
+    assert AgentConfig.from_env().scholarly_semantic is True
+    monkeypatch.setenv("SCHOLARLY_SEMANTIC", "false")
+    assert AgentConfig.from_env().scholarly_semantic is False
 
 
 # --- retries and failures ---------------------------------------------------
@@ -266,12 +405,15 @@ def test_every_source_failing_raises(monkeypatch):
         monkeypatch,
         scholarly.SearchFailed("OpenAlex: 503"),
         scholarly.SearchFailed("arXiv: ReadTimeout"),
+        semantic=scholarly.SearchFailed("OpenAlex semantic: 429"),
     )
 
     with pytest.raises(scholarly.SearchFailed) as raised:
         asyncio.run(scholarly.search_scholarly("creep", 5))
 
-    assert "OpenAlex: 503" in str(raised.value) and "arXiv: ReadTimeout" in str(raised.value)
+    message = str(raised.value)
+    assert "OpenAlex: 503" in message and "arXiv: ReadTimeout" in message
+    assert "OpenAlex semantic: 429" in message
 
 
 def test_openalex_failing_with_arxiv_off_raises(monkeypatch):
@@ -280,7 +422,7 @@ def test_openalex_failing_with_arxiv_off_raises(monkeypatch):
     _fake_sources(monkeypatch, scholarly.SearchFailed("OpenAlex: 429"), [])
 
     with pytest.raises(scholarly.SearchFailed, match="OpenAlex: 429"):
-        asyncio.run(scholarly.search_scholarly("creep", 5, arxiv=False))
+        asyncio.run(scholarly.search_scholarly("creep", 5, arxiv=False, semantic=False))
 
 
 def test_a_found_nothing_search_is_not_a_failure(monkeypatch):
