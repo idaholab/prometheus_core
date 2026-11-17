@@ -640,3 +640,65 @@ async def test_paginated_routes_accept_a_body_without_items():
     assert ItemsResource(SyncClient(body)).list().items == []
     assert (await AsyncItemsResource(AsyncClient(body)).list()).items == []
     assert SearchResource(SyncClient(body)).recent(limit=5) == []
+
+
+def _wire_clients(urls):
+    """Real sync and async storage clients whose HTTP layer records the URLs they request."""
+    import httpx
+
+    from prometheus_api.storage_client import AsyncStorageClient, StorageClient
+    from prometheus_api.storage_client.connection import ConnectionConfig
+
+    def handler(request):
+        urls.append(str(request.url))
+        return httpx.Response(200, json=paginated_payload([], hasNext=False, totalCount=0))
+
+    config = ConnectionConfig(
+        base_url="http://deeplynx.test/api/v1",
+        api_key="k",
+        api_secret="s",
+        organization_id=1,
+        project_id=2,
+    )
+    sync = StorageClient(config)
+    sync._http_client = httpx.Client(
+        base_url=config.base_url, transport=httpx.MockTransport(handler)
+    )
+    sync._auth_handler = SimpleNamespace(get_headers=lambda: {})
+    async_client = AsyncStorageClient(config)
+    async_client._http_client = httpx.AsyncClient(
+        base_url=config.base_url, transport=httpx.MockTransport(handler)
+    )
+
+    async def no_headers():
+        return {}
+
+    async_client._auth_handler = SimpleNamespace(get_headers=no_headers)
+    return sync, async_client
+
+
+async def test_recent_and_list_encode_their_query_strings_as_the_server_expects():
+    """Covers REQ-002-05, REQ-002-15: the URL on the wire, not just the params dict.
+
+    The project filter is a repeated key and booleans are lowercase; the dict the resources
+    build would still look right if either encoding changed.
+    """
+    urls: list[str] = []
+    sync, async_client = _wire_clients(urls)
+
+    sync.search.recent(limit=3)
+    sync.items.list(page=2, page_size=5, filters={"hideArchived": True, "isInsightEligible": False})
+    await async_client.search.recent(limit=3)
+    await async_client.items.list(
+        page=2, page_size=5, filters={"hideArchived": True, "isInsightEligible": False}
+    )
+
+    recent = (
+        "/organizations/1/query/records/paginated?projectIds=2&sortBy=2&PageNumber=1&PageSize=3"
+    )
+    listed = (
+        "/organizations/1/projects/2/records/paginated"
+        "?PageNumber=2&PageSize=5&hideArchived=true&isInsightEligible=false"
+    )
+    base = "http://deeplynx.test/api/v1"
+    assert urls == [base + recent, base + listed, base + recent, base + listed]
