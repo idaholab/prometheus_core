@@ -180,11 +180,18 @@ async def test_item_list_rejects_filters_the_server_would_ignore(filters):
     sync_client = SyncClient(paginated_payload([]))
     async_client = AsyncClient(paginated_payload([]))
 
-    with pytest.raises(ValueError, match="Unsupported item filter"):
+    bad_key = next(iter(filters))
+    # The message names the bad key, the filters to use instead, and the next step.
+    match = (
+        rf"Unsupported item filter\(s\) {re.escape(bad_key)}\. Use only these filters: "
+        r"dataSourceId, fileType, hideArchived, isInsightEligible\. .*search\.advanced_query"
+    )
+
+    with pytest.raises(ValueError, match=match):
         ItemsResource(sync_client).list(filters=filters)
-    with pytest.raises(ValueError, match="Unsupported item filter"):
+    with pytest.raises(ValueError, match=match):
         await AsyncItemsResource(async_client).list(filters=filters)
-    with pytest.raises(ValueError, match="Unsupported item filter"):
+    with pytest.raises(ValueError, match=match):
         list(ItemsResource(sync_client).iter_all(filters=filters))
 
     assert sync_client.calls == [] and async_client.calls == []

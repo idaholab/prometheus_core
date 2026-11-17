@@ -41,10 +41,11 @@ def check_list_filters(filters: Optional[Dict[str, Any]]) -> None:
     """Raise ``ValueError`` for a filter key the paginated records route does not accept."""
     unknown = sorted(set(filters or {}) - LIST_FILTER_KEYS)
     if unknown:
+        names = ", ".join(sorted(LIST_FILTER_KEYS))
         raise ValueError(
-            f"Unsupported item filter(s) {unknown}: the server would ignore them and return "
-            f"unfiltered items. Supported: {sorted(LIST_FILTER_KEYS)}. To filter on properties, "
-            "use search.advanced_query(...)."
+            f"Unsupported item filter(s) {', '.join(unknown)}. Use only these filters: {names}. "
+            "To filter on a property, use search.advanced_query(...). The server ignores "
+            "filters it does not know and would return every item."
         )
 
 
