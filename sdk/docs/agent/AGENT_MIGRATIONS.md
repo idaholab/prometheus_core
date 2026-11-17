@@ -74,6 +74,13 @@ parameter it doesn't know without an error, so a filter such as `{"properties.st
 used to return unfiltered items. It now raises `ValueError`. This affects agents that pass
 `filters=` to `items.list` or `items.iter_all`.
 
+Server requirement: these calls need a DeepLynx server that has the project-level paginated
+route `GET .../records/paginated` (`search.recent` below uses its org-level counterpart). They were verified on DeepLynx v0.8.0, the version the
+platform's `docker-compose.deeplynx.yml` pins; the earliest release that has them has not been
+established. On a server without a route the call fails with a `ValidationError` whose message is
+only `HTTP 400` (observed for a route v0.8.0 does not have), not a message about a missing
+route. If you see that after upgrading the SDK, check the server version first.
+
 Migration steps:
 
 1. Use only `dataSourceId`, `fileType`, `hideArchived` and `isInsightEligible` as keys in
@@ -100,6 +107,9 @@ route with `limit` and sort parameters that route ignores, so it returned every 
 order they were created (observed on a DeepLynx v0.8.0 server: `limit=1` returned all three
 records). `limit` below 1 now raises `ValueError`. This affects
 agents that call `search.recent` or rely on its order or length.
+
+Server requirement: `search.recent` needs the `GET .../query/records/paginated` route, with the
+same version caveat and `ValidationError: HTTP 400` failure described under `items.list` above.
 
 Migration steps:
 
