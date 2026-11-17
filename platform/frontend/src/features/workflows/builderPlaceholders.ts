@@ -15,6 +15,7 @@
  * dev review page for the other states (src/dev/BuilderStatesHarness.tsx). */
 import type { InspectedNode } from "./NodeInspector";
 import type { SkillGroup } from "./SkillLibrary";
+import type { TweakedStep } from "./TweakStepInspector";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
 // Placeholder skill library for the Builder, from Figma D.2.
@@ -123,6 +124,25 @@ export const INSPECTED_NODE: InspectedNode = {
   ],
   outputs: [{ name: "to_context", value: "radiation" }],
 };
+
+// Placeholder graph and step for changing this run, from Figma PPLT-409 D.2a:
+// D.2's graph with Corrosion selected instead of Radiation Damage. The canvas
+// drops the connect endpoint and the half-made wire itself in this mode.
+export const RUN_NODES: WorkflowGraphNode[] = BUILDER_NODES.map((node) =>
+  node.type === "skill" ? { ...node, selected: node.id === "corrosion" } : node,
+);
+export const TWEAKED_STEP: TweakedStep = {
+  name: "Corrosion",
+  tone: "analysis",
+  agent: "Corrosion Agent v2.1",
+  agentOptions: ["Corrosion Agent v2.0", "Corrosion Agent v1.8"],
+  settings: [{ name: "temperature_c", value: "from input.context" }],
+};
+
+// Unsaved structural changes to the template, from Figma PPLT-409 D.2d.
+// Nothing can change the structure yet, so PageWorkflows treats the template
+// opened from "Edit the template" as having these, to show the confirm.
+export const UNSAVED_CHANGES = "1 node added, 2 wires changed";
 
 // The dragging-skill state from Figma D.4, at 100% from the canvas's top left:
 // Get Material Data on its own, and Radiation Damage as the ghost of a skill

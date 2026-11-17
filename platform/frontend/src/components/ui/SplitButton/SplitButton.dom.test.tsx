@@ -286,3 +286,27 @@ test("Down on the arrow opens the menu on the first enabled option", async () =>
   await user.keyboard("{ArrowDown}");
   expect(screen.getByRole("menuitem", { name: "Edit the template" })).toHaveFocus();
 });
+
+test("an option's description shows under its label and is read out with it", async () => {
+  const user = userEvent.setup();
+  render(
+    <SplitButton
+      label="Modify Plan"
+      onClick={() => {}}
+      options={[{ label: "Change this run", description: "Tweak steps for this run only.", onClick: () => {} }]}
+    />,
+  );
+
+  await user.click(screen.getByRole("button", { name: "More Modify Plan options" }));
+  expect(screen.getByRole("menuitem", { name: /Change this run/ })).toHaveAccessibleDescription(
+    "Tweak steps for this run only.",
+  );
+});
+
+test("wide leaves the arrow square, so it doesn't take half the width", () => {
+  render(<SplitButton label="Modify Plan" onClick={() => {}} options={[{ label: "Edit", onClick: () => {} }]} wide />);
+
+  const arrow = screen.getByRole("button", { name: "More Modify Plan options" });
+  expect(arrow).toHaveClass("btn-square");
+  expect(arrow).not.toHaveClass("btn-block");
+});
