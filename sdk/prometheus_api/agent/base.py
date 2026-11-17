@@ -1605,11 +1605,8 @@ class PrometheusAgent:
         """Return the record whose ``original_id`` matches, or ``None``."""
         if not original_id:
             return None
-        page = await client.items.list(page_size=50, filters={"originalId": original_id})
-        for candidate in page.items:
-            if candidate.original_id == original_id:
-                return candidate
-        # Servers that ignore the filter: scan, newest records being last.
+        # ``items.list`` cannot filter on ``original_id`` (the paginated route ignores unknown
+        # parameters, so the SDK rejects them), so scan the records.
         async for candidate in client.items.iter_all(page_size=200):
             if candidate.original_id == original_id:
                 return candidate

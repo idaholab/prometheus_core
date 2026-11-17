@@ -1339,8 +1339,7 @@ workflows:
             == expected
         )
 
-    @pytest.mark.parametrize("server_filters", [True, False])
-    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, server_filters):
+    def test_resumed_task_reuses_its_execution_record(self, monkeypatch):
         """Covers REQ-009-23 and BEH-009-10: answering an INPUT_REQUIRED form
         resumes the same task id, whose record already exists; the request
         must run, reusing that record."""
@@ -1355,12 +1354,12 @@ workflows:
             async def create(self, item):
                 raise APIError("duplicate key value violates unique constraint")
 
-            async def list(self, page=1, page_size=100, filters=None):
-                hits = [mine] if server_filters else others
-                return SimpleNamespace(items=hits)
-
             async def iter_all(self, page_size=100, filters=None):
-                for record in [*others, mine]:
+                # The real client rejects filters the paginated route would ignore.
+                from prometheus_api.storage_client.resources.items import check_list_filters
+
+                check_list_filters(filters)
+                for record in [mine, *others]:
                     yield record
 
         class Client:
