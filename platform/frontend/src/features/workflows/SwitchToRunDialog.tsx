@@ -66,8 +66,12 @@ export function SwitchToRunDialog({ open, changes, onCancel, onSaveFirst, onDisc
           <Button label="Discard and switch" size="sm" variant="error" soft onClick={onDiscard} />
         </div>
       </div>
-      {/* A click on the backdrop keeps editing, like the admin dialogs */}
-      <div className="modal-backdrop" onClick={onCancel} />
+      {/* A click on the backdrop keeps editing, as in the admin dialogs. The
+          submit closes the dialog, which fires close, not cancel, so the
+          button tells the owner itself. */}
+      <form method="dialog" className="modal-backdrop">
+        <button onClick={onCancel}>close</button>
+      </form>
     </dialog>
   );
 }

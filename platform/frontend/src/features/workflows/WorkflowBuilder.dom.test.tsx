@@ -114,10 +114,12 @@ test("with unsaved structural changes, switching to this run asks first, and Kee
   expect(dialog).toHaveAccessibleDescription(
     "You have unsaved structural changes to the template (1 node added, 2 wires changed). A run can only change step settings, so these changes would be dropped.",
   );
+  // Then the backdrop's close button
   expect(within(dialog).getAllByRole("button").map((b) => b.textContent)).toEqual([
     "Keep editing",
     "Save template first",
     "Discard and switch",
+    "close",
   ]);
 
   await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
@@ -146,6 +148,17 @@ test("Escape on the confirm keeps editing the template", async () => {
 
   expect(await screen.findByRole("button", { name: /Changing:/ })).toHaveTextContent("the template");
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+test("a click on the backdrop keeps editing the template", async () => {
+  const user = userEvent.setup();
+  render(<Builder initial="template" unsavedChanges={UNSAVED_CHANGES} />);
+
+  await pickMode(user, /Change this run/);
+  await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "close" }));
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(badge()).toHaveTextContent("the template");
 });
 
 test("switching without structural changes, or from this run to the template, doesn't ask", async () => {

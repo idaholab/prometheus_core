@@ -159,7 +159,7 @@ export function SplitButton({
   };
 
   const size = style.size ?? "md";
-  // \`wide\` stretches the main half only: btn-block on the arrow too would
+  // `wide` stretches the main half only: btn-block on the arrow too would
   // split the width evenly and squeeze the label onto two lines.
   const half = (shape: string, stretch = false) =>
     buttonClassName({ ...style, wide: stretch && style.wide }, { shape: `join-item ${shape}` });
