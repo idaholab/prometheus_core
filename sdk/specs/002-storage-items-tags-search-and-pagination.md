@@ -13,7 +13,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-03: Item create with tag names MUST resolve/add those tags and refetch the created item.
 - REQ-002-04: Item update MUST use `PUT /records/{item_id}` and include only fields explicitly provided on `ItemUpdate`.
 - REQ-002-05: Item list MUST GET `/organizations/{org}/projects/{project}/records/paginated` with `PageNumber` and `PageSize` (plus caller filters, which MUST be limited to `dataSourceId`, `fileType`, `hideArchived` and `isInsightEligible`: any other key MUST raise `ValueError` before a request is sent, because the server ignores unknown parameters and would return unfiltered items), return `Page[Item]`, and take `total_count`, `has_next` and `has_previous` from the server's `PaginatedResponse` (`totalCount`, `hasNext`, `hasPrevious`). A null or missing `items` MUST be treated as an empty page.
-- REQ-002-06: `iter_all(...)` MUST repeatedly call `list(...)` until `page_info.has_next` is false.
+- REQ-002-06: `iter_all(...)` MUST repeatedly call `list(...)` until `page_info.has_next` is false or a page has no items, so a server that keeps reporting a next page of empty results cannot loop forever.
 - REQ-002-07: Bulk create MUST POST all item payloads to `/records/bulk` and parse both list-shaped and wrapped responses.
 - REQ-002-08: Tag operations MUST use project-scoped `/projects/{project_id}/tags` endpoints, normalize whitespace, reject empty names, skip duplicate names, and require resolved IDs to be positive integers.
 - REQ-002-09: `ItemsResource.add_tags(...)` and async equivalent MUST call `/records/{item_id}/tags` once per tag using singular `tagId` query parameters.
@@ -22,7 +22,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-12: Item/search parsing MUST accept DeepLynx camelCase fields and JSON-string `properties` or `tags`, producing typed `Item` and `Tag` values.
 - REQ-002-13: Sync and async item create/update payloads and search query parsing MUST remain aligned.
 - REQ-002-14: Sync and async advanced query MUST accept a list of structured filters and project IDs, optionally accept text search, validate page numbers and page sizes, POST matching payloads to `/organizations/{org}/query/records/advanced/paginated`, and parse server pagination into `Page[Item]`.
-- REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected or `hasNext` is false; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`.
+- REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected, `hasNext` is false or a page has no items; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`.
 
 ## Behavior
 - BEH-002-01: GIVEN a tag list with duplicate and blank names WHEN IDs are resolved THEN each non-empty normalized name is resolved once.

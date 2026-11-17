@@ -112,7 +112,8 @@ class AsyncItemsResource(AsyncBaseResource):
             for item in result.items:
                 yield item
 
-            if not result.page_info.has_next:
+            # An empty page ends paging even if the server claims a next one.
+            if not result.items or not result.page_info.has_next:
                 break
 
             page += 1

@@ -124,7 +124,9 @@ class AsyncSearchResource(AsyncBaseResource):
             )
             result = self._parse_paginated_results(response.json())
             items.extend(result.items)
-            if not result.page_info.has_next:
+            # An empty page ends paging even if the server claims a next one, so a server
+            # that never stops cannot hang the loop.
+            if not result.items or not result.page_info.has_next:
                 break
             page += 1
 

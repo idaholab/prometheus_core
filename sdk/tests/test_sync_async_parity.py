@@ -499,3 +499,48 @@ async def test_advanced_query_validation_matches_between_sync_and_async(page, pa
         sync_resource.advanced_query([], [2], page=page, page_size=page_size)
     with pytest.raises(ValueError, match=message):
         await async_resource.advanced_query([], [2], page=page, page_size=page_size)
+
+
+class StuckServerError(AssertionError):
+    """A paging loop kept asking a server that never ends the listing."""
+
+
+def stuck_page(page, *, items):
+    """An empty or repeating page that still claims there is a next one."""
+    return recent_page(items, page=page, has_next=True)
+
+
+class StuckSync(SyncClient):
+    def _request(self, method, path, **kwargs):
+        self.calls.append((method, path, kwargs))
+        if len(self.calls) > 5:
+            raise StuckServerError("paging did not stop")
+        return Response(stuck_page(kwargs["params"]["PageNumber"], items=[]))
+
+
+class StuckAsync(AsyncClient):
+    async def _request(self, method, path, **kwargs):
+        self.calls.append((method, path, kwargs))
+        if len(self.calls) > 5:
+            raise StuckServerError("paging did not stop")
+        return Response(stuck_page(kwargs["params"]["PageNumber"], items=[]))
+
+
+async def test_search_recent_stops_on_an_empty_page_that_claims_a_next_one():
+    """Covers REQ-002-15: a server that keeps saying hasNext with no items cannot hang recent."""
+    sync_client = StuckSync(None)
+    async_client = StuckAsync(None)
+
+    assert SearchResource(sync_client).recent(limit=50) == []
+    assert await AsyncSearchResource(async_client).recent(limit=50) == []
+    assert len(sync_client.calls) == len(async_client.calls) == 1
+
+
+async def test_items_iter_all_stops_on_an_empty_page_that_claims_a_next_one():
+    """Covers REQ-002-06: a server that keeps saying hasNext with no items cannot hang iter_all."""
+    sync_client = StuckSync(None)
+    async_client = StuckAsync(None)
+
+    assert list(ItemsResource(sync_client).iter_all(page_size=2)) == []
+    assert [i async for i in AsyncItemsResource(async_client).iter_all(page_size=2)] == []
+    assert len(sync_client.calls) == len(async_client.calls) == 1
