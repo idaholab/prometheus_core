@@ -3,13 +3,13 @@ title: Live demo reference
 footer: One day · Live demo reference · https://idaholab.github.io/prometheus_core/hackathon/one-day
 accent: dep
 index:
-  time: '9:30'
+  time: '60 min'
   heading: Live demo reference
   color: var(--sky)
   blurb: 'The patterns shown in the live demo, in the order shown: start the platform and try the debug agents, scaffold an agent, add a skill, call an LLM, read and publish artifacts, give the LLM a tool. Generic code with placeholders, and one watch-out each.'
 ---
 
-# Live demo reference {.title kicker="Agent developer hackathon · One day · 9:30 am" pills="Reference | 6 patterns | Keep it open while you build"}
+# Live demo reference {.title kicker="Agent developer hackathon · One day" pills="Reference | 6 patterns | Keep it open while you build"}
 The patterns from the live demo, in the order they appear.
 Note: This deck is a reference to keep open, not a script to present. The presenter builds an agent live; these slides carry the generic version of each step.
 
