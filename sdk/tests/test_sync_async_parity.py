@@ -340,11 +340,9 @@ async def test_search_recent_uses_sorted_paginated_query_route_in_sync_and_async
 
 async def test_search_recent_pages_until_limit_and_truncates_in_sync_and_async(monkeypatch):
     """Covers REQ-002-15: recent follows hasNext and returns exactly ``limit`` items."""
-    import prometheus_api.storage_client.async_resources.search as async_search
-    import prometheus_api.storage_client.resources.search as sync_search
+    import prometheus_api.storage_client.paging as paging
 
-    monkeypatch.setattr(sync_search, "_MAX_PAGE_SIZE", 2)
-    monkeypatch.setattr(async_search, "_MAX_PAGE_SIZE", 2)
+    monkeypatch.setattr(paging, "MAX_PAGE_SIZE", 2)
     pages = {
         1: recent_page([item_payload(id=5), item_payload(id=4)], page=1, has_next=True),
         2: recent_page([item_payload(id=3), item_payload(id=2)], page=2, has_next=True),
@@ -364,11 +362,9 @@ async def test_search_recent_pages_until_limit_and_truncates_in_sync_and_async(m
 
 async def test_search_recent_stops_when_server_has_no_next_page(monkeypatch):
     """Covers REQ-002-15: fewer records than ``limit`` is not an error and ends paging."""
-    import prometheus_api.storage_client.async_resources.search as async_search
-    import prometheus_api.storage_client.resources.search as sync_search
+    import prometheus_api.storage_client.paging as paging
 
-    monkeypatch.setattr(sync_search, "_MAX_PAGE_SIZE", 2)
-    monkeypatch.setattr(async_search, "_MAX_PAGE_SIZE", 2)
+    monkeypatch.setattr(paging, "MAX_PAGE_SIZE", 2)
     pages = {1: recent_page([item_payload(id=7)], page=1, has_next=False)}
     sync_client = PagedSearchSync(pages)
     async_client = PagedSearchAsync(pages)

@@ -16,9 +16,8 @@ import logging
 from typing import AsyncIterator, Dict, List, Optional, Any
 from importlib.metadata import version as pkg_version
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
-from ..models.pagination import Page, PageInfo
-from ..resources.base import check_paginated_body
-from ..resources.items import check_list_filters, check_page_size
+from ..models.pagination import Page
+from ..paging import check_list_filters, check_page_size, parse_paginated
 from .base import AsyncBaseResource
 
 logger = logging.getLogger(__name__)
@@ -182,24 +181,8 @@ class AsyncItemsResource(AsyncBaseResource):
         return await self.get(item_id)
 
     def _parse_paginated_items(self, data: Any, page: int, page_size: int) -> Page[Item]:
-        """Parse a ``PaginatedResponse<RecordResponseDto>`` into a ``Page[Item]``.
-
-        The server returns ``items: null`` for an empty result, so a missing or null ``items``
-        is an empty page. The paging fields are required and are taken from the server.
-
-        Raises:
-            StorageClientError: If the body is not an object or lacks a paging field
-        """
-        data = check_paginated_body(data, "records/paginated")
-        items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
-        page_info = PageInfo(
-            page_number=data["pageNumber"],
-            page_size=data["pageSize"],
-            total_count=data["totalCount"],
-            has_next=data["hasNext"],
-            has_previous=data["hasPrevious"],
-        )
-        return Page(items=items, page_info=page_info)
+        """Parse a ``PaginatedResponse<RecordResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse API response data into an Item model."""

@@ -15,14 +15,9 @@
 from typing import Any, Dict, List, Optional
 from ..models.item import Item, Tag
 from ..models.pagination import Page, PageInfo
-from ..resources.base import check_paginated_body
+from .. import paging
+from ..paging import parse_paginated
 from .base import AsyncBaseResource
-
-
-# GET /organizations/{org}/query/records/paginated: the server caps PageSize at 500, and
-# ``sortBy`` is an enum (0 NameAZ, 1 NameZA, 2 DateNew, 3 DateOld).
-_MAX_PAGE_SIZE = 500
-_SORT_DATE_NEW = 2
 
 
 class AsyncSearchResource(AsyncBaseResource):
@@ -58,8 +53,7 @@ class AsyncSearchResource(AsyncBaseResource):
         page_size: int = 25,
     ) -> Page[Item]:
         """Perform an advanced, server-paginated search asynchronously."""
-        if not 1 <= page_size <= 500:
-            raise ValueError("page_size must be between 1 and 500")
+        paging.check_page_size(page_size)
         if page < 1:
             raise ValueError("page must be 1 or greater")
 
@@ -109,7 +103,7 @@ class AsyncSearchResource(AsyncBaseResource):
         if limit < 1:
             raise ValueError("limit must be 1 or greater")
 
-        page_size = min(limit, _MAX_PAGE_SIZE)
+        page_size = min(limit, paging.MAX_PAGE_SIZE)
         items: List[Item] = []
         page = 1
         while len(items) < limit:
@@ -118,7 +112,7 @@ class AsyncSearchResource(AsyncBaseResource):
                 f"/organizations/{self._client.config.organization_id}/query/records/paginated",
                 params={
                     "projectIds": [self._client.config.project_id],
-                    "sortBy": _SORT_DATE_NEW,
+                    "sortBy": paging.SORT_DATE_NEW,
                     "PageNumber": page,
                     "PageSize": page_size,
                 },
@@ -154,20 +148,9 @@ class AsyncSearchResource(AsyncBaseResource):
 
         return Page(items=items, page_info=page_info)
 
-    def _parse_paginated_results(self, data: Dict[str, Any]) -> Page[Item]:
-        """Parse a PaginatedResponse<QueryRecordViewResponseDto> payload."""
-        data = check_paginated_body(data, "query/records/paginated")
-        items = [self._parse_item(item_data) for item_data in (data.get("items") or [])]
-
-        page_info = PageInfo(
-            page_number=data["pageNumber"],
-            page_size=data["pageSize"],
-            total_count=data["totalCount"],
-            has_next=data["hasNext"],
-            has_previous=data["hasPrevious"],
-        )
-
-        return Page(items=items, page_info=page_info)
+    def _parse_paginated_results(self, data: Any) -> Page[Item]:
+        """Parse a ``PaginatedResponse<QueryRecordViewResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "query/records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse item data from search results."""

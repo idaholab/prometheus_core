@@ -1357,7 +1357,7 @@ workflows:
 
             async def iter_all(self, page_size=100, filters=None):
                 # The real client rejects filters the paginated route would ignore.
-                from prometheus_api.storage_client.resources.items import check_list_filters
+                from prometheus_api.storage_client.paging import check_list_filters
 
                 check_list_filters(filters)
                 for record in [*others, mine]:
