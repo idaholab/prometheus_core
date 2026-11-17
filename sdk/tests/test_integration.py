@@ -263,6 +263,24 @@ class TestItemRetrieval:
         assert len(item_ids & test_item_ids) > 0
 
 
+class TestListFilters:
+    """The paginated records route applies its own filters and ignores any other parameter."""
+
+    def test_file_type_filter_is_applied(self, client, test_items):
+        """Covers REQ-002-05: ``fileType`` narrows the list; other keys are rejected up front."""
+        everything = client.items.list(page_size=50)
+        assert everything.page_info.total_count >= len(test_items)
+
+        # None of the test items is a csv file, so this must not return them
+        csv_only = client.items.list(page_size=50, filters={"fileType": "csv"})
+        csv_ids = {item.id for item in csv_only.items}
+        assert csv_ids.isdisjoint(item.id for item in test_items)
+        assert csv_only.page_info.total_count < everything.page_info.total_count
+
+        with pytest.raises(ValueError, match="Unsupported item filter"):
+            client.items.list(filters={"properties.status": "active"})
+
+
 class TestPagination:
     """Test pagination functionality."""
 

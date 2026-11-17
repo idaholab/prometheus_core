@@ -17,6 +17,22 @@ from ..models.item import Item, ItemCreate, ItemUpdate, Tag
 from ..models.pagination import Page, PageInfo
 from .base import BaseResource
 
+# Query parameters ``GET .../records/paginated`` accepts besides the paging ones. The server
+# ignores any other parameter without an error, so an unknown filter would silently return
+# unfiltered results.
+LIST_FILTER_KEYS = frozenset({"dataSourceId", "fileType", "hideArchived", "isInsightEligible"})
+
+
+def check_list_filters(filters: Optional[Dict[str, Any]]) -> None:
+    """Raise ``ValueError`` for a filter key the paginated records route does not accept."""
+    unknown = sorted(set(filters or {}) - LIST_FILTER_KEYS)
+    if unknown:
+        raise ValueError(
+            f"Unsupported item filter(s) {unknown}: the server would ignore them and return "
+            f"unfiltered items. Supported: {sorted(LIST_FILTER_KEYS)}. To filter on properties, "
+            "use search.advanced_query(...)."
+        )
+
 
 class ItemsResource(BaseResource):
     """Handles operations related to items (records in DeepLynx)."""
@@ -143,10 +159,15 @@ class ItemsResource(BaseResource):
         Args:
             page: Page number (1-indexed)
             page_size: Number of items per page
-            filters: Optional filters to apply
+            filters: Optional query parameters for the paginated records route. Only
+                ``dataSourceId``, ``fileType``, ``hideArchived`` and ``isInsightEligible`` are
+                supported; use ``search.advanced_query`` to filter on properties.
 
         Returns:
             Paginated list of items
+
+        Raises:
+            ValueError: If ``filters`` has a key the route does not accept
 
         Example:
             ```python
@@ -155,6 +176,7 @@ class ItemsResource(BaseResource):
                 print(item.name)
             ```
         """
+        check_list_filters(filters)
         params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:

@@ -17,6 +17,7 @@ from typing import AsyncIterator, Dict, List, Optional, Any
 from importlib.metadata import version as pkg_version
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
 from ..models.pagination import Page, PageInfo
+from ..resources.items import check_list_filters
 from .base import AsyncBaseResource
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class AsyncItemsResource(AsyncBaseResource):
         self, page: int = 1, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
     ) -> Page[Item]:
         """List items with pagination asynchronously."""
+        check_list_filters(filters)
         params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:

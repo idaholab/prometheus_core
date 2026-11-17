@@ -172,6 +172,24 @@ async def test_item_list_uses_paginated_route_and_server_paging_in_sync_and_asyn
     assert sync_page.page_info.has_previous is False
 
 
+@pytest.mark.parametrize(
+    "filters", [{"properties.status": "active"}, {"created_at": {"$gt": "2024"}}, {"nonsense": 1}]
+)
+async def test_item_list_rejects_filters_the_server_would_ignore(filters):
+    """Covers REQ-002-05: an unsupported filter raises instead of returning unfiltered items."""
+    sync_client = SyncClient(paginated_payload([]))
+    async_client = AsyncClient(paginated_payload([]))
+
+    with pytest.raises(ValueError, match="Unsupported item filter"):
+        ItemsResource(sync_client).list(filters=filters)
+    with pytest.raises(ValueError, match="Unsupported item filter"):
+        await AsyncItemsResource(async_client).list(filters=filters)
+    with pytest.raises(ValueError, match="Unsupported item filter"):
+        list(ItemsResource(sync_client).iter_all(filters=filters))
+
+    assert sync_client.calls == [] and async_client.calls == []
+
+
 async def test_item_list_passes_filters_through_in_sync_and_async():
     """Covers REQ-002-05: extra filters are sent alongside the paging parameters."""
     payload = paginated_payload([], totalCount=0, hasNext=False)
