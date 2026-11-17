@@ -45,6 +45,7 @@ agents/client-agent/
     chat_flow.py                   Maps requests onto the loop, outcomes onto responses
     agent_loop.py                  Tool-calling orchestration loop
     skills.py                      Skill lookup and invocation
+    hooks.py                       Call middleware around skill dispatches
     debug_commands.py              Slash command handlers
     utils.py                       Pure parsing/formatting helpers
   artifact_handling.py             Artifact catalog normalization, artifact-ref schema paths
@@ -189,6 +190,58 @@ Major functions:
 
 `invoke_skill()` is intentionally generic. Specialist-specific behavior should be
 expressed in agent-card metadata, schemas, workflow templates, or downstream agents.
+
+## Call Middleware: `orchestrator/hooks.py`
+
+Generic middleware around every specialist dispatch the orchestrator makes —
+one protocol covering the four interception points of a call, plus a fifth,
+turn-scoped point:
+
+Hooks run in the **client-agent orchestrator process** — not in your agent;
+they observe and may rewrite orchestrator-side values. `on_event` fires only
+for agents whose card declares `capabilities.streaming: true` (the template
+ships `false`); without it an agent produces no progress events.
+
+- `on_request(context, params) -> params` — orchestrator entering the agent (normalized params)
+- `on_event(context, message) -> message` — agent leaving progress to the orchestrator (in-flight stream)
+- `on_result(context, result) -> result` — agent returning to the orchestrator (parsed payload)
+- `on_error(context, error)` — dispatch failed: raised locally, or returned as an error result (`DispatchError`).
+- `on_turn(context)` — one user turn finished at a loop outcome
+
+`AgentCallContext` (conversation, skill, agent, task-graph node) identifies the
+dispatch. Contract:
+
+- **Hooks never own the `_*` bookkeeping keys.** `strip_reserved`/`apply_reserved`
+  hide the framework's plumbing (`conversation_id`, task-graph resume ids, the
+  status/background/artifact callback handles) from hooks and re-apply it after
+  them — carried values win, so a hook can neither drop nor forge them.
+- **Hook failures degrade, never abort.** Every hook call is wrapped; a raising
+  hook is logged and the value passes through unchanged. Async hook calls are
+  bounded by a per-call timeout (`hooks._HOOK_TIMEOUT_SECONDS`, 10 s) — a
+  timed-out hook is cancelled and logged. All hook failures surface only as
+  warnings in the client-agent container log; nothing else observes them.
+- **`on_event` is sync by decision.** Progress events fire inside the
+  stream-consume loop, latency-sensitive and high-volume; an awaitable would
+  either backpressure the stream or need a side queue that does not exist.
+  `on_request`/`on_result`/`on_error`/`on_turn` are async.
+- **`on_turn` is read-only and fires once per user reply.** It runs in
+  `chat_flow.chat` after `_respond` persisted the turn, so the hook sees the
+  turn exactly as stored — including backgrounded turns (the detached task
+  still runs `chat()` to completion). Its `TurnContext` carries a deep-copied
+  snapshot (the trimmed `llm_messages` transcript — the whole bounded history,
+  not a per-turn delta; `tool_results`/`tool_inputs` — repeated as-is on a
+  resumed turn, since the resume path skips `begin_user_turn`; the loop
+  outcome) — never the live
+  `AgentState`, which a sibling backgrounded turn can be writing concurrently.
+  An INPUT_REQUIRED pause and its resume are two `on_turn` fires sharing
+  `root_id`; join on `conversation_id` to rebuild one trajectory. It does not
+  fire for anything that returns before or beside the loop: slash-command
+  replies, `plan_rejected`, workflow-unavailable, nothing-awaiting, and
+  empty-query error returns, plus a mid-loop crash.
+
+`NoopCallHook` (the default) logs and changes nothing — the reference
+implementation real middleware extends. Install with
+`hooks.set_call_hook(hook)`; `hooks.set_call_hook(None)` restores the default.
 
 ## Slash Commands: `orchestrator/debug_commands.py`
 
