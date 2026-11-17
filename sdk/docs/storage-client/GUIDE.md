@@ -218,11 +218,18 @@ Path lookup is search-first and degrades gracefully:
 
 1. `search.advanced_query(...)`
 2. `search.query(...)` + exact metadata filtering
-3. `search.recent(...)` (emits runtime warning)
-4. `items.iter_all(...)` full scan fallback (emits runtime warning)
+3. `search.recent(limit=recent_limit)` (emits runtime warning)
+4. `items.iter_all(page_size=search_page_size)` full scan fallback (emits runtime warning)
 
 This keeps normal workflows efficient while still supporting DeepLynx deployments
 where some search endpoints are unavailable.
+
+Step 3 looks only at the newest `recent_limit` records (default 500), fetched in one
+request when `recent_limit` is at most 500. A file that is older than that is not found
+there and the lookup goes on to the full scan in step 4, which reads every record page by
+page, so it is slower. If your files are often found only by the full scan, raise
+`recent_limit` (extra pages are requested above 500). `search_page_size` must be between 1
+and 500, because the records route refuses larger pages.
 
 #### Common filesystem operations
 

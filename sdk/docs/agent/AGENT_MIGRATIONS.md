@@ -105,6 +105,10 @@ Migration steps:
 1. Pass `limit >= 1`. A zero or negative `limit` raises `ValueError`.
 2. Expect at most `limit` items, newest first. Code that took the whole list and sorted or
    sliced it can drop that step.
+3. If you use `DeepLynxFileSystem` (`deeplynx://` paths), note that its recent-items lookup step
+   calls `search.recent(limit=recent_limit)`, so `recent_limit` (default 500) now really limits
+   it to the newest records. A path that is not among them is found by the full scan that
+   follows, which is slower. Raise `recent_limit` if your files are mostly older than that.
 
 ```python
 newest = client.search.recent(limit=20)   # at most 20 items, most recently updated first

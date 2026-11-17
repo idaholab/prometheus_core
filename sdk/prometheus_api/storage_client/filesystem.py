@@ -135,8 +135,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
                 does not close it.
             config: Connection configuration used only when ``client`` is not
                 supplied.
-            recent_limit: Result count for ``search.recent`` fallback.
-            search_page_size: Page size for search pagination.
+            recent_limit: Number of newest records the ``search.recent`` fallback looks at
+                (at most 500 per request). Older files are found by the full scan instead.
+            search_page_size: Page size for search pagination (1 to 500).
             search_max_pages: Maximum number of pages fetched per search call.
             **kwargs: Additional options forwarded to
                 :class:`fsspec.AbstractFileSystem`.
