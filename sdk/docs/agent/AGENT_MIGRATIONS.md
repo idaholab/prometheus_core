@@ -96,8 +96,9 @@ by_property = client.search.advanced_query({"properties.status": "active"})
 
 `search.recent(limit)` now pages through `GET .../query/records/paginated` sorted by update time,
 newest first, and returns exactly the newest `limit` items. It used to call the plain records
-route with `limit` and sort parameters that route ignores, so it probably returned every record
-in no particular order (not observed). `limit` below 1 now raises `ValueError`. This affects
+route with `limit` and sort parameters that route ignores, so it returned every record, in the
+order they were created (observed on a DeepLynx v0.8.0 server: `limit=1` returned all three
+records). `limit` below 1 now raises `ValueError`. This affects
 agents that call `search.recent` or rely on its order or length.
 
 Migration steps:
