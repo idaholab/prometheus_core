@@ -473,3 +473,87 @@ def test_recent_failure_is_logged_and_lookup_falls_back_to_full_scan(tmp_path, c
     record = next(r for r in caplog.records if "search.recent failed" in r.getMessage())
     assert "malformed body" in str(record.exc_info[1])
     files.download.assert_called_once_with(77, output_dir / "result.e")
+
+
+def _real_client_over(handler):
+    """A real StorageClient whose HTTP layer is ``handler``, so the real parsers run."""
+    import httpx
+
+    from prometheus_api.storage_client import StorageClient
+    from prometheus_api.storage_client.connection import ConnectionConfig
+
+    config = ConnectionConfig(
+        base_url="http://deeplynx.test/api/v1",
+        api_key="k",
+        api_secret="s",
+        organization_id=1,
+        project_id=2,
+    )
+    client = StorageClient(config)
+    client._http_client = httpx.Client(
+        base_url=config.base_url, transport=httpx.MockTransport(handler)
+    )
+    client._auth_handler = SimpleNamespace(get_headers=lambda: {})
+    return client
+
+
+def _record(item_id: int, path: str) -> dict:
+    return {
+        "id": item_id,
+        "name": f"item-{item_id}",
+        "originalId": f"orig-{item_id}",
+        "lastUpdatedAt": "2026-04-25T12:00:00Z",
+        "tags": [],
+        "properties": {
+            "_deeplynx_fs_managed": True,
+            "_deeplynx_fs_path": path,
+            "_deeplynx_fs_version_ns": 1000,
+        },
+    }
+
+
+def _envelope(items, *, has_next=False):
+    return {
+        "items": items,
+        "pageNumber": 1,
+        "pageSize": 100,
+        "totalCount": 0 if items is None else len(items),
+        "hasPrevious": False,
+        "hasNext": has_next,
+    }
+
+
+def test_lookup_falls_through_a_null_items_recent_page_to_the_full_scan(caplog):
+    """Covers REQ-002-15: a server without the search routes, with ``items: null`` for recent.
+
+    The real parsers run: the advanced and query routes answer HTTP 400 (as a server lacking
+    them does), the recent route has no records (``items: null``), and only the full scan finds
+    the file. The lookup must get through every step and not mistake the null page for an error.
+    """
+    import httpx
+
+    path = "session/out/result.e"
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.path)
+        if request.url.path.endswith("/query/records/advanced/paginated"):
+            return httpx.Response(400, json={"title": "no such route"})
+        if request.url.path.endswith("/query/records/paginated"):
+            return httpx.Response(200, json=_envelope(None))
+        if request.url.path.endswith("/projects/2/records/paginated"):
+            return httpx.Response(200, json=_envelope([_record(77, path)]))
+        return httpx.Response(400, json={"title": "no such route"})
+
+    fs = DeepLynxFileSystem(client=_real_client_over(handler))
+
+    with caplog.at_level("WARNING", logger="prometheus_api.storage_client.filesystem"):
+        with pytest.warns(RuntimeWarning):
+            found = fs._find_items_for_exact_path(path, require_version=True)
+
+    assert [item.id for item in found] == [77]
+    # A null ``items`` is an empty page. If it were parsed as an error, the recent step would
+    # log "search.recent failed" and still fall through, which would hide the regression.
+    assert not [r for r in caplog.records if "search.recent failed" in r.getMessage()]
+    assert any(p.endswith("/query/records/paginated") for p in seen)
+    assert any(p.endswith("/projects/2/records/paginated") for p in seen)
