@@ -111,6 +111,11 @@ agents that call `search.recent` or rely on its order or length.
 Server requirement: `search.recent` needs the `GET .../query/records/paginated` route, with the
 same version caveat and `ValidationError: HTTP 400` failure described under `items.list` above.
 
+`search.recent` sends no `hideArchived` filter, so whether it returns archived records is up to
+the server's default for that route; it was not observed (on DeepLynx v0.8.0 the SDK's `delete`
+removes a record, so the SDK cannot create an archived one to try). Its results are limited to the
+client's project: with two projects, `recent` returned only the items of its own.
+
 Migration steps:
 
 1. Pass `limit >= 1`. A zero or negative `limit` raises `ValueError`.
