@@ -34,6 +34,12 @@ def check_list_filters(filters: Optional[Dict[str, Any]]) -> None:
         )
 
 
+def check_page_size(page_size: int) -> None:
+    """Raise ``ValueError`` for a page size the records route rejects (it allows up to 500)."""
+    if not 1 <= page_size <= 500:
+        raise ValueError("page_size must be between 1 and 500")
+
+
 class ItemsResource(BaseResource):
     """Handles operations related to items (records in DeepLynx)."""
 
@@ -167,7 +173,8 @@ class ItemsResource(BaseResource):
             Paginated list of items
 
         Raises:
-            ValueError: If ``filters`` has a key the route does not accept
+            ValueError: If ``filters`` has a key the route does not accept, or ``page_size``
+                is not between 1 and 500
 
         Example:
             ```python
@@ -177,6 +184,7 @@ class ItemsResource(BaseResource):
             ```
         """
         check_list_filters(filters)
+        check_page_size(page_size)
         params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:

@@ -80,6 +80,8 @@ Migration steps:
    `filters`.
 2. To filter on record properties, call `search.advanced_query(...)` instead.
 3. Read `page.page_info.total_count` as the server's real count, not an estimate.
+4. Pass a `page_size` between 1 and 500. A larger one raises `ValueError` (the server refuses it
+   with a bare HTTP 400); `DeepLynxFileSystem(search_page_size=...)` is passed through the same way.
 
 ```python
 # Before: the property filter was ignored and every item came back

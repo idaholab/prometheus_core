@@ -190,6 +190,39 @@ async def test_item_list_rejects_filters_the_server_would_ignore(filters):
     assert sync_client.calls == [] and async_client.calls == []
 
 
+@pytest.mark.parametrize("page_size", [0, -1, 501, 1000])
+async def test_item_list_rejects_a_page_size_the_server_would_refuse(page_size):
+    """Covers REQ-002-05: a page size outside 1-500 raises before any request is sent."""
+    sync_client = SyncClient(paginated_payload([]))
+    async_client = AsyncClient(paginated_payload([]))
+    message = "page_size must be between 1 and 500"
+
+    with pytest.raises(ValueError, match=message):
+        ItemsResource(sync_client).list(page_size=page_size)
+    with pytest.raises(ValueError, match=message):
+        await AsyncItemsResource(async_client).list(page_size=page_size)
+    with pytest.raises(ValueError, match=message):
+        list(ItemsResource(sync_client).iter_all(page_size=page_size))
+    with pytest.raises(ValueError, match=message):
+        [i async for i in AsyncItemsResource(async_client).iter_all(page_size=page_size)]
+
+    assert sync_client.calls == [] and async_client.calls == []
+
+
+@pytest.mark.parametrize("page_size", [1, 500])
+async def test_item_list_accepts_the_page_size_limits(page_size):
+    """Covers REQ-002-05: 1 and 500 are the smallest and largest page sizes sent unchanged."""
+    payload = paginated_payload([], totalCount=0, hasNext=False)
+    sync_client = SyncClient(payload)
+    async_client = AsyncClient(payload)
+
+    ItemsResource(sync_client).list(page_size=page_size)
+    await AsyncItemsResource(async_client).list(page_size=page_size)
+
+    assert sync_client.calls[0][2]["params"]["PageSize"] == page_size
+    assert async_client.calls[0][2]["params"]["PageSize"] == page_size
+
+
 async def test_item_list_passes_filters_through_in_sync_and_async():
     """Covers REQ-002-05: extra filters are sent alongside the paging parameters."""
     payload = paginated_payload([], totalCount=0, hasNext=False)
