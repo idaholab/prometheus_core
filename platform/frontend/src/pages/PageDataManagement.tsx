@@ -10,17 +10,31 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useDataManagement } from "@/features/data-management";
+import { ARTIFACT_FILTER, toggleSource, useDataManagement } from "@/features/data-management";
 import { usePageHeader } from "@/features/shell";
 import { DataManagement } from "@/features/data-management";
+import { useListFilter } from "@/lib/listFilter";
 
 /**
- * Data Management section page: owns the page's data and header. Layout lives in
- * DataManagement. Route params and filters will land here with the router.
+ * Data Management section page: owns the page's data, header and artifact filter
+ * state. Layout lives in DataManagement. Route params will land here with the router.
  */
 export function PageDataManagement() {
   usePageHeader({ title: "Data Sources & Artifact Persistence" });
   const { status, sources, storage, artifacts } = useDataManagement();
 
-  return <DataManagement status={status} sources={sources} storage={storage} artifacts={artifacts} />;
+  const { facet, setFacet, visible, noMatches } = useListFilter(artifacts, ARTIFACT_FILTER);
+
+  return (
+    <DataManagement
+      status={status}
+      sources={sources}
+      storage={storage}
+      artifacts={visible}
+      artifactType={facet}
+      onArtifactTypeChange={setFacet}
+      noMatchingArtifacts={noMatches}
+      onToggleSource={toggleSource}
+    />
+  );
 }
