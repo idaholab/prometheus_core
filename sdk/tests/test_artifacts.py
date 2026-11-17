@@ -428,3 +428,34 @@ def test_get_artifact_file_path_downloads_fsspec_uri_to_cache(tmp_path):
 
     assert path.exists()
     assert path.read_bytes() == b"hello"
+
+
+def test_resolver_get_artifact_file_path_resolves_by_id(tmp_path):
+    """ArtifactResolver.get_artifact_file_path stays usable on its own."""
+    from prometheus_api.agent.artifact_resolver import ArtifactResolver
+
+    registry = ArtifactRegistry()
+    registry.register(
+        ArtifactReference(
+            artifact_id="inline-1",
+            conversation_id="conv-resolver",
+            name="note.txt",
+            description="",
+            text_body="hello",
+        )
+    )
+    resolver = ArtifactResolver(registry)
+
+    path = asyncio.run(
+        resolver.get_artifact_file_path(
+            "inline-1", conversation_id="conv-resolver", cache_dir=tmp_path
+        )
+    )
+
+    assert path.read_text() == "hello"
+    with pytest.raises(ValueError, match="artifact_id is required"):
+        resolver.require_reference(" ", conversation_id="conv-resolver")
+    with pytest.raises(ValueError, match="conversation_id is required"):
+        resolver.require_reference("inline-1", conversation_id="")
+    with pytest.raises(FileNotFoundError, match="was not found"):
+        resolver.require_reference("missing", conversation_id="conv-resolver")
