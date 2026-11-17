@@ -38,8 +38,8 @@ interface BuilderModeBadgeProps {
  * Follows the WAI-ARIA menu button pattern, like SplitButton: the menu takes
  * focus on the current mode; Up/Down move, Enter or Space picks, Escape or a
  * click outside closes it and Escape returns focus to the badge, Tab closes
- * it. Picking a mode switches straight away; the confirm before leaving
- * unsaved template changes comes with PPLT-229.
+ * it. Picking a mode calls `onChange`; WorkflowBuilder asks first before
+ * leaving unsaved template changes (D.2d).
  */
 export function BuilderModeBadge({ mode, workflowName, onChange }: BuilderModeBadgeProps) {
   const [open, setOpen] = useState(false);
