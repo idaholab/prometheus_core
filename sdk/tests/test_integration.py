@@ -271,11 +271,12 @@ class TestListFilters:
         everything = client.items.list(page_size=50)
         assert everything.page_info.total_count >= len(test_items)
 
-        # None of the test items is a csv file, so this must not return them
+        # None of the test items is a csv file, so the filter must exclude them. Do not
+        # compare counts with the unfiltered list: on an empty or csv-only project, or a
+        # shared database that changes under the test, they need not differ.
         csv_only = client.items.list(page_size=50, filters={"fileType": "csv"})
         csv_ids = {item.id for item in csv_only.items}
         assert csv_ids.isdisjoint(item.id for item in test_items)
-        assert csv_only.page_info.total_count < everything.page_info.total_count
 
         with pytest.raises(ValueError, match="Unsupported item filter"):
             client.items.list(filters={"properties.status": "active"})
@@ -407,9 +408,16 @@ class TestSearch:
             with pytest.raises(ValueError):
                 client.search.recent(limit=0)
         finally:
-            # No try/except: a failed delete leaves test data behind and should fail the test.
+            # Try every delete so one failure does not leave the rest behind, then fail the
+            # test: leftover test data should not pass silently.
+            failures = []
             for item in made:
-                client.items.delete(item.id)
+                try:
+                    client.items.delete(item.id)
+                except Exception as exc:  # noqa: BLE001 - collected and re-raised below
+                    failures.append((item.id, exc))
+            if failures:
+                raise AssertionError(f"Could not delete test items: {failures}")
 
 
 class TestRelationships:
