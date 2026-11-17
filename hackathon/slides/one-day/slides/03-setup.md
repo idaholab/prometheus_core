@@ -3,15 +3,15 @@ title: Setting up
 footer: One day · Setting up · https://idaholab.github.io/prometheus_core/hackathon/one-day
 accent: gh
 index:
-  time: '11:00'
+  time: '60 min'
   heading: Setting up
   color: var(--green)
   blurb: 'Start the platform and local DeepLynx, log in and check health, try the debug agents, then scaffold your own agent and see it appear under /agents. Plus a catch-up slide.'
 ---
 
-# Setting up {.title kicker="Agent developer hackathon · One day · 11:00 am" pills="Hands-on | about 2 hours | lunch at noon while images build"}
+# Setting up {.title kicker="Agent developer hackathon · One day" pills="Hands-on | 60 min | the first build takes a while"}
 By the end of this block the platform runs on your laptop, you have talked to the debug agents, and your own agent is registered and visible in the chat.
-Note: Lunch is at noon. The first make up builds images, which is idle time; people eat while it runs. The checkpoints start at 1:00.
+Note: The first make up builds images, which takes a while; start it early and use the wait to try the debug agents' prompts or read the challenge. The checkpoints follow.
 
 ---
 
