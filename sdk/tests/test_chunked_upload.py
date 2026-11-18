@@ -197,3 +197,68 @@ def test_a_missing_file_raises_before_any_request(tmp_path):
         ChunkedUploader(client).upload(tmp_path / "nope.bin")
 
     assert client.calls == []
+
+
+class ShrinkingFile:
+    """A path whose size, as stat reports it, is larger than what the file holds when read."""
+
+    def __init__(self, real, claimed_size):
+        self._real, self._claimed = real, claimed_size
+
+    def exists(self):
+        return True
+
+    @property
+    def name(self):
+        return self._real.name
+
+    def stat(self):
+        return SimpleNamespace(st_size=self._claimed)
+
+    def __fspath__(self):
+        return str(self._real)
+
+
+async def test_a_file_that_shrinks_during_the_upload_completes_with_the_chunks_sent(tmp_path):
+    """Covers REQ-003-05: the count is what was sent, not what stat promised."""
+    real = _file(tmp_path, 4)  # 2 chunks of 2 bytes, but stat will claim 10 bytes (5 chunks)
+    claimed = ShrinkingFile(real, 10)
+    sync_client, async_client = FakeClient(), AsyncFakeClient()
+
+    ChunkedUploader(sync_client, chunk_size=2).upload(claimed)
+    await AsyncChunkedUploader(async_client, chunk_size=2).upload(claimed)
+
+    for client in (sync_client, async_client):
+        sent = [c for c in client.calls if c[1].endswith("/chunk")]
+        assert len(sent) == 2
+        assert client.calls[-1][2]["json"]["totalChunks"] == 2
+
+
+async def test_a_missing_file_raises_before_any_request_in_async(tmp_path):
+    """Covers REQ-003-05: the async uploader rejects a missing path without starting a session."""
+    client = AsyncFakeClient()
+
+    with pytest.raises(ValueError, match="does not exist"):
+        await AsyncChunkedUploader(client).upload(tmp_path / "nope.bin")
+
+    assert client.calls == []
+
+
+async def test_a_failed_cancel_does_not_hide_the_original_error(tmp_path):
+    """Covers REQ-003-05: if cancelling also fails, the chunk error is still the one raised."""
+    path = _file(tmp_path, 4)
+
+    class CancelFails(FakeClient):
+        def _answer(self, method, path_, kwargs):
+            if method == "DELETE":
+                raise StorageClientError("cancel refused")
+            return FakeClient._answer(self, method, path_, kwargs)
+
+    class AsyncCancelFails(CancelFails):
+        async def _request(self, method, path_, **kwargs):
+            return self._answer(method, path_, kwargs)
+
+    with pytest.raises(StorageClientError, match="chunk refused"):
+        ChunkedUploader(CancelFails(fail_on_chunk=1), chunk_size=2).upload(path)
+    with pytest.raises(StorageClientError, match="chunk refused"):
+        await AsyncChunkedUploader(AsyncCancelFails(fail_on_chunk=1), chunk_size=2).upload(path)
