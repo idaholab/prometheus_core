@@ -26,7 +26,7 @@ interface WorkflowHistoryProps {
  * The Builder's History tab (Figma PPLT-409 D.2c, keeping D.8's layout): one
  * panel holding the version list and the selected version's details. Side by
  * side from 1024px, each pane scrolling on its own; stacked below that, with
- * the Builder scrolling. Clicking a version does nothing until PPLT-234.
+ * the Builder scrolling. Clicking a version does nothing yet.
  * Display only; WorkflowBuilder supplies the data.
  */
 export function WorkflowHistory({ versions, selectedId, detail }: WorkflowHistoryProps) {

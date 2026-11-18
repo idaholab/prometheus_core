@@ -155,7 +155,7 @@ export const WORKFLOW_VERSIONS: WorkflowVersion[] = [
 ];
 
 // Placeholder details for the latest version, v1.2.0, from Figma D.8 (D.2c).
-// The older versions have none yet, which is fine until selecting one works (PPLT-234).
+// The older versions have none yet, which is fine while only the latest can be selected.
 export const VERSION_DETAILS: WorkflowVersionDetail[] = [
   {
     id: "v1.2.0",

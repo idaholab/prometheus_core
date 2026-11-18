@@ -126,7 +126,7 @@ export function WorkflowBuilder({
   const { tone } = BUILDER_MODES[mode];
   const actions = COMMIT_ACTIONS[mode];
   const locked = mode === "run";
-  // Picking a version comes with PPLT-234; until then the latest stays selected.
+  // Picking a version isn't built yet, so the latest stays selected.
   const selectedVersionId = versions.find((v) => v.latest)?.id;
 
   const changeMode = (next: BuilderMode) => {
@@ -148,22 +148,25 @@ export function WorkflowBuilder({
           </div>
           <div aria-hidden="true" className="hidden h-7 w-px bg-base-content/10 sm:block" />
           <BuilderModeBadge mode={mode} workflowName={name} onChange={changeMode} />
-          <button
-            type="button"
-            className="cursor-pointer whitespace-nowrap rounded font-mono text-xs text-primary hover:underline"
-            onClick={() => setTab("history")}
-          >
-            {version}
-            {/* Sizes go on each span: the base layer sets span font-size, so it isn't inherited. */}
-            {locked && (
-              <>
-                {" "}
-                <span className="ml-1 font-mono text-xs text-base-content/60">+ this run</span>
-              </>
-            )}
-          </button>
-          <div aria-hidden="true" className="hidden h-7 w-px bg-base-content/10 sm:block" />
-          <Tabs tabs={BUILDER_TABS} selected={tab} onChange={setTab} label="Builder view" panelId={panelId} variant="pill" />
+          {/* The version link and tabs wrap together, so their divider never ends a row. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3">
+            <button
+              type="button"
+              className="cursor-pointer whitespace-nowrap rounded font-mono text-xs text-primary hover:underline"
+              onClick={() => setTab("history")}
+            >
+              {version}
+              {/* Sizes go on each span: the base layer sets span font-size, so it isn't inherited. */}
+              {locked && (
+                <>
+                  {" "}
+                  <span className="ml-1 font-mono text-xs text-base-content/60">+ this run</span>
+                </>
+              )}
+            </button>
+            <div aria-hidden="true" className="hidden h-7 w-px bg-base-content/10 sm:block" />
+            <Tabs tabs={BUILDER_TABS} selected={tab} onChange={setTab} label="Builder view" panelId={panelId} variant="pill" />
+          </div>
         </div>
         {tab === "canvas" && (
           <div role="group" aria-label="Workflow actions" className="flex flex-wrap gap-3">
