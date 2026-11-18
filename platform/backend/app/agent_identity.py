@@ -120,7 +120,7 @@ async def _name_for_spiffe_id(redis: RedisClient, spiffe_id: str) -> Optional[st
         try:
             if json.loads(raw).get("spiffe_id") == spiffe_id:
                 return str(name)
-        except ValueError:
+        except ValueError:  # pragma: no cover - entries are always written as JSON
             continue
     return None
 

@@ -15,10 +15,10 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
-from app.agent_identity import AgentCaller, parse_xfcc_spiffe_id, require_agent_caller
+from app.agent_identity import AgentCaller, caller_spiffe_id, parse_xfcc_spiffe_id, require_agent_caller
 from app.config import settings
 from app.routers.agent_registry import require_agent_secret
 
@@ -92,6 +92,12 @@ def test_trusted_name_uses_header(whoami):
     resp = whoami.get("/v1/test-whoami", headers={**AUTH, "X-Agent-Name": "thermal-agent"})
     assert resp.json() == {"name": "thermal-agent", "spiffe_id": None}
     assert whoami.get("/v1/test-whoami", headers=AUTH).status_code == 401
+
+
+def test_caller_spiffe_id_ignores_xfcc_outside_istio():
+    # Without the mesh the header is client-supplied, so it must never be trusted.
+    request = Request({"type": "http", "headers": [(b"x-forwarded-client-cert", f"URI={THERMAL_ID}".encode())]})
+    assert caller_spiffe_id(request) is None
 
 
 def test_trusted_name_ignores_xfcc(whoami):
