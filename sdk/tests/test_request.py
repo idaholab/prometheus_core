@@ -234,3 +234,65 @@ def test_identity_and_execution_record_properties():
         assert request.execution_record_id == 42
     finally:
         agent._execution_record_id.reset(token)
+
+
+def _call_wrapper(request: PrometheusRequest[Any], name: str) -> tuple:
+    """Call wrapper ``name`` with a distinct sentinel per argument.
+
+    Returns the arguments the agent helper should receive (by parameter name)
+    and the wrapper's result.
+    """
+    args: Dict[str, Any] = {}
+    expected: Dict[str, Any] = {}
+    for param in inspect.signature(getattr(request, name)).parameters.values():
+        sentinel = object()
+        if param.kind is inspect.Parameter.VAR_KEYWORD:
+            args["extra"] = sentinel
+            expected[param.name] = {"extra": sentinel}
+        else:
+            args[param.name] = sentinel
+            expected[param.name] = sentinel
+    result = getattr(request, name)(**args)
+    if inspect.iscoroutine(result):
+        result = asyncio.run(result)
+    return expected, result
+
+
+@pytest.mark.parametrize("name", sorted(_wrapped_helpers()))
+def test_every_wrapper_forwards_all_arguments(name):
+    agent = PrometheusAgent(agent_name="Plain")
+    returned = object()
+    helper = getattr(PrometheusAgent, name)
+    mock = (AsyncMock if inspect.iscoroutinefunction(helper) else MagicMock)(return_value=returned)
+    setattr(agent, name, mock)
+    context = _context()
+    queue = AsyncMock(spec=EventQueue)
+    request: PrometheusRequest[Any] = PrometheusRequest(agent, {}, context, queue)
+
+    expected, result = _call_wrapper(request, name)
+
+    returns_none = inspect.signature(helper).return_annotation in (None, "None")
+    assert result is (None if returns_none else returned)
+    mock.assert_called_once()
+    args = mock.call_args.args
+    if not isinstance(inspect.getattr_static(PrometheusAgent, name), staticmethod):
+        args = (agent, *args)
+    received = inspect.signature(helper).bind(*args, **mock.call_args.kwargs).arguments
+    received.pop("self", None)
+    filled = {"context": context, "event_queue": queue, "conversation_id": "conv-1"}
+    for param in _BOUND & received.keys():
+        assert received.pop(param) == filled[param], param
+    assert received == expected
+
+
+@pytest.mark.parametrize("name", sorted(_wrapped_helpers()))
+def test_every_wrapper_refuses_a_closed_request(name):
+    agent = MagicMock(spec=PrometheusAgent)
+    request: PrometheusRequest[Any] = PrometheusRequest(
+        agent, {}, _context(), AsyncMock(spec=EventQueue)
+    )
+    request.close()
+
+    with pytest.raises(RequestClosedError):
+        _call_wrapper(request, name)
+    assert not agent.method_calls
