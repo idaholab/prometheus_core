@@ -69,7 +69,11 @@ print(result.columns, result.data[:3])
 
 `items.list` and `items.iter_all` now call `GET .../records/paginated` and take `total_count`,
 `has_next` and `has_previous` from the server, where they used to estimate them from the page
-length. Their `filters` are sent as query parameters of that route. The server ignores any
+length. The plain `GET .../records` route they called before ignored `page` and `limit`: against
+DeepLynx v0.8.0, `items.list(page=1, page_size=5)` returned every record in the project and
+page 2 returned them all again, with a `total_count` of 6. A page is now really a page, so code
+that read `.items` of page 1 and relied on getting everything must call `iter_all` instead.
+Records come back oldest first (ascending ID), as they did before. Their `filters` are sent as query parameters of that route. The server ignores any
 parameter it doesn't know without an error, so a filter such as `{"properties.status": "active"}`
 used to return unfiltered items. It now raises `ValueError`. This affects agents that pass
 `filters=` to `items.list` or `items.iter_all`.

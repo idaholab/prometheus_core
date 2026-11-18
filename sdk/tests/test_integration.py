@@ -249,18 +249,39 @@ class TestItemRetrieval:
         assert retrieved_item.properties["_test_suite_marker"] == TEST_MARKER
 
     def test_list_items(self, client, test_items):
-        """Test listing items with pagination."""
-        page = client.items.list(page=1, page_size=10)
+        """Test that paging ``items.list`` covers every record exactly once.
 
-        assert page.items is not None
-        assert len(page.items) > 0
-        assert page.page_info.page_number == 1
-        assert page.page_info.page_size == 10
+        The order of records is the server's business, so this does not look for the test items
+        on a particular page. It walks all pages and checks that the pages agree with the
+        server's own ``total_count`` and paging flags.
+        """
+        page_size = 10
+        first = client.items.list(page=1, page_size=page_size)
 
-        # Verify at least some of our test items are in the results
-        item_ids = {item.id for item in page.items}
-        test_item_ids = {item.id for item in test_items}
-        assert len(item_ids & test_item_ids) > 0
+        assert first.page_info.page_number == 1
+        assert first.page_info.page_size == page_size
+        assert first.page_info.has_previous is False
+        total = first.page_info.total_count
+        page_count = max(1, -(-total // page_size))
+
+        seen_ids = [item.id for item in first.items]
+        for number in range(2, page_count + 1):
+            page = client.items.list(page=number, page_size=page_size)
+            assert page.page_info.page_number == number
+            assert page.page_info.has_previous is True
+            assert page.items, f"page {number} of {page_count} is empty"
+            seen_ids.extend(item.id for item in page.items)
+
+        # has_next must be true on every page but the last
+        assert first.page_info.has_next is (page_count > 1)
+        last = client.items.list(page=page_count, page_size=page_size)
+        assert last.page_info.has_next is False
+
+        # Every record exactly once, including the ones this run created. Another writer on a
+        # shared server can make the count move during the walk; that is not a failure of paging
+        # but would show here, so run this against a quiet project.
+        assert len(seen_ids) == len(set(seen_ids)) == total
+        assert {item.id for item in test_items} <= set(seen_ids)
 
 
 class TestListFilters:
