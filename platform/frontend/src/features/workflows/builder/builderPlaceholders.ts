@@ -16,9 +16,9 @@
 import type { InspectedNode } from "./NodeInspector";
 import type { SkillGroup } from "./SkillLibrary";
 import type { TweakedStep } from "./TweakStepInspector";
-import type { WorkflowVersionDetail } from "./VersionDetail";
-import type { WorkflowVersion } from "./VersionItem";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
+import type { WorkflowVersionDetail } from "@/features/workflows/history/VersionDetail";
+import type { WorkflowVersion } from "@/features/workflows/history/VersionItem";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
 
 // Placeholder skill library for the Builder, from Figma D.2.
 export const SKILL_GROUPS: SkillGroup[] = [

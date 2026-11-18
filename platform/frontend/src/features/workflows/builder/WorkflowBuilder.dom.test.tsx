@@ -14,7 +14,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { BuilderMode } from "./builderMode.ts";
+import type { BuilderMode } from "@/features/workflows/builderMode";
 import {
   BUILDER_NODES,
   BUILDER_WIRES,

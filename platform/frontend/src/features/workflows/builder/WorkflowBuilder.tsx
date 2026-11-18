@@ -16,15 +16,15 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import { Tabs, type Tab } from "@/components/ui/Tabs";
 import { BuilderCanvas } from "./BuilderCanvas";
 import { BuilderModeBadge } from "./BuilderModeBadge";
-import { BUILDER_MODES, type BuilderMode } from "./builderMode";
+import { BUILDER_MODES, type BuilderMode } from "@/features/workflows/builderMode";
 import { NodeInspector, type InspectedNode } from "./NodeInspector";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
 import { SwitchToRunDialog } from "./SwitchToRunDialog";
 import { TweakStepInspector, type TweakedStep } from "./TweakStepInspector";
-import type { WorkflowVersionDetail } from "./VersionDetail";
-import type { WorkflowVersion } from "./VersionItem";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
-import { WorkflowHistory } from "./WorkflowHistory";
+import type { WorkflowVersionDetail } from "@/features/workflows/history/VersionDetail";
+import type { WorkflowVersion } from "@/features/workflows/history/VersionItem";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
+import { WorkflowHistory } from "@/features/workflows/history/WorkflowHistory";
 
 interface WorkflowBuilderProps {
   /** Workflow being edited, e.g. "Comprehensive Material Analysis". */

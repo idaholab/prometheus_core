@@ -13,7 +13,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { buttonClassName } from "@/components/ui/Button";
-import { BUILDER_MODES, type BuilderMode } from "./builderMode";
+import { BUILDER_MODES, type BuilderMode } from "@/features/workflows/builderMode";
 
 /** The badge's tone. Text stays base-content so it passes AA on the tint in both themes. */
 const TONE_CLASSES = {

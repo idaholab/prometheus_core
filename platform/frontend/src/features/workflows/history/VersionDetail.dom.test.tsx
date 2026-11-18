@@ -13,7 +13,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
-import { VERSION_DETAILS } from "./builderPlaceholders.ts";
+import { VERSION_DETAILS } from "@/features/workflows/builder/builderPlaceholders";
 import { VersionDetail } from "./VersionDetail.tsx";
 
 const [V120] = VERSION_DETAILS;
