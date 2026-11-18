@@ -10,43 +10,76 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
-import { chatStore } from "@/features/chat";
-import { useCurrentUser } from "@/features/auth";
-import { chatProfileName, useChatType } from "@/features/chat";
-import { AdminSection } from "@/features/admin";
-import { ChatHistory } from "@/features/chat";
-import { SettingsPanel } from "@/features/shell";
-import { Header } from "@/features/shell";
-import { LeftPanel } from "@/features/shell";
-import { Home } from "@/features/dashboard";
-import { ComingSoon } from "@/features/shell";
-import { navLabel, type NavId } from "@/features/shell";
-import { PageAgentRegistry } from "@/pages/PageAgentRegistry";
-import { PageApprovalQueue } from "@/pages/PageApprovalQueue";
-import { PageDataManagement } from "@/pages/PageDataManagement";
-import { PageProjectManagement } from "@/pages/PageProjectManagement";
-import { PageWorkflows } from "@/pages/PageWorkflows";
+import { Fragment, useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router";
+import { api } from "@/lib/api/client";
+import { setCurrentUser } from "@/features/auth";
+import { chatProfileName, chatStore, ChatHistory, useAuthLost, useChatType } from "@/features/chat";
+import { Header, LeftPanel, navLabel, SettingsPanel } from "@/features/shell";
+import { loginPathFor, NAV_PATHS, navIdForPath, PATHS } from "@/app/paths";
+import { PageHome } from "@/pages/PageHome";
 
-interface Props {
-  onLogout: () => void;
-}
-
-// Primary navigation lives in the left sidebar (LeftPanel).
-export function ProjectView({ onLogout }: Props) {
-  const [activeNav, setActiveNav] = useState<NavId>("home");
-  // Bumped on every sidebar click and used as the section page's key, so
-  // clicking the current section resets it (e.g. Workflows: Builder → Console).
+/**
+ * The signed-in app shell: the sidebar, the header, the settings panel, and
+ * the current route's page in the middle. Every signed-in route renders inside
+ * it, behind the requireUser guard.
+ *
+ * Home is rendered here rather than through the outlet, and only hidden while
+ * another section is showing, so Chat keeps its scroll position and any
+ * streaming reply across navigation.
+ */
+export function LayoutApp() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navId = navIdForPath(location.pathname);
+  // Bumped on every sidebar click. Workflows is keyed by it, so clicking
+  // Workflows from the Builder returns to the Console. PPLT-240 replaces this
+  // with a Builder URL.
   const [navCount, setNavCount] = useState(0);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(false);
   const [chatType] = useChatType();
-  const currentUser = useCurrentUser();
+  const authLost = useAuthLost();
+
+  // Load config + create a session, then open the SSE stream. The profile is
+  // chosen once at session start from the local chat-type toggle. Both calls
+  // are idempotent and self-guarding (chatStore.bootstrap checks `ready`,
+  // connect() checks for an open stream), so there is no ref guard: a ref
+  // survives Fast Refresh while the store's state does not, and that mismatch
+  // left the UI permanently not-ready.
+  useEffect(() => {
+    void chatStore.bootstrap(chatProfileName(chatType));
+    chatStore.connect();
+  }, [chatType]);
+
+  // The event stream closed and /api/auth/me confirmed the session is gone
+  // (24h cookie TTL, so an overnight tab hits this). Ask for credentials, then
+  // come back to this page.
+  useEffect(() => {
+    if (!authLost) return;
+    chatStore.suspendForReauth();
+    setCurrentUser(null);
+    navigate(loginPathFor(location.pathname + location.search), { replace: true });
+  }, [authLost, navigate, location.pathname, location.search]);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* clear client state regardless */
+    }
+    // clear(), not disconnect(): also forgets this tab's remembered
+    // conversation id, so signing in as someone else doesn't try to resume the
+    // previous user's conversation.
+    chatStore.clear();
+    setCurrentUser(null);
+    navigate(PATHS.login, { replace: true });
+  };
 
   // New chat: switch to Home, then a fresh conversation_id + cleared transcript
   // via the store (which returns Home to its idle welcome). No full page reload.
   const handleNewChat = () => {
-    setActiveNav("home");
+    navigate(PATHS.home);
     void chatStore.reset(chatProfileName(chatType));
   };
 
@@ -56,47 +89,26 @@ export function ProjectView({ onLogout }: Props) {
         <LeftPanel
           isOpen={leftOpen}
           onToggle={() => setLeftOpen((v) => !v)}
-          activeNav={activeNav}
-          onNavSelect={(id) => {
-            setActiveNav(id);
-            setNavCount((n) => n + 1);
-          }}
+          navPaths={NAV_PATHS}
+          onNavSelect={() => setNavCount((n) => n + 1)}
           onNewChat={handleNewChat}
         >
-          <ChatHistory
-            onNewChat={handleNewChat}
-            onOpenConversation={() => setActiveNav("home")}
-          />
+          <ChatHistory onNewChat={handleNewChat} onOpenConversation={() => navigate(PATHS.home)} />
         </LeftPanel>
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header
-            title={navLabel(activeNav)}
-            onLogout={onLogout}
+            title={navId ? navLabel(navId) : "Page not found"}
+            onLogout={handleLogout}
             onToggleSettings={() => setRightOpen((v) => !v)}
           />
           <main className="flex flex-1 overflow-hidden">
-            {/* Home stays mounted and is merely hidden while another section is
-                active, so Chat keeps its scroll position and any in-flight
-                streaming view across navigation. */}
-            <div
-              className={`flex flex-1 overflow-hidden ${activeNav === "home" ? "" : "hidden"}`}
-            >
-              <Home />
+            <div className={`flex flex-1 overflow-hidden ${navId === "home" ? "" : "hidden"}`}>
+              <PageHome />
             </div>
-            {activeNav === "admin" && currentUser?.role === "admin" && <AdminSection />}
-            {activeNav === "workflows" && <PageWorkflows key={navCount} />}
-            {activeNav === "agent-registry" && <PageAgentRegistry />}
-            {activeNav === "approval-queue" && <PageApprovalQueue />}
-            {activeNav === "data-management" && <PageDataManagement />}
-            {activeNav === "project-management" && <PageProjectManagement />}
-            {activeNav !== "home" &&
-              activeNav !== "admin" &&
-              activeNav !== "workflows" &&
-              activeNav !== "agent-registry" &&
-              activeNav !== "approval-queue" &&
-              activeNav !== "data-management" &&
-              activeNav !== "project-management" && <ComingSoon label={navLabel(activeNav)} />}
+            <Fragment key={navId === "workflows" ? navCount : undefined}>
+              <Outlet />
+            </Fragment>
           </main>
         </div>
 
