@@ -17,7 +17,7 @@ import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Data Management section page: owns the page's data, header and artifact filter
- * state. Layout lives in LayoutDataManagement. Route params will land here with the router.
+ * state. Layout lives in LayoutDataManagement. Route params go here.
  */
 export function PageDataManagement() {
   usePageHeader({ title: "Data Sources & Artifact Persistence" });

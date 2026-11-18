@@ -144,9 +144,9 @@ type BuilderStart = { mode: BuilderMode; isNew: boolean };
  * (in either mode) or "+ New Workflow". Layout lives in LayoutWorkflowConsole and
  * LayoutWorkflowBuilder.
  *
- * Until the router lands (RT-1), the Builder is a view here rather than its
- * own route. ProjectView remounts this page on every sidebar click, so
- * clicking Workflows from the Builder returns to the Console.
+ * The Builder is a view here rather than its own route until PPLT-240 gives
+ * it a URL. LayoutApp remounts this page on every sidebar click, so clicking
+ * Workflows from the Builder returns to the Console.
  */
 export function PageWorkflows() {
   const [builder, setBuilder] = useState<BuilderStart | null>(null);

@@ -84,7 +84,7 @@ const CHECKPOINTS: Checkpoint[] = [
 
 /**
  * Approval Queue section page: owns the page's data and header. Layout lives in
- * LayoutApprovalQueue. Route params and filters will land here with the router.
+ * LayoutApprovalQueue. Route params and filters go here.
  */
 export function PageApprovalQueue() {
   usePageHeader({ title: "Human-in-the-Loop Checkpoint Console" });

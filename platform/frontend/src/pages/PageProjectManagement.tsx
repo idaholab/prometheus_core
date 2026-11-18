@@ -18,7 +18,7 @@ import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Project Management section page: owns the page's data, header and filter state.
- * Layout lives in LayoutProjectManagement. Route params will land here with the router.
+ * Layout lives in LayoutProjectManagement. Route params go here.
  */
 export function PageProjectManagement() {
   usePageHeader({ title: "Access Control & Team Hub" });

@@ -17,7 +17,7 @@ import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Agent Registry section page: owns the page's data, header and filter state.
- * Layout lives in LayoutAgentRegistry. Route params will land here with the router.
+ * Layout lives in LayoutAgentRegistry. Route params go here.
  */
 export function PageAgentRegistry() {
   usePageHeader({ title: "Agent Registry" });
