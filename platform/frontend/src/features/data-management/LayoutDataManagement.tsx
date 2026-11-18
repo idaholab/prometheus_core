@@ -39,7 +39,7 @@ interface Props extends DataManagementState {
  * storage panel on the right (Figma G.1), stacked below `lg:`. Display only;
  * PageDataManagement supplies the data. Passes display strings to the parts.
  */
-export function DataManagement({
+export function LayoutDataManagement({
   status,
   sources,
   storage,
