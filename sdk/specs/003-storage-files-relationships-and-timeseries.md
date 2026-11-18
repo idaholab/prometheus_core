@@ -1,7 +1,7 @@
 # 003 — Storage files, relationships, and timeseries
 
 status: implemented
-sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/file.py, prometheus_api/storage_client/models/relationship.py, prometheus_api/storage_client/models/timeseries.py, prometheus_api/storage_client/resources/files.py, prometheus_api/storage_client/resources/relationships.py, prometheus_api/storage_client/resources/timeseries.py, prometheus_api/storage_client/utils/streaming.py, prometheus_api/storage_client/async_resources/files.py, prometheus_api/storage_client/async_resources/relationships.py, prometheus_api/storage_client/async_resources/timeseries.py, tests/test_models.py, tests/test_relationships.py, tests/test_integration.py
+sources: docs/storage-client/GUIDE.md, prometheus_api/storage_client/models/file.py, prometheus_api/storage_client/models/relationship.py, prometheus_api/storage_client/models/timeseries.py, prometheus_api/storage_client/resources/files.py, prometheus_api/storage_client/resources/relationships.py, prometheus_api/storage_client/resources/timeseries.py, prometheus_api/storage_client/utils/streaming.py, prometheus_api/storage_client/async_resources/files.py, prometheus_api/storage_client/async_resources/relationships.py, prometheus_api/storage_client/async_resources/timeseries.py, tests/test_models.py, tests/test_relationships.py, tests/test_integration.py, tests/test_chunked_upload.py
 depends-on: 001, 002
 
 ## Purpose
@@ -12,8 +12,8 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - REQ-003-02: File metadata lookup MUST retrieve the backing record through `/records/{file_id}` and parse DeepLynx file fields into `FileMetadata`.
 - REQ-003-03: File download MUST request `/files/{file_id}`, create parent directories for the target path, and write response bytes to disk.
 - REQ-003-04: File delete MUST call `/files/{file_id}` and return `None` on success.
-- REQ-003-05: Chunked upload MUST start a session, send zero-based chunks, complete with `total_chunks`, and best-effort cancel the session if an intermediate step fails. ⚠ untested
-- REQ-003-06: Chunked upload MUST use a generated UUID when the start response omits an upload ID. ⚠ untested
+- REQ-003-05: Chunked upload MUST start a session, send zero-based chunks, complete with the number of chunks actually sent (not the count the start response suggests, which truncates the file), and best-effort cancel the session if an intermediate step fails.
+- REQ-003-06: Chunked upload MUST use a generated UUID when the start response omits an upload ID.
 - REQ-003-07: Relationship create/bulk create MUST map generic model fields to DeepLynx `origin_id`, `destination_id`, `name`, `properties`, and include `dataSourceId`.
 - REQ-003-08: Relationship get/delete MUST address `/edges/{relationship_id}`.
 - REQ-003-09: `get_item_relationships(item_id, direction=None)` MUST combine outgoing and incoming relationships; explicit `outgoing`/`incoming` MUST map to `isOrigin=true/false`.
@@ -24,6 +24,7 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - REQ-003-14: `Relationship` MUST accept `properties` as the JSON-encoded string (or `null`) that DeepLynx edge endpoints return, decoding it to a dict; a string that is not valid JSON or does not decode to an object MUST become an empty dict.
 - REQ-003-15: Relationship `create` and `bulk_create` MUST send a nonblank `relationship_type` as the `relationship_id` of the project's relationship type with that name, creating the type at `/projects/{project_id}/relationships` when no unarchived type has that name, and MUST NOT send the name in a field the edge endpoint ignores. Type IDs MUST be cached per client. If creating the type fails, the type MUST be looked up again and reused when present; otherwise the failure MUST propagate. An empty `relationship_type` sends no `relationship_id`. Parsed relationships MUST read the type name from `relationshipName`.
 - REQ-003-16: `find_edge(from_item_id, to_item_id)` MUST return the edge for that ordered pair from `/edges/by-relationship`, and MUST return `None` when the lookup fails, because DeepLynx answers a missing edge with an error rather than an empty result.
+- REQ-003-17: Chunked upload start, chunk and complete requests MUST use the camelCase names DeepLynx accepts (`fileName`, `fileSize`, `chunkSize`, `uploadId`, `chunkNumber`, `totalChunks`) and read the session ID from the start response's `uploadId`. A description MUST travel in the completion request's `metadata` (`Name`, `Description`, `Properties`) and not as a top-level field, and no `metadata` is sent without one.
 
 ## Behavior
 - BEH-003-01: GIVEN a file path that does not exist WHEN upload is requested THEN `ValueError` is raised before any API request.
@@ -66,5 +67,5 @@ Support non-record storage workflows: binary files, large chunked uploads, relat
 - Relationship graph traversal semantics beyond forwarding `depth` are not defined here.
 
 ## Open questions
-- Chunked upload, relationship parser error paths, graph wrapping, and timeseries operations need focused unit tests.
+- Relationship parser error paths, graph wrapping, and timeseries operations need focused unit tests.
 - The sync/async parity suite currently covers item and search behavior more directly than file/relationship/timeseries behavior.

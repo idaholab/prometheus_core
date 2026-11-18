@@ -5,6 +5,31 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+### Chunked Uploads Work Against DeepLynx
+
+`files.upload_chunked(...)` (sync and async) failed at its first request on DeepLynx v0.8.0: it
+sent snake_case names (`file_name`, `file_size`, `upload_id`, `chunk_number`, `total_chunks`) and the
+server answers `HTTP 400` to them. The start, chunk and complete requests now use the camelCase
+names the server accepts (`fileName`, `uploadId`, `chunkNumber`, `totalChunks`), and the session ID
+is read from the start response's `uploadId`. A 3 MiB file in 1 MiB chunks now uploads and
+downloads byte for byte.
+
+Two other things changed with it:
+
+- The completion request carries the number of chunks actually sent. The start response suggests
+  one 100 MB chunk (`totalChunks: 1`) whatever `chunk_size` is sent, and completing a 4-chunk upload
+  with `totalChunks: 1` answers `HTTP 200` but stores only the first chunk (1,048,576 of 3,145,851
+  bytes in the case tried). Do not complete with the count the start response suggests.
+- The `description` argument now reaches the file's record. It travels in the completion
+  request's `metadata` (`Name`, `Description` and `Properties` are all required); a top-level
+  `description` is ignored by the server, which stored a made-up one (`File uploaded via chunked
+  upload (session: ...)`).
+
+No migration steps for callers of `upload_chunked`. Code that worked around the failure, for
+example by falling back to `files.upload`, can use `upload_chunked` again. Against DeepLynx v0.8.0
+the start, chunk and complete requests each answered `HTTP 400` with the old snake_case names and
+were accepted with the camelCase names. Other server versions were not tried.
+
 ### Resumed Tasks Reuse Their Execution Record
 
 When a user answers an `INPUT_REQUIRED` form, the task resumes with the same task ID. The
