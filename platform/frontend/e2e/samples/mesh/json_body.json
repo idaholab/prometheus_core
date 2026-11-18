@@ -1,0 +1,56 @@
+{
+  "datasetId": "3ece0a75c8a553e1",
+  "baseUrl": "/api/artifacts/mesh/3ece0a75c8a553e1",
+  "title": "Sample part (STL)",
+  "metadata": {
+    "num_timesteps": 1,
+    "time_values": [
+      0.0
+    ],
+    "nodal_variables": [],
+    "element_variables": [],
+    "global_variables": [],
+    "element_blocks": [],
+    "bounds": [
+      -2.0,
+      2.0,
+      0.0,
+      2.700000047683716,
+      -1.0,
+      1.0
+    ],
+    "num_nodes": 80,
+    "num_elements": 148
+  },
+  "manifest": {
+    "version": "1.0",
+    "num_timesteps": 1,
+    "files": [
+      {
+        "index": 0,
+        "timestep_index": 0,
+        "time_value": 0.0,
+        "filename": "surface_t0000.vtp"
+      }
+    ],
+    "variables": {
+      "point": [],
+      "cell": []
+    },
+    "array_ranges": {},
+    "bounds": [
+      -2.0,
+      2.0,
+      0.0,
+      2.700000047683716,
+      -1.0,
+      1.0
+    ]
+  },
+  "initialTimestep": 0,
+  "initialVariable": null,
+  "initialColorPreset": "coolToWarm",
+  "height": "500px",
+  "showControls": true,
+  "allowPicking": true
+}

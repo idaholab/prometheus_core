@@ -28,6 +28,7 @@ import { VISIBILITY_TOGGLES } from "./modelViewerTypes";
 import type { VisibilityCategory } from "./modelViewerTypes";
 import type { PipeRunItem } from "./IFCViewerEngine";
 import type { ViewerProps } from "@/features/artifacts/elements";
+import { useTheme, type Theme } from "@/lib/useTheme";
 
 type IFCProps = {
   fileUrl?: string;
@@ -42,6 +43,13 @@ const defaultVisibility = (): Record<VisibilityCategory, boolean> =>
 
 const allCategoryKeys = VISIBILITY_TOGGLES.map((t) => t.key);
 
+// The WebGL canvas does not follow DaisyUI, so it gets the app theme's colour
+// itself: the same pair the mesh viewer uses (MeshViewerElement.tsx).
+const CANVAS_BACKGROUND: Record<Theme, [number, number, number]> = {
+  dark:  [0.08, 0.08, 0.12],
+  light: [0.91, 0.91, 0.94],
+};
+
 export function IFCViewerElement({ element }: ViewerProps) {
   const props    = ((element as { props?: IFCProps }).props) ?? {};
   const fileUrl  = props.fileUrl ?? element.url ?? null;
@@ -49,6 +57,7 @@ export function IFCViewerElement({ element }: ViewerProps) {
   const height   = props.height ?? "560px";
 
   const ifcViewerRef = useRef<IFCViewerHandles>(null);
+  const [theme] = useTheme();
 
   const [showViewer, setShowViewer] = useState(false);
   const [visibility, setVisibility] = useState<Record<VisibilityCategory, boolean>>(defaultVisibility);
@@ -69,6 +78,11 @@ export function IFCViewerElement({ element }: ViewerProps) {
     setPipeRuns([]);
     setMemberVisibility({});
   }, [fileUrl]);
+
+  // Theme → canvas background. Also re-applied on load: a new model gets a new engine.
+  useEffect(() => {
+    ifcViewerRef.current?.setBackground(CANVAS_BACKGROUND[theme]);
+  }, [theme, showViewer]);
 
   const handleViewerLoad = async () => {
     setShowViewer(true);

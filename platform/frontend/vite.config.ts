@@ -27,6 +27,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
+      // The shared viewer samples, imported by the viewer playground's cases
+      "@viewer-samples": path.resolve(import.meta.dirname, "./e2e/samples"),
     },
   },
   // mermaid is only reachable through a nested dynamic import inside a lazily

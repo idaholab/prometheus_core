@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "num_timesteps": 1,
+  "files": [
+    {
+      "index": 0,
+      "timestep_index": 0,
+      "time_value": 0.0,
+      "filename": "surface_t0000.vtp"
+    }
+  ],
+  "variables": {
+    "point": [],
+    "cell": []
+  },
+  "array_ranges": {},
+  "bounds": [
+    -2.0,
+    2.0,
+    0.0,
+    2.700000047683716,
+    -1.0,
+    1.0
+  ]
+}
