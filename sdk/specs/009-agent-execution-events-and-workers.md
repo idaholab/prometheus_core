@@ -35,8 +35,10 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - REQ-009-25: While an execution item is bound, `get_artifact_file_path(...)` MUST create an `input_to` edge from each fetched artifact's DeepLynx item (parsed from a `deeplynx://organizations/{org}/projects/{project}/items/{item}` URI) to the execution item, at most once per item per execution. Artifacts without such a URI MUST NOT be linked. A failed edge MUST be logged, MUST NOT fail the fetch, and MUST NOT count as linked, unless the edge turns out to exist already (DeepLynx allows one edge per ordered pair), in which case it counts as linked and is not logged.
 - REQ-009-26: While an execution item is bound, `send_deeplynx_artifact(...)` MUST create a `generated` edge from the execution item to the emitted artifact's DeepLynx item. A failed edge MUST be logged and MUST NOT prevent the artifact from being emitted.
 - REQ-009-27: Lineage edges MUST stay within the DeepLynx organization and project of the run's execution item (the project bound to the run). An `input_to` edge MUST be skipped when the fetched artifact's URI names a different organization or project than the execution item, and a `generated` edge MUST be skipped when the upload's storage configuration does. Each skip MUST be logged and MUST NOT fail the fetch or the emit.
-
-## Behavior
+- REQ-009-28: `PrometheusRequestAgent` (a `PrometheusAgent` subclass) MUST raise `TypeError` at construction unless its `request_class` is a `PrometheusRequest` subclass. Its `_execute(...)` MUST build one new `request_class(agent, params, context, event_queue)` per call, await its `execute()` and return the result, so the executor lifecycle (REQ-009-04 to REQ-009-27) is unchanged. Agents that override `PrometheusAgent._execute(...)` MUST keep working.
+- REQ-009-29: Each public `PrometheusAgent` helper that takes `context`, `event_queue` or `conversation_id`, plus `get_credential`, `identity_metadata`, `current_user_id` and `pending_hint`, MUST have a `PrometheusRequest` method of the same name with the same remaining parameters and defaults, which forwards to the agent helper with the request's context, event queue and conversation ID filled in. `load_context_state` and `save_context_state` are not wrapped yet.
+- REQ-009-30: After `execute()` returns or raises, the request MUST be closed: every wrapper call MUST raise `RequestClosedError`.
+- REQ-009-31: `PrometheusRequest` MUST expose `agent`, `params`, `context`, `event_queue`, `task_id` and `conversation_id` (from the context) as attributes, and `identity`, `user_id` and `execution_record_id` as properties over the active request's verified identity and execution record.
 - BEH-009-01: GIVEN a slow `_execute(...)` and a short heartbeat interval WHEN execution runs THEN at least one silent non-final heartbeat is emitted before the final completed event.
 - BEH-009-02: GIVEN `_execute(...)` emits a final status WHEN it returns a dict THEN the executor skips automatic finalization and does not emit a contradictory terminal event.
 - BEH-009-03: GIVEN a worker emits status, artifact, and status events WHEN `run_worker(...)` completes THEN those events are forwarded in order and the worker result is returned.
@@ -51,6 +53,8 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - BEH-009-12: GIVEN an execution that fetches the same DeepLynx item several times, including through two catalog entries with the same URI, WHEN it runs THEN exactly one `input_to` edge per item points at the execution item, and a later execution links its own fetches again.
 - BEH-009-13: GIVEN an execution that emits a DeepLynx artifact WHEN the upload completes THEN a `generated` edge runs from the execution item to the artifact item; GIVEN no bound execution item THEN neither fetches nor emits create edges.
 - BEH-009-14: GIVEN an `input_to` edge that already exists, as when a resumed task or a second concurrent fetch in one run fetches the same input, WHEN linking is refused THEN the edge is found, counted as linked, and no failure is logged.
+- BEH-009-15: GIVEN two concurrent requests to one `PrometheusRequestAgent` WHEN each stores a value on its request's `self` THEN each returns its own value.
+- BEH-009-16: GIVEN a request object kept beyond its `execute()` (for example by a leftover background task) WHEN it calls any helper THEN `RequestClosedError` is raised and nothing is written to the finished stream.
 
 ## Interfaces
 - `MissingInput` is owned by spec 010.
@@ -64,6 +68,9 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - `PrometheusAgent.send_status_update(context, event_queue, state: TaskState = TaskState.working, final: bool = False, message: str | None = None, metadata: dict | None = None) -> None`
 - `PrometheusAgent.declare_long_running(context, event_queue, *, estimate_seconds: float | None = None, message: str | None = None, metadata: dict | None = None) -> None`
 - `PrometheusAgent.run_worker(worker: PrometheusWorker, context: RequestContext, event_queue: EventQueue, *, poll_interval: float = 0.5) -> dict[str, Any]`
+- `PrometheusRequestAgent(PrometheusAgent)` with `request_class: type[PrometheusRequest]`
+- `PrometheusRequest[AgentT](agent: AgentT, params: dict[str, Any], context: RequestContext, event_queue: EventQueue)`; override `execute() -> dict[str, Any]`; `close() -> None`; helpers per REQ-009-29 (e.g. `send_status_update(state=..., final=..., message=..., metadata=...)`, `resolve_artifact_reference(artifact_id)`, `llm_client(**kwargs)`)
+- `RequestClosedError(RuntimeError)`
 - `PrometheusWorker(mailbox_size: int = 256)`
 - `PrometheusWorker.drain() -> list[Any]`, `cancel() -> None`, `cancelled -> bool`
 - `PrometheusWorker.emit_status_update(message: str | None = None, *, state: TaskState = TaskState.working, metadata: dict | None = None) -> None`

@@ -39,6 +39,33 @@ Use helper methods when needed:
 - `send_input_required(...)` for missing-input requests
 - `load_context_state(...)` / `save_context_state(...)` for resumable agent-local state keyed by `contextId`
 
+### Request-scoped alternative
+
+Instead of overriding `_execute`, subclass `PrometheusRequestAgent` and put the
+work in a `PrometheusRequest`. A new request object is built for every A2A
+request with the params, context and event queue, so the helpers on `self` need
+no `context` or `event_queue`, and per-request values can safely live on `self`:
+
+```python
+from prometheus_api.agent import PrometheusRequest, PrometheusRequestAgent
+
+
+class MyRequest(PrometheusRequest["MyAgent"]):
+    async def execute(self):
+        await self.send_status_update(message="Working")
+        source = self.resolve_artifact_reference(self.params["artifact_id"])
+        return {"status": "completed", "source": source.name if source else None}
+
+
+class MyAgent(PrometheusRequestAgent):
+    request_class = MyRequest  # long-lived resources stay on the agent
+```
+
+`self.agent` is the long-lived agent. Request helpers keep the agent helper's
+name and arguments minus `context`, `event_queue` and `conversation_id`. After
+`execute()` returns, the request is closed and any further helper call raises
+`RequestClosedError`. Nothing on the request survives an `INPUT_REQUIRED` pause.
+
 To enable streaming (`SendStreamingMessage`), set
 `"capabilities": {"streaming": true}` in `agent_card.json`.
 
@@ -65,6 +92,7 @@ substantive updates. Heartbeats carry no message and are tagged
 
 - `PrometheusAgent`: base class for A2A-enabled specialists
 - `PrometheusAgentExecutor` / `DelegatingPrometheusAgentExecutor`: standard A2A task lifecycle and delegation to agent `_execute`
+- `PrometheusRequestAgent` / `PrometheusRequest`: one request object per A2A request, with request-bound helpers
 - `MissingInput`: canonical descriptor for `INPUT_REQUIRED`
 - `ArtifactReference` / `ArtifactRegistry`: conversation artifact helpers
 - `AgentRegistryClient`: LiteLLM registry registration client with exponential retries

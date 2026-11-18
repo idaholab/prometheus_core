@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Design, not built. Proposed 2026-11-06. |
+| **Status** | Step 1 built (2026-11-18, see [§13](#13-step-1-as-built)); steps 2 to 7 not built. Proposed 2026-11-06. |
 | **Approver** | Daniel Schwen |
 | **Related** | [ADR-004 Agent Registry and A2A Gateway][adr-004] (§7, no agent Valkey access), [ADR-005 Agent Workload Identity (mTLS)][adr-005], [Credential Plane for Agents](credential-plane.md), [Mid-execution user approval](user-approval.md), Jira epic PPLT-347, SDK specs [009](../../../sdk/specs/009-agent-execution-events-and-workers.md) (agent execution, events and workers), [010](../../../sdk/specs/010-agent-artifacts-input-and-context-state.md) (artifacts, input and context state) and [012](../../../sdk/specs/012-redis-backed-state-and-degradation.md) (Redis-backed state) |
 | **Origin** | Moved from [Confluence page 44335895][origin] (version 1, 2026-11-06). This file is now the source of truth. |
@@ -355,3 +355,30 @@ name from the mTLS certificate (after PPLT-347); `UserWorkerPool` integration.
 [origin]: https://nstinl.atlassian-us-gov-mod.net/wiki/spaces/Prometheus/pages/44335895
 [adr-004]: https://nstinl.atlassian-us-gov-mod.net/wiki/spaces/Prometheus/pages/42041369
 [adr-005]: https://nstinl.atlassian-us-gov-mod.net/wiki/spaces/Prometheus/pages/43319553
+
+## 13. Step 1 as built
+
+Decided 2026-11-18 while building step 1. Where these differ from the sections
+above, this section wins.
+
+- **Opt-in through a subclass, not an attribute on the base class.** Agents
+  subclass `PrometheusRequestAgent(PrometheusAgent)` and set `request_class`.
+  `PrometheusAgent` is unchanged. A missing or wrong `request_class` raises
+  `TypeError` when the agent is constructed.
+- **The author overrides `execute()`**, not `run()`.
+- **Wrappers keep the agent helper names** (`send_status_update`,
+  `send_json_artifact`, `resolve_artifact_reference`, `llm_client`, ...), not the
+  short names of [section 4.3](#43-request-bound-helpers). Each takes the agent
+  helper's arguments minus `context`, `event_queue` and `conversation_id`.
+  `get_credential`, `identity_metadata`, `current_user_id` and `pending_hint`
+  are forwarded too. `load_context_state` and `save_context_state` are not
+  wrapped until the backend-backed version lands.
+- **`PrometheusRequest` is generic** in the agent type, so
+  `PrometheusRequest[ThermalAgent]` types `self.agent`.
+- **Every wrapper** raises `RequestClosedError` once `execute()` has returned
+  or raised.
+- `identity`, `user_id` and `execution_record_id` are properties over the
+  existing `ContextVar`s.
+- Code: [`sdk/prometheus_api/agent/request.py`](../../../sdk/prometheus_api/agent/request.py);
+  tests, including the RS-8 parity test: `sdk/tests/test_request.py`; spec
+  009 REQ-009-28 to REQ-009-31.
