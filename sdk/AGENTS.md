@@ -75,6 +75,8 @@ imports from `llm_client/client.py`, and subclass new tool errors from
 
 Keep task status event construction in `agent/events.py` and route public helper methods through those helpers instead of duplicating `TaskStatusUpdateEvent` boilerplate.
 
+New A2A tasks emit one initial `Task`; a follow-up to an existing task (`context.current_task` set, for example resuming `INPUT_REQUIRED` or `AUTH_REQUIRED`) must continue the persisted task with status updates and must not enqueue the existing task snapshot again.
+
 Base-agent behavior changes that downstream agents may need to react to should be documented in `docs/agent/AGENT_MIGRATIONS.md` under a version heading, with each migration as a short subheading followed by migration steps and a compact code example.
 
 Spec-impacting behavior changes should update `specs/` in the same change and follow `docs/SDD_SPEC_AUTHORING.md`. Add or revise requirement and behavior IDs before implementing new behavior, keep deleted IDs marked retired rather than reusing them, use front-loaded `REQ-NNN-XX:` and `BEH-NNN-XX:` bullets, and tag inferred-but-untested requirements with `⚠ untested` until coverage exists. Spec-backed tests should follow `docs/SDD_TESTING_STANDARD.md`.
