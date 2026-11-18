@@ -10,25 +10,28 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
 import { AdminOidcProviders } from "./AdminOidcProviders";
 import { AdminSigningKeys } from "./AdminSigningKeys";
 import { AdminUsers } from "./AdminUsers";
 
-type AdminSubTab = "users" | "signing-keys" | "identity-providers";
+export type AdminSubTab = "users" | "signing-keys" | "identity-providers";
 
-// Grows with each admin phase: Users (Phase 2), Signing Keys (Phase 3),
-// Identity Providers (Phase 4) -- sub-sections of one Admin tab, not separate
-// top-level tabs (see the comment on ADMIN_TAB in ../ProjectView.tsx).
 const SUB_TABS: { id: AdminSubTab; label: string }[] = [
   { id: "users", label: "Users" },
   { id: "signing-keys", label: "Signing Keys" },
   { id: "identity-providers", label: "Identity Providers" },
 ];
 
-export function AdminSection() {
-  const [subTab, setSubTab] = useState<AdminSubTab>("users");
+interface LayoutAdminProps {
+  subTab: AdminSubTab;
+  onSubTabChange: (subTab: AdminSubTab) => void;
+}
 
+/**
+ * Admin layout: the sub-tab row, then the selected sub-tab's panel. PageAdmin
+ * owns which sub-tab is showing.
+ */
+export function LayoutAdmin({ subTab, onSubTabChange }: LayoutAdminProps) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="px-4 pt-1">
@@ -36,7 +39,7 @@ export function AdminSection() {
           {SUB_TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setSubTab(tab.id)}
+              onClick={() => onSubTabChange(tab.id)}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 subTab === tab.id
                   ? "border-primary text-base-content"

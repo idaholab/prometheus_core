@@ -12,4 +12,4 @@
 
 // What the rest of the app may import from features/dashboard. Anything else
 // in this folder is internal to it.
-export { Home } from "./Home";
+export { LayoutHome } from "./LayoutHome";
