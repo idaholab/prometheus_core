@@ -81,7 +81,7 @@ from a2a.types import (
 from .middleware import HEALTH_PATH, A2AContentSizeLimitMiddleware, BearerTokenMiddleware
 from .artifact_resolver import ArtifactResolver
 from .artifacts import ArtifactReference, ArtifactRegistry
-from .context_state import ContextStateStore
+from .agent_state import AgentStateClient, AgentStateError
 from .debug_routes import add_debug_chat_route
 from .events import (
     build_artifact_metadata as _build_artifact_metadata,
@@ -706,7 +706,11 @@ class PrometheusAgent:
         )
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
-        self.context_state_store = ContextStateStore()
+        # Versions of the conversation state this request loaded, so save is a
+        # compare-and-set against what the request read (per request, not on self).
+        self._context_state_versions: ContextVar[Optional[Dict[str, Optional[int]]]] = ContextVar(
+            f"prometheus_context_state_versions_{id(self)}", default=None
+        )
 
     def get_raw_agent_card(self) -> Dict[str, Any]:
         """Return the canonical raw agent-card payload used for planning metadata."""
@@ -1040,13 +1044,73 @@ class PrometheusAgent:
             workflows_dir,
         )
 
-    def load_context_state(self, context_id: str) -> Dict[str, Any]:
-        """Load persisted agent-local state for one A2A contextId."""
-        return self.context_state_store.load(self._producer_agent_id, str(context_id or ""))
+    def _agent_state_client(self) -> AgentStateClient:
+        base_url = self.registry_url()
+        if not base_url:
+            raise AgentStateError("REGISTRY_URL is not set")
+        # The registry key the backend knows this agent by (see register_with_registry).
+        agent_key = (
+            AgentRegistryClient.agent_name(self.agent_card)
+            if self.agent_card is not None
+            else self._producer_agent_id
+        )
+        return AgentStateClient.from_env(base_url, agent_name=agent_key)
 
-    def save_context_state(self, context_id: str, state: Dict[str, Any]) -> None:
-        """Persist agent-local state for one A2A contextId."""
-        self.context_state_store.save(self._producer_agent_id, str(context_id or ""), state)
+    @staticmethod
+    def _state_user_token() -> str:
+        identity = get_current_identity()
+        if identity is None or not identity.raw_token:
+            raise AgentStateError("no verified user identity for this turn")
+        return identity.raw_token
+
+    def _state_versions(self) -> Dict[str, Optional[int]]:
+        versions = self._context_state_versions.get()
+        if versions is None:
+            versions = {}
+            self._context_state_versions.set(versions)
+        return versions
+
+    async def load_context_state(self, context_id: str) -> Dict[str, Any]:
+        """Load this agent's state for one conversation (A2A ``contextId``); ``{}`` if none.
+
+        Stored by the backend (``/v1/agent-state/conversations/{id}``), private to this
+        agent and the turn's user, kept 24 h after the last save. Raises
+        :class:`AgentStateError` when the backend can't be reached or refuses.
+        """
+        context_id = str(context_id or "")
+        stored = await self._agent_state_client().load(
+            "conversation", conversation_id=context_id, user_token=self._state_user_token()
+        )
+        self._state_versions()[context_id] = None if stored is None else stored.version
+        return {} if stored is None else dict(stored.state)
+
+    async def save_context_state(self, context_id: str, state: Dict[str, Any]) -> None:
+        """Persist this agent's state for one conversation (A2A ``contextId``).
+
+        Replaces what this request loaded. Raises
+        :class:`~prometheus_api.agent.agent_state.AgentStateConflict` if another
+        request saved in between, so a concurrent write is never silently lost;
+        call :meth:`load_context_state` again and retry. Saving without a load in
+        this request overwrites whatever is stored.
+        """
+        context_id = str(context_id or "")
+        client = self._agent_state_client()
+        token = self._state_user_token()
+        versions = self._state_versions()
+        if context_id in versions:
+            version = versions[context_id]
+        else:
+            current = await client.load(
+                "conversation", conversation_id=context_id, user_token=token
+            )
+            version = None if current is None else current.version
+        versions[context_id] = await client.save(
+            "conversation",
+            dict(state or {}),
+            version=version,
+            conversation_id=context_id,
+            user_token=token,
+        )
 
     @staticmethod
     def get_input_sources(context: RequestContext) -> Dict[str, str]:
@@ -1600,9 +1664,11 @@ class PrometheusAgent:
                 item = existing
 
         token = self._execution_record_id.set(item.id)
+        versions_token = self._context_state_versions.set({})
         try:
             yield
         finally:
+            self._context_state_versions.reset(versions_token)
             self._execution_record_id.reset(token)
 
     def create_executor(self) -> PrometheusAgentExecutor:

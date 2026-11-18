@@ -5,6 +5,34 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+### Context State Moves to the Backend and Becomes Async
+
+`load_context_state` / `save_context_state` no longer talk to Valkey. The platform
+backend stores the state (`/v1/agent-state/conversations/{id}`), checks that the
+turn's user owns the conversation, and keeps each agent's state private to it. Both
+helpers are now coroutines. `ContextStateStore` and `AGENT_CONTEXT_TTL_SECONDS` are
+gone (the backend's `AGENT_STATE_TTL_SECONDS` sets the 24 h expiry).
+
+Migration steps:
+
+1. `await` both calls.
+2. Expect `AgentStateError` when the backend is unreachable or the turn has no user
+   identity. There is no in-memory fallback any more.
+3. `save_context_state` replaces the version this request loaded. If another request
+   saved in between it raises `AgentStateConflict`: load again and retry, or fail.
+4. Keep state under 256 KB (backend `AGENT_STATE_MAX_BYTES`); put large data in
+   artifacts.
+
+```python
+# Before
+state = self.load_context_state(str(context.context_id))
+self.save_context_state(str(context.context_id), state)
+
+# After
+state = await self.load_context_state(str(context.context_id))
+await self.save_context_state(str(context.context_id), state)
+```
+
 ### Resumed Tasks Reuse Their Execution Record
 
 When a user answers an `INPUT_REQUIRED` form, the task resumes with the same task ID. The
@@ -572,7 +600,7 @@ Migration steps:
 ```python
 async def _execute(self, params, context, event_queue):
     # Conversation-scoped (survives across turns and skills):
-    memo = self.load_context_state(context.context_id)
+    memo = await self.load_context_state(context.context_id)
 
     # Per-invocation scoping, if you really need it:
     scratch_key = f"{context.context_id}:{context.task_id}"

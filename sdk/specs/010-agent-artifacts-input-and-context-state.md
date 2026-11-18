@@ -1,7 +1,7 @@
 # 010 — Agent artifacts, input, and context state
 
 status: implemented
-sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/context_state.py, prometheus_api/agent/events.py, tests/test_agent.py, tests/test_artifacts.py
+sources: docs/agent/GUIDE.md, docs/agent/DEEPLYNX_CHUNKED_UPLOAD.md, prometheus_api/agent/base.py, prometheus_api/agent/artifacts.py, prometheus_api/agent/artifact_resolver.py, prometheus_api/agent/agent_state.py, prometheus_api/agent/events.py, tests/test_agent.py, tests/test_artifacts.py
 depends-on: 008, 009, 012
 
 ## Purpose
@@ -11,8 +11,8 @@ Let agents request missing structured input, persist per-conversation state, pub
 - REQ-010-01: `MissingInput` and `build_input_required_payload(...)` MUST serialize missing input descriptors under `missing_inputs` and include a stripped `hint`.
 - REQ-010-02: `send_input_required(...)` MUST emit a final `input_required` status whose message part is a JSON `DataPart` with canonical missing-input payload.
 - REQ-010-03: `get_input_sources(...)` MUST return the `inputSources` message-metadata map (parameter name → `"model"`, `"user"`, or `"context"`) as strings, and `{}` when the message or the map is missing.
-- REQ-010-04: `load_context_state(...)` and `save_context_state(...)` MUST scope state by normalized producer agent ID and A2A `context_id`.
-- REQ-010-05: `ContextStateStore.load(...)` MUST return `{}` for blank IDs, missing state, corrupt JSON, or non-dict payloads; `save(...)` MUST reject blank agent/context IDs.
+- REQ-010-04: `load_context_state(...)` and `save_context_state(...)` MUST store state through the backend's `/v1/agent-state/conversations/{context_id}` API (`AgentStateClient`), sending `AGENT_SECRET`, the agent's registry name and the turn's user identity token; agents MUST NOT reach Valkey for it.
+- REQ-010-05: `load_context_state(...)` MUST return `{}` when no state is stored; both helpers MUST raise `AgentStateError` when there is no user identity or the backend is unreachable or refuses, never fall back to empty or in-memory state. `save_context_state(...)` MUST replace the version its request loaded and raise `AgentStateConflict` when another request saved in between.
 - REQ-010-06: `ArtifactReference` MUST serialize to/from a normalized JSON-compatible dict and MUST normalize native A2A file, data, and text artifact payloads.
 - REQ-010-07: `ArtifactRegistry` MUST require conversation scope and one content source (`uri`, `json_body`, or `text_body`) for registration.
 - REQ-010-08: Artifact registry lookups MUST be isolated by conversation, resolvable by ID or normalized name, list newest-first, and degrade from Redis to memory.
@@ -36,8 +36,8 @@ Let agents request missing structured input, persist per-conversation state, pub
 - `build_input_required_payload(missing_inputs: list[MissingInput], hint: str) -> dict[str, Any]`
 - `PrometheusAgent.send_input_required(context, event_queue, *, missing_inputs: list[MissingInput], hint: str, metadata: dict | None = None) -> None`
 - `PrometheusAgent.get_input_sources(context: RequestContext) -> dict[str, str]`
-- `PrometheusAgent.load_context_state(context_id: str) -> dict[str, Any]`
-- `PrometheusAgent.save_context_state(context_id: str, state: dict[str, Any]) -> None`
+- `async PrometheusAgent.load_context_state(context_id: str) -> dict[str, Any]`
+- `async PrometheusAgent.save_context_state(context_id: str, state: dict[str, Any]) -> None`
 - `PrometheusAgent.register_artifact_reference(context: RequestContext, reference: ArtifactReference) -> ArtifactReference`
 - `PrometheusAgent.list_artifact_references(conversation_id: str, limit: int | None = None) -> list[ArtifactReference]`
 - `PrometheusAgent.resolve_artifact_reference(conversation_id: str, artifact_id: str) -> ArtifactReference | None`
@@ -47,7 +47,7 @@ Let agents request missing structured input, persist per-conversation state, pub
 - `ArtifactReference(...)`, `to_dict() -> dict`, `from_dict(payload: dict) -> ArtifactReference`, `from_a2a_artifact(payload: Any, *, conversation_id: str | None = None, producer_agent_id: str | None = None) -> ArtifactReference | None`, `from_any(...) -> ArtifactReference | None`, `to_context_dict() -> dict`
 - `ArtifactRegistry(redis_url: str | None = None, ttl_seconds: int | None = None).register/resolve_by_id/resolve_by_name/list/clear_conversation`
 - `ArtifactResolver(registry: ArtifactRegistry).get_artifact_file_path(...) -> Path`
-- `ContextStateStore(redis_url: str | None = None, ttl_seconds: int | None = None).load/save`
+- `AgentStateClient(base_url: str, *, agent_name: str, agent_secret: str).load/save/delete(scope: "task" | "conversation", ...)`; `AgentStateError`, `AgentStateConflict`
 
 ## Constraints
 - Artifact IDs are conversation-scoped and opaque; callers should pass IDs rather than rely on names when possible.
