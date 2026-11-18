@@ -5,6 +5,26 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
+### Execution Middleware (`ExecuteHook`)
+
+The standard executor now runs execution middleware — an optional chain of hooks
+observing (and at the rewriting points transforming) every task: `on_request` (params,
+before the execution record is created), `on_event` (progress messages, sync),
+`on_result` (the returned payload, before finalization), `on_error`, and `on_task`
+(once, after finalization, with a deep-copied snapshot). It is the specialist-side
+counterpart of the orchestrator's dispatch middleware, and the groundwork for
+platform-provided memory and telemetry: `PROMETHEUS_AGENT_MIDDLEWARE` (comma-separated
+`module:ClassName` entries) loads mandatory middleware at agent construction with no
+agent code involved, while `self.add_execute_hook(hook, strict=False)` registers
+agent-authored hooks after them. Reserved framework keys (`conversation_id`,
+`skill_id`, `user_id`, `_`-prefixed) never reach hooks and cannot be dropped or forged
+by them. See the "Execution Middleware (Hooks)" section of the
+[PrometheusAgent Guide](GUIDE.md) and spec 009 (REQ-009-28..34).
+
+No migration steps. With no middleware configured, execution is unchanged;
+agents that set `PROMETHEUS_AGENT_MIDDLEWARE` gain the configured hooks at their next
+deploy, and a malformed entry now fails agent construction with `ValueError` by design.
+
 ### Resumed Tasks Reuse Their Execution Record
 
 When a user answers an `INPUT_REQUIRED` form, the task resumes with the same task ID. The

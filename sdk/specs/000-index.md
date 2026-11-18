@@ -33,7 +33,7 @@ Test coverage and `⚠ untested` handling should follow
 | 006 | LLM chat and embeddings | implemented | Sync/async chat and embedding calls, proxy/fallback execution, and response shaping. |
 | 007 | LLM security and tracing | implemented | Secret redaction, no credentials from A2A requests, prompt-safe debug logging, and MLflow tracing. |
 | 008 | Agent app, card, auth, and registry | implemented | Agent card loading, workflow injection, Starlette routes, bearer auth, and LiteLLM registration. |
-| 009 | Agent execution, events, and workers | implemented | Executor lifecycle, heartbeats, status/background events, cancellation, and blocking worker support. |
+| 009 | Agent execution, events, and workers | implemented | Executor lifecycle, heartbeats, status/background events, cancellation, blocking worker support, and execution middleware. |
 | 010 | Agent artifacts, input, and context state | implemented | Input-required payloads, artifact cataloging/resolution, DeepLynx artifact upload, and context state. |
 | 011 | A2A conversation contract and streams | implemented | Frontend/client-agent payload models plus NDJSON/SSE stream accumulation. |
 | 012 | Redis-backed state and degradation | implemented | Shared Redis client creation and Redis-backed A2A task storage with memory fallback. |

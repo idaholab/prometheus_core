@@ -40,6 +40,13 @@ from .base import (
     PrometheusAgent,
     PrometheusAgentExecutor,
 )
+from .hooks import (
+    ExecuteContext,
+    ExecuteHook,
+    ExecuteHookError,
+    NoopExecuteHook,
+    TaskSnapshot,
+)
 from .artifact_resolver import ArtifactResolver
 from .artifacts import ArtifactReference, ArtifactRegistry
 from .context_state import ContextStateStore
@@ -90,6 +97,12 @@ __all__ = [
     "MissingInput",
     "PrometheusAgent",
     "PrometheusAgentExecutor",
+    # execution middleware
+    "ExecuteContext",
+    "ExecuteHook",
+    "ExecuteHookError",
+    "NoopExecuteHook",
+    "TaskSnapshot",
     "PrometheusWorker",
     "ArtifactReference",
     "ArtifactRegistry",

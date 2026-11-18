@@ -98,6 +98,36 @@ def is_stopping_status_event(event: Any) -> bool:
     return isinstance(event, TaskStatusUpdateEvent) and event.status.state in STOPPING_TASK_STATES
 
 
+def task_state_name(state: Any) -> str:
+    """Return a task state's canonical proto name (e.g. ``TASK_STATE_COMPLETED``).
+
+    The a2a ``TaskState`` constants are proto integers, so their wire-form
+    string is the enum name. Values that are already strings pass through;
+    unknown shapes fall back to their string form.
+    """
+    if isinstance(state, str):
+        return state
+    try:
+        return TaskState.Name(int(state))
+    except (TypeError, ValueError, AttributeError):
+        return str(state or "")
+
+
+def status_event_message_text(event: Any) -> str:
+    """Return a status event's progress text ('' when there is none).
+
+    Only a single-text-part status message counts: heartbeats and most
+    framework statuses carry no message, and structured (multi-part or
+    non-text) messages are not rewriteable progress text, so both return ''.
+    """
+    status = getattr(event, "status", None)
+    message = getattr(status, "message", None) if status is not None else None
+    parts = list(getattr(message, "parts", None) or [])
+    if len(parts) != 1:
+        return ""
+    return str(getattr(parts[0], "text", "") or "")
+
+
 def build_status_update_event(
     *,
     context: RequestContext,
