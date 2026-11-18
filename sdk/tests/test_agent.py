@@ -214,7 +214,7 @@ class TestPrometheusAgentExecutor:
             pass
 
     def test_execute_calls_enqueue_event(self, executor, mock_context, mock_event_queue):
-        """Test that execute uses enqueue_event for status updates."""
+        """Covers REQ-009-24: new tasks emit the initial Task before status updates."""
 
         # Create a concrete implementation for testing
         class TestExecutor(PrometheusAgentExecutor):
@@ -250,6 +250,39 @@ class TestPrometheusAgentExecutor:
         assert second_event.status.state == TaskState.TASK_STATE_COMPLETED
         payload_text = second_event.status.message.parts[0].text
         assert json.loads(payload_text) == {"status": "success", "data": "test data"}
+
+    @pytest.mark.parametrize(
+        "stored_state",
+        [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_AUTH_REQUIRED],
+        ids=["input_required", "auth_required"],
+    )
+    def test_execute_follow_up_continues_existing_task_with_status_update(
+        self, mock_context, mock_event_queue, stored_state
+    ):
+        """Covers REQ-009-24: any follow-up to an existing task, not only an
+        answered INPUT_REQUIRED form, continues it without re-emitting the Task."""
+
+        class ResumingExecutor(PrometheusAgentExecutor):
+            async def _execute(self, params, context, event_queue):
+                return {"status": "resumed"}
+
+        mock_context.current_task = Task(
+            id=mock_context.task_id,
+            context_id=mock_context.context_id,
+            status=TaskStatus(state=stored_state),
+        )
+
+        asyncio.run(
+            ResumingExecutor(agent_name="TestAgent").execute(mock_context, mock_event_queue)
+        )
+
+        events = [call.args[0] for call in mock_event_queue.enqueue_event.call_args_list]
+        assert len(events) == 2
+        assert all(isinstance(event, TaskStatusUpdateEvent) for event in events)
+        assert [event.status.state for event in events] == [
+            TaskState.TASK_STATE_WORKING,
+            TaskState.TASK_STATE_COMPLETED,
+        ]
 
     def test_execute_emits_heartbeats_during_long_execute(self, mock_context, monkeypatch):
         """A slow _execute should produce periodic non-final keepalive events."""
