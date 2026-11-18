@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/idaholab/prometheus_core/common/speccheck/speccheck-results-1.schema.json",
+  "title": "speccheck-results/1",
+  "description": "One line of a speccheck results file (JSON Lines). The first line is a header; every other line is a result. A reader rejects a file whose header has any other schema value, and ignores keys it doesn't know, so fields may be added within speccheck-results/1.",
+  "oneOf": [{ "$ref": "#/$defs/header" }, { "$ref": "#/$defs/result" }],
+  "$defs": {
+    "text": { "type": "string", "maxLength": 1000 },
+    "header": {
+      "type": "object",
+      "required": ["schema", "producer"],
+      "properties": {
+        "schema": { "const": "speccheck-results/1" },
+        "producer": { "$ref": "#/$defs/text", "minLength": 1, "description": "A producer declared in the spec folder's config" },
+        "runner": { "$ref": "#/$defs/text", "description": "What wrote the file, such as `pytest 8.4.1`" },
+        "ci": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ci" }] },
+        "root": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/text" }],
+          "description": "The folder results' `file` paths are relative to, as a path from the repository's root (`.` for the root); null when not known"
+        },
+        "started": { "$ref": "#/$defs/text", "description": "ISO 8601 UTC" }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "description": "Where the run happened: the CI provider, and for GitHub Actions the GITHUB_* variables and SPECCHECK_JOB_ID",
+      "properties": {
+        "provider": { "$ref": "#/$defs/scalar", "description": "The CI provider, such as `github`" },
+        "server": { "$ref": "#/$defs/scalar" },
+        "repository": { "$ref": "#/$defs/scalar" },
+        "workflow": { "$ref": "#/$defs/scalar" },
+        "job": { "$ref": "#/$defs/scalar" },
+        "run_id": { "$ref": "#/$defs/scalar" },
+        "run_attempt": { "$ref": "#/$defs/scalar" },
+        "job_id": { "$ref": "#/$defs/scalar" },
+        "sha": { "$ref": "#/$defs/scalar" },
+        "ref": { "$ref": "#/$defs/scalar" },
+        "event": { "$ref": "#/$defs/scalar" },
+        "run_url": { "$ref": "#/$defs/scalar" },
+        "job_url": { "$ref": "#/$defs/scalar" }
+      }
+    },
+    "scalar": { "oneOf": [{ "type": "null" }, { "type": "integer" }, { "$ref": "#/$defs/text" }] },
+    "claim": {
+      "type": "object",
+      "required": ["id", "how"],
+      "properties": {
+        "id": { "$ref": "#/$defs/text", "minLength": 1, "description": "The requirement ID" },
+        "how": {
+          "$ref": "#/$defs/text",
+          "minLength": 1,
+          "pattern": "^[^\\n\\r\\u000b\\u000c\\u001c-\\u001e\\u0085\\u2028\\u2029]*$",
+          "description": "How the test or job proves the requirement: plain text on one line, whitespace collapsed"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": ["test", "covers", "outcome"],
+      "properties": {
+        "test": { "$ref": "#/$defs/text", "minLength": 1, "description": "The test's node ID, or the CI job's name" },
+        "file": { "$ref": "#/$defs/text", "description": "The test file; never opened by the reader" },
+        "line": { "type": "integer", "minimum": 0 },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "description": "What the test or job claims, one entry per ID; a reader rejects an ID given twice",
+          "items": { "$ref": "#/$defs/claim" }
+        },
+        "outcome": {
+          "enum": ["passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected", "collected"],
+          "description": "Only `passed` is evidence"
+        },
+        "kind": { "enum": ["test", "ci"], "default": "test" }
+      }
+    }
+  }
+}

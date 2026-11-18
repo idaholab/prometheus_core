@@ -16,6 +16,8 @@ import { buttonClassName, type ButtonStyle } from "@/components/ui/Button";
 
 export interface SplitButtonOption {
   label: string;
+  /** A line under the label saying what the option does, e.g. "Default. Tweak steps for this run only". */
+  description?: string;
   onClick: () => void;
   disabled?: boolean;
   /**
@@ -157,7 +159,10 @@ export function SplitButton({
   };
 
   const size = style.size ?? "md";
-  const half = (shape: string) => buttonClassName(style, { shape: `join-item ${shape}` });
+  // `wide` stretches the main half only: btn-block on the arrow too would
+  // split the width evenly and squeeze the label onto two lines.
+  const half = (shape: string, stretch = false) =>
+    buttonClassName({ ...style, wide: stretch && style.wide }, { shape: `join-item ${shape}` });
 
   return (
     <div
@@ -167,7 +172,7 @@ export function SplitButton({
       <div className={`join ${style.wide ? "w-full" : ""}`}>
         <button
           type="button"
-          className={half(style.wide ? "flex-1" : "")}
+          className={half(style.wide ? "flex-1" : "", true)}
           onClick={onClick}
           disabled={disabled}
         >
@@ -199,13 +204,16 @@ export function SplitButton({
           aria-label={menuLabel ?? `More ${label} options`}
           onKeyDown={onMenuKeyDown}
           className={[
-            "menu menu-panel absolute z-20 min-w-full w-max p-1",
+            "menu menu-panel absolute z-20 p-1",
             placement.up ? "bottom-full mb-1" : "top-full mt-1",
-            placement.start ? "right-0" : "left-0",
+            // A wide button's menu matches its width (D.1), so it can't run
+            // off a narrow screen; descriptions wrap to fit
+            style.wide ? "inset-x-0" : `min-w-full w-max ${placement.start ? "right-0" : "left-0"}`,
           ].join(" ")}
         >
           {options.map((option, i) => {
             const reasonId = option.disabled && option.disabledReason ? `${menuId}-reason-${i}` : undefined;
+            const descriptionId = option.description ? `${menuId}-description-${i}` : undefined;
             return (
               <li key={option.label} role="none" className={option.disabled ? "menu-disabled" : undefined}>
                 <button
@@ -216,7 +224,7 @@ export function SplitButton({
                   role="menuitem"
                   tabIndex={i === active ? 0 : -1}
                   aria-disabled={option.disabled || undefined}
-                  aria-describedby={reasonId}
+                  aria-describedby={[descriptionId, reasonId].filter(Boolean).join(" ") || undefined}
                   onClick={() => pick(option)}
                   onMouseEnter={() => !option.disabled && setActive(i)}
                   // The sidebar's active-item style for the highlighted option,
@@ -229,7 +237,8 @@ export function SplitButton({
                   // Disabled options get no highlight, but keep the ring, since
                   // keys can land on them when every option is disabled
                   className={[
-                    "flex flex-col items-start gap-0 whitespace-nowrap",
+                    "flex flex-col items-start gap-0",
+                    style.wide ? "text-left" : "whitespace-nowrap",
                     "focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-base-content",
                     option.disabled
                       ? // DaisyUI's menu focus style brightens the text and adds a
@@ -241,6 +250,16 @@ export function SplitButton({
                     .join(" ")}
                 >
                   {option.label}
+                  {descriptionId && (
+                    // Wraps, unlike the label, so a long description doesn't
+                    // stretch the menu far past the button
+                    <span
+                      id={descriptionId}
+                      className={`whitespace-normal text-xs text-base-content/60 ${style.wide ? "" : "max-w-64"}`}
+                    >
+                      {option.description}
+                    </span>
+                  )}
                   {reasonId && (
                     // Dimmer than an enabled label but above the 20% DaisyUI
                     // gives disabled text, so the reason stays readable

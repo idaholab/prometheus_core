@@ -22,7 +22,7 @@
  * main.tsx loads this only in dev, so it never reaches the production build.
  */
 import { useState } from "react";
-import type { InspectedNode } from "@/features/workflows";
+import type { BuilderMode, InspectedNode } from "@/features/workflows";
 import { WorkflowBuilder } from "@/features/workflows";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import { useTheme } from "@/lib/useTheme";
@@ -37,6 +37,7 @@ import {
   INVALID_NODES,
   INVALID_WIRES,
   SKILL_GROUPS,
+  TWEAKED_STEP,
 } from "@/features/workflows";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
@@ -66,6 +67,8 @@ const STATES: Record<StateId, BuilderState> = {
 export function BuilderStatesHarness() {
   const [theme, setTheme] = useTheme();
   const [stateId, setStateId] = useState<StateId>("empty");
+  // D.3 to D.6 are template edits, so it starts there; the badge switches it.
+  const [mode, setMode] = useState<BuilderMode>("template");
   const state = STATES[stateId];
 
   return (
@@ -91,10 +94,15 @@ export function BuilderStatesHarness() {
       <WorkflowBuilder
         key={stateId}
         name="Comprehensive Material Analysis"
+        mode={mode}
+        onModeChange={setMode}
+        version="v1.2.0"
+        nextVersion="v1.3.0"
         skillGroups={SKILL_GROUPS}
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}
+        tweaked={TWEAKED_STEP}
         canvasError={state.canvasError}
       />
     </div>

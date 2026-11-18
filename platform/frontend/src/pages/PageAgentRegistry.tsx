@@ -10,17 +10,29 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useAgents } from "@/features/agent-registry";
+import { AGENT_FILTER, useAgents } from "@/features/agent-registry";
 import { usePageHeader } from "@/features/shell";
 import { AgentRegistry } from "@/features/agent-registry";
+import { useListFilter } from "@/lib/listFilter";
 
 /**
- * Agent Registry section page: owns the page's data and header. Layout lives in
- * AgentRegistry. Route params and filters will land here with the router.
+ * Agent Registry section page: owns the page's data, header and filter state.
+ * Layout lives in AgentRegistry. Route params will land here with the router.
  */
 export function PageAgentRegistry() {
   usePageHeader({ title: "Agent Registry" });
   const { agents, status } = useAgents();
+  const { query, setQuery, facet, setFacet, visible, noMatches } = useListFilter(agents, AGENT_FILTER);
 
-  return <AgentRegistry agents={agents} status={status} />;
+  return (
+    <AgentRegistry
+      agents={visible}
+      status={status}
+      query={query}
+      onQueryChange={setQuery}
+      domain={facet}
+      onDomainChange={setFacet}
+      noMatches={noMatches}
+    />
+  );
 }

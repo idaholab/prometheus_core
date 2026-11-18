@@ -16,19 +16,20 @@
  *
  * The data is a placeholder constant until PPLT-244 adds the registry API;
  * that change replaces AGENTS and adds the load, and nothing else changes.
- * JSX-free and imports only react, so a node:test can cover it.
+ * JSX-free; its only runtime import is react, so a node:test can cover it.
  */
 import { useSyncExternalStore } from "react";
+import type { ListFilterConfig } from "@/lib/listFilter";
 
 export type AgentStatus = "healthy" | "degraded" | "offline" | "escalating";
-export type AgentDomain =
-  | "Plant & Systems"
-  | "Core & Fuel"
-  | "Component"
-  | "Structural & Seismic"
-  | "Licensing & Regulatory"
-  | "Manufacturing & Construction"
-  | "Data & Knowledge";
+export const AGENT_DOMAINS = [
+  "Plant & Systems",
+  "Core & Fuel",
+  "Structural & Seismic",
+  "Licensing & Regulatory",
+  "Data & Knowledge",
+] as const;
+export type AgentDomain = (typeof AGENT_DOMAINS)[number];
 export type AgentIcon =
   | "box"
   | "grid"
@@ -51,6 +52,12 @@ export interface Agent {
   status: AgentStatus;
   icon: AgentIcon; // a key, so the store stays JSX-free and node-testable
 }
+
+/** The Agent Registry search (name, description) and domain facet. */
+export const AGENT_FILTER: ListFilterConfig<Agent> = {
+  searchFields: [(a) => a.name, (a) => a.description],
+  facetOf: (a) => a.domain,
+};
 
 export type AgentsStatus = "ready" | "empty" | "loading" | "error";
 export interface AgentsState {

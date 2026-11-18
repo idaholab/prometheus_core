@@ -13,4 +13,4 @@
 // What the rest of the app may import from features/agent-registry. Anything else
 // in this folder is internal to it.
 export { AgentRegistry } from "./AgentRegistry";
-export { useAgents } from "./store/agents";
+export { AGENT_FILTER, useAgents } from "./store/agents";

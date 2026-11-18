@@ -1,0 +1,320 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+"""What check, verify and report share: reading the inputs, the JSON of a status, and the summary."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import pytest
+
+from speccheck import evidence, results
+from speccheck.actions import _common
+from speccheck.claims import Claim
+from speccheck.config import ConfigError
+from speccheck.specs import Problem
+from tests.unit.conftest import ROOT, err, make_ctx, make_requirement, make_spec, make_specs, namespace, out
+
+
+def test_paths_are_made_relative_where_possible(tmp_path: Path):
+    """Under the current folder: relative; elsewhere: as given."""
+    assert _common._relative(str(tmp_path / "a" / "b.jsonl"), tmp_path) == "a/b.jsonl"
+    assert _common._relative("/elsewhere/x.jsonl", tmp_path) == "/elsewhere/x.jsonl"
+    assert _common._relocate(Problem(str(tmp_path / "x"), 2, "m"), tmp_path) == Problem("x", 2, "m")
+
+
+def test_the_arguments():
+    """Inputs default to none; `--complete` and `--workflow` are the scope."""
+    parser = argparse.ArgumentParser()
+    _common.add_inputs(parser)
+    _common.add_scope(parser)
+    assert vars(parser.parse_args([])) == {"inputs": [], "complete": False, "workflow": None}
+    args = parser.parse_args(["a", "b", "--complete", "--workflow", "ci"])
+    assert (args.inputs, args.complete, args.workflow) == (["a", "b"], True, "ci")
+
+
+class TestEvaluate:
+    """Reading the inputs relative to where speccheck runs, then `evidence.evaluate`."""
+
+    def test_inputs_are_read_relative_to_the_cwd(self, tmp_path: Path):
+        """A relative input is under the cwd; sources and problems come back relative to it."""
+        unit = results.ResultsFile(
+            producer="unit", results=[results.Result("t", [Claim("T-REQ-001-01", "t proves it")], "passed")]
+        )
+        results.write(tmp_path / "r" / "unit.jsonl", unit)
+        (tmp_path / "r" / "bad.jsonl").write_text("{\n")
+        ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+        evaluation = _common.evaluate(ctx, namespace(inputs=["r", "missing.jsonl"]), runtime=True)
+        assert [f.source for f in evaluation.files] == ["r/unit.jsonl"]
+        assert [str(p) for p in evaluation.problems] == [
+            "missing.jsonl: no such results file or folder",
+            "r/bad.jsonl:1: not JSON: Expecting property name enclosed in double quotes",
+        ]
+        assert evaluation.statuses[0].status == "passed"
+
+    def test_an_absolute_input(self, tmp_path: Path):
+        """Used as given."""
+        path = tmp_path / "elsewhere" / "u.jsonl"
+        results.write(path, results.ResultsFile(producer="unit"))
+        ctx = make_ctx(tmp_path / "cwd", specs_set=make_specs())
+        assert _common.evaluate(ctx, namespace(inputs=[str(path)]), runtime=False).files[0].source == path.as_posix()
+
+    def test_check_has_no_scope(self, tmp_path: Path):
+        """`check`'s arguments have no `--complete`, so nothing is expected to report."""
+        ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+        evaluation = _common.evaluate(ctx, argparse.Namespace(inputs=[]), runtime=False)
+        assert evaluation.missing == [] and evaluation.statuses[0].status == "unclaimed"
+
+
+def one_status(status: str = "passed", **ci) -> evidence.Evaluation:
+    """An evaluation of one requirement with one result from `unit`."""
+    requirement = make_requirement(make_spec())
+    source = results.ResultsFile(producer="unit", ci=ci or None)
+    result = results.Result(
+        "tests/t.py::t", [Claim("T-REQ-001-01", "t proves it")], "passed", file="tests/t.py", line=3
+    )
+    found = [evidence.Evidence(result, source, "t proves it")]
+    return evidence.Evaluation([evidence.Status(requirement, status, found)], [], ["unit"], [])
+
+
+REPOSITORY = "https://github.com/o/r"
+"""This run's repository URL, the only one a result's link may be under."""
+JOB = f"{REPOSITORY}/actions/runs/7/job/8"
+"""A job's page."""
+RUN = f"{REPOSITORY}/actions/runs/7/attempts/2"
+"""A run attempt's page."""
+
+
+@pytest.mark.parametrize(
+    ("ci", "url"),
+    [
+        ({"job_url": JOB, "run_url": RUN}, JOB),
+        ({"run_url": RUN}, RUN),
+        ({"job": "unit"}, ""),
+        ({}, ""),
+    ],
+)
+def test_evidence_json_links_the_job_then_the_run(ci, url):
+    """The job's link, else the run's, else none."""
+    item = one_status(**ci).statuses[0].evidence[0]
+    assert _common.evidence_json(item, REPOSITORY)["url"] == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example/o/r/actions/runs/7/job/8",
+        "https://github.com/o/other/actions/runs/7/job/8",
+        "http://github.com/o/r/actions/runs/7/job/8",
+        f"{REPOSITORY}/pulls/7",
+        f"{JOB}\n",
+        "javascript:alert(1)",
+    ],
+)
+def test_evidence_json_leaves_out_a_link_that_is_not_this_runs(url):
+    """Another server or repository, another shape, or no link at all: the field is empty, not the file's text."""
+    item = one_status(job_url=url).statuses[0].evidence[0]
+    assert _common.evidence_json(item, REPOSITORY)["url"] == ""
+
+
+def test_evidence_json_has_no_link_without_a_repository():
+    """Outside CI there is no repository to trust, so even a well-formed link is left out."""
+    item = one_status(job_url=JOB).statuses[0].evidence[0]
+    assert _common.evidence_json(item)["url"] == ""
+    assert _common.evidence_json(item, "")["url"] == ""
+
+
+def test_statuses_json_passes_the_repository_to_each_result():
+    """The repository reaches every result, not only the first."""
+    evaluation = one_status(job_url=JOB)
+    assert _common.statuses_json(evaluation, None, REPOSITORY)[0]["evidence"][0]["url"] == JOB
+    assert _common.statuses_json(evaluation)[0]["evidence"][0]["url"] == ""
+
+
+def test_statuses_json():
+    """Every field of a status and its evidence; with the repository's root, the spec's path from it."""
+    evaluation = one_status(job="unit")
+    evaluation.statuses[0].evidence[0] = evidence.Evidence(
+        evaluation.statuses[0].evidence[0].result,
+        results.ResultsFile(producer="unit", ci={"job": "unit"}, root="sub"),
+        "t proves it",
+        "unit (3.12)",
+    )
+    body = _common.statuses_json(evaluation, ROOT)
+    assert body == [
+        {
+            "id": "T-REQ-001-01",
+            "spec": "001",
+            "status": "passed",
+            "text": "It.",
+            "reason": None,
+            "path": "specs/001-thing.md",
+            "line": 7,
+            "evidence": [
+                {
+                    "test": "tests/t.py::t",
+                    "how": "t proves it",
+                    "kind": "test",
+                    "file": "tests/t.py",
+                    "line": 3,
+                    "root": "sub",
+                    "outcome": "passed",
+                    "producer": "unit",
+                    "job": "unit",
+                    "job_name": "unit (3.12)",
+                    "url": "",
+                }
+            ],
+            "waiting_on": [],
+        }
+    ]
+    assert _common.statuses_json(one_status())[0]["path"] is None
+
+
+class TestJobNames:
+    """`--job-names FILE`: a JSON object from job ID to display name."""
+
+    def test_the_argument(self):
+        """Optional."""
+        parser = argparse.ArgumentParser()
+        _common.add_job_names(parser)
+        assert parser.parse_args([]).job_names is None
+        assert parser.parse_args(["--job-names", "n.json"]).job_names == "n.json"
+
+    def test_none_without_the_option(self, tmp_path: Path):
+        """No option, or arguments without it: no names."""
+        assert _common.job_names(make_ctx(tmp_path), namespace()) == {}
+        assert _common.job_names(make_ctx(tmp_path), argparse.Namespace()) == {}
+
+    def test_read_relative_or_absolute_with_names_cleaned(self, tmp_path: Path):
+        """Keys become strings; a name is made one line."""
+        (tmp_path / "n.json").write_text(json.dumps({"1": "build\n x", 2: "y" * 200}))
+        names = _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+        assert names == {"1": "build x", "2": "y" * 200}
+        assert _common.job_names(make_ctx(Path("/")), namespace(job_names=str(tmp_path / "n.json"))) == names
+
+    def test_a_name_over_the_limit_is_refused_not_cut(self, tmp_path: Path):
+        """One character over MAX_NAME is a usage error that names the job and the length."""
+        (tmp_path / "n.json").write_text(json.dumps({"7": "y" * 201}))
+        with pytest.raises(
+            ConfigError, match=r"--job-names n.json: the name for 7 is 201 characters; the limit is 200"
+        ):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_the_length_is_measured_after_whitespace_is_collapsed(self, tmp_path: Path):
+        """Runs of spaces in a name don't count against the limit."""
+        (tmp_path / "n.json").write_text(json.dumps({"7": "y" + " " * 500 + "z"}))
+        assert _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json")) == {"7": "y z"}
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            (None, "can't read"),
+            ("{", "not JSON"),
+            (b"\xff", "not JSON"),
+            ("[1]", "must be a JSON object from job ID to name"),
+            ('{"1": 2}', "must be a JSON object from job ID to name"),
+        ],
+    )
+    def test_a_bad_file_is_a_usage_error(self, tmp_path: Path, text, message: str):
+        """Missing, not JSON, not UTF-8, not an object, or a name that isn't a string."""
+        if isinstance(text, bytes):
+            (tmp_path / "n.json").write_bytes(text)
+        elif text is not None:
+            (tmp_path / "n.json").write_text(text)
+        with pytest.raises(ConfigError, match=message):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_a_huge_file_is_refused(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Over MAX_JOB_NAMES bytes, before it is read."""
+        monkeypatch.setattr(_common, "MAX_JOB_NAMES", 4)
+        (tmp_path / "n.json").write_text('{"1": "build"}')
+        with pytest.raises(ConfigError, match="over 4 bytes"):
+            _common.job_names(make_ctx(tmp_path), namespace(job_names="n.json"))
+
+    def test_evaluate_names_each_result(self, tmp_path: Path):
+        """The names reach the evidence, by the results file's job ID."""
+        unit = results.ResultsFile(
+            producer="unit",
+            ci={"job_id": 7},
+            results=[results.Result("t", [Claim("T-REQ-001-01", "t proves it")], "passed")],
+        )
+        results.write(tmp_path / "u.jsonl", unit)
+        (tmp_path / "n.json").write_text('{"7": "unit job"}')
+        ctx = make_ctx(tmp_path, specs_set=make_specs("It."))
+        evaluation = _common.evaluate(ctx, namespace(inputs=["u.jsonl"], job_names="n.json"), runtime=True)
+        assert evaluation.statuses[0].evidence[0].job_name == "unit job"
+
+
+class TestFinish:
+    """Printing the result of check or verify, and the exit code."""
+
+    def test_clean(self):
+        """0, and one line on stdout naming who reported."""
+        ctx = make_ctx()
+        assert _common.finish(ctx, namespace(), "verify", one_status()) == 0
+        assert (out(ctx), err(ctx)) == ("speccheck verify: 1 requirement: 1 passed; reported: unit\n", "")
+
+    def test_problems_and_missing_producers(self):
+        """1, the problems on stderr, then the summary with who was missing."""
+        evaluation = one_status()
+        evaluation.problems, evaluation.missing = [Problem("a", 1, "bad")], ["docker"]
+        ctx = make_ctx()
+        assert _common.finish(ctx, namespace(), "verify", evaluation) == 1
+        assert err(ctx).splitlines() == [
+            "a:1: bad",
+            "speccheck verify: 1 requirement: 1 passed; reported: unit; missing: docker; 1 problem",
+        ]
+
+    def test_nobody_reported(self):
+        """Without any producer reported or missing, the summary says neither."""
+        evaluation = one_status()
+        evaluation.reported = []
+        ctx = make_ctx()
+        _common.finish(ctx, namespace(), "check", evaluation)
+        assert out(ctx) == "speccheck check: 1 requirement: 1 passed\n"
+        evaluation.missing = ["docker"]
+        ctx = make_ctx()
+        _common.finish(ctx, namespace(), "check", evaluation)
+        assert "reported: none; missing: docker" in out(ctx)
+
+    def test_verbose_lists_every_status(self):
+        """Before the summary."""
+        ctx = make_ctx(verbose=True)
+        _common.finish(ctx, namespace(), "verify", one_status())
+        assert out(ctx).splitlines()[0] == "T-REQ-001-01  passed"
+
+    def test_json(self):
+        """One object: counts, requirements and producers; nothing else printed."""
+        evaluation = one_status()
+        evaluation.problems = [Problem("a", 1, "bad")]
+        ctx = make_ctx(json_mode=True, verbose=True)
+        assert _common.finish(ctx, namespace(), "verify", evaluation) == 1
+        body = json.loads(out(ctx))
+        assert (body["command"], body["ok"], body["counts"]["passed"]) == ("verify", False, 1)
+        assert body["requirements"] == _common.statuses_json(evaluation)
+        assert body["producers"] == {"reported": ["unit"], "missing": []}
+        assert body["problems"] == [{"path": "a", "line": 1, "message": "bad", "code": "problem"}]
+        assert err(ctx) == ""
+
+    def test_the_summary_is_written(self, tmp_path: Path):
+        """`--summary` gets the counts line and the problems, whatever the output mode."""
+        evaluation = one_status()
+        evaluation.problems = [Problem("a", 1, "bad")]
+        ctx = make_ctx(tmp_path, json_mode=True)
+        _common.finish(ctx, namespace(summary="s.md"), "verify", evaluation)
+        assert (
+            tmp_path / "s.md"
+        ).read_text() == "**speccheck:** 1 problem. 1 requirement: 1 passed\n\n- `a:1: bad`\n\n"

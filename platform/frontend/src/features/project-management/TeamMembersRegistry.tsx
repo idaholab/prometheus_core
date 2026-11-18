@@ -10,14 +10,16 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { MemberStatus, Role, TeamMember } from "./store/projectManagementModel";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { SearchInput } from "@/components/ui/SearchInput";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { StatusPill, type StatusPillTone } from "@/components/ui/StatusPill";
 import { Tag } from "@/components/ui/Tag";
+import { ALL } from "@/lib/listFilter";
 
 const STATUS_TONE: Record<MemberStatus, StatusPillTone> = {
   active: "success",
@@ -28,14 +30,20 @@ const STATUS_TONE: Record<MemberStatus, StatusPillTone> = {
 interface Props {
   members: TeamMember[];
   roles: Role[];
+  query: string;
+  onQueryChange: (query: string) => void;
+  role: string;
+  onRoleChange: (role: string) => void;
+  /** Members exist but none matches the search and role. */
+  noMatches: boolean;
 }
 
 /**
  * Team members registry: search bar, role filter, invite button and the
- * member table. Search, filter and the row actions are not wired yet (PM-4).
+ * member table. The row actions are not wired yet (PM-4).
  */
-export function TeamMembersRegistry({ members, roles }: Props) {
-  const roleNames = new Map(roles.map((role) => [role.id, role.name]));
+export function TeamMembersRegistry({ members, roles, query, onQueryChange, role, onRoleChange, noMatches }: Props) {
+  const roleNames = new Map(roles.map((r) => [r.id, r.name]));
 
   const columns: DataTableColumn<TeamMember>[] = [
     { id: "name", header: "Name", value: (m) => m.name, className: "font-semibold text-base-content" },
@@ -74,18 +82,27 @@ export function TeamMembersRegistry({ members, roles }: Props) {
     <section className="flex flex-col gap-3">
       <SectionLabel>Team Members Registry</SectionLabel>
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput placeholder="Search team..." label="Search team" />
-        <select className="select select-bordered select-sm w-auto" defaultValue="" aria-label="Filter by role">
-          <option value="">All Roles</option>
-          {roles.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.name}
+        <SearchInput placeholder="Search team..." label="Search team" value={query} onChange={onQueryChange} />
+        <select
+          className="select select-bordered select-sm w-auto"
+          value={role}
+          onChange={(e) => onRoleChange(e.target.value)}
+          aria-label="Filter by role"
+        >
+          <option value={ALL}>All Roles</option>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
             </option>
           ))}
         </select>
         <Button variant="primary" outline size="sm" icon={<Plus />} label="Invite User" />
       </div>
-      <DataTable data={members} columns={columns} rowId={(m) => m.id} label="Team members" />
+      {noMatches ? (
+        <EmptyState icon={<Search size={24} />} title="No matching team members" hint="Try another search or role" />
+      ) : (
+        <DataTable data={members} columns={columns} rowId={(m) => m.id} label="Team members" />
+      )}
     </section>
   );
 }

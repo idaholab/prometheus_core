@@ -3,15 +3,15 @@ title: Welcome & Prometheus
 footer: One day · Welcome & Prometheus · https://idaholab.github.io/prometheus_core/hackathon/one-day
 accent: welcome
 index:
-  time: '8:30'
+  time: '60 min'
   heading: Welcome &amp; Prometheus
   color: var(--navy)
-  blurb: 'The agenda and what you will leave with, a short primer on LLMs and agents, and how Prometheus works from an agent author''s view: the platform at a glance, one chat turn, eight terms, what the platform does for you.'
+  blurb: 'The agenda and what you will leave with, a short primer on LLMs and agents, and how Prometheus works from an agent author''s view: the platform at a glance, one chat turn, eight terms, how your card and code plug in, what the platform does for you.'
 ---
 
-# Welcome & Prometheus {.title kicker="Agent developer hackathon · One day · 8:30 am" pills="All participants | 60 min | Press N for notes · O for overview"}
+# Welcome & Prometheus {.title kicker="Agent developer hackathon · One day" pills="All participants | 60 min | Press N for notes · O for overview"}
 What we will build today, what AI can and cannot do, and how Prometheus fits the pieces together.
-Note: Welcome first (15 minutes): agenda, outcomes, links. Then the AI primer and the Prometheus overview (45 minutes). The live demo follows at 9:30.
+Note: Welcome first (15 minutes): agenda, outcomes, links. Then the AI primer and the Prometheus overview (45 minutes). The live demo follows.
 
 ---
 
@@ -45,14 +45,12 @@ Note: Point out that the slide URL is also in the footer of every slide in this 
 ## The day {eyebrow="Agenda" content-style="gap:0"}
 
 ::: agenda
-- 8:30 | Welcome and Prometheus | Agenda · what AI can and cannot do · how Prometheus works {.now}
-- 9:30 | Live demo | An agent built from scratch, step by step. Follow along or just watch.
-- 10:30 | Break
-- 10:40 | The challenge | What you will build today, and questions
-- 11:00 | Setting up (hands-on) | Start the platform and DeepLynx, try the debug agents, scaffold your agent. Lunch at noon while it runs.
-- 1:00 | Challenge checkpoints (hands-on) | A new skill · files in and out · an LLM call · a second skill that plots. Mentors circulate.
-- 1:45 | Break (10 min, then back to the checkpoints)
-- 2:50 | Close out | What you built, and where to go next
+- 60 min | Welcome and Prometheus | Agenda · what AI can and cannot do · how Prometheus works {.now}
+- 60 min | Live demo | An agent built from scratch, step by step. Follow along or just watch.
+- 20 min | The challenge | What you will build today, and questions
+- 60 min | Setting up (hands-on) | Start the platform and DeepLynx, try the debug agents, scaffold your agent.
+- 100 min | Challenge checkpoints (hands-on) | A new skill · files in and out · an LLM call · a second skill that plots. Mentors circulate.
+- 10 min | Close out | What you built, and where to go next
 :::
 
 ---
@@ -248,6 +246,149 @@ Note: This is the same prompt used in the first minutes of the live demo. The de
 
 ---
 
+## Two files, two moments {eyebrow="Your agent and the platform"}
+> The card is read when your agent starts. The code runs when someone asks.
+
+:::: cols 1fr 1.15fr gap=36px
+::: card tag="At startup · make up"
+<div class="dg">
+<div class="box orange"><b>agent_card.json</b><span class="small">name · skills[].id · description · inputSchema</span></div>
+<div class="arrow-v"><span>registers itself</span></div>
+<div class="box gray"><b>Registry</b><span class="small">route key = card name, lowercase, hyphens</span></div>
+<div class="arrow-v"><span>every skill becomes a tool</span></div>
+<div class="box navy"><b>Orchestrator</b><span class="small">its LLM reads your descriptions and inputs</span></div>
+</div>
+:::
+
+|||
+
+::: card acc tag="At chat time · every request"
+<div class="dg">
+<div class="box sky"><b>Chat UI</b><span class="small">"Create an image of the word INL"</span></div>
+<div class="arrow-v"><span>prompt</span></div>
+<div class="box navy"><b>Orchestrator</b><span class="small">picks a skill and fills in its inputs from the card</span></div>
+<div class="arrow-v"><span>calls the skill_id with params</span></div>
+<div class="box orange"><b>agent.py</b><span class="small"><code>_execute(params)</code>: your code does the work</span></div>
+<div class="arrow-v"><span>stores the file, gets an id</span></div>
+<div class="box teal"><b>DeepLynx</b><span class="small">the artifact id comes back and the chat shows the file</span></div>
+</div>
+:::
+::::
+
+::: callout good
+The card decides **whether** you get called. `agent.py` decides **what happens** when you are.
+:::
+
+Note: The same agent appears in both columns. Left: make up, the agent registers, and within about a minute the orchestrator sees its skills. Right: every chat turn, the one just seen in the INL example. The next two slides zoom in on the card and the code.
+
+---
+
+## Which line goes where {eyebrow="Your agent and the platform"}
+> Each key line in your two files is read by one part of the platform.
+
+:::: cols 1fr 1fr gap=28px
+::: card tag="agent_card.json"
+<div class="wl">
+<div><code>"name": "Hello Agent"</code><span class="to">Registry</span><span class="why">route key <code>hello-agent</code></span></div>
+<div><code>"id": "greet"</code><span class="to">Orchestrator</span><span class="why">the tool's name, and <code>params["skill_id"]</code></span></div>
+<div><code>"description": "…"</code><span class="to">Orchestrator's LLM</span><span class="why">decides whether to call you</span></div>
+<div><code>"inputSchema": {…}</code><span class="to">Orchestrator's LLM</span><span class="why">fills in the arguments, or asks the user</span></div>
+<div><code>"x_artifact_ref": "single"</code><span class="to">Orchestrator</span><span class="why">that argument gets a file's artifact id</span></div>
+</div>
+:::
+
+|||
+
+::: card acc tag="agent.py"
+<div class="wl">
+<div><code>_execute(self, params, …)</code><span class="to">Orchestrator</span><span class="why">calls it with the arguments it filled in</span></div>
+<div><code>params["person_name"]</code><span class="to">inputSchema</span><span class="why">the key must match the card</span></div>
+<div><code>get_artifact_file_path(id, …)</code><span class="to">DeepLynx</span><span class="why">turns the artifact id into a local file</span></div>
+<div><code>self.llm_client(context)</code><span class="to">LLM provider</span><span class="why">your call, set by <code>LLM_CONFIG_PROFILE</code></span></div>
+<div><code>send_deeplynx_artifact(…)</code><span class="to">DeepLynx</span><span class="why">stores the file; its id comes back</span></div>
+<div><code>return {"artifact_id": …}</code><span class="to">Chat UI</span><span class="why">shows the file, picked by <code>mime_type</code></span></div>
+</div>
+:::
+::::
+
+::: callout info
+Change a card line and the orchestrator behaves differently. Change a code line and the work changes. Keep the two in step.
+:::
+
+Note: Walk the left card top to bottom, then the right. The point: name, id, description and inputSchema are all read by the platform, not by your code. The keys in params must match the inputSchema properties. This slide and "Two files, two moments" cover the same idea from two angles; keep whichever works better.
+
+<style>
+.wl { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.wl > div { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; padding: 6px 12px; border-left: 4px solid var(--orange); background: var(--panel); border-radius: 6px; }
+.wl > div > code { grid-column: 1 / -1; font-size: 19px; }
+.wl code { font-size: 17px; }
+.wl .to { font-family: var(--display); font-weight: 700; color: var(--navy); font-size: 17px; white-space: nowrap; }
+.wl .to::before { content: "→ "; color: var(--ink-3); }
+.wl .why { font-size: 16px; color: var(--ink-2, var(--ink-3)); }
+</style>
+
+---
+
+## How the orchestrator picks a skill and its arguments {eyebrow="Your agent and the platform"}
+> Every registered skill is one tool. For each request the LLM reads all of them and chooses.
+
+:::: cols 1fr 1.3fr gap=28px
+::: card tag="Tools it sees · all agents"
+<div class="tl">
+<div class="g">Artifact Debug Agent</div>
+<div class="t hit"><code>create_svg_artifact</code></div>
+<div class="t"><code>convert_svg_to_png</code></div>
+<div class="t"><code>create_json_artifact</code></div>
+<div class="g">Material Data Agent</div>
+<div class="t"><code>list_materials</code> · <code>get_material_data</code> · …</div>
+<div class="g">Corrosion Analysis Agent</div>
+<div class="t"><code>analyze_corrosion</code> · <code>predict_corrosion_rate</code> · …</div>
+<div class="g you">Your agent</div>
+<div class="t you"><code>your_skill_id</code></div>
+</div>
+:::
+
+|||
+
+::: steps
+#### 1. Which skill?
+
+{.small}
+It matches "Create an image of the word INL" to each tool's `description`. "Generate an SVG image artifact containing a user-provided word" fits. The corrosion and material skills do not.
+
+#### 2. How do I use it?
+
+{.small}
+`usage_notes` says when to use it. `inputSchema` lists the arguments: `word` is required, and `width`, `color` and `background_color` are optional.
+
+#### 3. What do I send?
+
+{.small}
+It fills each argument from the prompt, guided by the property names and descriptions:
+
+{.small}
+`{"word": "INL", "background_color": "white", "color": "blue"}`
+:::
+::::
+
+::: callout info
+A required value the user never gave becomes a **form**. An artifact id is taken from the conversation's artifacts. Arguments that break the schema are sent back to the LLM, never to your agent.
+:::
+
+Note: Use the INL prompt, the same one as the earlier slide. The orchestrator is an LLM with a list of tools, one per skill across every registered agent, rebuilt about every minute. It picks by reading descriptions, so a vague description means your skill is not called, or a neighbour's is called instead. usage_notes is the place to say when not to use a skill and which one to prefer. For arguments, it uses only the inputSchema: names, types, enums and descriptions. A required argument the user did not give turns into a form. The agent-level name and description are not in the tool list. After a card change, make up, then wait up to a minute and start a fresh conversation.
+
+<style>
+.tl { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.tl .g { font-family: var(--display); font-weight: 700; color: var(--navy); font-size: 18px; margin-top: 6px; }
+.tl .t { padding: 6px 12px; border-left: 4px solid #9aa8ba; background: var(--panel); border-radius: 6px; font-size: 17px; }
+.tl .t.hit { border-left-color: var(--green); background: #f0f8e6; }
+.tl .t.hit code { font-weight: 700; }
+.tl .g.you { color: var(--orange); }
+.tl .t.you { border-left-color: var(--orange); background: #fef3e6; }
+</style>
+
+---
+
 ## What the platform does for your agent {eyebrow="What you get for free"}
 
 {widths="470px|"}
@@ -334,5 +475,5 @@ Stored in DeepLynx, passed by id.
 ::::
 
 ::: callout good
-Next: the live demo at 9:30.
+Next: the live demo.
 :::
