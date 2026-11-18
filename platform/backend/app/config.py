@@ -188,6 +188,18 @@ class Settings(BaseSettings):
         "mesh-timeout-seconds",
     )
 
+    # Agent state (/v1/agent-state, app/services/agent_state.py). TTL is refreshed on
+    # every write; 24 h matches the SDK's TASK_STORE_TTL_SECONDS, so task state and
+    # the task it resumes expire together.
+    agent_state_ttl_seconds: int = _positive_int(
+        (os.environ.get("AGENT_STATE_TTL_SECONDS") or "").strip() or data.get("agent-state-ttl-seconds", 86400),
+        "agent-state-ttl-seconds",
+    )
+    agent_state_max_bytes: int = _positive_int(
+        (os.environ.get("AGENT_STATE_MAX_BYTES") or "").strip() or data.get("agent-state-max-bytes", 262144),
+        "agent-state-max-bytes",
+    )
+
     # Behavior
     debug: bool = data.get("debug", False)
     auto_approve_steps: bool = data.get("auto-approve-steps", False)
