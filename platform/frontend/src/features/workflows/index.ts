@@ -14,8 +14,8 @@
 // in this folder is internal to it.
 export type { BuilderMode } from "./builderMode";
 export type { InspectedNode } from "./builder/NodeInspector";
-export { WorkflowBuilder } from "./builder/WorkflowBuilder";
-export { WorkflowConsole } from "./console/WorkflowConsole";
+export { LayoutWorkflowBuilder } from "./builder/LayoutWorkflowBuilder";
+export { LayoutWorkflowConsole } from "./console/LayoutWorkflowConsole";
 export { WorkflowHistory } from "./history/WorkflowHistory";
 export type { WorkflowGraphNode, WorkflowGraphWire } from "./graph/WorkflowGraph";
 export type { WorkflowPlan } from "./console/WorkflowPlanner";

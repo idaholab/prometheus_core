@@ -12,8 +12,8 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/features/shell";
-import { WorkflowBuilder } from "@/features/workflows";
-import { WorkflowConsole } from "@/features/workflows";
+import { LayoutWorkflowBuilder } from "@/features/workflows";
+import { LayoutWorkflowConsole } from "@/features/workflows";
 import type { BuilderMode, WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import type { WorkflowPlan } from "@/features/workflows";
 import type { WorkflowTemplate } from "@/features/workflows";
@@ -141,8 +141,8 @@ type BuilderStart = { mode: BuilderMode; isNew: boolean };
 /**
  * Workflows section page: owns the page's data and header, and which view is
  * showing: the Workflow Console, or the Builder opened from its "Modify Plan"
- * (in either mode) or "+ New Workflow". Layout lives in WorkflowConsole and
- * WorkflowBuilder.
+ * (in either mode) or "+ New Workflow". Layout lives in LayoutWorkflowConsole and
+ * LayoutWorkflowBuilder.
  *
  * Until the router lands (RT-1), the Builder is a view here rather than its
  * own route. ProjectView remounts this page on every sidebar click, so
@@ -170,7 +170,7 @@ function ConsoleView({
 }) {
   usePageHeader({ title: "Workflow Console" });
   return (
-    <WorkflowConsole
+    <LayoutWorkflowConsole
       templates={TEMPLATES}
       selectedId={SELECTED_TEMPLATE_ID}
       plan={EXAMPLE_PLAN}
@@ -192,7 +192,7 @@ function BuilderView({ start }: { start: BuilderStart }) {
     if (next === "run") setUnsaved(false);
   };
   return (
-    <WorkflowBuilder
+    <LayoutWorkflowBuilder
       // Placeholder name until naming a new workflow is designed. D.3 keeps the template's.
       name={SELECTED_TEMPLATE_NAME}
       mode={mode}
