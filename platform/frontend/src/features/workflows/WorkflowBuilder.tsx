@@ -21,6 +21,7 @@ import { NodeInspector, type InspectedNode } from "./NodeInspector";
 import { SkillLibrary, type SkillGroup } from "./SkillLibrary";
 import { SwitchToRunDialog } from "./SwitchToRunDialog";
 import { TweakStepInspector, type TweakedStep } from "./TweakStepInspector";
+import type { WorkflowVersionDetail } from "./VersionDetail";
 import type { WorkflowVersion } from "./VersionItem";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 import { WorkflowHistory } from "./WorkflowHistory";
@@ -40,6 +41,8 @@ interface WorkflowBuilderProps {
   skillGroups: SkillGroup[];
   /** The template's versions, newest first, listed on the History tab. */
   versions: WorkflowVersion[];
+  /** Details for the versions that have them, shown for the selected one. */
+  versionDetails: WorkflowVersionDetail[];
   /** The workflow's graph, drawn on the canvas. */
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
@@ -109,6 +112,7 @@ export function WorkflowBuilder({
   nextVersion,
   skillGroups,
   versions,
+  versionDetails,
   nodes,
   wires,
   inspected,
@@ -172,7 +176,11 @@ export function WorkflowBuilder({
 
       {tab === "history" ? (
         <div id={panelId} role="tabpanel" aria-label="History" className="flex flex-1 flex-col lg:min-h-0">
-          <WorkflowHistory versions={versions} selectedId={selectedVersionId} />
+          <WorkflowHistory
+            versions={versions}
+            selectedId={selectedVersionId}
+            detail={versionDetails.find((d) => d.id === selectedVersionId)}
+          />
         </div>
       ) : (
         <div id={panelId} role="tabpanel" aria-label="Canvas" className="flex flex-1 flex-col lg:min-h-0">

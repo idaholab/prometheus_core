@@ -38,6 +38,7 @@ import {
   INVALID_WIRES,
   SKILL_GROUPS,
   TWEAKED_STEP,
+  VERSION_DETAILS,
   WORKFLOW_VERSIONS,
 } from "@/features/workflows";
 
@@ -101,6 +102,7 @@ export function BuilderStatesHarness() {
         nextVersion="v1.3.0"
         skillGroups={SKILL_GROUPS}
         versions={WORKFLOW_VERSIONS}
+        versionDetails={VERSION_DETAILS}
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}

@@ -23,6 +23,7 @@ import {
   SKILL_GROUPS,
   TWEAKED_STEP,
   UNSAVED_CHANGES,
+  VERSION_DETAILS,
   WORKFLOW_VERSIONS,
 } from "./builderPlaceholders.ts";
 import { WorkflowBuilder } from "./WorkflowBuilder.tsx";
@@ -59,6 +60,7 @@ function Builder({ initial, unsavedChanges }: { initial: BuilderMode; unsavedCha
       nextVersion="v1.3.0"
       skillGroups={SKILL_GROUPS}
       versions={WORKFLOW_VERSIONS}
+      versionDetails={VERSION_DETAILS}
       nodes={mode === "run" ? RUN_NODES : BUILDER_NODES}
       wires={BUILDER_WIRES}
       inspected={INSPECTED_NODE}
@@ -202,6 +204,8 @@ test("the History tab shows the version list and hides the commit buttons and th
     "v1.0.0",
   ]);
   expect(within(list).getByRole("article", { name: "v1.2.0" })).toHaveAttribute("aria-current", "true");
+  const details = screen.getByRole("region", { name: "Version details" });
+  expect(within(details).getByRole("heading", { level: 2, name: "v1.2.0" })).toBeInTheDocument();
   expect(screen.queryByRole("group", { name: "Workflow actions" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Saving creates v1\.3\.0/)).not.toBeInTheDocument();
   expect(screen.queryByRole("region", { name: "Canvas" })).not.toBeInTheDocument();

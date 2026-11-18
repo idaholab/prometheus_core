@@ -11,23 +11,25 @@
 // SPDX-License-Identifier: MIT
 
 import { SectionLabel } from "@/components/ui/SectionLabel";
+import { VersionDetail, type WorkflowVersionDetail } from "./VersionDetail";
 import { VersionItem, type WorkflowVersion } from "./VersionItem";
 
 interface WorkflowHistoryProps {
   /** Newest first. */
   versions: WorkflowVersion[];
   selectedId?: string;
+  /** The selected version's details, or none to leave the pane empty. */
+  detail?: WorkflowVersionDetail;
 }
 
 /**
  * The Builder's History tab (Figma PPLT-409 D.2c, keeping D.8's layout): one
  * panel holding the version list and the selected version's details. Side by
  * side from 1024px, each pane scrolling on its own; stacked below that, with
- * the Builder scrolling. The details pane is empty until PPLT-233 fills it,
- * and clicking a version does nothing until PPLT-234. Display only;
- * WorkflowBuilder supplies the data.
+ * the Builder scrolling. Clicking a version does nothing until PPLT-234.
+ * Display only; WorkflowBuilder supplies the data.
  */
-export function WorkflowHistory({ versions, selectedId }: WorkflowHistoryProps) {
+export function WorkflowHistory({ versions, selectedId, detail }: WorkflowHistoryProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-col p-6 lg:min-h-0">
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-base-content/10 lg:flex-row lg:overflow-hidden">
@@ -48,7 +50,9 @@ export function WorkflowHistory({ versions, selectedId }: WorkflowHistoryProps) 
         <section
           aria-label="Version details"
           className="flex min-h-48 min-w-0 flex-1 flex-col border-t border-base-content/10 p-6 lg:overflow-y-auto lg:border-t-0"
-        />
+        >
+          {detail && <VersionDetail detail={detail} />}
+        </section>
       </div>
     </div>
   );

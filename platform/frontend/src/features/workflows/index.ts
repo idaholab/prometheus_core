@@ -20,5 +20,6 @@ export { WorkflowHistory } from "./WorkflowHistory";
 export type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 export type { WorkflowPlan } from "./WorkflowPlanner";
 export type { WorkflowTemplate } from "./WorkflowTemplateCard";
-export { BUILDER_NODES, BUILDER_WIRES, DRAGGING_NODES, INSERT_NODES, INSERT_WIRES, INSPECTED_NODE, INVALID_ERROR, INVALID_NODES, INVALID_WIRES, RUN_NODES, SKILL_GROUPS, TWEAKED_STEP, UNSAVED_CHANGES, WORKFLOW_VERSIONS } from "./builderPlaceholders";
+export { BUILDER_NODES, BUILDER_WIRES, DRAGGING_NODES, INSERT_NODES, INSERT_WIRES, INSPECTED_NODE, INVALID_ERROR, INVALID_NODES, INVALID_WIRES, RUN_NODES, SKILL_GROUPS, TWEAKED_STEP, UNSAVED_CHANGES, VERSION_DETAILS, WORKFLOW_VERSIONS } from "./builderPlaceholders";
+export type { WorkflowVersionDetail } from "./VersionDetail";
 export type { WorkflowVersion } from "./VersionItem";

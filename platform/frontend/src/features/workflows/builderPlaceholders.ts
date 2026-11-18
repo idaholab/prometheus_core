@@ -16,6 +16,7 @@
 import type { InspectedNode } from "./NodeInspector";
 import type { SkillGroup } from "./SkillLibrary";
 import type { TweakedStep } from "./TweakStepInspector";
+import type { WorkflowVersionDetail } from "./VersionDetail";
 import type { WorkflowVersion } from "./VersionItem";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
 
@@ -151,6 +152,32 @@ export const WORKFLOW_VERSIONS: WorkflowVersion[] = [
   { id: "v1.2.0", version: "v1.2.0", summary: "+ QA Gate after analyses", date: "2 days ago", author: "V. Kerimov", latest: true },
   { id: "v1.1.0", version: "v1.1.0", summary: "Swapped Thermal agent v1.8→v2.0", date: "Oct 1", author: "Dr. Halsey" },
   { id: "v1.0.0", version: "v1.0.0", summary: "Initial template", date: "Sep 12", author: "platform-team" },
+];
+
+// Placeholder details for the latest version, v1.2.0, from Figma D.8 (D.2c).
+// The older versions have none yet, which is fine until selecting one works (PPLT-234).
+export const VERSION_DETAILS: WorkflowVersionDetail[] = [
+  {
+    id: "v1.2.0",
+    version: "v1.2.0",
+    workflowId: "comprehensive_material_analysis",
+    derivedFrom: "v1.1.0",
+    changes: [
+      { kind: "added", text: "Added QA Gate checkpoint after the parallel analyses" },
+      { kind: "changed", text: "SME Review moved below the new QA Gate" },
+    ],
+    invalidated:
+      "3 cached runs of 'Synthesize Report' invalidated — downstream of the new checkpoint. Re-run required for provenance.",
+    stats: [
+      { label: "Total runs", value: "12", detail: "since 2 days ago" },
+      { label: "Last run", value: "4h ago", detail: "Thermal Analysis RC-7" },
+      { label: "Status", value: "Active", detail: "current latest" },
+    ],
+    runIn: [
+      { project: "MARVEL Reactor Project", runs: "9 runs" },
+      { project: "Fuel Assembly QA — RC-7", runs: "3 runs" },
+    ],
+  },
 ];
 
 // The dragging-skill state from Figma D.4, at 100% from the canvas's top left:

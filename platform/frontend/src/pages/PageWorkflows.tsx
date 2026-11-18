@@ -25,6 +25,7 @@ import {
   SKILL_GROUPS,
   TWEAKED_STEP,
   UNSAVED_CHANGES,
+  VERSION_DETAILS,
   WORKFLOW_VERSIONS,
 } from "@/features/workflows";
 
@@ -201,6 +202,7 @@ function BuilderView({ start }: { start: BuilderStart }) {
       nextVersion={NEXT_TEMPLATE_VERSION}
       skillGroups={SKILL_GROUPS}
       versions={WORKFLOW_VERSIONS}
+      versionDetails={VERSION_DETAILS}
       // Selection isn't interactive yet, so each mode shows its frame's
       // selected node: Corrosion changing this run (D.2a), Radiation Damage
       // changing the template (D.2b).
