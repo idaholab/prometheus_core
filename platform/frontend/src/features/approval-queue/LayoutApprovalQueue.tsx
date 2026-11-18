@@ -29,7 +29,7 @@ interface ApprovalQueueProps {
  * own; stacked below that, with the page scrolling. Display only;
  * PageApprovalQueue supplies the data.
  */
-export function ApprovalQueue({ counters, checkpoints, selectedId }: ApprovalQueueProps) {
+export function LayoutApprovalQueue({ counters, checkpoints, selectedId }: ApprovalQueueProps) {
   const selected = checkpoints.find((c) => c.id === selectedId);
 
   return (
