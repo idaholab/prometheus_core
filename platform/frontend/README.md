@@ -94,7 +94,7 @@ npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make te
 make down-e2e            # in platform/: stop it and delete its data
 ```
 
-`make up-e2e` needs a `platform/.env` with an LLM profile and its key, as every stack does; on the first run it creates `.env` and asks for them. It needs nothing for DeepLynx: the stack sets made-up DeepLynx credentials of its own, because every agent refuses to start without some, and the tests never reach DeepLynx. Your real `DEEPLYNX_*` values in `.env` don't reach this stack.
+`make up-e2e` needs no LLM key and nothing for DeepLynx. The stack sets a made-up LLM profile and key and made-up DeepLynx credentials of its own, because the stack won't start without a profile and every agent refuses to start without DeepLynx credentials, and the tests never send a chat turn or reach DeepLynx. Your real `LLM_*`, `EMBEDDING_API_KEY` and `DEEPLYNX_*` values in `platform/.env` don't reach this stack. On a fresh clone it creates `.env` with its secrets and asks only whether to build the SDK image locally. It saves no LLM profile and no DeepLynx answer, so your first `make up` still asks for those.
 
 The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does (through the form) and `e2e/full/sign-in-api.spec.ts` does (through the API, including a wrong password and a stack that already has its admin).
 

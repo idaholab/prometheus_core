@@ -169,11 +169,25 @@ def test_up_e2e_tells_the_script_the_stack_runs_no_deeplynx(platform):
 
 def test_up_e2e_neither_asks_about_nor_saves_local_deeplynx(real_platform):
     """With the real script: only LOCAL_SDK is left to ask, and no LOCAL_DEEPLYNX line decides a later `make up`."""
-    result = make_real(real_platform, "up-e2e", LLM_CONFIG_PROFILE="ollama")
+    result = make_real(real_platform, "up-e2e")
 
     assert "Not asked (no terminal): LOCAL_SDK stay false" in result.stdout, result.stdout + result.stderr
     lines = (real_platform / ".env").read_text().splitlines()
     assert not any(line.startswith("LOCAL_DEEPLYNX=") for line in lines)
+
+
+def test_up_e2e_needs_no_llm_profile_and_saves_none(real_platform):
+    """A fresh clone's `make up-e2e` starts without an LLM key, and leaves .env for `make up` to ask."""
+    result = make_real(real_platform, "up-e2e")
+
+    assert result.returncode == 0, result.stderr
+    assert "LLM_CONFIG_PROFILE is empty" not in result.stderr
+    lines = (real_platform / ".env").read_text().splitlines()
+    written = dict(line.split("=", 1) for line in lines if "=" in line and line[0] != "#")
+    assert written["LLM_CONFIG_PROFILE"] == "" and written["LLM_API_KEY"] == ""
+
+    later = make_real(real_platform, "up")
+    assert later.returncode != 0 and "LLM_CONFIG_PROFILE is empty" in later.stderr
 
 
 def test_a_missing_env_is_announced_once_before_make_looks_for_it(platform):

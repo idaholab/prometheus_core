@@ -473,19 +473,27 @@ down: ##@ Stop all services
 # DeepLynx, so the stack sets made-up ones (a command-line value beats .env), and
 # blanks the JWT token, which the check refuses to combine with a key. A
 # developer's real DeepLynx credentials stay out of this stack.
+# The same for the LLM: compose needs a profile, but a model is only called
+# while handling a chat turn, which the tests don't send. So the stack sets a
+# profile with a made-up key, and blanks a custom LLM_CONFIG_FILE (which would
+# replace the profile) and the embedding key. A developer's real LLM key stays out
+# of this stack, and a fresh clone needs none.
 E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
 	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
 	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
 	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
 	DEEPLYNX_ORG_ID=1 DEEPLYNX_PROJECT_ID=1 \
+	LLM_CONFIG_PROFILE=anthropic LLM_CONFIG_FILE= LLM_API_KEY=e2e-not-real EMBEDDING_API_KEY= \
 	REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
 
 # What the .env rule at the top passes to init_env.py when the goal is up-e2e
 # (E2E_STACK only reaches the make that up-e2e starts, after .env is ready). The
 # stack never runs DeepLynx, so it doesn't ask whether to. A variable set in the
 # script's environment is neither asked about nor saved, so a later `make up`
-# still asks.
-E2E_INIT_ENV := LOCAL_DEEPLYNX=false
+# still asks. The stack brings its own LLM profile and key, so the script doesn't
+# ask for, save or require one either (INIT_ENV_SKIP_LLM): a placeholder key typed
+# here would end up in .env and break chat on the next `make up`.
+E2E_INIT_ENV := LOCAL_DEEPLYNX=false INIT_ENV_SKIP_LLM=true
 
 up-e2e: ##@ Start the e2e stack for the frontend's full-stack tests (nginx on http://localhost:8090), beside any dev stack
 	$(MAKE) --no-print-directory up $(E2E_STACK) ENV_READY=true

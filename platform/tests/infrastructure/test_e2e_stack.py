@@ -10,13 +10,13 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""The e2e stack (`make up-e2e`) gets DeepLynx settings every SDK agent accepts at startup.
+"""The e2e stack (`make up-e2e`) gets DeepLynx and LLM settings every SDK agent accepts at startup.
 
-.env.example leaves the DEEPLYNX_* credentials blank, and an agent exits at startup
-without them. The stack sets made-up ones in the Makefile's E2E_STACK, so a fresh
-clone's `make up-e2e` comes up. These tests apply E2E_STACK to a Makefile next to a
-copy of .env.example, as `up-e2e` does, and run the SDK's own startup check on what
-a recipe then sees. Nothing here needs Docker.
+.env.example leaves the DEEPLYNX_* credentials and the LLM profile blank, and an agent
+can't start without them. The stack sets made-up ones in the Makefile's E2E_STACK, so a
+fresh clone's `make up-e2e` comes up. These tests apply E2E_STACK to a Makefile next to
+a copy of .env.example, as `up-e2e` does, and run the SDK's own checks on what a recipe
+then sees. Nothing here needs Docker.
 """
 
 import os
@@ -42,7 +42,8 @@ show-env:
 
 def clean_env() -> dict[str, str]:
     # Nothing from the developer's shell: DEEPLYNX_*, LOCAL_*, MAKE* or a compose setting
-    return {k: v for k, v in os.environ.items() if not k.startswith(("DEEPLYNX_", "LOCAL_", "MAKE", "COMPOSE_"))}
+    prefixes = ("DEEPLYNX_", "LLM_", "EMBEDDING_", "LOCAL_", "MAKE", "COMPOSE_")
+    return {k: v for k, v in os.environ.items() if not k.startswith(prefixes)}
 
 
 def make(root: Path, *args: str) -> str:
@@ -128,3 +129,30 @@ def test_the_e2e_stack_does_not_read_a_developers_real_deeplynx_credentials(plat
     env_file.write_text(env_file.read_text().replace("DEEPLYNX_KEY=\n", "DEEPLYNX_KEY=my-real-key\n"))
     assert recipe_env(platform).get("DEEPLYNX_KEY") == "my-real-key"
     assert recipe_env(platform, *stack_args(platform)).get("DEEPLYNX_KEY") != "my-real-key"
+
+
+LLM = ("LLM_CONFIG_PROFILE", "LLM_CONFIG_FILE", "LLM_API_KEY", "EMBEDDING_API_KEY")
+
+
+def test_up_e2e_gives_the_agents_an_llm_profile_the_sdk_loads(platform):
+    """A fresh clone's blank profile is replaced by one the SDK's LLM config accepts, with its key."""
+    from prometheus_api.llm_client.config import LLMConfig
+
+    assert not recipe_env(platform).get("LLM_CONFIG_PROFILE"), "the .env copy should leave the profile blank"
+    env = recipe_env(platform, *stack_args(platform))
+    assert env["LLM_CONFIG_PROFILE"] and env["LLM_API_KEY"]
+    config = LLMConfig.from_env(env={name: env.get(name, "") for name in LLM})
+    assert config.config_file.stem == env["LLM_CONFIG_PROFILE"]
+
+
+@pytest.mark.parametrize(
+    "real",
+    ["LLM_API_KEY=sk-my-real-key", "EMBEDDING_API_KEY=my-real-embedding-key", "LLM_CONFIG_FILE=/my/custom.yaml"],
+)
+def test_the_e2e_stack_does_not_read_a_developers_real_llm_settings(platform, real):
+    """A real key, or a custom config that would replace the stack's profile, stays out of the stack."""
+    name, value = real.split("=", 1)
+    env_file = platform / ".env"
+    env_file.write_text(env_file.read_text().replace(f"\n{name}=\n", f"\n{real}\n", 1))
+    assert recipe_env(platform).get(name) == value
+    assert recipe_env(platform, *stack_args(platform)).get(name) != value
