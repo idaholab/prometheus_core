@@ -1,4 +1,4 @@
 services:
   client-agent:
     ports:
-      - "${CLIENT_AGENT_PORT:-8001}:8000"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${CLIENT_AGENT_PORT:-8001}:8000"

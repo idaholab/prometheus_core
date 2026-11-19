@@ -20,7 +20,7 @@
 NO_ENV_GOALS := help generate clean-generated regenerate test-static check-markings \
 	check-prerequisites base-image cluster-up cluster-down cluster-reset \
 	react-dev react-build react-check react-test-e2e \
-	down down-v logs ps clear-agent-registry clobber clear-admin-users \
+	down down-v down-e2e logs ps clear-agent-registry clobber clear-admin-users \
 	check test-system test-integration test-infra
 #
 # `make -n` (dry run) leaves .env alone: Make would run the rule anyway, since it
@@ -32,14 +32,16 @@ NO_ENV_GOALS := help generate clean-generated regenerate test-static check-marki
 # assignments: only its first % is a wildcard.)
 INIT_ENV_ON_DRY_RUN ?= false
 DRY_RUN := $(strip $(foreach w,$(filter-out --% -O% -I%,$(MAKEFLAGS)),$(if $(findstring =,$(w)),,$(findstring n,$(w)))))
-NEEDS_ENV := $(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help))
+# ENV_READY=true: an outer make (up-e2e) already prepared .env, so only read it
+ENV_READY ?= false
+NEEDS_ENV := $(if $(filter true,$(ENV_READY)),,$(filter-out $(NO_ENV_GOALS),$(or $(MAKECMDGOALS),help)))
 ifneq ($(and $(NEEDS_ENV),$(if $(DRY_RUN),$(filter true,$(INIT_ENV_ON_DRY_RUN)),x)),)
 ifeq ($(MAKE_RESTARTS),)
 # Without this, Ctrl-C while the script runs makes Make delete .env, with the
 # secrets and answers already saved in it.
 .PRECIOUS: .env
 .env: FORCE
-	@python3 scripts/init_env.py
+	@$(if $(filter up-e2e,$(MAKECMDGOALS)),$(E2E_INIT_ENV) )python3 scripts/init_env.py
 # Make 3.81 (macOS) warns "No such file or directory" for the include below
 # before it runs the rule above. It can't be silenced (-include would also hide
 # a failing script), so say first that it is expected.
@@ -284,7 +286,7 @@ PREREQUISITE_TARGETS := \
 
 $(PREREQUISITE_TARGETS): check-prerequisites
 
-.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-agent-registry deeplynx-setup clear-admin-users clobber help
+.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg up-e2e down-e2e ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-agent-registry deeplynx-setup clear-admin-users clobber help
 
 FORCE:
 
@@ -457,6 +459,50 @@ clobber: ##@ Stop services and delete the DB and Valkey volumes (users, keys, hi
 down: ##@ Stop all services
 	$(RM_FRONTEND_DEV)
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down
+
+# The e2e stack: the platform for the frontend's full-stack tests
+# (frontend/e2e/full/), served by nginx (PROFILE=prod). It's its own compose
+# project on its own host ports, so it runs beside a dev stack without touching
+# it, and it skips DeepLynx and the debug and optional agents. Those agent
+# settings change which agents `generate` lists, so the stack gets its own
+# generated agents file: a dev stack in the same checkout keeps
+# docker-compose.agents.yml, with its debug agents. up-e2e prepares .env itself,
+# so the make it starts only reads it (ENV_READY=true).
+# Every SDK agent checks at startup that DeepLynx has credentials and a project,
+# and exits if not, but .env.example leaves them blank. The tests never reach
+# DeepLynx, so the stack sets made-up ones (a command-line value beats .env), and
+# blanks the JWT token, which the check refuses to combine with a key. A
+# developer's real DeepLynx credentials stay out of this stack.
+# The same for the LLM: compose needs a profile, but a model is only called
+# while handling a chat turn, which the tests don't send. So the stack sets a
+# profile with a made-up key, and blanks a custom LLM_CONFIG_FILE (which would
+# replace the profile) and the embedding key. A developer's real LLM key stays out
+# of this stack, and a fresh clone needs none.
+# Its ports are on loopback only (PUBLISH_ADDR): its admin, e2e-admin, has the
+# password in the repo, and Docker Engine's port rules bypass ufw and firewalld,
+# so on 0.0.0.0 anyone on the network could sign in as it.
+E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
+	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
+	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
+	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
+	DEEPLYNX_ORG_ID=1 DEEPLYNX_PROJECT_ID=1 \
+	LLM_CONFIG_PROFILE=anthropic LLM_CONFIG_FILE= LLM_API_KEY=e2e-not-real EMBEDDING_API_KEY= \
+	PUBLISH_ADDR=127.0.0.1 REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
+
+# What the .env rule at the top passes to init_env.py when the goal is up-e2e
+# (E2E_STACK only reaches the make that up-e2e starts, after .env is ready). The
+# stack never runs DeepLynx, so it doesn't ask whether to. A variable set in the
+# script's environment is neither asked about nor saved, so a later `make up`
+# still asks. The stack brings its own LLM profile and key, so the script doesn't
+# ask for, save or require one either (INIT_ENV_SKIP_LLM): a placeholder key typed
+# here would end up in .env and break chat on the next `make up`.
+E2E_INIT_ENV := LOCAL_DEEPLYNX=false INIT_ENV_SKIP_LLM=true
+
+up-e2e: ##@ Start the e2e stack for the frontend's full-stack tests (nginx on http://localhost:8090), beside any dev stack
+	$(MAKE) --no-print-directory up $(E2E_STACK) ENV_READY=true
+
+down-e2e: ##@ Stop the e2e stack and delete its data, so the next run starts fresh
+	$(MAKE) --no-print-directory down-v $(E2E_STACK)
 
 down-v: ##@ Stop all services and remove volumes
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down -v

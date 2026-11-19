@@ -21,6 +21,9 @@
    environment if it is set there (as in CI). Otherwise, if the script runs in
    a terminal, offer a profile menu (arrow keys, Enter) and prompt for that
    profile's key. Otherwise exit non-zero. There is no default profile.
+   INIT_ENV_SKIP_LLM=true in the environment skips this step: nothing is asked,
+   saved or required (`make up-e2e` sets it, since its stack brings its own
+   placeholder profile and key).
 4. In a terminal, ask whether to build the base image from ../sdk (LOCAL_SDK)
    and whether to run DeepLynx next to the platform (LOCAL_DEEPLYNX), for each
    that .env has no ``VAR=`` line for. Enter means yes. The answer, yes or no,
@@ -299,6 +302,9 @@ def main() -> int:
             f"Set {' and '.join(f'{v}=true' for v in unasked)} there to build the SDK image locally "
             "or run DeepLynx locally, or run make init-env in a terminal to be asked."
         )
+
+    if os.environ.get("INIT_ENV_SKIP_LLM") == "true":
+        return 0
 
     env = values(text)
     if missing_profile(env) and os.environ.get("LLM_CONFIG_PROFILE"):

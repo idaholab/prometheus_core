@@ -83,3 +83,19 @@ End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 
 Playwright builds and starts the app itself on every run, so the tests always check your current code. If something is already using port 5160, the run fails instead of testing it; stop that server first. When a test fails it keeps a trace and a screenshot in `test-results/`; open a trace with `npx playwright show-trace <path>/trace.zip`. In CI, the `platform: frontend e2e` job uploads them with the HTML report as the `frontend-e2e-report` artifact.
+
+#### Against the full platform
+
+The tests in `e2e/full/` run against the e2e stack: the whole platform, served by nginx, with nothing faked. They check what the faked tests can't: nginx's `/api` proxy, the real backend and its database.
+
+```bash
+make up-e2e              # in platform/: start the e2e stack, nginx on http://localhost:8090
+npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make test-e2e-full)
+make down-e2e            # in platform/: stop it and delete its data
+```
+
+`make up-e2e` needs no LLM key and nothing for DeepLynx. The stack sets a made-up LLM profile and key and made-up DeepLynx credentials of its own, because the stack won't start without a profile and every agent refuses to start without DeepLynx credentials, and the tests never send a chat turn or reach DeepLynx. Your real `LLM_*`, `EMBEDDING_API_KEY` and `DEEPLYNX_*` values in `platform/.env` don't reach this stack. On a fresh clone it creates `.env` with its secrets and asks only whether to build the SDK image locally. It saves no LLM profile and no DeepLynx answer, so your first `make up` still asks for those.
+
+The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Its ports are on `127.0.0.1` only, so other machines can't reach it, because its test admin's password is in the repo. To do the same for your dev stack, set `PUBLISH_ADDR=127.0.0.1` in `platform/.env`. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does (through the form) and `e2e/full/sign-in-api.spec.ts` does (through the API, including a wrong password and a stack that already has its admin).
+
+Import `test` and `expect` from `e2e/full/fixtures.ts`. Nothing is faked there, but a test fails if the page throws or an `/api` call fails or is refused (any status of 400 or more, except the answers the fixture expects). Each run writes to its own folder under `test-results-full/` (set `E2E_RUN_ID` to name it), so two runs at once don't delete each other's files; a failed test keeps its trace in that folder, and `rm -rf test-results-full` clears the old ones. CI's `platform: frontend e2e full` job uploads them as `frontend-e2e-full-report`. That job reports on every pull request but isn't a required check yet.

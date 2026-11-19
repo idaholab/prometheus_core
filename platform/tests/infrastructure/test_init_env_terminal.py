@@ -215,3 +215,18 @@ def test_end_of_input_stops_cleanly_without_a_traceback(platform):
 
     assert term.finish() == 130, term.text
     assert "Traceback" not in term.text
+
+
+def test_up_e2es_first_run_in_a_terminal_asks_only_about_the_sdk(platform):
+    """What the .env rule passes the script under `make up-e2e`: no DeepLynx question, no LLM menu or key."""
+    term = Terminal(platform, LOCAL_DEEPLYNX="false", INIT_ENV_SKIP_LLM="true")
+    term.read_until("(LOCAL_SDK)?")
+    term.send(b"\r")
+
+    assert term.finish() == 0, term.text
+    assert "LOCAL_DEEPLYNX)?" not in term.text
+    assert "Choose an LLM profile" not in term.text and "(input hidden)" not in term.text
+    written = env_lines(platform)
+    assert written["LOCAL_SDK"] == "true"
+    assert "LOCAL_DEEPLYNX" not in written
+    assert written["LLM_CONFIG_PROFILE"] == ""
