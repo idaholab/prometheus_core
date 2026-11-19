@@ -192,6 +192,11 @@ export const api = {
     return `${API_BASE}/artifacts/${encodeURIComponent(artifactId)}/content`;
   },
 
+  /** The baked HTML report a producer attached to an artifact (see `has_report`). */
+  artifactReportUrl(artifactId: string): string {
+    return `${API_BASE}/artifacts/${encodeURIComponent(artifactId)}/report`;
+  },
+
   // --- admin: users (require_admin server-side; 403 for non-admins) ---
   listAdminUsers(): Promise<AdminUser[]> {
     return request<AdminUser[]>("/admin/users");

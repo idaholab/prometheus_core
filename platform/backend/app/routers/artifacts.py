@@ -36,14 +36,19 @@ from typing import Any, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from starlette.background import BackgroundTask
 
 from app import uri_resolver
 from app.api_responses import AUTH_RESPONSES
 from app.openapi import TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
-from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
+from app.services.artifacts import (
+    artifact_download_payload,
+    artifact_identity,
+    classify_render_hint,
+    report_file_id,
+)
 from app.services.mesh.service import mesh_cache_root
 from app.sessions import SessionState, get_store
 
@@ -158,6 +163,98 @@ async def get_artifact_content(
     raise HTTPException(
         status_code=http_status.HTTP_404_NOT_FOUND,
         detail=f"Artifact {artifact_id!r} has no downloadable content.",
+    )
+
+
+# The report runs its own scripts (Plotly figures), so it is served as an opaque
+# origin: no access to the platform's cookies, storage or DOM, even when opened
+# directly in a tab rather than through the viewer's sandboxed iframe. Popups it
+# opens stay sandboxed too, and it may not make network requests of its own.
+_REPORT_CSP = "sandbox allow-scripts allow-popups; connect-src 'none'"
+# A baked notebook with inline Plotly is a few MB; refuse anything far larger.
+_MAX_REPORT_BYTES = 64 * 1024 * 1024
+# Shown inside the viewer's frame when there is no report to serve: the frame is the
+# only request for the report, so the failure has to be a page it can display.
+_REPORT_UNAVAILABLE_HTML = (
+    '<!doctype html><html><head><meta charset="utf-8"><title>Report unavailable</title></head>'
+    '<body style="font-family:system-ui,sans-serif;font-size:14px;margin:16px;color:#555">'
+    "<p>The report could not be loaded. Download the notebook to view the results.</p>"
+    "</body></html>"
+)
+_REPORT_HEADERS = {
+    "Content-Security-Policy": _REPORT_CSP,
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+def _report_unavailable(status_code: int) -> HTMLResponse:
+    """The fixed notice the viewer's frame shows instead of the report (no URI echoed)."""
+    return HTMLResponse(
+        _REPORT_UNAVAILABLE_HTML,
+        status_code=status_code,
+        headers={**_REPORT_HEADERS, "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/artifacts/{artifact_id}/report")
+async def get_artifact_report(
+    artifact_id: str,
+    request: Request,
+    claims: TokenClaims = Depends(current_claims),
+) -> Response:
+    """The baked HTML report a producer attached to an artifact (``metadata.report``).
+
+    A UQ notebook artifact carries ``metadata.report = {"uri": "deeplynx://.../items/{id}"}``
+    pointing at the static HTML export of the notebook, stored in DeepLynx next to the
+    notebook itself. Only ``deeplynx://`` is served, and the file id comes from the
+    URI's item id (``services.artifacts.report_file_id``), so no service shares a disk
+    with the agent and the producer cannot point the backend at another address.
+
+    The viewer's frame is the only request for the report, so a missing or unreadable
+    report answers ``404``/``502`` with a short HTML notice the frame can show.
+    """
+    store = get_store(request)
+    session = await store.get_or_create(claims.sid)
+
+    artifact = _find_artifact(session, artifact_id)
+    file_id = report_file_id(artifact) if artifact is not None else None
+    if artifact is None or file_id is None:
+        return _report_unavailable(http_status.HTTP_404_NOT_FOUND)
+    uri = str(artifact["metadata"]["report"]["uri"])
+
+    name = f"{Path(str(artifact.get('name') or 'report')).stem}.html"
+    # Resolve as its own artifact: the report's file id (from its URI), not the notebook's.
+    report_artifact = {"name": name, "metadata": {"deeplynx_file_id": file_id}}
+    cache_dir = Path(tempfile.mkdtemp(prefix="chat-report-"))
+    try:
+        local_path = await uri_resolver.resolve_to_local_path(
+            uri,
+            cache_dir=cache_dir,
+            artifact=report_artifact,
+            artifact_id=f"{artifact_id}-report",
+        )
+        if local_path is None or not local_path.is_file():
+            logger.warning("Report of artifact %r (DeepLynx file %d) could not be resolved", artifact_id, file_id)
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return _report_unavailable(http_status.HTTP_502_BAD_GATEWAY)
+        if local_path.stat().st_size > _MAX_REPORT_BYTES:
+            logger.warning("Report of artifact %r (DeepLynx file %d) exceeds the size cap", artifact_id, file_id)
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return _report_unavailable(http_status.HTTP_502_BAD_GATEWAY)
+    except BaseException:
+        # Clean up on every failure, including a resolver that raises.
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        raise
+    return FileResponse(
+        path=str(local_path),
+        media_type="text/html",
+        headers={
+            **_content_disposition(name, "inline"),
+            **_REPORT_HEADERS,
+            # Per-user (the session's catalog), so never in a shared cache.
+            "Cache-Control": "private, max-age=300",
+        },
+        background=BackgroundTask(shutil.rmtree, str(cache_dir), ignore_errors=True),
     )
 
 
