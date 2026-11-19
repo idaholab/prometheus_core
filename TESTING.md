@@ -15,7 +15,7 @@ without a browser, a container or a network should.
 | Python code that needs a real service: Valkey, Postgres, DeepLynx | **Integration** (pytest, marked `integration`) | `platform/tests/infrastructure/` | `test_integration_*.py` |
 | Frontend logic: stores, parsers, formatters | **Unit** (Vitest, `*.test.ts`, runs in Node) | Next to the file it tests | `features/chat/store/chat.test.ts` |
 | A shared frontend component in `components/ui` | **Component** (Vitest and Testing Library, `*.dom.test.tsx`, runs in jsdom) | Next to the component | `components/ui/FilterChips/FilterChips.dom.test.tsx` |
-| A screen's own behavior: a filter, a form, a dialog | **Component**, of the screen as a whole | Next to the screen's main component | `features/workflows/NodeInspector.dom.test.tsx` |
+| A screen's own behavior: a filter, a form, a dialog | **Component**, of the screen as a whole | Next to the screen's main component | `features/workflows/builder/NodeInspector.dom.test.tsx` |
 | A flow that crosses the frontend and backend: sign-in, a chat reply, opening an artifact | **End-to-end** (Playwright, `*.spec.ts`) | `platform/frontend/e2e/` | `e2e/login.spec.ts` |
 
 End-to-end tests are slow and the hardest to debug, so write one only for a flow
