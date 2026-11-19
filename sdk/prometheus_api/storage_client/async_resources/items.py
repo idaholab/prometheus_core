@@ -16,7 +16,8 @@ import logging
 from typing import AsyncIterator, Dict, List, Optional, Any
 from importlib.metadata import version as pkg_version
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
-from ..models.pagination import Page, PageInfo
+from ..models.pagination import Page
+from ..paging import check_list_filters, check_page_size, parse_paginated
 from .base import AsyncBaseResource
 
 logger = logging.getLogger(__name__)
@@ -89,34 +90,18 @@ class AsyncItemsResource(AsyncBaseResource):
         self, page: int = 1, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
     ) -> Page[Item]:
         """List items with pagination asynchronously."""
-        params = {
-            "page": page,
-            "limit": page_size,
-        }
+        check_list_filters(filters)
+        check_page_size(page_size)
+        params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:
             params.update(filters)
 
-        response = await self._client._request("GET", f"{self._base_path}/records", params=params)
-
-        data = response.json()
-
-        # API returns array directly, not wrapped in object
-        if isinstance(data, list):
-            items = [self._parse_item(item_data) for item_data in data]
-            total_count = len(items) if len(items) < page_size else page * page_size + 1
-        else:
-            items = [self._parse_item(item_data) for item_data in data.get("records", [])]
-            total_count = data.get("total", len(items))
-        page_info = PageInfo(
-            page_number=page,
-            page_size=page_size,
-            total_count=total_count,
-            has_next=page * page_size < total_count,
-            has_previous=page > 1,
+        response = await self._client._request(
+            "GET", f"{self._base_path}/records/paginated", params=params
         )
 
-        return Page(items=items, page_info=page_info)
+        return self._parse_paginated_items(response.json(), page, page_size)
 
     async def iter_all(
         self, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
@@ -128,7 +113,8 @@ class AsyncItemsResource(AsyncBaseResource):
             for item in result.items:
                 yield item
 
-            if not result.page_info.has_next:
+            # An empty page ends paging even if the server claims a next one.
+            if not result.items or not result.page_info.has_next:
                 break
 
             page += 1
@@ -193,6 +179,10 @@ class AsyncItemsResource(AsyncBaseResource):
             )
 
         return await self.get(item_id)
+
+    def _parse_paginated_items(self, data: Any, page: int, page_size: int) -> Page[Item]:
+        """Parse a ``PaginatedResponse<RecordResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse API response data into an Item model."""
