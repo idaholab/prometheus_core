@@ -41,7 +41,7 @@ ifeq ($(MAKE_RESTARTS),)
 # secrets and answers already saved in it.
 .PRECIOUS: .env
 .env: FORCE
-	@python3 scripts/init_env.py
+	@$(if $(filter up-e2e,$(MAKECMDGOALS)),$(E2E_INIT_ENV) )python3 scripts/init_env.py
 # Make 3.81 (macOS) warns "No such file or directory" for the include below
 # before it runs the rule above. It can't be silenced (-include would also hide
 # a failing script), so say first that it is expected.
@@ -479,6 +479,13 @@ E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
 	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
 	DEEPLYNX_ORG_ID=1 DEEPLYNX_PROJECT_ID=1 \
 	REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
+
+# What the .env rule at the top passes to init_env.py when the goal is up-e2e
+# (E2E_STACK only reaches the make that up-e2e starts, after .env is ready). The
+# stack never runs DeepLynx, so it doesn't ask whether to. A variable set in the
+# script's environment is neither asked about nor saved, so a later `make up`
+# still asks.
+E2E_INIT_ENV := LOCAL_DEEPLYNX=false
 
 up-e2e: ##@ Start the e2e stack for the frontend's full-stack tests (nginx on http://localhost:8090), beside any dev stack
 	$(MAKE) --no-print-directory up $(E2E_STACK) ENV_READY=true

@@ -35,6 +35,8 @@ import os, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
 with open(root / "runs.log", "a") as log:
     log.write("ran\\n")
+with open(root / "deeplynx.log", "a") as log:
+    log.write(os.environ.get("LOCAL_DEEPLYNX", "unset") + "\\n")
 env = root / ".env"
 if not env.exists():
     env.write_text("LOCAL_SDK=true\\nLOCAL_DEEPLYNX=true\\n")
@@ -155,6 +157,23 @@ def test_the_real_script_leaves_a_complete_env_for_the_second_run(real_platform)
     assert (real_platform / ".env").read_text() == first
     assert "Not asked" not in second_run.stdout
     assert "Creating .env" not in second_run.stdout
+
+
+def test_up_e2e_tells_the_script_the_stack_runs_no_deeplynx(platform):
+    """The e2e stack never runs DeepLynx, so its .env rule doesn't let the script ask about it."""
+    make(platform, "up-e2e")
+    make(platform, "up")
+    assert runs(platform) == 2, "the make that up-e2e starts must not run the script again"
+    assert (platform / "deeplynx.log").read_text().splitlines() == ["false", "unset"]
+
+
+def test_up_e2e_neither_asks_about_nor_saves_local_deeplynx(real_platform):
+    """With the real script: only LOCAL_SDK is left to ask, and no LOCAL_DEEPLYNX line decides a later `make up`."""
+    result = make_real(real_platform, "up-e2e", LLM_CONFIG_PROFILE="ollama")
+
+    assert "Not asked (no terminal): LOCAL_SDK stay false" in result.stdout, result.stdout + result.stderr
+    lines = (real_platform / ".env").read_text().splitlines()
+    assert not any(line.startswith("LOCAL_DEEPLYNX=") for line in lines)
 
 
 def test_a_missing_env_is_announced_once_before_make_looks_for_it(platform):
