@@ -13,7 +13,7 @@
 import { useId } from "react";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { InspectorField } from "./NodeInspector";
-import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
+import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "@/features/workflows/skillTone";
 
 /** A step as "this run" mode shows it: which agent runs it and the settings a run may change. */
 export interface TweakedStep {

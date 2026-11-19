@@ -13,8 +13,8 @@
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SplitButton } from "@/components/ui/SplitButton";
-import { BUILDER_MODES, type BuilderMode } from "./builderMode";
-import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
+import { BUILDER_MODES, type BuilderMode } from "@/features/workflows/builderMode";
+import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
 
 export interface WorkflowPlan {
   /** Breadcrumb above the graph, e.g. ["Chat", "Workflow Plan", "comprehensive_material_analysis"]. */
