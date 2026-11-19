@@ -65,10 +65,15 @@ def _resolve_default(expr: str, env_vars: dict[str, str]) -> str | None:
     return expr
 
 
-def test_postgres_no_host_port(compose_data):
-    """PostgreSQL should not expose a host port (internal-only access)."""
+def test_postgres_port_is_loopback_only(compose_data):
+    """admin-db holds password hashes, OIDC client secrets, and signing keys --
+    unlike every other published port here, its mapping is hardcoded to
+    127.0.0.1 rather than following PUBLISH_ADDR, so it's never reachable
+    from the network even when PUBLISH_ADDR is unset."""
     svc = compose_data["services"]["admin-db"]
-    assert "ports" not in svc, "admin-db should not expose host ports"
+    ports = svc.get("ports", [])
+    assert len(ports) == 1
+    assert ports[0].startswith("127.0.0.1:")
 
 
 def test_redis_port_mapping(compose_data):
@@ -141,7 +146,12 @@ def test_every_published_port_can_be_kept_to_one_address(project_root):
 @pytest.mark.skipif(shutil.which("docker") is None, reason="needs docker compose")
 @pytest.mark.parametrize("address", ["", "127.0.0.1"])
 def test_compose_publishes_on_publish_addr_or_everywhere(project_root, address):
-    """Blank: no host IP, so every interface (IPv4 and IPv6), as before. Set: that address only."""
+    """Blank: no host IP, so every interface (IPv4 and IPv6), as before. Set: that address only.
+
+    admin-db is the one exception: its port is hardcoded to 127.0.0.1 (see
+    test_postgres_port_is_loopback_only) regardless of PUBLISH_ADDR, since it
+    holds password hashes, OIDC client secrets, and signing keys.
+    """
     files = ["docker-compose.yml", "docker-compose.system-test.yml"]
     # Only what compose needs to render: not the developer's own PUBLISH_ADDR, ports or .env
     env = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", ""), "LLM_CONFIG_PROFILE": "x"}
@@ -161,5 +171,7 @@ def test_compose_publishes_on_publish_addr_or_everywhere(project_root, address):
         for name, svc in json.loads(result.stdout)["services"].items()
         if svc.get("ports")
     }
+    admin_db_ips = published.pop("admin-db", None)
+    assert admin_db_ips == ["127.0.0.1"], admin_db_ips
     assert set(published) == {"redis", "backend", "frontend-dev", "frontend-prod", "client-agent"}
     assert all(ips == [address or None] for ips in published.values()), published
