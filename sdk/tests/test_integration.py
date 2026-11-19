@@ -537,6 +537,41 @@ class TestFileUpload:
                     print(f"Warning: Failed to delete test file {file_id}: {e}")
 
 
+class TestTimeseries:
+    """Query a tabular file through the OLAP route."""
+
+    def test_query_uploaded_csv(self, client, tmp_path):
+        """Covers REQ-003-12: upload a CSV, then read it back with and without options."""
+        csv_file = tmp_path / f"timeseries_{TEST_RUN_ID}.csv"
+        csv_file.write_text("timestamp,power,label\n1,10.5,a\n2,20.25,b\n3,30.0,c\n")
+
+        file_id = None
+        try:
+            file_id = client.files.upload(csv_file, description="Timeseries test file").id
+
+            everything = client.timeseries.query(file_id)
+            assert everything.columns == ["timestamp", "power", "label"]
+            assert everything.data == [[1, 10.5, "a"], [2, 20.25, "b"], [3, 30, "c"]]
+
+            filtered = client.timeseries.query(
+                file_id, sql_query="SELECT power FROM data WHERE power > 15"
+            )
+            assert filtered.columns == ["power"]
+            assert filtered.data == [[20.25], [30]]
+
+            window = client.timeseries.query(file_id, start_row=2, stop_row=3)
+            assert window.data == [[2, 20.25, "b"], [3, 30, "c"]]
+
+            past_end = client.timeseries.query(file_id, start_row=50, stop_row=60)
+            assert past_end.data == []
+
+        finally:
+            # No try/except: a failed delete leaves test data behind and should fail the test.
+            # If an assertion above already failed, pytest shows both errors.
+            if file_id:
+                client.files.delete(file_id)
+
+
 class TestDeeplynxFileSystem:
     def test_moose_integration(self, client, tmp_path):
         """
