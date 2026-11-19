@@ -14,7 +14,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "playground": "vite --open /dev/viewers/",
+    "playground:preview": "vite build -c vite.playground.config.ts && vite preview -c vite.playground.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

@@ -16,7 +16,9 @@
 import type { InspectedNode } from "./NodeInspector";
 import type { SkillGroup } from "./SkillLibrary";
 import type { TweakedStep } from "./TweakStepInspector";
-import type { WorkflowGraphNode, WorkflowGraphWire } from "./WorkflowGraph";
+import type { WorkflowVersionDetail } from "@/features/workflows/history/VersionDetail";
+import type { WorkflowVersion } from "@/features/workflows/history/VersionItem";
+import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
 
 // Placeholder skill library for the Builder, from Figma D.2.
 export const SKILL_GROUPS: SkillGroup[] = [
@@ -143,6 +145,40 @@ export const TWEAKED_STEP: TweakedStep = {
 // Nothing can change the structure yet, so PageWorkflows treats the template
 // opened from "Edit the template" as having these, to show the confirm.
 export const UNSAVED_CHANGES = "1 node added, 2 wires changed";
+
+// Placeholder versions of Comprehensive Material Analysis, newest first, from
+// Figma D.8 (the Builder's History tab in PPLT-409 D.2c).
+export const WORKFLOW_VERSIONS: WorkflowVersion[] = [
+  { id: "v1.2.0", version: "v1.2.0", summary: "+ QA Gate after analyses", date: "2 days ago", author: "V. Kerimov", latest: true },
+  { id: "v1.1.0", version: "v1.1.0", summary: "Swapped Thermal agent v1.8→v2.0", date: "Oct 1", author: "Dr. Halsey" },
+  { id: "v1.0.0", version: "v1.0.0", summary: "Initial template", date: "Sep 12", author: "platform-team" },
+];
+
+// Placeholder details for the latest version, v1.2.0, from Figma D.8 (D.2c).
+// The older versions have none yet, which is fine while only the latest can be selected.
+export const VERSION_DETAILS: WorkflowVersionDetail[] = [
+  {
+    id: "v1.2.0",
+    version: "v1.2.0",
+    workflowId: "comprehensive_material_analysis",
+    derivedFrom: "v1.1.0",
+    changes: [
+      { kind: "added", text: "Added QA Gate checkpoint after the parallel analyses" },
+      { kind: "changed", text: "SME Review moved below the new QA Gate" },
+    ],
+    invalidated:
+      "3 cached runs of 'Synthesize Report' invalidated — downstream of the new checkpoint. Re-run required for provenance.",
+    stats: [
+      { label: "Total runs", value: "12", detail: "since 2 days ago" },
+      { label: "Last run", value: "4h ago", detail: "Thermal Analysis RC-7" },
+      { label: "Status", value: "Active", detail: "current latest" },
+    ],
+    runIn: [
+      { project: "MARVEL Reactor Project", runs: "9 runs" },
+      { project: "Fuel Assembly QA — RC-7", runs: "3 runs" },
+    ],
+  },
+];
 
 // The dragging-skill state from Figma D.4, at 100% from the canvas's top left:
 // Get Material Data on its own, and Radiation Damage as the ghost of a skill

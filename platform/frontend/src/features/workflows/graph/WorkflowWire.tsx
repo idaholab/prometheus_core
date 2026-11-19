@@ -12,7 +12,7 @@
 
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
 import { Plus } from "lucide-react";
-import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
+import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "@/features/workflows/skillTone";
 
 export interface WireData extends Record<string, unknown> {
   dashed?: boolean;

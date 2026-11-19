@@ -28,8 +28,9 @@
  * follows the same convention as the other heavy viewers.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ViewerProps } from "@/features/artifacts/elements";
+import { useTheme, type Theme } from "@/lib/useTheme";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,26 +45,16 @@ type RenderStatus = "idle" | "loading" | "ready" | "error";
 type ViewMode = "diagram" | "code";
 
 // ---------------------------------------------------------------------------
-// Theme detection
+// Theme
 //
-// NOTE: duplicated here from the same pattern used in the pre-DaisyUI-port
-// ThermalAnalysisViewer. Both viewers need mermaid/library-level theme
-// strings ("dark" | "default"), not just DaisyUI classes, since mermaid
-// renders raw SVG with its own internal color config. Worth extracting to a
-// shared `useLibraryTheme()` hook in the viewer toolkit rather than
-// duplicating a third time on the next viewer that needs it.
+// mermaid renders raw SVG with its own colour config, so it needs its own theme
+// name ("dark" | "default"), not DaisyUI classes. It follows the app theme from
+// useTheme, which watches data-theme, so a theme switch redraws the diagram.
 // ---------------------------------------------------------------------------
 
-function detectTheme(): "dark" | "default" {
-  if (typeof document !== "undefined") {
-    const html = document.documentElement;
-    if (html.getAttribute("data-theme") === "dark") return "dark";
-    if (html.classList.contains("dark")) return "dark";
-  }
-  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
-  return "default";
+/** The mermaid theme name for an app theme. */
+function mermaidTheme(theme: Theme): "dark" | "default" {
+  return theme === "dark" ? "dark" : "default";
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +71,8 @@ export function MermaidElement({ element }: ViewerProps) {
   const [copied, setCopied] = useState(false);
   const [downloadError, setDownloadError] = useState("");
 
-  const theme = useMemo(() => detectTheme(), []);
+  const [appTheme] = useTheme();
+  const theme = mermaidTheme(appTheme);
 
   useEffect(() => {
     let cancelled = false;

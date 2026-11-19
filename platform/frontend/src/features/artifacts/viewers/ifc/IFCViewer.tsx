@@ -23,6 +23,7 @@ type Props = {
 
 export type IFCViewerHandles = {
   resetCamera: () => void;
+  setBackground: (rgb: [number, number, number]) => void;
   fitToFrame: () => void;
   setTopView: () => void;
   setFrontView: () => void;
@@ -54,6 +55,7 @@ const IfcViewer = forwardRef<IFCViewerHandles, Props>(({
 
   useImperativeHandle(ref, () => ({
     resetCamera:        () => engineRef.current?.resetCamera(),
+    setBackground:      (rgb) => engineRef.current?.setBackground(rgb),
     fitToFrame:         () => engineRef.current?.fitToFrame(),
     setTopView:         () => engineRef.current?.setTopView(),
     setFrontView:       () => engineRef.current?.setFrontView(),

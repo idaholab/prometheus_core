@@ -1,0 +1,10 @@
+graph TD
+    A[Start] --> B{Material data available?}
+    B -->|Yes| C[Run thermal analysis]
+    B -->|No| D[Fetch material data]
+    D --> C
+    C --> E{Status acceptable?}
+    E -->|Yes| F[Synthesize report]
+    E -->|No| G[Flag for review]
+    G --> F
+    F --> H[Done]

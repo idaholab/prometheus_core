@@ -41,7 +41,7 @@ function featureBoundary(own) {
 }
 
 export default defineConfig([
-  globalIgnores(["dist", "coverage", "public", "test-results", "playwright-report", "blob-report"]),
+  globalIgnores(["dist", "dist-playground", "coverage", "public", "test-results", "playwright-report", "blob-report"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat["recommended-latest"]],

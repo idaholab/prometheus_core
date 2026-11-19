@@ -1,0 +1,20 @@
+{
+  "num_timesteps": 1,
+  "time_values": [
+    0.0
+  ],
+  "nodal_variables": [],
+  "element_variables": [],
+  "global_variables": [],
+  "element_blocks": [],
+  "bounds": [
+    -2.0,
+    2.0,
+    0.0,
+    2.700000047683716,
+    -1.0,
+    1.0
+  ],
+  "num_nodes": 80,
+  "num_elements": 148
+}

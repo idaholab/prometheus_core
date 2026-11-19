@@ -13,7 +13,7 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import type { BuilderMode } from "./builderMode";
+import type { BuilderMode } from "@/features/workflows/builderMode";
 import { WorkflowPlanner, type WorkflowPlan } from "./WorkflowPlanner";
 import { WorkflowTemplateCard, type WorkflowTemplate } from "./WorkflowTemplateCard";
 

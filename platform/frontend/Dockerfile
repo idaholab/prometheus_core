@@ -53,6 +53,9 @@ FROM deps AS build
 # don't invalidate the bundle. Config first, then the sources that change most.
 COPY frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/index.html ./
 COPY frontend/public ./public
+# tsc checks the dev-only viewer playground, whose cases import these samples.
+# The app bundle does not use them, and the prod stage copies only dist/.
+COPY frontend/e2e/samples ./e2e/samples
 COPY frontend/src ./src
 RUN npm run build
 

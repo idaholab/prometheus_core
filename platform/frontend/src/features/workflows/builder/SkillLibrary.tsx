@@ -14,7 +14,7 @@ import { useEffect, useRef } from "react";
 import { GripVertical, Lock } from "lucide-react";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
+import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "@/features/workflows/skillTone";
 
 export interface Skill {
   id: string;

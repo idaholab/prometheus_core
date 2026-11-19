@@ -39,6 +39,7 @@ src/
   components/ui/<Name>/   shared design-system components, one folder each
   lib/        code with no UI that several features use: api/, highlight/, mime, table/, useTheme
   test/       Vitest setup and the tests that check rules across the app
+  dev/        dev-only pages, not in the app build: the viewer playground (see dev/viewer-playground/README.md)
 e2e/          Playwright end-to-end tests, by user flow
 ```
 

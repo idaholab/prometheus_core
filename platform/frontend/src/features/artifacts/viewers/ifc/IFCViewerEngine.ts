@@ -694,6 +694,11 @@ export default class IFCViewerEngine {
 
   resetCamera(): void { this.fitToFrame(); }
 
+  /** Set the canvas background, an `[r, g, b]` triple in 0..1 (as the mesh viewer's setBackground). */
+  setBackground(rgb: [number, number, number]): void {
+    this.world.scene.config.backgroundColor = new THREE.Color(...rgb);
+  }
+
   setTopView(): void {
     const controls = this.world.camera.controls;
     const target   = controls.getTarget(new THREE.Vector3());
