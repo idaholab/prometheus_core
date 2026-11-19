@@ -76,13 +76,22 @@ services:
   # PostgreSQL — persistent store for the backend's admin plane (local users,
   # OIDC provider config, RS256 signing keys).
   admin-db:
-    image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    image: postgres:18.7-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD}
-      POSTGRES_DB: admin
+      POSTGRES_DB: prometheus
+    ports:
+      # Bound to loopback only -- unlike redis below, this DB holds password
+      # hashes, OIDC client secrets, and signing keys, so it must not be
+      # reachable from other devices on the LAN/VPN even with a weak
+      # ADMIN_DB_PASSWORD. For a local pgAdmin/Beekeeper Studio connection only.
+      - "127.0.0.1:${ADMIN_DB_LOCAL_PORT:-5432}:5432"
     volumes:
-      - admin-db-data:/var/lib/postgresql/data
+      # postgres 18+ images expect a single mount at /var/lib/postgresql (not
+      # directly at .../data) and manage their own versioned subdirectory
+      # underneath -- see https://github.com/docker-library/postgres/pull/1259.
+      - admin-db-data:/var/lib/postgresql
     networks:
       - agent-network
     healthcheck:
@@ -176,7 +185,7 @@ services:
       USER_IDENTITY_TTL: ${USER_IDENTITY_TTL:-7200}
       # Admin plane (local users, OIDC provider config, signing keys) --
       # backend-only, never forwarded to agents.
-      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+asyncpg://admin:${ADMIN_DB_PASSWORD}@admin-db:5432/admin}
+      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+asyncpg://admin:${ADMIN_DB_PASSWORD}@admin-db:5432/prometheus}
       ADMIN_DB_ENCRYPTION_KEY: ${ADMIN_DB_ENCRYPTION_KEY:-}
       # Base URL for the OIDC redirect_uri sent to identity providers -- must
       # be the origin the BROWSER actually uses (e.g. the Vite dev server at

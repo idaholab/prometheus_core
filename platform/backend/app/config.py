@@ -192,7 +192,7 @@ class Settings(BaseSettings):
     # Admin plane (local users, OIDC provider config, RS256 signing keys).
     # See app/db/__init__.py. No config.yml equivalent -- infra URL, env-only.
     admin_database_url: str = os.environ.get(
-        "ADMIN_DATABASE_URL", "postgresql+asyncpg://admin:admin@admin-db:5432/admin"
+        "ADMIN_DATABASE_URL", "postgresql+asyncpg://admin:admin@admin-db:5432/prometheus"
     )
     # Encrypts OidcProvider.client_secret and SigningKey.private_key at rest
     # (Fernet). Required to actually store/read those tables -- see app/crypto.py.
