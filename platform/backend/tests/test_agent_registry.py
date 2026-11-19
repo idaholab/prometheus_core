@@ -23,6 +23,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agent_store import REGISTRY_KEY
 from app.config import settings
 from app.routers import agent_registry as registry_mod
 
@@ -110,7 +111,7 @@ def test_reregistration_overwrites(client):
 
 def test_registry_stamps_registered_at(client, fake_redis):
     def stored_registered_at() -> datetime:
-        raw = asyncio.run(fake_redis.hget(registry_mod.REGISTRY_KEY, "thermal-agent"))
+        raw = asyncio.run(fake_redis.hget(REGISTRY_KEY, "thermal-agent"))
         return datetime.fromisoformat(json.loads(raw)["registered_at"])
 
     before = datetime.now(timezone.utc)

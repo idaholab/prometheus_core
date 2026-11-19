@@ -29,7 +29,7 @@ from fastapi.testclient import TestClient
 from redis.exceptions import RedisError
 
 from app.routers import agents as agents_mod
-from app.routers.agent_registry import REGISTRY_KEY
+from app.agent_store import REGISTRY_KEY
 
 ALPHA_SECRET = "Bearer alpha-own-secret"
 ALPHA_REGISTERED_AT = "2026-11-01T08:30:00+00:00"

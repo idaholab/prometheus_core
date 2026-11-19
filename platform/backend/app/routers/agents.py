@@ -38,11 +38,11 @@ from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from pydantic import ValidationError
 from redis.exceptions import RedisError
 
+from app.agent_store import load_all, load_entry
 from app.api_responses import AUTH_RESPONSES, error
 from app.contract import AgentListResponse, AgentStatus
 from app.openapi import SESSION_COOKIE, TAG_AGENTS
 from app.redis_client import RedisClient, get_redis
-from app.routers.agent_registry import _load, _load_all
 from app.security import TokenClaims, current_claims
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ async def list_agent_status(
     """Every registered agent with its live reachability, sorted by ``agent_name``."""
     checked_at = _now()
     try:
-        stored = await _load_all(redis)
+        stored = await load_all(redis)
     except RedisError as exc:
         logger.warning("Agent registry read failed: %s", exc)
         return AgentListResponse(available=False, checked_at=checked_at, agents=[])
@@ -149,10 +149,14 @@ async def get_agent_status(
     """One registered agent with its live reachability and the time it was checked."""
     checked_at = _now()
     try:
-        stored = await _load(redis, agent_name)
+        stored = await load_entry(redis, agent_name)
     except RedisError as exc:
         logger.warning("Agent registry read failed for '%s': %s", agent_name, exc)
         raise HTTPException(status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail=_REGISTRY_UNAVAILABLE) from exc
+    if stored is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' is not registered"
+        )
     async with _make_client() as client:
         agent = await _probe_stored(client, stored)
     agent.checked_at = checked_at

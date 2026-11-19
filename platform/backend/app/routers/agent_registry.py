@@ -47,13 +47,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
+from app.agent_store import REGISTRY_KEY, load_all, load_entry
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
 from app.redis_client import RedisClient, get_redis
 
 logger = logging.getLogger(__name__)
-
-REGISTRY_KEY = "prometheus:agent-registry"
 
 # Matches the client-agent's own dispatch timeout (tool_discovery.call_a2a_agent):
 # research agents can run for minutes, and the proxy must not be the first to give up.
@@ -100,16 +99,10 @@ def _public_entry(stored: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
-    raw = await redis.hget(REGISTRY_KEY, agent_name)
-    if raw is None:
+    stored = await load_entry(redis, agent_name)
+    if stored is None:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' is not registered")
-    return cast(Dict[str, Any], json.loads(raw))
-
-
-async def _load_all(redis: RedisClient) -> List[Dict[str, Any]]:
-    """Every stored registration, sorted by agent name."""
-    entries = await redis.hgetall(REGISTRY_KEY)
-    return [cast(Dict[str, Any], json.loads(raw)) for _, raw in sorted(entries.items())]
+    return stored
 
 
 @router.post("/v1/agents")
@@ -123,7 +116,7 @@ async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(g
 
 @router.get("/v1/agents")
 async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str, Any]]:
-    return [_public_entry(stored) for stored in await _load_all(redis)]
+    return [_public_entry(stored) for stored in await load_all(redis)]
 
 
 @router.delete("/v1/agents/{agent_id}")
