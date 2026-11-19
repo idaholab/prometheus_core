@@ -292,8 +292,7 @@ class PrometheusAgentExecutor(AgentExecutor):
         Args:
             agent_name: Name of the agent (for logging)
             execute_hooks: Ordered execution middleware chain — ``(hook,
-                strict)`` pairs. Empty/None means no interception: the
-                standard flow runs exactly as before.
+                strict)`` pairs. Empty/None means no interception.
             execution_record_id_fn: Optional callable reading the owning
                 agent's active execution-record ID, for the ``on_task``
                 snapshot. Best-effort: ``None`` when no execution scope is
