@@ -536,6 +536,10 @@ A stored card whose fields fail validation (for example, a non-string `version`,
 without an `id`, or `skills` that is not a list) does not fail the request. Both routes keep
 the row with its `agent_name`, `registered_at` and probed `reachable`, return empty card
 fields (`name`, `description` and `version` are `""`, `skills` is `[]`), and log a warning.
+An entry that a hand edit of Valkey broke (a value that is not a JSON object, a card that is
+not an object, a `url` that is not a string or that httpx cannot parse) also keeps its row,
+keyed by its hash field, with empty card fields and `reachable: false`. `GET /v1/agents`
+returns it too.
 
 `reachable` is computed live on each request: it is true when `GET /healthz` on the
 origin of the card `url` answers 2xx within 2 s. The probes of a list request run

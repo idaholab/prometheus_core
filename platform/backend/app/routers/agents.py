@@ -66,14 +66,19 @@ def _now() -> str:
 
 
 async def _probe(client: httpx.AsyncClient, url: str) -> bool:
-    """True when ``GET /healthz`` on the origin of *url* answers 2xx in time."""
+    """True when ``GET /healthz`` on the origin of *url* answers 2xx in time.
+
+    Any failure is ``False``: a timeout, a refused connection, a non-2xx, and a card url
+    that httpx cannot parse or send (``InvalidURL``, an IDNA ``UnicodeError``), so one
+    bad registration cannot fail the whole list.
+    """
     if not url:
         return False
     try:
         # httpx applies its timeout per phase (connect, read, ...), so bound the whole call.
         async with asyncio.timeout(AGENT_PROBE_TIMEOUT_S):
             response = await client.get(httpx.URL(url).join("/healthz"))
-    except (httpx.HTTPError, httpx.InvalidURL, TimeoutError):
+    except Exception:  # noqa: BLE001 - every failure means "not reachable"
         return False
     return response.is_success
 
@@ -81,7 +86,10 @@ async def _probe(client: httpx.AsyncClient, url: str) -> bool:
 def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
     """The status row of one entry. A card that does not validate keeps the row, with
     its card fields empty, so one malformed registration cannot fail the whole list."""
-    card = stored.get("agent_card_params") or {}
+    card = stored["agent_card_params"]
+    registered_at = stored.get("registered_at")
+    if not isinstance(registered_at, str):
+        registered_at = None
     try:
         return AgentStatus.model_validate(
             {
@@ -89,7 +97,7 @@ def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
                 "name": card.get("name") or "",
                 "description": card.get("description") or "",
                 "version": card.get("version") or "",
-                "registered_at": stored.get("registered_at"),
+                "registered_at": registered_at,
                 "reachable": reachable,
                 "skills": card.get("skills") or [],
             }
@@ -98,13 +106,12 @@ def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
         logger.warning(
             "Agent '%s' has a malformed card; returning it without card fields: %s", stored["agent_name"], exc
         )
-        return AgentStatus(
-            agent_name=stored["agent_name"], registered_at=stored.get("registered_at"), reachable=reachable
-        )
+        return AgentStatus(agent_name=stored["agent_name"], registered_at=registered_at, reachable=reachable)
 
 
 async def _probe_stored(client: httpx.AsyncClient, stored: Dict[str, Any]) -> AgentStatus:
-    url = ((stored.get("agent_card_params") or {}).get("url") or "").strip()
+    url = stored["agent_card_params"].get("url")
+    url = url.strip() if isinstance(url, str) else ""
     return _to_status(stored, await _probe(client, url))
 
 

@@ -388,3 +388,50 @@ def test_make_client_bounds_each_probe_by_the_probe_timeout():
         assert client.timeout == httpx.Timeout(agents_mod.AGENT_PROBE_TIMEOUT_S)
     finally:
         asyncio.run(client.aclose())
+
+
+@pytest.mark.parametrize(
+    ("raw", "card_url"),
+    [
+        pytest.param("{", None, id="not-json"),
+        pytest.param(json.dumps(["x"]), None, id="not-an-object"),
+        pytest.param(json.dumps({"agent_card_params": ["x"], "registered_at": 5}), None, id="card-not-a-dict"),
+        pytest.param(json.dumps({"agent_card_params": {"url": 123}}), None, id="url-not-a-string"),
+        pytest.param(json.dumps({"agent_card_params": {"url": "http://xn--a.com/"}}), None, id="url-idna-error"),
+        pytest.param(json.dumps({"agent_card_params": {"url": "http://[::1/"}}), None, id="url-invalid"),
+    ],
+)
+def test_agents_list_keeps_unreadable_entry(monkeypatch, fake_redis, raw, card_url):
+    """An entry that a hand edit of Valkey broke keeps its row, keyed by its hash field,
+    and fails neither the list, nor its own route, nor the service list ``GET /v1/agents``."""
+    from app.config import settings
+
+    _seed(fake_redis, ALPHA)
+    asyncio.run(fake_redis.hset(REGISTRY_KEY, "aaa-bad-agent", raw))
+    _route_probes(monkeypatch, {"alpha-agent": 200})
+    client = _authed_client(monkeypatch)
+
+    listed = client.get("/api/agents")
+    one = client.get("/api/agents/aaa-bad-agent")
+
+    assert listed.status_code == 200
+    rows = listed.json()["agents"]
+    assert [row["agent_name"] for row in rows] == ["aaa-bad-agent", "alpha-agent"]
+    assert rows[0] == {
+        "agent_name": "aaa-bad-agent",
+        "name": "",
+        "description": "",
+        "version": "",
+        "registered_at": None,
+        "reachable": False,
+        "checked_at": None,
+        "skills": [],
+    }
+    assert rows[1]["reachable"] is True
+    assert one.status_code == 200
+    assert one.json()["reachable"] is False
+
+    monkeypatch.setattr(settings, "agent_secret", "test-agent-secret")
+    service = client.get("/v1/agents", headers={"Authorization": "Bearer test-agent-secret"})
+    assert service.status_code == 200
+    assert [entry["agent_name"] for entry in service.json()] == ["aaa-bad-agent", "alpha-agent"]
