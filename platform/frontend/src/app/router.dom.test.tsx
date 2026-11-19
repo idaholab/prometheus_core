@@ -13,7 +13,7 @@
 /* The real route table, guards and app shell in a memory router. The API is
  * stubbed and the heavier pages are stand-ins, so this checks routing and
  * access, not what each screen shows. */
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, expect, test, vi } from "vitest";
@@ -166,10 +166,11 @@ test("sidebar links change the URL, back returns, and Home stays mounted while h
   expect(home).toBeInTheDocument();
   expect(home.parentElement).toHaveClass("hidden");
 
-  await router.navigate(-1);
+  await act(() => router.navigate(-1));
   expect(router.state.location.pathname).toBe("/");
-  expect(await screen.findByText("Home page")).toBe(home);
-  expect(home.parentElement).not.toHaveClass("hidden");
+  // Home's text never leaves the page, so wait for the class, not the text
+  await waitFor(() => expect(home.parentElement).not.toHaveClass("hidden"));
+  expect(screen.getByText("Home page")).toBe(home);
 });
 
 test("logging out returns to Login", async () => {
