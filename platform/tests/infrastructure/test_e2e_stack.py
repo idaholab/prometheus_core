@@ -156,3 +156,13 @@ def test_the_e2e_stack_does_not_read_a_developers_real_llm_settings(platform, re
     env_file.write_text(env_file.read_text().replace(f"\n{name}=\n", f"\n{real}\n", 1))
     assert recipe_env(platform).get(name) == value
     assert recipe_env(platform, *stack_args(platform)).get(name) != value
+
+
+def test_the_e2e_stack_publishes_its_ports_on_loopback_only(platform):
+    """Its admin's password is in the repo, so other machines must not reach its ports.
+
+    Docker Engine's port rules bypass ufw and firewalld, so publishing on 127.0.0.1 is what
+    keeps them off the network. Compose reads PUBLISH_ADDR from the recipe's environment.
+    """
+    assert recipe_env(platform, *stack_args(platform)).get("PUBLISH_ADDR") == "127.0.0.1"
+    assert not recipe_env(platform).get("PUBLISH_ADDR"), "a dev stack keeps Docker's default"

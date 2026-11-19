@@ -94,7 +94,9 @@ def test_client_agent_port_is_published_only_by_system_test_override(
 
     override_path = project_root / "docker-compose.system-test.yml"
     override = yaml.safe_load(override_path.read_text(encoding="utf-8"))
-    assert override["services"]["client-agent"]["ports"] == ["${CLIENT_AGENT_PORT:-8001}:8000"]
+    assert override["services"]["client-agent"]["ports"] == [
+        "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${CLIENT_AGENT_PORT:-8001}:8000"
+    ]
 
 
 def test_system_test_target_does_not_start_or_reconfigure_docker(project_root):

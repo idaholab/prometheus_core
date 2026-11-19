@@ -47,6 +47,11 @@ x-common-env: &common-env
 x-host-gateway: &host-gateway
   - "prometheus.host.internal:host-gateway"
 
+# The ports below are published on every interface, as Docker does by default.
+# PUBLISH_ADDR (an IP, e.g. 127.0.0.1) publishes them on that address only, so
+# other machines can't reach them (`make up-e2e` sets it). It must be in each
+# `ports:` entry: YAML anchors can't build part of a string.
+
 x-build-args: &prometheus-api-build-args
   PROMETHEUS_API_BASE_IMAGE_REPO: ${PROMETHEUS_API_BASE_IMAGE_REPO:-ghcr.io/idaholab/prometheus_core/prometheus_sdk-devel}
   PROMETHEUS_API_BASE_IMAGE_HASH: ${PROMETHEUS_API_BASE_IMAGE_HASH:-}
@@ -93,7 +98,7 @@ services:
     image: valkey/valkey-bundle:9.1.4@sha256:c64007296a2a38398d4be63847e1c9890954e45574c16cbe607883ba71c6b985
     command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
     ports:
-      - "${REDIS_LOCAL_PORT:-6379}:6379"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${REDIS_LOCAL_PORT:-6379}:6379"
     networks:
       - agent-network
     volumes:
@@ -151,7 +156,7 @@ services:
     extra_hosts: *host-gateway
     ports:
       # Keep the default in sync with BACKEND_PORT in the Makefile (make check)
-      - "${BACKEND_PORT:-8600}:8000"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${BACKEND_PORT:-8600}:8000"
     networks:
       - agent-network
     environment:
@@ -233,7 +238,7 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       # Keep the default in sync with FRONTEND_DEV_PORT in the Makefile (make check)
-      - "${FRONTEND_DEV_PORT:-5150}:5150"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${FRONTEND_DEV_PORT:-5150}:5150"
     networks:
       - agent-network
     environment:
@@ -262,7 +267,7 @@ services:
     extra_hosts: *host-gateway
     ports:
       # Keep the default in sync with FRONTEND_PROD_PORT in the Makefile (make check)
-      - "${FRONTEND_PROD_PORT:-8080}:8080"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${FRONTEND_PROD_PORT:-8080}:8080"
     networks:
       - agent-network
     depends_on:

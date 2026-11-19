@@ -478,13 +478,16 @@ down: ##@ Stop all services
 # profile with a made-up key, and blanks a custom LLM_CONFIG_FILE (which would
 # replace the profile) and the embedding key. A developer's real LLM key stays out
 # of this stack, and a fresh clone needs none.
+# Its ports are on loopback only (PUBLISH_ADDR): its admin, e2e-admin, has the
+# password in the repo, and Docker Engine's port rules bypass ufw and firewalld,
+# so on 0.0.0.0 anyone on the network could sign in as it.
 E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
 	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
 	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
 	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
 	DEEPLYNX_ORG_ID=1 DEEPLYNX_PROJECT_ID=1 \
 	LLM_CONFIG_PROFILE=anthropic LLM_CONFIG_FILE= LLM_API_KEY=e2e-not-real EMBEDDING_API_KEY= \
-	REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
+	PUBLISH_ADDR=127.0.0.1 REDIS_LOCAL_PORT=6390 BACKEND_PORT=8610 FRONTEND_PROD_PORT=8090
 
 # What the .env rule at the top passes to init_env.py when the goal is up-e2e
 # (E2E_STACK only reaches the make that up-e2e starts, after .env is ready). The
