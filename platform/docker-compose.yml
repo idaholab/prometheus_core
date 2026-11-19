@@ -82,15 +82,8 @@ services:
       POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD}
       POSTGRES_DB: prometheus
     ports:
-      # Bound to loopback only -- unlike redis below, this DB holds password
-      # hashes, OIDC client secrets, and signing keys, so it must not be
-      # reachable from other devices on the LAN/VPN even with a weak
-      # ADMIN_DB_PASSWORD. For a local pgAdmin/Beekeeper Studio connection only.
       - "127.0.0.1:${ADMIN_DB_LOCAL_PORT:-5432}:5432"
     volumes:
-      # postgres 18+ images expect a single mount at /var/lib/postgresql (not
-      # directly at .../data) and manage their own versioned subdirectory
-      # underneath -- see https://github.com/docker-library/postgres/pull/1259.
       - admin-db-data:/var/lib/postgresql
     networks:
       - agent-network

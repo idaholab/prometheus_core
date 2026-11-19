@@ -108,9 +108,6 @@ def test_mesh_cache_volume(compose_data):
 
 
 def test_postgres_data_volume(compose_data):
-    """Mounted at /var/lib/postgresql (not .../data) -- postgres 18+ images
-    manage their own versioned subdirectory underneath and refuse to start
-    against any pre-existing content at the old mount point."""
     volumes = _get_volumes(compose_data["services"]["admin-db"])
     assert any("admin-db-data:/var/lib/postgresql" in v for v in volumes)
 
