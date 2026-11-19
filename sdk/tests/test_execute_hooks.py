@@ -105,6 +105,7 @@ class RecordingHook:
         task_error=None,
         request_sleep=0.0,
         junk_request=False,
+        junk_result=False,
     ):
         self.request_rewrite = request_rewrite
         self.event_rewrite = event_rewrite
@@ -116,6 +117,7 @@ class RecordingHook:
         self.task_error = task_error
         self.request_sleep = request_sleep
         self.junk_request = junk_request
+        self.junk_result = junk_result
         self.requests = []
         self.events = []
         self.results = []
@@ -142,6 +144,8 @@ class RecordingHook:
         self.results.append(dict(result))
         if self.result_error is not None:
             raise self.result_error
+        if self.junk_result:
+            return 42
         return self.result_rewrite if self.result_rewrite is not None else result
 
     async def on_error(self, context, error):
@@ -226,6 +230,46 @@ class TestRunnerUnits:
         params = {"input_data": "x"}
         result = await run_request_hooks([], make_context(), params)
         assert result == params and result is not params
+
+    async def test_empty_chain_event_result_and_task_unchanged(self):
+        result_payload = {"status": "success"}
+        assert run_event_hooks([], make_context(), "msg") == "msg"
+        passed = await run_result_hooks([], make_context(), result_payload)
+        assert passed == result_payload and passed is not result_payload
+        # A task observer over an empty chain is a no-op that must not raise.
+        await run_task_hooks(
+            [],
+            make_context(),
+            outcome="TASK_STATE_COMPLETED",
+            message="",
+            result=result_payload,
+            error=None,
+            execution_record_id=None,
+        )
+
+    async def test_noop_hook_passes_everything_through(self):
+        noop = NoopExecuteHook()
+        params = {"input_data": "x"}
+        result = {"status": "success"}
+        chain = [(noop, False)]
+        assert await run_request_hooks(chain, make_context(), params) == params
+        assert run_event_hooks(chain, make_context(), "msg") == "msg"
+        assert await run_result_hooks(chain, make_context(), result) == result
+        await run_error_hooks(chain, make_context(), ValueError("e"))
+        await run_task_hooks(
+            chain,
+            make_context(),
+            outcome="TASK_STATE_COMPLETED",
+            message="",
+            result=result,
+            error=None,
+            execution_record_id=None,
+        )
+
+    async def test_result_junk_return_degrades(self):
+        hook = RecordingHook(junk_result=True)
+        result = await run_result_hooks([(hook, False)], make_context(), {"status": "success"})
+        assert result == {"status": "success"}
 
     async def test_request_failure_degrades_to_entering_value(self):
         failing = RecordingHook(request_error=ValueError("boom"))
