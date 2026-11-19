@@ -30,7 +30,7 @@ interface VersionItemProps {
 /**
  * A version in the Workflow History list (Figma D.8): version number, the
  * "Latest" badge on the newest one, its summary, and when and by whom.
- * Display only for now; selecting a version comes with the detail panel.
+ * Display only for now: selecting a version isn't built yet.
  */
 export function VersionItem({ version: item, selected = false }: VersionItemProps) {
   const { version, summary, date, author, latest = false } = item;
@@ -50,7 +50,7 @@ export function VersionItem({ version: item, selected = false }: VersionItemProp
         <div className="flex min-w-0 items-center justify-between gap-2">
           <h3 className="m-0 font-mono text-[13px] font-normal text-base-content">{version}</h3>
           {latest && (
-            <span className="shrink-0 rounded bg-success/10 px-1.5 py-px font-mono text-[9px] uppercase leading-3 tracking-[0.04em] text-success">
+            <span className="shrink-0 rounded bg-success/25 px-1.5 py-px font-mono text-[9px] uppercase leading-3 tracking-[0.04em] text-base-content">
               Latest
             </span>
           )}
