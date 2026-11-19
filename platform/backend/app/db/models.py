@@ -124,9 +124,7 @@ class Organization(Base):
     __table_args__ = (UniqueConstraint("deeplynx_organization_id", name="uq_organizations_deeplynx_organization_id"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    oidc_provider_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("oidc_providers.id"), nullable=False, index=True
-    )
+    oidc_provider_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("oidc_providers.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(String(3000), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
@@ -142,9 +140,7 @@ class OrganizationUser(Base):
     __table_args__ = (PrimaryKeyConstraint("user_id", "organization_id"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id"), nullable=False, index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -161,9 +157,7 @@ class Project(Base):
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id"), nullable=False, index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(String(3000), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
@@ -179,9 +173,7 @@ class Group(Base):
     __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_groups_organization_name"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id"), nullable=False, index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -193,9 +185,7 @@ class GroupUser(Base):
 
     __tablename__ = "group_users"
     __table_args__ = (
-        PrimaryKeyConstraint(
-            "group_id", "organization_users_organization_id", "organization_users_user_id"
-        ),
+        PrimaryKeyConstraint("group_id", "organization_users_organization_id", "organization_users_user_id"),
         ForeignKeyConstraint(
             ["organization_users_user_id", "organization_users_organization_id"],
             ["organization_users.user_id", "organization_users.organization_id"],
@@ -244,9 +234,7 @@ class Permission(Base):
     ``Resource``. Granted to ``Role``s via ``RolePermission``."""
 
     __tablename__ = "permissions"
-    __table_args__ = (
-        UniqueConstraint("resource_id", "action_id", name="uq_permissions_resource_action"),
-    )
+    __table_args__ = (UniqueConstraint("resource_id", "action_id", name="uq_permissions_resource_action"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     resource_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("resources.id"), nullable=False)
@@ -265,17 +253,11 @@ class Role(Base):
     partial indexes."""
 
     __tablename__ = "roles"
-    __table_args__ = (
-        UniqueConstraint("organization_id", "project_id", "name", name="uq_roles_scope_name"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "project_id", "name", name="uq_roles_scope_name"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("projects.id"), nullable=True, index=True
-    )
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("organizations.id"), nullable=True, index=True
-    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(String(3000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -285,15 +267,11 @@ class RolePermission(Base):
     """Grants a ``Permission`` to a ``Role``."""
 
     __tablename__ = "role_permissions"
-    __table_args__ = (
-        UniqueConstraint("role_id", "permission_id", name="uq_role_permissions_role_permission"),
-    )
+    __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_role_permissions_role_permission"),)
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("roles.id"), nullable=False)
-    permission_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("permissions.id"), nullable=False, index=True
-    )
+    permission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("permissions.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -305,9 +283,7 @@ class OrganizationUserRole(Base):
 
     __tablename__ = "organization_user_roles"
     __table_args__ = (
-        PrimaryKeyConstraint(
-            "role_id", "organization_users_organization_id", "organization_users_user_id"
-        ),
+        PrimaryKeyConstraint("role_id", "organization_users_organization_id", "organization_users_user_id"),
         ForeignKeyConstraint(
             ["organization_users_user_id", "organization_users_organization_id"],
             ["organization_users.user_id", "organization_users.organization_id"],
