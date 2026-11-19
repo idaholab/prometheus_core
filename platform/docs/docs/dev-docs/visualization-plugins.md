@@ -63,38 +63,56 @@ Both return a `MeshDataset` (`components/mesh_view.py`) whose `to_chainlit_eleme
 
 ## IFCViewer
 
-Renders IFC (Industry Foundation Classes) 3D building models using the ThatOpen Components (OBC) engine with THREE.js.
+Renders IFC (Industry Foundation Classes) building models in the browser with the ThatOpen
+Components engine and THREE.js. The model file is parsed in the browser by web-ifc; nothing is
+converted on the server.
 
-**File:** `public/elements/IFCViewer.jsx`
+**Code:** `frontend/src/features/artifacts/viewers/ifc/`
 
-**What it does:** Displays 3D building/component models from IFC files with orbit controls, element selection, and property inspection.
+**How an artifact reaches it:** the backend gives an artifact the `ifc` render hint when it has the
+`ifc` tag, the MIME type `model/ifc` or `application/ifc`, or a file name ending in `.ifc`
+(`backend/app/services/artifacts.py`). The frontend (`artifactAdapter.ts`) then mounts the viewer
+with the artifact's content URL as `fileUrl` and its name as `filename`.
 
-**How to trigger it:**
+**What it shows:**
 
-1. **File upload**: User uploads an `.ifc` file. The frontend copies it to the public directory and creates a viewer element.
+- **Visibility panel:** a flat toggle for each element category the model has (floors, beams, doors,
+  windows and so on). Walls, Roof and Columns become trees when their elements have pieces: each
+  insulated-metal-panel face with its skins and core, the flashing, and each column with its
+  base-plate pieces. Equipment lists every item, and Pipes lists each pipe run with its segments.
+- **Controls panel:** Reset View, Top, Front and Side; a pan toggle (with a mouse-control legend);
+  a perspective/orthographic toggle; and an IFC download.
+- **Theme:** the canvas background follows the app's light or dark theme.
 
-2. **Agent artifact**: An agent returns an artifact with `_type: "ifc_dataset"`.
+**Where it comes from:** the viewer is copied from Alchemy (`alchemy-frontend/src/components/viewer`
+in the Alchemy repository), not forked. Alchemy's team adds features there, and we copy them over.
+The last copy (PPLT-322) took Alchemy's version from 2026-10-06.
 
-**Supported formats:** `.ifc`
+| File | Origin |
+|------|--------|
+| `IFCViewer.tsx`, `IFCViewerEngine.ts`, `ViewerOverlayPanels.tsx`, `treeGrouping.ts`, `visibilityCategories.ts`, `modelViewerTypes.ts` | Alchemy's files, with our license header. We add one thing: `setBackground` in the engine and the viewer handle, for the theme. |
+| `IFCViewerElement.tsx` | Ours. It wires the panels to the viewer the way Alchemy's `StepModelViewer.tsx` does, and adds the theme, the chat layout and the download. |
+| `IFCViewerEngine.dom.test.tsx` | Alchemy's `IFCViewerEngine.test.ts`, with its mock setup from `tests/fixtures/viewerEngine.fixtures.ts` folded in. It checks that the Walls and Roof toggles find the names Alchemy's generator writes. |
+| `IFCViewerElement.dom.test.tsx` | Ours. It checks the canvas background follows the theme. |
 
-**Props:**
+**Updating it from Alchemy:**
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `datasetId` | string | Unique dataset identifier |
-| `fileUrl` | string | URL path to the IFC file |
-| `filename` | string | Original filename |
-| `height` | string | Viewer height |
+1. Compare Alchemy's viewer folder with ours, ignoring our license header, to see what changed.
+2. Copy the changed files over ours, with the license header on top.
+3. Add `setBackground` back to `IFCViewerEngine.ts` and to the handle in `IFCViewer.tsx`, if the new
+   files dropped it.
+4. If Alchemy's `StepModelViewer.tsx` wires a new control or section, wire it the same way in
+   `IFCViewerElement.tsx`, and add any new handle methods to the stub in
+   `IFCViewerElement.dom.test.tsx`.
+5. Copy Alchemy's engine tests again if they changed, then run `make check` in `frontend/`.
+6. Compare the two viewers with one model. Alchemy's backend makes one without an LLM: post one of
+   its inputs in `alchemy-backend/tests/fixtures/input/` (for example
+   `tc_and_sg_and_pumps_in_two_buildings.json`) to its `/api/transform`, then download
+   `/api/result/<task_id>/ifc`. Open the file in the viewer playground and in Alchemy, in both
+   themes, and put the screenshots in the PR.
 
-**Python usage:**
-
-```python
-from components.ifc_integration import process_ifc_upload
-
-dataset = await process_ifc_upload(Path("building.ifc"))
-viewer = dataset.to_chainlit_element()
-await cl.Message(content="IFC model loaded", elements=[viewer]).send()
-```
+**Not ported:** Alchemy's OBJ viewer, which has the same panels (PPLT-462). Our STL and Exodus files
+go to the MeshViewer.
 
 ## MermaidViewer
 
