@@ -11,6 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { ReactNode } from "react";
+import { NavLink } from "react-router";
 import { Atom, MessageSquarePlus, PanelLeft } from "lucide-react";
 import { useCurrentUser } from "@/features/auth";
 import { Button } from "@/components/ui/Button";
@@ -19,8 +20,10 @@ import { NAV_ITEMS, ADMIN_NAV_ITEM, type NavId, type NavItem } from "./nav";
 interface Props {
   isOpen: boolean;
   onToggle: () => void;
-  activeNav: NavId;
-  onNavSelect: (id: NavId) => void;
+  /** The URL of each destination. */
+  navPaths: Record<NavId, string>;
+  /** Called on every nav click, including the current section. */
+  onNavSelect?: (id: NavId) => void;
   /** Only used by the collapsed rail's icon button — the expanded state's
    * "New Chat" affordance belongs to the chat-history block in `children`. */
   onNewChat: () => void;
@@ -29,33 +32,36 @@ interface Props {
   children?: ReactNode;
 }
 
-function NavButton({
+function NavItemLink({
   item,
-  active,
+  to,
   collapsed,
   onSelect,
 }: {
   item: NavItem;
-  active: boolean;
+  to: string;
   collapsed: boolean;
-  onSelect: (id: NavId) => void;
+  onSelect?: (id: NavId) => void;
 }) {
+  // NavLink marks the current section with aria-current="page" itself. `end`
+  // keeps Home ("/") from matching every URL.
   return (
-    <button
-      onClick={() => onSelect(item.id)}
+    <NavLink
+      to={to}
+      end={to === "/"}
+      onClick={() => onSelect?.(item.id)}
       title={item.label}
-      aria-current={active ? "page" : undefined}
-      className={`flex items-center rounded-lg border-l-2 text-sm transition-colors cursor-pointer ${
+      className={({ isActive }) => `flex items-center rounded-lg border-l-2 text-sm transition-colors cursor-pointer ${
         collapsed ? "size-9 justify-center" : "w-full gap-2.5 px-2.5 py-2"
       } ${
-        active
+        isActive
           ? "border-primary bg-primary/15 font-semibold text-base-content"
           : "border-transparent text-base-content/60 hover:bg-base-300 hover:text-base-content"
       }`}
     >
       <span className="flex size-[18px] shrink-0 items-center justify-center">{item.icon}</span>
       {!collapsed && <span className="truncate">{item.label}</span>}
-    </button>
+    </NavLink>
   );
 }
 
@@ -69,7 +75,7 @@ function NavButton({
 export function LeftPanel({
   isOpen,
   onToggle,
-  activeNav,
+  navPaths,
   onNavSelect,
   onNewChat,
   children,
@@ -113,10 +119,10 @@ export function LeftPanel({
       {/* Primary nav */}
       <nav className={`flex flex-col gap-1 px-2 ${collapsed ? "items-center" : ""}`}>
         {NAV_ITEMS.map((item) => (
-          <NavButton
+          <NavItemLink
             key={item.id}
             item={item}
-            active={activeNav === item.id}
+            to={navPaths[item.id]}
             collapsed={collapsed}
             onSelect={onNavSelect}
           />
@@ -148,9 +154,9 @@ export function LeftPanel({
       {/* Admin (role-gated, pinned bottom) */}
       {isAdmin && (
         <div className={`border-t border-base-300 p-2 ${collapsed ? "flex justify-center" : ""}`}>
-          <NavButton
+          <NavItemLink
             item={ADMIN_NAV_ITEM}
-            active={activeNav === "admin"}
+            to={navPaths.admin}
             collapsed={collapsed}
             onSelect={onNavSelect}
           />

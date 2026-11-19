@@ -14,7 +14,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { api, ApiError } from "@/lib/api/client";
 import { setCurrentUser } from "./store/session";
-import { AuthError, AuthField, AuthLayout } from "@/layouts/AuthLayout";
+import { AuthError, AuthField, LayoutAuth } from "@/layouts/LayoutAuth";
 
 interface Props {
   onSuccess: () => void;
@@ -64,7 +64,7 @@ export function SetupWizard({ onSuccess }: Props) {
   };
 
   return (
-    <AuthLayout
+    <LayoutAuth
       title="Welcome, set up your admin account"
       subtitle="This platform has no users yet. Create the first account below; it will be an administrator."
       onSubmit={handleSubmit}
@@ -103,6 +103,6 @@ export function SetupWizard({ onSuccess }: Props) {
         loading={loading}
         label={loading ? "Creating account..." : "Create admin account"}
       />
-    </AuthLayout>
+    </LayoutAuth>
   );
 }

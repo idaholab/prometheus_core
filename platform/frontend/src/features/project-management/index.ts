@@ -12,6 +12,6 @@
 
 // What the rest of the app may import from features/project-management. Anything else
 // in this folder is internal to it.
-export { ProjectManagement } from "./ProjectManagement";
+export { LayoutProjectManagement } from "./LayoutProjectManagement";
 export { useProjectManagement } from "./store/projectManagement";
 export { TEAM_FILTER } from "./store/projectManagementModel";

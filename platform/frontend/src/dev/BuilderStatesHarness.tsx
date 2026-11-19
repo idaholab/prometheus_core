@@ -15,7 +15,7 @@
  * reach by clicking yet: the empty canvas (Figma D.3), a skill being dragged
  * onto it (D.4), the insert menu on a wire (D.5) and an invalid connection
  * (D.6), plus the base state (D.2) to compare against. Each
- * is the real WorkflowBuilder, with a theme toggle. It also covers the Node
+ * is the real LayoutWorkflowBuilder, with a theme toggle. It also covers the Node
  * Inspector's two states: selected in D.2 and D.4, empty in D.3.
  *
  * Open http://localhost:5150/?harness=builder-states under `npm run dev`.
@@ -23,7 +23,7 @@
  */
 import { useState } from "react";
 import type { BuilderMode, InspectedNode } from "@/features/workflows";
-import { WorkflowBuilder } from "@/features/workflows";
+import { LayoutWorkflowBuilder } from "@/features/workflows";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import { useTheme } from "@/lib/useTheme";
 import {
@@ -93,7 +93,7 @@ export function BuilderStatesHarness() {
         </button>
       </div>
       {/* Keyed so each state mounts fresh, as it would on the Builder page. */}
-      <WorkflowBuilder
+      <LayoutWorkflowBuilder
         key={stateId}
         name="Comprehensive Material Analysis"
         mode={mode}

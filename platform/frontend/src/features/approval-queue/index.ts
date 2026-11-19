@@ -12,6 +12,6 @@
 
 // What the rest of the app may import from features/approval-queue. Anything else
 // in this folder is internal to it.
-export { ApprovalQueue } from "./ApprovalQueue";
+export { LayoutApprovalQueue } from "./LayoutApprovalQueue";
 export type { QueueCounter } from "./QueueSummary";
 export type { Checkpoint } from "./types";

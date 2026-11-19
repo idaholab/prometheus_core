@@ -104,7 +104,7 @@ function modeMessage(mode: BuilderMode, name: string, version: string, nextVersi
  *
  * The commit buttons have no handlers yet.
  */
-export function WorkflowBuilder({
+export function LayoutWorkflowBuilder({
   name,
   mode,
   onModeChange,

@@ -148,7 +148,7 @@ function hasFiles(dt: DataTransfer | null | undefined): boolean {
 // ---------------------------------------------------------------------------
 
 interface ChatProps {
-  // Owned by the parent (ProjectView) so that, once a second panel (artifact
+  // Owned by the parent (LayoutHome) so that, once a second panel (artifact
   // viewer) is added alongside Chat, each panel scrolls independently and
   // the scrollbar sits at the panel boundary rather than hugging the
   // narrower max-w-4xl message column. Chat still owns all the scroll
