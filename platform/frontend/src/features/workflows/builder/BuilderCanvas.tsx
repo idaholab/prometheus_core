@@ -13,7 +13,7 @@
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ErrorToast } from "@/components/ui/ErrorToast";
-import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "./WorkflowGraph";
+import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
 
 interface BuilderCanvasProps {
   nodes: WorkflowGraphNode[];

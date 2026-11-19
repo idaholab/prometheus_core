@@ -1,0 +1,27 @@
+{
+  "analysis": "thermal",
+  "status": "completed",
+  "component": {
+    "name": "Sample bracket",
+    "material": "SS316",
+    "mass_kg": 1.84
+  },
+  "parameters": {
+    "ambient_temperature_c": 25.0,
+    "heat_flux_w_m2": 1200.0,
+    "convection_coefficient_w_m2k": 15.0
+  },
+  "results": {
+    "max_temperature_c": 182.4,
+    "min_temperature_c": 31.7,
+    "mean_temperature_c": 96.2,
+    "max_von_mises_mpa": 74.5,
+    "safety_factor": 2.8
+  },
+  "checks": [
+    { "name": "Temperature limit", "limit": 400.0, "value": 182.4, "passed": true },
+    { "name": "Stress limit", "limit": 205.0, "value": 74.5, "passed": true }
+  ],
+  "warnings": [],
+  "notes": "Made-up values for the viewer playground. No analysis produced them."
+}

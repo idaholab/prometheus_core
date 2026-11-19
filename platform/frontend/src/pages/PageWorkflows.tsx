@@ -25,6 +25,8 @@ import {
   SKILL_GROUPS,
   TWEAKED_STEP,
   UNSAVED_CHANGES,
+  VERSION_DETAILS,
+  WORKFLOW_VERSIONS,
 } from "@/features/workflows";
 
 // Placeholder graph for Comprehensive Material Analysis, laid out as in Figma D.1.
@@ -199,6 +201,8 @@ function BuilderView({ start }: { start: BuilderStart }) {
       version={TEMPLATE_VERSION}
       nextVersion={NEXT_TEMPLATE_VERSION}
       skillGroups={SKILL_GROUPS}
+      versions={WORKFLOW_VERSIONS}
+      versionDetails={VERSION_DETAILS}
       // Selection isn't interactive yet, so each mode shows its frame's
       // selected node: Corrosion changing this run (D.2a), Radiation Damage
       // changing the template (D.2b).

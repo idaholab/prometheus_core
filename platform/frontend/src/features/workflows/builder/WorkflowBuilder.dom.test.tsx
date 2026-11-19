@@ -14,7 +14,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { BuilderMode } from "./builderMode.ts";
+import type { BuilderMode } from "@/features/workflows/builderMode";
 import {
   BUILDER_NODES,
   BUILDER_WIRES,
@@ -23,6 +23,8 @@ import {
   SKILL_GROUPS,
   TWEAKED_STEP,
   UNSAVED_CHANGES,
+  VERSION_DETAILS,
+  WORKFLOW_VERSIONS,
 } from "./builderPlaceholders.ts";
 import { WorkflowBuilder } from "./WorkflowBuilder.tsx";
 
@@ -57,6 +59,8 @@ function Builder({ initial, unsavedChanges }: { initial: BuilderMode; unsavedCha
       version="v1.2.0"
       nextVersion="v1.3.0"
       skillGroups={SKILL_GROUPS}
+      versions={WORKFLOW_VERSIONS}
+      versionDetails={VERSION_DETAILS}
       nodes={mode === "run" ? RUN_NODES : BUILDER_NODES}
       wires={BUILDER_WIRES}
       inspected={INSPECTED_NODE}
@@ -173,4 +177,51 @@ test("switching without structural changes, or from this run to the template, do
   await pickMode(user, /Edit the template/);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(badge()).toHaveTextContent("the template");
+});
+
+test("the Builder opens on the Canvas tab, with the commit buttons", () => {
+  render(<Builder initial="template" />);
+
+  const tabs = within(screen.getByRole("tablist", { name: "Builder view" })).getAllByRole("tab");
+  expect(tabs.map((tab) => tab.textContent)).toEqual(["Canvas", "History"]);
+  expect(screen.getByRole("tab", { name: "Canvas" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("region", { name: "Canvas" })).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "Workflow actions" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Version history" })).not.toBeInTheDocument();
+});
+
+test("the History tab shows the version list and hides the commit buttons and the mode strip", async () => {
+  const user = userEvent.setup();
+  render(<Builder initial="template" />);
+
+  await user.click(screen.getByRole("tab", { name: "History" }));
+
+  expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+  const list = screen.getByRole("region", { name: "Version history" });
+  expect(within(list).getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
+    "v1.2.0",
+    "v1.1.0",
+    "v1.0.0",
+  ]);
+  expect(within(list).getByRole("article", { name: "v1.2.0" })).toHaveAttribute("aria-current", "true");
+  const details = screen.getByRole("region", { name: "Version details" });
+  expect(within(details).getByRole("heading", { level: 2, name: "v1.2.0" })).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Workflow actions" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Saving creates v1\.3\.0/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Canvas" })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("tab", { name: "Canvas" }));
+  expect(screen.getByRole("group", { name: "Workflow actions" })).toBeInTheDocument();
+});
+
+test("the version link opens the History tab, and reads + this run when changing this run", async () => {
+  const user = userEvent.setup();
+  const { unmount } = render(<Builder initial="template" />);
+  expect(screen.getByRole("button", { name: "v1.2.0" })).toBeInTheDocument();
+  unmount();
+
+  render(<Builder initial="run" />);
+  await user.click(screen.getByRole("button", { name: "v1.2.0 + this run" }));
+  expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("region", { name: "Version history" })).toBeInTheDocument();
 });

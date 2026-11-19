@@ -13,7 +13,7 @@
 import { useId } from "react";
 import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
-import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "./skillTone";
+import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "@/features/workflows/skillTone";
 
 export interface InspectorField {
   /** Port name, e.g. "material_id". Uppercased with CSS. */

@@ -38,6 +38,8 @@ import {
   INVALID_WIRES,
   SKILL_GROUPS,
   TWEAKED_STEP,
+  VERSION_DETAILS,
+  WORKFLOW_VERSIONS,
 } from "@/features/workflows";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
@@ -99,6 +101,8 @@ export function BuilderStatesHarness() {
         version="v1.2.0"
         nextVersion="v1.3.0"
         skillGroups={SKILL_GROUPS}
+        versions={WORKFLOW_VERSIONS}
+        versionDetails={VERSION_DETAILS}
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}
