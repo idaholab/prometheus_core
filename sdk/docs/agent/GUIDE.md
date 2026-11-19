@@ -56,8 +56,7 @@ The executor can run middleware around every task it executes. Middleware observ
 and at the rewriting points may transform — the traffic crossing the agent's boundary,
 without touching `_execute()` itself. This is the specialist-side counterpart of the
 orchestrator's dispatch middleware (`platform/agents/client-agent/orchestrator/hooks.py`):
-the orchestrator watches each dispatch from outside the agent; execution middleware
-watches each task from inside it. Same protocol shape, same failure discipline.
+the middleware has the same function but different vantage points; orchestrator middleware is relative to the orchestrator, execution (specialist agent) is relative to the specialist. Same protocol shape, same failure discipline. The execution middleware provides two flavors of implementation; one mandated by the platform (helpful for telemetry, memory), one opt-in for the agent itself. Many frameworks already have middleware provisions (e.g., ADK, Langchain, etc) but this opt-in pattern extends the prometheus SDK to support middleware as well, for authors relying on the SDK instead of third party libraries when authoring their agents.
 
 The `ExecuteHook` protocol has five points:
 
