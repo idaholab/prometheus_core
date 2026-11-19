@@ -5,8 +5,6 @@ changes. When a base-agent change requires downstream agent updates, add a short
 section here under the relevant version heading with migration steps and a
 minimal code example.
 
-## 0.16.0
-
 ### Execution Middleware (`ExecuteHook`)
 
 The standard executor now runs execution middleware — an optional chain of hooks
@@ -49,6 +47,8 @@ step's result. The executor now emits the initial task only for a new task
 
 No migration steps. Streaming callers that read the initial task event of a resumed
 stream get the task ID and context ID from the status events instead.
+
+## 0.16.0
 
 ### Timeseries Queries Go Through the OLAP Route, Keyed by Record ID
 
