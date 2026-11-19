@@ -79,6 +79,12 @@ ticket, once the shared components have tests (PPLT-317).
   assertion, the behavior changed; say so in the PR.
 - **Name tests for the behavior** they check (`test_expired_session_returns_401`,
   `"wrong credentials show an error"`), not the function they call.
+- **Describe each end-to-end test well enough to stand in for a spec.** The
+  platform has no requirements yet, so its end-to-end tests are the only record
+  of the behavior they check. Keep one feature per spec file, and give each
+  test a name a reader can understand without opening the code: who does what,
+  and what they should see. When the platform gets specs, these
+  descriptions become its behavior spec.
 - **Keep unit and component tests hermetic.** No network, no real credentials,
   and no reliance on test order or the wall clock. They must pass without a
   `.env` file.
