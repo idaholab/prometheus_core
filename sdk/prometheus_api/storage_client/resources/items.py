@@ -14,7 +14,8 @@
 
 from typing import Dict, Iterator, List, Optional, Any
 from ..models.item import Item, ItemCreate, ItemUpdate, Tag
-from ..models.pagination import Page, PageInfo
+from ..models.pagination import Page
+from ..paging import check_list_filters, check_page_size, parse_paginated
 from .base import BaseResource
 
 
@@ -143,10 +144,16 @@ class ItemsResource(BaseResource):
         Args:
             page: Page number (1-indexed)
             page_size: Number of items per page
-            filters: Optional filters to apply
+            filters: Optional query parameters for the paginated records route. Only
+                ``dataSourceId``, ``fileType``, ``hideArchived`` and ``isInsightEligible`` are
+                supported; use ``search.advanced_query`` to filter on properties.
 
         Returns:
             Paginated list of items
+
+        Raises:
+            ValueError: If ``filters`` has a key the route does not accept, or ``page_size``
+                is not between 1 and 500
 
         Example:
             ```python
@@ -155,36 +162,18 @@ class ItemsResource(BaseResource):
                 print(item.name)
             ```
         """
-        params = {
-            "page": page,
-            "limit": page_size,
-        }
+        check_list_filters(filters)
+        check_page_size(page_size)
+        params: Dict[str, Any] = {"PageNumber": page, "PageSize": page_size}
 
         if filters:
             params.update(filters)
 
-        response = self._client._request("GET", f"{self._base_path}/records", params=params)
-
-        data = response.json()
-
-        # API returns array directly, not wrapped in object
-        if isinstance(data, list):
-            items = [self._parse_item(item_data) for item_data in data]
-            # Without total count from API, estimate based on page size
-            total_count = len(items) if len(items) < page_size else page * page_size + 1
-        else:
-            # Fallback for wrapped response
-            items = [self._parse_item(item_data) for item_data in data.get("records", [])]
-            total_count = data.get("total", len(items))
-        page_info = PageInfo(
-            page_number=page,
-            page_size=page_size,
-            total_count=total_count,
-            has_next=page * page_size < total_count,
-            has_previous=page > 1,
+        response = self._client._request(
+            "GET", f"{self._base_path}/records/paginated", params=params
         )
 
-        return Page(items=items, page_info=page_info)
+        return self._parse_paginated_items(response.json(), page, page_size)
 
     def iter_all(
         self, page_size: int = 100, filters: Optional[Dict[str, Any]] = None
@@ -209,7 +198,8 @@ class ItemsResource(BaseResource):
             result = self.list(page=page, page_size=page_size, filters=filters)
             yield from result.items
 
-            if not result.page_info.has_next:
+            # An empty page ends paging even if the server claims a next one.
+            if not result.items or not result.page_info.has_next:
                 break
 
             page += 1
@@ -308,6 +298,10 @@ class ItemsResource(BaseResource):
             )
 
         return self.get(item_id)
+
+    def _parse_paginated_items(self, data: Any, page: int, page_size: int) -> Page[Item]:
+        """Parse a ``PaginatedResponse<RecordResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse API response data into an Item model.

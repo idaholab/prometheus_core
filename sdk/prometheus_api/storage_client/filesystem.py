@@ -17,6 +17,7 @@ This module exposes a :class:`DeepLynxFileSystem` implementation that maps
 ``prometheus_api.storage_client`` high-level resources.
 """
 
+import logging
 import os
 import re
 import posixpath
@@ -35,6 +36,8 @@ from .client import StorageClient
 from .connection import ConnectionConfig
 from .models.item import Item, ItemUpdate
 from .uri import parse_item_uri
+
+logger = logging.getLogger(__name__)
 
 
 class DeepLynxFileSystem(AbstractFileSystem):
@@ -132,8 +135,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
                 does not close it.
             config: Connection configuration used only when ``client`` is not
                 supplied.
-            recent_limit: Result count for ``search.recent`` fallback.
-            search_page_size: Page size for search pagination.
+            recent_limit: Number of newest records the ``search.recent`` fallback looks at
+                (at most 500 per request). Older files are found by the full scan instead.
+            search_page_size: Page size for search pagination (1 to 500).
             search_max_pages: Maximum number of pages fetched per search call.
             **kwargs: Additional options forwarded to
                 :class:`fsspec.AbstractFileSystem`.
@@ -705,7 +709,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -724,7 +729,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -736,6 +742,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
         try:
             return list(self._client.search.recent(limit=self._recent_limit))
         except Exception:
+            # A failure here (a route error, a malformed body) otherwise looks like
+            # "file not found" to the caller.
+            logger.warning("search.recent failed during a deeplynx:// lookup", exc_info=True)
             return []
 
     def _scan_all_items(self) -> List[Item]:
