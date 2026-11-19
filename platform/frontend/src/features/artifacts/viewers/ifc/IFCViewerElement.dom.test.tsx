@@ -30,6 +30,9 @@ vi.mock("./IFCViewer", () => ({
       enumerateCategories: async () => [],
       enumerateEquipment: async () => [],
       enumeratePipeRuns: async () => [],
+      enumerateWallGroups: async () => [],
+      enumerateRoofGroups: async () => [],
+      enumerateColumnGroups: async () => [],
     }));
     // Load once, as the real engine does: the element passes a new handler each render.
     const onLoadRef = useRef(onLoad);
