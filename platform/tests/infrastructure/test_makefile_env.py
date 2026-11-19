@@ -264,6 +264,7 @@ ENV_GOALS = {
     "ng-restart-fg",
     "init-env",
     "deeplynx-setup",
+    "oidc-up",
     "build",
     "build-plain",
 }

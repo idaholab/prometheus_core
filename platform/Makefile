@@ -21,6 +21,7 @@ NO_ENV_GOALS := help generate clean-generated regenerate test-static check-marki
 	check-prerequisites base-image cluster-up cluster-down cluster-reset \
 	react-dev react-build react-check react-test-e2e \
 	down down-v logs ps clear-agent-registry clobber clear-admin-users \
+	oidc-down oidc-reset \
 	check test-system test-integration test-infra
 #
 # `make -n` (dry run) leaves .env alone: Make would run the rule anyway, since it
@@ -284,7 +285,7 @@ PREREQUISITE_TARGETS := \
 
 $(PREREQUISITE_TARGETS): check-prerequisites
 
-.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-agent-registry deeplynx-setup clear-admin-users clobber help
+.PHONY: all up up-fg down down-v build base-image build-plain logs ps generate clean-generated regenerate restart restart-fg ng-up ng-up-fg ng-restart ng-restart-fg init-env clear-agent-registry deeplynx-setup oidc-up oidc-down oidc-reset clear-admin-users clobber help
 
 FORCE:
 
@@ -420,6 +421,31 @@ deeplynx-setup: ##@ Start the local DeepLynx (LOCAL_DEEPLYNX=true) and save a pr
 	fi
 	$(COMPOSE) -f $(COMPOSE_BASE) -f docker-compose.deeplynx.yml up -d --wait --wait-timeout $(WAIT_TIMEOUT) deeplynx-postgres deeplynx-server deeplynx-ui
 	@python3 scripts/deeplynx_setup.py --port $(DEEPLYNX_SERVER_PORT)
+
+# A local identity provider for the login page's "Sign in with ..." button.
+# Its own compose project, joined to the platform's network, so the platform's
+# --remove-orphans teardowns leave it alone and its `down -v` can only reach
+# its own volume. The platform must be up first, for that network to exist.
+# See docs/docs/local-oidc.md.
+PLATFORM_NETWORK := $(COMPOSE_PROJECT_NAME)_agent-network
+export PLATFORM_NETWORK
+COMPOSE_OIDC := docker compose -p $(COMPOSE_PROJECT_NAME)_oidc -f docker-compose.oidc.yml
+
+oidc-up: ##@ Start the local Keycloak, so the login page can offer OIDC sign-in (see docs/docs/local-oidc.md)
+	@if ! docker network inspect $(PLATFORM_NETWORK) >/dev/null 2>&1; then \
+		printf "Network %s does not exist; start the platform first ('make up').\n" "$(PLATFORM_NETWORK)"; \
+		exit 1; \
+	fi
+	$(COMPOSE_OIDC) up -d --wait --wait-timeout $(WAIT_TIMEOUT)
+	@printf "Keycloak is up at http://localhost:%s (admin / %s).\n" \
+		"$(or $(KEYCLOAK_PORT),8180)" "$(or $(KEYCLOAK_ADMIN_PASSWORD),admin)"
+	@printf "Register it once under Admin -> Identity Providers; see docs/docs/local-oidc.md.\n"
+
+oidc-down: ##@ Stop the local Keycloak, keeping its realm (use oidc-reset to discard it)
+	$(COMPOSE_OIDC) down
+
+oidc-reset: ##@ Stop the local Keycloak and delete its database, so the realm is re-imported next start
+	$(COMPOSE_OIDC) down -v
 
 clear-admin-users: ##@ Delete all rows from admin-db's users table (re-triggers the first-run setup wizard)
 	@if ! $(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) ps --status running --services 2>/dev/null | grep -qx admin-db; then \
