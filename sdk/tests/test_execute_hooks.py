@@ -21,6 +21,7 @@ baseline.
 
 import asyncio
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -31,14 +32,17 @@ from a2a.types import Message, Part, Role, TaskState, TaskStatusUpdateEvent
 from prometheus_api.agent import (
     ExecuteContext,
     ExecuteHookError,
+    IdentityError,
     PrometheusAgent,
     PrometheusAgentExecutor,
     TaskSnapshot,
 )
+from prometheus_api.agent.base import _TrackedEventQueue
 from prometheus_api.agent.events import (
     build_status_update_event,
     emit_status_update,
     status_event_message_text,
+    task_state_name,
 )
 from prometheus_api.agent.hooks import (
     ENV_EXECUTE_MIDDLEWARE,
@@ -401,6 +405,38 @@ class TestRunnerUnits:
         assert hook.snapshots == []
 
 
+class TestTaskStateName:
+    def test_string_state_passes_through(self):
+        assert task_state_name("TASK_STATE_COMPLETED") == "TASK_STATE_COMPLETED"
+
+    def test_proto_int_state_maps_to_canonical_name(self):
+        assert task_state_name(TaskState.TASK_STATE_WORKING) == "TASK_STATE_WORKING"
+
+    def test_unknown_int_falls_back_to_str_form(self):
+        assert task_state_name(424242) == "424242"
+
+    def test_none_falls_back_to_empty_string(self):
+        assert task_state_name(None) == ""
+
+
+class TestTrackedEventQueue:
+    def test_unknown_attributes_delegate_to_wrapped_queue(self):
+        wrapped = MagicMock()
+        tracked = _TrackedEventQueue(wrapped)
+
+        # Anything the wrapper doesn't own proxies to the wrapped queue so the
+        # executor keeps the framework queue's full surface.
+        assert tracked.tap is wrapped.tap
+        assert tracked.close is wrapped.close
+
+        # The finalization-tracking surface stays local: enqueue_event is the
+        # wrapper's own method and the tracking fields are plain state.
+        assert tracked.enqueue_event.__self__ is tracked
+        assert tracked.seen_final_status is False
+        assert tracked.final_state is None
+        assert tracked.final_message == ""
+
+
 class TestHookValidation:
     def test_async_on_event_rejected(self):
         class BadHook:
@@ -710,6 +746,47 @@ class TestExecutorIntegration:
         assert snapshot.result == {"status": "success", "data": "test data"}
         assert snapshot.error is None
         assert snapshot.execution_record_id == 42
+
+    async def test_on_task_record_fn_failure_degrades_to_none(
+        self, mock_context, mock_event_queue, caplog
+    ):
+        hook = RecordingHook()
+
+        def broken_record_id_fn():
+            raise RuntimeError("record backend down")
+
+        executor = make_executor((hook, False), execution_record_id_fn=broken_record_id_fn)
+
+        with caplog.at_level(logging.WARNING, logger="prometheus_api.agent.base"):
+            await executor.execute(mock_context, mock_event_queue)
+
+        assert hook.snapshots[0].execution_record_id is None
+        assert "Failed to read the execution record ID for middleware" in caplog.text
+        assert "RuntimeError: record backend down" in caplog.text
+        events = status_events(mock_event_queue)
+        assert events[-1].status.state == TaskState.TASK_STATE_COMPLETED
+
+    async def test_identity_failure_fails_task_without_observing_middleware(
+        self, mock_context, mock_event_queue, caplog
+    ):
+        hook = RecordingHook()
+        executor = make_executor((hook, False))
+        executor._extract_identity = MagicMock(side_effect=IdentityError("expired token"))
+
+        with caplog.at_level(logging.WARNING, logger="prometheus_api.agent.base"):
+            with pytest.raises(IdentityError, match="expired token"):
+                await executor.execute(mock_context, mock_event_queue)
+
+        assert "Identity verification failed for TestAgent" in caplog.text
+        # Middleware is not observed: identity failures precede parameter
+        # extraction, so no execution context exists yet.
+        assert hook.snapshots == []
+        assert hook.errors == []
+        events = status_events(mock_event_queue)
+        assert events[-1].status.state == TaskState.TASK_STATE_FAILED
+        assert "Identity verification failed: expired token" in status_event_message_text(
+            events[-1]
+        )
 
     async def test_on_task_agent_self_finalized_outcome(self, mock_context, mock_event_queue):
         hook = RecordingHook()
