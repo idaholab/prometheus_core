@@ -188,7 +188,7 @@ test("a JSON file in a reply opens in the JSON viewer with its content", async (
 
   expect((await content).status(), "the JSON file the browser loads").toBe(200);
   // The viewer pretty-prints the JSON itself: results.json comes to 37 lines.
-  // Its header doesn't show the file's name yet, so this doesn't check it (bug filed separately)
+  // Its header doesn't show the file's name yet, so this doesn't check it (PPLT-467)
   await expect(main.getByRole("button", { name: /\b37 lines$/ })).toBeVisible();
   await expect(main.getByText("unparsed", { exact: true })).toHaveCount(0);
   await expect(main.getByRole("button", { name: "Copy JSON" })).toBeVisible();
