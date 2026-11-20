@@ -85,7 +85,9 @@ def _make_client() -> httpx.AsyncClient:
 
 
 class AgentRegistration(BaseModel):
-    agent_name: str = Field(min_length=1)
+    # One path segment: the name is the key in /a2a/{agent_name}, /v1/agents/{agent_id}
+    # and /api/agents/{agent_name}, so a "/" would make the agent unreachable by name.
+    agent_name: str = Field(min_length=1, pattern=r"^[^/]+$")
     agent_card_params: Dict[str, Any]
     static_headers: Dict[str, str] = Field(default_factory=dict)
 

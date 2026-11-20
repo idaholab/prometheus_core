@@ -176,3 +176,11 @@ def test_proxy_unreachable_agent_502(client, monkeypatch):
     monkeypatch.setattr(registry_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
     assert client.post("/a2a/thermal-agent", json={}, headers=AUTH).status_code == 502
+
+
+def test_rejects_agent_name_with_a_slash(client, fake_redis):
+    """A name is one path segment of every by-name route, so "/" is refused at registration."""
+    resp = client.post("/v1/agents", json={**REGISTRATION, "agent_name": "i/o-agent"}, headers=AUTH)
+
+    assert resp.status_code == 422
+    assert asyncio.run(fake_redis.hgetall(REGISTRY_KEY)) == {}

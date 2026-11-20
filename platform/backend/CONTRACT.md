@@ -523,6 +523,7 @@ the serving agent; the client-agent does not record it yet, so it is `null`.
 
 A read view of the agent registry for the browser (`app/routers/agents.py`). The
 registry is the Valkey hash `prometheus:agent-registry` that `POST /v1/agents` writes.
+An `agent_name` is one path segment: `POST /v1/agents` rejects a name with a `/` with `422`.
 These routes use the session cookie (OpenAPI scheme `sessionCookie`), not the
 `AGENT_SECRET` bearer token of the `/v1/agents` routes. A request without a valid
 session answers `401`. The card `url` and the `static_headers` never reach this wire.

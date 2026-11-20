@@ -3659,6 +3659,7 @@
           "agent_name": {
             "type": "string",
             "minLength": 1,
+            "pattern": "^[^/]+$",
             "title": "Agent Name"
           },
           "agent_card_params": {
