@@ -26,6 +26,7 @@ from app.routers import (
     admin_oidc,
     admin_users,
     agent_registry,
+    agents,
     artifacts,
     auth,
     chat,
@@ -142,6 +143,7 @@ app.include_router(events.router)
 app.include_router(uploads.router)
 app.include_router(artifacts.router)
 app.include_router(conversations.router)
+app.include_router(agents.router)
 app.include_router(admin_users.router)
 app.include_router(admin_keys.router)
 app.include_router(admin_oidc.router)

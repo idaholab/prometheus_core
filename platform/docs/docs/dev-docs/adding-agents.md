@@ -316,6 +316,21 @@ Every PrometheusAgent exposes:
 | `GET /.well-known/agent.json` | No | Agent card (A2A discovery) |
 | `POST /` | Yes | A2A JSON-RPC 2.0 message endpoint |
 
+## Agent status in the platform
+
+`GET /api/agents` lists every registered agent with a `reachable` flag
+(`platform/backend/CONTRACT.md`, "Agents"). `reachable` is true when `GET /healthz` on
+the origin of the agent's registered card URL returns a 2xx response within 2 s.
+
+- `reachable: false` does not mean that A2A calls fail. An agent image from before the
+  move from `/health` to `/healthz` (`sdk/docs/agent/AGENT_MIGRATIONS.md`) still answers
+  A2A calls, but its `/healthz` returns 404. Rebuild the image on the current base image.
+- `reachable: true` means only that the HTTP server answers. It does not mean that the
+  agent's skills work.
+- The backend calls the card URL from inside its container. Set `EXTERNAL_AGENT_URL` to
+  the compose service name (`http://my-analysis-agent:8000`), not to `localhost` or a
+  host-published port. Inside the backend container, `localhost` is the backend itself.
+
 ## Sending artifacts from agents
 
 See [artifacts.md](artifacts.md) for details on returning structured artifacts from `process_analysis()`.

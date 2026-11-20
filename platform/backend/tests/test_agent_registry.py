@@ -14,13 +14,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agent_store import REGISTRY_KEY
 from app.config import settings
 from app.routers import agent_registry as registry_mod
 
@@ -106,6 +109,28 @@ def test_reregistration_overwrites(client):
     assert [e["agent_card_params"]["url"] for e in listed] == ["http://elsewhere:8000/"]
 
 
+def test_registry_stamps_registered_at(client, fake_redis):
+    def stored_registered_at() -> datetime:
+        raw = asyncio.run(fake_redis.hget(REGISTRY_KEY, "thermal-agent"))
+        return datetime.fromisoformat(json.loads(raw)["registered_at"])
+
+    before = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
+    after = datetime.now(timezone.utc)
+
+    first = stored_registered_at()
+    assert first.utcoffset() == timedelta(0)
+    assert before <= first <= after
+
+    before_again = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
+    assert before_again <= stored_registered_at() <= datetime.now(timezone.utc)
+
+    # Stored for the backend's own status view only; the LiteLLM-compatible list is unchanged.
+    listed = client.get("/v1/agents", headers=AUTH).json()
+    assert [set(entry) for entry in listed] == [{"agent_id", "agent_name", "agent_card_params"}]
+
+
 def test_get_card(client):
     client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
     assert client.get("/a2a/thermal-agent", headers=AUTH).json() == CARD
@@ -151,3 +176,82 @@ def test_proxy_unreachable_agent_502(client, monkeypatch):
     monkeypatch.setattr(registry_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     client.post("/v1/agents", json=REGISTRATION, headers=AUTH)
     assert client.post("/a2a/thermal-agent", json={}, headers=AUTH).status_code == 502
+
+
+def test_rejects_agent_name_with_a_slash(client, fake_redis):
+    """A name is one path segment of every by-name route, so "/" is refused at registration."""
+    resp = client.post("/v1/agents", json={**REGISTRATION, "agent_name": "i/o-agent"}, headers=AUTH)
+
+    assert resp.status_code == 422
+    assert asyncio.run(fake_redis.hgetall(REGISTRY_KEY)) == {}
+
+
+def _sdk_registration() -> dict[str, Any]:
+    """The exact payload the SDK's AgentRegistryClient posts, built by the SDK itself."""
+    from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
+    from google.protobuf.json_format import MessageToDict
+    from prometheus_api.agent.registry import AgentRegistryClient
+
+    card = AgentCard(
+        name="Thermal Agent",
+        description="Thermal analysis.",
+        supported_interfaces=[
+            AgentInterface(url="http://thermal-agent:8000/", protocol_binding="JSONRPC", protocol_version="1.0")
+        ],
+        version="1.0.0",
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[AgentSkill(id="analyze_thermal", name="Analyze thermal", description="Runs it.", tags=["thermal"])],
+    )
+    registry = AgentRegistryClient("http://backend:8000", agent_secret="agent-own-secret")
+    _, payload = registry.build_payload(card, raw_agent_card=MessageToDict(card))
+    return payload
+
+
+def test_sdk_registration_keeps_the_v1_list_shape(client):
+    """The SDK's own payload registers, and GET /v1/agents returns exactly the fields it
+    returned before registered_at existed: what the SDK and the client-agent read."""
+    payload = _sdk_registration()
+
+    created = client.post("/v1/agents", json=payload, headers=AUTH)
+    listed = client.get("/v1/agents", headers=AUTH).json()
+
+    assert created.status_code == 200
+    assert listed == [
+        {
+            "agent_id": "thermal-agent",
+            "agent_name": "thermal-agent",
+            "agent_card_params": payload["agent_card_params"],
+        }
+    ]
+    assert "agent-own-secret" not in json.dumps(listed)
+
+
+def test_registration_reaches_the_status_view(client, monkeypatch):
+    """One path from POST /v1/agents to GET /api/agents: the registered_at the registry
+    stamps is the one the status view returns, so a renamed key on one side fails here."""
+    from app import security
+    from app.routers import agents as agents_mod
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return ["10.0.0.7"]
+
+    monkeypatch.setattr(agents_mod, "_resolve", resolve)
+    monkeypatch.setattr(
+        agents_mod,
+        "_make_client",
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200))),
+    )
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret", raising=False)
+    monkeypatch.setattr(security.settings, "jwt_secret", "test-secret", raising=False)
+
+    before = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=_sdk_registration(), headers=AUTH)
+    after = datetime.now(timezone.utc)
+    client.cookies.set(settings.cookie_name, security.issue_token(security.User(identifier="alice"), sid="sid-e2e"))
+
+    rows = client.get("/api/agents").json()["agents"]
+
+    assert [row["agent_name"] for row in rows] == ["thermal-agent"]
+    assert before <= datetime.fromisoformat(rows[0]["registered_at"]) <= after
+    assert rows[0]["reachable"] is True
+    assert [skill["id"] for skill in rows[0]["skills"]] == ["analyze_thermal"]

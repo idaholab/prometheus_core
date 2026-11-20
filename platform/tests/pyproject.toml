@@ -10,6 +10,8 @@ dependencies = [
     "pydantic>=2.0",
     "httpx>=0.27.0",
     "redis>=5.0.0",
+    # Signs a test session cookie for the agent status integration test.
+    "pyjwt>=2.8.0",
     # Cross-repo A2A contract tests exercise the real prometheus_api request
     # parsing against the client-agent's and frontend's request builders.
     "prometheus-api",

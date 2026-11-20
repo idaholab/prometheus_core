@@ -16,7 +16,8 @@ Wire-compatible with the subset of LiteLLM's agent API that ``prometheus_api``'s
 ``AgentRegistryClient`` and the client-agent's ``tool_discovery`` use, so neither
 needs to change when ``REGISTRY_URL`` points here instead of at LiteLLM:
 
-- ``POST /v1/agents`` -- register ``{agent_name, agent_card_params, static_headers?}``
+- ``POST /v1/agents`` -- register ``{agent_name, agent_card_params, static_headers?}``; the
+  backend also stores ``registered_at`` (ISO 8601 UTC, set at write time, never returned)
 - ``GET /v1/agents`` -- a bare list of ``{agent_id, agent_name, agent_card_params}``
 - ``DELETE /v1/agents/{agent_id}``
 - ``GET /a2a/{agent_name}`` -- the registered card
@@ -37,6 +38,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, cast
 
 import httpx
@@ -45,13 +47,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
+from app.agent_store import REGISTRY_KEY, load_all, load_entry
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
 from app.redis_client import RedisClient, get_redis
 
 logger = logging.getLogger(__name__)
-
-REGISTRY_KEY = "prometheus:agent-registry"
 
 # Matches the client-agent's own dispatch timeout (tool_discovery.call_a2a_agent):
 # research agents can run for minutes, and the proxy must not be the first to give up.
@@ -84,7 +85,9 @@ def _make_client() -> httpx.AsyncClient:
 
 
 class AgentRegistration(BaseModel):
-    agent_name: str = Field(min_length=1)
+    # One path segment: the name is the key in /a2a/{agent_name}, /v1/agents/{agent_id}
+    # and /api/agents/{agent_name}, so a "/" would make the agent unreachable by name.
+    agent_name: str = Field(min_length=1, pattern=r"^[^/]+$")
     agent_card_params: Dict[str, Any]
     static_headers: Dict[str, str] = Field(default_factory=dict)
 
@@ -98,15 +101,16 @@ def _public_entry(stored: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
-    raw = await redis.hget(REGISTRY_KEY, agent_name)
-    if raw is None:
+    stored = await load_entry(redis, agent_name)
+    if stored is None:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' is not registered")
-    return cast(Dict[str, Any], json.loads(raw))
+    return stored
 
 
 @router.post("/v1/agents")
 async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(get_redis)) -> Dict[str, Any]:
     stored = body.model_dump()
+    stored["registered_at"] = datetime.now(timezone.utc).isoformat()
     await redis.hset(REGISTRY_KEY, body.agent_name, json.dumps(stored))
     logger.info("Registered agent '%s' at %s", body.agent_name, body.agent_card_params.get("url", ""))
     return _public_entry(stored)
@@ -114,8 +118,7 @@ async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(g
 
 @router.get("/v1/agents")
 async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str, Any]]:
-    entries = await redis.hgetall(REGISTRY_KEY)
-    return [_public_entry(json.loads(raw)) for _, raw in sorted(entries.items())]
+    return [_public_entry(stored) for stored in await load_all(redis)]
 
 
 @router.delete("/v1/agents/{agent_id}")

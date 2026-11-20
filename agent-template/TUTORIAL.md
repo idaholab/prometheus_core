@@ -938,6 +938,8 @@ Registration retries with exponential backoff (default: 10 attempts, up to 30 se
 3. Start your agent: `make up`
 4. Verify registration: `curl -s -H "Authorization: Bearer $AGENT_SECRET" http://localhost:8600/v1/agents | python -m json.tool` (replace `8600` with `BACKEND_PORT` from the platform's `.env`). Your agent's name should appear in the list.
 
+> **Troubleshooting:** If the platform's agent status (`GET /api/agents`) shows your agent with `reachable: false`, check the URL that your agent registered. The backend calls that URL from inside its container. Use the compose service name, or `prometheus.host.internal` in external port mode. Do not use `localhost`: inside the backend container, `localhost` is the backend itself.
+
 If you need the agent to restart automatically when the platform does, add it to the platform team's infrastructure configuration or document the startup order for your deployment environment.
 
 ### In-tree deployment
