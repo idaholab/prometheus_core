@@ -12,18 +12,20 @@
 
 /* Feature: viewing an agent's artifacts in chat.
  *
- * When an agent's reply carries a mesh, an IFC building model or a Mermaid
- * diagram, the chat opens it in that kind of viewer, right under the reply.
+ * When an agent's reply carries a mesh, an IFC building model, a Mermaid
+ * diagram or a JSON file, the chat opens it in that kind of viewer, right
+ * under the reply.
  * These tests open each viewer the way a user gets one, by asking in chat, and
  * check that the viewer drew the artifact, not only that its frame appeared.
  * They stand in for that feature's behavior spec until the platform has one
  * (TESTING.md, "Rules for every test").
  *
  * The stub agent (platform/e2e/stub-client-agent) answers a prompt naming
- * "mesh", "ifc" or "diagram" with that viewer sample from e2e/samples/, the
- * same files the viewer playground shows. The mesh and IFC model travel the
- * way a real agent's files do: the agent gives the backend a URL, and the
- * backend fetches the file. The diagram travels inline in the reply.
+ * "mesh", "ifc", "diagram" or "json" with that viewer sample from
+ * e2e/samples/, the same files the viewer playground shows. The mesh, IFC
+ * model and JSON travel the way a real agent's files do: the agent gives the
+ * backend a URL, and the backend fetches the file. The diagram travels inline
+ * in the reply.
  *
  * Why end-to-end: the viewers are WebGL and SVG drawn from files the backend
  * converts or proxies, so jsdom component tests can't show they draw. These
@@ -162,5 +164,36 @@ test("a Mermaid diagram in a reply opens in the diagram viewer with every node",
   ];
   for (const node of nodes) {
     await expect(diagram.getByText(node, { exact: true }), `the "${node}" node`).toBeVisible();
+  }
+});
+
+/**
+ * Behavior: a JSON file in an agent's reply opens in the JSON viewer with its
+ * content, even when the reply carries only the file and not the JSON itself.
+ * - Given a signed-in user on Home,
+ * - when an agent replies with a JSON file by URL, with no inline copy (the
+ *   sample results.json),
+ * - then the browser loads the file through the backend's artifact content
+ *   route,
+ * - and the JSON viewer opens under the reply with its line count and a Copy
+ *   button,
+ * - and it shows the file's content, parsed: no "unparsed" badge.
+ *
+ * Why this case: a stored JSON file once opened as an empty viewer showing
+ * "1 lines" and "unparsed" (PPLT-374), because the viewer read only inline JSON.
+ */
+test("a JSON file in a reply opens in the JSON viewer with its content", async ({ page }) => {
+  const content = page.waitForResponse((response) => /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname));
+  const main = await ask(page, "show me the json results", "Here are the results.");
+
+  expect((await content).status(), "the JSON file the browser loads").toBe(200);
+  // The viewer pretty-prints the JSON itself: results.json comes to 37 lines.
+  // Its header doesn't show the file's name yet, so this doesn't check it (bug filed separately)
+  await expect(main.getByRole("button", { name: /\b37 lines$/ })).toBeVisible();
+  await expect(main.getByText("unparsed", { exact: true })).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "Copy JSON" })).toBeVisible();
+  // Values from deep in the file, so a viewer that shows only its first line fails
+  for (const text of ['"Sample bracket"', '"max_von_mises_mpa"', '"Stress limit"']) {
+    await expect(main.getByText(text, { exact: true }).first(), `the ${text} value`).toBeVisible();
   }
 });

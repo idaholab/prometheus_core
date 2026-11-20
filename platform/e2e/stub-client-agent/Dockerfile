@@ -16,8 +16,8 @@ RUN --mount=type=cache,id=prometheus-uv-cache,target=/root/.cache/uv,sharing=loc
 COPY agent.py /app/agent.py
 COPY agent_card.json /app/agent_card.json
 # The shared viewer samples (platform/frontend/e2e/samples), from the compose
-# build context of that name. Only the three the stub hands out
-COPY --from=samples part.stl model.ifc diagram.mmd /app/samples/
+# build context of that name. Only the ones the stub hands out
+COPY --from=samples part.stl model.ifc diagram.mmd results.json /app/samples/
 
 # 8000: A2A (bearer auth). 8100: the sample files, for the backend to download
 EXPOSE 8000 8100

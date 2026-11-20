@@ -54,7 +54,7 @@ def test_a_prompt_naming_no_sample_gets_the_fixed_answer_and_no_artifact():
 
 
 def test_every_reply_parses_as_the_contract_the_backend_reads():
-    for query in ("hello", "show me the mesh", "the ifc model please", "draw a diagram"):
+    for query in ("hello", "show me the mesh", "the ifc model please", "draw a diagram", "the json results"):
         result, _ = _execute({"query": query, "conversation_id": "conv-1"})
 
         # The backend json.loads the final message and validates it as this model
@@ -94,6 +94,18 @@ def test_a_diagram_prompt_returns_the_mermaid_source_inline():
     assert artifact["mime_type"] == "text/x-mermaid"
     assert artifact["json_body"] == {"diagram": (SHARED_SAMPLES / "diagram.mmd").read_text(encoding="utf-8")}
     assert "uri" not in artifact
+
+
+def test_a_json_prompt_returns_the_file_by_url_not_inline():
+    # A stored JSON file, with no json_body, once showed an empty viewer (PPLT-374)
+    result, _ = _execute({"query": "show me the JSON results", "conversation_id": "conv-1"})
+
+    (artifact,) = result["new_artifacts"]
+    assert result["response_text"] == "Here are the results."
+    assert artifact["name"] == "results.json"
+    assert artifact["mime_type"] == "application/json"
+    assert artifact["uri"] == f"{_MODULE.SAMPLES_BASE_URL}/results.json"
+    assert "json_body" not in artifact
 
 
 def test_each_artifact_gets_its_own_id():

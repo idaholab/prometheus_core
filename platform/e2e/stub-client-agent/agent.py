@@ -18,16 +18,17 @@ so the tests can drive a chat through the real browser, nginx and backend withou
 an LLM. It speaks the same A2A protocol through PrometheusAgent and answers with
 the same ConversationResponse shape, but its answer is fixed instead of reasoned:
 
-- a prompt naming "mesh", "ifc" or "diagram" gets an answer with that viewer
+- a prompt naming "mesh", "ifc", "diagram" or "json" gets an answer with that viewer
   sample as an artifact, the way a specialist agent's output reaches the user;
 - anything else gets the same text answer.
 
 The samples are the shared viewer samples (platform/frontend/e2e/samples), which
-the image copies in. The mesh and IFC samples are served over plain HTTP on
+the image copies in. The mesh, IFC and JSON samples are served over plain HTTP on
 SAMPLES_PORT, and the artifact's uri points there, so the backend downloads them
 as it would a real agent's file: it converts the STL to the mesh viewer's VTP
-itself, and streams the IFC model to the browser through its artifact content
-proxy. The samples are public test files, so that port takes no bearer token; the
+itself, and streams the IFC model and the JSON to the browser through its artifact
+content proxy. The JSON goes by uri, not inline, because a stored JSON file once
+showed an empty viewer (PPLT-374). The samples are public test files, so that port takes no bearer token; the
 A2A port keeps the agent's usual auth. The Mermaid sample travels inline, in
 json_body, as Mermaid artifacts do.
 
@@ -81,6 +82,7 @@ SAMPLES = (
     Sample("mesh", "part.stl", "model/stl", "Here is the mesh."),
     Sample("ifc", "model.ifc", "model/ifc", "Here is the IFC model."),
     Sample("diagram", "diagram.mmd", "text/x-mermaid", "Here is the diagram.", inline=True),
+    Sample("json", "results.json", "application/json", "Here are the results."),
 )
 
 
