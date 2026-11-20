@@ -409,7 +409,7 @@ clear-agent-registry: ##@ Stop services (removing the dev frontend container and
 	@$(COMPOSE) $(CLEAR_COMPOSE_FILES) exec -T redis sh -c '\
 		cli="valkey-cli --no-auth-warning -a $$REDIS_PASSWORD"; \
 		for i in $$(seq 1 30); do $$cli ping >/dev/null 2>&1 && break; sleep 1; done; \
-		printf "Cleared %s agent registration key(s).\n" "$$($$cli DEL prometheus:agent-registry)"'
+		printf "Cleared %s agent registration key(s).\n" "$$($$cli DEL prometheus:agent-registry prometheus:agent-registry:spiffe)"'
 
 # The agents read DEEPLYNX_* when they start, so DeepLynx has to be up and its
 # key in .env before the rest of the stack starts. Only the DeepLynx services

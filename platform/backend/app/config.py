@@ -12,7 +12,7 @@
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
@@ -103,6 +103,22 @@ def _redis_url(data: dict[str, Any]) -> str:
     return _with_redis_password(os.environ.get("REDIS_URL", data.get("redis-url", "redis://localhost:6379")))
 
 
+AgentIdentitySource = Literal["trusted-name", "istio"]
+
+
+def _agent_identity_source(raw: Any, data: dict[str, Any]) -> AgentIdentitySource:
+    """``AGENT_IDENTITY_SOURCE`` / ``agent-identity-source``: ``trusted-name`` or ``istio``.
+
+    ``raw`` is the environment value. An empty one counts as unset and falls back to
+    ``config.yml``, then ``trusted-name``. See :mod:`app.agent_identity`. An unknown
+    value fails at startup rather than silently falling back to the weaker mode.
+    """
+    value = str(raw or "").strip() or str(data.get("agent-identity-source") or "").strip() or "trusted-name"
+    if value not in ("trusted-name", "istio"):
+        raise ValueError(f"AGENT_IDENTITY_SOURCE must be 'trusted-name' or 'istio', got {value!r}")
+    return cast(AgentIdentitySource, value)
+
+
 def _cookie_secure(data: dict) -> bool:
     """Whether to mark auth cookies ``Secure``, derived from the browser-facing scheme.
 
@@ -143,6 +159,8 @@ class Settings(BaseSettings):
     agent_url: str = os.environ.get("CLIENT_AGENT_URL", data.get("agent-url", "http://localhost:8001"))
     agent_secret: str = os.environ.get("AGENT_SECRET", data.get("agent-secret", ""))
     redis_url: str = _redis_url(data)
+    # How /v1 routes tell agents apart (app/agent_identity.py).
+    agent_identity_source: AgentIdentitySource = _agent_identity_source(os.environ.get("AGENT_IDENTITY_SOURCE"), data)
 
     # ``BaseSettings`` also reads the ``REDIS_URL`` env var into this field, which
     # replaces the default above and would skip the ``REDIS_PASSWORD`` folding.
@@ -151,6 +169,13 @@ class Settings(BaseSettings):
     @classmethod
     def _fold_redis_password(cls, v: str) -> str:
         return _with_redis_password(v)
+
+    # Likewise ``AGENT_IDENTITY_SOURCE``: the env value lands here unresolved, so an
+    # empty value or stray whitespace would fail the ``Literal`` check. Resolve it again.
+    @field_validator("agent_identity_source", mode="before")
+    @classmethod
+    def _resolve_agent_identity_source(cls, v: Any) -> AgentIdentitySource:
+        return _agent_identity_source(v, cls.model_fields["data"].default)
 
     # Uploads
     max_upload_bytes: int = get_max_upload_bytes(data)

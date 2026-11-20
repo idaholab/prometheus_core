@@ -18,6 +18,11 @@ agent-url: "http://localhost:8001"
 agent-secret: ""
 redis-url: "redis://localhost:6379"
 
+# How agent-facing /v1 routes identify the calling agent (env AGENT_IDENTITY_SOURCE):
+# "trusted-name" trusts the X-Agent-Name header (Docker Compose); "istio" reads the
+# SPIFFE ID from the Istio sidecar's x-forwarded-client-cert (Kubernetes).
+agent-identity-source: "trusted-name"
+
 # Upload handling (overridden by env var PROMETHEUS_MAX_UPLOAD_BYTES)
 max-upload-bytes: 104857600
 
