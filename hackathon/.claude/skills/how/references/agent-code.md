@@ -76,7 +76,7 @@ The client-agent checks the `error` key, not `status`: always put a non-empty `e
 | `send_status_update(context, eq, message=...)` | a live progress line (needs `streaming: true`); always write `message=` | 1528 | - |
 | `send_conversation_message(context, eq, message)` | a message that stays in the chat | 1876 | - |
 | `send_json_artifact(...)`, `send_deeplynx_artifact(...)`, `get_artifact_file_path(...)` | artifacts | 1642, 1741, 1196 | `artifacts.md` |
-| `send_input_required(...)`, `get_input_sources(...)`, `load_context_state` / `save_context_state` | ask the user, keep state | 1096, 1047, 1038 | `asking-the-user.md` |
+| `send_input_required(...)`, `get_input_sources(...)`, `load_context_state` / `save_context_state` | ask the user, keep state | 1185, 1136, 1091 | `asking-the-user.md` |
 | `declare_long_running(...)`, `run_worker(...)` | long or blocking work | 1551, 1592 | `long-running.md` |
 | `llm_client(context, config=cfg)` | the async LLM client | 1000 | `llm.md` |
 

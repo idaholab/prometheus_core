@@ -265,7 +265,7 @@ The PNG artifact renders in the conversation, with the orchestrator's summary.
 | Approval before costly steps | `"requires_approval": true` |
 | Background tasks for long jobs | `declare_long_running` |
 | LLM access, any of several providers | `self.llm_client(...)` + `LLM_CONFIG_PROFILE` |
-| Per-conversation memory | `load_context_state` / `save_context_state` |
+| Per-conversation memory | `await load_context_state` / `await save_context_state` |
 
 {.small}
 How to use each one: the agent session at 2:45 pm.

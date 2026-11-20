@@ -402,7 +402,7 @@ Note: Use the INL prompt, the same one as the earlier slide. The orchestrator is
 | Live progress in the chat | `send_status_update`, with `"streaming": true` in the card |
 | Approval before costly steps | `"requires_approval": true` |
 | Background tasks for long jobs | `declare_long_running` |
-| Per-conversation memory | `load_context_state` / `save_context_state` |
+| Per-conversation memory | `await load_context_state` / `await save_context_state` |
 
 {.small}
 Today you use the first four. The rest are in the agent developer guide.

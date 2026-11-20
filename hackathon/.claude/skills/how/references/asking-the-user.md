@@ -3,7 +3,7 @@
 Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0.15, no LiteLLM). When the code disagrees with this file, the code is correct.
 
 The platform asks the user for you. You never parse chat text (deck 04, slides 2 and 21). Short paths:
-`base.py` and `context_state.py` are in `prometheus_api/prometheus_api/agent/`; `agent_loop.py` is in
+`base.py` and `agent_state.py` are in `prometheus_api/prometheus_api/agent/`; `agent_loop.py` is in
 `prometheus_platform/agents/client-agent/orchestrator/`, `tool_discovery.py` one folder up.
 
 | moment | mechanism | you write |
@@ -38,16 +38,17 @@ if not x:
     return {}
 ```
 
-1. `send_input_required` ends the task in `TASK_STATE_INPUT_REQUIRED` (`base.py:1096`). Return `{}`:
+1. `send_input_required` ends the task in `TASK_STATE_INPUT_REQUIRED` (`base.py:1185`). Return `{}`:
    the value is ignored.
 2. The orchestrator calls you again with the same `contextId` and **all the original arguments plus the
    answers merged into `params`** (SDK 0.14.1). `self.get_input_sources(context)` tells, per parameter,
-   whether `model`, `user`, or `context` supplied it (`base.py:1047`). There is no `get_provided_inputs`.
+   whether `model`, `user`, or `context` supplied it (`base.py:1136`). There is no `get_provided_inputs`.
 3. **Python state does not survive**, but the original `params` come back, so most skills need no state.
-   For more, `save_context_state` / `load_context_state` (per agent and conversation, JSON, 24 h TTL,
-   `base.py:1038-1042`). Save ids, not DataFrames. Never ask for a secret this way.
+   For more, `await self.save_context_state(...)` / `await self.load_context_state(...)` (per agent and
+   conversation, JSON, stored by the backend, 24 h TTL, 256 KB, `base.py:1091-1133`). A concurrent save
+   raises `AgentStateConflict`: load again and retry. Save ids, not DataFrames. Never ask for a secret this way.
 
-`MissingInput` (`base.py:134-143`): `name`, `description`, `user_prompt`, `type` (`enum`, `number` →
+`MissingInput` (`base.py:141-150`): `name`, `description`, `user_prompt`, `type` (`enum`, `number` →
 `float`, `integer` → `int`, `boolean`, else text), `options`, `resolvable_from_context`, `required`
 (`sensitive` is gone; the client-agent rejects it). An empty answer counts as no answer.
 

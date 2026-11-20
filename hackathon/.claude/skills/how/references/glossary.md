@@ -10,7 +10,7 @@ Facts as of `prometheus_core` `devel` 2026-10-30, after #310 (`prometheus_api` 0
 - **Background task.** Work after the turn ends, from `declare_long_running`; `/tasks` shows it (`long-running.md`).
 - **Base image.** `prometheus_api:local` with `LOCAL_SDK=true` (else `containers.github.inl.gov/genesis/prometheus_api:<tag>`). It holds the SDK (`environment.md`).
 - **`contextId`.** The conversation id: `context.context_id` in your code.
-- **Context state.** Per-agent, per-conversation JSON: `save_context_state`, `load_context_state`; 24 hours.
+- **Context state.** Per-agent, per-conversation JSON, stored by the backend: `await save_context_state`, `await load_context_state`; 24 hours.
 - **DeepLynx.** INL's data store for uploads, result files (`deeplynx://...`), and an execution record per call. No DeepLynx, no agent start.
 - **Discovery.** The client-agent reads the registry, fetches each card, and caches it 60 s (`run-and-register.md`).
 - **Flavor.** The LLM kind you ask for: `default`, `small`, `medium`, `large`, `vision`, `embedding` (`llm.md`).

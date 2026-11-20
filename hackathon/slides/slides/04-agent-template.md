@@ -1137,7 +1137,7 @@ Status, artifacts, user input, state, long-running work, and DeepLynx.
 | `send_input_required(context, eq, missing_inputs=[MissingInput(…)], hint=)` | Pause and ask the user (INPUT_REQUIRED); `return {}` afterwards |
 | `get_input_sources(context)` | Who supplied each param: `model`, `user` or `context` (the answers themselves are in `params`) |
 | `execution_record_id` | DeepLynx execution record of this call (inside `_execute`) |
-| `load_context_state(ctx_id)` / `save_context_state(ctx_id, state)` | Per-agent, per-conversation JSON state in Valkey (24 h TTL) |
+| `await load_context_state(ctx_id)` / `await save_context_state(ctx_id, state)` | Per-agent, per-conversation JSON state, stored by the backend (24 h TTL, 256 KB); `AgentStateConflict` on a concurrent save |
 | `declare_long_running(context, eq, estimate_seconds=, message=)` | The orchestrator detaches the turn; the result is delivered later over SSE |
 | `await run_worker(PrometheusWorker(...), context, eq)` | Run blocking code on a thread and stream its progress |
 | `llm_client(context, config=…)` | `AsyncLLMClient` (next section) |
