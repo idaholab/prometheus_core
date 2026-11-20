@@ -125,6 +125,11 @@ PROMETHEUS_SYSTEM_TESTING ?= false
 CLIENT_AGENT_PORT ?= 8001
 PROMETHEUS_SYSTEM_TEST_URL ?= http://localhost:$(CLIENT_AGENT_PORT)
 
+# E2E_TESTING=true adds docker-compose.e2e.yml, which points the backend at
+# e2e/stub-client-agent: it answers chat turns with a fixed reply, so the
+# frontend's full-stack tests need no LLM key. `make up-e2e` sets it.
+E2E_TESTING ?= false
+
 # Set PROFILE=prod to bring up the React frontend in production mode instead,
 # or PROFILE= (empty) to exclude the React frontend entirely. Default: dev.
 PROFILE ?= dev
@@ -184,6 +189,9 @@ COMPOSE_FILES := -f $(COMPOSE_BASE)
 ifeq ($(PROMETHEUS_SYSTEM_TESTING),true)
 COMPOSE_FILES += -f docker-compose.system-test.yml
 endif
+ifeq ($(E2E_TESTING),true)
+COMPOSE_FILES += -f docker-compose.e2e.yml
+endif
 ifneq ($(AGENT_COMPOSE_FILES),)
 COMPOSE_FILES += -f $(COMPOSE_AGENTS)
 endif
@@ -199,6 +207,9 @@ endif
 COMPOSE_FILES_NG := -f $(COMPOSE_BASE)
 ifeq ($(PROMETHEUS_SYSTEM_TESTING),true)
 COMPOSE_FILES_NG += -f docker-compose.system-test.yml
+endif
+ifeq ($(E2E_TESTING),true)
+COMPOSE_FILES_NG += -f docker-compose.e2e.yml
 endif
 ifneq ($(wildcard $(COMPOSE_AGENTS)),)
 COMPOSE_FILES_NG += -f $(COMPOSE_AGENTS)
@@ -461,7 +472,8 @@ down: ##@ Stop all services
 	$(COMPOSE) $(COMPOSE_FILES) $(PROFILE_FLAGS) down
 
 # The e2e stack: the platform for the frontend's full-stack tests
-# (frontend/e2e/full/), served by nginx (PROFILE=prod). It's its own compose
+# (frontend/e2e/full/), served by nginx (PROFILE=prod), with a stub agent
+# answering chat turns (E2E_TESTING=true). It's its own compose
 # project on its own host ports, so it runs beside a dev stack without touching
 # it, and it skips DeepLynx and the debug and optional agents. Those agent
 # settings change which agents `generate` lists, so the stack gets its own
@@ -474,14 +486,15 @@ down: ##@ Stop all services
 # blanks the JWT token, which the check refuses to combine with a key. A
 # developer's real DeepLynx credentials stay out of this stack.
 # The same for the LLM: compose needs a profile, but a model is only called
-# while handling a chat turn, which the tests don't send. So the stack sets a
+# while an agent handles a chat turn, and here the stub agent answers every turn
+# without one (E2E_TESTING=true, docker-compose.e2e.yml). So the stack sets a
 # profile with a made-up key, and blanks a custom LLM_CONFIG_FILE (which would
 # replace the profile) and the embedding key. A developer's real LLM key stays out
 # of this stack, and a fresh clone needs none.
 # Its ports are on loopback only (PUBLISH_ADDR): its admin, e2e-admin, has the
 # password in the repo, and Docker Engine's port rules bypass ufw and firewalld,
 # so on 0.0.0.0 anyone on the network could sign in as it.
-E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod \
+E2E_STACK := COMPOSE_PROJECT_NAME=prometheus_e2e PROFILE=prod E2E_TESTING=true \
 	COMPOSE_AGENTS=docker-compose.agents.e2e.yml \
 	LOCAL_DEEPLYNX=false DEBUG_AGENTS=false OPTIONAL_AGENTS=false \
 	DEEPLYNX_KEY=e2e-not-real DEEPLYNX_SECRET=e2e-not-real DEEPLYNX_JWT_TOKEN= \
