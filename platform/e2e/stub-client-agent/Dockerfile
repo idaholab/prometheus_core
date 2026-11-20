@@ -16,8 +16,12 @@ RUN --mount=type=cache,id=prometheus-uv-cache,target=/root/.cache/uv,sharing=loc
 COPY agent.py /app/agent.py
 COPY agent_card.json /app/agent_card.json
 # The shared viewer samples (platform/frontend/e2e/samples), from the compose
-# build context of that name. Only the ones the stub hands out
-COPY --from=samples part.stl model.ifc diagram.mmd results.json /app/samples/
+# build context of that name. Only the ones the stub hands out. A bind mount
+# reads a named context the same way the backend reads `sdk`, which hadolint
+# accepts; `COPY --from=samples` would be flagged as an unknown stage (DL3022)
+RUN --mount=type=bind,from=samples,target=/tmp/samples \
+    mkdir -p /app/samples && \
+    cp /tmp/samples/part.stl /tmp/samples/model.ifc /tmp/samples/diagram.mmd /tmp/samples/results.json /app/samples/
 
 # 8000: A2A (bearer auth). 8100: the sample files, for the backend to download
 EXPOSE 8000 8100
