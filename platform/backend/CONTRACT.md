@@ -544,7 +544,11 @@ keyed by its hash field, with empty card fields and `reachable: false`. `GET /v1
 returns it too.
 
 `reachable` is computed live on each request: it is true when `GET /healthz` on the
-origin of the card `url` answers 2xx within 2 s. The probes of a list request run
+origin of the card `url` answers 2xx within 2 s. The backend probes only an `http` or
+`https` card `url`, and never one whose host resolves to a link-local or cloud metadata
+address; such a row is `reachable: false`. Compose service names and private addresses
+are probed, because the in-tree agents run there. The registry is the trust boundary:
+whoever holds `AGENT_SECRET` chooses the card `url`. The probes of a list request run
 concurrently. Nothing is cached or stored. `checked_at` is the ISO 8601 UTC time at
 which the probes finished, also with a `+00:00` suffix.
 

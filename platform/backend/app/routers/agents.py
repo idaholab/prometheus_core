@@ -29,7 +29,9 @@ reach this wire. When Valkey is unreachable the list degrades to
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
+import socket
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -65,6 +67,42 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Addresses a card url may not lead to: the link-local range, which holds the cloud
+# metadata service (169.254.169.254), and AWS's IPv6 metadata address, which is
+# unique-local. A registrant could otherwise use the probe as a yes/no oracle on them.
+# Compose service names and private ranges stay allowed: that is where in-tree agents run.
+_METADATA_ADDRESSES = {ipaddress.ip_address("fd00:ec2::254")}
+
+
+async def _resolve(host: str, port: int) -> list[str]:
+    """The addresses *host* resolves to (a seam for tests)."""
+    infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return [str(info[4][0]) for info in infos]
+
+
+def _blocked(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return address.is_link_local or address.is_unspecified or address.is_multicast or address in _METADATA_ADDRESSES
+
+
+async def _probe_target(url: str) -> httpx.URL | None:
+    """The ``/healthz`` url to probe for a card *url*, or ``None`` when it must not be probed.
+
+    Only ``http`` and ``https`` are probed. The host is resolved first, and the probe is
+    refused when any of its addresses is blocked, so a numeric form (``0xa9fea9fe``) or a
+    DNS name that points at the metadata service is refused too.
+    """
+    parsed = httpx.URL(url)
+    if parsed.scheme not in ("http", "https") or not parsed.host:
+        return None
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    addresses = await _resolve(parsed.host, port)
+    if not addresses or any(_blocked(ipaddress.ip_address(address)) for address in addresses):
+        return None
+    return parsed.join("/healthz")
+
+
 async def _probe(client: httpx.AsyncClient, url: str) -> bool:
     """True when ``GET /healthz`` on the origin of *url* answers 2xx in time.
 
@@ -75,9 +113,13 @@ async def _probe(client: httpx.AsyncClient, url: str) -> bool:
     if not url:
         return False
     try:
-        # httpx applies its timeout per phase (connect, read, ...), so bound the whole call.
+        # One bound for the lookup and the request: httpx applies its own timeout per
+        # phase (connect, read, ...), and the lookup is not covered by it at all.
         async with asyncio.timeout(AGENT_PROBE_TIMEOUT_S):
-            response = await client.get(httpx.URL(url).join("/healthz"))
+            target = await _probe_target(url)
+            if target is None:
+                return False
+            response = await client.get(target)
     except Exception:  # noqa: BLE001 - every failure means "not reachable"
         return False
     return response.is_success

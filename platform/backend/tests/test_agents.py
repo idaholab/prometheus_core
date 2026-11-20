@@ -84,6 +84,19 @@ GAMMA = {
 }
 
 
+@pytest.fixture(autouse=True)
+def resolve_to_a_private_address(monkeypatch) -> None:
+    """Resolve every card host to one private address, so no test touches DNS.
+
+    A test that checks the address guard replaces this with its own resolver.
+    """
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return ["10.0.0.7"]
+
+    monkeypatch.setattr(agents_mod, "_resolve", resolve)
+
+
 def _authed_client(monkeypatch) -> TestClient:
     from app import security
     from app.config import settings
@@ -455,3 +468,47 @@ def test_checked_at_is_taken_after_the_probe(monkeypatch, fake_redis, path):
     body = _authed_client(monkeypatch).get(path).json()
 
     assert datetime.fromisoformat(body["checked_at"]) >= probed_at[0]
+
+
+@pytest.mark.parametrize(
+    ("url", "resolved"),
+    [
+        pytest.param("ftp://alpha-agent/", ["10.0.0.7"], id="not-http"),
+        pytest.param("file:///etc/passwd", ["10.0.0.7"], id="file"),
+        pytest.param("http://169.254.169.254/latest/", ["169.254.169.254"], id="metadata-v4"),
+        pytest.param("http://0xa9fea9fe/", ["169.254.169.254"], id="metadata-hex"),
+        pytest.param("http://metadata.example/", ["169.254.169.254"], id="dns-to-metadata"),
+        pytest.param("http://[fd00:ec2::254]/", ["fd00:ec2::254"], id="metadata-aws-v6"),
+        pytest.param("http://[::ffff:169.254.169.254]/", ["::ffff:169.254.169.254"], id="metadata-v4-mapped"),
+        pytest.param("http://[fe80::1]/", ["fe80::1"], id="link-local-v6"),
+        pytest.param("http://mixed.example/", ["10.0.0.7", "169.254.1.1"], id="any-address-blocked"),
+        pytest.param("http://nowhere.example/", [], id="no-address"),
+    ],
+)
+def test_probe_refuses_a_blocked_target(monkeypatch, fake_redis, url, resolved):
+    """A card url that is not http(s), or whose host resolves to a link-local or metadata
+    address, is reported unreachable without a request, so the probe is no oracle on it."""
+    entry = {**GAMMA, "agent_card_params": {**GAMMA["agent_card_params"], "url": url}}
+    _seed(fake_redis, entry)
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return resolved
+
+    monkeypatch.setattr(agents_mod, "_resolve", resolve)
+    seen = _route_probes(monkeypatch, {})
+
+    row = _authed_client(monkeypatch).get("/api/agents/gamma-agent").json()
+
+    assert row["reachable"] is False
+    assert seen == []
+
+
+def test_probe_allows_a_private_compose_host(monkeypatch, fake_redis):
+    """In-tree agents run on private compose addresses; those are probed."""
+    _seed(fake_redis, GAMMA)
+    seen = _route_probes(monkeypatch, {"gamma-agent": 200})
+
+    row = _authed_client(monkeypatch).get("/api/agents/gamma-agent").json()
+
+    assert row["reachable"] is True
+    assert [str(request.url) for request in seen] == ["http://gamma-agent:8000/healthz"]
