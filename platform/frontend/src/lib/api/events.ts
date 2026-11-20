@@ -23,12 +23,14 @@
  * backend events audit).
  */
 
-import type { StatusEvent, TaskDoneEvent, TaskProgressEvent } from "./types";
+import type { StatusEvent, TaskDoneEvent, TaskProgressEvent, TurnDoneEvent } from "./types";
 
 export interface EventStreamHandlers {
   onStatus?: (e: StatusEvent) => void;
   onTaskProgress?: (e: TaskProgressEvent) => void;
   onTaskDone?: (e: TaskDoneEvent) => void;
+  onTurnDone?: (e: TurnDoneEvent) => void;
+  /** Fires on the first connect and on every reconnect. */
   onOpen?: () => void;
   /** `closed` distinguishes the two very different things `EventSource` reports
    * as the same `error` event: `false` means it is retrying on its own (a
@@ -67,10 +69,15 @@ export function openEventStream(handlers: EventStreamHandlers): () => void {
     const data = parse<TaskDoneEvent>(ev);
     if (data) handlers.onTaskDone?.(data);
   };
+  const onTurnDone = (ev: MessageEvent) => {
+    const data = parse<TurnDoneEvent>(ev);
+    if (data) handlers.onTurnDone?.(data);
+  };
 
   source.addEventListener("status", onStatus as EventListener);
   source.addEventListener("task_progress", onTaskProgress as EventListener);
   source.addEventListener("task_done", onTaskDone as EventListener);
+  source.addEventListener("turn_done", onTurnDone as EventListener);
   if (handlers.onOpen) source.addEventListener("open", handlers.onOpen);
   // EventSource fires `error` on transient disconnects too (it auto-reconnects);
   // surface it but don't tear down — let the browser retry. `readyState` is read
@@ -85,6 +92,8 @@ export function openEventStream(handlers: EventStreamHandlers): () => void {
     source.removeEventListener("status", onStatus as EventListener);
     source.removeEventListener("task_progress", onTaskProgress as EventListener);
     source.removeEventListener("task_done", onTaskDone as EventListener);
+    source.removeEventListener("turn_done", onTurnDone as EventListener);
+    if (handlers.onOpen) source.removeEventListener("open", handlers.onOpen);
     source.close();
   };
 }
