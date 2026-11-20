@@ -27,6 +27,11 @@ Registrations live in one Valkey hash so every worker sees the same set and they
 a backend restart (agents only register when *they* start). A re-registering agent
 overwrites its own entry; ``make clear-agent-registry`` wipes the hash.
 
+With ``AGENT_IDENTITY_SOURCE=istio`` a registration also binds the caller's SPIFFE ID
+(from the Istio sidecar) to the agent name: an entry can only be overwritten or deleted
+by the workload that created it, and one workload can't register two names. Later
+``/v1`` routes resolve the caller through that binding (:mod:`app.agent_identity`).
+
 Every route requires ``Authorization: Bearer <AGENT_SECRET>``. These are called by
 agents, never the browser, so the session-cookie auth in :mod:`app.security` does not
 apply. ``static_headers`` hold agent credentials and are never returned.
@@ -45,6 +50,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
+from app.agent_identity import caller_spiffe_id
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
 from app.redis_client import RedisClient, get_redis
@@ -89,6 +95,16 @@ class AgentRegistration(BaseModel):
     static_headers: Dict[str, str] = Field(default_factory=dict)
 
 
+def _require_spiffe_id(request: Request) -> Optional[str]:
+    """The caller's SPIFFE ID under Istio (401 without one); ``None`` in trusted-name mode."""
+    if settings.agent_identity_source != "istio":
+        return None
+    spiffe_id = caller_spiffe_id(request)
+    if spiffe_id is None:
+        raise HTTPException(status_code=401, detail="No verified workload identity on the request")
+    return spiffe_id
+
+
 def _public_entry(stored: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "agent_id": stored["agent_name"],
@@ -105,8 +121,20 @@ async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
 
 
 @router.post("/v1/agents")
-async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(get_redis)) -> Dict[str, Any]:
+async def register_agent(
+    body: AgentRegistration, request: Request, redis: RedisClient = Depends(get_redis)
+) -> Dict[str, Any]:
     stored = body.model_dump()
+    spiffe_id = _require_spiffe_id(request)
+    if spiffe_id is not None:
+        for key, raw in (await redis.hgetall(REGISTRY_KEY)).items():
+            name = str(key)
+            bound = json.loads(raw).get("spiffe_id")
+            if name == body.agent_name and bound not in (None, spiffe_id):
+                raise HTTPException(status_code=403, detail=f"Agent '{name}' is registered by another workload")
+            if name != body.agent_name and bound == spiffe_id:
+                raise HTTPException(status_code=409, detail=f"This workload is already registered as '{name}'")
+        stored["spiffe_id"] = spiffe_id
     await redis.hset(REGISTRY_KEY, body.agent_name, json.dumps(stored))
     logger.info("Registered agent '%s' at %s", body.agent_name, body.agent_card_params.get("url", ""))
     return _public_entry(stored)
@@ -119,7 +147,12 @@ async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str,
 
 
 @router.delete("/v1/agents/{agent_id}")
-async def delete_agent(agent_id: str, redis: RedisClient = Depends(get_redis)) -> Dict[str, str]:
+async def delete_agent(agent_id: str, request: Request, redis: RedisClient = Depends(get_redis)) -> Dict[str, str]:
+    spiffe_id = _require_spiffe_id(request)
+    if spiffe_id is not None:
+        bound = (await _load(redis, agent_id)).get("spiffe_id")
+        if bound not in (None, spiffe_id):
+            raise HTTPException(status_code=403, detail=f"Agent '{agent_id}' is registered by another workload")
     if not await redis.hdel(REGISTRY_KEY, agent_id):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not registered")
     logger.info("Removed agent registration '%s'", agent_id)

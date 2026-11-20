@@ -581,3 +581,39 @@ class CreateSessionRequest(BaseModel):
 
     profile: Optional[str] = None
     bind_seq: Optional[int] = None
+
+
+# --------------------------------------------------------------------------- #
+# Mid-execution user approval (GET/POST /api/interactions)
+# --------------------------------------------------------------------------- #
+
+InteractionState = Literal["pending", "accepted", "declined", "expired", "cancelled"]
+InteractionResolvedBy = Literal["user", "timeout", "agent", "system"]
+
+
+class Interaction(BaseModel):
+    """A specialist agent's yes/no question to the user (docs/design/user-approval.md).
+
+    ``message`` is markdown. Timestamps are ISO-8601 UTC. ``turn_id``, when known,
+    places the card in the turn that raised it.
+    """
+
+    id: str
+    kind: Literal["approval"] = "approval"
+    conversation_id: str
+    task_id: str
+    turn_id: Optional[str] = None
+    agent: str
+    skill: str = ""
+    message: str
+    state: InteractionState
+    created_at: str
+    expires_at: str
+    resolved_at: Optional[str] = None
+    resolved_by: Optional[InteractionResolvedBy] = None
+
+
+class InteractionDecisionRequest(BaseModel):
+    """Body for ``POST /api/interactions/{id}``."""
+
+    decision: Literal["accept", "decline"]
