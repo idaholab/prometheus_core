@@ -544,7 +544,10 @@ keyed by its hash field, with empty card fields and `reachable: false`. `GET /v1
 returns it too.
 
 `reachable` is computed live on each request: it is true when `GET /healthz` on the
-origin of the card `url` answers 2xx within 2 s. The backend probes only an `http` or
+origin of the card `url` answers 2xx within 2 s. The probe drops the card `url`'s path,
+query and fragment, because the SDK serves `/healthz` at the root of the agent's app and
+the JSON-RPC route at the card `url`'s path. An agent behind a path-routing gateway
+(`http://gw/agents/x/`) is therefore probed at the gateway's `/healthz`. The backend probes only an `http` or
 `https` card `url`, and never one whose host resolves to a link-local or cloud metadata
 address; such a row is `reachable: false`. Compose service names and private addresses
 are probed, because the in-tree agents run there. The registry is the trust boundary:
