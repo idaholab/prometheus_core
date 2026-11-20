@@ -99,7 +99,7 @@ The backend consumes the client-agent's A2A `message/stream` and re-emits status
 1. **Registry**: each agent `POST`s `/v1/agents` at startup; the client-agent reads `GET /v1/agents`. Registrations live in one Valkey hash (`prometheus:agent-registry`), so they survive a backend restart; a re-registering agent overwrites its own entry.
 2. **Gateway**: the client-agent sends A2A JSON-RPC to `POST /a2a/{agent_name}`; the backend forwards it to the agent's card URL with the agent's registered `static_headers` (Bearer `AGENT_SECRET`) and streams SSE/NDJSON back unchanged.
 
-Every registry route requires `Authorization: Bearer <AGENT_SECRET>`. Every agent (client-agent included) `depends_on` a healthy backend; the backend does not depend on the client-agent. The client-agent still fetches each agent's `/.well-known/agent.json` for full per-skill metadata (`inputSchema` etc.). If you change capability metadata, verify both paths.
+Every route in `agent_registry.py` requires `Authorization: Bearer <AGENT_SECRET>`; they are service-to-service. The browser reads the same registry through `backend/app/routers/agents.py` (`GET /api/agents`, `GET /api/agents/{agent_name}`), which uses the session cookie instead and adds a live `reachable` probe of each agent's `/healthz` (`backend/CONTRACT.md`, "Agents"). `backend/app/agent_store.py` owns the hash key and its decoding for both. Every agent (client-agent included) `depends_on` a healthy backend; the backend does not depend on the client-agent. The client-agent still fetches each agent's `/.well-known/agent.json` for full per-skill metadata (`inputSchema` etc.). If you change capability metadata, verify both paths.
 
 ### Agents
 
