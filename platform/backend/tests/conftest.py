@@ -106,7 +106,11 @@ def no_real_signing_key_db_lookup(monkeypatch):
     async def _no_active_key() -> None:
         return None
 
+    async def _no_public_key(kid: str) -> None:
+        return None
+
     monkeypatch.setattr(identity_mod, "_load_active_key_from_db", _no_active_key)
+    monkeypatch.setattr(identity_mod, "_load_public_key_from_db", _no_public_key)
     yield
     signing_keys.invalidate_active_key_cache()
 

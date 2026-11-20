@@ -201,3 +201,53 @@ async def test_invalidating_the_cache_forces_a_reload(monkeypatch, rsa_keypair):
     signing_keys.invalidate_active_key_cache()
     await identity.mint_for_user("alice")
     assert len(calls) == 2
+
+
+# --------------------------------------------------------------------------- #
+# verify_user_token -- the backend checking a token it minted (agent-facing routes)
+# --------------------------------------------------------------------------- #
+
+
+async def test_verify_env_minted_token(monkeypatch, rsa_private_key_pem):
+    monkeypatch.setenv("USER_IDENTITY_PRIVATE_KEY", rsa_private_key_pem)
+    token = await identity.mint_for_user("alice")
+    assert token is not None
+    assert await identity.verify_user_token(token) == "alice"
+
+
+async def test_verify_db_minted_token_by_kid(monkeypatch, rsa_keypair):
+    private_pem, public_pem = rsa_keypair
+    kid = signing_keys.compute_kid(public_pem)
+    _stub_db_key(monkeypatch, kid, private_pem)
+    monkeypatch.delenv("USER_IDENTITY_PRIVATE_KEY", raising=False)
+
+    async def _public(requested: str):
+        return public_pem if requested == kid else None
+
+    monkeypatch.setattr(identity, "_load_public_key_from_db", _public)
+    token = await identity.mint_for_user("alice")
+    assert token is not None
+    assert await identity.verify_user_token(token) == "alice"
+
+
+async def test_verify_rejects_foreign_expired_and_garbage(monkeypatch, rsa_private_key_pem):
+    from prometheus_api.agent.identity_keygen import generate_keypair
+
+    monkeypatch.setenv("USER_IDENTITY_PRIVATE_KEY", generate_keypair(key_size=2048)[0])
+    foreign = await identity.mint_for_user("mallory")
+    monkeypatch.setenv("USER_IDENTITY_PRIVATE_KEY", rsa_private_key_pem)
+    assert foreign is not None
+    assert await identity.verify_user_token(foreign) is None
+
+    monkeypatch.setenv("USER_IDENTITY_TTL", "-10")
+    expired = await identity.mint_for_user("alice")
+    assert expired is not None
+    assert await identity.verify_user_token(expired) is None
+
+    assert await identity.verify_user_token("") is None
+    assert await identity.verify_user_token("not.a.jwt") is None
+
+
+async def test_verify_without_any_key(monkeypatch):
+    monkeypatch.delenv("USER_IDENTITY_PRIVATE_KEY", raising=False)
+    assert await identity.verify_user_token("a.b.c") is None

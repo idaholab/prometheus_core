@@ -12,7 +12,7 @@
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
@@ -103,6 +103,18 @@ def _redis_url(data: dict[str, Any]) -> str:
     return _with_redis_password(os.environ.get("REDIS_URL", data.get("redis-url", "redis://localhost:6379")))
 
 
+def _agent_identity_source(data: dict[str, Any]) -> Literal["trusted-name", "istio"]:
+    """``AGENT_IDENTITY_SOURCE`` / ``agent-identity-source``: ``trusted-name`` or ``istio``.
+
+    See :mod:`app.agent_identity`. An unknown value fails at startup rather than
+    silently falling back to the weaker mode.
+    """
+    raw = (os.environ.get("AGENT_IDENTITY_SOURCE") or data.get("agent-identity-source") or "trusted-name").strip()
+    if raw not in ("trusted-name", "istio"):
+        raise ValueError(f"AGENT_IDENTITY_SOURCE must be 'trusted-name' or 'istio', got {raw!r}")
+    return cast(Literal["trusted-name", "istio"], raw)
+
+
 def _cookie_secure(data: dict) -> bool:
     """Whether to mark auth cookies ``Secure``, derived from the browser-facing scheme.
 
@@ -143,6 +155,8 @@ class Settings(BaseSettings):
     agent_url: str = os.environ.get("CLIENT_AGENT_URL", data.get("agent-url", "http://localhost:8001"))
     agent_secret: str = os.environ.get("AGENT_SECRET", data.get("agent-secret", ""))
     redis_url: str = _redis_url(data)
+    # How /v1 routes tell agents apart (app/agent_identity.py).
+    agent_identity_source: Literal["trusted-name", "istio"] = _agent_identity_source(data)
 
     # ``BaseSettings`` also reads the ``REDIS_URL`` env var into this field, which
     # replaces the default above and would skip the ``REDIS_PASSWORD`` folding.
@@ -172,6 +186,18 @@ class Settings(BaseSettings):
     mesh_timeout_seconds: int = _positive_int(
         (os.environ.get("PROMETHEUS_MESH_TIMEOUT_SECONDS") or "").strip() or data.get("mesh-timeout-seconds", 120),
         "mesh-timeout-seconds",
+    )
+
+    # Agent state (/v1/agent-state, app/services/agent_state.py). TTL is refreshed on
+    # every write; 24 h matches the SDK's TASK_STORE_TTL_SECONDS, so task state and
+    # the task it resumes expire together.
+    agent_state_ttl_seconds: int = _positive_int(
+        (os.environ.get("AGENT_STATE_TTL_SECONDS") or "").strip() or data.get("agent-state-ttl-seconds", 86400),
+        "agent-state-ttl-seconds",
+    )
+    agent_state_max_bytes: int = _positive_int(
+        (os.environ.get("AGENT_STATE_MAX_BYTES") or "").strip() or data.get("agent-state-max-bytes", 262144),
+        "agent-state-max-bytes",
     )
 
     # Behavior
