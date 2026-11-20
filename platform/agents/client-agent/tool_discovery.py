@@ -477,7 +477,7 @@ async def call_a2a_agent(
         )
     # Propagate the conversation scope as the A2A contextId so downstream
     # agents see RequestContext.context_id == conversation_id. This is what
-    # scopes the ArtifactRegistry and ContextStateStore on the specialist
+    # scopes the ArtifactRegistry and the agent-state API on the specialist
     # side. The INPUT_REQUIRED resume path overrides it with the contextId
     # echoed by the downstream agent, which is the same value once the
     # initial call carried it.

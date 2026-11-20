@@ -562,7 +562,7 @@ For workflows that need several distinct forms (e.g. classification fields then 
 ```python
 async def _execute(self, params, context, event_queue):
     context_id = str(context.context_id)
-    state = self.load_context_state(context_id)
+    state = await self.load_context_state(context_id)
     phase = state.get("phase", "start")
 
     if phase == "start":
@@ -574,7 +574,7 @@ async def _execute(self, params, context, event_queue):
     raise ValueError(f"Unknown phase: {phase!r}")
 
 async def _phase_start(self, params, context, event_queue, context_id):
-    self.save_context_state(context_id, {
+    await self.save_context_state(context_id, {
         "phase": "awaiting_classification",
         "initial_params": params,
     })
@@ -596,7 +596,7 @@ async def _phase_classification(self, params, context, event_queue, context_id, 
     # This round's answers arrive in params; earlier rounds' answers live in state.
     profile = {**state.get("profile", {}), **{k: params[k] for k in ("code_class", "safety_category") if k in params}}
 
-    self.save_context_state(context_id, {
+    await self.save_context_state(context_id, {
         "phase": "awaiting_sizing",
         "profile": profile,
         "initial_params": state.get("initial_params"),
@@ -619,7 +619,7 @@ async def _phase_sizing(self, params, context, event_queue, context_id, state):
         if params.get(k) is not None:
             profile[k] = params[k]
 
-    self.save_context_state(context_id, {})   # clear state when done
+    await self.save_context_state(context_id, {})   # clear state when done
 
     result = run_analysis(profile)   # your business logic
     await self.send_json_artifact(
@@ -653,25 +653,25 @@ Save state *before* calling `send_input_required`, not after. Once you call it, 
 ```python
 # WRONG — state is saved after the final event is emitted
 await self.send_input_required(...)
-self.save_context_state(context_id, state)   # may not persist reliably
+await self.save_context_state(context_id, state)   # may not persist reliably
 return {}
 
 # CORRECT
-self.save_context_state(context_id, state)
+await self.save_context_state(context_id, state)
 await self.send_input_required(...)
 return {}
 ```
 
 **3. Using `task_id` as the state key**
 
-`task_id` changes on every invocation (each turn is a new task). `context_id` is stable for the entire conversation. Always use `context_id` as the state key.
+The key is the conversation: the backend checks that the turn's user owns it, so anything else, such as `task_id`, fails with `AgentStateError`. Always pass `context_id`.
 
 ```python
-# WRONG — state is lost on resume
-self.save_context_state(context.task_id, state)
+# WRONG — not a conversation ID; the backend refuses it
+await self.save_context_state(context.task_id, state)
 
 # CORRECT
-self.save_context_state(str(context.context_id), state)
+await self.save_context_state(str(context.context_id), state)
 ```
 
 **4. Copying params into context state "for the resume"**
@@ -680,7 +680,7 @@ Not needed: on resume the platform re-sends every original argument with the ans
 
 ```python
 # WRONG — redundant; params already has material_id on resume
-self.save_context_state(context_id, {"resolved": {"material_id": params["material_id"]}})
+await self.save_context_state(context_id, {"resolved": {"material_id": params["material_id"]}})
 
 # CORRECT
 material_id = params.get("material_id")
@@ -693,10 +693,10 @@ material_id = params.get("material_id")
 ```python
 # First turn
 skill_id = params.get("skill_id")
-self.save_context_state(context_id, {"skill_id": skill_id, "phase": "awaiting_input"})
+await self.save_context_state(context_id, {"skill_id": skill_id, "phase": "awaiting_input"})
 
 # Resume turn
-state = self.load_context_state(context_id)
+state = await self.load_context_state(context_id)
 skill_id = params.get("skill_id") or state.get("skill_id")
 ```
 
@@ -876,9 +876,8 @@ behavior changes, see [Prometheus Agent Migration Guide](AGENT_MIGRATIONS.md).
 | `REGISTRY_MAX_RETRIES` | `10` | Registration retries after the first attempt, used for both explicit `REGISTRY_URL` and the built-in fallback URL. |
 | `LITELLM_MASTER_KEY` | — | LiteLLM admin key |
 | `LLM_API_KEY` | — | If the agent calls Claude directly |
-| `REDIS_URL` | `redis://localhost:6379` | Redis for artifact catalog and context state |
+| `REDIS_URL` | `redis://localhost:6379` | Redis for the artifact catalog |
 | `REDIS_PASSWORD` | — | Redis auth password |
-| `AGENT_CONTEXT_TTL_SECONDS` | `86400` | TTL for per-context persisted state (24 h) |
 
 ---
 
@@ -1040,13 +1039,13 @@ Register and emit a URI-backed file artifact.
 
 Emit a durable chat-visible message.
 
-### `load_context_state(context_id) → Dict`
+### `await load_context_state(context_id) → Dict`
 
-Load persisted per-context state. Returns `{}` if nothing saved.
+Load this agent's state for the conversation. Returns `{}` if nothing saved. Raises `AgentStateError` if the backend can't be reached.
 
-### `save_context_state(context_id, state)`
+### `await save_context_state(context_id, state)`
 
-Persist agent-local state (Redis with in-memory fallback, TTL 24 h by default).
+Persist this agent's state for the conversation. The backend stores it (`/v1/agent-state`), private to this agent and the turn's user, for 24 h after the last save. Raises `AgentStateConflict` if another request saved since this request's load.
 
 ### `get_input_sources(context) → Dict[str, str]`
 

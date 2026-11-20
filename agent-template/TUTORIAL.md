@@ -1270,12 +1270,12 @@ See [PrometheusAgent Quick Start — DeepLynx artifact](https://github.com/idaho
 If your agent needs to remember context between turns (e.g. partial results, user preferences), use the built-in state store keyed by `context_id`:
 
 ```python
-state = self.load_context_state(str(context.context_id))
+state = await self.load_context_state(str(context.context_id))
 state["counter"] = state.get("counter", 0) + 1
-self.save_context_state(str(context.context_id), state)
+await self.save_context_state(str(context.context_id), state)
 ```
 
-State is backed by Redis when `REDIS_URL` is set, with an in-memory fallback for local development.
+The platform backend stores the state (`/v1/agent-state`), private to your agent and the conversation's user, for 24 h after the last save. Your agent needs `REGISTRY_URL` pointing at the backend and the turn's user identity; without them the call raises `AgentStateError`.
 
 As of prometheus_api 0.7.0, `context.context_id` is the **stable conversation
 ID** propagated by the orchestrator: state saved in one call is visible to

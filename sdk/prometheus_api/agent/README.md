@@ -37,7 +37,7 @@ Use helper methods when needed:
 - `send_json_artifact(..., catalog_artifact=True)` for reusable inline JSON artifacts
 - `send_conversation_message(...)` for durable chat-visible messages
 - `send_input_required(...)` for missing-input requests
-- `load_context_state(...)` / `save_context_state(...)` for resumable agent-local state keyed by `contextId`
+- `await load_context_state(...)` / `await save_context_state(...)` for per-conversation agent state, stored by the backend
 
 To enable streaming (`SendStreamingMessage`), set
 `"capabilities": {"streaming": true}` in `agent_card.json`.
@@ -68,7 +68,7 @@ substantive updates. Heartbeats carry no message and are tagged
 - `MissingInput`: canonical descriptor for `INPUT_REQUIRED`
 - `ArtifactReference` / `ArtifactRegistry`: conversation artifact helpers
 - `AgentRegistryClient`: LiteLLM registry registration client with exponential retries
-- `ContextStateStore`: per-agent state persistence keyed by `contextId`
+- `AgentStateClient`: client for the backend's `/v1/agent-state` API (task and conversation scope)
 - `BearerTokenMiddleware`: shared-secret auth middleware
 
 ## Installation

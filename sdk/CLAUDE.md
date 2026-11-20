@@ -14,11 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Two more shared, dependency-light top-level modules (do not copy their logic into consumers):
 - `prometheus_api.a2a_stream` — client-side consumption of A2A `message/stream` responses (SSE/NDJSON parsing, heartbeat skipping, status/background callbacks, artifact merge). Used by the platform frontend and client-agent.
-- `prometheus_api.redis_utils` — `create_redis_client()`, the single Redis connection recipe (`REDIS_URL`/`REDIS_PASSWORD`, `decode_responses=True`, fail-fast ping, logged `None` on failure). The agent stores (`ArtifactRegistry`, `ContextStateStore`, `RedisTaskStore`) build their connections through it.
+- `prometheus_api.redis_utils` — `create_redis_client()`, the single Redis connection recipe (`REDIS_URL`/`REDIS_PASSWORD`, `decode_responses=True`, fail-fast ping, logged `None` on failure). The agent stores (`ArtifactRegistry`, `RedisTaskStore`) build their connections through it.
 
 Artifact-to-file resolution (cache layout, allowed local roots, fsspec downloads, inline materialization) lives in `prometheus_api.agent.artifact_resolver.ArtifactResolver`; `PrometheusAgent.get_artifact_file_path` looks the artifact up once with `ArtifactResolver.require_reference`, downloads it with `get_reference_file_path`, and links it as a lineage input.
 
-The agent component depends on the storage client (used internally for `ContextStateStore` and artifact persistence). The A2A server stack (`a2a-sdk[http-server]`, `starlette`, `uvicorn`) is part of the base `dependencies` — there is no `[agent]` extra.
+The agent component depends on the storage client (used internally for artifact persistence). The A2A server stack (`a2a-sdk[http-server]`, `starlette`, `uvicorn`) is part of the base `dependencies` — there is no `[agent]` extra.
 
 ## Common Commands
 
@@ -92,7 +92,7 @@ Inside `_execute`, use the helpers rather than constructing A2A events manually:
 - `send_conversation_message(...)` — durable chat-visible message
 - `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload. On resume the answers arrive merged into `params` with every original argument; there is no separate provided-inputs channel. The resume reuses the task's execution item (REQ-009-23) and does not re-emit the stored task (REQ-009-24 above), so a blocking caller gets the resumed work's result
 - `get_input_sources(context)` — who supplied each param (`"model"` / `"user"` / `"context"`), from `inputSources` message metadata
-- `load_context_state(...)` / `save_context_state(...)` — per-`contextId` resumable state via `ContextStateStore`
+- `await load_context_state(...)` / `await save_context_state(...)` — per-conversation agent state, stored by the backend (`/v1/agent-state`, `AgentStateClient`); no agent Valkey access
 
 The agent module also re-exports common A2A types (`RequestContext`, `EventQueue`, `TaskState`, `TaskStatus`, `TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`, `Artifact`, `TextPart`) from `prometheus_api.agent`, so subclasses normally don't need to import directly from `a2a.*`.
 

@@ -143,12 +143,12 @@ class TEMPLATE_CLASSAgent(PrometheusAgent):
     #         return {"status": "error", "error": f"Unknown skill: {params.get('skill_id')}"}
     #     return await handler(params, context, event_queue)
     #
-    # Persisting per-conversation state across turns (Redis-backed, with an
-    # in-memory fallback for local development):
+    # Persisting per-conversation state across turns (stored by the platform
+    # backend; needs REGISTRY_URL and the turn's user identity):
     #
-    #     state = self.load_context_state(str(context.context_id))
+    #     state = await self.load_context_state(str(context.context_id))
     #     state["count"] = state.get("count", 0) + 1
-    #     self.save_context_state(str(context.context_id), state)
+    #     await self.save_context_state(str(context.context_id), state)
     #
     # See TUTORIAL.md ("Advanced topics") for emitting artifacts, asking the
     # user for missing inputs (INPUT_REQUIRED), and DeepLynx file storage.

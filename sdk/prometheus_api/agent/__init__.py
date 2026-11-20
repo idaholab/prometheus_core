@@ -42,7 +42,7 @@ from .base import (
 )
 from .artifact_resolver import ArtifactResolver
 from .artifacts import ArtifactReference, ArtifactRegistry
-from .context_state import ContextStateStore
+from .agent_state import AgentStateClient, AgentStateConflict, AgentStateError
 from ..contract import ConversationRequest, ConversationResponse, ConversationStatus
 from .task_store import RedisTaskStore
 from .registry import AgentRegistryClient
@@ -95,7 +95,9 @@ __all__ = [
     "ArtifactRegistry",
     "ArtifactResolver",
     "AgentRegistryClient",
-    "ContextStateStore",
+    "AgentStateClient",
+    "AgentStateConflict",
+    "AgentStateError",
     "ConversationRequest",
     "ConversationResponse",
     "ConversationStatus",

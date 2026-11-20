@@ -26,6 +26,7 @@ from app.routers import (
     admin_oidc,
     admin_users,
     agent_registry,
+    agent_state,
     artifacts,
     auth,
     chat,
@@ -146,3 +147,4 @@ app.include_router(admin_users.router)
 app.include_router(admin_keys.router)
 app.include_router(admin_oidc.router)
 app.include_router(agent_registry.router)
+app.include_router(agent_state.router)

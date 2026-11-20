@@ -9,7 +9,7 @@ Architecture, conventions, and the day-to-day commands for working on `prometheu
 1. **`prometheus_api.storage_client`** — Pydantic-typed sync (`StorageClient`) and async (`AsyncStorageClient`) HTTP clients for items, files (incl. chunked uploads), relationships, search, tags, timeseries. Also registers a `deeplynx://` fsspec filesystem (`DeepLynxFileSystem`) via the `fsspec.specs` entry point.
 2. **`prometheus_api.agent`** — `PrometheusAgent` base class for A2A-protocol agents (built on `a2a-sdk` + Starlette/uvicorn). Subclasses override `async _execute(params, context, event_queue)` and the base handles agent-card loading, bearer-token auth, registry registration, status/artifact emission, and per-`contextId` state persistence.
 
-The agent component depends on the storage client (used internally for `ContextStateStore` and artifact persistence). The A2A server stack is part of the base dependencies — there is no `[agent]` extra.
+The agent component depends on the storage client (used internally for artifact persistence). The A2A server stack is part of the base dependencies — there is no `[agent]` extra.
 
 ## Common commands
 
@@ -85,7 +85,7 @@ Subclasses override `async _execute(self, params, context: RequestContext, event
 - `send_json_artifact(..., catalog_artifact=True)` — reusable inline JSON artifact
 - `send_conversation_message(...)` — durable chat-visible message
 - `send_input_required(missing_inputs=[MissingInput(...)])` — INPUT_REQUIRED with canonical payload
-- `load_context_state(...)` / `save_context_state(...)` — per-`contextId` resumable state via `ContextStateStore`
+- `await load_context_state(...)` / `await save_context_state(...)` — per-conversation agent state via the backend (`AgentStateClient`)
 
 Streaming (`message/stream`) is opt-in: set `"capabilities": {"streaming": true}` in the agent's `agent_card.json`. Bearer-token auth via `BearerTokenMiddleware` is enforced when `AGENT_SECRET` is set; setting `AGENT_SECRET_REQUIRED=false` is a development-only escape hatch.
 

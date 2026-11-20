@@ -18,6 +18,11 @@ agent-url: "http://localhost:8001"
 agent-secret: ""
 redis-url: "redis://localhost:6379"
 
+# How agent-facing /v1 routes identify the calling agent (env AGENT_IDENTITY_SOURCE):
+# "trusted-name" trusts the X-Agent-Name header (Docker Compose); "istio" reads the
+# SPIFFE ID from the Istio sidecar's x-forwarded-client-cert (Kubernetes).
+agent-identity-source: "trusted-name"
+
 # Upload handling (overridden by env var PROMETHEUS_MAX_UPLOAD_BYTES)
 max-upload-bytes: 104857600
 
@@ -30,6 +35,12 @@ mesh-workers: 2
 # Wall-clock budget for one conversion, in seconds (env PROMETHEUS_MESH_TIMEOUT_SECONDS).
 # On expiry the worker is killed and that artifact degrades to a file download.
 mesh-timeout-seconds: 120
+
+# Agent state store (/v1/agent-state): TTL in seconds, refreshed on every write
+# (env AGENT_STATE_TTL_SECONDS), and the cap on one record's JSON state
+# (env AGENT_STATE_MAX_BYTES). Large data belongs in artifacts or DeepLynx.
+agent-state-ttl-seconds: 86400
+agent-state-max-bytes: 262144
 
 debug: false
 auto-approve-steps: false
