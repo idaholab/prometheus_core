@@ -1,7 +1,7 @@
 [project]
 name = "stub-client-agent"
 version = "0.1.0"
-description = "Stub client-agent for the frontend's end-to-end tests: fixed replies, no LLM"
+description = "Stub client-agent for the frontend's end-to-end tests: fixed replies and viewer samples, no LLM"
 requires-python = ">=3.12"
 dependencies = []
 
