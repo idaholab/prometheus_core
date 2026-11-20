@@ -543,3 +543,31 @@ def test_probe_names_itself_in_the_user_agent(monkeypatch, fake_redis):
     _authed_client(monkeypatch).get("/api/agents/gamma-agent")
 
     assert seen[0].headers["user-agent"] == "prometheus-backend-status"
+
+
+@pytest.mark.parametrize(
+    ("url", "probed"),
+    [
+        pytest.param("http://gamma-agent:8000", "http://gamma-agent:8000/healthz", id="bare-origin"),
+        pytest.param("http://gamma-agent:8000/a2a/", "http://gamma-agent:8000/healthz", id="path"),
+        pytest.param("http://gamma-agent:8000/a2a/?x=1", "http://gamma-agent:8000/healthz", id="path-and-query"),
+        pytest.param("http://gamma-agent:8000/a2a#frag", "http://gamma-agent:8000/healthz", id="fragment"),
+        pytest.param("  http://gamma-agent:8000/  ", "http://gamma-agent:8000/healthz", id="whitespace"),
+        pytest.param("https://gamma-agent/agents/x/", "https://gamma-agent/healthz", id="https-gateway-path"),
+        pytest.param("", None, id="empty"),
+        pytest.param("   ", None, id="blank"),
+        pytest.param("not a url", None, id="garbage"),
+    ],
+)
+def test_probe_targets_the_card_url_origin(monkeypatch, fake_redis, url, probed):
+    """The probe goes to ``/healthz`` on the card url's origin, whatever path, query or
+    fragment the url has: the SDK serves ``/healthz`` at the root of the agent's app. A url
+    with no host is reported unreachable without a request."""
+    entry = {**GAMMA, "agent_card_params": {**GAMMA["agent_card_params"], "url": url}}
+    _seed(fake_redis, entry)
+    seen = _route_probes(monkeypatch, {"gamma-agent": 200})
+
+    row = _authed_client(monkeypatch).get("/api/agents/gamma-agent").json()
+
+    assert [str(request.url) for request in seen] == ([probed] if probed else [])
+    assert row["reachable"] is (probed is not None)
