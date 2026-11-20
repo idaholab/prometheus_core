@@ -18,3 +18,176 @@ rules:
   # The backend is self-hosted, so there's no one server URL to list. Clients
   # call the host they loaded the document from
   no-empty-servers: off
+
+  # Replaced by rule/operation-4xx-response below, which makes the same check
+  # but skips the routes that can't answer with a 4xx
+  operation-4xx-response: off
+
+  # Every operation documents at least one 4xx response, like the built-in rule,
+  # except on the routes listed here. Each one either has no input to reject
+  # or reports failure with a 5xx:
+  #   /healthz, /readyz      health probes; /readyz's failure is a 503
+  #   /.well-known/jwks.json public signing keys
+  #   /api/setup/status      whether the first admin exists
+  #   /api/auth/logout       always 200, even with no or a bad cookie
+  #   /api/auth/providers    public list of login options
+  # Only add a route here if it can't answer with a 4xx. If it can, document
+  # the response with app/api_responses.py
+  rule/operation-4xx-response:
+    subject:
+      type: Responses
+    assertions:
+      # Every registered 4xx code, and the 4XX range. Redocly can't match keys
+      # by pattern here, so they're listed
+      requireAny:
+        - "4XX"
+        - "400"
+        - "401"
+        - "402"
+        - "403"
+        - "404"
+        - "405"
+        - "406"
+        - "407"
+        - "408"
+        - "409"
+        - "410"
+        - "411"
+        - "412"
+        - "413"
+        - "414"
+        - "415"
+        - "416"
+        - "417"
+        - "418"
+        - "421"
+        - "422"
+        - "423"
+        - "424"
+        - "425"
+        - "426"
+        - "428"
+        - "429"
+        - "431"
+        - "451"
+    where:
+      - subject:
+          type: PathItem
+          filterOutParentKeys:
+            - /healthz
+            - /readyz
+            - /.well-known/jwks.json
+            - /api/setup/status
+            - /api/auth/logout
+            - /api/auth/providers
+        assertions:
+          defined: true
+    message: Operation must have at least one `4XX` response.
+    severity: error
+
+  # The route documentation standard in ../README.md, "Documenting a route".
+  # recommended-strict already requires a summary, an operationId and tag
+  # descriptions; these check the rest of what a linter can
+
+  # The docstring, written for API consumers
+  operation-description: error
+
+  # description= on Query(), Path(), Header() and Cookie()
+  parameter-description: error
+
+  # Field(description=...) on every top-level field of the backend's named
+  # models; an inline nested object's fields aren't checked. FastAPI's own
+  # validation error schemas are skipped because no model of ours defines them.
+  # A field that's only a reference to another model passes, because Redocly
+  # reads the referenced model's description
+  rule/schema-property-description:
+    subject:
+      type: Schema
+      property: description
+    where:
+      - subject:
+          type: NamedSchemas
+        assertions:
+          defined: true
+      - subject:
+          type: Schema
+          filterOutParentKeys:
+            - HTTPValidationError
+            - ValidationError
+        assertions:
+          defined: true
+      - subject:
+          type: SchemaProperties
+        assertions:
+          defined: true
+    assertions:
+      defined: true
+    message: Model fields must have a description. Set Field(description=...)
+    severity: error
+
+  # A success response says what it returns: response_model= for JSON, or
+  # response_class= and its content type for a stream, file or redirect.
+  # FastAPI writes an empty schema for a route with neither. A response with no
+  # content, or a content type with no schema, isn't checked
+  rule/typed-response:
+    subject:
+      type: Schema
+    where:
+      - subject:
+          type: Response
+          filterInParentKeys:
+            - "200"
+            - "201"
+            - "202"
+            - "203"
+            - "206"
+        assertions:
+          defined: true
+      - subject:
+          type: MediaType
+        assertions:
+          defined: true
+    assertions:
+      requireAny:
+        - type
+        - anyOf
+        - oneOf
+        - allOf
+        - const
+        - enum
+    message: >-
+      Success responses must have a schema. Set response_model=, or
+      response_class= and its content type in responses=
+    severity: error
+
+  # Exactly one tag per route, from the catalog in app/openapi.py
+  operation-tag-defined: error
+  operation-singular-tag: error
+
+  # Zalando's naming rules: kebab-case paths, snake_case fields and parameters
+  paths-kebab-case: error
+
+  rule/property-snake-case:
+    subject:
+      type: SchemaProperties
+    assertions:
+      casing: snake_case
+    message: Field names must be snake_case.
+    severity: error
+
+  rule/parameter-snake-case:
+    subject:
+      type: Parameter
+      property: name
+    where:
+      - subject:
+          type: Parameter
+          property: in
+        assertions:
+          enum:
+            - path
+            - query
+    assertions:
+      casing: snake_case
+    message: Path and query parameter names must be snake_case.
+    severity: error

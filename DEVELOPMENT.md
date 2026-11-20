@@ -187,7 +187,8 @@ diff. CI's `platform: backend openapi` job fails if it's out of date. If the dif
 changes more than wording, your change altered the API: either fix the change, or,
 if it's intentional, explain the difference in the PR. The frontend mirrors the
 wire contract in TypeScript, so update both together. See "OpenAPI document" in
-`platform/backend/README.md`.
+`platform/backend/README.md`. A new or changed route follows "Documenting a route"
+there, which the document's lint checks.
 
 ### SDK (`prometheus_api`)
 

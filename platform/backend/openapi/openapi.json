@@ -3,6 +3,11 @@
   "info": {
     "title": "Prometheus Backend",
     "description": "The JSON/SSE API behind the Prometheus Platform's React frontend. The backend\nauthenticates users, holds per-browser session state, relays chat turns to the\nclient-agent orchestrator, and streams progress back over Server-Sent Events.\n\n## Authentication\n\nAuthentication is a session cookie (`prometheus_session` by default; the name is\nconfigurable). It is an HttpOnly, `SameSite=Lax` JWT issued by a successful login\nand sent automatically by the browser on every request. Routes that need it answer\n`401` without a valid, unrevoked cookie; `/api/admin/*` routes additionally answer\n`403` unless the user has the `admin` role.\n\nPublic routes: `/healthz`, `/.well-known/jwks.json`, `/api/setup/*`, and every\n`/api/auth/*` route except `GET /api/auth/me`.\n\n## Typical flow\n\n1. **First run:** `GET /api/setup/status`; if not bootstrapped,\n   `POST /api/setup/bootstrap` creates the first admin and logs them in.\n2. **Log in:** `GET /api/auth/providers` lists the login options. Then either\n   `POST /api/auth/login` (username and password), or follow the browser redirect\n   from `GET /api/auth/login/{provider_id}` (OIDC).\n3. **Start a conversation:** `POST /api/sessions` binds a new `conversation_id` to\n   the session. The id lives server-side and is never sent in a request body.\n4. **Open the event stream:** `GET /api/events` (one per browser session) for\n   status updates and background-task progress.\n5. **Chat:** `POST /api/chat/messages`, optionally attaching files staged with\n   `POST /api/uploads`. Fetch artifacts with\n   `GET /api/artifacts/{artifact_id}/content`.\n6. **History:** `/api/conversations/*` lists, reopens, renames and deletes past\n   conversations.\n\n## Errors\n\nErrors are JSON of the form `{\"detail\": \"<message>\"}`, and the message is meant to\nbe shown to the user. The exception is request validation performed by the\nframework itself, which returns `422` with `detail` as a list of field errors.\n\nA chat turn that fails while talking to the agent is **not** an HTTP error: it\nreturns `200` with `status: \"error\"` and a `message`, so the conversation can render\nit inline.\n\n## Wire contract\n\nEvery payload is defined by the Pydantic models in `app/contract.py` and explained,\nwith examples, in `CONTRACT.md` alongside this service.\n",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT",
+      "url": "https://github.com/idaholab/prometheus_core/blob/main/LICENSE"
+    },
     "version": "0.1.0"
   },
   "paths": {
@@ -12,7 +17,7 @@
           "health"
         ],
         "summary": "Healthz",
-        "operationId": "healthz_healthz_get",
+        "operationId": "healthz",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -23,7 +28,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Healthz Healthz Get"
+                  "title": "Response Healthz"
                 }
               }
             }
@@ -37,7 +42,7 @@
           "health"
         ],
         "summary": "Readyz",
-        "operationId": "readyz_readyz_get",
+        "operationId": "readyz",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -56,7 +61,7 @@
           "identity"
         ],
         "summary": "Jwks",
-        "operationId": "jwks__well_known_jwks_json_get",
+        "operationId": "jwks",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -71,7 +76,7 @@
                     "type": "array"
                   },
                   "type": "object",
-                  "title": "Response Jwks  Well Known Jwks Json Get"
+                  "title": "Response Jwks"
                 }
               }
             }
@@ -84,9 +89,9 @@
         "tags": [
           "setup"
         ],
-        "summary": "Status ",
+        "summary": "Get Setup Status",
         "description": "``needs_setup`` is true iff no ``users`` row exists yet.",
-        "operationId": "status__api_setup_status_get",
+        "operationId": "get_setup_status",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -108,7 +113,7 @@
         ],
         "summary": "Bootstrap",
         "description": "Create the first admin user, once, and log them in immediately.\n\nClosing the race between two concurrent first requests matters here more than\nalmost anywhere else in the app (it's the one window where *anyone* can create\nan admin account) so, on Postgres, this takes a transaction-scoped advisory\nlock before checking the count -- a second concurrent request blocks until the\nfirst commits (at which point its own count check correctly sees >0). SQLite\n(used in tests, and only in tests) has no advisory locks; the plain\ncheck-then-insert below is fine there since TestClient issues requests\nsequentially, not concurrently.",
-        "operationId": "bootstrap_api_setup_bootstrap_post",
+        "operationId": "bootstrap",
         "requestBody": {
           "content": {
             "application/json": {
@@ -150,7 +155,54 @@
         ],
         "summary": "Login",
         "description": "Accept form-encoded or JSON ``{username, password}`` and set the cookie.",
-        "operationId": "login_api_auth_login_post",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "title": "Username"
+                  },
+                  "password": {
+                    "type": "string",
+                    "title": "Password"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "title": "LoginRequest",
+                "description": "The body of ``POST /api/auth/login``, as JSON or form-encoded fields.\n\nDocumentation only: :func:`_read_credentials` reads the body itself, so FastAPI\nnever parses it with this model."
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "title": "Username"
+                  },
+                  "password": {
+                    "type": "string",
+                    "title": "Password"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "title": "LoginRequest",
+                "description": "The body of ``POST /api/auth/login``, as JSON or form-encoded fields.\n\nDocumentation only: :func:`_read_credentials` reads the body itself, so FastAPI\nnever parses it with this model."
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -158,6 +210,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoginResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The username or password is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid credentials",
+                    "value": {
+                      "detail": "Invalid credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body has no username or no password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "username and password required",
+                    "value": {
+                      "detail": "username and password required"
+                    }
+                  }
                 }
               }
             }
@@ -172,7 +260,7 @@
         ],
         "summary": "Logout",
         "description": "Clear the session cookie and forget any server-side session state.",
-        "operationId": "logout_api_auth_logout_post",
+        "operationId": "logout",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -183,7 +271,7 @@
                     "type": "boolean"
                   },
                   "type": "object",
-                  "title": "Response Logout Api Auth Logout Post"
+                  "title": "Response Logout"
                 }
               }
             }
@@ -198,7 +286,7 @@
         ],
         "summary": "Me",
         "description": "Return the authenticated user, or 401. Replaces the React ``/user`` probe.",
-        "operationId": "me_api_auth_me_get",
+        "operationId": "me",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -213,8 +301,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -278,7 +368,7 @@
         ],
         "summary": "List Providers",
         "description": "Public: enabled OIDC providers, for <Login> to render a button per entry.",
-        "operationId": "list_providers_api_auth_providers_get",
+        "operationId": "list_providers",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -289,7 +379,7 @@
                     "$ref": "#/components/schemas/ProviderInfo"
                   },
                   "type": "array",
-                  "title": "Response List Providers Api Auth Providers Get"
+                  "title": "Response List Providers"
                 }
               }
             }
@@ -304,7 +394,7 @@
         ],
         "summary": "Login Via Provider",
         "description": "Start the OIDC authorization-code flow: redirect the browser to the\nidentity provider, with the state/nonce cookie ``callback`` reads back.",
-        "operationId": "login_via_provider_api_auth_login__provider_id__get",
+        "operationId": "login_via_provider",
         "parameters": [
           {
             "name": "provider_id",
@@ -345,7 +435,7 @@
         ],
         "summary": "Oauth Callback",
         "description": "OIDC redirect callback — resolved through the provider registry (AU-6).\n\nA registered provider completes the handshake via ``IdentityProvider.callback``,\nwhich raises on any failure (``HTTPException`` for a request-level problem,\n``NotImplementedError`` for a provider with no redirect flow at all).",
-        "operationId": "oauth_callback_api_auth_callback__provider__get",
+        "operationId": "oauth_callback",
         "parameters": [
           {
             "name": "provider",
@@ -415,7 +505,7 @@
           "config"
         ],
         "summary": "Get Config",
-        "operationId": "get_config_api_config_get",
+        "operationId": "get_config",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -430,8 +520,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -495,7 +587,7 @@
         ],
         "summary": "Create Session",
         "description": "Create a new conversation under the caller's session identity.\n\nA second call reuses the same session (keyed by the JWT ``sid``) but mints a\nfresh ``conversation_id``, so the user can start a new conversation without\nre-authenticating.",
-        "operationId": "create_session_api_sessions_post",
+        "operationId": "create_session",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -510,8 +602,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -591,7 +685,7 @@
           "chat"
         ],
         "summary": "Post Message",
-        "operationId": "post_message_api_chat_messages_post",
+        "operationId": "post_message",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -606,8 +700,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -699,7 +795,7 @@
         ],
         "summary": "Get Turn",
         "description": "A turn's state: ``running``, or ``done`` with the response its POST returned.\n\nFor a client that lost track of a turn: its POST failed at the network level, or its\nevent stream reconnected while the turn was in flight. Read once at those moments;\nthe ``turn_done`` event is the normal path, so don't poll this. 404 when this session\nhas no such turn (never started, expired, its worker stopped, or another session's).",
-        "operationId": "get_turn_api_chat_turns__turn_id__get",
+        "operationId": "get_turn",
         "parameters": [
           {
             "name": "turn_id",
@@ -724,8 +820,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -807,7 +905,7 @@
         ],
         "summary": "Events",
         "description": "Open the session's SSE stream. Auth-required; one per browser connection.",
-        "operationId": "events_api_events_get",
+        "operationId": "events",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -822,8 +920,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -884,7 +984,7 @@
           "uploads"
         ],
         "summary": "Post Upload",
-        "operationId": "post_upload_api_uploads_post",
+        "operationId": "post_upload",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -899,8 +999,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -908,7 +1010,7 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_post_upload_api_uploads_post"
+                "$ref": "#/components/schemas/Body_post_upload"
               }
             }
           }
@@ -973,7 +1075,7 @@
           "artifacts"
         ],
         "summary": "Get Artifact Content",
-        "operationId": "get_artifact_content_api_artifacts__artifact_id__content_get",
+        "operationId": "get_artifact_content",
         "parameters": [
           {
             "name": "artifact_id",
@@ -997,8 +1099,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1060,7 +1164,7 @@
         ],
         "summary": "Get Mesh File",
         "description": "Serve a converted VTP timestep for the React MeshViewer (auth-required).\n\nA mesh artifact's ``json_body.baseUrl`` is ``/api/artifacts/mesh/{dataset_id}``\n(see ``services/mesh/service.py``); the viewer fetches each\n``${baseUrl}/${filename}`` from here. ``dataset_id`` is a content hash and the\ncached files are session-independent, so the guard is auth + path-traversal\nsafety: both segments must be single safe names and the resolved path must stay\ninside the mesh cache root.",
-        "operationId": "get_mesh_file_api_artifacts_mesh__dataset_id___filename__get",
+        "operationId": "get_mesh_file",
         "parameters": [
           {
             "name": "dataset_id",
@@ -1093,8 +1197,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1155,7 +1261,7 @@
           "conversations"
         ],
         "summary": "Get Recent Conversations",
-        "operationId": "get_recent_conversations_api_conversations_recent_get",
+        "operationId": "get_recent_conversations",
         "parameters": [
           {
             "name": "limit",
@@ -1182,8 +1288,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1246,7 +1354,7 @@
           "conversations"
         ],
         "summary": "Get Conversation Detail",
-        "operationId": "get_conversation_detail_api_conversations__conversation_id__get",
+        "operationId": "get_conversation_detail",
         "parameters": [
           {
             "name": "conversation_id",
@@ -1270,8 +1378,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1332,7 +1442,7 @@
           "conversations"
         ],
         "summary": "Rename Conversation",
-        "operationId": "rename_conversation_api_conversations__conversation_id__patch",
+        "operationId": "rename_conversation",
         "parameters": [
           {
             "name": "conversation_id",
@@ -1356,8 +1466,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -1429,7 +1541,7 @@
         ],
         "summary": "Delete Conversation",
         "description": "Soft delete: hides the conversation from ``recent``, and ``GET /{id}`` and\n``/resume`` answer 404 for it. The underlying ``conversation:{id}`` document (and\nits artifacts) are left intact.",
-        "operationId": "delete_conversation_api_conversations__conversation_id__delete",
+        "operationId": "delete_conversation",
         "parameters": [
           {
             "name": "conversation_id",
@@ -1453,8 +1565,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1511,7 +1625,7 @@
         ],
         "summary": "Get Conversation Tasks",
         "description": "The conversation's background-task tree (the client-agent's Task Graph) as\nJSON: the structured form of the ``/tasks`` slash command. Running and finished\ntasks alike, root turns newest first, each with its skill dispatches nested.",
-        "operationId": "get_conversation_tasks_api_conversations__conversation_id__tasks_get",
+        "operationId": "get_conversation_tasks",
         "parameters": [
           {
             "name": "conversation_id",
@@ -1535,8 +1649,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1600,7 +1716,7 @@
         ],
         "summary": "Resume Conversation",
         "description": "Rebind the caller's session to a past conversation so the next chat turn\ncontinues it. Returns its transcript + artifact catalog in the same call so\nthe frontend can render history and resume in one round-trip.\n\nRebinds first, enriches meshes second. Enrichment can take seconds per mesh on a\ncache miss, and the frontend lets the user click elsewhere meanwhile; the rebind\nitself is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer click\nalways wins regardless of which request finishes last. The enriched catalog is then\nwritten back only if the session is still on this conversation, with the catalog\nthe rebind seeded.",
-        "operationId": "resume_conversation_api_conversations__conversation_id__resume_post",
+        "operationId": "resume_conversation",
         "parameters": [
           {
             "name": "conversation_id",
@@ -1624,8 +1740,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -1705,7 +1823,7 @@
           "admin-users"
         ],
         "summary": "List Users",
-        "operationId": "list_users_api_admin_users_get",
+        "operationId": "list_users",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -1720,8 +1838,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1734,7 +1854,7 @@
                   "items": {
                     "$ref": "#/components/schemas/AdminUserOut"
                   },
-                  "title": "Response List Users Api Admin Users Get"
+                  "title": "Response List Users"
                 }
               }
             }
@@ -1804,7 +1924,7 @@
           "admin-users"
         ],
         "summary": "Create User",
-        "operationId": "create_user_api_admin_users_post",
+        "operationId": "create_user",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -1819,8 +1939,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -1911,7 +2033,7 @@
           "admin-users"
         ],
         "summary": "Update User",
-        "operationId": "update_user_api_admin_users__user_id__patch",
+        "operationId": "update_user",
         "parameters": [
           {
             "name": "user_id",
@@ -1936,8 +2058,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2026,7 +2150,7 @@
           "admin-users"
         ],
         "summary": "Delete User",
-        "operationId": "delete_user_api_admin_users__user_id__delete",
+        "operationId": "delete_user",
         "parameters": [
           {
             "name": "user_id",
@@ -2051,8 +2175,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2126,7 +2252,7 @@
           "admin-signing-keys"
         ],
         "summary": "List Keys",
-        "operationId": "list_keys_api_admin_signing_keys_get",
+        "operationId": "list_keys",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -2141,8 +2267,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2155,7 +2283,7 @@
                   "items": {
                     "$ref": "#/components/schemas/SigningKeyOut"
                   },
-                  "title": "Response List Keys Api Admin Signing Keys Get"
+                  "title": "Response List Keys"
                 }
               }
             }
@@ -2226,7 +2354,7 @@
         ],
         "summary": "Create Key",
         "description": "Generate a new RS256 keypair. Does not activate it -- see .../activate.",
-        "operationId": "create_key_api_admin_signing_keys_post",
+        "operationId": "create_key",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -2241,8 +2369,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2354,7 +2484,7 @@
         ],
         "summary": "Activate Key",
         "description": "Make this the one key mint_for_user() signs with.\n\nDeactivates whichever key was active before -- it stays in the table and\nkeeps appearing in the JWKS, un-retired, until an admin explicitly retires\nit (see /retire below).",
-        "operationId": "activate_key_api_admin_signing_keys__key_id__activate_post",
+        "operationId": "activate_key",
         "parameters": [
           {
             "name": "key_id",
@@ -2379,8 +2509,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2462,7 +2594,7 @@
         ],
         "summary": "Retire Key",
         "description": "Mark this key as done -- it keeps verifying (still served in the JWKS)\nbut is no longer eligible for /activate.\n\nRefuses to retire the currently active key with no replacement: that would\nleave mint_for_user() with no active DB row at all, silently falling back\nto the (usually unconfigured) env var. Activate a replacement first.",
-        "operationId": "retire_key_api_admin_signing_keys__key_id__retire_post",
+        "operationId": "retire_key",
         "parameters": [
           {
             "name": "key_id",
@@ -2487,8 +2619,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2568,8 +2702,8 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "List Providers",
-        "operationId": "list_providers_api_admin_oidc_providers_get",
+        "summary": "List OIDC providers",
+        "operationId": "list_oidc_providers",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -2584,8 +2718,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -2598,7 +2734,7 @@
                   "items": {
                     "$ref": "#/components/schemas/OidcProviderOut"
                   },
-                  "title": "Response List Providers Api Admin Oidc Providers Get"
+                  "title": "Response List Oidc Providers"
                 }
               }
             }
@@ -2667,8 +2803,8 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Create Provider",
-        "operationId": "create_provider_api_admin_oidc_providers_post",
+        "summary": "Create an OIDC provider",
+        "operationId": "create_oidc_provider",
         "parameters": [
           {
             "name": "prometheus_session",
@@ -2683,8 +2819,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2804,8 +2942,8 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Update Provider",
-        "operationId": "update_provider_api_admin_oidc_providers__provider_row_id__patch",
+        "summary": "Update an OIDC provider",
+        "operationId": "update_oidc_provider",
         "parameters": [
           {
             "name": "provider_row_id",
@@ -2830,8 +2968,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "requestBody": {
@@ -2949,8 +3089,8 @@
         "tags": [
           "admin-oidc-providers"
         ],
-        "summary": "Delete Provider",
-        "operationId": "delete_provider_api_admin_oidc_providers__provider_row_id__delete",
+        "summary": "Delete an OIDC provider",
+        "operationId": "delete_oidc_provider",
         "parameters": [
           {
             "name": "provider_row_id",
@@ -2975,8 +3115,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -3050,7 +3192,7 @@
           "agent-registry"
         ],
         "summary": "List Agents",
-        "operationId": "list_agents_v1_agents_get",
+        "operationId": "list_agents",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3062,7 +3204,43 @@
                     "type": "object"
                   },
                   "type": "array",
-                  "title": "Response List Agents V1 Agents Get"
+                  "title": "Response List Agents"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid or missing agent credentials",
+                    "value": {
+                      "detail": "Invalid or missing agent credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "AGENT_SECRET is not configured on the backend",
+                    "value": {
+                      "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
                 }
               }
             }
@@ -3074,7 +3252,7 @@
           "agent-registry"
         ],
         "summary": "Register Agent",
-        "operationId": "register_agent_v1_agents_post",
+        "operationId": "register_agent",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3093,7 +3271,43 @@
                 "schema": {
                   "additionalProperties": true,
                   "type": "object",
-                  "title": "Response Register Agent V1 Agents Post"
+                  "title": "Response Register Agent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid or missing agent credentials",
+                    "value": {
+                      "detail": "Invalid or missing agent credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "AGENT_SECRET is not configured on the backend",
+                    "value": {
+                      "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
                 }
               }
             }
@@ -3117,7 +3331,7 @@
           "agent-registry"
         ],
         "summary": "Delete Agent",
-        "operationId": "delete_agent_v1_agents__agent_id__delete",
+        "operationId": "delete_agent",
         "parameters": [
           {
             "name": "agent_id",
@@ -3139,7 +3353,43 @@
                   "additionalProperties": {
                     "type": "string"
                   },
-                  "title": "Response Delete Agent V1 Agents  Agent Id  Delete"
+                  "title": "Response Delete Agent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid or missing agent credentials",
+                    "value": {
+                      "detail": "Invalid or missing agent credentials"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "AGENT_SECRET is not configured on the backend",
+                    "value": {
+                      "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3163,7 +3413,7 @@
           "agent-registry"
         ],
         "summary": "Get Agent Card",
-        "operationId": "get_agent_card_a2a__agent_name__get",
+        "operationId": "get_agent_card",
         "parameters": [
           {
             "name": "agent_name",
@@ -3183,7 +3433,43 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true,
-                  "title": "Response Get Agent Card A2A  Agent Name  Get"
+                  "title": "Response Get Agent Card"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid or missing agent credentials",
+                    "value": {
+                      "detail": "Invalid or missing agent credentials"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "AGENT_SECRET is not configured on the backend",
+                    "value": {
+                      "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3205,7 +3491,7 @@
           "agent-registry"
         ],
         "summary": "Proxy A2A",
-        "operationId": "proxy_a2a_a2a__agent_name__post",
+        "operationId": "proxy_a2a",
         "parameters": [
           {
             "name": "agent_name",
@@ -3223,7 +3509,43 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Proxy A2A A2A  Agent Name  Post"
+                  "title": "Response Proxy A2A"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Invalid or missing agent credentials",
+                    "value": {
+                      "detail": "Invalid or missing agent credentials"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The backend has no `AGENT_SECRET` configured, so no agent can authenticate.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "AGENT_SECRET is not configured on the backend",
+                    "value": {
+                      "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3497,13 +3819,8 @@
             "title": "Tags"
           },
           "json_body": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Json Body"
+            "title": "Json Body",
+            "description": "Any JSON value, or null."
           },
           "render_hint": {
             "type": "string",
@@ -3565,7 +3882,7 @@
         "title": "ArtifactMeta",
         "description": "Conversation-scoped artifact reference on our wire.\n\nSnake_case per the Prometheus catalog convention (see\ndocs/docs/dev-docs/artifacts.md). Superset of ``prometheus_api``'s\n``ArtifactReference`` fields the frontend needs, plus the derived\n``render_hint``. ``json_body`` is inline-only; bytes are fetched via\n``GET /api/artifacts/{artifact_id}/content`` (task 07)."
       },
-      "Body_post_upload_api_uploads_post": {
+      "Body_post_upload": {
         "properties": {
           "file": {
             "type": "string",
@@ -3577,7 +3894,7 @@
         "required": [
           "file"
         ],
-        "title": "Body_post_upload_api_uploads_post"
+        "title": "Body_post_upload"
       },
       "BootstrapRequest": {
         "properties": {
@@ -4225,13 +4542,8 @@
             "title": "Options"
           },
           "default": {
-            "anyOf": [
-              {},
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default"
+            "title": "Default",
+            "description": "Any JSON value, or null."
           },
           "help": {
             "anyOf": [

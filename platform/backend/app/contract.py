@@ -37,7 +37,13 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional, Union, cast, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
+
+# Any JSON value, including null. Pydantic writes ``Optional[Any]`` as
+# ``anyOf: [{}, {type: null}]``, and the ``{}`` branch already matches null, so that
+# anyOf says nothing. This writes the same meaning as a plain schema with a
+# description. Validation is unchanged: every value is accepted as is.
+AnyJson = Annotated[Optional[Any], WithJsonSchema({"description": "Any JSON value, or null."})]
 
 # --------------------------------------------------------------------------- #
 # Status enum
@@ -118,7 +124,7 @@ class FormField(BaseModel):
     input_type: FieldInputType = "text"
     required: bool = True
     options: Optional[list[SelectOption]] = None
-    default: Optional[Any] = None
+    default: AnyJson = None
     help: Optional[str] = None
     placeholder: Optional[str] = None
     rows: Optional[int] = None
@@ -238,7 +244,7 @@ class ArtifactMeta(BaseModel):
     description: str = ""
     uri: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
-    json_body: Optional[Any] = None  # inline only
+    json_body: AnyJson = None  # inline only
     render_hint: RenderHint = "unknown"
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None

@@ -45,6 +45,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
+from app.api_responses import AGENT_SECRET_RESPONSES
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
 from app.redis_client import RedisClient, get_redis
@@ -75,7 +76,9 @@ def require_agent_secret(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing agent credentials")
 
 
-router = APIRouter(tags=[TAG_AGENT_REGISTRY], dependencies=[Depends(require_agent_secret)])
+router = APIRouter(
+    tags=[TAG_AGENT_REGISTRY], dependencies=[Depends(require_agent_secret)], responses=AGENT_SECRET_RESPONSES
+)
 
 
 def _make_client() -> httpx.AsyncClient:
