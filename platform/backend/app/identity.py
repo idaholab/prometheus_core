@@ -140,3 +140,74 @@ async def mint_for_user(user_id: str) -> Optional[str]:
     except Exception as exc:
         logger.warning("Failed to mint user token for %r: %s", user_id, exc)
         return None
+
+
+async def _load_public_key_from_db(kid: str) -> Optional[str]:
+    """Return the public PEM of admin-db's signing key ``kid`` (active or retired), or ``None``."""
+    from sqlalchemy import select
+
+    from app.db import get_session_factory
+    from app.db.models import SigningKey
+
+    session_factory = get_session_factory()
+    async with session_factory() as db:
+        row = await db.scalar(select(SigningKey).where(SigningKey.kid == kid))
+        return None if row is None else row.public_key_pem
+
+
+async def verify_user_token(token: str) -> Optional[str]:
+    """Verify a platform JWT this backend minted; return its ``sub``, or ``None``.
+
+    For agent-facing routes that act on a user's behalf (``/v1/interactions``): the
+    agent forwards the token it received for the turn, and the backend checks it
+    against its own keys -- admin-db's key named by the token's ``kid`` (retired keys
+    included, as in the JWKS), else the ``USER_IDENTITY_PRIVATE_KEY`` env key. Checks
+    signature, expiry, issuer and audience. Never raises.
+    """
+    import jwt
+
+    if not token:
+        return None
+    iss = os.environ.get("USER_IDENTITY_ISS", "prometheus-platform")
+    aud = os.environ.get("USER_IDENTITY_AUD", "prometheus-agents")
+    try:
+        kid = jwt.get_unverified_header(token).get("kid")
+    except jwt.InvalidTokenError:
+        return None
+
+    key: Optional[str] = None
+    if kid:
+        try:
+            key = await _load_public_key_from_db(str(kid))
+        except Exception as exc:
+            logger.warning("Failed to load signing key %r from admin-db: %s", kid, exc)
+    if key is None:
+        key = os.environ.get("USER_IDENTITY_PRIVATE_KEY") or None
+        if key is not None:
+            from cryptography.hazmat.primitives import serialization
+
+            try:
+                private = serialization.load_pem_private_key(key.encode(), password=None)
+                key = (
+                    private.public_key()
+                    .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+                    .decode()
+                )
+            except (ValueError, TypeError) as exc:
+                logger.warning("USER_IDENTITY_PRIVATE_KEY is not a usable PEM key: %s", exc)
+                return None
+    if key is None:
+        return None
+    try:
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=["RS256"],
+            issuer=iss,
+            audience=aud,
+            options={"require": ["sub", "exp", "iat", "iss", "aud"]},
+        )
+    except jwt.InvalidTokenError:
+        return None
+    sub = claims.get("sub")
+    return str(sub) if sub else None

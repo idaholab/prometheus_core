@@ -41,7 +41,7 @@ Readers: SDK and backend developers, and agent authors.
 | RS-3 | **The A2A `taskId` is the key between a request and its resume.** The client-agent already echoes the specialist's task ID on resume ([`agents/client-agent/tool_discovery.py`](../../agents/client-agent/tool_discovery.py), `_a2a_task_id`). `contextId` is the whole conversation and is not specific enough. |
 | RS-4 | **Request objects are not kept in memory between requests.** Only a declared, serializable `State` model is persisted. Every resume builds a fresh request object with the new context, queue and params. Reasons: restarts and multiple replicas, no cancel signal for abandoned forms, closed event queues, and per-user worker isolation. |
 | RS-5 | **Task state is stored through a backend API, not in Valkey.** The backend checks the agent and user credentials and the owner on every call, and enforces TTL, size and version limits. This is consistent with ADR-004 §7 (agents get no direct Valkey access). |
-| RS-6 | **First version: per-task state only.** The route is `tasks/{task_id}`. Conversation-scoped state (the replacement for `ContextStateStore`) is a separate later change under `conversations/{id}`. |
+| RS-6 | **Both scopes in the backend API from the start** (revised 2026-11-17; originally per-task only). `tasks/{task_id}` carries a task across a resume; `conversations/{conversation_id}` holds one agent's state for the whole conversation and replaces `ContextStateStore`. One store and one set of rules serve both. |
 | RS-7 | **Ship on the shared `AGENT_SECRET` first.** Until ADR-005 mTLS is in place, the backend can't tell agents apart and trusts the agent name in the request. The user-ownership check works from day one. After mTLS, the agent name comes from the client certificate. |
 | RS-8 | **The explicit-argument helpers on `PrometheusAgent` stay the one implementation.** Request methods are thin wrappers that pass the request's context and queue. A test checks that every public agent helper has a request wrapper. |
 
@@ -186,6 +186,7 @@ sequenceDiagram
 | `GET` | `/v1/agent-state/tasks/{task_id}` | Returns `state` and `version` (as an `ETag`). 404 when absent or not owned by the caller. |
 | `PUT` | `/v1/agent-state/tasks/{task_id}` | Creates or replaces the record. `If-Match: <version>` is required on replace, and `If-None-Match: *` on create. Refreshes the TTL. |
 | `DELETE` | `/v1/agent-state/tasks/{task_id}` | Removes the record. Idempotent. |
+| `GET` / `PUT` / `DELETE` | `/v1/agent-state/conversations/{conversation_id}` | The same, for the calling agent's conversation-scoped record. Each agent has its own record per conversation; the path names the conversation, so `X-Conversation-Id` isn't needed. |
 
 Callers send:
 
@@ -193,7 +194,11 @@ Callers send:
   certificate later;
 - the forwarded user token (`X-User-Token`), the same platform JWT that reaches the
   agent in `message.metadata.userToken`;
-- `X-Agent-Name` and `X-Conversation-Id`.
+- `X-Agent-Name` (in `trusted-name` mode; under Istio the name comes from the
+  sidecar's XFCC, see `backend/app/agent_identity.py`) and, for task scope,
+  `X-Conversation-Id`.
+
+A `PUT` with neither `If-Match` nor `If-None-Match` is rejected with 428.
 
 ### 6.2 Record
 
@@ -258,7 +263,7 @@ stateDiagram-v2
   Stored --> Stored: resume, PUT again (version+1, TTL refreshed)
   Stored --> Absent: task completed / failed / canceled (SDK DELETE)
   Stored --> Absent: TTL expiry (default 24 h, matches task store)
-  Stored --> Absent: conversation deleted (backend cascade)
+  Stored --> Absent: conversation deleted (hidden at once, then TTL)
   Stored --> Absent: tasks/cancel from client-agent (follow-up)
 ```
 
@@ -268,8 +273,10 @@ stateDiagram-v2
 - **TTL:** otherwise the record expires after the backend TTL. The default is 24 h,
   the same as `TASK_STORE_TTL_SECONDS`: once the task record is gone a resume
   can't succeed, so both expire together.
-- **Conversation deleted:** the backend owns conversations, so deleting a
-  conversation also deletes its task state. An agent-side store couldn't do this.
+- **Conversation deleted:** conversation delete is a soft delete
+  (`conv:meta:{id}.hidden`), so the API answers 404 for every record of a deleted
+  conversation, in both scopes, and the records age out by TTL. An agent-side store
+  couldn't do this. A hard-delete cascade comes with hard conversation delete.
 - **Abandoned forms:** today the client-agent closes a dropped pending call on its
   own side only and sends nothing to the specialist. A follow-up adds
   `tasks/cancel` to the specialist, which deletes the state right away and calls an
@@ -299,8 +306,8 @@ stateDiagram-v2
 
 ## 10. What the first version does not cover
 
-- Conversation-scoped state through the backend (replacing `ContextStateStore`),
-  RS-6.
+- Moving agents from `ContextStateStore` to the conversation-scoped API (the API
+  itself ships in step 2, RS-6).
 - Agent identity from the mTLS certificate (ADR-005, PPLT-347), RS-7.
 - `tasks/cancel` from the client-agent and the `on_cancel()` hook
   ([section 7](#7-record-lifetime)).
@@ -331,7 +338,7 @@ parallel. Jira tickets are added later.
 | Step | Change | Where | Depends on |
 | --- | --- | --- | --- |
 | 1 | `PrometheusRequest` class, `request_class` dispatch in `PrometheusAgent._execute`, request-bound helper wrappers, close guard, helper parity test, spec 009 update. | sdk | – |
-| 2 | Backend agent task-state API: router, JWT and ownership checks, TTL, size limit, version check, conversation-delete cascade, tests, spec. | backend | – |
+| 2 | Backend agent-state API, task and conversation scope: router, JWT and ownership checks, TTL, size limit, version check, deleted-conversation 404, tests, spec. | backend | – |
 | 3 | `State` on `PrometheusRequest`; `TaskStateStore`, `BackendTaskStateStore`, `InMemoryTaskStateStore`; load on resume by `taskId`, save on INPUT_REQUIRED, delete on terminal; spec 010 update. | sdk | 1, 2 |
 | 4 | Migrate one debug agent (corrosion or thermal) as the reference example, using `State`. | agents | 3 |
 | 5 | Update the agent template ([`agent-template/`](../../../agent-template/)), [`sdk/CLAUDE.md`](../../../sdk/CLAUDE.md) and the agent README. | template, sdk | 4 |
@@ -349,7 +356,8 @@ flowchart LR
 ```
 
 **Follow-ups** (outside this sequence): `tasks/cancel` from the client-agent and
-`on_cancel()`; conversation-scoped state API replacing `ContextStateStore`; agent
+`on_cancel()`; SDK client for conversation-scoped state, then moving
+`load_context_state`/`save_context_state` off `ContextStateStore`; agent
 name from the mTLS certificate (after PPLT-347); `UserWorkerPool` integration.
 
 [origin]: https://nstinl.atlassian-us-gov-mod.net/wiki/spaces/Prometheus/pages/44335895
