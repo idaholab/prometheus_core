@@ -20,11 +20,15 @@ This is a Prometheus specialist agent.  Subclass PrometheusAgent and implement
 serving, and registry registration for you.
 """
 
+import asyncio  # noqa: F401 - used by parallel design patterns
 import logging
 from typing import Any
 
 from prometheus_api import load_prompt  # noqa: F401 - used by the LLM pattern below
 from prometheus_api.agent import EventQueue, PrometheusAgent, RequestContext
+
+# >>> design pattern constants (setup_agent.py replaces this block)
+# <<< design pattern constants
 
 # Read secrets and configuration from environment variables.
 # Never hard-code API keys or URLs here.
@@ -108,11 +112,14 @@ class TEMPLATE_CLASSAgent(PrometheusAgent):
         )
 
         # ------------------------------------------------------------------
-        # 3. Do your actual work here.  Replace this with real logic.
+        # 3. Do your actual work here.  `_run_pattern` (below) walks the
+        #    steps of the agent's design pattern; fill in each `_step_*`.
         # ------------------------------------------------------------------
+        state = await self._run_pattern(input_data, context, event_queue)
         result = {
             "status": "success",
             "input_received": input_data,
+            "steps": {name: value for name, value in state.items() if name != "input_data"},
             "message": "Replace this with your agent's processing logic.",
         }
 
@@ -121,6 +128,45 @@ class TEMPLATE_CLASSAgent(PrometheusAgent):
         #    "output_format" you described in agent_card.json.
         # ------------------------------------------------------------------
         return result
+
+    # >>> design pattern (setup_agent.py replaces this block)
+    # ------------------------------------------------------------------
+    # Design pattern: Tool Use (Tools & Actions family, linear topology).
+    # Steps: decide_tool -> call_tool -> respond. See README.md.
+    # ------------------------------------------------------------------
+
+    async def _run_pattern(
+        self, input_data: Any, context: RequestContext, event_queue: EventQueue
+    ) -> dict[str, Any]:
+        """Run the Tool Use steps on one request and return the state they built."""
+        state: dict[str, Any] = {"input_data": input_data}
+        state["decide_tool"] = await self._step_decide_tool(state, context, event_queue)
+        state["call_tool"] = await self._step_call_tool(state, context, event_queue)
+        state["respond"] = await self._step_respond(state, context, event_queue)
+        return state
+
+    async def _step_decide_tool(
+        self, state: dict[str, Any], context: RequestContext, event_queue: EventQueue
+    ) -> Any:
+        """Tool Use step `decide_tool`: Decide which tool to call and with what arguments."""
+        # TODO(author): implement `decide_tool`.
+        return None
+
+    async def _step_call_tool(
+        self, state: dict[str, Any], context: RequestContext, event_queue: EventQueue
+    ) -> Any:
+        """Tool Use step `call_tool`: Call the tool."""
+        # TODO(author): implement `call_tool`.
+        return None
+
+    async def _step_respond(
+        self, state: dict[str, Any], context: RequestContext, event_queue: EventQueue
+    ) -> Any:
+        """Tool Use step `respond`: Incorporate the tool result into the answer."""
+        # TODO(author): implement `respond`.
+        return None
+
+    # <<< design pattern
 
     # ----------------------------------------------------------------------
     # PATTERNS — uncomment and adapt as needed.
