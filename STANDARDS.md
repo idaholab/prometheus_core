@@ -15,7 +15,7 @@ this document links to them rather than repeating them.
 | Language | Version | Where it's set |
 |----------|---------|----------------|
 | Python | 3.12 minimum; CI tests 3.12, 3.13, and 3.14 | `requires-python` in each `pyproject.toml`; the `python` matrix in `.github/workflows/test.yml` |
-| Node.js | 22 (pinned to 22.19.0) | `platform/frontend/Dockerfile`, the `node-version` in CI |
+| Node.js | 22 (pinned to 22.23.3) | `platform/frontend/Dockerfile`, the `node-version` in CI |
 | TypeScript | strict mode | `platform/frontend/tsconfig.json` |
 
 Container images build on Python 3.12. Write code that runs on the minimum
