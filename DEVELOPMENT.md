@@ -156,21 +156,10 @@ one (`PPLT-198: ...`).
 ## Tests and checks
 
 [CONTRIBUTING.md](CONTRIBUTING.md#5-run-the-checks) lists the commands for each
-component. A few rules matter when you plan a change:
-
-- **New and changed lines must be covered.** Codecov requires 100% patch
-  coverage and no drop in project coverage, and it annotates uncovered lines in
-  the PR diff. The `fail_under` floors in each `pyproject.toml` may be raised,
-  never lowered.
-- **Test the behavior, not the implementation.** A refactor should pass the
-  existing tests without changing their assertions. If you have to change an
-  assertion, the behavior changed; say so in the PR.
-- **A bug fix includes a test** that fails without the fix.
-- **Don't skip or delete a failing test** to get CI green. Fix it, or explain in
-  the PR why it's wrong.
-- **Integration tests** that need DeepLynx or a running stack are excluded from
-  the default `make test`. Run them when you touch those paths, and say so in the
-  PR.
+component. [TESTING.md](TESTING.md) says which tests a change needs and how much
+coverage is enough. Plan for them when you size a change: a bug fix needs a test
+that fails without it, and a change to a flow that crosses the frontend and
+backend needs an end-to-end test.
 
 ## Behavior and interface changes
 

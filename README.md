@@ -38,5 +38,5 @@ Needed prerequisites are Docker, python, make.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow
 and checks and [DEVELOPMENT.md](DEVELOPMENT.md) for development and pull request
-practices and [STANDARDS.md](STANDARDS.md) for coding standards, and please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+practices, [STANDARDS.md](STANDARDS.md) for coding standards and [TESTING.md](TESTING.md) for how we test, and please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report
 security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
