@@ -11,7 +11,8 @@
 # SPDX-License-Identifier: MIT
 
 # The e2e stack's own services: e2e/stub-client-agent answers chat turns
-# instead of the client-agent, so a chat needs no LLM key. `make up-e2e` adds
+# instead of the client-agent, so a chat needs no LLM key, and hands out the
+# viewer samples for the viewer tests. `make up-e2e` adds
 # this file (E2E_TESTING=true). See platform/frontend/README.md, "Against the
 # full platform".
 #
@@ -26,6 +27,9 @@ services:
   stub-client-agent:
     build:
       context: ./e2e/stub-client-agent
+      # The viewer samples the stub hands out, shared with the viewer playground
+      additional_contexts:
+        samples: ./frontend/e2e/samples
       args:
         - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO}
         - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
@@ -36,6 +40,8 @@ services:
       - agent-network
     environment:
       AGENT_PORT: 8000
+      SAMPLES_PORT: 8100
+      SAMPLES_BASE_URL: http://stub-client-agent:8100
       EXTERNAL_AGENT_URL: http://stub-client-agent:8000
       AGENT_SECRET: ${AGENT_SECRET}
       AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
