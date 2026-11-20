@@ -1,0 +1,19 @@
+[project]
+name = "stub-client-agent"
+version = "0.1.0"
+description = "Stub client-agent for the frontend's end-to-end tests: fixed replies, no LLM"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["."]
+relative_files = true
+omit = ["tests/*", ".venv/*"]
+
+[tool.coverage.report]
+# The lowest total across the supported Python versions; never lower it
+fail_under = 100.0
+precision = 2
