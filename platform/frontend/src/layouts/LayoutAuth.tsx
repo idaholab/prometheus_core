@@ -12,7 +12,7 @@
 
 import { useId, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
-interface AuthLayoutProps {
+interface LayoutAuthProps {
   title: string;
   subtitle?: ReactNode;
   onSubmit: () => void;
@@ -24,7 +24,7 @@ interface AuthLayoutProps {
  * Page background + brand lockup on the left, form card on the right.
  * Stacks vertically below `lg`, side-by-side at `lg` and up.
  */
-export function AuthLayout({ title, subtitle, onSubmit, children }: AuthLayoutProps) {
+export function LayoutAuth({ title, subtitle, onSubmit, children }: LayoutAuthProps) {
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     onSubmit();

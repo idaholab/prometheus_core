@@ -10,23 +10,29 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Chat } from "@/features/chat";
 import { StatusPanel } from "./StatusPanel";
 
+interface LayoutHomeProps {
+  /** The status rail is collapsed to its icon strip. */
+  statusCollapsed: boolean;
+  onStatusCollapsedChange: (collapsed: boolean) => void;
+}
+
 /**
- * Home = the merged command center (Figma dashboard-home / -chat / -artifacts):
- * the live Chat on the left, a persistent status rail on the right. Chat is
- * always mounted — it swaps its own transcript area for the Figma welcome
- * screen while idle, and keeps its composer either way.
+ * Home layout, the merged command center (Figma dashboard-home / -chat /
+ * -artifacts): the live Chat on the left, a persistent status rail on the
+ * right. Chat is always mounted. It swaps its own transcript area for the
+ * Figma welcome screen while idle, and keeps its composer either way.
+ * PageHome supplies the rail state.
  *
  * The scroll container ref lives here (not in Chat) so this panel and the
  * status rail scroll independently and the scrollbar sits at the panel
  * boundary rather than hugging Chat's narrower centered message column.
  */
-export function Home() {
+export function LayoutHome({ statusCollapsed, onStatusCollapsedChange }: LayoutHomeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [statusCollapsed, setStatusCollapsed] = useState(false);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
@@ -40,8 +46,8 @@ export function Home() {
       >
         <StatusPanel
           collapsed={statusCollapsed}
-          onCollapse={() => setStatusCollapsed(true)}
-          onExpand={() => setStatusCollapsed(false)}
+          onCollapse={() => onStatusCollapsedChange(true)}
+          onExpand={() => onStatusCollapsedChange(false)}
         />
       </aside>
     </div>

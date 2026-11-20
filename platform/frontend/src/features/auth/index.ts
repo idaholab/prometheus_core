@@ -12,4 +12,6 @@
 
 // What the rest of the app may import from features/auth. Anything else
 // in this folder is internal to it.
-export { useCurrentUser } from "./store/session";
+export { Login } from "./Login";
+export { SetupWizard } from "./SetupWizard";
+export { getCurrentUser, setCurrentUser, useCurrentUser } from "./store/session";

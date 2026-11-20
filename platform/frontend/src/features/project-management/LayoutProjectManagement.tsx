@@ -32,7 +32,7 @@ type ProjectManagementProps = ProjectManagementState & {
  * registry and the role-based access control schema. Display only;
  * PageProjectManagement supplies the data and the header title.
  */
-export function ProjectManagement(props: ProjectManagementProps) {
+export function LayoutProjectManagement(props: ProjectManagementProps) {
   return <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{renderBody(props)}</div>;
 }
 

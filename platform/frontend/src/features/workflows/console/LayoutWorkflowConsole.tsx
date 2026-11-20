@@ -32,7 +32,7 @@ interface WorkflowConsoleProps {
  * Workflow Console layout (Figma D.1): the template picker, then the execution
  * planner for the selected template. Display only; PageWorkflows supplies the data.
  */
-export function WorkflowConsole({ templates, selectedId, plan, onModifyPlan, onNewWorkflow }: WorkflowConsoleProps) {
+export function LayoutWorkflowConsole({ templates, selectedId, plan, onModifyPlan, onNewWorkflow }: WorkflowConsoleProps) {
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
       <section className="flex flex-col gap-3">

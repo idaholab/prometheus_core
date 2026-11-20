@@ -29,7 +29,7 @@ type Props = AgentsState & {
  * Agent Registry layout (Figma C.1): the toolbar, then the agent grid or the
  * load state. Display only; PageAgentRegistry supplies the data.
  */
-export function AgentRegistry({ agents, status, query, onQueryChange, domain, onDomainChange, noMatches }: Props) {
+export function LayoutAgentRegistry({ agents, status, query, onQueryChange, domain, onDomainChange, noMatches }: Props) {
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
       {status === "loading" && <p className="m-0 text-sm text-base-content/60">Loading agents...</p>}

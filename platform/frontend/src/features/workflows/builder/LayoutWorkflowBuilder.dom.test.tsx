@@ -26,7 +26,7 @@ import {
   VERSION_DETAILS,
   WORKFLOW_VERSIONS,
 } from "./builderPlaceholders.ts";
-import { WorkflowBuilder } from "./WorkflowBuilder.tsx";
+import { LayoutWorkflowBuilder } from "./LayoutWorkflowBuilder.tsx";
 
 // React Flow watches its container for resizes, and jsdom has no modal
 // dialogs, so stand in for both: showModal and close just set the open attribute.
@@ -52,7 +52,7 @@ afterEach(() => vi.unstubAllGlobals());
 function Builder({ initial, unsavedChanges }: { initial: BuilderMode; unsavedChanges?: string }) {
   const [mode, setMode] = useState(initial);
   return (
-    <WorkflowBuilder
+    <LayoutWorkflowBuilder
       name="Comprehensive Material Analysis"
       mode={mode}
       onModeChange={setMode}
