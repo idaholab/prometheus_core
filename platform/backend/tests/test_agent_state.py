@@ -199,3 +199,23 @@ async def test_deleted_conversation_hides_state(client, tokens, fake_redis, url)
     assert client.get(url, headers=h(alice)).status_code == 404
     write = client.put(url, json={"state": {}}, headers=h(alice, **{"If-Match": "1"}))
     assert write.status_code == 404
+
+
+@pytest.mark.parametrize("url", [TASK_URL, CONV_URL])
+async def test_not_found_says_whether_state_or_conversation_is_missing(client, tokens, fake_redis, url):
+    alice = tokens["alice"]
+    absent = client.get(url, headers=h(alice))
+    assert absent.status_code == 404
+    assert absent.headers["x-agent-state-not-found"] == "state"
+
+    if url == TASK_URL:  # Conversation keys include the agent, so only a task key can be someone else's
+        # Someone else's record at the key is "no state" too, so it doesn't leak.
+        create(client, url, alice, {})
+        hijack = client.put(url, json={"state": {}}, headers=h(alice, agent="osti-agent", **{"If-None-Match": "*"}))
+        assert hijack.status_code == 404
+        assert hijack.headers["x-agent-state-not-found"] == "state"
+
+    await fake_redis.hset(f"conv:meta:{CONV}", mapping={"hidden": "1"})
+    deleted = client.get(url, headers=h(alice))
+    assert deleted.status_code == 404
+    assert deleted.headers["x-agent-state-not-found"] == "conversation"

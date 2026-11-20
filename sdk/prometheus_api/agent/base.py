@@ -1105,11 +1105,13 @@ class PrometheusAgent:
     async def save_context_state(self, context_id: str, state: Dict[str, Any]) -> None:
         """Persist this agent's state for one conversation (A2A ``contextId``).
 
-        Replaces what this request loaded. Raises
+        Replaces the version this request loaded. Raises
         :class:`~prometheus_api.agent.agent_state.AgentStateConflict` if another
-        request saved in between, so a concurrent write is never silently lost;
-        call :meth:`load_context_state` again and retry. Saving without a load in
-        this request overwrites whatever is stored.
+        request saved in between, so a concurrent write is never silently lost.
+        The stale version is kept after a conflict, so call
+        :meth:`load_context_state` again before retrying. Without a load in this
+        request, the save reads the current version and replaces that; it can
+        still raise ``AgentStateConflict`` if another save lands in between.
         """
         context_id = str(context_id or "")
         client = self._agent_state_client()

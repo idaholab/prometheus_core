@@ -24,6 +24,7 @@ from prometheus_api.agent.agent_state import (
     AgentStateClient,
     AgentStateConflict,
     AgentStateError,
+    NOT_FOUND_HEADER,
 )
 
 BASE = "http://backend:8000"
@@ -47,7 +48,9 @@ class FakeBackend:
         record = self.records.get(path)
         if request.method == "GET":
             if record is None:
-                return httpx.Response(404, json={"detail": "No such state"})
+                return httpx.Response(
+                    404, json={"detail": "No such state"}, headers={NOT_FOUND_HEADER: "state"}
+                )
             return httpx.Response(200, json=record, headers={"ETag": f'"{record["version"]}"'})
         if request.method == "DELETE":
             self.records.pop(path, None)
@@ -160,3 +163,36 @@ async def test_missing_identity_or_ids_fail_before_any_request(backend, client, 
     with pytest.raises(AgentStateError):
         await client.load(**kwargs)
     assert backend.requests == []
+
+
+def _answer_404(monkeypatch, **kwargs: Any) -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(404, **kwargs))
+    monkeypatch.setattr(
+        AgentStateClient, "_client", lambda self: httpx.AsyncClient(transport=transport)
+    )
+
+
+async def test_missing_conversation_raises_instead_of_empty_state(monkeypatch, client):
+    _answer_404(
+        monkeypatch,
+        json={"detail": "No such conversation"},
+        headers={NOT_FOUND_HEADER: "conversation"},
+    )
+    with pytest.raises(AgentStateError, match="conversation not found") as exc:
+        await client.load("conversation", conversation_id=CONV, user_token=TOKEN)
+    assert exc.value.status == 404
+    with pytest.raises(AgentStateError, match="conversation not found"):
+        await client.save("conversation", {}, version=None, conversation_id=CONV, user_token=TOKEN)
+    await client.delete("conversation", conversation_id=CONV, user_token=TOKEN)  # still idempotent
+
+
+async def test_404_from_something_else_raises(monkeypatch, client):
+    """A wrong REGISTRY_URL (LiteLLM, say) answers 404 without the marker; that isn't "no state"."""
+    _answer_404(monkeypatch, text="Not Found")
+    for call in (
+        client.load("conversation", conversation_id=CONV, user_token=TOKEN),
+        client.save("conversation", {}, version=None, conversation_id=CONV, user_token=TOKEN),
+        client.delete("conversation", conversation_id=CONV, user_token=TOKEN),
+    ):
+        with pytest.raises(AgentStateError, match="REGISTRY_URL"):
+            await call

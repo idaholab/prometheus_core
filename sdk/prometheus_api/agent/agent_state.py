@@ -44,6 +44,10 @@ logger = logging.getLogger(__name__)
 
 Scope = Literal["task", "conversation"]
 
+# The backend marks each 404 as "state" (nothing stored) or "conversation" (not the
+# user's, or deleted). A 404 without it didn't come from the agent-state API.
+NOT_FOUND_HEADER = "X-Agent-State-Not-Found"
+
 
 class AgentStateError(RuntimeError):
     """The backend couldn't serve the state request (unreachable, auth, refused).
@@ -128,15 +132,18 @@ class AgentStateClient:
     ) -> StoredState | None:
         """The stored state and its version, or ``None`` when there is none.
 
-        The backend answers 404 both for "no state" and for "no such conversation";
-        both mean there is nothing to resume from.
+        Only a 404 the backend marks as "no state" means ``None``. A conversation that
+        isn't the user's (or was deleted), or a 404 from something that isn't the
+        agent-state API (a wrong ``REGISTRY_URL``), raises :class:`AgentStateError`.
         """
         url, headers = self._target(
             scope, conversation_id=conversation_id, task_id=task_id, user_token=user_token
         )
         resp = await self._send("GET", url, headers)
-        if resp.status_code == 404:
+        if resp.status_code == 404 and resp.headers.get(NOT_FOUND_HEADER) == "state":
             return None
+        if resp.status_code == 404:
+            raise _not_found(resp, url)
         if resp.status_code != 200:
             raise AgentStateError(
                 f"backend refused the state read ({resp.status_code}): {_detail(resp)}",
@@ -167,6 +174,8 @@ class AgentStateClient:
         resp = await self._send("PUT", url, headers, json={"state": state})
         if resp.status_code == 409:
             raise AgentStateConflict(f"state changed concurrently: {_detail(resp)}", status=409)
+        if resp.status_code == 404:
+            raise _not_found(resp, url)
         if resp.status_code != 200:
             raise AgentStateError(
                 f"backend refused the state write ({resp.status_code}): {_detail(resp)}",
@@ -182,16 +191,33 @@ class AgentStateClient:
         user_token: str,
         task_id: str | None = None,
     ) -> None:
-        """Remove the state. Idempotent; a missing record or conversation is not an error."""
+        """Remove the state. Idempotent; a missing record or conversation is not an error.
+
+        A 404 that didn't come from the agent-state API (a wrong ``REGISTRY_URL``) is.
+        """
         url, headers = self._target(
             scope, conversation_id=conversation_id, task_id=task_id, user_token=user_token
         )
         resp = await self._send("DELETE", url, headers)
+        if resp.status_code == 404 and resp.headers.get(NOT_FOUND_HEADER) is None:
+            raise _not_found(resp, url)
         if resp.status_code not in (204, 404):
             raise AgentStateError(
                 f"backend refused the state delete ({resp.status_code}): {_detail(resp)}",
                 status=resp.status_code,
             )
+
+
+def _not_found(resp: httpx.Response, url: str) -> AgentStateError:
+    if resp.headers.get(NOT_FOUND_HEADER) == "conversation":
+        return AgentStateError(
+            "conversation not found for this user (not theirs, or deleted)", status=404
+        )
+    return AgentStateError(
+        f"{url} is not the backend agent-state API (404 without {NOT_FOUND_HEADER}); "
+        "check REGISTRY_URL points at the platform backend",
+        status=404,
+    )
 
 
 def _detail(resp: httpx.Response) -> Any:

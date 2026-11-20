@@ -3300,7 +3300,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3414,7 +3426,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "409": {
             "description": "Version mismatch (or the state already exists on create)"
@@ -3488,7 +3512,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3552,7 +3588,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3656,7 +3704,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "409": {
             "description": "Version mismatch (or the state already exists on create)"
@@ -3720,7 +3780,19 @@
             "description": "Missing or invalid agent credentials or user identity token"
           },
           "404": {
-            "description": "No such conversation, or no state owned by this user, agent and conversation"
+            "description": "No such conversation, or no state owned by this user, agent and conversation",
+            "headers": {
+              "X-Agent-State-Not-Found": {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "state",
+                    "conversation"
+                  ]
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",

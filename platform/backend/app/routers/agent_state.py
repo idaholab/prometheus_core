@@ -29,6 +29,10 @@ absent.
 ``GET`` returns the version as an ``ETag``. ``PUT`` needs ``If-None-Match: *`` to
 create or ``If-Match: <version>`` to replace (409 on a mismatch, 428 with neither), so
 two racing resumes can't silently overwrite each other. ``DELETE`` is idempotent.
+
+Every 404 carries ``X-Agent-State-Not-Found: state`` (no record for this owner) or
+``conversation`` (not the user's, or deleted), so a client can tell "nothing stored"
+from a missing conversation or a request that never reached this API.
 """
 
 from __future__ import annotations
@@ -55,10 +59,30 @@ from app.services.agent_state import (
 
 router = APIRouter(prefix="/v1/agent-state", tags=[TAG_AGENT_REGISTRY], dependencies=[Depends(require_agent_secret)])
 
+NOT_FOUND_HEADER = "X-Agent-State-Not-Found"
+
 _STATE_RESPONSES: dict[int | str, dict[str, Any]] = {
     401: {"description": "Missing or invalid agent credentials or user identity token"},
-    404: {"description": "No such conversation, or no state owned by this user, agent and conversation"},
+    404: {
+        "description": "No such conversation, or no state owned by this user, agent and conversation",
+        "headers": {
+            NOT_FOUND_HEADER: {
+                "description": "`state` when there is no record, `conversation` when the conversation isn't the user's",
+                "schema": {"type": "string", "enum": ["state", "conversation"]},
+            }
+        },
+    },
 }
+
+
+def _not_found(what: str, detail: str) -> HTTPException:
+    return HTTPException(status_code=404, detail=detail, headers={NOT_FOUND_HEADER: what})
+
+
+def _http_error(exc: AgentStateError) -> HTTPException:
+    if exc.status == 404:
+        return _not_found("state", exc.detail)
+    return HTTPException(status_code=exc.status, detail=exc.detail)
 
 
 class StateBody(BaseModel):
@@ -92,7 +116,7 @@ async def _owner(redis: RedisClient, caller: AgentCaller, user_token: Optional[s
         or not await redis.sismember(f"user:convs:{user_id}", conversation_id)
         or await redis.hget(f"conv:meta:{conversation_id}", "hidden")
     ):
-        raise HTTPException(status_code=404, detail="No such conversation")
+        raise _not_found("conversation", "No such conversation")
     return Owner(user_id=user_id, agent=caller.name, conversation_id=conversation_id)
 
 
@@ -138,7 +162,7 @@ def _respond(record: StateRecord, response: Response) -> StateResponse:
 async def _get(store: AgentStateStore, key: str, owner: Owner, response: Response) -> StateResponse:
     record = await store.get(key, owner)
     if record is None:
-        raise HTTPException(status_code=404, detail="No such state")
+        raise _not_found("state", "No such state")
     return _respond(record, response)
 
 
@@ -155,7 +179,7 @@ async def _put(
     try:
         record = await store.put(key, owner, body.state, expected_version=expected)
     except AgentStateError as exc:
-        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+        raise _http_error(exc) from exc
     return _respond(record, response)
 
 
@@ -163,7 +187,7 @@ async def _delete(store: AgentStateStore, key: str, owner: Owner) -> Response:
     try:
         await store.delete(key, owner)
     except AgentStateError as exc:
-        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+        raise _http_error(exc) from exc
     return Response(status_code=204)
 
 

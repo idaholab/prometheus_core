@@ -87,7 +87,7 @@ def test_thermal_agent_resume_needs_no_saved_state():
     # On resume the client-agent re-sends every argument plus the answer, so the
     # agent proceeds past the temperature prompt from params alone.
     agent = ThermalAnalysisAgent(agent_name="Thermal Analysis Agent")
-    agent.load_context_state = MagicMock(side_effect=AssertionError("no saved state needed"))
+    agent.load_context_state = AsyncMock(side_effect=AssertionError("no saved state needed"))
     agent.llm_client = MagicMock(return_value=_FakeLLM())
     agent.send_status_update = AsyncMock()
     agent.send_json_artifact = AsyncMock()

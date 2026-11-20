@@ -16,8 +16,10 @@ gone (the backend's `AGENT_STATE_TTL_SECONDS` sets the 24 h expiry).
 Migration steps:
 
 1. `await` both calls.
-2. Expect `AgentStateError` when the backend is unreachable or the turn has no user
-   identity. There is no in-memory fallback any more.
+2. Expect `AgentStateError` when the backend is unreachable, the turn has no user
+   identity, the conversation isn't the user's (or was deleted), or `REGISTRY_URL`
+   doesn't point at the platform backend. Only "nothing stored" returns `{}`. There
+   is no in-memory fallback any more.
 3. `save_context_state` replaces the version this request loaded. If another request
    saved in between it raises `AgentStateConflict`: load again and retry, or fail.
 4. Keep state under 256 KB (backend `AGENT_STATE_MAX_BYTES`); put large data in
