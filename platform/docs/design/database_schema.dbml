@@ -1,0 +1,529 @@
+// ============================================================
+// Schema with FKs, indexes, and unique constraints
+// Tables marked "non-MVP" are in the diagram but not to be implemented yet.
+// ============================================================
+
+// ---------- Identity / tenancy ----------
+
+Table oidc_providers {
+  id uuid [pk, not null]
+  provider_id text
+  name text [not null]
+  issuer_url text [not null]
+  client_id text [not null]
+  client_secret_encrypted bytea [not null]
+  scopes text
+  is_platform_managed boolean
+  is_enabled boolean
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    provider_id [unique, name: 'uq_oidc_providers_provider_id']
+  }
+}
+
+Table users {
+  id uuid [pk, not null]
+  username text
+  email text [not null]
+  display_name text
+  is_sys_admin boolean [not null, default: false]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    email [unique, name: 'uq_users_email']
+    username [unique, name: 'uq_users_username']
+  }
+}
+
+Table user_identities {
+  id uuid [pk, not null]
+  user_id uuid [not null]
+  oidc_provider_id uuid [not null]
+  subject text
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    user_id [name: 'idx_user_identities_user_id']
+    (oidc_provider_id, subject) [unique, name: 'uq_user_identities_provider_subject']
+  }
+}
+
+// non-MVP; do not implement
+Table classification_levels {
+  id uuid [pk, not null]
+  name text [not null]
+  rank integer [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    name [unique, name: 'uq_classification_levels_name']
+  }
+}
+
+Table organizations {
+  id uuid [pk, not null]
+  oidc_provider_id uuid [not null]
+  classification_ceiling_id uuid // FK classification_levels; not MVP (don't implement)
+  name text [not null]
+  description text
+  metadata jsonb
+  deeplynx_organization_id bigint
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    oidc_provider_id [name: 'idx_organizations_oidc_provider_id']
+    classification_ceiling_id [name: 'idx_organizations_classification_ceiling_id']
+    deeplynx_organization_id [unique, name: 'uq_organizations_deeplynx_organization_id']
+  }
+}
+
+Table organization_users {
+  user_id uuid [not null]
+  organization_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (user_id, organization_id) [pk]
+    organization_id [name: 'idx_organization_users_organization_id']
+    user_id [name: 'idx_organization_users_user_id']
+  }
+}
+
+Table projects {
+  id uuid [pk, not null]
+  organization_id uuid [not null]
+  classification_level_id uuid // FK classification_levels; not MVP (don't implement)
+  name text [not null]
+  description text
+  metadata jsonb
+  deeplynx_project_id bigint
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    organization_id [name: 'idx_projects_organization_id']
+    classification_level_id [name: 'idx_projects_classification_level_id']
+    (organization_id, name) [unique, name: 'uq_projects_organization_name']
+    deeplynx_project_id [unique, name: 'uq_projects_deeplynx_project_id']
+  }
+}
+
+Table groups {
+  id uuid [pk, not null]
+  organization_id uuid [not null]
+  name text [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    organization_id [name: 'idx_groups_organization_id']
+    (organization_id, name) [unique, name: 'uq_groups_organization_name']
+  }
+}
+
+Table group_users {
+  group_id uuid [not null]
+  organization_users_organization_id uuid [not null]
+  organization_users_user_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (group_id, organization_users_organization_id, organization_users_user_id) [pk]
+    (organization_users_user_id, organization_users_organization_id) [name: 'idx_group_users_org_user']
+  }
+}
+
+// ---------- RBAC ----------
+
+Table resources {
+  id uuid [pk, not null]
+  name text [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    name [unique, name: 'uq_resources_name']
+  }
+}
+
+Table actions {
+  id uuid [pk, not null]
+  name text [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    name [unique, name: 'uq_actions_name']
+  }
+}
+
+Table permissions {
+  id uuid [pk, not null]
+  resource_id uuid [not null]
+  action_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    action_id [name: 'idx_permissions_action_id']
+    (resource_id, action_id) [unique, name: 'uq_permissions_resource_action']
+  }
+}
+
+Table roles {
+  id uuid [pk, not null]
+  project_id uuid
+  organization_id uuid
+  name text [not null]
+  description text
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    project_id [name: 'idx_roles_project_id']
+    organization_id [name: 'idx_roles_organization_id']
+    // Note: NULLs are distinct in a unique index, so this only guards rows where both scopes are set.
+    // Consider two partial unique indexes in the real DDL (one WHERE project_id IS NULL, one WHERE organization_id IS NULL).
+    (organization_id, project_id, name) [unique, name: 'uq_roles_scope_name']
+  }
+}
+
+Table role_permissions {
+  id uuid [pk, not null]
+  role_id uuid [not null]
+  permission_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    permission_id [name: 'idx_role_permissions_permission_id']
+    (role_id, permission_id) [unique, name: 'uq_role_permissions_role_permission']
+  }
+}
+
+Table organization_user_roles {
+  role_id uuid [not null]
+  organization_users_organization_id uuid [not null]
+  organization_users_user_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (role_id, organization_users_organization_id, organization_users_user_id) [pk]
+    (organization_users_user_id, organization_users_organization_id) [name: 'idx_organization_user_roles_org_user']
+  }
+}
+
+Table project_user_roles {
+  project_id uuid [not null]
+  user_id uuid [not null]
+  role_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (project_id, user_id, role_id) [pk]
+    user_id [name: 'idx_project_user_roles_user_id']
+    role_id [name: 'idx_project_user_roles_role_id']
+  }
+}
+
+Table project_group_roles {
+  project_id uuid [not null]
+  group_id uuid [not null]
+  role_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    (project_id, group_id, role_id) [pk]
+    group_id [name: 'idx_project_group_roles_group_id']
+    role_id [name: 'idx_project_group_roles_role_id']
+  }
+}
+
+// ---------- Sensitivity / classification (non-MVP) ----------
+
+// non-MVP; do not implement
+Table sensitivity_tags {
+  id uuid [pk, not null]
+  organization_id uuid
+  project_id uuid
+  classification_level_id uuid [not null]
+  name text [not null]
+  deeplynx_label_id bigint
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    organization_id [name: 'idx_sensitivity_tags_organization_id']
+    project_id [name: 'idx_sensitivity_tags_project_id']
+    classification_level_id [name: 'idx_sensitivity_tags_classification_level_id']
+    (organization_id, project_id, name) [unique, name: 'uq_sensitivity_tags_scope_name']
+    deeplynx_label_id [unique, name: 'uq_sensitivity_tags_deeplynx_label_id']
+  }
+}
+
+// non-MVP; do not implement
+Table sensitivity_tag_permissions {
+  id uuid [pk, not null]
+  resource_id uuid [not null]
+  action_id uuid [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    action_id [name: 'idx_sensitivity_tag_permissions_action_id']
+    (resource_id, action_id) [unique, name: 'uq_sensitivity_tag_permissions_resource_action']
+  }
+}
+
+// non-MVP; do not implement
+Table sensitivity_tag_group_grants {
+  id uuid [pk, not null]
+  sensitivity_tag_id uuid [not null]
+  group_id uuid [not null]
+  sensitivity_tag_permission_id uuid [not null]
+  expires_at timestamptz
+  granted_at timestamptz
+  granted_by_user_id uuid
+  revoked_at timestamptz
+  revoked_by_user_id uuid
+
+  indexes {
+    sensitivity_tag_id [name: 'idx_stgg_sensitivity_tag_id']
+    group_id [name: 'idx_stgg_group_id']
+    sensitivity_tag_permission_id [name: 'idx_stgg_sensitivity_tag_permission_id']
+    granted_by_user_id [name: 'idx_stgg_granted_by_user_id']
+    revoked_by_user_id [name: 'idx_stgg_revoked_by_user_id']
+  }
+}
+
+// non-MVP; do not implement
+Table sensitivity_tag_user_grants {
+  id uuid [pk, not null]
+  sensitivity_tag_id uuid [not null]
+  user_id uuid [not null]
+  sensitivity_tag_permission_id uuid [not null]
+  expires_at timestamptz
+  granted_at timestamptz
+  granted_by_user_id uuid
+  revoked_at timestamptz
+  revoked_by_user_id uuid
+
+  indexes {
+    sensitivity_tag_id [name: 'idx_stug_sensitivity_tag_id']
+    user_id [name: 'idx_stug_user_id']
+    sensitivity_tag_permission_id [name: 'idx_stug_sensitivity_tag_permission_id']
+    granted_by_user_id [name: 'idx_stug_granted_by_user_id']
+    revoked_by_user_id [name: 'idx_stug_revoked_by_user_id']
+  }
+}
+
+// ---------- Data sources (non-MVP) ----------
+
+// non-MVP; do not implement
+Table data_source_connector {
+  id uuid [pk, not null]
+  name text [not null]
+  config_template jsonb
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    name [unique, name: 'uq_data_source_connector_name']
+  }
+}
+
+// non-MVP; do not implement
+Table data_sources {
+  id uuid [pk, not null]
+  organization_id uuid [not null]
+  project_id uuid [not null]
+  version text
+  data_source_connector_id uuid [not null]
+  config jsonb [not null]
+  connection_status text [not null]
+  data_source_type text [not null]
+  created_at timestamptz [default: `now()`]
+  last_sync_at timestamptz
+
+  indexes {
+    organization_id [name: 'idx_data_sources_organization_id']
+    project_id [name: 'idx_data_sources_project_id']
+    data_source_connector_id [name: 'idx_data_sources_data_source_connector_id']
+  }
+}
+
+// ---------- Sessions (non-MVP) ----------
+
+// non-MVP; do not implement
+Table sessions {
+  id uuid [pk, not null]
+  user_id uuid [not null]
+  project_id uuid
+  organization_id uuid
+  started_at timestamptz
+  ended_at timestamptz
+  last_active_at timestamptz
+
+  indexes {
+    user_id [name: 'idx_sessions_user_id']
+    project_id [name: 'idx_sessions_project_id']
+    organization_id [name: 'idx_sessions_organization_id']
+  }
+}
+
+// ---------- Plans / workflows (non-MVP) ----------
+
+// non-MVP; do not implement
+Table plans {
+  id uuid [pk, not null]
+  organization_id uuid
+  project_id uuid
+  derived_from_workflow_id uuid
+  type text [not null]
+  status text [not null]
+  created_at timestamptz [default: `now()`]
+  created_by_user_id uuid
+
+  indexes {
+    organization_id [name: 'idx_plans_organization_id']
+    project_id [name: 'idx_plans_project_id']
+    derived_from_workflow_id [name: 'idx_plans_derived_from_workflow_id']
+    created_by_user_id [name: 'idx_plans_created_by_user_id']
+  }
+}
+
+// non-MVP; do not implement
+Table plan_steps {
+  id uuid [pk, not null]
+  plan_id uuid [not null]
+  sequence int [not null]
+  checkpoint_required boolean [not null]
+  // planned_agent_id removed per request
+
+  indexes {
+    (plan_id, sequence) [unique, name: 'uq_plan_steps_plan_sequence']
+  }
+}
+
+// non-MVP; do not implement
+Table workflows {
+  id uuid [pk, not null]
+  organization_id uuid
+  project_id uuid
+  originating_plan_id uuid
+  initiating_user_id uuid [not null]
+  status text
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    organization_id [name: 'idx_workflows_organization_id']
+    project_id [name: 'idx_workflows_project_id']
+    originating_plan_id [name: 'idx_workflows_originating_plan_id']
+    initiating_user_id [name: 'idx_workflows_initiating_user_id']
+  }
+}
+
+// non-MVP; do not implement
+Table workflow_steps {
+  id uuid [pk, not null]
+  plan_step_id uuid [not null]
+  workflow_id uuid [not null]
+  sequence int [not null]
+
+  indexes {
+    plan_step_id [name: 'idx_workflow_steps_plan_step_id']
+    (workflow_id, sequence) [unique, name: 'uq_workflow_steps_workflow_sequence']
+  }
+}
+
+// non-MVP; do not implement
+Table checkpoints {
+  id uuid [pk, not null]
+  workflow_step_id uuid [not null]
+  type text [not null]
+  created_at timestamptz [default: `now()`]
+
+  indexes {
+    workflow_step_id [name: 'idx_checkpoints_workflow_step_id']
+  }
+}
+
+// non-MVP; do not implement
+Table checkpoint_approvals {
+  id uuid [pk, not null]
+  checkpoint_id uuid [not null]
+  user_id uuid [not null]
+  status text [not null]
+
+  indexes {
+    (checkpoint_id, user_id) [unique, name: 'uq_checkpoint_approvals_checkpoint_user']
+    user_id [name: 'idx_checkpoint_approvals_user_id']
+  }
+}
+
+// ============================================================
+// Foreign keys
+// ============================================================
+
+// Identity / tenancy
+Ref fk_user_identities_user_id: user_identities.user_id > users.id
+Ref fk_user_identities_oidc_provider_id: user_identities.oidc_provider_id > oidc_providers.id
+Ref fk_organizations_oidc_provider_id: organizations.oidc_provider_id > oidc_providers.id
+Ref fk_organizations_classification_ceiling_id: organizations.classification_ceiling_id > classification_levels.id
+Ref fk_organization_users_user_id: organization_users.user_id > users.id
+Ref fk_organization_users_organization_id: organization_users.organization_id > organizations.id
+Ref fk_projects_organization_id: projects.organization_id > organizations.id
+Ref fk_projects_classification_level_id: projects.classification_level_id > classification_levels.id
+Ref fk_groups_organization_id: groups.organization_id > organizations.id
+Ref fk_group_users_group_id: group_users.group_id > groups.id
+Ref fk_group_users_organization_users: group_users.(organization_users_user_id, organization_users_organization_id) > organization_users.(user_id, organization_id)
+
+// RBAC
+Ref fk_permissions_resource_id: permissions.resource_id > resources.id
+Ref fk_permissions_action_id: permissions.action_id > actions.id
+Ref fk_roles_project_id: roles.project_id > projects.id
+Ref fk_roles_organization_id: roles.organization_id > organizations.id
+Ref fk_role_permissions_role_id: role_permissions.role_id > roles.id
+Ref fk_role_permissions_permission_id: role_permissions.permission_id > permissions.id
+Ref fk_organization_user_roles_role_id: organization_user_roles.role_id > roles.id
+Ref fk_organization_user_roles_organization_users: organization_user_roles.(organization_users_user_id, organization_users_organization_id) > organization_users.(user_id, organization_id)
+Ref fk_project_user_roles_project_id: project_user_roles.project_id > projects.id
+Ref fk_project_user_roles_user_id: project_user_roles.user_id > users.id
+Ref fk_project_user_roles_role_id: project_user_roles.role_id > roles.id
+Ref fk_project_group_roles_project_id: project_group_roles.project_id > projects.id
+Ref fk_project_group_roles_group_id: project_group_roles.group_id > groups.id
+Ref fk_project_group_roles_role_id: project_group_roles.role_id > roles.id
+
+// Sensitivity (non-MVP)
+Ref fk_sensitivity_tags_organization_id: sensitivity_tags.organization_id > organizations.id
+Ref fk_sensitivity_tags_project_id: sensitivity_tags.project_id > projects.id
+Ref fk_sensitivity_tags_classification_level_id: sensitivity_tags.classification_level_id > classification_levels.id
+Ref fk_sensitivity_tag_permissions_resource_id: sensitivity_tag_permissions.resource_id > resources.id
+Ref fk_sensitivity_tag_permissions_action_id: sensitivity_tag_permissions.action_id > actions.id
+Ref fk_stgg_sensitivity_tag_id: sensitivity_tag_group_grants.sensitivity_tag_id > sensitivity_tags.id
+Ref fk_stgg_group_id: sensitivity_tag_group_grants.group_id > groups.id
+Ref fk_stgg_permission_id: sensitivity_tag_group_grants.sensitivity_tag_permission_id > sensitivity_tag_permissions.id
+Ref fk_stgg_granted_by_user_id: sensitivity_tag_group_grants.granted_by_user_id > users.id
+Ref fk_stgg_revoked_by_user_id: sensitivity_tag_group_grants.revoked_by_user_id > users.id
+Ref fk_stug_sensitivity_tag_id: sensitivity_tag_user_grants.sensitivity_tag_id > sensitivity_tags.id
+Ref fk_stug_user_id: sensitivity_tag_user_grants.user_id > users.id
+Ref fk_stug_permission_id: sensitivity_tag_user_grants.sensitivity_tag_permission_id > sensitivity_tag_permissions.id
+Ref fk_stug_granted_by_user_id: sensitivity_tag_user_grants.granted_by_user_id > users.id
+Ref fk_stug_revoked_by_user_id: sensitivity_tag_user_grants.revoked_by_user_id > users.id
+
+// Data sources (non-MVP)
+Ref fk_data_sources_organization_id: data_sources.organization_id > organizations.id
+Ref fk_data_sources_project_id: data_sources.project_id > projects.id
+Ref fk_data_sources_data_source_connector_id: data_sources.data_source_connector_id > data_source_connector.id
+
+// Sessions (non-MVP)
+Ref fk_sessions_user_id: sessions.user_id > users.id
+Ref fk_sessions_project_id: sessions.project_id > projects.id
+Ref fk_sessions_organization_id: sessions.organization_id > organizations.id
+
+// Plans / workflows (non-MVP)
+Ref fk_plans_organization_id: plans.organization_id > organizations.id
+Ref fk_plans_project_id: plans.project_id > projects.id
+Ref fk_plans_derived_from_workflow_id: plans.derived_from_workflow_id > workflows.id
+Ref fk_plans_created_by_user_id: plans.created_by_user_id > users.id
+Ref fk_plan_steps_plan_id: plan_steps.plan_id > plans.id
+Ref fk_workflows_organization_id: workflows.organization_id > organizations.id
+Ref fk_workflows_project_id: workflows.project_id > projects.id
+Ref fk_workflows_originating_plan_id: workflows.originating_plan_id > plans.id
+Ref fk_workflows_initiating_user_id: workflows.initiating_user_id > users.id
+Ref fk_workflow_steps_plan_step_id: workflow_steps.plan_step_id > plan_steps.id
+Ref fk_workflow_steps_workflow_id: workflow_steps.workflow_id > workflows.id
+Ref fk_checkpoints_workflow_step_id: checkpoints.workflow_step_id > workflow_steps.id
+Ref fk_checkpoint_approvals_checkpoint_id: checkpoint_approvals.checkpoint_id > checkpoints.id
+Ref fk_checkpoint_approvals_user_id: checkpoint_approvals.user_id > users.id
