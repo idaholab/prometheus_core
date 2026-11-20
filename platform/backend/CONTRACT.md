@@ -547,7 +547,9 @@ with empty card fields and `reachable: false`. `GET /v1/agents` returns it too.
 `GET /healthz` on the origin of the card `url` answers 2xx within 2 s. It shows only that
 the agent's HTTP server answers: the SDK's `/healthz` returns a fixed `ok`, so an agent can
 be `reachable` while its A2A calls fail. Read it as "process up", not "agent working". The
-probes of a list request run concurrently. Nothing is cached or stored. `checked_at` is the
+probes of a list request run concurrently, at most 32 at a time per backend worker across
+all requests; a probe that cannot start within the 2 s bound counts as unreachable.
+Nothing is cached or stored. `checked_at` is the
 ISO 8601 UTC time at which the probes finished, with a `+00:00` suffix.
 
 **Probe target.** The probe drops the card `url`'s path, query and fragment, because the SDK

@@ -32,6 +32,7 @@ import asyncio
 import ipaddress
 import logging
 import socket
+import weakref
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -54,6 +55,25 @@ logger = logging.getLogger(__name__)
 AGENT_PROBE_TIMEOUT_S = 2.0
 
 _REGISTRY_UNAVAILABLE = "Agent registry is unavailable"
+
+# The most probes one backend worker runs at a time, across every request. Each status tab
+# that polls sends one probe per agent, and a dead agent holds its socket for the whole
+# bound, so polling from many tabs must not open sockets without limit. Probes past the
+# cap wait their turn inside the same bound, and a probe that cannot start in time counts
+# as unreachable. The planned stored agent_health replaces the live probe.
+MAX_CONCURRENT_PROBES = 32
+# One semaphore per event loop: an asyncio.Semaphore binds to the first loop that waits on
+# it, so a module-level one fails in any other loop (a test client, a second app instance).
+_probe_slots: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = weakref.WeakKeyDictionary()
+
+
+def _slots() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    slots = _probe_slots.get(loop)
+    if slots is None:
+        slots = _probe_slots[loop] = asyncio.Semaphore(MAX_CONCURRENT_PROBES)
+    return slots
+
 
 router = APIRouter(prefix="/api", tags=[TAG_AGENTS], responses=AUTH_RESPONSES, dependencies=[Depends(SESSION_COOKIE)])
 
@@ -120,7 +140,7 @@ async def _probe(client: httpx.AsyncClient, url: str) -> bool:
     try:
         # One bound for the lookup and the request: httpx applies its own timeout per
         # phase (connect, read, ...), and the lookup is not covered by it at all.
-        async with asyncio.timeout(AGENT_PROBE_TIMEOUT_S):
+        async with asyncio.timeout(AGENT_PROBE_TIMEOUT_S), _slots():
             target = await _probe_target(url)
             if target is None:
                 return False

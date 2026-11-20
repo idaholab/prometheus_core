@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import weakref
 from datetime import datetime, timezone
 from typing import Any
 
@@ -625,3 +626,35 @@ def test_no_path_leaks_the_agents_secret(monkeypatch, fake_redis, caplog):
     for resp in bodies:
         assert sentinel not in resp.text
     assert sentinel not in caplog.text
+
+
+def test_probes_never_exceed_the_concurrency_cap(monkeypatch, fake_redis):
+    """However many agents a list holds, at most ``MAX_CONCURRENT_PROBES`` probes are open
+    at once, so polling cannot open sockets without limit."""
+    entries = [
+        {
+            **GAMMA,
+            "agent_name": f"agent-{n:02d}",
+            "agent_card_params": {**GAMMA["agent_card_params"], "url": f"http://agent-{n:02d}:8000/"},
+        }
+        for n in range(8)
+    ]
+    _seed(fake_redis, *entries)
+    monkeypatch.setattr(agents_mod, "MAX_CONCURRENT_PROBES", 3)
+    monkeypatch.setattr(agents_mod, "_probe_slots", weakref.WeakKeyDictionary())
+    open_now = peak = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal open_now, peak
+        open_now += 1
+        peak = max(peak, open_now)
+        await asyncio.sleep(0.05)
+        open_now -= 1
+        return httpx.Response(200)
+
+    monkeypatch.setattr(agents_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+
+    rows = _authed_client(monkeypatch).get("/api/agents").json()["agents"]
+
+    assert [row["reachable"] for row in rows] == [True] * 8
+    assert peak == 3
