@@ -224,3 +224,34 @@ def test_sdk_registration_keeps_the_v1_list_shape(client):
         }
     ]
     assert "agent-own-secret" not in json.dumps(listed)
+
+
+def test_registration_reaches_the_status_view(client, monkeypatch):
+    """One path from POST /v1/agents to GET /api/agents: the registered_at the registry
+    stamps is the one the status view returns, so a renamed key on one side fails here."""
+    from app import security
+    from app.routers import agents as agents_mod
+
+    async def resolve(host: str, port: int) -> list[str]:
+        return ["10.0.0.7"]
+
+    monkeypatch.setattr(agents_mod, "_resolve", resolve)
+    monkeypatch.setattr(
+        agents_mod,
+        "_make_client",
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200))),
+    )
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret", raising=False)
+    monkeypatch.setattr(security.settings, "jwt_secret", "test-secret", raising=False)
+
+    before = datetime.now(timezone.utc)
+    client.post("/v1/agents", json=_sdk_registration(), headers=AUTH)
+    after = datetime.now(timezone.utc)
+    client.cookies.set(settings.cookie_name, security.issue_token(security.User(identifier="alice"), sid="sid-e2e"))
+
+    rows = client.get("/api/agents").json()["agents"]
+
+    assert [row["agent_name"] for row in rows] == ["thermal-agent"]
+    assert before <= datetime.fromisoformat(rows[0]["registered_at"]) <= after
+    assert rows[0]["reachable"] is True
+    assert [skill["id"] for skill in rows[0]["skills"]] == ["analyze_thermal"]
