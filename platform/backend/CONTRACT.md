@@ -523,49 +523,55 @@ the serving agent; the client-agent does not record it yet, so it is `null`.
 
 A read view of the agent registry for the browser (`app/routers/agents.py`). The
 registry is the Valkey hash `prometheus:agent-registry` that `POST /v1/agents` writes.
-An `agent_name` is one path segment: `POST /v1/agents` rejects a name with a `/` with `422`.
 These routes use the session cookie (OpenAPI scheme `sessionCookie`), not the
 `AGENT_SECRET` bearer token of the `/v1/agents` routes. A request without a valid
 session answers `401`. The card `url` and the `static_headers` never reach this wire.
 
-Each row carries the card's `name`, `description`, `version` and `skills`. A skill
-keeps only `id`, `name`, `description` and `tags`; a missing string is `""` and missing
-`tags` are `[]`. `registered_at` is the ISO 8601 UTC time of the agent's last
-registration, with a `+00:00` suffix. It is `null` for an entry stored before the
-backend recorded it. `GET /v1/agents` does not return `registered_at`.
-A malformed card field does not fail the request. Each field is checked on its own: a
-`name`, `description` or `version` that is not a string is `""`, a skill that fails
-validation (for example, without an `id`, or with `tags` that are not strings) is dropped
-on its own, and `skills` that is not a list is `[]`. The other fields and skills stay, and
-the backend logs one warning per agent.
-An entry that a hand edit of Valkey broke (a value that is not a JSON object, a card that is
-not an object, a `url` that is not a string or that httpx cannot parse) also keeps its row,
-keyed by its hash field, with empty card fields and `reachable: false`. `GET /v1/agents`
-returns it too.
+**Row fields.** Each row carries the card's `name`, `description`, `version` and `skills`.
+A skill keeps only `id`, `name`, `description` and `tags`; a missing string is `""` and
+missing `tags` are `[]`. `registered_at` is the ISO 8601 UTC time of the agent's last
+registration, with a `+00:00` suffix. It is `null` for an entry stored before the backend
+recorded it. `GET /v1/agents` does not return `registered_at`. An `agent_name` is one path
+segment: `POST /v1/agents` rejects a name with a `/` with `422`.
 
-`reachable` is computed live on each request: it is true when `GET /healthz` on the
-origin of the card `url` answers 2xx within 2 s. The probe drops the card `url`'s path,
-query and fragment, because the SDK serves `/healthz` at the root of the agent's app and
-the JSON-RPC route at the card `url`'s path. An agent behind a path-routing gateway
-(`http://gw/agents/x/`) is therefore probed at the gateway's `/healthz`. The backend probes only an `http` or
-`https` card `url`, and never one whose host resolves to a link-local or cloud metadata
-address; such a row is `reachable: false`. Compose service names and private addresses
-are probed, because the in-tree agents run there. The registry is the trust boundary:
-whoever holds `AGENT_SECRET` chooses the card `url`. The probes of a list request run
-concurrently. Nothing is cached or stored. `checked_at` is the ISO 8601 UTC time at
-which the probes finished, also with a `+00:00` suffix.
+**Malformed entries.** A malformed card field does not fail the request. Each field is
+checked on its own: a `name`, `description` or `version` that is not a string is `""`, a
+skill that fails validation (for example, without an `id`, or with `tags` that are not
+strings) is dropped on its own, and `skills` that is not a list is `[]`. The other fields
+and skills stay, and the backend logs one warning per agent. An entry that a hand edit of
+Valkey broke (a value that is not a JSON object, a card that is not an object, a `url` that
+is not a string or that httpx cannot parse) also keeps its row, keyed by its hash field,
+with empty card fields and `reachable: false`. `GET /v1/agents` returns it too.
 
-**Registry reset.** Every launch and restart target (`make up`, `make restart`, `ng-*`) runs
-`make clear-agent-registry`, which deletes `prometheus:agent-registry`. An agent that
-the reset removes is absent from both routes until it registers again (GitHub #321). A re-registration overwrites the
-entry, so `registered_at` moves to the new registration time.
+**Reachability.** `reachable` is computed live on each request. It is true when
+`GET /healthz` on the origin of the card `url` answers 2xx within 2 s. It shows only that
+the agent's HTTP server answers: the SDK's `/healthz` returns a fixed `ok`, so an agent can
+be `reachable` while its A2A calls fail. Read it as "process up", not "agent working". The
+probes of a list request run concurrently. Nothing is cached or stored. `checked_at` is the
+ISO 8601 UTC time at which the probes finished, with a `+00:00` suffix.
+
+**Probe target.** The probe drops the card `url`'s path, query and fragment, because the SDK
+serves `/healthz` at the root of the agent's app and the JSON-RPC route at the card `url`'s
+path. An agent behind a path-routing gateway (`http://gw/agents/x/`) is therefore probed at
+the gateway's `/healthz`.
+
+**Probe safety.** The backend probes only an `http` or `https` card `url`, and never one
+whose host resolves to a link-local or cloud metadata address; such a row is
+`reachable: false`. Compose service names and private addresses are probed, because the
+in-tree agents run there. The registry is the trust boundary: whoever holds `AGENT_SECRET`
+chooses the card `url`.
+
+**Registry reset.** Every launch and restart target (`make up`, `make restart`, `ng-*`)
+runs `make clear-agent-registry`, which deletes `prometheus:agent-registry`. An agent that
+the reset removes is absent from both routes until it registers again (GitHub #321). A
+re-registration overwrites the entry, so `registered_at` moves to the new registration
+time.
 
 ### `GET /api/agents` → `AgentListResponse`
 
 Every registered agent, sorted by `agent_name`. The list's `checked_at` is the time the
-probes finished, and every row carries the same `checked_at`. When Valkey is
-unreachable, the route
-still answers `200` with `available: false` and an empty `agents`, as
+probes finished, and every row carries the same `checked_at`. When Valkey is unreachable,
+the route still answers `200` with `available: false` and an empty `agents`, as
 `GET /api/conversations/recent` does.
 
 ```json
@@ -601,10 +607,10 @@ still answers `200` with `available: false` and an empty `agents`, as
 
 ### `GET /api/agents/{agent_name}` → `AgentStatus`
 
-One registered agent, probed live. Its `checked_at` is the time its probe finished.
-An unknown `agent_name`
-answers `404` with `{"detail": "Agent '<name>' is not registered"}`. When Valkey is
-unreachable, the route answers `503` with `{"detail": "Agent registry is unavailable"}`.
+One registered agent, probed live. Its `checked_at` is the time its probe finished. An
+unknown `agent_name` answers `404` with `{"detail": "Agent '<name>' is not registered"}`.
+When Valkey is unreachable, the route answers `503` with
+`{"detail": "Agent registry is unavailable"}`.
 
 ```json
 {
