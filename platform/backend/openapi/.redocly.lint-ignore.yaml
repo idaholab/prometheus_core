@@ -8,20 +8,6 @@
 #
 #   npx redocly lint openapi.json --generate-ignore-file
 openapi.json:
-  info-license:
-    - '#/info'
-  operation-4xx-response:
-    - '#/paths/~1healthz/get/responses'
-    - '#/paths/~1readyz/get/responses'
-    - '#/paths/~1.well-known~1jwks.json/get/responses'
-    - '#/paths/~1api~1setup~1status/get/responses'
-    - '#/paths/~1api~1auth~1login/post/responses'
-    - '#/paths/~1api~1auth~1logout/post/responses'
-    - '#/paths/~1api~1auth~1providers/get/responses'
-    - '#/paths/~1v1~1agents/get/responses'
-  no-illogical-composition-keywords:
-    - '#/components/schemas/FormField/properties/default/anyOf/0'
-    - '#/components/schemas/ArtifactMeta/properties/json_body/anyOf/0'
   security-defined:
     - '#/paths/~1healthz/get'
     - '#/paths/~1readyz/get'
