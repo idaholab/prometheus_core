@@ -184,3 +184,43 @@ def test_rejects_agent_name_with_a_slash(client, fake_redis):
 
     assert resp.status_code == 422
     assert asyncio.run(fake_redis.hgetall(REGISTRY_KEY)) == {}
+
+
+def _sdk_registration() -> dict[str, Any]:
+    """The exact payload the SDK's AgentRegistryClient posts, built by the SDK itself."""
+    from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
+    from google.protobuf.json_format import MessageToDict
+    from prometheus_api.agent.registry import AgentRegistryClient
+
+    card = AgentCard(
+        name="Thermal Agent",
+        description="Thermal analysis.",
+        supported_interfaces=[
+            AgentInterface(url="http://thermal-agent:8000/", protocol_binding="JSONRPC", protocol_version="1.0")
+        ],
+        version="1.0.0",
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[AgentSkill(id="analyze_thermal", name="Analyze thermal", description="Runs it.", tags=["thermal"])],
+    )
+    registry = AgentRegistryClient("http://backend:8000", agent_secret="agent-own-secret")
+    _, payload = registry.build_payload(card, raw_agent_card=MessageToDict(card))
+    return payload
+
+
+def test_sdk_registration_keeps_the_v1_list_shape(client):
+    """The SDK's own payload registers, and GET /v1/agents returns exactly the fields it
+    returned before registered_at existed: what the SDK and the client-agent read."""
+    payload = _sdk_registration()
+
+    created = client.post("/v1/agents", json=payload, headers=AUTH)
+    listed = client.get("/v1/agents", headers=AUTH).json()
+
+    assert created.status_code == 200
+    assert listed == [
+        {
+            "agent_id": "thermal-agent",
+            "agent_name": "thermal-agent",
+            "agent_card_params": payload["agent_card_params"],
+        }
+    ]
+    assert "agent-own-secret" not in json.dumps(listed)
