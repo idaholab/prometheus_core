@@ -58,9 +58,13 @@ _REGISTRY_UNAVAILABLE = "Agent registry is unavailable"
 router = APIRouter(prefix="/api", tags=[TAG_AGENTS], responses=AUTH_RESPONSES, dependencies=[Depends(SESSION_COOKIE)])
 
 
+# Lets an agent tell the backend's status probes from orchestrator traffic in its log.
+PROBE_USER_AGENT = "prometheus-backend-status"
+
+
 def _make_client() -> httpx.AsyncClient:
     """The client for one request's health probes (a seam for tests)."""
-    return httpx.AsyncClient(timeout=AGENT_PROBE_TIMEOUT_S)
+    return httpx.AsyncClient(timeout=AGENT_PROBE_TIMEOUT_S, headers={"User-Agent": PROBE_USER_AGENT})
 
 
 def _now() -> str:

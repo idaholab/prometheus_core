@@ -133,7 +133,15 @@ def _route_probes(monkeypatch, answers: dict[str, int | Exception]) -> list[http
             raise answer
         return httpx.Response(answer)
 
-    monkeypatch.setattr(agents_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    real_client = agents_mod._make_client()
+    headers = dict(real_client.headers)
+    asyncio.run(real_client.aclose())
+
+    def client() -> httpx.AsyncClient:
+        # The real client's headers, with the transport swapped for the handler.
+        return httpx.AsyncClient(headers=headers, transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(agents_mod, "_make_client", client)
     return seen
 
 
@@ -525,3 +533,13 @@ def test_probe_drops_userinfo_from_the_card_url(monkeypatch, fake_redis):
     assert row["reachable"] is True
     assert str(seen[0].url) == "http://gamma-agent:8000/healthz"
     assert "authorization" not in seen[0].headers
+
+
+def test_probe_names_itself_in_the_user_agent(monkeypatch, fake_redis):
+    """An agent's access log can tell a status probe from orchestrator traffic."""
+    _seed(fake_redis, GAMMA)
+    seen = _route_probes(monkeypatch, {"gamma-agent": 200})
+
+    _authed_client(monkeypatch).get("/api/agents/gamma-agent")
+
+    assert seen[0].headers["user-agent"] == "prometheus-backend-status"
