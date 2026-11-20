@@ -76,11 +76,11 @@ Install local hooks once per checkout:
 make hooks
 ```
 
-The pre-commit hook runs ruff format and lint checks. The pre-push hook runs mypy and unit tests. To run hooks manually:
+The hooks come from the repository-wide [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml). The pre-commit hook scans staged changes for secrets with gitleaks and, when `sdk/` files change, runs ruff format and lint checks. The pre-push hook runs mypy and unit tests when `sdk/` files change. To run hooks manually:
 
 ```bash
-uv run pre-commit run --all-files
-uv run pre-commit run --all-files --hook-stage pre-push
+uv run pre-commit run --config ../.pre-commit-config.yaml --all-files
+uv run pre-commit run --config ../.pre-commit-config.yaml --all-files --hook-stage pre-push
 ```
 
 ## Writing Tests

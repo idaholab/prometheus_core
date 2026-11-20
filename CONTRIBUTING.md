@@ -69,11 +69,12 @@ git fetch upstream
 git checkout -b <branch-name> upstream/devel
 ```
 
-In `sdk/`, install the local git hooks once per clone. They run ruff on commit, and
-mypy plus the unit tests on push:
+Install the local git hooks once per clone. On every commit they scan the staged
+changes for secrets with gitleaks, as CI does. For changes in `sdk/` they also run
+ruff on commit, and mypy plus the unit tests on push:
 
 ```bash
-cd sdk && make hooks
+make hooks
 ```
 
 ### 3. Keep changes small
@@ -130,8 +131,9 @@ A few rules apply repository-wide:
   `.github/dependabot.yml`; a test fails until you do.
 - **Coverage floors.** `sdk/` enforces a minimum coverage (`fail_under` in
   `pyproject.toml`). Add tests with your change, and don't lower the floor.
-- **No secrets.** CI scans every commit with gitleaks. Never commit `.env` files,
-  API keys, tokens, or credentials, even in tests or examples.
+- **No secrets.** CI scans every commit with gitleaks, and the local hooks from
+  step 2 scan each commit before it's made. Never commit `.env` files, API keys,
+  tokens, or credentials, even in tests or examples.
 
 ### 6. Update the documentation
 
