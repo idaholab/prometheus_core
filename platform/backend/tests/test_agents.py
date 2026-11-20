@@ -19,6 +19,7 @@ through an ``httpx.MockTransport`` installed on the router's ``_make_client`` se
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import time
 import weakref
@@ -84,6 +85,10 @@ GAMMA = {
     "static_headers": {},
     "registered_at": "2026-11-02T09:00:00+00:00",
 }
+
+
+# The real resolver, kept before the autouse fixture below replaces it.
+_REAL_RESOLVE = agents_mod._resolve
 
 
 @pytest.fixture(autouse=True)
@@ -658,3 +663,11 @@ def test_probes_never_exceed_the_concurrency_cap(monkeypatch, fake_redis):
 
     assert [row["reachable"] for row in rows] == [True] * 8
     assert peak == 3
+
+
+def test_resolve_returns_the_hosts_addresses():
+    """The real resolver, which every other test replaces: localhost needs no network."""
+    addresses = asyncio.run(_REAL_RESOLVE("localhost", 8000))
+
+    assert addresses
+    assert all(ipaddress.ip_address(address).is_loopback for address in addresses)
