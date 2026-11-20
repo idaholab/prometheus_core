@@ -549,6 +549,33 @@ class TestFileUpload:
                 except Exception as e:
                     print(f"Warning: Failed to delete test file {file_id}: {e}")
 
+    def test_upload_chunked_round_trips_a_multi_chunk_file(self, client, tmp_path):
+        """A file sent in several chunks comes back whole, with the caller's description.
+
+        The server suggests one 100 MB chunk, so completing with that count would store only the
+        first chunk, and it ignores a top-level description. This fails if either regresses.
+        """
+        chunk_size = 1024 * 1024
+        content = bytes(range(256)) * (3 * chunk_size // 256) + b"tail"  # 3 chunks and a part
+        source = tmp_path / "chunked_source.bin"
+        source.write_bytes(content)
+
+        file_meta = client.files.upload_chunked(
+            source,
+            name="chunked_roundtrip.bin",
+            description="Chunked upload description",
+            chunk_size=chunk_size,
+        )
+        try:
+            downloaded = tmp_path / "chunked_back.bin"
+            client.files.download(file_meta.id, downloaded)
+
+            assert downloaded.read_bytes() == content
+            assert file_meta.size == len(content)
+            assert client.items.get(file_meta.id).description == "Chunked upload description"
+        finally:
+            client.files.delete(file_meta.id)
+
     def test_upload_and_download_binary_file(self, client, tmp_path):
         """Test uploading and downloading a binary file, verifying content integrity."""
         # Create a binary file with known content
