@@ -142,9 +142,15 @@ Loop state lives in the conversation record in Valkey (`conversation:{id}`):
   "turn_tool_results": { ... }, // skill_id → raw result for this user turn (response payload)
   "conversation_history": [ ... ], // user-visible transcript + evidence (backend chat history)
   "context": { "artifacts": [ ... ] },
-  "awaiting_approval": bool, "missing_info": [...], "final_report": str|null, "plan": {...}
+  "awaiting_approval": bool, "missing_info": [...], "final_report": str|null, "plan": {...},
+  "user_request_parts": [ ... ], // the user's own words for the request in progress
+  "user_request_delivered": bool // a skill has run since; the next typed message starts anew
 }
 ```
+
+`user_request_parts` fills skill fields marked `"x-prometheus-source": "user_message"`.
+Those fields are hidden from the model, which never writes them (see
+[Adding agents](adding-agents.md#receiving-the-users-own-words)).
 
 How the next request is mapped:
 

@@ -48,6 +48,8 @@ From deck 04, slide 7 and A13.
 2. **Say when not to use it** in `usage_notes`, and name the neighbour skill to prefer.
 3. **Describe every parameter; require few.** `enum` for fixed choices, units in the description. File
    inputs get `"x_artifact_ref": "single"`; values from another skill get `"x_input_source": "runtime"`.
+   A plain `string` field that needs the user's exact words, not the LLM's rewording, gets
+   `"x-prometheus-source": "user_message"`. The LLM never sees that field.
 4. **Return what the next step needs:** the `artifact_id`, the caption, the exact column names.
 5. **Test three phrasings,** each in a fresh conversation. Fix the card, not the prompt.
 
