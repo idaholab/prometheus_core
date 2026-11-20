@@ -105,6 +105,7 @@ def _skills(agent_name: str, card: Dict[str, Any]) -> list[AgentSkillSummary]:
         except ValidationError:
             dropped += 1
     if dropped:
+        # The count only: a ValidationError's text repeats the registrant's input values.
         logger.warning("Agent '%s' has %d malformed skill(s); returning the others", agent_name, dropped)
     return skills
 
