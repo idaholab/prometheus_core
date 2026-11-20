@@ -47,6 +47,7 @@ from ..contract import ConversationRequest, ConversationResponse, ConversationSt
 from .task_store import RedisTaskStore
 from .registry import AgentRegistryClient
 from .worker import PrometheusWorker
+from .request import PrometheusRequest, PrometheusRequestAgent, RequestClosedError
 
 # Re-export commonly used A2A types for convenience
 from a2a.server.agent_execution.context import RequestContext
@@ -90,6 +91,9 @@ __all__ = [
     "MissingInput",
     "PrometheusAgent",
     "PrometheusAgentExecutor",
+    "PrometheusRequest",
+    "PrometheusRequestAgent",
+    "RequestClosedError",
     "PrometheusWorker",
     "ArtifactReference",
     "ArtifactRegistry",
