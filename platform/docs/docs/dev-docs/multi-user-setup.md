@@ -342,9 +342,17 @@ service-to-service routes) read the agent name from the source that
 
 In `istio` mode an agent's registration (`POST /v1/agents`) binds its SPIFFE ID
 (`spiffe://<trust-domain>/ns/<ns>/sa/<service-account>`) to its name. Only the same
-workload can re-register or delete that entry, and one workload can register only one
-name. Requests that arrive without a verified identity get 401. Requests from a
-workload that hasn't registered get 403.
+workload can re-register or delete a bound entry. One workload holds one name: if it
+registers under a new name (an agent renamed but keeping its ServiceAccount), the entry
+under its old name is removed. Requests that arrive without a verified identity get 401.
+Requests from a workload that hasn't registered get 403.
+
+Entries without a binding stay open. An entry written in `trusted-name` mode, or before
+the switch to `istio`, has no SPIFFE ID. The first workload that registers it under
+`istio` claims it, and until then any workload can overwrite or delete it. Clear the
+registry when you switch to `istio` so that every entry is bound: delete the Valkey keys
+`prometheus:agent-registry` and `prometheus:agent-registry:spiffe` (what
+`make clear-agent-registry` does under Compose).
 
 The header can be trusted only under these conditions. Set them up before you switch
 to `istio`:
