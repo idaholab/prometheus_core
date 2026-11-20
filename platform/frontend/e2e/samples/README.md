@@ -7,11 +7,12 @@ This directory holds the sample files for the artifact viewers. These files use 
 - `platform/frontend/src/features/artifacts/playgroundCases.test.ts`.
 - `platform/backend/tests/test_viewer_samples.py`.
 - The end-to-end viewer tests, `platform/frontend/e2e/full/viewers.spec.ts`. The e2e stack's stub
-  agent (`platform/e2e/stub-client-agent`) hands out `part.stl`, `model.ifc` and `diagram.mmd` when a
-  chat prompt names a mesh, an IFC model or a diagram. Its image copies them from this directory, so
+  agent (`platform/e2e/stub-client-agent`) hands out `part.stl`, `model.ifc`, `diagram.mmd` and
+  `results.json` when a chat prompt names a mesh, an IFC model, a diagram or JSON. Its image copies them from this directory, so
   a renamed or removed sample also needs a change to the stub's `SAMPLES` and its `Dockerfile`.
 - What the viewer tests check depends on what a sample holds: the IFC test looks for each kind of
-  element `model.ifc` has, and the diagram test for every node of `diagram.mmd`. Change the test with
+  element `model.ifc` has, the diagram test for every node of `diagram.mmd`, and the JSON test for values and the line count
+  of `results.json`. Change the test with
   the sample.
 
 The production image does not contain the samples, because it copies only the built `dist/` folder.
