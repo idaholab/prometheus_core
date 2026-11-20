@@ -1,7 +1,7 @@
 # 009 — Agent execution, events, and workers
 
 status: implemented
-sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/worker.py, tests/test_agent.py, tests/test_a2a_payloads.py
+sources: docs/agent/GUIDE.md, prometheus_api/agent/base.py, prometheus_api/agent/events.py, prometheus_api/agent/hooks.py, prometheus_api/agent/worker.py, tests/test_agent.py, tests/test_a2a_payloads.py, tests/test_execute_hooks.py
 depends-on: none
 
 ## Purpose
@@ -35,6 +35,13 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - REQ-009-25: While an execution item is bound, `get_artifact_file_path(...)` MUST create an `input_to` edge from each fetched artifact's DeepLynx item (parsed from a `deeplynx://organizations/{org}/projects/{project}/items/{item}` URI) to the execution item, at most once per item per execution. Artifacts without such a URI MUST NOT be linked. A failed edge MUST be logged, MUST NOT fail the fetch, and MUST NOT count as linked, unless the edge turns out to exist already (DeepLynx allows one edge per ordered pair), in which case it counts as linked and is not logged.
 - REQ-009-26: While an execution item is bound, `send_deeplynx_artifact(...)` MUST create a `generated` edge from the execution item to the emitted artifact's DeepLynx item. A failed edge MUST be logged and MUST NOT prevent the artifact from being emitted.
 - REQ-009-27: Lineage edges MUST stay within the DeepLynx organization and project of the run's execution item (the project bound to the run). An `input_to` edge MUST be skipped when the fetched artifact's URI names a different organization or project than the execution item, and a `generated` edge MUST be skipped when the upload's storage configuration does. Each skip MUST be logged and MUST NOT fail the fetch or the emit.
+- REQ-009-28: `PrometheusAgent` MUST load platform-mandated execution middleware from `PROMETHEUS_AGENT_MIDDLEWARE` (comma-separated `module:ClassName` entries, class entries instantiated) at construction, in listed order, ahead of any author-registered hook. A malformed entry, an unimportable module, a missing attribute, or a wrong-shape hook MUST raise `ValueError` at construction.
+- REQ-009-29: `PrometheusAgent.add_execute_hook(hook, strict=False)` MUST append the hook after platform-mandated hooks and MUST reject wrong sync/async shapes at registration (only `on_event` is sync; wrong shapes would otherwise be silently ignored or fail at call time). The chain runs in registration order, and each rewriting hook (`on_request`/`on_event`/`on_result`) MUST observe the previous hook's output.
+- REQ-009-30: `on_request` MUST run after parameter extraction and before the execution-record scope opens, so the durable record snapshots the params the middleware left behind. The framework's reserved keys (`conversation_id`, `skill_id`, `user_id`, and every `_`-prefixed key) MUST be stripped before hooks run and re-applied after, so hooks can neither drop nor forge them. A non-strict hook failure (raising, timing out, or returning a non-dict) MUST degrade to the value entering that hook; a strict hook failure MUST fail the task by raising `ExecuteHookError` with the hook's exception as its cause.
+- REQ-009-31: `on_event` MUST run (sync) only on the agent's own single-text-part status-update messages emitted during `_execute(...)`; the framework's own emits (initial task, working status, automatic finalization), message-less heartbeats, and structured (non-single-text-part) messages MUST pass through untouched. Failure rules follow REQ-009-30's degrade/strict split.
+- REQ-009-32: `on_result` MUST run on the payload `_execute(...)` returned, before automatic finalization, so the finalized status carries the rewritten result. Reserved-key and failure rules follow REQ-009-30.
+- REQ-009-33: The observing points MUST NOT alter a task's outcome, not even when strict: `on_error` MUST fire on task failure (before the failed status), and `on_task` MUST fire exactly once per executor run after finalization with a deep-copied snapshot — the final task state's canonical proto name, the final status message text, a deep copy of the final payload (`None` on failure), the failure text (`None` otherwise), and a best-effort execution-record ID. An observer failure or an un-deepcopyable payload MUST be logged and MUST NOT affect the task's outcome or status.
+- REQ-009-34: Async hook calls MUST be awaited under a 10-second ceiling, a timeout behaving like any other hook failure. With no middleware configured, execution MUST proceed exactly as it would without the seam (no interception work).
 
 ## Behavior
 - BEH-009-01: GIVEN a slow `_execute(...)` and a short heartbeat interval WHEN execution runs THEN at least one silent non-final heartbeat is emitted before the final completed event.
@@ -51,15 +58,20 @@ Define the standard A2A task lifecycle for Prometheus agents, including paramete
 - BEH-009-12: GIVEN an execution that fetches the same DeepLynx item several times, including through two catalog entries with the same URI, WHEN it runs THEN exactly one `input_to` edge per item points at the execution item, and a later execution links its own fetches again.
 - BEH-009-13: GIVEN an execution that emits a DeepLynx artifact WHEN the upload completes THEN a `generated` edge runs from the execution item to the artifact item; GIVEN no bound execution item THEN neither fetches nor emits create edges.
 - BEH-009-14: GIVEN an `input_to` edge that already exists, as when a resumed task or a second concurrent fetch in one run fetches the same input, WHEN linking is refused THEN the edge is found, counted as linked, and no failure is logged.
+- BEH-009-15: GIVEN a chain of rewriting hooks WHEN execution runs THEN each hook observes the previous hook's output, reserved keys never reach the hooks yet always reach `_execute(...)`, and a hook that raises, times out, or returns junk leaves the entering value in place unless it was registered strict.
+- BEH-009-16: GIVEN middleware registered WHEN the task finishes THEN `on_task` fires exactly once with the state the task ended in (including an agent-emitted `TASK_STATE_INPUT_REQUIRED` final), and a failing observer or an un-deepcopyable payload leaves the task's outcome and statuses untouched.
 
 ## Interfaces
 - `MissingInput` is owned by spec 010.
-- `PrometheusAgentExecutor(agent_name: str = "Agent")`
+- `PrometheusAgentExecutor(agent_name: str = "Agent", execute_hooks: Sequence[tuple[ExecuteHook, bool]] | None = None, execution_record_id_fn: Callable[[], int | None] | None = None)`
 - `PrometheusAgentExecutor.execute(context: RequestContext, event_queue: EventQueue) -> None`
 - `PrometheusAgentExecutor.cancel(context: RequestContext, event_queue: EventQueue) -> None`
 - `PrometheusAgentExecutor._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
-- `DelegatingPrometheusAgentExecutor(agent_name: str, execute_fn: Callable[..., Awaitable[dict[str, Any]]], execution_scope: Callable[..., AsyncContextManager[None]] | None = None)`
+- `DelegatingPrometheusAgentExecutor(agent_name: str, execute_fn: Callable[..., Awaitable[dict[str, Any]]], execution_scope: Callable[..., AsyncContextManager[None]] | None = None, execute_hooks: Sequence[tuple[ExecuteHook, bool]] | None = None, execution_record_id_fn: Callable[[], int | None] | None = None)`
+- `PrometheusAgent.add_execute_hook(hook: ExecuteHook, *, strict: bool = False) -> None`
 - `PrometheusAgent.execution_record_id -> int | None`
+- `prometheus_api.agent.hooks`: `ExecuteHook` (protocol: `on_request`/`on_result`/`on_error`/`on_task` async, `on_event` sync), `ExecuteContext(agent_name, context_id, task_id, skill_id, user_id)`, `TaskSnapshot(outcome, message, result, error, execution_record_id)`, `NoopExecuteHook`, `ExecuteHookError`, `load_env_execute_hooks() -> list[tuple[ExecuteHook, bool]]`, `validate_execute_hook(hook) -> None`
+- `utc_now_iso() -> str`, `normalize_producer_agent_id(agent_name: str) -> str`, `build_artifact_metadata(...) -> dict`, `context_task_id(context) -> str`, `context_id(context) -> str`, `task_state_name(state) -> str`, `status_event_message_text(event) -> str`
 - `PrometheusAgent._execute(params: dict[str, Any], context: RequestContext, event_queue: EventQueue) -> dict[str, Any]`
 - `PrometheusAgent.send_status_update(context, event_queue, state: TaskState = TaskState.working, final: bool = False, message: str | None = None, metadata: dict | None = None) -> None`
 - `PrometheusAgent.declare_long_running(context, event_queue, *, estimate_seconds: float | None = None, message: str | None = None, metadata: dict | None = None) -> None`

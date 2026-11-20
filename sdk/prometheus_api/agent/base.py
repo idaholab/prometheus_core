@@ -36,6 +36,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     cast,
 )
 from datetime import datetime, timezone
@@ -79,6 +80,17 @@ from a2a.types import (
     TaskStatusUpdateEvent,
 )
 from .middleware import HEALTH_PATH, A2AContentSizeLimitMiddleware, BearerTokenMiddleware
+from .hooks import (
+    ExecuteContext,
+    ExecuteHook,
+    load_env_execute_hooks,
+    run_error_hooks,
+    run_event_hooks,
+    run_request_hooks,
+    run_result_hooks,
+    run_task_hooks,
+    validate_execute_hook,
+)
 from .artifact_resolver import ArtifactResolver
 from .artifacts import ArtifactReference, ArtifactRegistry
 from .context_state import ContextStateStore
@@ -92,6 +104,8 @@ from .events import (
     emit_status_update,
     is_stopping_status_event,
     normalize_producer_agent_id as _normalize_producer_agent_id,
+    status_event_message_text,
+    task_state_name,
 )
 from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
@@ -126,16 +140,55 @@ class _TrackedEventQueue:
     def __init__(self, event_queue: EventQueue):
         self._event_queue = event_queue
         self.seen_final_status = False
+        # The stopping event's state name and message text, for the ``on_task``
+        # middleware snapshot. One branch per event, written at most a couple
+        # of times per task.
+        self.final_state: Optional[str] = None
+        self.final_message: str = ""
 
     async def enqueue_event(self, event: Any) -> None:
         """Forward event to wrapped queue while tracking task-finalization signals."""
         if is_stopping_status_event(event):
             self.seen_final_status = True
+            self.final_state = task_state_name(event.status.state)
+            self.final_message = status_event_message_text(event)
 
         await self._event_queue.enqueue_event(event)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._event_queue, name)
+
+
+class _HookedEventQueue(_TrackedEventQueue):
+    """Tracked queue that runs the middleware's sync ``on_event`` chain.
+
+    Wraps the executor's tracked queue and is handed to ``_execute`` in its
+    place only when middleware is registered, so the framework's own emits
+    (initial task, working status, automatic finalization) — which use the
+    outer queue — never reach ``on_event``; only the agent's own progress
+    does. Message-less events (heartbeats) and structured messages carry no
+    single rewriteable text and pass through untouched.
+    """
+
+    def __init__(
+        self,
+        event_queue: EventQueue,
+        chain: Sequence[Tuple[ExecuteHook, bool]],
+        exec_context: ExecuteContext,
+    ):
+        super().__init__(event_queue)
+        self._chain = chain
+        self._exec_context = exec_context
+
+    async def enqueue_event(self, event: Any) -> None:
+        text = status_event_message_text(event)
+        if text:
+            rewritten = run_event_hooks(self._chain, self._exec_context, text)
+            if rewritten != text:
+                parts = event.status.message.parts
+                if len(parts) == 1:
+                    parts[0].text = rewritten
+        await super().enqueue_event(event)
 
 
 @dataclass
@@ -227,15 +280,28 @@ class PrometheusAgentExecutor(AgentExecutor):
     Subclasses only need to implement _execute().
     """
 
-    def __init__(self, agent_name: str = "Agent"):
+    def __init__(
+        self,
+        agent_name: str = "Agent",
+        execute_hooks: Optional[Sequence[Tuple[ExecuteHook, bool]]] = None,
+        execution_record_id_fn: Optional[Callable[[], Optional[int]]] = None,
+    ):
         """
         Initialize the agent executor.
 
         Args:
             agent_name: Name of the agent (for logging)
+            execute_hooks: Ordered execution middleware chain — ``(hook,
+                strict)`` pairs. Empty/None means no interception.
+            execution_record_id_fn: Optional callable reading the owning
+                agent's active execution-record ID, for the ``on_task``
+                snapshot. Best-effort: ``None`` when no execution scope is
+                active or the run is process-isolated.
         """
         super().__init__()
         self.agent_name = agent_name
+        self._execute_hooks: List[Tuple[ExecuteHook, bool]] = list(execute_hooks or [])
+        self._execution_record_id_fn = execution_record_id_fn
         logger.info(f"Initialized {agent_name}")
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -254,6 +320,14 @@ class PrometheusAgentExecutor(AgentExecutor):
             event_queue: Queue for sending status updates
         """
         tracked_queue: Optional[_TrackedEventQueue] = None
+        # Execution middleware state, initialized before the try so the error
+        # paths can fire the observing points for failures at any stage:
+        # ``exec_context`` stays None until parameter extraction succeeds
+        # (identity failures precede middleware and are not observed), and
+        # ``record_id`` is captured inside the execution-record scope, so it
+        # is available after the scope has exited on both terminal paths.
+        exec_context: Optional[ExecuteContext] = None
+        record_id: Optional[int] = None
         try:
             logger.info(f"Starting {self.agent_name} execution")
 
@@ -277,10 +351,42 @@ class PrometheusAgentExecutor(AgentExecutor):
                 # Extract parameters from the message (injects params["user_id"])
                 params = self._extract_params(context)
 
+                # Execution middleware. The agent-facing queue is swapped for
+                # the hook-aware wrapper only when hooks are registered, and
+                # only for the queue handed into _execute: the framework's own
+                # emits (initial task, working status, automatic finalization)
+                # keep using the plain tracked queue, so ``on_event`` sees the
+                # agent's progress and nothing else.
+                agent_queue: _TrackedEventQueue = tracked_queue
+                if self._execute_hooks:
+                    exec_context = ExecuteContext(
+                        agent_name=self.agent_name,
+                        context_id=event_context_id(context),
+                        task_id=context_task_id(context),
+                        skill_id=str(params.get("skill_id") or ""),
+                        user_id=str(params.get("user_id") or ""),
+                    )
+                    params = await run_request_hooks(self._execute_hooks, exec_context, params)
+                    agent_queue = _HookedEventQueue(
+                        cast(EventQueue, tracked_queue), self._execute_hooks, exec_context
+                    )
+
                 # Standard delegating executors may establish request-scoped state
                 # before any work status or agent code runs. The bare executor's
                 # default scope is a storage-independent no-op.
                 async with self._establish_request_scope(params, context):
+                    # Bind the execution-record ID for the middleware snapshot
+                    # while the scope (and the ContextVar it sets) is active.
+                    if self._execute_hooks and self._execution_record_id_fn is not None:
+                        try:
+                            record_id = self._execution_record_id_fn()
+                        except Exception:
+                            logger.warning(
+                                "Failed to read the execution record ID for middleware",
+                                exc_info=True,
+                            )
+                            record_id = None
+
                     # Send "working" status
                     await emit_status_update(
                         context=context,
@@ -292,7 +398,9 @@ class PrometheusAgentExecutor(AgentExecutor):
                     # Perform the main analysis (implemented by subclass), with a
                     # background keepalive so streaming connections do not time out
                     # during long gaps between substantive status updates.
-                    result = await self._execute_with_heartbeat(params, context, tracked_queue)
+                    result = await self._execute_with_heartbeat(params, context, agent_queue)
+                    if self._execute_hooks and exec_context is not None:
+                        result = await run_result_hooks(self._execute_hooks, exec_context, result)
 
             # Agent can fully control finalization for advanced/streaming use cases.
             # If it already emitted a final status, skip automatic completion events.
@@ -310,10 +418,27 @@ class PrometheusAgentExecutor(AgentExecutor):
                     self.agent_name,
                 )
 
+            # Middleware observes the finished task after finalization, with the
+            # state the task actually ended in (the agent may have self-finalized
+            # with e.g. input_required).
+            if self._execute_hooks and exec_context is not None:
+                await run_task_hooks(
+                    self._execute_hooks,
+                    exec_context,
+                    outcome=tracked_queue.final_state
+                    or task_state_name(TaskState.TASK_STATE_COMPLETED),
+                    message=tracked_queue.final_message,
+                    result=result,
+                    error=None,
+                    execution_record_id=record_id,
+                )
+
             logger.info(f"{self.agent_name} execution completed successfully")
 
         except IdentityError as e:
             # Identity failures are always terminal — fail the task with the reason.
+            # Middleware does not observe them: they precede parameter extraction,
+            # so no execution context exists yet.
             logger.warning("Identity verification failed for %s: %s", self.agent_name, e)
             if not tracked_queue or not tracked_queue.seen_final_status:
                 await emit_status_update(
@@ -326,6 +451,10 @@ class PrometheusAgentExecutor(AgentExecutor):
             raise
         except Exception as e:
             logger.error(f"Error during execution: {str(e)}", exc_info=True)
+            # Observers fire before the failed status: the error is known, and
+            # ``on_task`` afterwards captures the task's actual final state.
+            if self._execute_hooks and exec_context is not None:
+                await run_error_hooks(self._execute_hooks, exec_context, e)
             # Avoid sending contradictory terminal states if the agent already finalized.
             if not tracked_queue or not tracked_queue.seen_final_status:
                 await emit_status_update(
@@ -333,6 +462,17 @@ class PrometheusAgentExecutor(AgentExecutor):
                     event_queue=tracked_queue or event_queue,
                     state=TaskState.TASK_STATE_FAILED,
                     final=True,
+                )
+            if self._execute_hooks and exec_context is not None and tracked_queue is not None:
+                await run_task_hooks(
+                    self._execute_hooks,
+                    exec_context,
+                    outcome=tracked_queue.final_state
+                    or task_state_name(TaskState.TASK_STATE_FAILED),
+                    message=tracked_queue.final_message,
+                    result=None,
+                    error=str(e),
+                    execution_record_id=record_id,
                 )
             raise
 
@@ -610,8 +750,14 @@ class DelegatingPrometheusAgentExecutor(PrometheusAgentExecutor):
             Awaitable[Dict[str, Any]],
         ],
         execution_scope: Optional[_ExecutionScope] = None,
+        execute_hooks: Optional[Sequence[Tuple[ExecuteHook, bool]]] = None,
+        execution_record_id_fn: Optional[Callable[[], Optional[int]]] = None,
     ):
-        super().__init__(agent_name=agent_name)
+        super().__init__(
+            agent_name=agent_name,
+            execute_hooks=execute_hooks,
+            execution_record_id_fn=execution_record_id_fn,
+        )
         self._execute_fn = execute_fn
         self._execution_scope = execution_scope
 
@@ -722,6 +868,11 @@ class PrometheusAgent:
             f"prometheus_execution_record_project_{id(self)}",
             default=None,
         )
+        # Execution middleware: platform-mandated hooks from
+        # PROMETHEUS_AGENT_MIDDLEWARE first (a malformed entry raises here —
+        # mandatory middleware fails loudly at construction), author hooks
+        # registered through add_execute_hook append after them.
+        self._execute_hooks: List[Tuple[ExecuteHook, bool]] = load_env_execute_hooks()
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
         self.context_state_store = ContextStateStore()
@@ -1693,13 +1844,32 @@ class PrometheusAgent:
             self._linked_input_items.reset(linked_token)
             self._execution_record_id.reset(token)
 
+    def add_execute_hook(self, hook: ExecuteHook, *, strict: bool = False) -> None:
+        """Register author execution middleware, appended after platform-mandated hooks.
+
+        The chain runs in registration order and composes: each rewriting hook
+        (``on_request``/``on_event``/``on_result``) sees the previous hook's
+        output. ``strict=True`` makes the rewriting points fail the task
+        (fail-closed) when the hook raises or times out instead of degrading
+        to the value entering the hook; the observing points (``on_error``/
+        ``on_task``) never abort the task either way.
+
+        Registration validates the hook's sync/async shape: only ``on_event``
+        is sync, and a wrong shape would otherwise be silently ignored or
+        fail at call time.
+        """
+        validate_execute_hook(hook)
+        self._execute_hooks.append((hook, strict))
+
     def create_executor(self) -> PrometheusAgentExecutor:
         """
         Create the agent executor.
 
         Override this method only when you need to replace the standard
         Prometheus execution lifecycle. Normal agents should override
-        `PrometheusAgent._execute()` instead.
+        `PrometheusAgent._execute()` instead. Note that replacing the
+        executor also replaces its middleware seam — execution middleware
+        only wraps the standard lifecycle.
 
         Returns:
             Agent executor instance
@@ -1708,6 +1878,8 @@ class PrometheusAgent:
             agent_name=self.agent_name,
             execute_fn=self._execute,
             execution_scope=self._create_execution_record,
+            execute_hooks=self._execute_hooks,
+            execution_record_id_fn=lambda: self.execution_record_id,
         )
 
     async def _execute(

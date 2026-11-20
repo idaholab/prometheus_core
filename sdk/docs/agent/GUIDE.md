@@ -50,6 +50,81 @@ executor lifecycle.
 
 ---
 
+## Execution Middleware (Hooks)
+
+The executor can run middleware around every task it executes. Middleware observes —
+and at the rewriting points may transform — the traffic crossing the agent's boundary,
+without touching `_execute()` itself. This is the specialist-side counterpart of the
+orchestrator's dispatch middleware (`platform/agents/client-agent/orchestrator/hooks.py`):
+the middleware has the same function but different vantage points; orchestrator middleware is relative to the orchestrator, execution (specialist agent) is relative to the specialist. Same protocol shape, same failure discipline. The execution middleware provides two flavors of implementation; one mandated by the platform (helpful for telemetry, memory), one opt-in for the agent itself. Many frameworks already have middleware provisions (e.g., ADK, Langchain, etc) but this opt-in pattern extends the prometheus SDK to support middleware as well, for authors relying on the SDK instead of third party libraries when authoring their agents.
+
+The `ExecuteHook` protocol has five points:
+
+| Point | Fires | May rewrite |
+| --- | --- | --- |
+| `on_request(context, params)` | after param extraction, before the execution record is created | the params dict |
+| `on_event(context, message)` | on each progress message your agent emits (sync) | the message text |
+| `on_result(context, result)` | on your returned dict, before finalization | the result dict |
+| `on_error(context, error)` | when the task fails | nothing (observe only) |
+| `on_task(context, snapshot)` | once per task, after finalization | nothing (observe only) |
+
+`ExecuteContext` carries the run's identity (`agent_name`, `context_id`, `task_id`,
+`skill_id`, `user_id`). The `on_task` snapshot (`TaskSnapshot`) carries the final state
+name (e.g. `TASK_STATE_COMPLETED`), the final message, a deep copy of the result (or
+`None` on failure), the failure text, and the execution-record ID when one is bound —
+the correlation key into the DeepLynx execution lineage.
+
+### Registering middleware
+
+```python
+from prometheus_api.agent import ExecuteHook, ExecuteContext, NoopExecuteHook, TaskSnapshot
+
+class RedactionMiddleware(NoopExecuteHook):
+    """Override only the points you need; the rest pass through."""
+
+    async def on_request(self, context: ExecuteContext, params: dict) -> dict:
+        # Hooks never see the framework's reserved keys: conversation_id,
+        # skill_id, user_id, and every _-prefixed key are stripped before the
+        # hook runs and re-applied afterwards — you cannot drop or forge them.
+        return {"input_data": redact(params.get("input_data", ""))}
+
+class MyAgent(PrometheusAgent):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_execute_hook(RedactionMiddleware())
+```
+
+Platform-mandated middleware needs no agent code at all:
+
+```bash
+export PROMETHEUS_AGENT_MIDDLEWARE=my_org.telemetry.TelemetryHook,my_org.memory.MemoryHook
+```
+
+Entries load (in order, instantiated) at agent construction, ahead of any
+`add_execute_hook` hook. A malformed or unimportable entry raises `ValueError` at
+construction — mandatory middleware fails loudly, never silently.
+
+### Failure rules
+
+- A rewriting hook that raises, times out (10 s ceiling), or returns junk is logged and
+  skipped: the value that entered the hook passes through — **fail-open**.
+- Register with `strict=True` to fail the task instead (**fail-closed**); the raised
+  `ExecuteHookError` keeps the hook's exception as its `__cause__`.
+- The observing points (`on_error`, `on_task`) never abort a task, strict or not — an
+  observation must not corrupt the outcome it observes. `on_task` skips its fire rather
+  than fail if the result cannot be deep-copied.
+- `on_event` is deliberately sync: progress events are high-volume and fire inside the
+  streaming loop, so an awaitable would backpressure the stream. Keep it cheap; a hook
+  that needs to block should collect work and flush it from `on_task`.
+
+### When middleware does not run
+
+Identity failures are terminal before parameter extraction, so no `ExecuteContext`
+exists and middleware does not observe them. Replacing `create_executor()` replaces the
+standard lifecycle — and its middleware seam with it.
+
+---
+
 ## The `_execute` Contract
 
 ### Signature
