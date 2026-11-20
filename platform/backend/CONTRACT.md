@@ -28,7 +28,7 @@ element/artifact classification and hands the frontend `render_hint`s.
 
 | status | meaning | key fields |
 |---|---|---|
-| `needs_info` | follow-up questions for the user | `followup_questions` |
+| `needs_info` | follow-up questions for the user | `followup_questions`, `artifacts` (outputs produced before the turn paused) |
 | `plan_ready` | plan awaiting approval | `plan`, `auto_approve` |
 | `executing` | plan execution in progress | `message` |
 | `completed` | multi-step plan finished | `report`, `artifacts`, `recommended_materials`, `follow_up_suggestions` |

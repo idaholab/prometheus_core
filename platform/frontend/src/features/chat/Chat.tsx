@@ -528,6 +528,9 @@ export function Chat({ scrollContainerRef }: ChatProps) {
             <AssistantAvatar />
             <div className="flex-1 text-base text-base-content">
               {ni.message && <Markdown>{ni.message}</Markdown>}
+              {ni.artifacts && ni.artifacts.length > 0 && (
+                <ElementList elements={artifactsToElements(ni.artifacts)} onSend={handleSend} />
+              )}
               <FollowupForm
                 fields={ni.fields}
                 disabled={ni.submitted || awaiting}

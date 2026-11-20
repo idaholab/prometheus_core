@@ -163,3 +163,27 @@ test("a reload shows the resume marker during getConfig() and drops it when getC
   assert.equal(readState().resumingConversationId, null);
   assert.equal(readState().ready, true);
 });
+
+test("a needs_info turn keeps the artifacts produced before it paused at the form", async () => {
+  installStorage(null);
+  const png = { artifact_id: "a1", name: "status.png", mime_type: "image/png", render_hint: "image" };
+  g.__chatTestApi = {
+    getConfig: async () => ({}),
+    createSession: async () => ({ conversation_id: "conv-new", auto_approve_steps: false }),
+    sendMessage: async () => ({
+      turn_id: "t1",
+      status: "needs_info",
+      message: "### Gate 2\n\nApprove?",
+      followup_questions: [{ id: "gate_action", label: "Decision?", input_type: "select", required: true }],
+      artifacts: [png],
+    }),
+  };
+
+  await chatStore.bootstrap("p");
+  await chatStore.sendTurn("run it");
+
+  const items = readState().items as Array<Record<string, unknown>>;
+  const ni = items.find((it) => it.kind === "needs_info");
+  assert.ok(ni, "a needs_info item is rendered");
+  assert.deepEqual(ni.artifacts, [png]);
+});

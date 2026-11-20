@@ -42,7 +42,10 @@ vi.mock("@/lib/api/client", () => {
       this.name = "ApiError";
     }
   }
-  return { ApiError: StubApiError, api: { uploadFile: mocks.uploadFile } };
+  return {
+    ApiError: StubApiError,
+    api: { uploadFile: mocks.uploadFile, artifactContentUrl: (id: string) => `/api/artifacts/${id}/content` },
+  };
 });
 
 // jsdom has no ResizeObserver; Chat observes the message list once it has messages.
@@ -331,5 +334,35 @@ describe("composer_drag_state", () => {
 
     expect(dropOnWindow(["Files"]).defaultPrevented).toBe(true);
     expect(dropOnWindow(["text/plain", "text/uri-list"]).defaultPrevented).toBe(false);
+  });
+});
+
+describe("needs_info_renders_turn_artifacts", () => {
+  test("artifacts produced before a follow-up form render with it", () => {
+    renderChat({
+      items: [
+        {
+          id: "ni-1",
+          kind: "needs_info",
+          turnId: "t1",
+          message: "Gate 2: approve?",
+          fields: [{ id: "gate_action", label: "Decision?", input_type: "text", required: true }],
+          artifacts: [
+            {
+              artifact_id: "a1",
+              name: "criterion_status.png",
+              mime_type: "image/png",
+              description: "Criterion status chart",
+              tags: [],
+              render_hint: "image",
+            },
+          ],
+          submitted: false,
+        },
+      ] as ComposerState["items"],
+    });
+    expect(screen.getByText("Gate 2: approve?")).toBeTruthy();
+    const img = document.querySelector('img[src="/api/artifacts/a1/content"]');
+    expect(img).not.toBeNull();
   });
 });

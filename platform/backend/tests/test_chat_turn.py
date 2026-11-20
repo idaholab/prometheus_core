@@ -141,6 +141,61 @@ async def test_map_needs_info_normalizes_questions(session_store):
     assert [o.value for o in second.options] == ["steel", "copper"]
 
 
+async def test_map_needs_info_carries_new_artifacts_and_persists_catalog(session_store):
+    """A workflow step can publish artifacts and then pause at a review form in the same
+    turn; the artifacts must reach the frontend with the form, not be dropped."""
+    await _seed(session_store)
+    response = _resp(
+        status="needs_info",
+        message="Gate 2: approve, request more evidence, or reject?",
+        followup_questions=[
+            {"field": "gate_action", "question": "Decision?", "type": "select", "options": ["approve", "reject"]}
+        ],
+        artifacts=[{"artifact_id": "a1", "name": "full"}],
+        new_artifacts=[
+            {"artifact_id": "a1", "name": "status.png", "mime_type": "image/png"},
+            {"artifact_id": "up", "name": "upload", "metadata": {"source": "user-upload"}},
+        ],
+    )
+
+    mapped = await chat_service.map_response(
+        response, "t1", session_store, SID, conversation_id="c1", auto_approve=False
+    )
+
+    assert mapped.status == ChatStatus.NEEDS_INFO.value
+    assert mapped.followup_questions is not None and len(mapped.followup_questions) == 1
+    assert mapped.artifacts is not None and [a.artifact_id for a in mapped.artifacts] == ["a1"]
+    assert (await _stored(session_store)).artifacts == [{"artifact_id": "a1", "name": "full"}]
+
+
+async def test_map_needs_info_without_artifacts_leaves_catalog(session_store):
+    await session_store.reset(SID, "c1", artifacts=[{"artifact_id": "earlier"}])
+    response = _resp(status="needs_info", message="m", followup_questions=[], artifacts=[])
+    mapped = await chat_service.map_response(
+        response, "t1", session_store, SID, conversation_id="c1", auto_approve=False
+    )
+    assert mapped.artifacts is None
+    # artifacts=[] must not wipe the accumulated catalog (T-7).
+    assert (await _stored(session_store)).artifacts == [{"artifact_id": "earlier"}]
+
+
+async def test_map_needs_info_skips_catalog_write_after_rebind(session_store):
+    await _seed(session_store)
+    await _rebind(session_store)
+    response = _resp(
+        status="needs_info",
+        message="m",
+        followup_questions=[],
+        artifacts=[{"artifact_id": "a1", "name": "full"}],
+        new_artifacts=[{"artifact_id": "a1", "name": "x.png", "mime_type": "image/png"}],
+    )
+    mapped = await chat_service.map_response(
+        response, "t1", session_store, SID, conversation_id="c1", auto_approve=False
+    )
+    assert mapped.status == ChatStatus.NEEDS_INFO.value
+    assert (await _stored(session_store)).artifacts == [{"artifact_id": "c2-art"}]
+
+
 async def test_map_plan_ready_carries_auto_approve(session_store):
     await _seed(session_store)
     response = _resp(status="plan_ready", message="Proposed plan", plan={"steps": ["a", "b"]})
