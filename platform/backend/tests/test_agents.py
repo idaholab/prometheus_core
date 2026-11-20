@@ -596,3 +596,32 @@ def test_probe_targets_the_card_url_origin(monkeypatch, fake_redis, url, probed)
 
     assert [str(request.url) for request in seen] == ([probed] if probed else [])
     assert row["reachable"] is (probed is not None)
+
+
+def test_no_path_leaks_the_agents_secret(monkeypatch, fake_redis, caplog):
+    """A sentinel in ``static_headers`` reaches no response body and no log line, on the
+    list, one-agent, not-found and registry-down paths."""
+    sentinel = "SENTINEL-static-header-91c2"
+    leaky = {**ALPHA, "static_headers": {"Authorization": f"Bearer {sentinel}"}}
+    _seed(fake_redis, leaky)
+    _route_probes(monkeypatch, {"alpha-agent": 200})
+    client = _authed_client(monkeypatch)
+
+    with caplog.at_level("DEBUG"):
+        bodies = [
+            client.get("/api/agents"),
+            client.get("/api/agents/alpha-agent"),
+            client.get("/api/agents/no-such-agent"),
+        ]
+
+        async def fail(*args: Any, **kwargs: Any) -> Any:
+            raise RedisError("valkey down")
+
+        monkeypatch.setattr(fake_redis, "hgetall", fail)
+        monkeypatch.setattr(fake_redis, "hget", fail)
+        bodies += [client.get("/api/agents"), client.get("/api/agents/alpha-agent")]
+
+    assert [resp.status_code for resp in bodies] == [200, 200, 404, 200, 503]
+    for resp in bodies:
+        assert sentinel not in resp.text
+    assert sentinel not in caplog.text
