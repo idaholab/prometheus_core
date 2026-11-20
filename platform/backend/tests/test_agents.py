@@ -437,3 +437,21 @@ def test_agents_list_keeps_unreadable_entry(monkeypatch, fake_redis, raw, card_u
     service = client.get("/v1/agents", headers={"Authorization": "Bearer test-agent-secret"})
     assert service.status_code == 200
     assert [entry["agent_name"] for entry in service.json()] == ["aaa-bad-agent", "alpha-agent"]
+
+
+@pytest.mark.parametrize("path", ["/api/agents", "/api/agents/alpha-agent"], ids=["list", "one"])
+def test_checked_at_is_taken_after_the_probe(monkeypatch, fake_redis, path):
+    """``checked_at`` is the time of the probe result, not of the request's start."""
+    _seed(fake_redis, ALPHA)
+    probed_at: list[datetime] = []
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.05)
+        probed_at.append(datetime.now(timezone.utc))
+        return httpx.Response(200)
+
+    monkeypatch.setattr(agents_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(slow)))
+
+    body = _authed_client(monkeypatch).get(path).json()
+
+    assert datetime.fromisoformat(body["checked_at"]) >= probed_at[0]

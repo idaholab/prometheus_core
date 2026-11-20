@@ -139,15 +139,15 @@ async def list_agent_status(
     claims: TokenClaims = Depends(current_claims),
 ) -> AgentListResponse:
     """Every registered agent with its live reachability, sorted by ``agent_name``."""
-    checked_at = _now()
     try:
         stored = await load_all(redis)
     except RedisError as exc:
         logger.warning("Agent registry read failed: %s", exc)
-        return AgentListResponse(available=False, checked_at=checked_at, agents=[])
+        return AgentListResponse(available=False, checked_at=_now(), agents=[])
     async with _make_client() as client:
         agents = await asyncio.gather(*(_probe_stored(client, entry) for entry in stored))
-    return AgentListResponse(available=True, checked_at=checked_at, agents=list(agents))
+    # After the probes, so the time is that of the result it describes.
+    return AgentListResponse(available=True, checked_at=_now(), agents=list(agents))
 
 
 @router.get(
@@ -172,7 +172,6 @@ async def get_agent_status(
     claims: TokenClaims = Depends(current_claims),
 ) -> AgentStatus:
     """One registered agent with its live reachability and the time it was checked."""
-    checked_at = _now()
     try:
         stored = await load_entry(redis, agent_name)
     except RedisError as exc:
@@ -184,5 +183,5 @@ async def get_agent_status(
         )
     async with _make_client() as client:
         agent = await _probe_stored(client, stored)
-    agent.checked_at = checked_at
+    agent.checked_at = _now()
     return agent

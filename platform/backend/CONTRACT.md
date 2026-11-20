@@ -544,8 +544,8 @@ returns it too.
 
 `reachable` is computed live on each request: it is true when `GET /healthz` on the
 origin of the card `url` answers 2xx within 2 s. The probes of a list request run
-concurrently. Nothing is cached or stored. `checked_at` is the ISO 8601 UTC time of the
-request, also with a `+00:00` suffix.
+concurrently. Nothing is cached or stored. `checked_at` is the ISO 8601 UTC time at
+which the probes finished, also with a `+00:00` suffix.
 
 **Registry reset.** Every launch and restart target (`make up`, `make restart`, `ng-*`) runs
 `make clear-agent-registry`, which deletes `prometheus:agent-registry`. An agent that
