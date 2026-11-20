@@ -327,6 +327,9 @@ the origin of the agent's registered card URL returns a 2xx response within 2 s.
   A2A calls, but its `/healthz` returns 404. Rebuild the image on the current base image.
 - `reachable: true` means only that the HTTP server answers. It does not mean that the
   agent's skills work.
+- The backend calls the card URL from inside its container. Set `EXTERNAL_AGENT_URL` to
+  the compose service name (`http://my-analysis-agent:8000`), not to `localhost` or a
+  host-published port. Inside the backend container, `localhost` is the backend itself.
 
 ## Sending artifacts from agents
 
