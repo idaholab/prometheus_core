@@ -12,83 +12,115 @@
 
 """Timeseries resource for synchronous operations."""
 
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
+from ..exceptions import StorageClientError
+from ..models.timeseries import TimeseriesResult
 from .base import BaseResource
 
 
+def build_query_payload(
+    sql_query: Optional[str],
+    limit: Optional[int],
+    row_stride: Optional[int],
+    start_row: Optional[int],
+    stop_row: Optional[int],
+    columns: Optional[Sequence[str]],
+) -> Dict[str, Any]:
+    """The JSON body for ``olap/query``: only the options the caller provided, camelCase."""
+    candidates = {
+        "query": sql_query,
+        "limit": limit,
+        "rowStride": row_stride,
+        "startRow": start_row,
+        "stopRow": stop_row,
+        "columns": list(columns) if columns is not None else None,
+    }
+    return {key: value for key, value in candidates.items() if value is not None}
+
+
+def parse_query_response(data: Any) -> TimeseriesResult:
+    """Turn the ``olap/query`` body into a result.
+
+    A missing or null ``columns`` or ``data`` (a window past the end of the file) is an empty
+    result. A body that is not a JSON object is a server fault and raises, so it is not mistaken
+    for an empty result.
+
+    Raises:
+        StorageClientError: If the body is not a JSON object
+    """
+    if not isinstance(data, dict):
+        raise StorageClientError(
+            f"Unexpected olap/query response: expected a JSON object, got {type(data).__name__}"
+        )
+    return TimeseriesResult(columns=data.get("columns") or [], data=data.get("data") or [])
+
+
 class TimeseriesResource(BaseResource):
-    """Handles operations related to timeseries data."""
+    """Handles queries over tabular (timeseries) file records."""
 
-    def upload(
-        self, file_path: Path, data_source_id: int, description: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Upload timeseries data from a file.
+    def query(
+        self,
+        record_id: int,
+        *,
+        view_name: str = "data",
+        sql_query: Optional[str] = None,
+        limit: Optional[int] = None,
+        row_stride: Optional[int] = None,
+        start_row: Optional[int] = None,
+        stop_row: Optional[int] = None,
+        columns: Optional[Sequence[str]] = None,
+    ) -> TimeseriesResult:
+        """Query the rows of a tabular file (csv or parquet) record.
+
+        Calls ``POST .../records/{record_id}/olap/query``. The server exposes the file as a
+        temporary SQL view called ``view_name`` and runs ``sql_query`` against it, so the
+        query must mention ``view_name``. Without a query it returns ``SELECT * FROM`` the
+        view, limited to ``limit`` rows (the server's default is 20).
 
         Args:
-            file_path: Path to the timeseries data file
-            data_source_id: Data source identifier
-            description: Optional description
+            record_id: ID of the record that points at the tabular file or folder of parts. It is
+                converted with ``int()``, so a value that is not a whole number raises
+                ``ValueError`` before any request is sent.
+            view_name: Name of the view the query refers to (letters, digits, underscore)
+            sql_query: A single SQL ``SELECT`` over ``view_name``. The server rejects
+                statements containing ``COPY``, ``EXPORT``, ``IMPORT``, ``INSERT``, ``UPDATE``,
+                ``DELETE``, ``DROP``, ``ALTER``, ``ATTACH``, ``CREATE`` of tables, views or
+                secrets, file-reading functions, or a ``;``, as a case-insensitive substring
+                match, so a column name such as ``updated`` can be rejected too.
+            limit: Maximum rows, 1 to 100000
+            row_stride: Keep every Nth row (1 keeps all)
+            start_row: First row to include; rows are numbered from 1 in file order
+            stop_row: Last row to include
+            columns: Column names to keep. The server rejects names with dots or other
+                symbols here.
 
         Returns:
-            Upload result information
+            The column names and rows. A window past the end of the data is an empty result,
+            not an error.
+
+        Raises:
+            ValidationError: If the server rejects the query or options
+            ItemNotFoundError: If the record or its file does not exist
+            StorageClientError: If the server's answer is not a JSON object
+
+        Note:
+            Each call opens a fresh query engine on the server and can take many seconds on
+            large files. Raise ``ConnectionConfig.timeout`` if requests time out.
 
         Example:
             ```python
-            result = client.timeseries.upload(
-                Path("sensor_data.csv"),
-                data_source_id=456
+            result = client.timeseries.query(
+                record_id=123,
+                sql_query='SELECT "Timestamp", power FROM data WHERE power > 5',
             )
+            print(result.columns, result.data[:3])
             ```
         """
-        if not file_path.exists():
-            raise ValueError(f"File does not exist: {file_path}")
-
-        with open(file_path, "rb") as f:
-            files = {"file": (file_path.name, f)}
-            data = {}
-
-            if description:
-                data["description"] = description
-
-            response = self._client._request(
-                "POST",
-                f"{self._base_path}/datasources/{data_source_id}/timeseries",
-                files=files,
-                data=data,
-            )
-
-        data = response.json()
-        return data if isinstance(data, dict) else {"result": data}
-
-    def query(self, data_source_id: int, sql_query: str, file_type: str = "json") -> Dict[str, Any]:
-        """Query timeseries data using SQL.
-
-        Args:
-            data_source_id: Data source identifier
-            sql_query: SQL query string
-            file_type: Output format (json, csv, etc.)
-
-        Returns:
-            Query results
-
-        Example:
-            ```python
-            results = client.timeseries.query(
-                data_source_id=456,
-                sql_query="SELECT * FROM sensor_data WHERE timestamp > '2024-01-01'",
-                file_type="json"
-            )
-            ```
-        """
-        payload = {
-            "query": sql_query,
-            "file_type": file_type,
-        }
-
         response = self._client._request(
-            "POST", f"{self._base_path}/datasources/{data_source_id}/timeseries/query", json=payload
+            "POST",
+            f"{self._base_path}/records/{int(record_id)}/olap/query",
+            params={"viewName": view_name},
+            json=build_query_payload(sql_query, limit, row_stride, start_row, stop_row, columns),
         )
 
-        data = response.json()
-        return data if isinstance(data, dict) else {"result": data}
+        return parse_query_response(response.json())

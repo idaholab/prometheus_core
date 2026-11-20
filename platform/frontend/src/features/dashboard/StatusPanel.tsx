@@ -109,7 +109,7 @@ interface StatusPanelProps {
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
  * a tab icon expands the rail straight to that tab. The open/closed width lives
- * on Home's `<aside>`; `tab` stays here so it survives a collapse/expand.
+ * on LayoutHome's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");

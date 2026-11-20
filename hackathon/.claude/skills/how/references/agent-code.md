@@ -31,7 +31,7 @@ class HelloAgent(PrometheusAgent):
 | your `inputSchema` properties | the JSON that the orchestrator sent | `base.py:446-460` |
 | `skill_id` | `message.metadata.skillId` | `base.py:462-469` |
 | `user_id` | the verified token; `local` without one | `base.py:471-477` |
-| `conversation_id`, `artifacts` | the client-agent adds them | `orchestrator/skills.py:95`, `orchestrator/agent_loop.py:879-884` |
+| `conversation_id`, `artifacts` | the client-agent adds them | `orchestrator/skills.py`, `orchestrator/agent_loop.py:879-884` |
 
 - Answers to your own input request arrive merged into `params`; `self.get_input_sources(context)`
   says who supplied each value (`asking-the-user.md`).
@@ -65,7 +65,7 @@ Example: `prometheus_platform/agents/debug-agents/material-data-agent` (deck 04,
 | the infrastructure is broken | let it raise | `TASK_STATE_FAILED`; `Error during execution` in your log |
 
 The client-agent checks the `error` key, not `status`: always put a non-empty `error`
-(`orchestrator/skills.py:150-159`). No blanket `try/except` (deck 04, A6).
+(`orchestrator/skills.py`). No blanket `try/except` (deck 04, A6).
 
 ## The helpers on `self`
 

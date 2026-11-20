@@ -56,6 +56,112 @@ step's result. The executor now emits the initial task only for a new task
 No migration steps. Streaming callers that read the initial task event of a resumed
 stream get the task ID and context ID from the status events instead.
 
+## 0.16.0
+
+### Timeseries Queries Go Through the OLAP Route, Keyed by Record ID
+
+`client.timeseries` called Nexus routes that no longer exist (`.../datasources/{id}/timeseries`
+and `.../timeseries/query`), so `upload` and `query` failed with HTTP 400 on current servers.
+`query` now calls `POST .../records/{record_id}/olap/query`, and `upload` is removed. This
+affects agents that use `StorageClient.timeseries` or `AsyncStorageClient.timeseries`; agents
+that never call it need no change.
+
+Migration steps:
+
+1. Replace `timeseries.upload(...)` with `files.upload(...)`. The server detects csv and parquet
+   files by itself, so no separate upload call is needed.
+2. Pass the uploaded file's `id` (its record ID) to `timeseries.query` as `record_id`, instead of
+   a data source ID.
+3. Pass everything after `record_id` as keyword arguments. `view_name` and `sql_query` are
+   keyword-only, so an old call such as `query(456, "SELECT ...")` raises `TypeError` and does not
+   send the SQL as the view name.
+4. Refer to the view by its `view_name` (default `"data"`) in `sql_query`, for example
+   `SELECT * FROM data`.
+5. Read `result.columns` and `result.data`. `TimeseriesResult` is now `(columns, data)`; the old
+   `(data, metadata)` fields and the `file_type` argument are gone.
+6. Delete imports of `TimeseriesQuery`. It is no longer exported.
+
+```python
+from pathlib import Path
+
+stored = client.files.upload(Path("sensor_data.csv"))
+result = client.timeseries.query(
+    record_id=stored.id,
+    sql_query="SELECT * FROM data WHERE Timestamp > '2024-01-01'",
+    limit=1000,
+)
+print(result.columns, result.data[:3])
+```
+
+### `items.list` Filters Are Query Parameters of the Paginated Route
+
+`items.list` and `items.iter_all` now call `GET .../records/paginated` and take `total_count`,
+`has_next` and `has_previous` from the server, where they used to estimate them from the page
+length. The plain `GET .../records` route they called before ignored `page` and `limit`: against
+DeepLynx v0.8.0, `items.list(page=1, page_size=5)` returned every record in the project and
+page 2 returned them all again, with a `total_count` of 6. A page is now really a page, so code
+that read `.items` of page 1 and relied on getting everything must call `iter_all` instead.
+Records come back oldest first (ascending ID), as they did before. Their `filters` are sent as query parameters of that route. The server ignores any
+parameter it doesn't know without an error, so a filter such as `{"properties.status": "active"}`
+used to return unfiltered items. It now raises `ValueError`. This affects agents that pass
+`filters=` to `items.list` or `items.iter_all`.
+
+Server requirement: these calls need a DeepLynx server that has the project-level paginated
+route `GET .../records/paginated` (`search.recent` below uses its org-level counterpart). They were verified on DeepLynx v0.8.0, the version the
+platform's `docker-compose.deeplynx.yml` pins; the earliest release that has them has not been
+established. On a server without a route the call fails with a `ValidationError` whose message is
+only `HTTP 400` (observed for a route v0.8.0 does not have), not a message about a missing
+route. If you see that after upgrading the SDK, check the server version first.
+
+Migration steps:
+
+1. Use only `dataSourceId`, `fileType`, `hideArchived` and `isInsightEligible` as keys in
+   `filters`.
+2. To filter on record properties, call `search.advanced_query(...)` instead.
+3. Read `page.page_info.total_count` as the server's real count, not an estimate.
+4. Pass a `page_size` between 1 and 500. A larger one raises `ValueError` (the server refuses it
+   with a bare HTTP 400); `DeepLynxFileSystem(search_page_size=...)` is passed through the same way.
+
+```python
+# Before: the property filter was ignored and every item came back
+page = client.items.list(filters={"properties.status": "active"})
+
+# After
+page = client.items.list(filters={"fileType": "csv", "hideArchived": True})
+by_property = client.search.advanced_query({"properties.status": "active"})
+```
+
+### `search.recent` Returns the Newest Items, and `limit` Must Be at Least 1
+
+`search.recent(limit)` now pages through `GET .../query/records/paginated` sorted by update time,
+newest first, and returns exactly the newest `limit` items. It used to call the plain records
+route with `limit` and sort parameters that route ignores, so it returned every record, in the
+order they were created (observed on a DeepLynx v0.8.0 server: `limit=1` returned all three
+records). `limit` below 1 now raises `ValueError`. This affects
+agents that call `search.recent` or rely on its order or length.
+
+Server requirement: `search.recent` needs the `GET .../query/records/paginated` route, with the
+same version caveat and `ValidationError: HTTP 400` failure described under `items.list` above.
+
+`search.recent` sends no `hideArchived` filter, so whether it returns archived records is up to
+the server's default for that route; it was not observed (on DeepLynx v0.8.0 the SDK's `delete`
+removes a record, so the SDK cannot create an archived one to try). Its results are limited to the
+client's project: with two projects, `recent` returned only the items of its own.
+
+Migration steps:
+
+1. Pass `limit >= 1`. A zero or negative `limit` raises `ValueError`.
+2. Expect at most `limit` items, newest first. Code that took the whole list and sorted or
+   sliced it can drop that step.
+3. If you use `DeepLynxFileSystem` (`deeplynx://` paths), note that its recent-items lookup step
+   calls `search.recent(limit=recent_limit)`, so `recent_limit` (default 500) now really limits
+   it to the newest records. A path that is not among them is found by the full scan that
+   follows, which is slower. Raise `recent_limit` if your files are mostly older than that.
+
+```python
+newest = client.search.recent(limit=20)   # at most 20 items, most recently updated first
+```
+
 ## 0.15.0
 
 ### Register with the Platform Backend; the Platform No Longer Runs LiteLLM

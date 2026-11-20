@@ -12,4 +12,5 @@
 
 // What the rest of the app may import from features/admin. Anything else
 // in this folder is internal to it.
-export { AdminSection } from "./AdminSection";
+export { LayoutAdmin } from "./LayoutAdmin";
+export type { AdminSubTab } from "./LayoutAdmin";

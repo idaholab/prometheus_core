@@ -214,7 +214,7 @@ class TestPrometheusAgentExecutor:
             pass
 
     def test_execute_calls_enqueue_event(self, executor, mock_context, mock_event_queue):
-        """Test that execute uses enqueue_event for status updates."""
+        """Covers REQ-009-24: new tasks emit the initial Task before status updates."""
 
         # Create a concrete implementation for testing
         class TestExecutor(PrometheusAgentExecutor):
@@ -250,6 +250,39 @@ class TestPrometheusAgentExecutor:
         assert second_event.status.state == TaskState.TASK_STATE_COMPLETED
         payload_text = second_event.status.message.parts[0].text
         assert json.loads(payload_text) == {"status": "success", "data": "test data"}
+
+    @pytest.mark.parametrize(
+        "stored_state",
+        [TaskState.TASK_STATE_INPUT_REQUIRED, TaskState.TASK_STATE_AUTH_REQUIRED],
+        ids=["input_required", "auth_required"],
+    )
+    def test_execute_follow_up_continues_existing_task_with_status_update(
+        self, mock_context, mock_event_queue, stored_state
+    ):
+        """Covers REQ-009-24: any follow-up to an existing task, not only an
+        answered INPUT_REQUIRED form, continues it without re-emitting the Task."""
+
+        class ResumingExecutor(PrometheusAgentExecutor):
+            async def _execute(self, params, context, event_queue):
+                return {"status": "resumed"}
+
+        mock_context.current_task = Task(
+            id=mock_context.task_id,
+            context_id=mock_context.context_id,
+            status=TaskStatus(state=stored_state),
+        )
+
+        asyncio.run(
+            ResumingExecutor(agent_name="TestAgent").execute(mock_context, mock_event_queue)
+        )
+
+        events = [call.args[0] for call in mock_event_queue.enqueue_event.call_args_list]
+        assert len(events) == 2
+        assert all(isinstance(event, TaskStatusUpdateEvent) for event in events)
+        assert [event.status.state for event in events] == [
+            TaskState.TASK_STATE_WORKING,
+            TaskState.TASK_STATE_COMPLETED,
+        ]
 
     def test_execute_emits_heartbeats_during_long_execute(self, mock_context, monkeypatch):
         """A slow _execute should produce periodic non-final keepalive events."""
@@ -1306,8 +1339,8 @@ workflows:
             == expected
         )
 
-    @pytest.mark.parametrize("server_filters", [True, False])
-    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, server_filters):
+    @pytest.mark.parametrize("in_recent", [True, False])
+    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, in_recent):
         """Covers REQ-009-23 and BEH-009-10: answering an INPUT_REQUIRED form
         resumes the same task id, whose record already exists; the request
         must run, reusing that record."""
@@ -1322,17 +1355,23 @@ workflows:
             async def create(self, item):
                 raise APIError("duplicate key value violates unique constraint")
 
-            async def list(self, page=1, page_size=100, filters=None):
-                hits = [mine] if server_filters else others
-                return SimpleNamespace(items=hits)
-
             async def iter_all(self, page_size=100, filters=None):
+                # The real client rejects filters the paginated route would ignore.
+                from prometheus_api.storage_client.paging import check_list_filters
+
+                check_list_filters(filters)
                 for record in [*others, mine]:
                     yield record
+
+        class Search:
+            async def recent(self, limit=100):
+                assert limit == 500
+                return [*others, mine] if in_recent else others
 
         class Client:
             def __init__(self, config):
                 self.items = Items()
+                self.search = Search()
 
             async def __aenter__(self):
                 return self
@@ -1387,8 +1426,13 @@ workflows:
                 yield
 
         class Client:
+            @staticmethod
+            async def _recent(limit=100):
+                return []
+
             def __init__(self, config):
                 self.items = Items()
+                self.search = SimpleNamespace(recent=self._recent)
 
             async def __aenter__(self):
                 return self

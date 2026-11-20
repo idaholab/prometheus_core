@@ -14,6 +14,7 @@
 
 from typing import Any, Dict, List, Optional
 from ..models.relationship import Relationship, RelationshipCreate
+from ..exceptions import StorageClientError
 from .base import BaseResource
 
 
@@ -39,12 +40,7 @@ class RelationshipsResource(BaseResource):
             ))
             ```
         """
-        payload = {
-            "origin_id": relationship.from_item_id,
-            "destination_id": relationship.to_item_id,
-            "name": relationship.relationship_type,  # API expects 'name' field
-            "properties": relationship.properties,
-        }
+        payload = self._edge_payload(relationship)
 
         params: Dict[str, Any] = {"dataSourceId": self._client._get_data_source_id()}
 
@@ -59,6 +55,78 @@ class RelationshipsResource(BaseResource):
             data = data["value"]
 
         return self._parse_relationship(data)
+
+    def _edge_payload(self, relationship: RelationshipCreate) -> Dict[str, Any]:
+        """Build an edge-create body. DeepLynx types an edge only by ``relationship_id``."""
+        payload: Dict[str, Any] = {
+            "origin_id": relationship.from_item_id,
+            "destination_id": relationship.to_item_id,
+            "properties": relationship.properties,
+        }
+        if relationship.relationship_type:
+            payload["relationship_id"] = self.get_or_create_relationship_type(
+                relationship.relationship_type
+            )
+        return payload
+
+    def get_or_create_relationship_type(self, name: str) -> int:
+        """Return the project's relationship-type ID for *name*, creating the type if needed.
+
+        DeepLynx stores an edge's type as a project-level relationship record, and an
+        edge-create request that names a missing type fails, so the type is created
+        first. IDs are cached per client. A concurrent creator can win the race; the
+        type is then looked up again rather than failing.
+        """
+        cache = self._client._relationship_type_ids
+        if name in cache:
+            return cache[name]
+        type_id = self._find_relationship_type(name)
+        if type_id is None:
+            try:
+                response = self._client._request(
+                    "POST",
+                    self._relationship_types_path,
+                    json={"name": name, "description": name},
+                )
+                type_id = int(response.json()["id"])
+            except StorageClientError:
+                type_id = self._find_relationship_type(name)
+                if type_id is None:
+                    raise
+        cache[name] = type_id
+        return type_id
+
+    def _find_relationship_type(self, name: str) -> Optional[int]:
+        response = self._client._request("GET", self._relationship_types_path)
+        data = response.json()
+        for relationship_type in data if isinstance(data, list) else []:
+            if relationship_type.get("name") == name and not relationship_type.get("isArchived"):
+                return int(relationship_type["id"])
+        return None
+
+    @property
+    def _relationship_types_path(self) -> str:
+        return f"/projects/{self._client.config.project_id}/relationships"
+
+    def find_edge(self, from_item_id: int, to_item_id: int) -> Optional[Relationship]:
+        """Return the edge from *from_item_id* to *to_item_id*, or ``None`` if there is none.
+
+        DeepLynx allows one edge per ordered pair of records, so the pair names at most
+        one edge. DeepLynx answers a missing edge with an error rather than an empty
+        result, so any failed lookup returns ``None``: the edge could not be confirmed.
+        """
+        try:
+            response = self._client._request(
+                "GET",
+                f"{self._base_path}/edges/by-relationship",
+                params={"originId": from_item_id, "destinationId": to_item_id},
+            )
+        except StorageClientError:
+            return None
+        data = response.json()
+        if isinstance(data, dict) and "value" in data:
+            data = data["value"]
+        return self._parse_relationship(data) if isinstance(data, dict) else None
 
     def get(self, relationship_id: int) -> Relationship:
         """Get a relationship by ID.
@@ -110,15 +178,7 @@ class RelationshipsResource(BaseResource):
             ])
             ```
         """
-        payload = [
-            {
-                "origin_id": rel.from_item_id,
-                "destination_id": rel.to_item_id,
-                "name": rel.relationship_type,  # API expects 'name' field
-                "properties": rel.properties,
-            }
-            for rel in relationships
-        ]
+        payload = [self._edge_payload(rel) for rel in relationships]
 
         params = {"dataSourceId": self._client._get_data_source_id()}
 
@@ -206,7 +266,9 @@ class RelationshipsResource(BaseResource):
                         id=rel_data.get("id", 0),
                         from_item_id=from_id,
                         to_item_id=to_id,
-                        relationship_type=rel_data.get("name", ""),
+                        relationship_type=rel_data.get("relationshipName")
+                        or rel_data.get("name")
+                        or "",
                         properties=rel_data.get("properties", {}),
                         created_at=rel_data.get("createdAt"),
                         updated_at=rel_data.get("lastUpdatedAt"),
@@ -281,7 +343,7 @@ class RelationshipsResource(BaseResource):
             id=data["id"],
             from_item_id=from_item_id,
             to_item_id=to_item_id,
-            relationship_type=data.get("name", ""),
+            relationship_type=data.get("relationshipName") or data.get("name") or "",
             properties=data.get("properties", {}),
             created_at=data.get("createdAt"),
             updated_at=data.get("lastUpdatedAt"),

@@ -16,7 +16,7 @@ import { expect, test, vi } from "vitest";
 import { PageDataManagement } from "./PageDataManagement.tsx";
 
 /* The real store with every mesh artifact removed, so the Meshes chip matches nothing.
- * The sources stay, so the page status stays "ready". The barrel and DataManagement
+ * The sources stay, so the page status stays "ready". The barrel and LayoutDataManagement
  * import this same module, so the mock reaches the page. */
 vi.mock("@/features/data-management/store/dataManagement", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/features/data-management/store/dataManagement")>();

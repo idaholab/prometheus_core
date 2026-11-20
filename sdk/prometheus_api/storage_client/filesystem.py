@@ -17,6 +17,7 @@ This module exposes a :class:`DeepLynxFileSystem` implementation that maps
 ``prometheus_api.storage_client`` high-level resources.
 """
 
+import logging
 import os
 import re
 import posixpath
@@ -34,6 +35,9 @@ from fsspec.utils import glob_translate
 from .client import StorageClient
 from .connection import ConnectionConfig
 from .models.item import Item, ItemUpdate
+from .uri import parse_item_uri
+
+logger = logging.getLogger(__name__)
 
 
 class DeepLynxFileSystem(AbstractFileSystem):
@@ -131,8 +135,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
                 does not close it.
             config: Connection configuration used only when ``client`` is not
                 supplied.
-            recent_limit: Result count for ``search.recent`` fallback.
-            search_page_size: Page size for search pagination.
+            recent_limit: Number of newest records the ``search.recent`` fallback looks at
+                (at most 500 per request). Older files are found by the full scan instead.
+            search_page_size: Page size for search pagination (1 to 500).
             search_max_pages: Maximum number of pages fetched per search call.
             **kwargs: Additional options forwarded to
                 :class:`fsspec.AbstractFileSystem`.
@@ -406,7 +411,7 @@ class DeepLynxFileSystem(AbstractFileSystem):
         return str(self._strip_protocol(path))
 
     def _parse_item_uri_key(self, key: str) -> Optional[int]:
-        """Parse ``organizations/{org}/projects/{project}/items/{item}`` URIs.
+        """Return the item ID of an ``organizations/{org}/projects/{project}/items/{item}`` key.
 
         ``send_deeplynx_artifact`` emits item-addressed URIs for durable
         artifacts, while this filesystem also supports logical object keys used
@@ -414,31 +419,18 @@ class DeepLynxFileSystem(AbstractFileSystem):
         configuration so a configured project cannot accidentally read another
         project's item through a copied URI.
         """
-        parts = str(key or "").strip("/").split("/")
-        is_item_uri = (
-            len(parts) == 6
-            and parts[0] == "organizations"
-            and parts[2] == "projects"
-            and parts[4] == "items"
-        )
-        if not is_item_uri:
+        ref = parse_item_uri(key)
+        if ref is None:
             return None
-        try:
-            organization_id = int(parts[1])
-            project_id = int(parts[3])
-            item_id = int(parts[5])
-        except ValueError:
-            return None
-
         config = getattr(self._client, "config", None)
         if config is not None:
-            if organization_id != int(config.organization_id) or project_id != int(
+            if ref.organization_id != int(config.organization_id) or ref.project_id != int(
                 config.project_id
             ):
                 raise ValueError(
                     "DeepLynx item URI does not match the configured organization/project"
                 )
-        return item_id
+        return ref.item_id
 
     def _join_keys(self, *parts: str) -> str:
         """Join non-empty path fragments into a normalized POSIX key."""
@@ -717,7 +709,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -736,7 +729,8 @@ class DeepLynxFileSystem(AbstractFileSystem):
                     page=page,
                     page_size=self._search_page_size,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("search fallback failed on page %d: %r", page, exc)
                 return []
             items.extend(result.items)
             if not result.page_info.has_next:
@@ -748,6 +742,9 @@ class DeepLynxFileSystem(AbstractFileSystem):
         try:
             return list(self._client.search.recent(limit=self._recent_limit))
         except Exception:
+            # A failure here (a route error, a malformed body) otherwise looks like
+            # "file not found" to the caller.
+            logger.warning("search.recent failed during a deeplynx:// lookup", exc_info=True)
             return []
 
     def _scan_all_items(self) -> List[Item]:

@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { api, ApiError } from "@/lib/api/client";
 import type { AuthProvider } from "@/lib/api/types";
 import { setCurrentUser } from "./store/session";
-import { AuthError, AuthField, AuthLayout } from "@/layouts/AuthLayout";
+import { AuthError, AuthField, LayoutAuth } from "@/layouts/LayoutAuth";
 
 interface Props {
   onSuccess: () => void;
@@ -74,7 +74,7 @@ export function Login({ onSuccess }: Props) {
   };
 
   return (
-    <AuthLayout
+    <LayoutAuth
       title="Sign in"
       subtitle="Enter your INL credentials to continue"
       onSubmit={handleSubmit}
@@ -122,6 +122,6 @@ export function Login({ onSuccess }: Props) {
           </div>
         </>
       )}
-    </AuthLayout>
+    </LayoutAuth>
   );
 }

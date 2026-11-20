@@ -12,7 +12,7 @@
 
 """Synchronous storage client."""
 
-from typing import Optional
+from typing import Dict, Optional
 import httpx
 from .connection import ConnectionConfig
 from .auth import AuthHandler
@@ -68,6 +68,8 @@ class StorageClient:
         self._items: Optional[ItemsResource] = None
         self._files: Optional[FilesResource] = None
         self._relationships: Optional[RelationshipsResource] = None
+        # Relationship-type name -> project relationship ID (see relationships resource).
+        self._relationship_type_ids: Dict[str, int] = {}
         self._search: Optional[SearchResource] = None
         self._tags: Optional[TagsResource] = None
         self._timeseries: Optional[TimeseriesResource] = None

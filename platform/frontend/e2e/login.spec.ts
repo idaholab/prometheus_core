@@ -101,6 +101,6 @@ test("signing in opens the app as the user the server returned", async ({ page }
   expectLogin(await login, "someone", "the-password");
 
   await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Admin", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in" })).toHaveCount(0);
 });

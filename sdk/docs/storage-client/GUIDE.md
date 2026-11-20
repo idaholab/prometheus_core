@@ -218,11 +218,18 @@ Path lookup is search-first and degrades gracefully:
 
 1. `search.advanced_query(...)`
 2. `search.query(...)` + exact metadata filtering
-3. `search.recent(...)` (emits runtime warning)
-4. `items.iter_all(...)` full scan fallback (emits runtime warning)
+3. `search.recent(limit=recent_limit)` (emits runtime warning)
+4. `items.iter_all(page_size=search_page_size)` full scan fallback (emits runtime warning)
 
 This keeps normal workflows efficient while still supporting DeepLynx deployments
 where some search endpoints are unavailable.
+
+Step 3 looks only at the newest `recent_limit` records (default 500), fetched in one
+request when `recent_limit` is at most 500. A file that is older than that is not found
+there and the lookup goes on to the full scan in step 4, which reads every record page by
+page, so it is slower. If your files are often found only by the full scan, raise
+`recent_limit` (extra pages are requested above 500). `search_page_size` must be between 1
+and 500, because the records route refuses larger pages.
 
 #### Common filesystem operations
 
@@ -301,28 +308,45 @@ results = client.search.advanced_query(
 results = client.search.by_tags(["important", "urgent"])
 results = client.search.by_tags(["tag1", "tag2"], match_all=True)
 
-# Get recent items
+# Get the 50 most recently updated items, newest first
 recent = client.search.recent(limit=50)
 ```
 
 ### Timeseries Operations
 
+Tabular files (csv or parquet) are uploaded like any other file with `client.files.upload(...)`.
+Query one by the ID of its record. The server exposes the file as a temporary SQL view named
+`view_name`, and your query must mention that name:
+
 ```python
 from pathlib import Path
 
-# Upload timeseries data
-result = client.timeseries.upload(
-    Path("sensor_data.csv"),
-    data_source_id=456
-)
+stored = client.files.upload(Path("sensor_data.csv"))
 
-# Query timeseries data
-results = client.timeseries.query(
-    data_source_id=456,
-    sql_query="SELECT * FROM data WHERE timestamp > '2024-01-01'",
-    file_type="json"
+result = client.timeseries.query(
+    record_id=stored.id,
+    view_name="data",
+    sql_query="SELECT * FROM data WHERE Timestamp > '2024-01-01'",
+    limit=1000,
 )
+print(result.columns)   # ["Timestamp", ...]
+print(result.data[:3])  # rows as lists, in column order
 ```
+
+- Without `sql_query` you get the view's rows limited by `limit` (the server's default is 20).
+- A missing value can arrive as `{}`, and one column can mix numbers and `{}`; cells are not
+  converted.
+- The `columns=` option rejects column names that contain dots or other symbols.
+- The server rejects statements containing words such as `UPDATE`, `COPY` or `ATTACH` anywhere,
+  including inside a column name.
+- Each call can take many seconds on a large file; raise `ConnectionConfig.timeout` if needed.
+
+**Coming from `timeseries.upload` and the data-source `query`?** Version 0.16.0 removed them,
+because the routes they called no longer exist on the server. Upload the file with
+`client.files.upload(...)`, then pass the returned `id` (the file's record ID) as `record_id` to
+`timeseries.query`. `view_name` and `sql_query` are keyword-only, and the result is
+`TimeseriesResult(columns, data)`. The steps are in
+[AGENT_MIGRATIONS.md](../agent/AGENT_MIGRATIONS.md#0160).
 
 ## Error Handling
 
@@ -369,16 +393,17 @@ for item in client.items.iter_all(page_size=100):
 ### Filtering
 
 ```python
-# Filter items in list operation
+# Filter items in list operation. `filters` are sent as query parameters to
+# GET .../records/paginated, so use the parameters that route accepts:
+# dataSourceId, fileType, hideArchived and isInsightEligible.
 results = client.items.list(
     page=1,
     page_size=100,
-    filters={
-        "properties.status": "active",
-        "created_at": {"$gt": "2024-01-01"}
-    }
+    filters={"fileType": "csv", "hideArchived": True},
 )
 ```
+
+For filtering on record properties, use `client.search.advanced_query(...)` instead.
 
 ### Bulk Operations
 

@@ -249,18 +249,58 @@ class TestItemRetrieval:
         assert retrieved_item.properties["_test_suite_marker"] == TEST_MARKER
 
     def test_list_items(self, client, test_items):
-        """Test listing items with pagination."""
-        page = client.items.list(page=1, page_size=10)
+        """Test that paging ``items.list`` covers every record exactly once.
 
-        assert page.items is not None
-        assert len(page.items) > 0
-        assert page.page_info.page_number == 1
-        assert page.page_info.page_size == 10
+        The order of records is the server's business, so this does not look for the test items
+        on a particular page. It walks all pages and checks that the pages agree with the
+        server's own ``total_count`` and paging flags.
+        """
+        page_size = 10
+        first = client.items.list(page=1, page_size=page_size)
 
-        # Verify at least some of our test items are in the results
-        item_ids = {item.id for item in page.items}
-        test_item_ids = {item.id for item in test_items}
-        assert len(item_ids & test_item_ids) > 0
+        assert first.page_info.page_number == 1
+        assert first.page_info.page_size == page_size
+        assert first.page_info.has_previous is False
+        total = first.page_info.total_count
+        page_count = max(1, -(-total // page_size))
+
+        seen_ids = [item.id for item in first.items]
+        for number in range(2, page_count + 1):
+            page = client.items.list(page=number, page_size=page_size)
+            assert page.page_info.page_number == number
+            assert page.page_info.has_previous is True
+            assert page.items, f"page {number} of {page_count} is empty"
+            seen_ids.extend(item.id for item in page.items)
+
+        # has_next must be true on every page but the last
+        assert first.page_info.has_next is (page_count > 1)
+        last = client.items.list(page=page_count, page_size=page_size)
+        assert last.page_info.has_next is False
+
+        # Every record exactly once, including the ones this run created. Another writer on a
+        # shared server can make the count move during the walk; that is not a failure of paging
+        # but would show here, so run this against a quiet project.
+        assert len(seen_ids) == len(set(seen_ids)) == total
+        assert {item.id for item in test_items} <= set(seen_ids)
+
+
+class TestListFilters:
+    """The paginated records route applies its own filters and ignores any other parameter."""
+
+    def test_file_type_filter_is_applied(self, client, test_items):
+        """Covers REQ-002-05: ``fileType`` narrows the list; other keys are rejected up front."""
+        everything = client.items.list(page_size=50)
+        assert everything.page_info.total_count >= len(test_items)
+
+        # None of the test items is a csv file, so the filter must exclude them. Do not
+        # compare counts with the unfiltered list: on an empty or csv-only project, or a
+        # shared database that changes under the test, they need not differ.
+        csv_only = client.items.list(page_size=50, filters={"fileType": "csv"})
+        csv_ids = {item.id for item in csv_only.items}
+        assert csv_ids.isdisjoint(item.id for item in test_items)
+
+        with pytest.raises(ValueError, match="Unsupported item filter"):
+            client.items.list(filters={"properties.status": "active"})
 
 
 class TestPagination:
@@ -357,19 +397,48 @@ class TestSearch:
         assert results.page_info is not None
 
     def test_search_recent(self, client, test_items):
-        """Test getting recent items."""
-        try:
-            recent = client.search.recent(limit=10)
-        except ItemNotFoundError as e:
-            pytest.skip(f"Recent search not available: {e}")
-        assert len(recent) > 0
+        """Covers REQ-002-15: recent returns the newest items first, capped at ``limit``."""
+        recent = client.search.recent(limit=10)
+        assert 0 < len(recent) <= 10
 
         # Our test items should be recent
         recent_ids = {item.id for item in recent}
         test_ids = {item.id for item in test_items}
-
-        # At least some overlap expected
         assert len(recent_ids & test_ids) > 0
+
+    def test_search_recent_is_newest_first_and_capped(self, client):
+        """Covers REQ-002-15: the order and the cap, with items made a second apart."""
+        made = []
+        try:
+            for n in range(3):
+                made.append(
+                    client.items.create(
+                        ItemCreate(
+                            name=f"recent-order-{TEST_RUN_ID}-{n}",
+                            description="Created to check the order of search.recent",
+                            properties={"_test_suite_marker": TEST_MARKER, "n": n},
+                        )
+                    )
+                )
+                time.sleep(1.1)  # keep the update times apart so the order is not a tie
+
+            newest_two = client.search.recent(limit=2)
+            assert [item.id for item in newest_two] == [made[2].id, made[1].id]
+            assert len(client.search.recent(limit=1)) == 1
+
+            with pytest.raises(ValueError):
+                client.search.recent(limit=0)
+        finally:
+            # Try every delete so one failure does not leave the rest behind, then fail the
+            # test: leftover test data should not pass silently.
+            failures = []
+            for item in made:
+                try:
+                    client.items.delete(item.id)
+                except Exception as exc:  # noqa: BLE001 - collected and re-raised below
+                    failures.append((item.id, exc))
+            if failures:
+                raise AssertionError(f"Could not delete test items: {failures}")
 
 
 class TestRelationships:
@@ -535,6 +604,41 @@ class TestFileUpload:
                     client.files.delete(file_id)
                 except Exception as e:
                     print(f"Warning: Failed to delete test file {file_id}: {e}")
+
+
+class TestTimeseries:
+    """Query a tabular file through the OLAP route."""
+
+    def test_query_uploaded_csv(self, client, tmp_path):
+        """Covers REQ-003-12: upload a CSV, then read it back with and without options."""
+        csv_file = tmp_path / f"timeseries_{TEST_RUN_ID}.csv"
+        csv_file.write_text("timestamp,power,label\n1,10.5,a\n2,20.25,b\n3,30.0,c\n")
+
+        file_id = None
+        try:
+            file_id = client.files.upload(csv_file, description="Timeseries test file").id
+
+            everything = client.timeseries.query(file_id)
+            assert everything.columns == ["timestamp", "power", "label"]
+            assert everything.data == [[1, 10.5, "a"], [2, 20.25, "b"], [3, 30, "c"]]
+
+            filtered = client.timeseries.query(
+                file_id, sql_query="SELECT power FROM data WHERE power > 15"
+            )
+            assert filtered.columns == ["power"]
+            assert filtered.data == [[20.25], [30]]
+
+            window = client.timeseries.query(file_id, start_row=2, stop_row=3)
+            assert window.data == [[2, 20.25, "b"], [3, 30, "c"]]
+
+            past_end = client.timeseries.query(file_id, start_row=50, stop_row=60)
+            assert past_end.data == []
+
+        finally:
+            # No try/except: a failed delete leaves test data behind and should fail the test.
+            # If an assertion above already failed, pytest shows both errors.
+            if file_id:
+                client.files.delete(file_id)
 
 
 class TestDeeplynxFileSystem:

@@ -15,15 +15,15 @@
  * reach by clicking yet: the empty canvas (Figma D.3), a skill being dragged
  * onto it (D.4), the insert menu on a wire (D.5) and an invalid connection
  * (D.6), plus the base state (D.2) to compare against. Each
- * is the real WorkflowBuilder, with a theme toggle. It also covers the Node
+ * is the real LayoutWorkflowBuilder, with a theme toggle. It also covers the Node
  * Inspector's two states: selected in D.2 and D.4, empty in D.3.
  *
  * Open http://localhost:5150/?harness=builder-states under `npm run dev`.
  * main.tsx loads this only in dev, so it never reaches the production build.
  */
 import { useState } from "react";
-import type { InspectedNode } from "@/features/workflows";
-import { WorkflowBuilder } from "@/features/workflows";
+import type { BuilderMode, InspectedNode } from "@/features/workflows";
+import { LayoutWorkflowBuilder } from "@/features/workflows";
 import type { WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import { useTheme } from "@/lib/useTheme";
 import {
@@ -37,6 +37,9 @@ import {
   INVALID_NODES,
   INVALID_WIRES,
   SKILL_GROUPS,
+  TWEAKED_STEP,
+  VERSION_DETAILS,
+  WORKFLOW_VERSIONS,
 } from "@/features/workflows";
 
 type StateId = "base" | "empty" | "dragging" | "insert" | "invalid";
@@ -66,6 +69,8 @@ const STATES: Record<StateId, BuilderState> = {
 export function BuilderStatesHarness() {
   const [theme, setTheme] = useTheme();
   const [stateId, setStateId] = useState<StateId>("empty");
+  // D.3 to D.6 are template edits, so it starts there; the badge switches it.
+  const [mode, setMode] = useState<BuilderMode>("template");
   const state = STATES[stateId];
 
   return (
@@ -88,13 +93,20 @@ export function BuilderStatesHarness() {
         </button>
       </div>
       {/* Keyed so each state mounts fresh, as it would on the Builder page. */}
-      <WorkflowBuilder
+      <LayoutWorkflowBuilder
         key={stateId}
         name="Comprehensive Material Analysis"
+        mode={mode}
+        onModeChange={setMode}
+        version="v1.2.0"
+        nextVersion="v1.3.0"
         skillGroups={SKILL_GROUPS}
+        versions={WORKFLOW_VERSIONS}
+        versionDetails={VERSION_DETAILS}
         nodes={state.nodes}
         wires={state.wires}
         inspected={state.inspected}
+        tweaked={TWEAKED_STEP}
         canvasError={state.canvasError}
       />
     </div>

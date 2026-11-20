@@ -18,7 +18,7 @@ from typing import Any, Dict, cast
 
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events import EventQueue
-from a2a.types import TaskState, TaskStatusUpdateEvent
+from a2a.types import Task, TaskState, TaskStatusUpdateEvent
 from google.protobuf.json_format import MessageToDict
 from starlette.responses import JSONResponse
 
@@ -31,6 +31,8 @@ class _LocalRequestContext:
     def __init__(self, request_params: Dict[str, Any], task_id: str, context_id: str):
         self.task_id = task_id
         self.context_id = context_id
+        # Each debug chat call starts a new task, so there is no persisted task to continue.
+        self.current_task: Task | None = None
         self._request_params = request_params
 
     def get_user_input(self) -> str:

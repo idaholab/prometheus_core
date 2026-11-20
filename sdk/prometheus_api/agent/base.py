@@ -97,8 +97,10 @@ from .worker import PrometheusWorker
 from .registry import AgentRegistryClient
 from ..storage_client.async_client import AsyncStorageClient
 from ..storage_client.connection import ConnectionConfig
-from ..storage_client.exceptions import APIError
+from ..storage_client.exceptions import APIError, StorageClientError
 from ..storage_client.models.item import ItemCreate, ItemUpdate
+from ..storage_client.models.relationship import RelationshipCreate
+from ..storage_client.uri import item_uri, parse_item_uri
 from ..llm_client.security import redact_secrets
 import uvicorn
 
@@ -111,6 +113,11 @@ _ExecutionScope = Callable[
     AsyncContextManager[None],
 ]
 _UNSET_EXECUTION_RECORD = object()
+# DeepLynx edge names for execution lineage. Edges run input -> execution -> output:
+# an artifact the execution fetched is ``input_to`` it, and the execution
+# ``generated`` each artifact it emitted.
+INPUT_TO_RELATIONSHIP = "input_to"
+GENERATED_RELATIONSHIP = "generated"
 
 
 class _TrackedEventQueue:
@@ -253,10 +260,10 @@ class PrometheusAgentExecutor(AgentExecutor):
             tracked_queue = _TrackedEventQueue(event_queue)
 
             # A2A v1 task streams must begin with the Task before any updates. A
-            # resumed task (an answered INPUT_REQUIRED form) is already stored: its
-            # stream continues from there. Re-sending the stored task, still
-            # INPUT_REQUIRED, would end a blocking send at once with the old form.
-            if getattr(context, "current_task", None) is None:
+            # follow-up to an existing task (e.g. an answered INPUT_REQUIRED form) is
+            # already stored and continues with status updates. Re-sending the stored
+            # task would end a blocking send at once with the old form.
+            if context.current_task is None:
                 await tracked_queue.enqueue_event(build_initial_task(context))
 
             # Verify the caller's user identity (from message.metadata["userToken"]).
@@ -703,6 +710,17 @@ class PrometheusAgent:
         self._execution_record_id: ContextVar[object] = ContextVar(
             f"prometheus_execution_record_id_{id(self)}",
             default=_UNSET_EXECUTION_RECORD,
+        )
+        # DeepLynx items already linked ``input_to`` the active execution record.
+        self._linked_input_items: ContextVar[Optional[set[int]]] = ContextVar(
+            f"prometheus_linked_input_items_{id(self)}",
+            default=None,
+        )
+        # (organization_id, project_id) of the active execution record: the DeepLynx
+        # project bound to this run. Lineage edges never leave it.
+        self._execution_record_project: ContextVar[Optional[tuple[int, int]]] = ContextVar(
+            f"prometheus_execution_record_project_{id(self)}",
+            default=None,
         )
         self.artifact_registry = ArtifactRegistry()
         self.artifact_resolver = ArtifactResolver(self.artifact_registry)
@@ -1348,14 +1366,77 @@ class PrometheusAgent:
         if not resolved_conversation_id:
             raise ValueError("conversation_id or context is required")
 
-        return await self.artifact_resolver.get_artifact_file_path(
-            artifact_id,
-            conversation_id=resolved_conversation_id,
-            artifacts=artifacts,
+        reference = self.artifact_resolver.require_reference(
+            artifact_id, conversation_id=resolved_conversation_id, artifacts=artifacts
+        )
+        path = await self.artifact_resolver.get_reference_file_path(
+            reference,
             cache_dir=cache_dir,
             allowed_file_roots=allowed_file_roots,
             force_download=force_download,
         )
+        await self._link_input_artifact(reference)
+        return path
+
+    async def _link_input_artifact(self, reference: ArtifactReference) -> None:
+        """Link a fetched DeepLynx artifact ``input_to`` the active execution record.
+
+        Each item is linked at most once per execution. Artifacts without a
+        DeepLynx item (inline or local files) are skipped, and so are items in a
+        different DeepLynx project than the execution record. Failures are logged and
+        never fail the fetch.
+        """
+        record_id = self.execution_record_id
+        linked = self._linked_input_items.get()
+        record_project = self._execution_record_project.get()
+        if record_id is None or linked is None or record_project is None:
+            return
+        artifact_id = reference.artifact_id
+        try:
+            item_ref = parse_item_uri(reference.uri)
+            if item_ref is None:
+                return
+            org_id, project_id, item_id = item_ref
+            if item_id in linked:
+                return
+            if (org_id, project_id) != record_project:
+                logger.warning(
+                    "Not linking artifact %s %s execution record %s: the artifact is in "
+                    "DeepLynx org %s project %s, the record in org %s project %s",
+                    artifact_id,
+                    INPUT_TO_RELATIONSHIP,
+                    record_id,
+                    org_id,
+                    project_id,
+                    *record_project,
+                )
+                return
+            credential = await self.get_credential("deeplynx")
+            config = ConnectionConfig.from_credential(credential)
+            async with AsyncStorageClient(config) as client:
+                try:
+                    await client.relationships.create(
+                        RelationshipCreate(
+                            from_item_id=item_id,
+                            to_item_id=record_id,
+                            relationship_type=INPUT_TO_RELATIONSHIP,
+                        )
+                    )
+                except StorageClientError:
+                    # DeepLynx allows one edge per ordered pair. A resumed task, or two
+                    # fetches racing in one run, finds the edge already there: that is
+                    # linked, not failed.
+                    if await client.relationships.find_edge(item_id, record_id) is None:
+                        raise
+            linked.add(item_id)
+        except Exception:
+            logger.warning(
+                "Failed to link artifact %s %s execution record %s",
+                artifact_id,
+                INPUT_TO_RELATIONSHIP,
+                record_id,
+                exc_info=True,
+            )
 
     def load_agent_card(self) -> AgentCard:
         """
@@ -1588,11 +1669,12 @@ class PrometheusAgent:
         """Return the record whose ``original_id`` matches, or ``None``."""
         if not original_id:
             return None
-        page = await client.items.list(page_size=50, filters={"originalId": original_id})
-        for candidate in page.items:
+        # ``items.list`` cannot filter on ``original_id`` (the paginated route ignores unknown
+        # parameters, so the SDK rejects them). A resumed task's record is recent, so check
+        # the newest records in one request before falling back to a full scan.
+        for candidate in await client.search.recent(limit=500):
             if candidate.original_id == original_id:
                 return candidate
-        # Servers that ignore the filter: scan, newest records being last.
         async for candidate in client.items.iter_all(page_size=200):
             if candidate.original_id == original_id:
                 return candidate
@@ -1665,9 +1747,15 @@ class PrometheusAgent:
 
         token = self._execution_record_id.set(item.id)
         versions_token = self._context_state_versions.set({})
+        linked_token = self._linked_input_items.set(set())
+        project_token = self._execution_record_project.set(
+            (config.organization_id, config.project_id)
+        )
         try:
             yield
         finally:
+            self._execution_record_project.reset(project_token)
+            self._linked_input_items.reset(linked_token)
             self._context_state_versions.reset(versions_token)
             self._execution_record_id.reset(token)
 
@@ -2096,11 +2184,11 @@ class PrometheusAgent:
             if tags:
                 await client.items.add_tags(file_meta.id, list(tags))
 
-        uri = (
-            f"deeplynx://organizations/{storage_config.organization_id}"
-            f"/projects/{storage_config.project_id}"
-            f"/items/{file_meta.id}"
-        )
+            await self._link_generated_artifact(
+                client, item_id=file_meta.id, storage_config=storage_config
+            )
+
+        uri = item_uri(storage_config.organization_id, storage_config.project_id, file_meta.id)
         return await self.send_artifact_reference(
             context=context,
             event_queue=event_queue,
@@ -2117,6 +2205,51 @@ class PrometheusAgent:
                 "deeplynx_file_id": file_meta.id,
             },
         )
+
+    async def _link_generated_artifact(
+        self,
+        client: AsyncStorageClient,
+        *,
+        item_id: int,
+        storage_config: ConnectionConfig,
+    ) -> None:
+        """Link the active execution record ``generated`` an uploaded DeepLynx item.
+
+        Skipped outside an execution, and when the upload went to a different DeepLynx
+        project than the execution record. Failures are logged and never fail the emit.
+        """
+        record_id = self.execution_record_id
+        record_project = self._execution_record_project.get()
+        if record_id is None or record_project is None:
+            return
+        artifact_project = (storage_config.organization_id, storage_config.project_id)
+        if artifact_project != record_project:
+            logger.warning(
+                "Not linking execution record %s %s artifact item %s: the record is in "
+                "DeepLynx org %s project %s, the artifact in org %s project %s",
+                record_id,
+                GENERATED_RELATIONSHIP,
+                item_id,
+                *record_project,
+                *artifact_project,
+            )
+            return
+        try:
+            await client.relationships.create(
+                RelationshipCreate(
+                    from_item_id=record_id,
+                    to_item_id=item_id,
+                    relationship_type=GENERATED_RELATIONSHIP,
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Failed to link execution record %s %s artifact item %s",
+                record_id,
+                GENERATED_RELATIONSHIP,
+                item_id,
+                exc_info=True,
+            )
 
     async def send_text_artifact(
         self,

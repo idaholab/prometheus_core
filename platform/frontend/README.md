@@ -32,23 +32,47 @@ Code is grouped by the product area it belongs to, so the work for one screen or
 
 ```
 src/
-  app shell   App.tsx, main.tsx, layouts/ (persistent shell), pages/ (PageX.tsx, what a route renders)
-  features/   one folder per product area: chat, artifacts (with every viewer), workflows,
+  app/        the router: paths.ts (every URL), guards.ts (who may open a route), router.tsx (the route table)
+  layouts/    the app shell: LayoutApp (sidebar, header) and LayoutAuth (sign-in screens)
+  pages/      PageX.tsx, what a route renders: one per screen
+  features/   one folder per product area (a domain, not a page): chat, artifacts (with every viewer), workflows,
               approval-queue, agent-registry, data-management, project-management, auth, admin,
               dashboard, shell (header, sidebar, nav)
   components/ui/<Name>/   shared design-system components, one folder each
   lib/        code with no UI that several features use: api/, highlight/, mime, table/, useTheme
   test/       Vitest setup and the tests that check rules across the app
+  dev/        dev-only pages, not in the app build: the viewer playground (see dev/viewer-playground/README.md)
 e2e/          Playwright end-to-end tests, by user flow
 ```
 
-- **A feature folder holds everything for its area:** components, hooks, helpers and tests. Stores go in a `store/` subfolder, as in `features/chat/store/chat.ts`. A new screen gets a feature folder and a `pages/PageX.tsx` that renders it.
+- **A feature folder holds everything for its area:** components, hooks, helpers and tests. Stores go in a `store/` subfolder, as in `features/chat/store/chat.ts`.
+- **Every screen has a page and a layout.** `pages/PageX.tsx` owns the logic: data, state, the header (`usePageHeader`), and route params and filters. It has very little markup. `features/<area>/LayoutX.tsx` owns the arrangement: it takes props and renders the feature's pieces, with no data loading or route logic. `PageAgentRegistry` and `LayoutAgentRegistry` are the example.
+- **A feature is a domain, not a page.** A piece lives in the feature its data belongs to, even when another page shows it. A screen's layout lives in the feature that owns the screen. When the Jobs Console lands, for example, `features/jobs` would hold the console's layout and also a summary that the Home layout imports from `@/features/jobs`.
 - **Other code imports a feature only through its `index.ts`.** Write `import { Chat } from "@/features/chat"`, not `@/features/chat/Chat`. The index names what the feature shares; everything else in the folder is internal to it, so it can change without touching other features. When another feature needs something new, export it from the index. Inside a feature, import its own files directly.
 - **Import anything outside your own folder with `@/`**, never `../`, so a file can move without its imports breaking. Use `./` only within the same folder or below it.
 - **A shared component gets its own folder** in `components/ui/`, holding the component, its helpers, its tests and an `index.ts` that re-exports it: `components/ui/Button/` has `Button.tsx`, `buttonStyle.ts`, `Button.test.ts`, `Button.dom.test.tsx` and `index.ts`. Import it as `@/components/ui/Button`.
 - **Code moves to `lib/` or `components/ui/` once a second feature needs it**, not before.
 
 `npm run lint` enforces the import rules: it fails a deep import into another feature and any `../` import.
+
+## Routes
+
+The app uses [React Router](https://reactrouter.com) 7 in data mode (`createBrowserRouter`), as a client-only single-page app. Every URL is in `src/app/paths.ts`, so links never spell out a path and a prefix such as a workspace can be added in one place.
+
+To add a screen:
+
+1. Add its path to `PATHS` in `src/app/paths.ts`. If it's in the sidebar, also add it to `NAV_PATHS` and `features/shell/nav.tsx`.
+2. Add `pages/PageX.tsx` and the layout it renders (see "Every screen has a page and a layout" above).
+3. Add a route in `src/app/router.tsx`. Signed-in screens go under the `LayoutApp` route, which already requires sign-in. For extra access rules, give the route a `loader` from `src/app/guards.ts`, as Admin uses `requireAdmin`.
+
+Notes:
+
+- **Loaders gate access; they don't load data.** A guard either returns or throws a `redirect`. Pages load their own data.
+- **Link with `<Link>`, `<NavLink>` or `<Button navTo>`,** not `window.location`, so navigation stays in the app.
+- **Params** (`/jobs-console/:jobId`) go in the route's `path`. Pages read them with `useParams()`. Add a helper next to `PATHS` that builds the URL, such as `jobPath(id)`.
+- **Unknown URLs** show `PageNotFound` inside the shell, and a route that throws shows `PageError`.
+- **Production:** nginx serves `index.html` for any path that isn't a file (`nginx/default.conf.template`), so a reload or deep link reaches the router.
+
 
 ## Testing
 
@@ -82,3 +106,19 @@ End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as 
 Use only made-up credentials and data in these tests. CI uploads a failed test's screenshots and trace, including what the page showed and every request and response, and the repo is public, so anyone signed in to GitHub can download them.
 
 Playwright builds and starts the app itself on every run, so the tests always check your current code. If something is already using port 5160, the run fails instead of testing it; stop that server first. When a test fails it keeps a trace and a screenshot in `test-results/`; open a trace with `npx playwright show-trace <path>/trace.zip`. In CI, the `platform: frontend e2e` job uploads them with the HTML report as the `frontend-e2e-report` artifact.
+
+#### Against the full platform
+
+The tests in `e2e/full/` run against the e2e stack: the whole platform, served by nginx, with nothing faked. They check what the faked tests can't: nginx's `/api` proxy, the real backend and its database.
+
+```bash
+make up-e2e              # in platform/: start the e2e stack, nginx on http://localhost:8090
+npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make test-e2e-full)
+make down-e2e            # in platform/: stop it and delete its data
+```
+
+`make up-e2e` needs no LLM key and nothing for DeepLynx. The stack sets a made-up LLM profile and key and made-up DeepLynx credentials of its own, because the stack won't start without a profile and every agent refuses to start without DeepLynx credentials, and the tests never send a chat turn or reach DeepLynx. Your real `LLM_*`, `EMBEDDING_API_KEY` and `DEEPLYNX_*` values in `platform/.env` don't reach this stack. On a fresh clone it creates `.env` with its secrets and asks only whether to build the SDK image locally. It saves no LLM profile and no DeepLynx answer, so your first `make up` still asks for those.
+
+The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Its ports are on `127.0.0.1` only, so other machines can't reach it, because its test admin's password is in the repo. To do the same for your dev stack, set `PUBLISH_ADDR=127.0.0.1` in `platform/.env`. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does (through the form) and `e2e/full/sign-in-api.spec.ts` does (through the API, including a wrong password and a stack that already has its admin).
+
+Import `test` and `expect` from `e2e/full/fixtures.ts`. Nothing is faked there, but a test fails if the page throws or an `/api` call fails or is refused (any status of 400 or more, except the answers the fixture expects). Each run writes to its own folder under `test-results-full/` (set `E2E_RUN_ID` to name it), so two runs at once don't delete each other's files; a failed test keeps its trace in that folder, and `rm -rf test-results-full` clears the old ones. CI's `platform: frontend e2e full` job uploads them as `frontend-e2e-full-report`. That job reports on every pull request but isn't a required check yet.

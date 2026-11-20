@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-playground
 dist-ssr
 *.local
 .vite/
@@ -29,5 +30,7 @@ coverage
 
 # Playwright output
 test-results
+test-results-full
 playwright-report
+playwright-report-full
 blob-report
