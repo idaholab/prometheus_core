@@ -606,9 +606,9 @@ class AgentStatus(BaseModel):
     ``agent_name`` is the registry key. ``registered_at`` is the ISO 8601 UTC time of
     the agent's last registration, ``None`` for an entry stored before the backend
     recorded it. ``reachable`` is true when the agent's ``GET /healthz`` answered 2xx
-    within 2 s during this request. ``checked_at`` is set on the one-agent route only;
-    the list carries one ``checked_at`` for all rows. ``static_headers`` and the card
-    ``url`` are never returned.
+    within 2 s when the probes finished, at ``checked_at``. ``checked_at`` has the same
+    meaning on both routes: each list row carries the list's ``checked_at``.
+    ``static_headers`` and the card ``url`` are never returned.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -619,7 +619,7 @@ class AgentStatus(BaseModel):
     version: str = ""
     registered_at: Optional[str] = None
     reachable: bool
-    checked_at: Optional[str] = None
+    checked_at: str
     skills: list[AgentSkillSummary] = Field(default_factory=list)
 
 

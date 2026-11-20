@@ -110,7 +110,7 @@ def _skills(agent_name: str, card: Dict[str, Any]) -> list[AgentSkillSummary]:
     return skills
 
 
-def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
+def _to_status(stored: Dict[str, Any], reachable: bool, checked_at: str) -> AgentStatus:
     """The status row of one entry. Each card field is checked on its own: a field of the
     wrong type is empty and an invalid skill is dropped, so one malformed value cannot fail
     the row, and one malformed registration cannot fail the whole list."""
@@ -123,14 +123,14 @@ def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
         version=_text(card, "version"),
         registered_at=registered_at if isinstance(registered_at, str) else None,
         reachable=reachable,
+        checked_at=checked_at,
         skills=_skills(stored["agent_name"], card),
     )
 
 
-async def _probe_stored(client: httpx.AsyncClient, stored: Dict[str, Any]) -> AgentStatus:
+async def _probe_stored(client: httpx.AsyncClient, stored: Dict[str, Any]) -> bool:
     url = stored["agent_card_params"].get("url")
-    url = url.strip() if isinstance(url, str) else ""
-    return _to_status(stored, await _probe(client, url))
+    return await _probe(client, url.strip() if isinstance(url, str) else "")
 
 
 @router.get("/agents", response_model=AgentListResponse)
@@ -145,9 +145,11 @@ async def list_agent_status(
         logger.warning("Agent registry read failed: %s", exc)
         return AgentListResponse(available=False, checked_at=_now(), agents=[])
     async with _make_client() as client:
-        agents = await asyncio.gather(*(_probe_stored(client, entry) for entry in stored))
+        reachable = await asyncio.gather(*(_probe_stored(client, entry) for entry in stored))
     # After the probes, so the time is that of the result it describes.
-    return AgentListResponse(available=True, checked_at=_now(), agents=list(agents))
+    checked_at = _now()
+    agents = [_to_status(entry, ok, checked_at) for entry, ok in zip(stored, reachable)]
+    return AgentListResponse(available=True, checked_at=checked_at, agents=agents)
 
 
 @router.get(
@@ -182,6 +184,5 @@ async def get_agent_status(
             status_code=http_status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' is not registered"
         )
     async with _make_client() as client:
-        agent = await _probe_stored(client, stored)
-    agent.checked_at = _now()
-    return agent
+        reachable = await _probe_stored(client, stored)
+    return _to_status(stored, reachable, _now())

@@ -3749,14 +3749,7 @@
             "title": "Reachable"
           },
           "checked_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Checked At"
           },
           "skills": {
@@ -3770,10 +3763,11 @@
         "type": "object",
         "required": [
           "agent_name",
-          "reachable"
+          "reachable",
+          "checked_at"
         ],
         "title": "AgentStatus",
-        "description": "One agent registry entry and its live reachability.\n\n``agent_name`` is the registry key. ``registered_at`` is the ISO 8601 UTC time of\nthe agent's last registration, ``None`` for an entry stored before the backend\nrecorded it. ``reachable`` is true when the agent's ``GET /healthz`` answered 2xx\nwithin 2 s during this request. ``checked_at`` is set on the one-agent route only;\nthe list carries one ``checked_at`` for all rows. ``static_headers`` and the card\n``url`` are never returned."
+        "description": "One agent registry entry and its live reachability.\n\n``agent_name`` is the registry key. ``registered_at`` is the ISO 8601 UTC time of\nthe agent's last registration, ``None`` for an entry stored before the backend\nrecorded it. ``reachable`` is true when the agent's ``GET /healthz`` answered 2xx\nwithin 2 s when the probes finished, at ``checked_at``. ``checked_at`` has the same\nmeaning on both routes: each list row carries the list's ``checked_at``.\n``static_headers`` and the card ``url`` are never returned."
       },
       "ArtifactMeta": {
         "properties": {

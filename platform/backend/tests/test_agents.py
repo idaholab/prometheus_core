@@ -158,7 +158,7 @@ def test_agents_list_reports_status(monkeypatch, fake_redis):
             "version": "1.2.0",
             "registered_at": ALPHA_REGISTERED_AT,
             "reachable": True,
-            "checked_at": None,
+            "checked_at": body["checked_at"],
             "skills": [
                 {
                     "id": "analyze_thermal",
@@ -175,7 +175,7 @@ def test_agents_list_reports_status(monkeypatch, fake_redis):
             "version": "0.3.1",
             "registered_at": None,
             "reachable": False,
-            "checked_at": None,
+            "checked_at": body["checked_at"],
             "skills": [{"id": "summarize", "name": "", "description": "", "tags": []}],
         },
         {
@@ -185,7 +185,7 @@ def test_agents_list_reports_status(monkeypatch, fake_redis):
             "version": "2.0.0",
             "registered_at": "2026-11-02T09:00:00+00:00",
             "reachable": False,
-            "checked_at": None,
+            "checked_at": body["checked_at"],
             "skills": [],
         },
     ]
@@ -349,7 +349,7 @@ def test_agents_list_keeps_malformed_entry(monkeypatch, fake_redis, caplog):
         "version": "",
         "registered_at": "2026-11-03T10:00:00+00:00",
         "reachable": True,
-        "checked_at": None,
+        "checked_at": body["checked_at"],
         "skills": [{"id": "fix", "name": "Fix", "description": "", "tags": ["repair"]}],
     }
     assert body["agents"][1]["agent_name"] == "alpha-agent"
@@ -426,7 +426,7 @@ def test_agents_list_keeps_unreadable_entry(monkeypatch, fake_redis, raw, card_u
         "version": "",
         "registered_at": None,
         "reachable": False,
-        "checked_at": None,
+        "checked_at": listed.json()["checked_at"],
         "skills": [],
     }
     assert rows[1]["reachable"] is True
