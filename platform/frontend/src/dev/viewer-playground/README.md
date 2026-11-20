@@ -28,4 +28,4 @@ Import a sample with `@viewer-samples/<file>?url` for an asset URL, or `?raw` fo
 
 ## Samples
 
-The sample files are in `platform/frontend/e2e/samples/`. These tests use them today: `sampleFetch.test.ts`, `src/features/artifacts/playgroundCases.test.ts` and the backend test `tests/test_viewer_samples.py`. The PPLT-402 end-to-end tests will use them later. [The samples README](../../../e2e/samples/README.md) tells what each sample is and how to make it again.
+The sample files are in `platform/frontend/e2e/samples/`. These tests use them today: `sampleFetch.test.ts`, `src/features/artifacts/playgroundCases.test.ts` and the backend test `tests/test_viewer_samples.py`. The end-to-end viewer tests (`e2e/full/viewers.spec.ts`) use them too, through the e2e stack's stub agent. [The samples README](../../../e2e/samples/README.md) tells what each sample is and how to make it again.
