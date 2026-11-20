@@ -16,7 +16,9 @@
  * screen has an address of its own that loads straight into it, through the
  * production nginx that serves the app. These tests stand in for that
  * feature's behavior spec until the platform has one (TESTING.md, "Rules for
- * every test").
+ * every test"). Where the Frontend Routing and Screen Structure spec
+ * (Confluence) has a requirement for the behavior, the test's name starts
+ * with its ID.
  *
  * What a screen shows is not checked here: each screen's own behavior belongs
  * in its component tests. These tests only prove the screen opened. Most
@@ -116,7 +118,7 @@ async function expectScreen(page: Page, screen: Screen) {
  *   title, and the screen's own content appears,
  * - and nothing on the way throws or gets a failed /api request (fixtures.ts).
  */
-test("a signed-in user opens each main screen from the sidebar", async ({ page }) => {
+test("ROUTE-1: a signed-in user opens each main screen from the sidebar", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("main").getByRole("textbox", { name: "Message" })).toBeVisible();
 
@@ -139,7 +141,7 @@ test("a signed-in user opens each main screen from the sidebar", async ({ page }
  * behind it (e2e/routing.spec.ts). What only the full stack can show is that
  * the production nginx hands every app address to the app.
  */
-test("loading a main screen's address directly opens that screen", async ({ page }) => {
+test("ROUTE-1, ROUTE-5: loading a main screen's address directly opens that screen", async ({ page }) => {
   for (const screen of SCREENS) {
     const response = await page.goto(screen.path);
     expect(response?.status(), `nginx's answer for ${screen.path}`).toBe(200);
@@ -156,7 +158,7 @@ test("loading a main screen's address directly opens that screen", async ({ page
  * - and the app shows its "page not found" message inside the usual shell,
  *   with a link back to Home that works.
  */
-test("loading an unknown address opens the app's page-not-found message", async ({ page }) => {
+test("ROUTE-3, ROUTE-5: loading an unknown address opens the app's page-not-found message", async ({ page }) => {
   const response = await page.goto("/no/such/screen");
   expect(response?.status(), "nginx's answer for an unknown address").toBe(200);
 
