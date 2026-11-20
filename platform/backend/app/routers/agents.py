@@ -40,7 +40,7 @@ from redis.exceptions import RedisError
 
 from app.agent_store import load_all, load_entry
 from app.api_responses import AUTH_RESPONSES, error
-from app.contract import AgentListResponse, AgentStatus
+from app.contract import AgentListResponse, AgentSkillSummary, AgentStatus
 from app.openapi import SESSION_COOKIE, TAG_AGENTS
 from app.redis_client import RedisClient, get_redis
 from app.security import TokenClaims, current_claims
@@ -83,30 +83,47 @@ async def _probe(client: httpx.AsyncClient, url: str) -> bool:
     return response.is_success
 
 
+def _text(card: Dict[str, Any], key: str) -> str:
+    value = card.get(key)
+    return value if isinstance(value, str) else ""
+
+
+def _skills(agent_name: str, card: Dict[str, Any]) -> list[AgentSkillSummary]:
+    """The card's skills that validate. An invalid skill is dropped on its own, so it
+    does not take the agent's other skills or card fields with it."""
+    raw = card.get("skills")
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        logger.warning("Agent '%s' has a card whose skills are not a list; returning no skills", agent_name)
+        return []
+    skills = []
+    dropped = 0
+    for skill in raw:
+        try:
+            skills.append(AgentSkillSummary.model_validate(skill))
+        except ValidationError:
+            dropped += 1
+    if dropped:
+        logger.warning("Agent '%s' has %d malformed skill(s); returning the others", agent_name, dropped)
+    return skills
+
+
 def _to_status(stored: Dict[str, Any], reachable: bool) -> AgentStatus:
-    """The status row of one entry. A card that does not validate keeps the row, with
-    its card fields empty, so one malformed registration cannot fail the whole list."""
+    """The status row of one entry. Each card field is checked on its own: a field of the
+    wrong type is empty and an invalid skill is dropped, so one malformed value cannot fail
+    the row, and one malformed registration cannot fail the whole list."""
     card = stored["agent_card_params"]
     registered_at = stored.get("registered_at")
-    if not isinstance(registered_at, str):
-        registered_at = None
-    try:
-        return AgentStatus.model_validate(
-            {
-                "agent_name": stored["agent_name"],
-                "name": card.get("name") or "",
-                "description": card.get("description") or "",
-                "version": card.get("version") or "",
-                "registered_at": registered_at,
-                "reachable": reachable,
-                "skills": card.get("skills") or [],
-            }
-        )
-    except ValidationError as exc:
-        logger.warning(
-            "Agent '%s' has a malformed card; returning it without card fields: %s", stored["agent_name"], exc
-        )
-        return AgentStatus(agent_name=stored["agent_name"], registered_at=registered_at, reachable=reachable)
+    return AgentStatus(
+        agent_name=stored["agent_name"],
+        name=_text(card, "name"),
+        description=_text(card, "description"),
+        version=_text(card, "version"),
+        registered_at=registered_at if isinstance(registered_at, str) else None,
+        reachable=reachable,
+        skills=_skills(stored["agent_name"], card),
+    )
 
 
 async def _probe_stored(client: httpx.AsyncClient, stored: Dict[str, Any]) -> AgentStatus:

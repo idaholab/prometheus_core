@@ -311,7 +311,9 @@ def test_agent_status_is_503_when_valkey_fails(monkeypatch, fake_redis):
 
 
 def test_agents_list_keeps_malformed_entry(monkeypatch, fake_redis, caplog):
-    # A card the status row cannot validate: its version is a number, not a string.
+    """A malformed field or skill empties or drops only itself: the other card fields and
+    skills stay, and the warning names the agent and a count, never the card's values."""
+    sentinel = "SENTINEL-card-value-7f3a"
     broken = {
         "agent_name": "aaa-broken-agent",
         "agent_card_params": {
@@ -319,7 +321,13 @@ def test_agents_list_keeps_malformed_entry(monkeypatch, fake_redis, caplog):
             "description": "Bad card.",
             "version": 3,
             "url": "http://broken-agent:8000/",
-            "skills": [{"id": "fix"}],
+            "skills": [
+                {"id": "fix", "name": "Fix", "tags": ["repair"]},
+                {"id": "bad-tags", "tags": None},
+                {"id": "bad-name", "name": None},
+                {"id": "bad-tag", "tags": [sentinel, 4]},
+                {"name": "no id"},
+            ],
         },
         "static_headers": {},
         "registered_at": "2026-11-03T10:00:00+00:00",
@@ -334,38 +342,32 @@ def test_agents_list_keeps_malformed_entry(monkeypatch, fake_redis, caplog):
     assert resp.status_code == 200
     body = resp.json()
     assert body["available"] is True
-    assert body["agents"] == [
-        {
-            "agent_name": "aaa-broken-agent",
-            "name": "",
-            "description": "",
-            "version": "",
-            "registered_at": "2026-11-03T10:00:00+00:00",
-            "reachable": True,
-            "checked_at": None,
-            "skills": [],
-        },
-        {
-            "agent_name": "alpha-agent",
-            "name": "Alpha Agent",
-            "description": "Thermal analysis.",
-            "version": "1.2.0",
-            "registered_at": ALPHA_REGISTERED_AT,
-            "reachable": True,
-            "checked_at": None,
-            "skills": [
-                {
-                    "id": "analyze_thermal",
-                    "name": "Analyze thermal",
-                    "description": "Runs a thermal analysis.",
-                    "tags": ["thermal"],
-                }
-            ],
-        },
-    ]
+    assert body["agents"][0] == {
+        "agent_name": "aaa-broken-agent",
+        "name": "Broken Agent",
+        "description": "Bad card.",
+        "version": "",
+        "registered_at": "2026-11-03T10:00:00+00:00",
+        "reachable": True,
+        "checked_at": None,
+        "skills": [{"id": "fix", "name": "Fix", "description": "", "tags": ["repair"]}],
+    }
+    assert body["agents"][1]["agent_name"] == "alpha-agent"
+    assert [skill["id"] for skill in body["agents"][1]["skills"]] == ["analyze_thermal"]
     warnings = [r.getMessage() for r in caplog.records if r.name == "app.routers.agents" and r.levelname == "WARNING"]
-    assert len(warnings) == 1
-    assert "Agent 'aaa-broken-agent' has a malformed card" in warnings[0]
+    assert warnings == ["Agent 'aaa-broken-agent' has 4 malformed skill(s); returning the others"]
+    assert sentinel not in caplog.text
+
+
+def test_agents_list_drops_skills_that_are_not_a_list(monkeypatch, fake_redis):
+    odd = {**GAMMA, "agent_card_params": {**GAMMA["agent_card_params"], "skills": {"id": "x"}}}
+    _seed(fake_redis, odd)
+    _route_probes(monkeypatch, {"gamma-agent": 200})
+
+    row = _authed_client(monkeypatch).get("/api/agents/gamma-agent").json()
+
+    assert row["name"] == "Gamma Agent"
+    assert row["skills"] == []
 
 
 def test_agent_without_card_url_is_unreachable_without_a_probe(monkeypatch, fake_redis):

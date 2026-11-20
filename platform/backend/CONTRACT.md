@@ -532,10 +532,11 @@ keeps only `id`, `name`, `description` and `tags`; a missing string is `""` and 
 `tags` are `[]`. `registered_at` is the ISO 8601 UTC time of the agent's last
 registration, with a `+00:00` suffix. It is `null` for an entry stored before the
 backend recorded it. `GET /v1/agents` does not return `registered_at`.
-A stored card whose fields fail validation (for example, a non-string `version`, a skill
-without an `id`, or `skills` that is not a list) does not fail the request. Both routes keep
-the row with its `agent_name`, `registered_at` and probed `reachable`, return empty card
-fields (`name`, `description` and `version` are `""`, `skills` is `[]`), and log a warning.
+A malformed card field does not fail the request. Each field is checked on its own: a
+`name`, `description` or `version` that is not a string is `""`, a skill that fails
+validation (for example, without an `id`, or with `tags` that are not strings) is dropped
+on its own, and `skills` that is not a list is `[]`. The other fields and skills stay, and
+the backend logs one warning per agent.
 An entry that a hand edit of Valkey broke (a value that is not a JSON object, a card that is
 not an object, a `url` that is not a string or that httpx cannot parse) also keeps its row,
 keyed by its hash field, with empty card fields and `reachable: false`. `GET /v1/agents`
