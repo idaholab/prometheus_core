@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -404,13 +405,37 @@ def test_agent_without_card_url_is_unreachable_without_a_probe(monkeypatch, fake
     assert seen == []
 
 
-def test_make_client_bounds_each_probe_by_the_probe_timeout():
-    """The default probe client applies ``AGENT_PROBE_TIMEOUT_S`` to every phase of a request."""
-    client = agents_mod._make_client()
-    try:
-        assert client.timeout == httpx.Timeout(agents_mod.AGENT_PROBE_TIMEOUT_S)
-    finally:
-        asyncio.run(client.aclose())
+def test_list_probes_run_concurrently(monkeypatch, fake_redis):
+    """Three slow agents and one that hangs cost about one probe bound, not their sum: the list
+    probes run concurrently, and the hung agent is cut off at the probe bound."""
+    entries = [
+        {
+            **GAMMA,
+            "agent_name": name,
+            "agent_card_params": {**GAMMA["agent_card_params"], "url": f"http://{name}:8000/"},
+        }
+        for name in ("slow-a", "slow-b", "slow-c", "hung")
+    ]
+    _seed(fake_redis, *entries)
+    monkeypatch.setattr(agents_mod, "AGENT_PROBE_TIMEOUT_S", 1.0)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(10 if request.url.host == "hung" else 0.5)
+        return httpx.Response(200)
+
+    monkeypatch.setattr(agents_mod, "_make_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    client = _authed_client(monkeypatch)
+
+    started = time.monotonic()
+    resp = client.get("/api/agents")
+    elapsed = time.monotonic() - started
+
+    assert resp.status_code == 200
+    reachable = {row["agent_name"]: row["reachable"] for row in resp.json()["agents"]}
+    assert reachable == {"hung": False, "slow-a": True, "slow-b": True, "slow-c": True}
+    # Concurrent: about one bound, 1 s. Sequential: 3 x 0.5 s for the slow agents plus
+    # 1 s for the hung one, 2.5 s. The cut-off sits between them with room for a slow runner.
+    assert elapsed < 2.0
 
 
 @pytest.mark.parametrize(
