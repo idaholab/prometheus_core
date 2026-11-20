@@ -512,3 +512,16 @@ def test_probe_allows_a_private_compose_host(monkeypatch, fake_redis):
 
     assert row["reachable"] is True
     assert [str(request.url) for request in seen] == ["http://gamma-agent:8000/healthz"]
+
+
+def test_probe_drops_userinfo_from_the_card_url(monkeypatch, fake_redis):
+    """``http://u:p@host/`` is probed without the userinfo, so it is never sent as Basic auth."""
+    entry = {**GAMMA, "agent_card_params": {**GAMMA["agent_card_params"], "url": "http://u:p@gamma-agent:8000/"}}
+    _seed(fake_redis, entry)
+    seen = _route_probes(monkeypatch, {"gamma-agent": 200})
+
+    row = _authed_client(monkeypatch).get("/api/agents/gamma-agent").json()
+
+    assert row["reachable"] is True
+    assert str(seen[0].url) == "http://gamma-agent:8000/healthz"
+    assert "authorization" not in seen[0].headers

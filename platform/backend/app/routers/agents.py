@@ -91,7 +91,8 @@ async def _probe_target(url: str) -> httpx.URL | None:
 
     Only ``http`` and ``https`` are probed. The host is resolved first, and the probe is
     refused when any of its addresses is blocked, so a numeric form (``0xa9fea9fe``) or a
-    DNS name that points at the metadata service is refused too.
+    DNS name that points at the metadata service is refused too. Userinfo is dropped, so
+    ``http://u:p@host/`` is not sent as Basic auth.
     """
     parsed = httpx.URL(url)
     if parsed.scheme not in ("http", "https") or not parsed.host:
@@ -100,7 +101,7 @@ async def _probe_target(url: str) -> httpx.URL | None:
     addresses = await _resolve(parsed.host, port)
     if not addresses or any(_blocked(ipaddress.ip_address(address)) for address in addresses):
         return None
-    return parsed.join("/healthz")
+    return parsed.copy_with(userinfo=b"").join("/healthz")
 
 
 async def _probe(client: httpx.AsyncClient, url: str) -> bool:
