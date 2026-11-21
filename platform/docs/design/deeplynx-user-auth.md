@@ -304,6 +304,7 @@ them blocks topologies A or B.
 | G4 | Only one non-Entra issuer (`JWT_ISSUER`) | A DeepLynx shared by deployments with different Okta servers can't use topology A for all of them | A list of trusted issuers, each with its audience. Not planned for the next release; not needed at INL (topology C) |
 | G5 | The device-flow refresh token doesn't rotate and has a fixed 30-day lifetime from issue (`LastUsedAt` is updated, `ExpiresAt` is not) | Every user re-links at least every 30 days, even when active; a leaked refresh token stays valid for its whole life | Rotate the refresh token on each use (return a new one, revoke the old one), with a sliding idle timeout and an absolute cap |
 | G6 | With an Okta org authorization server, `JWT_AUDIENCE` is the org URL that every app in the org gets | Not a Prometheus problem in topology C; it widens who can call DeepLynx | A custom Okta authorization server with a DeepLynx-only audience |
+| G7 | Service accounts can't add members to projects or groups (`[ForbidServiceAccounts]` on the member routes; group routes need organization-level permission, which a project-scoped service account can't hold) | Prometheus can't onboard a linked user into its DeepLynx project automatically | Let a designated service account manage the membership of one group (see [Project access](#project-access-in-deeplynx)) |
 
 The DeepLynx team is expected to take G1-G3 and G5, so the target is the
 redirect flow with a rotating refresh token. Until G1 lands, `oauth_link` uses the
@@ -337,7 +338,98 @@ backend's viewers) can't tell which instance an item URI points to. This design
 proposes adding the instance name as the authority,
 `deeplynx://<instance>/organizations/...`, and reading a URI without one as the
 primary instance. That keeps every URI written so far valid. It is a separate SDK
-change (open question 3).
+change (rollout step 7).
+
+## Project access in DeepLynx
+
+A link proves who the user is at DeepLynx. It doesn't give them access to the
+project that Prometheus writes to. DeepLynx auto-provisions a user on their first
+login, but only into the default organization. Because the link is mandatory and
+there is no service-key fallback, a linked user without project membership can't
+write anything.
+
+DeepLynx already has the APIs to grant that access (v2, all under
+`/api/v2/organizations/{organizationId}`):
+
+| Route | Caller needs | Notes |
+| --- | --- | --- |
+| `POST /projects/{projectId}/members?userId=&groupId=&roleId=&isProjectAdmin=` | Project admin; not a service account (`[ForbidServiceAccounts]`) | Adds an existing user or group to the project with a role |
+| `POST /projects/{projectId}/invite?userEmail=&roleId=` | Project admin; not a service account | Adds the user by email to the organization and the project. If no DeepLynx user has that email, it **creates** one, then sends a notification email |
+| `POST /groups/{groupId}/users?userId=` | An organization-level `update` permission on groups, or organization admin | Adds a user to a group. Service accounts can't be group members |
+| `GET /projects/{projectId}/members` | `read` on project and user | Lists members and roles |
+
+Two ways to use them:
+
+- **Group-based (proposed).** A DeepLynx admin creates a group, for example
+  `prometheus-users`, once, and adds that group to the primary project with the
+  write role. After a user links, the backend adds the user to the group. The
+  DeepLynx project admins can see and revoke Prometheus access in one place, and
+  new projects need one group grant, not one grant per user.
+- **Per-user invite.** The backend calls `/invite` for each new user. That works,
+  but scatters per-user rows over projects and sends an email for each.
+
+**Who makes the call is the problem.** Both the membership route and the invite
+route forbid service accounts. The group route needs an organization-level
+permission, and DeepLynx keeps service accounts project-scoped ("Service accounts
+must be added directly to a project"), so a service account has no way to hold
+that permission. The backend therefore can't add a user with a DeepLynx service
+account. The
+options:
+
+1. The DeepLynx team allows a designated service account to manage one group's
+   membership (a scoped exception to `[ForbidServiceAccounts]`, or a group
+   permission that service accounts can hold). The backend then adds users to
+   `prometheus-users` right after the link. This is the proposed option (G7).
+2. The user's own link is used: it can't grant itself access, so this only works
+   for users who are already project admins.
+3. Manual onboarding: a DeepLynx admin adds users, or an IdP group syncs to the
+   DeepLynx group. Prometheus shows `Your DeepLynx account has no access to
+   <project>. Ask <contact> for access.` until it does.
+
+Until option 1 exists, the platform uses option 3. The first-login gate checks the
+membership (`GET /api/v2/users/current`, then the project) and shows that message.
+
+**Different emails.** If the linked DeepLynx email differs from the Prometheus
+email, membership applies to the DeepLynx user ID that the link resolved, so the
+backend always adds by `userId`, never by the Prometheus email.
+
+## Service accounts for jobs without a user
+
+Scheduled jobs, the debug agents and the `PROMETHEUS_DEBUG` stack run without a
+user session, so they have no user link. DeepLynx supports this directly:
+
+1. A project admin creates a service account in the project:
+   `POST /api/v2/organizations/{org}/projects/{project}/invite/serviceAccount?name=&roleId=`.
+   DeepLynx creates a user `service_<guid>` (`AccountType.Service`) and adds it to
+   the organization and the project with that role.
+2. The project admin generates a key pair for it:
+   `POST /api/v2/oauth/organizations/{org}/projects/{project}/keys/service/{serviceAccountId}`.
+   The secret is returned once.
+3. Prometheus stores the key and secret as a **platform** credential (Vault, outside
+   any user's path), and the job uses the existing `key_secret` path: the broker,
+   or the job directly, exchanges them at `POST /oauth/tokens` for a short-lived
+   token.
+
+The service account belongs to one project and holds only the role it got there.
+It can't manage members or groups (`[ForbidServiceAccounts]`), and its actions show
+up in DeepLynx under its own `service_<guid>` user, not under a person.
+
+Rules on the Prometheus side:
+
+- **One service account per job type** (for example `prometheus-scheduler`,
+  `prometheus-debug`), each with the narrowest role that does the job. Not one key
+  shared by all jobs.
+- **No user-driven work runs under a service account.** A chat turn always uses the
+  user's link. A scheduled job that a user created (for example a recurring
+  report) is open question 3: it either runs as that user with their stored link,
+  or as a service account with the user recorded in the lineage metadata.
+- **Rotation.** DeepLynx API keys have no expiry (`ApiKey` has no `ExpiresAt`), so
+  Prometheus rotates them. Generate a new pair, switch the Vault entry, delete the
+  old key (`DELETE /api/v2/oauth/keys/{key}`). Proposed: every 90 days, and at once
+  when someone who could read the platform credential leaves.
+
+This replaces today's single shared `DEEPLYNX_KEY` / `DEEPLYNX_SECRET`. The key no
+longer stands in for users. It only serves the jobs that have no user.
 
 ## Rejected: DeepLynx trusts Prometheus as an issuer
 
@@ -423,7 +515,9 @@ step 4. Steps 1, 2 and 6 serve shared-IdP and federated deployments.
 | 5 | backend | `oauth_link` for DeepLynx: the callback route, the Connect button, the device-code fallback | PPLT-31 step 3 (views) |
 | 6 | backend | `idp_derived` / `token_exchange` | 2, and a deployment that needs it |
 | 7 | sdk + platform | Instance-qualified `deeplynx://<instance>/...` URIs, the `role` check in the broker, reads from secondary instances | 5 |
-| 8 | platform | The first-login Connect DeepLynx gate; backend DeepLynx calls (`uri_resolver.py`, uploads, mesh service) use the user's credential; remove `DEEPLYNX_KEY` / `DEEPLYNX_SECRET` from agents and the backend | 4, 5 |
+| 8 | platform | The first-login Connect DeepLynx gate, with the project access check; backend DeepLynx calls (`uri_resolver.py`, uploads, mesh service) use the user's credential; remove `DEEPLYNX_KEY` / `DEEPLYNX_SECRET` from agents and the backend | 4, 5, 9 |
+| 9 | platform | Per-job-type DeepLynx service accounts as platform credentials, with rotation; move scheduled and debug jobs onto them | PPLT-31 step 2 |
+| 10 | backend | Automatic onboarding: add a linked user to the `prometheus-users` DeepLynx group | G7 |
 
 ## Decisions (2026-11-21)
 
@@ -437,6 +531,11 @@ step 4. Steps 1, 2 and 6 serve shared-IdP and federated deployments.
   instances; artifacts and lineage are written only to the primary instance.
 - **DeepLynx gaps.** The DeepLynx team is expected to take G1-G3 (and G5). Several
   trusted issuers (G4) are not expected in the next release.
+- **Instance-qualified URIs.** `deeplynx://<instance>/organizations/...`, with the
+  instance optional; a URI without one means the primary instance.
+- **Secondary instances are linked on first use**, not at first login.
+- **Jobs without a user use DeepLynx service accounts**, one per job type, with
+  key pairs stored as platform credentials and rotated by Prometheus.
 
 ## Open questions
 
@@ -444,9 +543,7 @@ step 4. Steps 1, 2 and 6 serve shared-IdP and federated deployments.
 | --- | --- | --- | --- |
 | 1 | Confirm the production `JWT_ISSUER` and `JWT_AUDIENCE` of DeepLynx (see [Finding them](#the-inl-deployment-topology-c)). If they are the org URL, does the DeepLynx team want a custom authorization server (G6)? Do the INL Okta admins rule out org-to-org federation with token exchange (topology B)? | DeepLynx team, INL Okta admins | Nothing in Prometheus; confirms that topology C is the right choice |
 | 2 | Prometheus's OAuth application in DeepLynx: who registers it (client ID, secret, callback URL) for each Prometheus environment (dev, preview, production), and must the callback be on an `inl.gov` host? | DeepLynx team | Step 5 |
-| 3 | The instance-qualified `deeplynx://<instance>/...` URI: accept the proposal, or keep the instance elsewhere (for example in `ArtifactReference.metadata`)? | prometheus_api owner | Step 7 |
-| 4 | Is a link to a secondary (read-only) instance also mandatory, or linked on first use as proposed? | Platform Technical Lead | Step 7 |
-| 5 | Do Prometheus users who have no DeepLynx account yet get one? DeepLynx auto-provisions on first login, but only into the default organization. Who adds them to the project that Prometheus writes to? | DeepLynx team, Platform Technical Lead | Step 8 (first-login gate) |
-| 6 | Service work without a user (scheduled jobs, the debug agents, the `PROMETHEUS_DEBUG` stack): do they keep a DeepLynx service account, outside the user credential path? | Platform Technical Lead | Step 8 |
+| 3 | A scheduled job that a user created: does it run as that user (their stored link, which can expire while the job waits) or as a service account, with the user recorded in the lineage? | Platform Technical Lead | Step 9 |
+| 4 | Project onboarding: will the DeepLynx team allow a service account to manage one group's membership (G7)? Until then, who adds Prometheus users to the DeepLynx project, and is there an IdP group that could sync to the DeepLynx group? | DeepLynx team, Platform Technical Lead | Step 10; until then, manual onboarding |
 
 [adr-003]: https://nstinl.atlassian-us-gov-mod.net/wiki/spaces/Prometheus/pages/34866140
