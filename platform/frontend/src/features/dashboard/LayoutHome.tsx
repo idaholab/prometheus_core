@@ -10,7 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Chat } from "@/features/chat";
 import { StatusPanel } from "./StatusPanel";
 
@@ -33,6 +33,10 @@ interface LayoutHomeProps {
  */
 export function LayoutHome({ statusCollapsed, onStatusCollapsedChange }: LayoutHomeProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // An artifact open in the panel gets about half the width on large screens;
+  // the card list keeps the narrow rail. Drag-resizing is PPLT-483.
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const openWidth = viewerOpen ? "w-full lg:w-1/2 lg:min-w-96" : "w-full lg:w-96 xl:w-[26rem]";
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
@@ -41,13 +45,14 @@ export function LayoutHome({ statusCollapsed, onStatusCollapsedChange }: LayoutH
       </section>
       <aside
         className={`flex shrink-0 flex-col overflow-hidden transition-[width] duration-200 ${
-          statusCollapsed ? "w-16" : "w-full lg:w-96 xl:w-[26rem]"
+          statusCollapsed ? "w-16" : openWidth
         }`}
       >
         <StatusPanel
           collapsed={statusCollapsed}
           onCollapse={() => onStatusCollapsedChange(true)}
           onExpand={() => onStatusCollapsedChange(false)}
+          onViewerOpenChange={setViewerOpen}
         />
       </aside>
     </div>

@@ -52,13 +52,22 @@ function stateWith(artifacts: ArtifactMeta[], resumingConversationId: string | n
 
 const onCollapse = vi.fn();
 const onExpand = vi.fn();
+const onViewerOpenChange = vi.fn();
 
 function renderPanel(state: PanelState, collapsed = false) {
+  const panel = (isCollapsed: boolean) => (
+    <StatusPanel
+      collapsed={isCollapsed}
+      onCollapse={onCollapse}
+      onExpand={onExpand}
+      onViewerOpenChange={onViewerOpenChange}
+    />
+  );
   mocks.state = state;
-  const view = render(<StatusPanel collapsed={collapsed} onCollapse={onCollapse} onExpand={onExpand} />);
+  const view = render(panel(collapsed));
   const update = (next: PanelState, nextCollapsed = collapsed) => {
     mocks.state = next;
-    view.rerender(<StatusPanel collapsed={nextCollapsed} onCollapse={onCollapse} onExpand={onExpand} />);
+    view.rerender(panel(nextCollapsed));
   };
   return { ...view, update };
 }
@@ -66,6 +75,7 @@ function renderPanel(state: PanelState, collapsed = false) {
 beforeEach(() => {
   onCollapse.mockReset();
   onExpand.mockReset();
+  onViewerOpenChange.mockReset();
 });
 
 describe("the Artifacts tab list", () => {
@@ -109,14 +119,44 @@ describe("opening an artifact from the Artifacts tab", () => {
     await user.click(screen.getByRole("tab", { name: /Artifacts/ }));
     await user.click(screen.getByText("input.txt"));
     expect(screen.getByTestId("viewer")).toHaveTextContent("input.txt");
-    expect(screen.getByRole("link", { name: "Open input.txt in a new tab" })).toHaveAttribute(
-      "href",
-      "/api/artifacts/input/content",
-    );
+    // The viewer owns the name and actions; the panel adds no title of its own.
+    expect(screen.getAllByText("input.txt")).toHaveLength(1);
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(true);
 
-    await user.click(screen.getByRole("button", { name: "Back to artifacts" }));
+    await user.click(screen.getByRole("button", { name: "All artifacts" }));
     expect(screen.queryByTestId("viewer")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "All artifacts" })).not.toBeInTheDocument();
     expect(screen.getByText("input.txt")).toBeInTheDocument();
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test("clicking the Artifacts tab from an open artifact returns to the list", async () => {
+    const user = userEvent.setup();
+    renderPanel(stateWith([artifact("input"), artifact("log")]));
+    await user.click(screen.getByRole("tab", { name: /Artifacts/ }));
+    await user.click(screen.getByText("input.txt"));
+    expect(screen.getByTestId("viewer")).toHaveTextContent("input.txt");
+
+    await user.click(screen.getByRole("tab", { name: /Artifacts/ }));
+    expect(screen.queryByTestId("viewer")).not.toBeInTheDocument();
+    await user.click(screen.getByText("log.txt"));
+    expect(screen.getByTestId("viewer")).toHaveTextContent("log.txt");
+  });
+
+  test("the layout is told the viewer closed when the panel collapses or the tab changes", async () => {
+    const user = userEvent.setup();
+    const { update } = renderPanel(stateWith([artifact("input")]));
+    await user.click(screen.getByRole("tab", { name: /Artifacts/ }));
+    await user.click(screen.getByText("input.txt"));
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(true);
+
+    update(stateWith([artifact("input")]), true);
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(false);
+    update(stateWith([artifact("input")]), false);
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(true);
+
+    await user.click(screen.getByRole("tab", { name: "Active Jobs" }));
+    expect(onViewerOpenChange).toHaveBeenLastCalledWith(false);
   });
 
   test("an artifact with no panel viewer stays a link to the raw file", async () => {
