@@ -18,15 +18,7 @@
  * generic code-editor palette.
  */
 
-export type JsonTokenType =
-  | "key"
-  | "string"
-  | "number"
-  | "boolean"
-  | "null"
-  | "punct"
-  | "space"
-  | "text"; // fallback for lines that aren't valid JSON
+export type JsonTokenType = "key" | "string" | "number" | "boolean" | "null" | "punct" | "space" | "text"; // fallback for lines that aren't valid JSON
 
 export interface JsonToken {
   type: JsonTokenType;

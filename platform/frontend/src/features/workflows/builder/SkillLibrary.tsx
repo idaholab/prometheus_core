@@ -78,18 +78,18 @@ export function SkillLibrary({ groups, locked = false }: { groups: SkillGroup[];
       <div ref={skillsRef} className={`flex flex-col gap-4 ${locked ? "opacity-40" : ""}`}>
         <SearchInput placeholder="Search skills..." label="Search skills" />
         {groups.map((group) => (
-        <section key={group.id} className="flex flex-col gap-2">
-          <SectionLabel variant="panel" as="h3">
-            {group.label}
-          </SectionLabel>
-          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-            {group.skills.map((skill) => (
-              <li key={skill.id}>
-                <SkillLibraryItem name={skill.name} tone={group.tone} />
-              </li>
-            ))}
-          </ul>
-        </section>
+          <section key={group.id} className="flex flex-col gap-2">
+            <SectionLabel variant="panel" as="h3">
+              {group.label}
+            </SectionLabel>
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {group.skills.map((skill) => (
+                <li key={skill.id}>
+                  <SkillLibraryItem name={skill.name} tone={group.tone} />
+                </li>
+              ))}
+            </ul>
+          </section>
         ))}
       </div>
     </div>

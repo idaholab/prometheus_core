@@ -36,7 +36,10 @@ test("a node shows its name, skill id, a field per input and output, and Remove 
   expect(screen.getByRole("heading", { name: "Output" })).toBeInTheDocument();
   expect(screen.getByRole("textbox", { name: "material_id" })).toHaveValue("from input.material_id");
   expect(screen.getByRole("textbox", { name: "neutron_flux" })).toHaveValue("");
-  expect(screen.getByRole("textbox", { name: "neutron_flux" })).toHaveAttribute("placeholder", "— optional —");
+  expect(screen.getByRole("textbox", { name: "neutron_flux" })).toHaveAttribute(
+    "placeholder",
+    "— optional —",
+  );
   expect(screen.getByRole("textbox", { name: "temperature_c" })).toHaveValue("from input.context");
   expect(screen.getByRole("textbox", { name: "to_context" })).toHaveValue("radiation");
   expect(screen.getByRole("button", { name: "Remove Node" })).toBeInTheDocument();

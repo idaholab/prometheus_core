@@ -42,7 +42,10 @@ export type OpenConversation = {
  * reply and is missing from the list (no row has its id). Otherwise `rows` itself,
  * unchanged.
  */
-export function withPendingRow<R extends HistoryRowLike>(rows: R[], open: OpenConversation): (R | HistoryRowLike)[] {
+export function withPendingRow<R extends HistoryRowLike>(
+  rows: R[],
+  open: OpenConversation,
+): (R | HistoryRowLike)[] {
   const { conversationId, firstQuery, awaiting, now } = open;
   if (!awaiting || !conversationId || !firstQuery) return rows;
   if (rows.some((r) => r.conversation_id === conversationId)) return rows;

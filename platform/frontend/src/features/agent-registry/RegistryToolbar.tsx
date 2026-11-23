@@ -30,7 +30,12 @@ export function RegistryToolbar({ query, onQueryChange, selected, onSelect }: Pr
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
       <div className="w-full md:w-96">
-        <SearchInput placeholder="Search agents..." label="Search agents" value={query} onChange={onQueryChange} />
+        <SearchInput
+          placeholder="Search agents..."
+          label="Search agents"
+          value={query}
+          onChange={onQueryChange}
+        />
       </div>
       <FilterChips chips={DOMAIN_CHIPS} selected={selected} label="Agent domains" onSelect={onSelect} />
     </div>

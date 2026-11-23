@@ -12,7 +12,9 @@
 @source not "./lib/api/types.ts";
 
 @plugin "daisyui" {
-  themes: dark --default, light;
+  themes:
+    dark --default,
+    light;
   exclude: rootscrollgutter;
 }
 
@@ -39,11 +41,11 @@
   /* Cyan, matching the dark theme's hue; darker so it holds up on the light base. */
   --color-info: oklch(60.9% 0.126 221.7);
   --color-info-content: oklch(0% 0 0);
-  --color-success: oklch(70.0% 0.200 145.0);
+  --color-success: oklch(70% 0.2 145);
   --color-success-content: oklch(0% 0 0);
-  --color-warning: oklch(85.0% 0.300 95.0);
+  --color-warning: oklch(85% 0.3 95);
   --color-warning-content: oklch(0% 0 0);
-  --color-error: oklch(40.0% 0.300 25.0);
+  --color-error: oklch(40% 0.3 25);
   --color-error-content: oklch(100% 0 0);
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
@@ -80,9 +82,9 @@
   /* Cyan (#22d3ee), the frames' colour for informational states. */
   --color-info: oklch(78.9% 0.154 211.5);
   --color-info-content: oklch(0% 0 0);
-  --color-success: oklch(70.0% 0.200 145.0);
+  --color-success: oklch(70% 0.2 145);
   --color-success-content: oklch(0% 0 0);
-  --color-warning: oklch(85.0% 0.300 95.0);
+  --color-warning: oklch(85% 0.3 95);
   --color-warning-content: oklch(0% 0 0);
   /* Brighter than the light theme's red so red text stays readable on the
      dark base (5.5:1 vs 2.5:1); dark text on solid red for the same reason. */
@@ -112,12 +114,19 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  html, body, #root {
+  html,
+  body,
+  #root {
     min-height: 100vh;
     overflow: hidden;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: "Geist Variable", sans-serif;
     font-weight: 600;
     line-height: 1.2;
@@ -148,7 +157,9 @@
     font-size: 0.75rem; /* 12px */
   }
 
-  p, span, li {
+  p,
+  span,
+  li {
     font-size: 0.875rem;
     line-height: 1.5;
   }
@@ -158,7 +169,8 @@
     margin-bottom: 1rem; /* Add bottom margin for spacing */
   }
 
-  ul, ol {
+  ul,
+  ol {
     margin: 0;
     padding: 0;
     list-style: none; /* Reset list style */
@@ -191,10 +203,8 @@
 }
 
 html {
-    scroll-behavior: smooth;
+  scroll-behavior: smooth;
 }
-
-
 
 .active {
   background-color: var(--menu-active-bg);
@@ -212,8 +222,12 @@ html {
    A bright band sweeps across dimmed text so it reads as clearly alive,
    mirroring the old Chainlit loader. */
 @keyframes text-shimmer {
-  0% { background-position: 150% center; }
-  100% { background-position: -50% center; }
+  0% {
+    background-position: 150% center;
+  }
+  100% {
+    background-position: -50% center;
+  }
 }
 
 .text-shimmer {
@@ -230,7 +244,7 @@ html {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: text-shimmer 3.0s ease-in-out infinite;
+  animation: text-shimmer 3s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -272,7 +286,7 @@ canvas {
 .responsive-canvas {
   width: 100%;
   height: auto;
-  margin:0
+  margin: 0;
 }
 
 .table-of-contents {
@@ -321,8 +335,6 @@ canvas {
 
 /* AG Grid */
 .ag-theme-quartz .ag-cell {
-
-
 }
 
 .ag-theme-quartz .ag-row:nth-child(even) {

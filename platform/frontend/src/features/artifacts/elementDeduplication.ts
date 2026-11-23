@@ -42,12 +42,7 @@ function resourceSignature(element: DeduplicatedElement): string {
     return [component, resource].filter(Boolean).join(":").toLowerCase();
   }
 
-  return (
-    (element.name ?? "").trim() ||
-    element.url ||
-    element.path ||
-    elementId(element)
-  ).toLowerCase();
+  return ((element.name ?? "").trim() || element.url || element.path || elementId(element)).toLowerCase();
 }
 
 function duplicateKey(element: DeduplicatedElement): string {

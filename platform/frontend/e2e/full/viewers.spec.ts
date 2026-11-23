@@ -70,14 +70,17 @@ async function paintedPixels(page: Page, canvas: Locator): Promise<number> {
     ctx.drawImage(image, 0, 0);
     const data = ctx.getImageData(0, 0, copy.width, copy.height).data;
     const rgb = (i: number) => [data[i], data[i + 1], data[i + 2]];
-    const differs = (a: number[], b: number[]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) > 30;
+    const differs = (a: number[], b: number[]) =>
+      Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) > 30;
 
     const edge: number[][] = [];
     for (let x = 0; x < copy.width; x += 8) {
       edge.push(rgb(x * 4), rgb(((copy.height - 1) * copy.width + x) * 4));
     }
     const background = edge.reduce((best, color) =>
-      edge.filter((c) => !differs(c, color)).length > edge.filter((c) => !differs(c, best)).length ? color : best,
+      edge.filter((c) => !differs(c, color)).length > edge.filter((c) => !differs(c, best)).length
+        ? color
+        : best,
     );
 
     let painted = 0;
@@ -98,7 +101,9 @@ async function paintedPixels(page: Page, canvas: Locator): Promise<number> {
  */
 test("a mesh in a reply opens in the mesh viewer and draws", async ({ page }) => {
   // The surface comes from the backend's conversion, not from the agent
-  const surface = page.waitForResponse((response) => /\/api\/artifacts\/mesh\/[^/]+\/[^/]+\.vtp$/.test(new URL(response.url()).pathname));
+  const surface = page.waitForResponse((response) =>
+    /\/api\/artifacts\/mesh\/[^/]+\/[^/]+\.vtp$/.test(new URL(response.url()).pathname),
+  );
   const main = await ask(page, "show me the mesh", "Here is the mesh.");
 
   expect((await surface).status(), "the converted surface the browser loads").toBe(200);
@@ -122,14 +127,19 @@ test("a mesh in a reply opens in the mesh viewer and draws", async ({ page }) =>
  * - and its canvas shows the building, not an empty background.
  */
 test("an IFC model in a reply opens in the IFC viewer, draws, and lists its elements", async ({ page }) => {
-  const content = page.waitForResponse((response) => /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname));
+  const content = page.waitForResponse((response) =>
+    /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
+  );
   const main = await ask(page, "open the ifc model", "Here is the IFC model.");
 
   expect((await content).status(), "the IFC file the browser loads").toBe(200);
   // What the sample holds (e2e/samples/README.md): walls, a floor slab, columns,
   // a beam, a door, a window, a roof, two pipe segments and a pump
   for (const element of ["Walls", "Floors", "Columns", "Beams", "Doors", "Windows", "Roof"]) {
-    await expect(main.getByRole("button", { name: element, exact: true }), `the ${element} toggle`).toBeVisible({ timeout: 60_000 });
+    await expect(
+      main.getByRole("button", { name: element, exact: true }),
+      `the ${element} toggle`,
+    ).toBeVisible({ timeout: 60_000 });
   }
   await expect(main.getByRole("button", { name: "Pipe run 1 (1 segments)" })).toBeVisible();
   await expect(main.getByRole("button", { name: "Pump P-101" })).toBeVisible();
@@ -183,7 +193,9 @@ test("a Mermaid diagram in a reply opens in the diagram viewer with every node",
  * "1 lines" and "unparsed" (PPLT-374), because the viewer read only inline JSON.
  */
 test("a JSON file in a reply opens in the JSON viewer with its content", async ({ page }) => {
-  const content = page.waitForResponse((response) => /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname));
+  const content = page.waitForResponse((response) =>
+    /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
+  );
   const main = await ask(page, "show me the json results", "Here are the results.");
 
   expect((await content).status(), "the JSON file the browser loads").toBe(200);

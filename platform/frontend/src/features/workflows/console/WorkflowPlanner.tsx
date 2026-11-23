@@ -14,7 +14,11 @@ import { Button } from "@/components/ui/Button";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { SplitButton } from "@/components/ui/SplitButton";
 import { BUILDER_MODES, type BuilderMode } from "@/features/workflows/builderMode";
-import { WorkflowGraph, type WorkflowGraphNode, type WorkflowGraphWire } from "@/features/workflows/graph/WorkflowGraph";
+import {
+  WorkflowGraph,
+  type WorkflowGraphNode,
+  type WorkflowGraphWire,
+} from "@/features/workflows/graph/WorkflowGraph";
 
 export interface WorkflowPlan {
   /** Breadcrumb above the graph, e.g. ["Chat", "Workflow Plan", "comprehensive_material_analysis"]. */
@@ -129,11 +133,7 @@ export function WorkflowPlanner({
       </aside>
 
       <div className="overflow-x-auto p-5 xl:col-start-1 xl:row-start-2 xl:pt-0">
-        <WorkflowGraph
-          nodes={plan.nodes}
-          wires={plan.wires}
-          className="h-157 w-full min-w-193 lg:min-w-0"
-        />
+        <WorkflowGraph nodes={plan.nodes} wires={plan.wires} className="h-157 w-full min-w-193 lg:min-w-0" />
       </div>
     </div>
   );

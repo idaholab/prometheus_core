@@ -18,6 +18,12 @@ test("approval queue: lists the checkpoints and opens the first one", () => {
   render(<PageApprovalQueue />);
 
   const queue = within(screen.getByRole("region", { name: "Checkpoint queue" })).getAllByRole("list")[0];
-  expect(within(queue).getAllByRole("listitem", { hidden: false }).filter((li) => li.parentElement === queue)).toHaveLength(4);
-  expect(screen.getByRole("region", { name: "Checkpoint details" })).toHaveTextContent("Mesh Validation - Fuel Assembly RC-7");
+  expect(
+    within(queue)
+      .getAllByRole("listitem", { hidden: false })
+      .filter((li) => li.parentElement === queue),
+  ).toHaveLength(4);
+  expect(screen.getByRole("region", { name: "Checkpoint details" })).toHaveTextContent(
+    "Mesh Validation - Fuel Assembly RC-7",
+  );
 });

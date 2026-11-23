@@ -114,7 +114,9 @@ export function DataTable<T extends RowData>({
   maxHeight,
   label,
 }: DataTableProps<T>) {
-  const [sorting, setSorting] = useState<SortingState>(defaultSort ? [{ id: defaultSort.id, desc: !!defaultSort.desc }] : []);
+  const [sorting, setSorting] = useState<SortingState>(
+    defaultSort ? [{ id: defaultSort.id, desc: !!defaultSort.desc }] : [],
+  );
 
   const columnDefs = useMemo<ColumnDef<typeof features, T>[]>(
     () =>
@@ -220,7 +222,9 @@ export function DataTable<T extends RowData>({
       {/* Outside the scroller, so it centres in the card rather than across a
           table that may be wider than the screen. */}
       {rows.length === 0 && (
-        <p className="m-0 px-5 py-8 text-center text-xs text-base-content/50">{data.length === 0 ? empty : noMatches}</p>
+        <p className="m-0 px-5 py-8 text-center text-xs text-base-content/50">
+          {data.length === 0 ? empty : noMatches}
+        </p>
       )}
     </div>
   );

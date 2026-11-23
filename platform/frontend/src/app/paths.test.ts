@@ -29,7 +29,15 @@ test("navIdForPath maps a URL to its section, nested URLs included", () => {
 
 test("safeNextPath keeps in-app paths and drops everything else", () => {
   expect(safeNextPath("/workflows?tab=1#top")).toBe("/workflows?tab=1#top");
-  for (const bad of [null, undefined, "", "https://evil.example", "//evil.example", "/\\evil.example", "workflows"]) {
+  for (const bad of [
+    null,
+    undefined,
+    "",
+    "https://evil.example",
+    "//evil.example",
+    "/\\evil.example",
+    "workflows",
+  ]) {
     expect(safeNextPath(bad)).toBe(PATHS.home);
   }
   expect(safeNextPath("/login?next=/x")).toBe(PATHS.home);

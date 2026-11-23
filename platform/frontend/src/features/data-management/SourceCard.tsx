@@ -31,7 +31,16 @@ interface Props {
  * an enable toggle, then the last sync and the volume. Same DaisyUI card shape
  * as SuggestionCard.
  */
-export function SourceCard({ connectorClass, name, statusTone, statusLabel, enabled, lastSync, volume, onToggle }: Props) {
+export function SourceCard({
+  connectorClass,
+  name,
+  statusTone,
+  statusLabel,
+  enabled,
+  lastSync,
+  volume,
+  onToggle,
+}: Props) {
   return (
     <div className="card w-full min-w-0 bg-base-200 border border-base-300">
       <div className="card-body gap-2.5 p-4">

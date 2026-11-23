@@ -31,7 +31,10 @@ test("Button's classes for each variant, size and style flag", () => {
     [{ label: "Go", variant: "primary", size: "sm" }, "btn btn-primary btn-sm"],
     [{ label: "Go", variant: "error", size: "xs", outline: true }, "btn btn-error btn-xs btn-outline"],
     // A neutral outline keeps its border on hover, with a faint tint
-    [{ label: "Go", outline: true }, "btn btn-md btn-outline hover:border-base-content hover:bg-base-content/8"],
+    [
+      { label: "Go", outline: true },
+      "btn btn-md btn-outline hover:border-base-content hover:bg-base-content/8",
+    ],
     [{ label: "Go", variant: "neutral", size: "lg", soft: true }, "btn btn-neutral btn-lg btn-soft"],
     [{ label: "Go", wide: true }, "btn btn-md btn-block"],
     [{ label: "Go", active: true }, "btn btn-md btn-active"],
@@ -53,10 +56,19 @@ test("Button's classes for icon-only buttons, including the ghost rail style", (
   const cases: Array<[Props, string]> = [
     [{ icon: ICON, ariaLabel: "Bell" }, "btn btn-md btn-square"],
     [{ icon: ICON, ariaLabel: "Bell", shape: "circle", size: "xs" }, "btn btn-xs btn-circle"],
-    [{ icon: ICON, ariaLabel: "Bell", variant: "ghost" }, "btn btn-ghost btn-md btn-square text-base-content/60 hover:text-base-content"],
+    [
+      { icon: ICON, ariaLabel: "Bell", variant: "ghost" },
+      "btn btn-ghost btn-md btn-square text-base-content/60 hover:text-base-content",
+    ],
     [{ icon: ICON, ariaLabel: "Bell", variant: "ghost", muted: false }, "btn btn-ghost btn-md btn-square"],
-    [{ icon: ICON, ariaLabel: "Bell", variant: "ghost", active: true }, "btn btn-ghost btn-md btn-square bg-primary/15 text-primary"],
-    [{ icon: ICON, ariaLabel: "Bell", variant: "primary", active: true }, "btn btn-primary btn-md btn-square btn-active"],
+    [
+      { icon: ICON, ariaLabel: "Bell", variant: "ghost", active: true },
+      "btn btn-ghost btn-md btn-square bg-primary/15 text-primary",
+    ],
+    [
+      { icon: ICON, ariaLabel: "Bell", variant: "primary", active: true },
+      "btn btn-primary btn-md btn-square btn-active",
+    ],
   ];
   for (const [props, expected] of cases) assert.equal(classOf(props), expected, JSON.stringify(props));
 });
@@ -64,9 +76,15 @@ test("Button's classes for icon-only buttons, including the ghost rail style", (
 test("Button's attributes, icon slot and tooltip wrapper", () => {
   assert.match(render({ label: "Go" }), /^<button type="button" class="btn btn-md">Go<\/button>$/);
   assert.match(render({ label: "Go", type: "submit", disabled: true }), /type="submit"[^>]*disabled=""/);
-  assert.match(render({ label: "Go", loading: true }), /disabled="" aria-busy="true"><span class="loading loading-spinner size-5" aria-hidden="true"><\/span>Go/);
+  assert.match(
+    render({ label: "Go", loading: true }),
+    /disabled="" aria-busy="true"><span class="loading loading-spinner size-5" aria-hidden="true"><\/span>Go/,
+  );
   assert.match(render({ label: "Go", active: true }), /aria-pressed="true"/);
-  assert.match(render({ label: "Go", icon: ICON, size: "xs" }), /<span class="flex shrink-0 \[&amp;&gt;svg\]:size-full size-3" aria-hidden="true"><svg data-icon=""><\/svg><\/span>Go/);
+  assert.match(
+    render({ label: "Go", icon: ICON, size: "xs" }),
+    /<span class="flex shrink-0 \[&amp;&gt;svg\]:size-full size-3" aria-hidden="true"><svg data-icon=""><\/svg><\/span>Go/,
+  );
   assert.match(render({ label: "Go", icon: ICON, iconPosition: "right" }), />Go<span class="flex shrink-0/);
 
   // Icon-only: the name goes on aria-label, and the tooltip wrapper repeats it

@@ -42,7 +42,15 @@ interface Props {
  * Team members registry: search bar, role filter, invite button and the
  * member table. The row actions are not wired yet (PM-4).
  */
-export function TeamMembersRegistry({ members, roles, query, onQueryChange, role, onRoleChange, noMatches }: Props) {
+export function TeamMembersRegistry({
+  members,
+  roles,
+  query,
+  onQueryChange,
+  role,
+  onRoleChange,
+  noMatches,
+}: Props) {
   const roleNames = new Map(roles.map((r) => [r.id, r.name]));
 
   const columns: DataTableColumn<TeamMember>[] = [
@@ -61,7 +69,12 @@ export function TeamMembersRegistry({ members, roles, query, onQueryChange, role
       value: (m) => m.status,
       cell: (m) => <StatusPill label={m.status} tone={STATUS_TONE[m.status]} />,
     },
-    { id: "lastActive", header: "Last Active", value: (m) => m.lastActive, className: "text-base-content/60" },
+    {
+      id: "lastActive",
+      header: "Last Active",
+      value: (m) => m.lastActive,
+      className: "text-base-content/60",
+    },
     {
       id: "actions",
       header: "Actions",
@@ -82,7 +95,12 @@ export function TeamMembersRegistry({ members, roles, query, onQueryChange, role
     <section className="flex flex-col gap-3">
       <SectionLabel>Team Members Registry</SectionLabel>
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput placeholder="Search team..." label="Search team" value={query} onChange={onQueryChange} />
+        <SearchInput
+          placeholder="Search team..."
+          label="Search team"
+          value={query}
+          onChange={onQueryChange}
+        />
         <select
           className="select select-bordered select-sm w-auto"
           value={role}
@@ -99,7 +117,11 @@ export function TeamMembersRegistry({ members, roles, query, onQueryChange, role
         <Button variant="primary" outline size="sm" icon={<Plus />} label="Invite User" />
       </div>
       {noMatches ? (
-        <EmptyState icon={<Search size={24} />} title="No matching team members" hint="Try another search or role" />
+        <EmptyState
+          icon={<Search size={24} />}
+          title="No matching team members"
+          hint="Try another search or role"
+        />
       ) : (
         <DataTable data={members} columns={columns} rowId={(m) => m.id} label="Team members" />
       )}

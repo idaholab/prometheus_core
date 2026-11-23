@@ -581,12 +581,18 @@ jobs:
           cache-dependency-path: platform/frontend/package-lock.json
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # The steps call the Makefile, so CI also checks the targets developers
+      # run. Install stays npm ci: a clean, exact install from the lockfile
+      # (make install runs npm install, which may update it).
+      # Fails on any file Prettier would change; `make format` fixes it
+      - name: Format
+        run: make format-check
       - name: Lint
-        run: npm run lint
+        run: make lint
       - name: Typecheck
-        run: npm run typecheck
+        run: make typecheck
       - name: Tests
-        run: npm run test:coverage
+        run: make test-coverage
       # The shared coverage action reads Python's coverage report, so the
       # frontend's summary, path prefix and upload are done here instead
       - name: Coverage summary
@@ -608,7 +614,7 @@ jobs:
           disable_search: true
           fail_ci_if_error: true
       - name: Build
-        run: npm run build
+        run: make build
 
   platform-frontend-e2e:
     # Playwright against the built frontend on its own; each test stubs /api

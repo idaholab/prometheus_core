@@ -21,7 +21,9 @@ import { expect, test, vi } from "vitest";
 vi.mock("@/features/chat", () => ({ Chat: () => <p>Chat</p>, useChatState: () => ({ items: [] }) }));
 vi.mock("@/features/admin/AdminUsers", () => ({ AdminUsers: () => <p>Users panel</p> }));
 vi.mock("@/features/admin/AdminSigningKeys", () => ({ AdminSigningKeys: () => <p>Signing Keys panel</p> }));
-vi.mock("@/features/admin/AdminOidcProviders", () => ({ AdminOidcProviders: () => <p>Identity Providers panel</p> }));
+vi.mock("@/features/admin/AdminOidcProviders", () => ({
+  AdminOidcProviders: () => <p>Identity Providers panel</p>,
+}));
 
 const { PageHome } = await import("./PageHome.tsx");
 const { PageAdmin } = await import("./PageAdmin.tsx");

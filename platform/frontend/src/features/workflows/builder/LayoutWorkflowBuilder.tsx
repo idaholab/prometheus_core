@@ -165,13 +165,25 @@ export function LayoutWorkflowBuilder({
               )}
             </button>
             <div aria-hidden="true" className="hidden h-7 w-px bg-base-content/10 sm:block" />
-            <Tabs tabs={BUILDER_TABS} selected={tab} onChange={setTab} label="Builder view" panelId={panelId} variant="pill" />
+            <Tabs
+              tabs={BUILDER_TABS}
+              selected={tab}
+              onChange={setTab}
+              label="Builder view"
+              panelId={panelId}
+              variant="pill"
+            />
           </div>
         </div>
         {tab === "canvas" && (
           <div role="group" aria-label="Workflow actions" className="flex flex-wrap gap-3">
             {actions.map((label, i) => (
-              <Button key={label} label={label} size="sm" variant={i === actions.length - 1 ? "primary" : undefined} />
+              <Button
+                key={label}
+                label={label}
+                size="sm"
+                variant={i === actions.length - 1 ? "primary" : undefined}
+              />
             ))}
           </div>
         )}
@@ -190,7 +202,10 @@ export function LayoutWorkflowBuilder({
           <p
             className={`m-0 flex items-start gap-2 border-b px-6 py-2 text-xs text-base-content ${STRIP_CLASSES[tone].strip}`}
           >
-            <span aria-hidden="true" className={`mt-1.5 size-1.5 shrink-0 rounded-full ${STRIP_CLASSES[tone].dot}`} />
+            <span
+              aria-hidden="true"
+              className={`mt-1.5 size-1.5 shrink-0 rounded-full ${STRIP_CLASSES[tone].dot}`}
+            />
             {modeMessage(mode, name, version, nextVersion)}
           </p>
 

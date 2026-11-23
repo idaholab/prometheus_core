@@ -131,10 +131,7 @@ const CATEGORY_IFC_CLASSES: Record<string, string[]> = {
 // " - Outer Skin" / " - Core" / " - Inner Liner" suffixes). Renaming them there
 // would silently break these toggles, which is what
 // src/tests/components/viewer/IFCViewerEngine.test.ts exists to catch.
-const CATEGORY_NAME_PATTERNS: Record<
-  string,
-  { pattern: RegExp; categories?: RegExp[] }[]
-> = {
+const CATEGORY_NAME_PATTERNS: Record<string, { pattern: RegExp; categories?: RegExp[] }[]> = {
   walls: [
     // The skins and core of each wall panel - the pieces that own a body.
     {
@@ -232,11 +229,7 @@ class UnionFind {
 
 export default class IFCViewerEngine {
   private components: OBC.Components;
-  private world: OBC.SimpleWorld<
-    OBC.SimpleScene,
-    OBC.OrthoPerspectiveCamera,
-    OBC.SimpleRenderer
-  >;
+  private world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBC.SimpleRenderer>;
   private fragments: OBC.FragmentsManager;
   private hider: OBC.Hider;
   private disposed = false;
@@ -269,11 +262,7 @@ export default class IFCViewerEngine {
     this.components = new OBC.Components();
 
     const worlds = this.components.get(OBC.Worlds);
-    this.world = worlds.create<
-      OBC.SimpleScene,
-      OBC.OrthoPerspectiveCamera,
-      OBC.SimpleRenderer
-    >();
+    this.world = worlds.create<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBC.SimpleRenderer>();
 
     this.world.scene = new OBC.SimpleScene(this.components);
     this.world.scene.setup();
@@ -291,11 +280,9 @@ export default class IFCViewerEngine {
 
     // Logarithmic depth so sub-millimetre layers (panel skins over cores) are
     // resolvable at building-scale camera distances instead of z-fighting.
-    this.world.renderer = new OBC.SimpleRenderer(
-      this.components,
-      opts.container,
-      { logarithmicDepthBuffer: true },
-    );
+    this.world.renderer = new OBC.SimpleRenderer(this.components, opts.container, {
+      logarithmicDepthBuffer: true,
+    });
 
     // Without this, three defaults to NoToneMapping: any lit color channel
     // over 1.0 hard-clips to pure white instead of rolling off smoothly.
@@ -340,36 +327,34 @@ export default class IFCViewerEngine {
       },
     );
 
-    this.fragments.list.onItemSet.add(
-      ({ value: model }: { value: FRAGS.FragmentsModel }) => {
-        model.useCamera(this.world.camera.three);
-        this.world.scene.three.add(model.object);
-        this.fragments.core.update(true);
+    this.fragments.list.onItemSet.add(({ value: model }: { value: FRAGS.FragmentsModel }) => {
+      model.useCamera(this.world.camera.three);
+      this.world.scene.three.add(model.object);
+      this.fragments.core.update(true);
 
-        // This first update(true) call runs on an empty model — its meshes
-        // populate asynchronously afterward, and nothing re-triggers LOD
-        // resolution once they do unless the camera happens to still be
-        // actively moving (the only other thing calling update() is the
-        // controls "update" listener above). Without a second pass, the LOD
-        // proxy and the real mesh for the same geometry can both end up stuck
-        // visible simultaneously, fighting over which one actually renders.
-        // Force a few more passes shortly after load so this settles on its
-        // own instead of requiring the user to nudge the camera first.
-        for (const delay of [250, 750, 1500, 3000]) {
-          setTimeout(() => this.fragments.core.update(true), delay);
-        }
+      // This first update(true) call runs on an empty model — its meshes
+      // populate asynchronously afterward, and nothing re-triggers LOD
+      // resolution once they do unless the camera happens to still be
+      // actively moving (the only other thing calling update() is the
+      // controls "update" listener above). Without a second pass, the LOD
+      // proxy and the real mesh for the same geometry can both end up stuck
+      // visible simultaneously, fighting over which one actually renders.
+      // Force a few more passes shortly after load so this settles on its
+      // own instead of requiring the user to nudge the camera first.
+      for (const delay of [250, 750, 1500, 3000]) {
+        setTimeout(() => this.fragments.core.update(true), delay);
+      }
 
-        // There's no verified "this model's materials are fully resolved"
-        // event available here — onFragmentsLoaded was tried earlier and
-        // doesn't fire in this load path (OBC.IfcLoader), which is why that
-        // attempt was reverted. Rather than guess a fixed delay (which just
-        // trades one failure mode for another — too short races ahead of a
-        // real color still in flight, too long leaves a visible stale period
-        // for no reason), poll until materials actually stop changing across
-        // consecutive checks, then apply the colour corrections once.
-        this.pollUntilMaterialsSettle(model);
-      },
-    );
+      // There's no verified "this model's materials are fully resolved"
+      // event available here — onFragmentsLoaded was tried earlier and
+      // doesn't fire in this load path (OBC.IfcLoader), which is why that
+      // attempt was reverted. Rather than guess a fixed delay (which just
+      // trades one failure mode for another — too short races ahead of a
+      // real color still in flight, too long leaves a visible stale period
+      // for no reason), poll until materials actually stop changing across
+      // consecutive checks, then apply the colour corrections once.
+      this.pollUntilMaterialsSettle(model);
+    });
   }
 
   // Snapshot every non-LOD material's color as one string, so two snapshots
@@ -380,15 +365,9 @@ export default class IFCViewerEngine {
     model.object.traverse((child: THREE.Object3D) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material)
-        ? mesh.material
-        : [mesh.material];
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const m of mats) {
-        if (
-          "isLodMaterial" in m &&
-          (m as { isLodMaterial?: boolean }).isLodMaterial
-        )
-          continue;
+        if ("isLodMaterial" in m && (m as { isLodMaterial?: boolean }).isLodMaterial) continue;
         const color = (m as THREE.MeshStandardMaterial).color;
         colors.push(color ? color.getHexString() : "none");
       }
@@ -404,11 +383,7 @@ export default class IFCViewerEngine {
   // doesn't poll forever — at that point it applies the corrections anyway
   // using whatever state currently exists, same as the old fixed-delay
   // behavior would have.
-  private pollUntilMaterialsSettle(
-    model: FRAGS.FragmentsModel,
-    maxChecks = 20,
-    intervalMs = 250,
-  ): void {
+  private pollUntilMaterialsSettle(model: FRAGS.FragmentsModel, maxChecks = 20, intervalMs = 250): void {
     let previousSnapshot: string | null = null;
     let stableCount = 0;
     let checks = 0;
@@ -436,9 +411,7 @@ export default class IFCViewerEngine {
   // Order matters: resolve authored material colours first, then gray out
   // whatever is still white. Doing the fallback first would paint over
   // elements the material pass is about to colour correctly.
-  private async applyColorCorrections(
-    model: FRAGS.FragmentsModel,
-  ): Promise<void> {
+  private async applyColorCorrections(model: FRAGS.FragmentsModel): Promise<void> {
     try {
       if (this.disposed) return;
       await this.applyMaterialColors(model);
@@ -471,10 +444,7 @@ export default class IFCViewerEngine {
   private async waitForFirstColorPass(timeoutMs = 8000): Promise<void> {
     const deferred = this.colorPassDeferred;
     if (!deferred) return;
-    await Promise.race([
-      deferred.promise,
-      new Promise<void>((r) => setTimeout(r, timeoutMs)),
-    ]);
+    await Promise.race([deferred.promise, new Promise<void>((r) => setTimeout(r, timeoutMs))]);
   }
 
   // Run only once pollUntilMaterialsSettle above has confirmed materials
@@ -487,15 +457,9 @@ export default class IFCViewerEngine {
     model.object.traverse((child: THREE.Object3D) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material)
-        ? mesh.material
-        : [mesh.material];
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const m of mats) {
-        if (
-          "isLodMaterial" in m &&
-          (m as { isLodMaterial?: boolean }).isLodMaterial
-        )
-          continue;
+        if ("isLodMaterial" in m && (m as { isLodMaterial?: boolean }).isLodMaterial) continue;
         const color = (m as THREE.MeshStandardMaterial).color;
         if (color && color.getHex() === 0xffffff) {
           color.setHex(UNSTYLED_FALLBACK_COLOR);
@@ -506,10 +470,7 @@ export default class IFCViewerEngine {
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  async loadIfcFromUrl(
-    url: string,
-    onProgress?: (p: LoadProgress) => void,
-  ): Promise<void> {
+  async loadIfcFromUrl(url: string, onProgress?: (p: LoadProgress) => void): Promise<void> {
     const ifcLoader = this.components.get(OBC.IfcLoader);
 
     // Arm the reveal gate before the load so the colour pass this load kicks
@@ -598,10 +559,7 @@ export default class IFCViewerEngine {
           modelIdMap[model.modelId] = new Set(localIds as number[]);
         }
       } catch (err) {
-        console.warn(
-          `[IFCViewerEngine] getItemsOfCategories failed for "${category}":`,
-          err,
-        );
+        console.warn(`[IFCViewerEngine] getItemsOfCategories failed for "${category}":`, err);
       }
     }
 
@@ -632,10 +590,7 @@ export default class IFCViewerEngine {
     try {
       modelIdMap = await query.test();
     } catch (err) {
-      console.warn(
-        `[IFCViewerEngine] ItemsFinder query failed for pattern "${namePattern}":`,
-        err,
-      );
+      console.warn(`[IFCViewerEngine] ItemsFinder query failed for pattern "${namePattern}":`, err);
       return;
     }
 
@@ -678,19 +633,13 @@ export default class IFCViewerEngine {
         const items = await model.getItemsOfCategories(regexes);
         if (Object.values(items).flat().length > 0) return true;
       } catch (err) {
-        console.warn(
-          `[IFCViewerEngine] getItemsOfCategories failed for "${category}":`,
-          err,
-        );
+        console.warn(`[IFCViewerEngine] getItemsOfCategories failed for "${category}":`, err);
       }
     }
     return false;
   }
 
-  private async nameQueryHasItems(
-    namePattern: RegExp,
-    categories?: RegExp[],
-  ): Promise<boolean> {
+  private async nameQueryHasItems(namePattern: RegExp, categories?: RegExp[]): Promise<boolean> {
     const finder = this.components.get(OBC.ItemsFinder);
     const queryKey = `__name_${namePattern.source}_${categories?.map((r) => r.source).join("_") ?? ""}`;
 
@@ -707,14 +656,9 @@ export default class IFCViewerEngine {
 
     try {
       const modelIdMap = await query.test();
-      return Object.values(modelIdMap).some(
-        (ids) => (ids as Set<number>).size > 0,
-      );
+      return Object.values(modelIdMap).some((ids) => (ids as Set<number>).size > 0);
     } catch (err) {
-      console.warn(
-        `[IFCViewerEngine] ItemsFinder query failed for pattern "${namePattern}":`,
-        err,
-      );
+      console.warn(`[IFCViewerEngine] ItemsFinder query failed for pattern "${namePattern}":`, err);
       return false;
     }
   }
@@ -753,22 +697,15 @@ export default class IFCViewerEngine {
         const localId = localIds[i];
         const nameAttr = dataList[i]?.Name as { value?: unknown } | undefined;
         const rawName =
-          nameAttr && typeof nameAttr === "object" && "value" in nameAttr
-            ? nameAttr.value
-            : undefined;
-        const label =
-          typeof rawName === "string" && rawName.length > 0
-            ? rawName
-            : `#${localId}`;
+          nameAttr && typeof nameAttr === "object" && "value" in nameAttr ? nameAttr.value : undefined;
+        const label = typeof rawName === "string" && rawName.length > 0 ? rawName : `#${localId}`;
         const key = `${model.modelId}:${localId}`;
         this.equipmentIdMaps.set(key, { [model.modelId]: new Set([localId]) });
         items.push({ key, label });
       }
     }
 
-    items.sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { numeric: true }),
-    );
+    items.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     return items;
   }
 
@@ -797,14 +734,9 @@ export default class IFCViewerEngine {
   // export), every pipe simply falls back to its own single-member run below
   // — grouping degrades gracefully rather than requiring the relations.
 
-  private async computePipeRunGlobalIdGroups(
-    buffer: Uint8Array,
-  ): Promise<Set<string>[]> {
+  private async computePipeRunGlobalIdGroups(buffer: Uint8Array): Promise<Set<string>[]> {
     const ifcApi = new WEBIFC.IfcAPI();
-    ifcApi.SetWasmPath(
-      this.opts.wasmCdnPath ?? "https://unpkg.com/web-ifc@0.0.77/",
-      true,
-    );
+    ifcApi.SetWasmPath(this.opts.wasmCdnPath ?? "https://unpkg.com/web-ifc@0.0.77/", true);
     await ifcApi.Init();
 
     let modelID: number | null = null;
@@ -826,26 +758,20 @@ export default class IFCViewerEngine {
         return (Array.isArray(raw) ? raw : [raw]) as { value?: number }[];
       };
 
-      const pipeIds = [
-        ...getIds(WEBIFC.IFCPIPESEGMENT),
-        ...getIds(WEBIFC.IFCPIPEFITTING),
-      ];
+      const pipeIds = [...getIds(WEBIFC.IFCPIPESEGMENT), ...getIds(WEBIFC.IFCPIPEFITTING)];
       const pipeIdSet = new Set(pipeIds);
       if (pipeIds.length === 0) return [];
 
       const equipmentIds = new Set<number>();
       for (const className of EQUIPMENT_IFC_CLASSES) {
-        const type = (WEBIFC as unknown as Record<string, number>)[
-          className.toUpperCase()
-        ];
+        const type = (WEBIFC as unknown as Record<string, number>)[className.toUpperCase()];
         for (const id of getIds(type)) equipmentIds.add(id);
       }
 
       const portToParent = new Map<number, number>();
       for (const relId of getIds(WEBIFC.IFCRELNESTS)) {
         const rel = getLine(relId);
-        const parent = (rel.RelatingObject as { value?: number } | undefined)
-          ?.value;
+        const parent = (rel.RelatingObject as { value?: number } | undefined)?.value;
         if (parent === undefined || !pipeIdSet.has(parent)) continue;
         for (const child of asHandleArray(rel.RelatedObjects)) {
           if (child.value !== undefined) portToParent.set(child.value, parent);
@@ -871,9 +797,7 @@ export default class IFCViewerEngine {
 
       const idToGlobalId = new Map<number, string>();
       for (const id of pipeIds) {
-        const globalIdAttr = getLine(id).GlobalId as
-          | { value?: string }
-          | undefined;
+        const globalIdAttr = getLine(id).GlobalId as { value?: string } | undefined;
         if (globalIdAttr?.value) idToGlobalId.set(id, globalIdAttr.value);
       }
 
@@ -924,14 +848,9 @@ export default class IFCViewerEngine {
   // layered wall is really several colours. Good enough for a whole-element
   // tint; refine per-layer only if something actually needs it.
 
-  private async computeMaterialColors(
-    buffer: Uint8Array,
-  ): Promise<Map<string, string>> {
+  private async computeMaterialColors(buffer: Uint8Array): Promise<Map<string, string>> {
     const ifcApi = new WEBIFC.IfcAPI();
-    ifcApi.SetWasmPath(
-      this.opts.wasmCdnPath ?? "https://unpkg.com/web-ifc@0.0.77/",
-      true,
-    );
+    ifcApi.SetWasmPath(this.opts.wasmCdnPath ?? "https://unpkg.com/web-ifc@0.0.77/", true);
     await ifcApi.Init();
 
     const result = new Map<string, string>();
@@ -960,8 +879,7 @@ export default class IFCViewerEngine {
         if (raw == null) return [];
         return (Array.isArray(raw) ? raw : [raw]) as { value?: number }[];
       };
-      const asHandle = (raw: unknown): number | undefined =>
-        (raw as { value?: number } | undefined)?.value;
+      const asHandle = (raw: unknown): number | undefined => (raw as { value?: number } | undefined)?.value;
 
       // ── Step 1: materialId -> hex, via IfcMaterialDefinitionRepresentation
       // -> IfcStyledRepresentation -> IfcStyledItem -> IfcSurfaceStyle
@@ -1000,9 +918,7 @@ export default class IFCViewerEngine {
               // concrete domes authored with only a material-level surface
               // style rendered white-ish instead of their authored gray.
               const surfaceStyleHandles =
-                style.type === WEBIFC.IFCSURFACESTYLE
-                  ? [styleHandle]
-                  : asHandleArray(style.Styles);
+                style.type === WEBIFC.IFCSURFACESTYLE ? [styleHandle] : asHandleArray(style.Styles);
 
               for (const ssHandle of surfaceStyleHandles) {
                 if (ssHandle.value === undefined) continue;
@@ -1012,34 +928,17 @@ export default class IFCViewerEngine {
                 // surface colour comes from, so skip anything else here.
                 if (surfaceStyle.type !== WEBIFC.IFCSURFACESTYLE) continue;
 
-                for (const shadingHandle of asHandleArray(
-                  surfaceStyle.Styles,
-                )) {
+                for (const shadingHandle of asHandleArray(surfaceStyle.Styles)) {
                   if (shadingHandle.value === undefined) continue;
                   const shading = getLine(shadingHandle.value);
                   const colourId = asHandle(shading.SurfaceColour);
                   if (colourId === undefined) continue;
                   const colour = getLine(colourId);
-                  const r = Number(
-                    (colour.Red as { value?: unknown })?.value ??
-                      colour.Red ??
-                      0,
-                  );
-                  const g = Number(
-                    (colour.Green as { value?: unknown })?.value ??
-                      colour.Green ??
-                      0,
-                  );
-                  const b = Number(
-                    (colour.Blue as { value?: unknown })?.value ??
-                      colour.Blue ??
-                      0,
-                  );
+                  const r = Number((colour.Red as { value?: unknown })?.value ?? colour.Red ?? 0);
+                  const g = Number((colour.Green as { value?: unknown })?.value ?? colour.Green ?? 0);
+                  const b = Number((colour.Blue as { value?: unknown })?.value ?? colour.Blue ?? 0);
                   if (!materialColor.has(materialId)) {
-                    materialColor.set(
-                      materialId,
-                      new THREE.Color(r, g, b).getHexString(),
-                    );
+                    materialColor.set(materialId, new THREE.Color(r, g, b).getHexString());
                   }
                 }
               }
@@ -1071,10 +970,7 @@ export default class IFCViewerEngine {
         "Materials",
       ];
       const resolvedSelect = new Map<number, string | null>();
-      const resolveSelect = (
-        id: number,
-        visited = new Set<number>(),
-      ): string | null => {
+      const resolveSelect = (id: number, visited = new Set<number>()): string | null => {
         if (resolvedSelect.has(id)) return resolvedSelect.get(id)!;
         if (visited.has(id)) return null;
         visited.add(id);
@@ -1147,9 +1043,7 @@ export default class IFCViewerEngine {
         if (pdsId === undefined) return false;
         for (const repHandle of asHandleArray(getLine(pdsId).Representations)) {
           if (repHandle.value === undefined) continue;
-          for (const itemHandle of asHandleArray(
-            getLine(repHandle.value).Items,
-          )) {
+          for (const itemHandle of asHandleArray(getLine(repHandle.value).Items)) {
             const itemId = itemHandle.value;
             if (itemId === undefined) continue;
             if (styledGeometryItems.has(itemId)) return true;
@@ -1159,11 +1053,7 @@ export default class IFCViewerEngine {
             const mappedRepId = asHandle(getLine(srcId).MappedRepresentation);
             if (mappedRepId === undefined) continue;
             for (const inner of asHandleArray(getLine(mappedRepId).Items)) {
-              if (
-                inner.value !== undefined &&
-                styledGeometryItems.has(inner.value)
-              )
-                return true;
+              if (inner.value !== undefined && styledGeometryItems.has(inner.value)) return true;
             }
           }
         }
@@ -1201,9 +1091,7 @@ export default class IFCViewerEngine {
     await model.setColor(localIds, color);
   }
 
-  private async applyMaterialColors(
-    model: FRAGS.FragmentsModel,
-  ): Promise<void> {
+  private async applyMaterialColors(model: FRAGS.FragmentsModel): Promise<void> {
     const buffer = this.ifcBuffers.get(model.modelId);
     if (!buffer) return;
 
@@ -1220,10 +1108,7 @@ export default class IFCViewerEngine {
     try {
       byCategory = await model.getItemsOfCategories([/^Ifc/i]);
     } catch (err) {
-      console.warn(
-        "[IFCViewerEngine] getItemsOfCategories (material colour) failed:",
-        err,
-      );
+      console.warn("[IFCViewerEngine] getItemsOfCategories (material colour) failed:", err);
       return;
     }
     const localIds = Object.values(byCategory).flat();
@@ -1233,10 +1118,7 @@ export default class IFCViewerEngine {
     try {
       guids = await model.getGuidsByLocalIds(localIds);
     } catch (err) {
-      console.warn(
-        "[IFCViewerEngine] getGuidsByLocalIds (material colour) failed:",
-        err,
-      );
+      console.warn("[IFCViewerEngine] getGuidsByLocalIds (material colour) failed:", err);
       return;
     }
 
@@ -1256,10 +1138,7 @@ export default class IFCViewerEngine {
       try {
         await this.setItemsColor(model, ids, new THREE.Color(`#${hex}`));
       } catch (err) {
-        console.warn(
-          `[IFCViewerEngine] setItemsColor failed for colour #${hex}:`,
-          err,
-        );
+        console.warn(`[IFCViewerEngine] setItemsColor failed for colour #${hex}:`, err);
       }
     }
     console.debug(
@@ -1275,18 +1154,13 @@ export default class IFCViewerEngine {
     const runs: PipeRunItem[] = [];
 
     for (const [, model] of this.fragments.list) {
-      const pipeRegexes = PIPE_MEMBER_IFC_CLASSES.map(
-        (c) => new RegExp(`^${c}$`, "i"),
-      );
+      const pipeRegexes = PIPE_MEMBER_IFC_CLASSES.map((c) => new RegExp(`^${c}$`, "i"));
 
       let pipeByCategory: { [category: string]: number[] };
       try {
         pipeByCategory = await model.getItemsOfCategories(pipeRegexes);
       } catch (err) {
-        console.warn(
-          "[IFCViewerEngine] getItemsOfCategories(pipe runs) failed:",
-          err,
-        );
+        console.warn("[IFCViewerEngine] getItemsOfCategories(pipe runs) failed:", err);
         continue;
       }
 
@@ -1316,14 +1190,10 @@ export default class IFCViewerEngine {
       pipeIds.forEach((localId, i) => {
         const nameAttr = itemData[i]?.Name as { value?: unknown } | undefined;
         const rawName =
-          nameAttr && typeof nameAttr === "object" && "value" in nameAttr
-            ? nameAttr.value
-            : undefined;
+          nameAttr && typeof nameAttr === "object" && "value" in nameAttr ? nameAttr.value : undefined;
         nameByLocalId.set(
           localId,
-          typeof rawName === "string" && rawName.length > 0
-            ? rawName
-            : `#${localId}`,
+          typeof rawName === "string" && rawName.length > 0 ? rawName : `#${localId}`,
         );
 
         const guid = guids[i];
@@ -1344,10 +1214,7 @@ export default class IFCViewerEngine {
         try {
           globalIdGroups = await this.computePipeRunGlobalIdGroups(buffer);
         } catch (err) {
-          console.warn(
-            "[IFCViewerEngine] computePipeRunGlobalIdGroups failed:",
-            err,
-          );
+          console.warn("[IFCViewerEngine] computePipeRunGlobalIdGroups failed:", err);
         }
       }
 
@@ -1379,9 +1246,7 @@ export default class IFCViewerEngine {
           });
         }
 
-        memberItems.sort((a, b) =>
-          a.label.localeCompare(b.label, undefined, { numeric: true }),
-        );
+        memberItems.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
         this.pipeRunIdMaps.set(runKey, runIdMap);
         runs.push({
           key: runKey,
@@ -1418,9 +1283,7 @@ export default class IFCViewerEngine {
       );
     }
 
-    runs.sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { numeric: true }),
-    );
+    runs.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
     return runs;
   }
 
@@ -1470,10 +1333,7 @@ export default class IFCViewerEngine {
       if (columns.length === 0) continue;
       // Base plates and their fasteners are IfcPlate / IfcMechanicalFastener;
       // the join back to the column is purely by name ("Base Plate for <col>").
-      const candidates = await this.namedItemsOfClasses(model, [
-        "IfcPlate",
-        "IfcMechanicalFastener",
-      ]);
+      const candidates = await this.namedItemsOfClasses(model, ["IfcPlate", "IfcMechanicalFastener"]);
       const nameGroups = groupColumnsWithBasePlates(columns, candidates);
       groups.push(...this.materializeTreeGroups("column", model, nameGroups));
     }
@@ -1515,12 +1375,7 @@ export default class IFCViewerEngine {
       const standalone = standaloneClasses.length
         ? await this.standaloneBodyGroups(model, standaloneClasses)
         : [];
-      groups.push(
-        ...this.materializeTreeGroups(prefix, model, [
-          ...nameGroups,
-          ...standalone,
-        ]),
-      );
+      groups.push(...this.materializeTreeGroups(prefix, model, [...nameGroups, ...standalone]));
     }
     return groups;
   }
@@ -1540,10 +1395,7 @@ export default class IFCViewerEngine {
   // add dead toggles that control no visible geometry. Fragments' own
   // "items with geometry" set cleanly separates the real standalone elements
   // from those containers.
-  private async standaloneBodyGroups(
-    model: FRAGS.FragmentsModel,
-    classes: string[],
-  ): Promise<NameGroup[]> {
+  private async standaloneBodyGroups(model: FRAGS.FragmentsModel, classes: string[]): Promise<NameGroup[]> {
     const items = await this.namedItemsOfClasses(model, classes);
     if (items.length === 0) return [];
     const bodyIds = await this.getBodyBearingLocalIds(model);
@@ -1560,9 +1412,7 @@ export default class IFCViewerEngine {
   // (the promise is cached so concurrent wall/roof enumeration asks Fragments
   // once). Returns null only if the query errors, which callers treat as
   // "can't tell — include everything" rather than silently dropping toggles.
-  private getBodyBearingLocalIds(
-    model: FRAGS.FragmentsModel,
-  ): Promise<Set<number> | null> {
+  private getBodyBearingLocalIds(model: FRAGS.FragmentsModel): Promise<Set<number> | null> {
     const cached = this.bodyBearingCache.get(model.modelId);
     if (cached) return cached;
     const pending = this.computeBodyBearingLocalIds(model);
@@ -1573,27 +1423,19 @@ export default class IFCViewerEngine {
   // Fragments knows which items actually produced geometry; bodyless panel
   // containers (decomposed into their skin/core pieces) produce none, so they
   // fall out here without any IFC re-parse or GlobalId bridging.
-  private async computeBodyBearingLocalIds(
-    model: FRAGS.FragmentsModel,
-  ): Promise<Set<number> | null> {
+  private async computeBodyBearingLocalIds(model: FRAGS.FragmentsModel): Promise<Set<number> | null> {
     try {
       const ids = await model.getItemsIdsWithGeometry();
       return new Set(ids);
     } catch (err) {
-      console.warn(
-        "[IFCViewerEngine] getItemsIdsWithGeometry failed:",
-        err,
-      );
+      console.warn("[IFCViewerEngine] getItemsIdsWithGeometry failed:", err);
       return null;
     }
   }
 
   // Fetch { id: localId, name } for every element of the given entity classes,
   // reusing the Name-attribute extraction pattern from enumerateEquipment.
-  private async namedItemsOfClasses(
-    model: FRAGS.FragmentsModel,
-    classes: string[],
-  ): Promise<NamedItem[]> {
+  private async namedItemsOfClasses(model: FRAGS.FragmentsModel, classes: string[]): Promise<NamedItem[]> {
     const regexes = classes.map((c) => new RegExp(`^${c}$`, "i"));
     let byCategory: { [category: string]: number[] };
     try {
@@ -1621,15 +1463,10 @@ export default class IFCViewerEngine {
       const localId = localIds[i];
       const nameAttr = dataList[i]?.Name as { value?: unknown } | undefined;
       const rawName =
-        nameAttr && typeof nameAttr === "object" && "value" in nameAttr
-          ? nameAttr.value
-          : undefined;
+        nameAttr && typeof nameAttr === "object" && "value" in nameAttr ? nameAttr.value : undefined;
       items.push({
         id: localId,
-        name:
-          typeof rawName === "string" && rawName.length > 0
-            ? rawName
-            : `#${localId}`,
+        name: typeof rawName === "string" && rawName.length > 0 ? rawName : `#${localId}`,
       });
     }
     return items;
@@ -1756,9 +1593,7 @@ export default class IFCViewerEngine {
   // regression for people who already knew the gesture.
   setPanMode(active: boolean): void {
     const controls = this.world.camera.controls;
-    controls.mouseButtons.left = active
-      ? CameraControls.ACTION.TRUCK
-      : CameraControls.ACTION.ROTATE;
+    controls.mouseButtons.left = active ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
     controls.mouseButtons.right = CameraControls.ACTION.TRUCK;
   }
 
@@ -1766,45 +1601,21 @@ export default class IFCViewerEngine {
     const controls = this.world.camera.controls;
     const target = controls.getTarget(new THREE.Vector3());
     const dist = controls.distance;
-    controls.setLookAt(
-      target.x,
-      target.y + dist,
-      target.z,
-      target.x,
-      target.y,
-      target.z,
-      true,
-    );
+    controls.setLookAt(target.x, target.y + dist, target.z, target.x, target.y, target.z, true);
   }
 
   setFrontView(): void {
     const controls = this.world.camera.controls;
     const target = controls.getTarget(new THREE.Vector3());
     const dist = controls.distance;
-    controls.setLookAt(
-      target.x,
-      target.y,
-      target.z + dist,
-      target.x,
-      target.y,
-      target.z,
-      true,
-    );
+    controls.setLookAt(target.x, target.y, target.z + dist, target.x, target.y, target.z, true);
   }
 
   setSideView(): void {
     const controls = this.world.camera.controls;
     const target = controls.getTarget(new THREE.Vector3());
     const dist = controls.distance;
-    controls.setLookAt(
-      target.x + dist,
-      target.y,
-      target.z,
-      target.x,
-      target.y,
-      target.z,
-      true,
-    );
+    controls.setLookAt(target.x + dist, target.y, target.z, target.x, target.y, target.z, true);
   }
 
   setIsometricView(): void {
@@ -1812,15 +1623,7 @@ export default class IFCViewerEngine {
     const target = controls.getTarget(new THREE.Vector3());
     const dist = controls.distance;
     const off = dist / Math.sqrt(3);
-    controls.setLookAt(
-      target.x + off,
-      target.y + off,
-      target.z + off,
-      target.x,
-      target.y,
-      target.z,
-      true,
-    );
+    controls.setLookAt(target.x + off, target.y + off, target.z + off, target.x, target.y, target.z, true);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────

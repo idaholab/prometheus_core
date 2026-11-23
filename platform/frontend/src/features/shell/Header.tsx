@@ -60,7 +60,10 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
               return (
                 <Fragment key={i}>
                   <li aria-hidden="true">/</li>
-                  <li className={current ? "text-primary" : undefined} aria-current={current ? "page" : undefined}>
+                  <li
+                    className={current ? "text-primary" : undefined}
+                    aria-current={current ? "page" : undefined}
+                  >
                     {crumb}
                   </li>
                 </Fragment>
@@ -74,7 +77,14 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
-        <Button variant="ghost" size="sm" icon={<Bell />} ariaLabel="Notifications" tooltipPlacement="bottom" muted={false} />
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Bell />}
+          ariaLabel="Notifications"
+          tooltipPlacement="bottom"
+          muted={false}
+        />
         <div className="h-6 w-px bg-base-300" />
         <div className="dropdown dropdown-end">
           <div
@@ -90,17 +100,12 @@ export function Header({ title, onLogout, onToggleSettings }: Props) {
                 {user?.identifier ?? "User"}
               </span>
               {user?.role && (
-                <span className="text-[10px] uppercase leading-tight text-base-content/50">
-                  {user.role}
-                </span>
+                <span className="text-[10px] uppercase leading-tight text-base-content/50">{user.role}</span>
               )}
             </div>
             <ChevronDown size={14} className="text-base-content/50" />
           </div>
-          <ul
-            tabIndex={0}
-            className="menu menu-panel dropdown-content z-10 mt-2 w-48 p-2"
-          >
+          <ul tabIndex={0} className="menu menu-panel dropdown-content z-10 mt-2 w-48 p-2">
             <li>
               <button onClick={() => setTheme(nextTheme)}>
                 {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}

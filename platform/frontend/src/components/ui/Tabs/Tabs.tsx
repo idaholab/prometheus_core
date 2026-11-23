@@ -73,9 +73,13 @@ export function Tabs<T extends string>({
     const last = tabs.length - 1;
     const next =
       event.key === "ArrowRight"
-        ? index === last ? 0 : index + 1
+        ? index === last
+          ? 0
+          : index + 1
         : event.key === "ArrowLeft"
-          ? index === 0 ? last : index - 1
+          ? index === 0
+            ? last
+            : index - 1
           : event.key === "Home"
             ? 0
             : event.key === "End"
@@ -90,7 +94,9 @@ export function Tabs<T extends string>({
   // The rule is a positioned pseudo-element on the wrapper; the scroller is
   // positioned too and comes later, so the selected tab's underline paints over it.
   const rule =
-    variant === "underline" ? "before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-base-content/10" : "";
+    variant === "underline"
+      ? "before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-base-content/10"
+      : "";
   return (
     <div className={`relative min-w-0 ${rule} ${className}`}>
       <div

@@ -12,8 +12,14 @@
 
 import React, { useState } from "react";
 import {
-  ChevronDown, ChevronRight, Play, Pause, SkipBack, SkipForward,
-  SlidersHorizontal, Minimize2,
+  ChevronDown,
+  ChevronRight,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
+  Minimize2,
 } from "lucide-react";
 import { COLOR_PRESETS, PRESET_LABELS, type ColorPreset } from "./MeshViewerEngine";
 
@@ -33,8 +39,16 @@ function formatValue(val: number | undefined): string {
 }
 
 export function Colorbar({
-  preset, min, max, variable,
-}: { preset: ColorPreset; min: number; max: number; variable: string }) {
+  preset,
+  min,
+  max,
+  variable,
+}: {
+  preset: ColorPreset;
+  min: number;
+  max: number;
+  variable: string;
+}) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
@@ -78,10 +92,19 @@ type Props = {
 };
 
 const MeshViewerControls: React.FC<Props> = ({
-  numTimesteps, currentTimestep, onTimestepChange, isPlaying, onTogglePlay, timeLabel,
-  variableOptions, currentVariable, onVariableChange,
-  colorPreset, onColorPresetChange,
-  scalarRange, onScalarRangeChange,
+  numTimesteps,
+  currentTimestep,
+  onTimestepChange,
+  isPlaying,
+  onTogglePlay,
+  timeLabel,
+  variableOptions,
+  currentVariable,
+  onVariableChange,
+  colorPreset,
+  onColorPresetChange,
+  scalarRange,
+  onScalarRangeChange,
   disabled = false,
 }) => {
   const [open, setOpen] = useState(true);
@@ -175,7 +198,9 @@ const MeshViewerControls: React.FC<Props> = ({
                   </button>
                 </div>
                 <div className="flex items-center justify-between text-[11px] font-mono text-base-content/60">
-                  <span>{currentTimestep + 1} / {numTimesteps}</span>
+                  <span>
+                    {currentTimestep + 1} / {numTimesteps}
+                  </span>
                   {timeLabel && <span>t = {timeLabel}</span>}
                 </div>
               </div>
@@ -184,102 +209,112 @@ const MeshViewerControls: React.FC<Props> = ({
         )}
 
         {hasVariables && (
-        <div className="border-b border-base-300 last:border-b-0">
-          <button
-            type="button"
-            className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/70 hover:bg-base-200"
-            onClick={() => setAppearanceOpen((v) => !v)}
-          >
-            <span>Variable &amp; Color</span>
-            {appearanceOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
-          {appearanceOpen && (
-            <div className="p-3 flex flex-col gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
-                  Variable
-                </span>
-                <select
-                  className="select select-xs select-bordered w-full"
-                  value={currentVariable ?? ""}
-                  onChange={(e) => onVariableChange(e.target.value || null)}
-                  disabled={disabled}
-                >
-                  <option value="">None</option>
-                  {variableOptions.some((v) => v.group === "point") && (
-                    <optgroup label="Point">
-                      {variableOptions.filter((v) => v.group === "point").map((v) => (
-                        <option key={v.value} value={v.value}>{v.label}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {variableOptions.some((v) => v.group === "cell") && (
-                    <optgroup label="Cell">
-                      {variableOptions.filter((v) => v.group === "cell").map((v) => (
-                        <option key={v.value} value={v.value}>{v.label}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </label>
+          <div className="border-b border-base-300 last:border-b-0">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/70 hover:bg-base-200"
+              onClick={() => setAppearanceOpen((v) => !v)}
+            >
+              <span>Variable &amp; Color</span>
+              {appearanceOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+            {appearanceOpen && (
+              <div className="p-3 flex flex-col gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
+                    Variable
+                  </span>
+                  <select
+                    className="select select-xs select-bordered w-full"
+                    value={currentVariable ?? ""}
+                    onChange={(e) => onVariableChange(e.target.value || null)}
+                    disabled={disabled}
+                  >
+                    <option value="">None</option>
+                    {variableOptions.some((v) => v.group === "point") && (
+                      <optgroup label="Point">
+                        {variableOptions
+                          .filter((v) => v.group === "point")
+                          .map((v) => (
+                            <option key={v.value} value={v.value}>
+                              {v.label}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {variableOptions.some((v) => v.group === "cell") && (
+                      <optgroup label="Cell">
+                        {variableOptions
+                          .filter((v) => v.group === "cell")
+                          .map((v) => (
+                            <option key={v.value} value={v.value}>
+                              {v.label}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </label>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
-                  Colors
-                </span>
-                <select
-                  className="select select-xs select-bordered w-full"
-                  value={colorPreset}
-                  onChange={(e) => onColorPresetChange(e.target.value as ColorPreset)}
-                  disabled={disabled}
-                >
-                  {Object.entries(PRESET_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
+                    Colors
+                  </span>
+                  <select
+                    className="select select-xs select-bordered w-full"
+                    value={colorPreset}
+                    onChange={(e) => onColorPresetChange(e.target.value as ColorPreset)}
+                    disabled={disabled}
+                  >
+                    {Object.entries(PRESET_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              {currentVariable && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
-                      Range
-                    </span>
-                    <input
-                      type="number"
-                      className="input input-xs input-bordered w-20 font-mono"
-                      value={scalarRange[0]}
-                      step="any"
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) onScalarRangeChange([v, scalarRange[1]]);
-                      }}
-                      disabled={disabled}
+                {currentVariable && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-wide text-base-content/50 font-semibold">
+                        Range
+                      </span>
+                      <input
+                        type="number"
+                        className="input input-xs input-bordered w-20 font-mono"
+                        value={scalarRange[0]}
+                        step="any"
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v)) onScalarRangeChange([v, scalarRange[1]]);
+                        }}
+                        disabled={disabled}
+                      />
+                      <span className="text-base-content/40 text-xs">to</span>
+                      <input
+                        type="number"
+                        className="input input-xs input-bordered w-20 font-mono"
+                        value={scalarRange[1]}
+                        step="any"
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v)) onScalarRangeChange([scalarRange[0], v]);
+                        }}
+                        disabled={disabled}
+                      />
+                    </div>
+                    <Colorbar
+                      preset={colorPreset}
+                      min={scalarRange[0]}
+                      max={scalarRange[1]}
+                      variable={currentVariable}
                     />
-                    <span className="text-base-content/40 text-xs">to</span>
-                    <input
-                      type="number"
-                      className="input input-xs input-bordered w-20 font-mono"
-                      value={scalarRange[1]}
-                      step="any"
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) onScalarRangeChange([scalarRange[0], v]);
-                      }}
-                      disabled={disabled}
-                    />
-                  </div>
-                  <Colorbar
-                    preset={colorPreset}
-                    min={scalarRange[0]}
-                    max={scalarRange[1]}
-                    variable={currentVariable}
-                  />
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -26,7 +26,10 @@ test("the badge names the mode and opens a menu of both, with the current one ch
   await user.click(badge());
 
   expect(screen.getByRole("menu", { name: "Builder mode" })).toBeInTheDocument();
-  expect(screen.getByRole("menuitemradio", { name: /Change this run/ })).toHaveAttribute("aria-checked", "true");
+  expect(screen.getByRole("menuitemradio", { name: /Change this run/ })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   expect(screen.getByRole("menuitemradio", { name: /Edit the template/ })).toHaveAccessibleDescription(
     "Change Comprehensive Material Analysis for everyone (new version).",
   );

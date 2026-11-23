@@ -21,7 +21,7 @@
 // clear_span_industrial_buildings.ifc). If the backend renames a panel or a
 // piece, this suite fails instead of the toggle quietly going inert.
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from "vitest";
 // Engine mocks, from Alchemy's tests/fixtures/viewerEngine.fixtures.ts.
 // viewerEngine.fixtures.ts
 //
@@ -41,7 +41,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // rather than containing the tests itself - as long as this file is imported
 // (statically) before IFCViewerEngine is loaded.
 
-
 // One row of the fake model. localId is what the real Fragments API hands back
 // and what Hider.set() is given, so the tests assert on sets of these.
 // `bodyless: true` marks an element Fragments produced no geometry for (an
@@ -54,7 +53,7 @@ type FakeElement = {
   bodyless?: boolean;
 };
 
-const MODEL_ID = 'model-1';
+const MODEL_ID = "model-1";
 
 let elements: FakeElement[] = [];
 
@@ -89,8 +88,7 @@ function resetViewerMocks(): void {
   elements = [];
 }
 
-const matchesAny = (value: string, regexes: RegExp[]): boolean =>
-  regexes.some((regex) => regex.test(value));
+const matchesAny = (value: string, regexes: RegExp[]): boolean => regexes.some((regex) => regex.test(value));
 
 // -- Fake Fragments model ----------------------------------------------------
 
@@ -109,9 +107,7 @@ const fakeModel = {
   // Mirrors FragmentsModel.getItemsData for the Name attribute, which the tree
   // enumeration (enumerateWallGroups / enumerateColumnGroups) reads to group by
   // name. Shape matches the engine's `dataList[i].Name = { value: string }`.
-  getItemsData: async (
-    localIds: number[],
-  ): Promise<{ Name: { value: string } }[]> =>
+  getItemsData: async (localIds: number[]): Promise<{ Name: { value: string } }[]> =>
     localIds.map((id) => {
       const el = elements.find((e) => e.localId === id);
       return { Name: { value: el?.name ?? `#${id}` } };
@@ -144,7 +140,7 @@ const fakeItemsFinder = {
         test: async (): Promise<Record<string, Set<number>>> => {
           const ids = new Set<number>();
           for (const def of defs) {
-            const nameQuery = def.attributes?.queries.find((q) => q.name.test('Name'));
+            const nameQuery = def.attributes?.queries.find((q) => q.name.test("Name"));
             if (!nameQuery) continue;
             for (const el of elements) {
               if (def.categories && !matchesAny(el.ifcClass, def.categories)) continue;
@@ -174,7 +170,7 @@ const fakeHider = {
 
 // -- Mocked libraries --------------------------------------------------------
 
-vi.mock('@thatopen/components', () => {
+vi.mock("@thatopen/components", () => {
   class Worlds {
     // The engine assigns scene/camera/renderer onto whatever this returns.
     create() {
@@ -199,13 +195,13 @@ vi.mock('@thatopen/components', () => {
   class OrthoPerspectiveCamera {
     controls = { addEventListener: vi.fn() };
     three = {};
-    projection = { current: 'Perspective', toggle: vi.fn() };
+    projection = { current: "Perspective", toggle: vi.fn() };
   }
   class SimpleRenderer {
     three = { toneMapping: 0, toneMappingExposure: 1 };
   }
   class FragmentsManager {
-    static getWorker = async () => '';
+    static getWorker = async () => "";
     list = new Map<string, typeof fakeModel>([[MODEL_ID, fakeModel]]);
     core = {
       update: vi.fn(),
@@ -253,11 +249,11 @@ vi.mock('@thatopen/components', () => {
 });
 
 // Types only, but still a runtime import in the engine's module graph.
-vi.mock('@thatopen/fragments', () => ({}));
+vi.mock("@thatopen/fragments", () => ({}));
 
 // Only reached by the pipe-run parsing path, which these tests never call.
 // Mocked so the wasm-bearing module never has to load under jsdom.
-vi.mock('web-ifc', () => ({
+vi.mock("web-ifc", () => ({
   IfcAPI: class {},
   IFCPIPESEGMENT: 0,
   IFCPIPEFITTING: 0,
@@ -268,42 +264,42 @@ vi.mock('web-ifc', () => ({
 // Imported after the mocks are registered above (hoisting only reorders
 // vi.mock calls within this module, not across module boundaries, so this
 // dynamic import still needs to come after them textually).
-const { default: IFCViewerEngine } = await import('./IFCViewerEngine');
+const { default: IFCViewerEngine } = await import("./IFCViewerEngine");
 
 function createEngine() {
-  return new IFCViewerEngine({ container: document.createElement('div') });
+  return new IFCViewerEngine({ container: document.createElement("div") });
 }
 
 // Verbatim from the generated IFC.
 const WALL_FACES = [
-  'Envelope Panel - End Wall at Y Min',
-  'Envelope Panel - Side Wall at X Max',
-  'Envelope Panel - End Wall at Y Max',
-  'Envelope Panel - Side Wall at X Min',
+  "Envelope Panel - End Wall at Y Min",
+  "Envelope Panel - Side Wall at X Max",
+  "Envelope Panel - End Wall at Y Max",
+  "Envelope Panel - Side Wall at X Min",
 ];
 
-const ROOF_FACE = 'Envelope Panel - Roof';
+const ROOF_FACE = "Envelope Panel - Roof";
 
 const PIECE_SUFFIXES: [suffix: string, ifcClass: string][] = [
-  ['Outer Skin', 'IfcPlate'],
-  ['Core', 'IfcBuildingElementPart'],
-  ['Inner Liner', 'IfcPlate'],
+  ["Outer Skin", "IfcPlate"],
+  ["Core", "IfcBuildingElementPart"],
+  ["Inner Liner", "IfcPlate"],
 ];
 
 // Vertical, closing two wall faces each - so these follow the Walls toggle.
 const CORNER_FLASHING = [
-  'Envelope Flashing - Corner at X Min Y Min',
-  'Envelope Flashing - Corner at X Max Y Min',
-  'Envelope Flashing - Corner at X Max Y Max',
-  'Envelope Flashing - Corner at X Min Y Max',
+  "Envelope Flashing - Corner at X Min Y Min",
+  "Envelope Flashing - Corner at X Max Y Min",
+  "Envelope Flashing - Corner at X Max Y Max",
+  "Envelope Flashing - Corner at X Min Y Max",
 ];
 
 // Capping the roof edge - so these follow the Roof toggle.
 const EDGE_FLASHING = [
-  'Envelope Flashing - Eave at X Min',
-  'Envelope Flashing - Eave at X Max',
-  'Envelope Flashing - Rake at Y Min',
-  'Envelope Flashing - Rake at Y Max',
+  "Envelope Flashing - Eave at X Min",
+  "Envelope Flashing - Eave at X Max",
+  "Envelope Flashing - Rake at Y Min",
+  "Envelope Flashing - Rake at Y Max",
 ];
 
 // Elements the envelope patterns must never catch.
@@ -315,22 +311,22 @@ const EDGE_FLASHING = [
 // only thing keeping voids out of a visibility toggle. A door or window hole in
 // an end wall produces three of them, one per piece.
 const NON_ENVELOPE: [ifcClass: string, name: string][] = [
-  ['IfcSlab', 'IfcSlab #1'],
-  ['IfcSlab', 'IfcSlab #2'],
-  ['IfcPlate', 'Shear Tab at Start of B1.b1 - Plate'],
-  ['IfcPlate', 'Shear Tab at End of B5.b3 - Plate'],
-  ['IfcPlate', 'Base Plate for Column A1 - Base Plate'],
-  ['IfcPlate', 'Base Plate for Column E4 - Base Plate'],
-  ['IfcColumn', 'A1'],
-  ['IfcBeam', 'B1.b1'],
-  ['IfcOpeningElement', 'Envelope Panel - End Wall at Y Min - Outer Skin Opening'],
-  ['IfcOpeningElement', 'Envelope Panel - End Wall at Y Min - Core Opening'],
-  ['IfcOpeningElement', 'Envelope Panel - End Wall at Y Min - Inner Liner Opening'],
+  ["IfcSlab", "IfcSlab #1"],
+  ["IfcSlab", "IfcSlab #2"],
+  ["IfcPlate", "Shear Tab at Start of B1.b1 - Plate"],
+  ["IfcPlate", "Shear Tab at End of B5.b3 - Plate"],
+  ["IfcPlate", "Base Plate for Column A1 - Base Plate"],
+  ["IfcPlate", "Base Plate for Column E4 - Base Plate"],
+  ["IfcColumn", "A1"],
+  ["IfcBeam", "B1.b1"],
+  ["IfcOpeningElement", "Envelope Panel - End Wall at Y Min - Outer Skin Opening"],
+  ["IfcOpeningElement", "Envelope Panel - End Wall at Y Min - Core Opening"],
+  ["IfcOpeningElement", "Envelope Panel - End Wall at Y Min - Inner Liner Opening"],
   // Doors and windows sit in the end walls but are named "Door in Envelope
   // Panel - ...", so the anchored patterns miss them and they keep their own
   // toggles.
-  ['IfcDoor', 'Door in Envelope Panel - End Wall at Y Min'],
-  ['IfcWindow', 'Window #1a in Envelope Panel - End Wall at Y Min'],
+  ["IfcDoor", "Door in Envelope Panel - End Wall at Y Min"],
+  ["IfcWindow", "Window #1a in Envelope Panel - End Wall at Y Min"],
 ];
 
 function buildIndustrialBuilding(): {
@@ -353,19 +349,19 @@ function buildIndustrialBuilding(): {
   for (const face of WALL_FACES) {
     // The IfcWall / IfcRoof panel face is a bodyless container — its geometry
     // lives in the three pieces below, so Fragments reports no geometry for it.
-    wallNames.push(add('IfcWall', face, true));
+    wallNames.push(add("IfcWall", face, true));
     for (const [suffix, ifcClass] of PIECE_SUFFIXES) {
       wallNames.push(add(ifcClass, `${face} - ${suffix}`));
     }
   }
 
-  roofNames.push(add('IfcRoof', ROOF_FACE, true));
+  roofNames.push(add("IfcRoof", ROOF_FACE, true));
   for (const [suffix, ifcClass] of PIECE_SUFFIXES) {
     roofNames.push(add(ifcClass, `${ROOF_FACE} - ${suffix}`));
   }
 
-  for (const name of CORNER_FLASHING) wallNames.push(add('IfcDiscreteAccessory', name));
-  for (const name of EDGE_FLASHING) roofNames.push(add('IfcDiscreteAccessory', name));
+  for (const name of CORNER_FLASHING) wallNames.push(add("IfcDiscreteAccessory", name));
+  for (const name of EDGE_FLASHING) roofNames.push(add("IfcDiscreteAccessory", name));
 
   const otherNames = NON_ENVELOPE.map(([ifcClass, name]) => add(ifcClass, name));
 
@@ -381,37 +377,37 @@ beforeEach(() => {
   resetViewerMocks();
 });
 
-describe('IFCViewerEngine.setCategoryVisible - insulated metal panel envelope', () => {
-  it('hides each wall panel, its three pieces and the corner flashing', async () => {
+describe("IFCViewerEngine.setCategoryVisible - insulated metal panel envelope", () => {
+  it("hides each wall panel, its three pieces and the corner flashing", async () => {
     const { elements, wallNames } = buildIndustrialBuilding();
     setModelElements(elements);
 
-    await createEngine().setCategoryVisible('walls', false);
+    await createEngine().setCategoryVisible("walls", false);
 
     // Exact equality, so an over-broad pattern that also swallowed the roof
     // pieces, a shear tab or a base plate fails here.
     expect(hiddenNames()).toEqual(wallNames);
   });
 
-  it('hides the roof panel, its three pieces and the eave and rake flashing', async () => {
+  it("hides the roof panel, its three pieces and the eave and rake flashing", async () => {
     const { elements, roofNames } = buildIndustrialBuilding();
     setModelElements(elements);
 
-    await createEngine().setCategoryVisible('roofs', false);
+    await createEngine().setCategoryVisible("roofs", false);
 
     expect(hiddenNames()).toEqual(roofNames);
   });
 
-  it('assigns every envelope element to exactly one of walls and roofs', async () => {
+  it("assigns every envelope element to exactly one of walls and roofs", async () => {
     const { elements, wallNames, roofNames, otherNames } = buildIndustrialBuilding();
 
     setModelElements(elements);
-    await createEngine().setCategoryVisible('walls', false);
+    await createEngine().setCategoryVisible("walls", false);
     const walls = hiddenLocalIds();
 
     resetViewerMocks();
     setModelElements(elements);
-    await createEngine().setCategoryVisible('roofs', false);
+    await createEngine().setCategoryVisible("roofs", false);
     const roofs = hiddenLocalIds();
 
     // Disjoint: nothing is claimed by both toggles.
@@ -430,11 +426,11 @@ describe('IFCViewerEngine.setCategoryVisible - insulated metal panel envelope', 
     }
   });
 
-  it('turns a category back on with the same membership it hid', async () => {
+  it("turns a category back on with the same membership it hid", async () => {
     const { elements, roofNames } = buildIndustrialBuilding();
     setModelElements(elements);
 
-    await createEngine().setCategoryVisible('roofs', true);
+    await createEngine().setCategoryVisible("roofs", true);
 
     expect(hiderSetCalls.every((call) => call.visible)).toBe(true);
     const shown = new Set(hiderSetCalls.flatMap((call) => call.localIds));
@@ -442,22 +438,22 @@ describe('IFCViewerEngine.setCategoryVisible - insulated metal panel envelope', 
   });
 });
 
-describe('IFCViewerEngine.setCategoryVisible - other roof authoring', () => {
-  it('still hides a containment dome roof authored as a named IfcSlab', async () => {
+describe("IFCViewerEngine.setCategoryVisible - other roof authoring", () => {
+  it("still hides a containment dome roof authored as a named IfcSlab", async () => {
     // The pre-existing behaviour the envelope patterns were added alongside:
     // roofs also matches an IfcSlab called "Roof Slab", and must not start
     // hiding the floor slab next to it.
     setModelElements([
-      { localId: 1, ifcClass: 'IfcSlab', name: 'Roof Slab' },
-      { localId: 2, ifcClass: 'IfcSlab', name: 'Floor Slab' },
+      { localId: 1, ifcClass: "IfcSlab", name: "Roof Slab" },
+      { localId: 2, ifcClass: "IfcSlab", name: "Floor Slab" },
     ]);
 
-    await createEngine().setCategoryVisible('roofs', false);
+    await createEngine().setCategoryVisible("roofs", false);
 
-    expect(hiddenNames()).toEqual(['Roof Slab']);
+    expect(hiddenNames()).toEqual(["Roof Slab"]);
   });
 
-  it('hides a containment dome authored as a named IfcBuildingElementProxy', async () => {
+  it("hides a containment dome authored as a named IfcBuildingElementProxy", async () => {
     // Nuclear reactor models write the dome as IfcBuildingElementProxy
     // "Containment Dome" (create_dome() in
     // alchemy-backend/app/ifc_authoring_tools.py), not an IfcRoof or "Roof
@@ -466,13 +462,13 @@ describe('IFCViewerEngine.setCategoryVisible - other roof authoring', () => {
     // shell wall shares the model and must stay off the Roof toggle (it is an
     // IfcWall, owned by Walls).
     setModelElements([
-      { localId: 1, ifcClass: 'IfcBuildingElementProxy', name: 'Containment Dome' },
-      { localId: 2, ifcClass: 'IfcWall', name: 'Containment Shell Wall' },
+      { localId: 1, ifcClass: "IfcBuildingElementProxy", name: "Containment Dome" },
+      { localId: 2, ifcClass: "IfcWall", name: "Containment Shell Wall" },
     ]);
 
-    await createEngine().setCategoryVisible('roofs', false);
+    await createEngine().setCategoryVisible("roofs", false);
 
-    expect(hiddenNames()).toEqual(['Containment Dome']);
+    expect(hiddenNames()).toEqual(["Containment Dome"]);
   });
 });
 
@@ -488,8 +484,8 @@ function shape(
   }));
 }
 
-describe('IFCViewerEngine.enumerateWallGroups / enumerateRoofGroups', () => {
-  it('groups each wall panel over its three layers, plus a corner-flashing group', async () => {
+describe("IFCViewerEngine.enumerateWallGroups / enumerateRoofGroups", () => {
+  it("groups each wall panel over its three layers, plus a corner-flashing group", async () => {
     const { elements } = buildIndustrialBuilding();
     setModelElements(elements);
 
@@ -498,41 +494,41 @@ describe('IFCViewerEngine.enumerateWallGroups / enumerateRoofGroups', () => {
     // Four panels (sorted by name) each own Outer Skin → Core → Inner Liner,
     // then a single Corner Flashing group collects the four corner accessories.
     expect(groups).toEqual([
-      { label: 'Envelope Panel - End Wall at Y Max', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - End Wall at Y Min', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - Side Wall at X Max', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - Side Wall at X Min', members: ['Outer Skin', 'Core', 'Inner Liner'] },
+      { label: "Envelope Panel - End Wall at Y Max", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - End Wall at Y Min", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - Side Wall at X Max", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - Side Wall at X Min", members: ["Outer Skin", "Core", "Inner Liner"] },
       {
-        label: 'Corner Flashing',
+        label: "Corner Flashing",
         members: [
-          'Corner at X Max Y Max',
-          'Corner at X Max Y Min',
-          'Corner at X Min Y Max',
-          'Corner at X Min Y Min',
+          "Corner at X Max Y Max",
+          "Corner at X Max Y Min",
+          "Corner at X Min Y Max",
+          "Corner at X Min Y Min",
         ],
       },
     ]);
   });
 
-  it('groups the roof panel over its layers, plus an eave/rake flashing group', async () => {
+  it("groups the roof panel over its layers, plus an eave/rake flashing group", async () => {
     const { elements } = buildIndustrialBuilding();
     setModelElements(elements);
 
     const groups = shape(await createEngine().enumerateRoofGroups());
 
     expect(groups).toEqual([
-      { label: 'Envelope Panel - Roof', members: ['Outer Skin', 'Core', 'Inner Liner'] },
+      { label: "Envelope Panel - Roof", members: ["Outer Skin", "Core", "Inner Liner"] },
       {
-        label: 'Eave & Rake Flashing',
-        members: ['Eave at X Max', 'Eave at X Min', 'Rake at Y Max', 'Rake at Y Min'],
+        label: "Eave & Rake Flashing",
+        members: ["Eave at X Max", "Eave at X Min", "Rake at Y Max", "Rake at Y Min"],
       },
     ]);
   });
 
-  it('returns no groups for a plain building, so the flat Walls toggle is kept', async () => {
+  it("returns no groups for a plain building, so the flat Walls toggle is kept", async () => {
     setModelElements([
-      { localId: 1, ifcClass: 'IfcWall', name: 'Generic Wall 1' },
-      { localId: 2, ifcClass: 'IfcWallStandardCase', name: 'Generic Wall 2' },
+      { localId: 1, ifcClass: "IfcWall", name: "Generic Wall 1" },
+      { localId: 2, ifcClass: "IfcWallStandardCase", name: "Generic Wall 2" },
     ]);
 
     expect(await createEngine().enumerateWallGroups()).toEqual([]);
@@ -545,13 +541,13 @@ describe('IFCViewerEngine.enumerateWallGroups / enumerateRoofGroups', () => {
   // dome roof — must still appear as its own toggle under its category, or it
   // has no sidebar control at all. The bodyless panel-face containers must NOT
   // (their geometry is in the grouped pieces).
-  it('adds a standalone body-bearing containment wall/roof as its own entry when panels force tree mode', async () => {
+  it("adds a standalone body-bearing containment wall/roof as its own entry when panels force tree mode", async () => {
     const { elements } = buildIndustrialBuilding();
     // Plain body-bearing IfcWall/IfcRoof belonging to no envelope panel.
     setModelElements([
       ...elements,
-      { localId: 9001, ifcClass: 'IfcWall', name: 'IfcWall #5' },
-      { localId: 9002, ifcClass: 'IfcRoof', name: 'IfcRoof #2' },
+      { localId: 9001, ifcClass: "IfcWall", name: "IfcWall #5" },
+      { localId: 9002, ifcClass: "IfcRoof", name: "IfcRoof #2" },
     ]);
 
     const engine = createEngine();
@@ -561,82 +557,76 @@ describe('IFCViewerEngine.enumerateWallGroups / enumerateRoofGroups', () => {
     // envelope wall-face containers are absent — the exact list proves it, since
     // each would otherwise appear as its own trailing single-element group.
     expect(shape(await engine.enumerateWallGroups())).toEqual([
-      { label: 'Envelope Panel - End Wall at Y Max', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - End Wall at Y Min', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - Side Wall at X Max', members: ['Outer Skin', 'Core', 'Inner Liner'] },
-      { label: 'Envelope Panel - Side Wall at X Min', members: ['Outer Skin', 'Core', 'Inner Liner'] },
+      { label: "Envelope Panel - End Wall at Y Max", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - End Wall at Y Min", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - Side Wall at X Max", members: ["Outer Skin", "Core", "Inner Liner"] },
+      { label: "Envelope Panel - Side Wall at X Min", members: ["Outer Skin", "Core", "Inner Liner"] },
       {
-        label: 'Corner Flashing',
+        label: "Corner Flashing",
         members: [
-          'Corner at X Max Y Max',
-          'Corner at X Max Y Min',
-          'Corner at X Min Y Max',
-          'Corner at X Min Y Min',
+          "Corner at X Max Y Max",
+          "Corner at X Max Y Min",
+          "Corner at X Min Y Max",
+          "Corner at X Min Y Min",
         ],
       },
-      { label: 'IfcWall #5', members: ['IfcWall #5'] },
+      { label: "IfcWall #5", members: ["IfcWall #5"] },
     ]);
 
     // Roof: the envelope roof panel + eave/rake flashing, then the dome. The
     // bodyless "Envelope Panel - Roof" IfcRoof container is not added again (the
     // group of that name is the 3-piece panel group, not a 1-member entry).
     expect(shape(await engine.enumerateRoofGroups())).toEqual([
-      { label: 'Envelope Panel - Roof', members: ['Outer Skin', 'Core', 'Inner Liner'] },
+      { label: "Envelope Panel - Roof", members: ["Outer Skin", "Core", "Inner Liner"] },
       {
-        label: 'Eave & Rake Flashing',
-        members: ['Eave at X Max', 'Eave at X Min', 'Rake at Y Max', 'Rake at Y Min'],
+        label: "Eave & Rake Flashing",
+        members: ["Eave at X Max", "Eave at X Min", "Rake at Y Max", "Rake at Y Min"],
       },
-      { label: 'IfcRoof #2', members: ['IfcRoof #2'] },
+      { label: "IfcRoof #2", members: ["IfcRoof #2"] },
     ]);
   });
 });
 
-describe('IFCViewerEngine.enumerateColumnGroups', () => {
-  it('nests each column base-plate assembly (plate, bolts, nuts) under its column', async () => {
+describe("IFCViewerEngine.enumerateColumnGroups", () => {
+  it("nests each column base-plate assembly (plate, bolts, nuts) under its column", async () => {
     setModelElements([
-      { localId: 1, ifcClass: 'IfcColumn', name: 'Column A1' },
-      { localId: 2, ifcClass: 'IfcColumn', name: 'Column E4' },
-      { localId: 3, ifcClass: 'IfcPlate', name: 'Base Plate for Column A1 - Base Plate' },
-      { localId: 4, ifcClass: 'IfcMechanicalFastener', name: 'Base Plate for Column A1 - Anchor Bolt 0' },
-      { localId: 5, ifcClass: 'IfcMechanicalFastener', name: 'Base Plate for Column A1 - Hex Nut 0' },
-      { localId: 6, ifcClass: 'IfcPlate', name: 'Base Plate for Column E4 - Base Plate' },
+      { localId: 1, ifcClass: "IfcColumn", name: "Column A1" },
+      { localId: 2, ifcClass: "IfcColumn", name: "Column E4" },
+      { localId: 3, ifcClass: "IfcPlate", name: "Base Plate for Column A1 - Base Plate" },
+      { localId: 4, ifcClass: "IfcMechanicalFastener", name: "Base Plate for Column A1 - Anchor Bolt 0" },
+      { localId: 5, ifcClass: "IfcMechanicalFastener", name: "Base Plate for Column A1 - Hex Nut 0" },
+      { localId: 6, ifcClass: "IfcPlate", name: "Base Plate for Column E4 - Base Plate" },
       // Shares the IfcPlate class but belongs to no column — must be ignored.
-      { localId: 7, ifcClass: 'IfcPlate', name: 'Envelope Panel - Side Wall at X Max - Outer Skin' },
+      { localId: 7, ifcClass: "IfcPlate", name: "Envelope Panel - Side Wall at X Max - Outer Skin" },
     ]);
 
     const groups = shape(await createEngine().enumerateColumnGroups());
 
     expect(groups).toEqual([
       {
-        label: 'Column A1',
-        members: ['Column', 'Anchor Bolt 0', 'Base Plate', 'Hex Nut 0'],
+        label: "Column A1",
+        members: ["Column", "Anchor Bolt 0", "Base Plate", "Hex Nut 0"],
       },
-      { label: 'Column E4', members: ['Column', 'Base Plate'] },
+      { label: "Column E4", members: ["Column", "Base Plate"] },
     ]);
   });
 
-  it('returns no groups when columns have no base plates, so the flat toggle is kept', async () => {
+  it("returns no groups when columns have no base plates, so the flat toggle is kept", async () => {
     setModelElements([
-      { localId: 1, ifcClass: 'IfcColumn', name: 'Column A1' },
-      { localId: 2, ifcClass: 'IfcColumn', name: 'Column A2' },
+      { localId: 1, ifcClass: "IfcColumn", name: "Column A1" },
+      { localId: 2, ifcClass: "IfcColumn", name: "Column A2" },
     ]);
 
     expect(await createEngine().enumerateColumnGroups()).toEqual([]);
   });
 });
 
-describe('IFCViewerEngine.enumerateCategories', () => {
-  it('reports walls and roofs on a clear-span building so their toggles render', async () => {
+describe("IFCViewerEngine.enumerateCategories", () => {
+  it("reports walls and roofs on a clear-span building so their toggles render", async () => {
     const { elements } = buildIndustrialBuilding();
     setModelElements(elements);
 
-    const present = await createEngine().enumerateCategories([
-      'walls',
-      'roofs',
-      'floors',
-      'doors',
-      'pipes',
-    ]);
+    const present = await createEngine().enumerateCategories(["walls", "roofs", "floors", "doors", "pipes"]);
 
     // walls and roofs are satisfied twice over here - by the name patterns and
     // by the IfcWall/IfcRoof containers - which is the state to hold onto:
@@ -644,6 +634,6 @@ describe('IFCViewerEngine.enumerateCategories', () => {
     // so these two toggles did not render at all.
     // floors comes from the two base slabs, doors from the end-wall door;
     // pipes is absent from this model.
-    expect(present).toEqual(['walls', 'roofs', 'floors', 'doors']);
+    expect(present).toEqual(["walls", "roofs", "floors", "doors"]);
   });
 });

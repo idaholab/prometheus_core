@@ -22,7 +22,8 @@ const { guestOnly, requireAdmin, requireUser, setupOnly } = await import("./guar
 const USER: User = { identifier: "someone", role: "user", provider: "local" };
 const ADMIN: User = { ...USER, role: "admin" };
 
-const args = (url: string) => ({ request: new Request(`http://app${url}`), params: {}, context: {} }) as LoaderFunctionArgs;
+const args = (url: string) =>
+  ({ request: new Request(`http://app${url}`), params: {}, context: {} }) as LoaderFunctionArgs;
 const as = (session: SessionStatus) => resolveSession.mockResolvedValue(session);
 
 /** Where a guard sends the visitor, or null when it lets them in. */

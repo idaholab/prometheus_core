@@ -1,0 +1,6 @@
+# Commits git blame should skip: formatting-only changes.
+# Use locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file automatically.
+
+# PPLT-482: format the frontend with Prettier
+e3059c218048e834bb6aa288b9ba8876e9bd9d8a

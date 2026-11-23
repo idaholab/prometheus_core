@@ -353,8 +353,9 @@ make install     # npm install
 make dev         # Vite dev server on port 5150 (hot reload)
 make build       # Production bundle → dist/
 make lint        # eslint
+make format      # Prettier (make format-check to only check)
 make typecheck   # tsc
-make check       # lint + typecheck
+make check       # format-check + lint + typecheck + test
 ```
 
 The Vite dev server proxies `/api` to the backend (`VITE_BACKEND_URL`, default `http://localhost:8600`). React unit tests live alongside the source as `src/**/*.test.ts`.

@@ -47,7 +47,10 @@ test("filterList query matches any search field", () => {
 });
 
 test("filterList facet keeps only items with that facet", () => {
-  assert.deepEqual(names(filterList(ITEMS, FULL, { query: "", facet: "b" })), ["Heat Solver", "Flux Plotter"]);
+  assert.deepEqual(names(filterList(ITEMS, FULL, { query: "", facet: "b" })), [
+    "Heat Solver",
+    "Flux Plotter",
+  ]);
 });
 
 test("filterList query and facet combine with AND", () => {
@@ -71,5 +74,8 @@ test("filterList without facetOf ignores the facet", () => {
 test("filterList without searchFields ignores the query", () => {
   const config: ListFilterConfig<Item> = { facetOf: FULL.facetOf };
   assert.deepEqual(filterList(ITEMS, config, { query: "mesh", facet: ALL }), [MESH, HEAT, REPORT, FLUX]);
-  assert.deepEqual(names(filterList(ITEMS, config, { query: "mesh", facet: "b" })), ["Heat Solver", "Flux Plotter"]);
+  assert.deepEqual(names(filterList(ITEMS, config, { query: "mesh", facet: "b" })), [
+    "Heat Solver",
+    "Flux Plotter",
+  ]);
 });

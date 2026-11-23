@@ -227,7 +227,9 @@ export const api = {
   },
 
   activateSigningKey(keyId: string): Promise<SigningKey> {
-    return request<SigningKey>(`/admin/signing-keys/${encodeURIComponent(keyId)}/activate`, { method: "POST" });
+    return request<SigningKey>(`/admin/signing-keys/${encodeURIComponent(keyId)}/activate`, {
+      method: "POST",
+    });
   },
 
   retireSigningKey(keyId: string): Promise<SigningKey> {

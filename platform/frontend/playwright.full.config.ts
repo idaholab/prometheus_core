@@ -37,7 +37,12 @@ export default defineConfig({
   failOnFlakyTests: CI,
   // One signed-in admin, created once by global-setup.ts, is shared by every test
   workers: 1,
-  reporter: CI ? [["list"], ["html", { open: "never", outputFolder: `playwright-report-full/${process.env.E2E_RUN_ID}` }]] : "list",
+  reporter: CI
+    ? [
+        ["list"],
+        ["html", { open: "never", outputFolder: `playwright-report-full/${process.env.E2E_RUN_ID}` }],
+      ]
+    : "list",
   globalSetup: "./e2e/full/global-setup.ts",
   globalTeardown: "./e2e/full/global-teardown.ts",
   outputDir: RUN_DIR,

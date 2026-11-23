@@ -105,7 +105,12 @@ export const BUILDER_NODES: WorkflowGraphNode[] = [
       width: 170,
     },
   },
-  { id: "corrosion-drop", type: "connect", position: { x: 345, y: 464 }, data: { label: "drop to connect →" } },
+  {
+    id: "corrosion-drop",
+    type: "connect",
+    position: { x: 345, y: 464 },
+    data: { label: "drop to connect →" },
+  },
 ];
 export const BUILDER_WIRES: WorkflowGraphWire[] = [
   { from: "get-material-data", to: "radiation-damage" },
@@ -149,8 +154,21 @@ export const UNSAVED_CHANGES = "1 node added, 2 wires changed";
 // Placeholder versions of Comprehensive Material Analysis, newest first, from
 // Figma D.8 (the Builder's History tab in PPLT-409 D.2c).
 export const WORKFLOW_VERSIONS: WorkflowVersion[] = [
-  { id: "v1.2.0", version: "v1.2.0", summary: "+ QA Gate after analyses", date: "2 days ago", author: "V. Kerimov", latest: true },
-  { id: "v1.1.0", version: "v1.1.0", summary: "Swapped Thermal agent v1.8→v2.0", date: "Oct 1", author: "Dr. Halsey" },
+  {
+    id: "v1.2.0",
+    version: "v1.2.0",
+    summary: "+ QA Gate after analyses",
+    date: "2 days ago",
+    author: "V. Kerimov",
+    latest: true,
+  },
+  {
+    id: "v1.1.0",
+    version: "v1.1.0",
+    summary: "Swapped Thermal agent v1.8→v2.0",
+    date: "Oct 1",
+    author: "Dr. Halsey",
+  },
   { id: "v1.0.0", version: "v1.0.0", summary: "Initial template", date: "Sep 12", author: "platform-team" },
 ];
 
@@ -285,5 +303,7 @@ export const INVALID_NODES: WorkflowGraphNode[] = [
     },
   },
 ];
-export const INVALID_WIRES: WorkflowGraphWire[] = [{ from: "mesh-generator", to: "radiation-damage", invalid: true }];
+export const INVALID_WIRES: WorkflowGraphWire[] = [
+  { from: "mesh-generator", to: "radiation-damage", invalid: true },
+];
 export const INVALID_ERROR = "Type mismatch: mesh → material_data";

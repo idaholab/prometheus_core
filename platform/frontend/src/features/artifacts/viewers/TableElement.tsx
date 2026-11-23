@@ -63,7 +63,7 @@ export function TableElement({ element }: ViewerProps) {
   );
   const numeric = useMemo(() => (parsed ? numericColumns(parsed.header, parsed.rows) : []), [parsed]);
   const sorted = useMemo(
-    () => (parsed && sort ? sortRows(parsed.rows, sort.column, sort.direction) : parsed?.rows ?? []),
+    () => (parsed && sort ? sortRows(parsed.rows, sort.column, sort.direction) : (parsed?.rows ?? [])),
     [parsed, sort],
   );
 
@@ -139,7 +139,8 @@ export function TableElement({ element }: ViewerProps) {
                           title="Sort by this column"
                         >
                           {label || <span className="text-base-content/40">(blank)</span>}
-                          {active && (active.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+                          {active &&
+                            (active.direction === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                         </button>
                       </th>
                     );
@@ -150,7 +151,10 @@ export function TableElement({ element }: ViewerProps) {
                 {sorted.slice(0, MAX_TABLE_ROWS).map((row, r) => (
                   <tr key={r}>
                     {row.map((cell, c) => (
-                      <td key={c} className={`whitespace-nowrap ${numeric[c] ? "text-right tabular-nums" : ""}`}>
+                      <td
+                        key={c}
+                        className={`whitespace-nowrap ${numeric[c] ? "text-right tabular-nums" : ""}`}
+                      >
                         {cell}
                       </td>
                     ))}
@@ -166,8 +170,8 @@ export function TableElement({ element }: ViewerProps) {
           )}
           {parsed.rows.length > MAX_TABLE_ROWS && (
             <div className="bg-base-100 px-4 py-2 text-xs text-base-content/60 border-t border-base-300">
-              Showing {fmt.format(MAX_TABLE_ROWS)} of {fmt.format(parsed.rows.length)} rows — download for the full
-              file.
+              Showing {fmt.format(MAX_TABLE_ROWS)} of {fmt.format(parsed.rows.length)} rows — download for the
+              full file.
             </div>
           )}
         </>

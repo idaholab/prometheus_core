@@ -31,7 +31,13 @@ interface SwitchToRunDialogProps {
  * A native modal <dialog>, as in the admin screens, so the browser traps
  * focus, puts the backdrop over the Builder and closes it on Escape.
  */
-export function SwitchToRunDialog({ open, changes, onCancel, onSaveFirst, onDiscard }: SwitchToRunDialogProps) {
+export function SwitchToRunDialog({
+  open,
+  changes,
+  onCancel,
+  onSaveFirst,
+  onDiscard,
+}: SwitchToRunDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const bodyId = useId();
@@ -57,8 +63,8 @@ export function SwitchToRunDialog({ open, changes, onCancel, onSaveFirst, onDisc
           Switch to changing this run?
         </h2>
         <p id={bodyId} className="mt-3 mb-0 text-xs leading-relaxed text-base-content/70">
-          You have unsaved structural changes to the template ({changes}). A run can only change step settings, so
-          these changes would be dropped.
+          You have unsaved structural changes to the template ({changes}). A run can only change step
+          settings, so these changes would be dropped.
         </p>
         <div className="modal-action mt-5 flex-wrap justify-start gap-2">
           <Button label="Keep editing" size="sm" variant="ghost" onClick={onCancel} />

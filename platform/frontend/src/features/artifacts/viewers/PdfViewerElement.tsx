@@ -45,11 +45,7 @@ export function PdfViewerElement({ element }: ViewerProps) {
           Download
         </a>
       </div>
-      <iframe
-        src={url}
-        title={name}
-        className="w-full h-[600px] bg-base-100"
-      />
+      <iframe src={url} title={name} className="w-full h-[600px] bg-base-100" />
     </div>
   );
 }

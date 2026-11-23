@@ -103,7 +103,10 @@ const SCREENS: Screen[] = [
 async function expectScreen(page: Page, screen: Screen) {
   const what = `the ${screen.link} screen`;
   await expect(page, what).toHaveURL(screen.path);
-  await expect(page.getByRole("link", { name: screen.link, exact: true }), what).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: screen.link, exact: true }), what).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(page.getByRole("heading", { level: 1 }), what).toHaveText(screen.title);
   await expect(screen.content(page.getByRole("main")), what).toBeVisible();
 }
@@ -158,7 +161,9 @@ test("ROUTE-1, ROUTE-5: loading a main screen's address directly opens that scre
  * - and the app shows its "page not found" message inside the usual shell,
  *   with a link back to Home that works.
  */
-test("ROUTE-3, ROUTE-5: loading an unknown address opens the app's page-not-found message", async ({ page }) => {
+test("ROUTE-3, ROUTE-5: loading an unknown address opens the app's page-not-found message", async ({
+  page,
+}) => {
   const response = await page.goto("/no/such/screen");
   expect(response?.status(), "nginx's answer for an unknown address").toBe(200);
 
@@ -168,5 +173,8 @@ test("ROUTE-3, ROUTE-5: loading an unknown address opens the app's page-not-foun
   await expect(page.getByRole("link", { name: "Agent Registry", exact: true })).toBeVisible();
 
   await main.getByRole("link", { name: "Go to Home" }).click();
-  await expectScreen(page, SCREENS.find((screen) => screen.path === "/")!);
+  await expectScreen(
+    page,
+    SCREENS.find((screen) => screen.path === "/")!,
+  );
 });

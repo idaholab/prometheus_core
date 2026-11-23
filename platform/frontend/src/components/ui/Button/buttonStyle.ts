@@ -15,15 +15,7 @@
  * file exports only components, which Fast Refresh needs. */
 
 export type ButtonVariant =
-  | "neutral"
-  | "primary"
-  | "secondary"
-  | "accent"
-  | "info"
-  | "success"
-  | "warning"
-  | "error"
-  | "ghost";
+  "neutral" | "primary" | "secondary" | "accent" | "info" | "success" | "warning" | "error" | "ghost";
 
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
@@ -73,7 +65,15 @@ export interface ButtonStyle {
  * e.g. for the ghost rail style; both stay with the caller.
  */
 export function buttonClassName(
-  { variant, size = "md", active = false, wide = false, soft = false, outline = false, subtle = false }: ButtonStyle,
+  {
+    variant,
+    size = "md",
+    active = false,
+    wide = false,
+    soft = false,
+    outline = false,
+    subtle = false,
+  }: ButtonStyle,
   { shape, state }: { shape?: string | false | null; state?: string } = {},
 ): string {
   return [

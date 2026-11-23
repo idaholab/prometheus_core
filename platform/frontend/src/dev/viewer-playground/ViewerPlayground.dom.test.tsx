@@ -19,10 +19,16 @@ import { afterEach, expect, test, vi } from "vitest";
 import type { ViewerCase } from "./viewerCase";
 
 // jsdom has no matchMedia; useTheme reads it when data-theme is unset.
-vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+}));
 
 vi.mock("@/features/artifacts", () => ({
-  artifactsToElements: (artifacts: { name: string }[]) => artifacts.map((a) => ({ type: "custom", name: a.name })),
+  artifactsToElements: (artifacts: { name: string }[]) =>
+    artifacts.map((a) => ({ type: "custom", name: a.name })),
   ElementList: ({ elements }: { elements: { name: string }[] }) => <div>viewer for {elements[0].name}</div>,
 }));
 

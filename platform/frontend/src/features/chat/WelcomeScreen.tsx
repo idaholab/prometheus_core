@@ -68,9 +68,7 @@ export function WelcomeScreen({ onSelect }: { onSelect: (text: string) => void }
         </div>
         <div className="max-w-md space-y-2 text-center">
           <h2 className="m-0 text-2xl font-bold text-base-content">{intro}</h2>
-          {showSuggestions && (
-            <p className="m-0 text-sm text-base-content/60">{suggestionTitle}</p>
-          )}
+          {showSuggestions && <p className="m-0 text-sm text-base-content/60">{suggestionTitle}</p>}
         </div>
         {showSuggestions && (
           <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
