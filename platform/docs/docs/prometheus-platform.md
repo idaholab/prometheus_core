@@ -67,8 +67,9 @@ From `frontend/`:
 make dev        # Start the Vite dev server (port 5150)
 make build      # Production bundle → dist/
 make lint       # eslint
+make format     # Prettier (make format-check to only check)
 make typecheck  # tsc
-make check      # lint + typecheck
+make check      # format-check + lint + typecheck + test
 ```
 
 ## Configuration

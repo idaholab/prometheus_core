@@ -16,6 +16,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
+import prettierConfig from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
 
 /* Folder rules (see the README's "Where code and tests go"):
@@ -77,4 +78,6 @@ export default defineConfig([
     files: ["e2e/**/*.ts", "playwright.config.ts", "playwright.full.config.ts"],
     languageOptions: { globals: globals.node },
   },
+  // Last: turns off ESLint rules that would fight Prettier's formatting
+  prettierConfig,
 ]);

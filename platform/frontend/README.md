@@ -26,6 +26,19 @@ If you are developing a production application, we recommend updating the config
 - Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
 - Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
 
+## Formatting
+
+Code is formatted with [Prettier](https://prettier.io) (settings in `.prettierrc.json`, skipped files in `.prettierignore`). It installs with the other dev dependencies, so there's nothing extra to set up.
+
+```bash
+npm run format        # format everything (also: make format)
+npm run format:check  # fail if anything isn't formatted (also: make format-check)
+```
+
+CI runs `format:check` in the `platform: frontend npm` job, so an unformatted file fails the PR; `npm run format` fixes it. `make check` runs it too. To format on save, install the Prettier extension for your editor (VS Code: `esbenp.prettier-vscode` with "Format On Save"; JetBrains: Settings, Prettier, "On save"). It picks up the project settings and version.
+
+Markdown is not formatted, so docs keep their hand-written line breaks and tables. ESLint's style rules that would conflict are turned off (`eslint-config-prettier`), so ESLint checks code and Prettier checks layout.
+
 ## Where code and tests go
 
 Code is grouped by the product area it belongs to, so the work for one screen or flow stays in one folder:
@@ -77,7 +90,7 @@ Notes:
 ## Testing
 
 ```bash
-npm test             # run every test once (also: make test; make check runs lint + typecheck + test)
+npm test             # run every test once (also: make test; make check runs format-check + lint + typecheck + test)
 npm run test:watch   # rerun on save
 ```
 

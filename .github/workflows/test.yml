@@ -581,6 +581,9 @@ jobs:
           cache-dependency-path: platform/frontend/package-lock.json
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # Fails on any file Prettier would change; `npm run format` fixes it
+      - name: Format
+        run: npm run format:check
       - name: Lint
         run: npm run lint
       - name: Typecheck
