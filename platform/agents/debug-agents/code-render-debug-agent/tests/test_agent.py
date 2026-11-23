@@ -36,6 +36,7 @@ CodeRenderDebugAgent = _MODULE.CodeRenderDebugAgent
 SAMPLES = _MODULE.SAMPLES
 MAX_LINES = _MODULE.MAX_LINES
 NEUTRAL_NAME = _MODULE.NEUTRAL_NAME
+DISPLAY_MODES = _MODULE.DISPLAY_MODES
 build_body = _MODULE.build_body
 parse_lines = _MODULE.parse_lines
 
@@ -82,8 +83,9 @@ def test_card_skills_match_samples():
     assert sorted(skill["id"] for skill in card["skills"]) == ALL_SKILLS
     for skill in card["skills"]:
         props = skill["inputSchema"]["properties"]
-        assert set(props) == {"lines", "routing"}
+        assert set(props) == {"lines", "routing", "display"}
         assert props["lines"]["maximum"] == MAX_LINES
+        assert props["display"]["enum"] == list(DISPLAY_MODES)
 
 
 @pytest.mark.parametrize("skill_id", ALL_SKILLS)
@@ -210,6 +212,28 @@ def test_routing_mime_errors_when_no_mime_routes_to_code(skill_id):
 @pytest.mark.parametrize("bad", [-1, MAX_LINES + 1, "abc", 1.5, True, "inf", "-inf", "nan", "1e999"])
 def test_invalid_lines_is_an_error_and_emits_nothing(bad):
     run = _run("render_python_sample", lines=bad)
+    assert run.result["status"] == "error"
+    run.agent.register_artifact_reference.assert_not_called()
+    run.agent.send_text_artifact.assert_not_called()
+
+
+@pytest.mark.parametrize("skill_id", ALL_SKILLS)
+def test_display_inline_is_the_default_and_sets_no_metadata(skill_id):
+    run = _run(skill_id)
+    assert run.registered.metadata == {}
+    assert run.result["display"] == "inline"
+    assert _run(skill_id, display="inline").registered.metadata == {}
+
+
+@pytest.mark.parametrize("skill_id", ALL_SKILLS)
+def test_display_panel_marks_the_artifact_for_the_side_panel(skill_id):
+    run = _run(skill_id, display="panel")
+    assert run.registered.metadata == {"display": "panel"}
+    assert run.result["display"] == "panel"
+
+
+def test_invalid_display_is_an_error_and_emits_nothing():
+    run = _run("render_python_sample", display="sidebar")
     assert run.result["status"] == "error"
     run.agent.register_artifact_reference.assert_not_called()
     run.agent.send_text_artifact.assert_not_called()
