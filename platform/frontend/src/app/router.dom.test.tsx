@@ -65,6 +65,11 @@ vi.mock("@/pages/PageWorkflows", async () => {
   };
 });
 vi.mock("@/pages/PageAdmin", () => ({ PageAdmin: () => <p>Admin page</p> }));
+const admin = vi.hoisted(() => ({ prefetchAdminUsers: vi.fn() }));
+vi.mock("@/features/admin", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/admin")>()),
+  prefetchAdminUsers: admin.prefetchAdminUsers,
+}));
 vi.mock("@/pages/PageAgentRegistry", () => ({
   PageAgentRegistry: () => {
     if (pages.registryThrows) throw new Error("boom");
@@ -140,12 +145,15 @@ test("a non-admin opening Admin is sent Home and never sees it", async () => {
   expect(await screen.findByText("Home page")).toBeVisible();
   expect(router.state.location.pathname).toBe("/");
   expect(screen.queryByText("Admin page")).not.toBeInTheDocument();
+  // The users list is only loaded once the guard has let the visitor in
+  expect(admin.prefetchAdminUsers).not.toHaveBeenCalled();
 });
 
-test("an admin can open Admin", async () => {
+test("an admin can open Admin, and its users list starts loading before the page renders", async () => {
   setCurrentUser(ADMIN);
   open("/admin");
   expect(await screen.findByText("Admin page")).toBeVisible();
+  expect(admin.prefetchAdminUsers).toHaveBeenCalledTimes(1);
 });
 
 test("an unknown URL shows Not Found inside the shell", async () => {
