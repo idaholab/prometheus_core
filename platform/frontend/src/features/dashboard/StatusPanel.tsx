@@ -95,8 +95,10 @@ function ArtifactViewerBody({ artifact }: { artifact: ArtifactMeta }) {
         "[&>div]:m-0 [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col",
         "[&>div>*]:m-0 [&>div>*]:flex [&>div>*]:min-h-0 [&>div>*]:flex-1 [&>div>*]:flex-col",
         "[&>div>*]:max-w-none [&>div>*]:rounded-none [&>div>*]:border-0",
-        // The viewer's body (everything after its header row) scrolls.
+        // The viewer's body (everything after its header row) fills and scrolls,
+        // and a code block's background fills it too.
         "[&>div>*>*:last-child]:min-h-0 [&>div>*>*:last-child]:flex-1 [&>div>*>*:last-child]:overflow-auto",
+        "[&_pre]:flex [&_pre]:flex-col [&_pre>code]:flex-1",
         // Inline height caps (code and table max-h-96, image 70vh, PDF 600px).
         "[&_[class*=max-h-]]:max-h-none [&_iframe]:h-full",
       ].join(" ")}

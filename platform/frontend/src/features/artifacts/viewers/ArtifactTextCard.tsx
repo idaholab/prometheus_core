@@ -86,7 +86,7 @@ export function ArtifactTextCard({
   return (
     <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">
       <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60">
-        <p className="text-sm font-medium text-base-content truncate flex items-center gap-1.5">
+        <p className="m-0 text-sm font-medium text-base-content truncate flex items-center gap-1.5">
           <Icon size={13} className="text-base-content/50 shrink-0" />
           {name}
           {badge}
