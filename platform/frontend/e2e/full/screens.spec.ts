@@ -79,7 +79,7 @@ const SCREENS: Screen[] = [
     link: "Jobs Console",
     path: "/jobs-console",
     title: "Jobs Console",
-    // A placeholder screen until PPLT-103; its own heading is all it shows
+    // A placeholder until PPLT-108 builds it (design: PPLT-103); its own heading is all it shows
     content: (main) => main.getByRole("heading", { level: 2, name: "Jobs Console" }),
   },
   {
