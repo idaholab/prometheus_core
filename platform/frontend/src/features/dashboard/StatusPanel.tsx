@@ -10,14 +10,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Cpu, Download, FolderOpen, PanelRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ElementList, artifactToElement, isPanelOnly } from "@/features/artifacts";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
-import { useChatState } from "@/features/chat";
+import { useChatState, type ChatState } from "@/features/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
 
 type StatusTab = "jobs" | "artifacts";
@@ -26,8 +26,7 @@ type StatusTab = "jobs" | "artifacts";
  * by id. A resumed conversation gives each assistant turn the artifacts it
  * produced (see `itemsFromTranscript` in `features/chat/store/chat.ts`), so this matches
  * the live session. */
-function useConversationArtifacts(): ArtifactMeta[] {
-  const { items } = useChatState();
+function useConversationArtifacts(items: ChatState["items"]): ArtifactMeta[] {
   const byId = new Map<string, ArtifactMeta>();
   for (const item of items) {
     if (item.kind !== "assistant") continue;
@@ -43,22 +42,28 @@ function canOpenInPanel(artifact: ArtifactMeta): boolean {
   return PANEL_VIEWABLE.has(artifact.render_hint);
 }
 
-/** The newest panel-only artifact this panel has not shown yet, if any. */
-function useNewestPanelArtifact(artifacts: ArtifactMeta[]): ArtifactMeta | null {
+/**
+ * Calls `onArrive` with the newest panel-only artifact that arrives live, so
+ * the panel can open it. Artifacts that come with a conversation's transcript
+ * (a sidebar switch, or recovering the open conversation after a reload) are
+ * not new: everything seen while a resume is in flight, or in the first render,
+ * is only recorded.
+ */
+function usePanelArrivals(
+  artifacts: ArtifactMeta[],
+  resuming: boolean,
+  onArrive: (artifact: ArtifactMeta) => void,
+): void {
   const seen = useRef<Set<string> | null>(null);
-  const [fresh, setFresh] = useState<ArtifactMeta | null>(null);
   useEffect(() => {
-    if (seen.current === null) {
-      // Artifacts already in a resumed conversation are not "new".
-      seen.current = new Set(artifacts.map((a) => a.artifact_id));
-      return;
-    }
-    const unseen = artifacts.filter((a) => !seen.current!.has(a.artifact_id));
-    for (const a of unseen) seen.current.add(a.artifact_id);
+    const first = seen.current === null;
+    const known = (seen.current ??= new Set());
+    const unseen = artifacts.filter((a) => !known.has(a.artifact_id));
+    for (const a of unseen) known.add(a.artifact_id);
+    if (first || resuming) return;
     const newest = [...unseen].reverse().find((a) => isPanelOnly(a) && canOpenInPanel(a));
-    if (newest) setFresh(newest);
-  }, [artifacts]);
-  return fresh;
+    if (newest) onArrive(newest);
+  }, [artifacts, resuming, onArrive]);
 }
 
 function ArtifactViewer({ artifact, onBack }: { artifact: ArtifactMeta; onBack: () => void }) {
@@ -172,21 +177,23 @@ interface StatusPanelProps {
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");
-  const artifacts = useConversationArtifacts();
+  const { items, resumingConversationId } = useChatState();
+  const artifacts = useConversationArtifacts(items);
+  const resuming = resumingConversationId !== null;
   const [openId, setOpenId] = useState<string | null>(null);
   const opened = artifacts.find((a) => a.artifact_id === openId) ?? null;
 
   // A new panel-only artifact (e.g. a generated MOOSE input) opens itself,
   // since the message no longer shows it inline.
-  const fresh = useNewestPanelArtifact(artifacts);
-  useEffect(() => {
-    if (!fresh) return;
-    setTab("artifacts");
-    setOpenId(fresh.artifact_id);
-    if (collapsed) onExpand();
-    // Only react to a newly arrived artifact, not to panel state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fresh]);
+  const openArrival = useCallback(
+    (artifact: ArtifactMeta) => {
+      setTab("artifacts");
+      setOpenId(artifact.artifact_id);
+      if (collapsed) onExpand();
+    },
+    [collapsed, onExpand],
+  );
+  usePanelArrivals(artifacts, resuming, openArrival);
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
