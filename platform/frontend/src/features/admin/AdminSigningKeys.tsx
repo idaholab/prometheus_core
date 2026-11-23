@@ -10,12 +10,18 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, Copy, Plus } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
 import type { SigningKey } from "@/lib/api/types";
 import { Button } from "@/components/ui/Button";
 import { StatusPill, type StatusPillTone } from "@/components/ui/StatusPill";
+import {
+  errorMessage,
+  useActivateSigningKeyMutation,
+  useGenerateSigningKeyMutation,
+  useListSigningKeysQuery,
+  useRetireSigningKeyMutation,
+} from "./adminApi";
 
 /** An inactive key is waiting to be activated, so it warns; a retired key is done. */
 const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone> = {
@@ -29,31 +35,29 @@ const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone>
  * plane (app/identity.py::mint_for_user() -- see backend/app/routers/admin_keys.py).
  * No modal needed here (unlike AdminUsers) -- generate takes no input, and
  * activate/retire are one-click actions on an existing row.
+ *
+ * Server data comes from RTK Query (adminApi.ts); each action invalidates the
+ * list, so it refetches.
  */
 export function AdminSigningKeys() {
-  const [keys, setKeys] = useState<SigningKey[] | null>(null);
-  const [error, setError] = useState("");
+  const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: true });
+  const keys = list.data ?? null;
+  const [generateKey] = useGenerateSigningKeyMutation();
+  const [activateKey] = useActivateSigningKeyMutation();
+  const [retireKey] = useRetireSigningKeyMutation();
+  const [actionError, setActionError] = useState("");
+  const error = list.error ? errorMessage(list.error, "Could not load signing keys") : actionError;
   const [generating, setGenerating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const refresh = () => {
-    api
-      .listSigningKeys()
-      .then((list) => setKeys(list))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load signing keys"));
-  };
-
-  useEffect(refresh, []);
-
   const handleGenerate = async () => {
     setGenerating(true);
-    setError("");
+    setActionError("");
     try {
-      await api.generateSigningKey();
-      refresh();
+      await generateKey().unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not generate key");
+      setActionError(errorMessage(err, "Could not generate key"));
     } finally {
       setGenerating(false);
     }
@@ -61,12 +65,11 @@ export function AdminSigningKeys() {
 
   const handleActivate = async (key: SigningKey) => {
     setBusyId(key.id);
-    setError("");
+    setActionError("");
     try {
-      await api.activateSigningKey(key.id);
-      refresh();
+      await activateKey(key.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not activate key");
+      setActionError(errorMessage(err, "Could not activate key"));
     } finally {
       setBusyId(null);
     }
@@ -74,12 +77,11 @@ export function AdminSigningKeys() {
 
   const handleRetire = async (key: SigningKey) => {
     setBusyId(key.id);
-    setError("");
+    setActionError("");
     try {
-      await api.retireSigningKey(key.id);
-      refresh();
+      await retireKey(key.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not retire key");
+      setActionError(errorMessage(err, "Could not retire key"));
     } finally {
       setBusyId(null);
     }

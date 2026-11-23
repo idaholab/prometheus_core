@@ -10,12 +10,18 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
 import type { OidcProvider } from "@/lib/api/types";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
+import {
+  errorMessage,
+  useCreateOidcProviderMutation,
+  useDeleteOidcProviderMutation,
+  useListOidcProvidersQuery,
+  useUpdateOidcProviderMutation,
+} from "./adminApi";
 
 const DEFAULT_SCOPES = "openid profile email";
 
@@ -24,10 +30,18 @@ const DEFAULT_SCOPES = "openid profile email";
  * (backend/app/routers/admin_oidc.py) -- client_secret is write-only, never
  * shown back; provider_id is immutable after creation (no field for it in
  * the edit dialog). Same table + native <dialog> pattern as AdminUsers.tsx.
+ *
+ * Server data comes from RTK Query (adminApi.ts); a create, edit or delete
+ * invalidates the list, so it refetches.
  */
 export function AdminOidcProviders() {
-  const [providers, setProviders] = useState<OidcProvider[] | null>(null);
-  const [error, setError] = useState("");
+  const list = useListOidcProvidersQuery(undefined, { refetchOnMountOrArgChange: true });
+  const providers = list.data ?? null;
+  const [createProvider] = useCreateOidcProviderMutation();
+  const [updateProvider] = useUpdateOidcProviderMutation();
+  const [deleteProvider] = useDeleteOidcProviderMutation();
+  const [deleteError, setDeleteError] = useState("");
+  const error = list.error ? errorMessage(list.error, "Could not load identity providers") : deleteError;
 
   const createDialogRef = useRef<HTMLDialogElement>(null);
   const [createProviderId, setCreateProviderId] = useState("");
@@ -51,15 +65,6 @@ export function AdminOidcProviders() {
   const [editEnabled, setEditEnabled] = useState(true);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const refresh = () => {
-    api
-      .listOidcProviders()
-      .then((list) => setProviders(list))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load identity providers"));
-  };
-
-  useEffect(refresh, []);
 
   const openCreate = () => {
     setCreateProviderId("");
@@ -87,7 +92,7 @@ export function AdminOidcProviders() {
     setCreating(true);
     setCreateError("");
     try {
-      await api.createOidcProvider({
+      await createProvider({
         provider_id: createProviderId,
         display_name: createDisplayName,
         issuer_url: createIssuerUrl,
@@ -96,11 +101,10 @@ export function AdminOidcProviders() {
         scopes: createScopes,
         default_role: createDefaultRole,
         is_enabled: true,
-      });
+      }).unwrap();
       createDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : "Could not create provider");
+      setCreateError(errorMessage(err, "Could not create provider"));
     } finally {
       setCreating(false);
     }
@@ -124,19 +128,21 @@ export function AdminOidcProviders() {
     setSaving(true);
     setEditError("");
     try {
-      await api.updateOidcProvider(editing.id, {
-        display_name: editDisplayName,
-        issuer_url: editIssuerUrl,
-        client_id: editClientId,
-        scopes: editScopes,
-        default_role: editDefaultRole,
-        is_enabled: editEnabled,
-        ...(editClientSecret ? { client_secret: editClientSecret } : {}),
-      });
+      await updateProvider({
+        id: editing.id,
+        patch: {
+          display_name: editDisplayName,
+          issuer_url: editIssuerUrl,
+          client_id: editClientId,
+          scopes: editScopes,
+          default_role: editDefaultRole,
+          is_enabled: editEnabled,
+          ...(editClientSecret ? { client_secret: editClientSecret } : {}),
+        },
+      }).unwrap();
       editDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setEditError(err instanceof ApiError ? err.message : "Could not update provider");
+      setEditError(errorMessage(err, "Could not update provider"));
     } finally {
       setSaving(false);
     }
@@ -145,11 +151,11 @@ export function AdminOidcProviders() {
   const handleDelete = async (provider: OidcProvider) => {
     if (!window.confirm(`Delete identity provider "${provider.display_name}"? This cannot be undone.`))
       return;
+    setDeleteError("");
     try {
-      await api.deleteOidcProvider(provider.id);
-      refresh();
+      await deleteProvider(provider.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete provider");
+      setDeleteError(errorMessage(err, "Could not delete provider"));
     }
   };
 

@@ -10,13 +10,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Pencil, Plus, Shield, Trash2, User } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
 import type { AdminUser } from "@/lib/api/types";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Tag } from "@/components/ui/Tag";
+import {
+  errorMessage,
+  useCreateAdminUserMutation,
+  useDeleteAdminUserMutation,
+  useListAdminUsersQuery,
+  useUpdateAdminUserMutation,
+} from "./adminApi";
 
 /**
  * Admin > Users. First table component in this codebase -- plain DaisyUI
@@ -24,10 +30,19 @@ import { Tag } from "@/components/ui/Tag";
  * (DaisyUI's modal pattern), also a first here; controlled via refs rather
  * than a boolean + conditional render so DaisyUI's open/close transition and
  * backdrop-click-to-close (`method="dialog"` inside the form) work for free.
+ *
+ * Server data comes from RTK Query (adminApi.ts): the list is cached, and a
+ * create, edit or delete invalidates it so it refetches. Coming back to the
+ * tab shows the cached list at once while it refreshes.
  */
 export function AdminUsers() {
-  const [users, setUsers] = useState<AdminUser[] | null>(null);
-  const [error, setError] = useState("");
+  const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: true });
+  const users = list.data ?? null;
+  const [createUser] = useCreateAdminUserMutation();
+  const [updateUser] = useUpdateAdminUserMutation();
+  const [deleteUser] = useDeleteAdminUserMutation();
+  const [deleteError, setDeleteError] = useState("");
+  const error = list.error ? errorMessage(list.error, "Could not load users") : deleteError;
 
   const createDialogRef = useRef<HTMLDialogElement>(null);
   const [createUsername, setCreateUsername] = useState("");
@@ -43,15 +58,6 @@ export function AdminUsers() {
   const [editPassword, setEditPassword] = useState("");
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const refresh = () => {
-    api
-      .listAdminUsers()
-      .then((list) => setUsers(list))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load users"));
-  };
-
-  useEffect(refresh, []);
 
   const openCreate = () => {
     setCreateUsername("");
@@ -69,11 +75,10 @@ export function AdminUsers() {
     setCreating(true);
     setCreateError("");
     try {
-      await api.createAdminUser({ username: createUsername, password: createPassword, role: createRole });
+      await createUser({ username: createUsername, password: createPassword, role: createRole }).unwrap();
       createDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : "Could not create user");
+      setCreateError(errorMessage(err, "Could not create user"));
     } finally {
       setCreating(false);
     }
@@ -93,15 +98,17 @@ export function AdminUsers() {
     setSaving(true);
     setEditError("");
     try {
-      await api.updateAdminUser(editing.id, {
-        role: editRole,
-        is_active: editActive,
-        ...(editPassword ? { password: editPassword } : {}),
-      });
+      await updateUser({
+        id: editing.id,
+        patch: {
+          role: editRole,
+          is_active: editActive,
+          ...(editPassword ? { password: editPassword } : {}),
+        },
+      }).unwrap();
       editDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setEditError(err instanceof ApiError ? err.message : "Could not update user");
+      setEditError(errorMessage(err, "Could not update user"));
     } finally {
       setSaving(false);
     }
@@ -109,11 +116,11 @@ export function AdminUsers() {
 
   const handleDelete = async (user: AdminUser) => {
     if (!window.confirm(`Delete user "${user.username}"? This cannot be undone.`)) return;
+    setDeleteError("");
     try {
-      await api.deleteAdminUser(user.id);
-      refresh();
+      await deleteUser(user.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete user");
+      setDeleteError(errorMessage(err, "Could not delete user"));
     }
   };
 
