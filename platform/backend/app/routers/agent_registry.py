@@ -28,6 +28,18 @@ Registrations live in one Valkey hash so every worker sees the same set and they
 a backend restart (agents only register when *they* start). A re-registering agent
 overwrites its own entry; ``make clear-agent-registry`` wipes the hash.
 
+With ``AGENT_IDENTITY_SOURCE=istio`` a registration also binds the caller's SPIFFE ID
+(from the Istio sidecar) to the agent name, and records it in the reverse index
+:data:`app.agent_identity.SPIFFE_INDEX_KEY`. An entry bound to one workload can only be
+overwritten or deleted by that workload, and one workload holds one name: registering
+under a new name (an agent renamed but keeping its ServiceAccount) replaces the entry it
+held under the old one. An entry with no binding (written in ``trusted-name`` mode, or
+before the switch to ``istio``) is open: the first workload to register it under
+``istio`` claims it, and any workload can delete it -- clear the registry when switching
+modes. Later ``/v1`` routes resolve the caller through the index
+(:mod:`app.agent_identity`). The check and the write run in one ``WATCH``/``MULTI``
+transaction over both hashes, so concurrent registrations can't both pass the check.
+
 Every route requires ``Authorization: Bearer <AGENT_SECRET>``. These are called by
 agents, never the browser, so the session-cookie auth in :mod:`app.security` does not
 apply. ``static_headers`` hold agent credentials and are never returned.
@@ -45,8 +57,10 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from redis.asyncio.client import Pipeline
 from starlette.background import BackgroundTask
 
+from app.agent_identity import SPIFFE_INDEX_KEY, caller_spiffe_id
 from app.agent_store import REGISTRY_KEY, load_all, load_entry
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
@@ -92,6 +106,16 @@ class AgentRegistration(BaseModel):
     static_headers: Dict[str, str] = Field(default_factory=dict)
 
 
+def _require_spiffe_id(request: Request) -> Optional[str]:
+    """The caller's SPIFFE ID under Istio (401 without one); ``None`` in trusted-name mode."""
+    if settings.agent_identity_source != "istio":
+        return None
+    spiffe_id = caller_spiffe_id(request)
+    if spiffe_id is None:
+        raise HTTPException(status_code=401, detail="No verified workload identity on the request")
+    return spiffe_id
+
+
 def _public_entry(stored: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "agent_id": stored["agent_name"],
@@ -107,12 +131,46 @@ async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
     return stored
 
 
+def _bound(raw: Optional[str | bytes]) -> Optional[str]:
+    """The SPIFFE ID a stored entry is bound to, if any."""
+    return None if raw is None else cast(Optional[str], json.loads(raw).get("spiffe_id"))
+
+
 @router.post("/v1/agents")
-async def register_agent(body: AgentRegistration, redis: RedisClient = Depends(get_redis)) -> Dict[str, Any]:
+async def register_agent(
+    body: AgentRegistration, request: Request, redis: RedisClient = Depends(get_redis)
+) -> Dict[str, Any]:
+    name = body.agent_name
     stored = body.model_dump()
     stored["registered_at"] = datetime.now(timezone.utc).isoformat()
-    await redis.hset(REGISTRY_KEY, body.agent_name, json.dumps(stored))
-    logger.info("Registered agent '%s' at %s", body.agent_name, body.agent_card_params.get("url", ""))
+    spiffe_id = _require_spiffe_id(request)
+    if spiffe_id is not None:
+        stored["spiffe_id"] = spiffe_id
+
+    async def write(pipe: Pipeline) -> None:
+        # Reads run immediately (the keys are watched); writes queue after multi().
+        bound = _bound(await pipe.hget(REGISTRY_KEY, name))
+        if spiffe_id is not None and bound not in (None, spiffe_id):
+            raise HTTPException(status_code=403, detail=f"Agent '{name}' is registered by another workload")
+        # Under Istio, a different name this workload still holds (the agent was renamed).
+        old_name: Optional[str] = None
+        if spiffe_id is not None:
+            # decode_responses=True: hash values are str.
+            indexed = cast(Optional[str], await pipe.hget(SPIFFE_INDEX_KEY, spiffe_id))
+            if indexed is not None and indexed != name and _bound(await pipe.hget(REGISTRY_KEY, indexed)) == spiffe_id:
+                old_name = indexed
+        pipe.multi()
+        if bound is not None and bound != spiffe_id:
+            pipe.hdel(SPIFFE_INDEX_KEY, bound)  # trusted-name mode overwrote a bound entry
+        if old_name is not None:
+            pipe.hdel(REGISTRY_KEY, old_name)
+            logger.info("Workload %s re-registered as '%s'; removed its entry '%s'", spiffe_id, name, old_name)
+        pipe.hset(REGISTRY_KEY, name, json.dumps(stored))
+        if spiffe_id is not None:
+            pipe.hset(SPIFFE_INDEX_KEY, spiffe_id, name)
+
+    await redis.transaction(write, REGISTRY_KEY, SPIFFE_INDEX_KEY)
+    logger.info("Registered agent '%s' at %s", name, body.agent_card_params.get("url", ""))
     return _public_entry(stored)
 
 
@@ -122,9 +180,24 @@ async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str,
 
 
 @router.delete("/v1/agents/{agent_id}")
-async def delete_agent(agent_id: str, redis: RedisClient = Depends(get_redis)) -> Dict[str, str]:
-    if not await redis.hdel(REGISTRY_KEY, agent_id):
-        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not registered")
+async def delete_agent(agent_id: str, request: Request, redis: RedisClient = Depends(get_redis)) -> Dict[str, str]:
+    spiffe_id = _require_spiffe_id(request)
+
+    async def remove(pipe: Pipeline) -> None:
+        raw = await pipe.hget(REGISTRY_KEY, agent_id)
+        if raw is None:
+            raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' is not registered")
+        bound = _bound(raw)
+        if spiffe_id is not None and bound not in (None, spiffe_id):
+            raise HTTPException(status_code=403, detail=f"Agent '{agent_id}' is registered by another workload")
+        # Under trusted-name the index may already point this SPIFFE ID elsewhere.
+        indexed = bound if bound is not None and await pipe.hget(SPIFFE_INDEX_KEY, bound) == agent_id else None
+        pipe.multi()
+        pipe.hdel(REGISTRY_KEY, agent_id)
+        if indexed is not None:
+            pipe.hdel(SPIFFE_INDEX_KEY, indexed)
+
+    await redis.transaction(remove, REGISTRY_KEY, SPIFFE_INDEX_KEY)
     logger.info("Removed agent registration '%s'", agent_id)
     return {"agent_id": agent_id}
 
