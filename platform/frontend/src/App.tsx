@@ -10,17 +10,40 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Provider } from "react-redux";
 import { RouterProvider } from "react-router";
+import { loginPathFor } from "@/app/paths";
 import { createAppRouter } from "@/app/router";
+import { setCurrentUser } from "@/features/auth";
+import { onUnauthorized } from "@/lib/api/baseApi";
+import { appStore } from "@/lib/api/store";
 
 /**
  * The app: every screen is a route (app/router.tsx). Sign-in, first-run setup
  * and the admin check are route guards (app/guards.ts), which replaced the
  * boot state machine that used to live here.
+ *
+ * Server data goes through the Redux store's RTK Query cache (lib/api). A 401
+ * from any of its requests means the session is gone: forget the user and go to
+ * Login, then back to this page after signing in, as a lost chat session does.
  */
 export default function App() {
   // Created once, on first render, so importing this module has no side effects.
   const [router] = useState(createAppRouter);
-  return <RouterProvider router={router} />;
+
+  useEffect(() => {
+    onUnauthorized(() => {
+      setCurrentUser(null);
+      const { pathname, search } = router.state.location;
+      void router.navigate(loginPathFor(pathname + search), { replace: true });
+    });
+    return () => onUnauthorized(null);
+  }, [router]);
+
+  return (
+    <Provider store={appStore}>
+      <RouterProvider router={router} />
+    </Provider>
+  );
 }
