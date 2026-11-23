@@ -3886,6 +3886,15 @@
               }
             ],
             "title": "Created At"
+          },
+          "display": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "panel"
+            ],
+            "title": "Display",
+            "default": "inline"
           }
         },
         "type": "object",
