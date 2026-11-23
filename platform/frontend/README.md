@@ -80,12 +80,38 @@ To add a screen:
 
 Notes:
 
-- **Loaders gate access; they don't load data.** A guard either returns or throws a `redirect`. Pages load their own data.
+- **Loaders gate access.** A guard either returns or throws a `redirect`. Pages load their own data through RTK Query hooks; a loader may *start* a page's query early (see "Server data"), but never waits for it or returns data.
 - **Link with `<Link>`, `<NavLink>` or `<Button navTo>`,** not `window.location`, so navigation stays in the app.
 - **Params** (`/jobs-console/:jobId`) go in the route's `path`. Pages read them with `useParams()`. Add a helper next to `PATHS` that builds the URL, such as `jobPath(id)`.
 - **Unknown URLs** show `PageNotFound` inside the shell, and a route that throws shows `PageError`.
 - **Production:** nginx serves `index.html` for any path that isn't a file (`nginx/default.conf.template`), so a reload or deep link reaches the router.
 
+
+## Server data
+
+Data from the backend goes through [RTK Query](https://redux-toolkit.js.org/rtk-query/overview), which fetches, caches and refetches it. Screens use its hooks and don't call `lib/api/client.ts` themselves. Admin is the first user; other screens move when their real API lands. Chat and its event stream, the signed-in session and the page header keep their own stores.
+
+- **One API, in `src/lib/api/baseApi.ts`.** It uses the same `/api` base and session cookie as `client.ts`. Errors reach screens as `{ status, message }`, where `message` is the backend's `detail`. A 401 from any request sends the user to Login and back to the page afterward (wired in `App.tsx`).
+- **Endpoints live in their feature.** A feature adds its endpoints with `baseApi.injectEndpoints` in its own file, as `features/admin/adminApi.ts` does, and exports the hooks it generates.
+- **The store is in `src/lib/api/store.ts`.** It holds only RTK Query's cache. Tests call `createAppStore()` for a fresh cache each.
+
+To add an endpoint:
+
+1. In the feature's API file, add a `build.query` (to read) or `build.mutation` (to change), with the path and method from the backend router.
+2. Give each list a tag (`providesTags`) and have each change invalidate it (`invalidatesTags`), so the list refetches after a create, edit or delete. Add a new tag name to `tagTypes` in `baseApi.ts`.
+3. Export the hook (`useListThingsQuery`, `useCreateThingMutation`) and use it in the screen. For a mutation, `await createThing(input).unwrap()` throws on failure, with the error's `message` to show.
+
+In a screen:
+
+```tsx
+const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: true });
+const users = list.data ?? null;   // null until the first load: show the loading state
+const [createUser] = useCreateAdminUserMutation();
+```
+
+`refetchOnMountOrArgChange` shows the cached list at once when the user comes back to the screen, then refreshes it.
+
+**Starting a query before the page renders:** a route `loader` can call a feature's helper that dispatches the query's `initiate()` without awaiting it, as the `/admin` route does with `prefetchAdminUsers()`. The page's own hook then picks up the request already in flight.
 
 ## Testing
 
