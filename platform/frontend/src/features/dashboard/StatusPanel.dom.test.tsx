@@ -68,6 +68,39 @@ beforeEach(() => {
   onExpand.mockReset();
 });
 
+describe("the Artifacts tab list", () => {
+  test("lists each artifact once across turns, with its description, skipping other items", async () => {
+    const user = userEvent.setup();
+    const shared = artifact("shared", { description: "Verified MOOSE input" });
+    renderPanel({
+      items: [
+        { kind: "user", id: "u1", text: "run it" },
+        {
+          kind: "assistant",
+          id: "a1",
+          text: "",
+          artifacts: [shared],
+          recommendedMaterials: [],
+          followUpSuggestions: [],
+        },
+        {
+          kind: "assistant",
+          id: "a2",
+          text: "",
+          artifacts: [shared, artifact("log")],
+          recommendedMaterials: [],
+          followUpSuggestions: [],
+        },
+      ] as ChatState["items"],
+      resumingConversationId: null,
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Artifacts (2)" }));
+    expect(screen.getAllByText("shared.txt")).toHaveLength(1);
+    expect(screen.getByText("Verified MOOSE input")).toBeInTheDocument();
+  });
+});
+
 describe("opening an artifact from the Artifacts tab", () => {
   test("a viewable artifact opens in the panel, and Back returns to the list", async () => {
     const user = userEvent.setup();
@@ -143,5 +176,50 @@ describe("a new panel-only artifact opens itself", () => {
     // A panel artifact that arrives after that still opens.
     update(stateWith([artifact("old", { display: "panel" }), artifact("new", { display: "panel" })]));
     expect(screen.getByTestId("viewer")).toHaveTextContent("new.txt");
+  });
+});
+
+describe("tabs and the collapsed rail", () => {
+  test("the tab bar switches between Active Jobs and Artifacts", async () => {
+    const user = userEvent.setup();
+    renderPanel(stateWith([]));
+    expect(screen.getByText("No Active Jobs")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Artifacts" }));
+    expect(screen.getByText("No Artifacts Yet")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Active Jobs" }));
+    expect(screen.getByText("No Active Jobs")).toBeInTheDocument();
+  });
+
+  test("the collapse button collapses the panel", async () => {
+    const user = userEvent.setup();
+    renderPanel(stateWith([]));
+    await user.click(screen.getByRole("button", { name: "Collapse status panel" }));
+    expect(onCollapse).toHaveBeenCalledTimes(1);
+  });
+
+  test("a rail icon expands the panel straight to its tab", async () => {
+    const user = userEvent.setup();
+    const { update } = renderPanel(stateWith([artifact("a"), artifact("b")]), true);
+
+    await user.click(screen.getByRole("button", { name: "Artifacts (2)" }));
+    expect(onExpand).toHaveBeenCalledTimes(1);
+    update(stateWith([artifact("a"), artifact("b")]), false);
+    expect(screen.getByRole("tab", { name: /Artifacts/ })).toHaveClass("tab-active");
+
+    update(stateWith([artifact("a"), artifact("b")]), true);
+    await user.click(screen.getByRole("button", { name: "Active Jobs" }));
+    expect(onExpand).toHaveBeenCalledTimes(2);
+    update(stateWith([artifact("a"), artifact("b")]), false);
+    expect(screen.getByRole("tab", { name: "Active Jobs" })).toHaveClass("tab-active");
+  });
+
+  test("the rail's expand button and an empty Artifacts label", async () => {
+    const user = userEvent.setup();
+    renderPanel(stateWith([]), true);
+    expect(screen.getByRole("button", { name: "Artifacts" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand status panel" }));
+    expect(onExpand).toHaveBeenCalledTimes(1);
   });
 });
