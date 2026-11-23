@@ -35,7 +35,7 @@ npm run format        # format everything (also: make format)
 npm run format:check  # fail if anything isn't formatted (also: make format-check)
 ```
 
-CI runs `format:check` in the `platform: frontend npm` job, so an unformatted file fails the PR; `npm run format` fixes it. `make check` runs it too. To format on save, install the Prettier extension for your editor (VS Code: `esbenp.prettier-vscode` with "Format On Save"; JetBrains: Settings, Prettier, "On save"). It picks up the project settings and version.
+CI runs `make format-check` in the `platform: frontend npm` job (that job calls the Makefile for each check, so the targets stay working), so an unformatted file fails the PR; `npm run format` fixes it. `make check` runs it too. To format on save, install the Prettier extension for your editor (VS Code: `esbenp.prettier-vscode` with "Format On Save"; JetBrains: Settings, Prettier, "On save"). It picks up the project settings and version.
 
 Markdown is not formatted, so docs keep their hand-written line breaks and tables. ESLint's style rules that would conflict are turned off (`eslint-config-prettier`), so ESLint checks code and Prettier checks layout.
 

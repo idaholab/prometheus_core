@@ -2,7 +2,7 @@
 ##@ Frontend React
 ##@
 
-.PHONY: dev build lint format format-check typecheck test test-e2e test-e2e-full check install
+.PHONY: dev build lint format format-check typecheck test test-coverage test-e2e test-e2e-full check install
 
 dev: ##@ Start Vite dev server
 	npm run dev -- --port 5150
@@ -24,6 +24,9 @@ typecheck: ##@ Run TypeScript type checker
 
 test: ##@ Run the unit and component tests (vitest)
 	npm test
+
+test-coverage: ##@ Run the unit and component tests with a coverage report (as CI does)
+	npm run test:coverage
 
 test-e2e: ##@ Run the end-to-end tests (Playwright, headless Chromium)
 	npm run test:e2e

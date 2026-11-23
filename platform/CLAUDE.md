@@ -57,6 +57,7 @@ make lint        # npm run lint                 (eslint)
 make format      # npm run format               (Prettier; make format-check only checks, as CI does)
 make typecheck   # npm run typecheck            (tsc)
 make test        # npm test                     (Vitest unit and component tests)
+make test-coverage # npm run test:coverage      (the same, with a coverage report, as CI runs it)
 make test-e2e    # npm run test:e2e             (Playwright end-to-end tests, headless Chromium)
 make check       # format-check + lint + typecheck + test (not the end-to-end tests)
 ```
