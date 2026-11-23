@@ -62,7 +62,7 @@ RUN npm run build
 # ---- prod ----
 # The unprivileged variant runs as UID 101 and keeps its pid and temp files in
 # /tmp, so it works with a read-only root filesystem.
-FROM nginx/nginx-unprivileged:1.31.8-alpine@sha256:f90ef283a8a580912aa56315c3ed8f54cf50c2e89ed7e6fbf4c53368b55d712f AS prod
+FROM nginx/nginx-unprivileged:1.31.9-alpine@sha256:60214a103e6f38e953ff957f34b1f2e97a9db801ab2df3821da955d0fe6cadd6 AS prod
 # The nginx image renders /etc/nginx/templates/*.template at start, substituting
 # ${BACKEND_UPSTREAM}. It renders into /tmp rather than conf.d/, which isn't
 # writable with a read-only root (nginx would then start on the stock config,
