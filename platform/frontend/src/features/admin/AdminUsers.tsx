@@ -167,7 +167,7 @@ export function AdminUsers() {
                       variant="ghost"
                       size="xs"
                       icon={<Pencil />}
-                      ariaLabel="Edit user"
+                      ariaLabel={`Edit ${user.username}`}
                       onClick={() => openEdit(user)}
                     />
                     <Button
@@ -175,7 +175,7 @@ export function AdminUsers() {
                       soft
                       size="xs"
                       icon={<Trash2 />}
-                      ariaLabel="Delete user"
+                      ariaLabel={`Delete ${user.username}`}
                       onClick={() => handleDelete(user)}
                     />
                   </td>
@@ -193,9 +193,11 @@ export function AdminUsers() {
         </div>
       )}
 
-      <dialog ref={createDialogRef} className="modal">
+      <dialog ref={createDialogRef} className="modal" aria-labelledby="admin-create-title">
         <div className="modal-box max-w-sm">
-          <h3 className="font-medium mb-3">New user</h3>
+          <h3 id="admin-create-title" className="font-medium mb-3">
+            New user
+          </h3>
           <div className="space-y-3">
             {createError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -203,10 +205,11 @@ export function AdminUsers() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-username">
                 <span className="label-text text-xs uppercase tracking-wider">Username</span>
               </label>
               <input
+                id="admin-create-username"
                 className="input input-bordered w-full"
                 value={createUsername}
                 onChange={(e) => setCreateUsername(e.target.value)}
@@ -214,10 +217,11 @@ export function AdminUsers() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-password">
                 <span className="label-text text-xs uppercase tracking-wider">Password</span>
               </label>
               <input
+                id="admin-create-password"
                 className="input input-bordered w-full"
                 type="password"
                 value={createPassword}
@@ -225,10 +229,11 @@ export function AdminUsers() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-role">
                 <span className="label-text text-xs uppercase tracking-wider">Role</span>
               </label>
               <select
+                id="admin-create-role"
                 className="select select-bordered w-full"
                 value={createRole}
                 onChange={(e) => setCreateRole(e.target.value)}
@@ -257,9 +262,11 @@ export function AdminUsers() {
         </form>
       </dialog>
 
-      <dialog ref={editDialogRef} className="modal">
+      <dialog ref={editDialogRef} className="modal" aria-labelledby="admin-edit-title">
         <div className="modal-box max-w-sm">
-          <h3 className="font-medium mb-3">Edit {editing?.username}</h3>
+          <h3 id="admin-edit-title" className="font-medium mb-3">
+            Edit {editing?.username}
+          </h3>
           <div className="space-y-3">
             {editError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -267,10 +274,11 @@ export function AdminUsers() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-edit-role">
                 <span className="label-text text-xs uppercase tracking-wider">Role</span>
               </label>
               <select
+                id="admin-edit-role"
                 className="select select-bordered w-full"
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value)}
@@ -291,10 +299,11 @@ export function AdminUsers() {
               </label>
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-edit-password">
                 <span className="label-text text-xs uppercase tracking-wider">New password (optional)</span>
               </label>
               <input
+                id="admin-edit-password"
                 className="input input-bordered w-full"
                 type="password"
                 placeholder="Leave blank to keep current password"
