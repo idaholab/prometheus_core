@@ -76,6 +76,9 @@ flags:
   thread-pattern-agent:
     paths:
       - platform/agents/debug-agents/thread-pattern-agent/
+  stub-client-agent:
+    paths:
+      - platform/e2e/stub-client-agent/
   agent-template:
     paths:
       - agent-template/setup_agent.py

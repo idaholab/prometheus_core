@@ -1379,8 +1379,9 @@ jobs:
 
   platform-frontend-e2e-full:
     # The frontend's full-stack e2e tests (frontend/e2e/full/) against the e2e
-    # stack: the whole platform, served by nginx. The tests don't send a chat
-    # turn, so no LLM key or DeepLynx is needed. Not a required check yet; the
+    # stack: the whole platform, served by nginx, with a stub agent answering
+    # chat turns (platform/e2e/stub-client-agent), so no LLM key or DeepLynx
+    # is needed. Not a required check yet; the
     # team will decide when it blocks merges (PPLT-321)
     name: "platform: frontend e2e full"
     needs: [gitleaks, platform-compose]
@@ -1451,7 +1452,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
-          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.agents.e2e.yml \
+          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.agents.e2e.yml \
             --profile prod logs --no-color --timestamps > "$RUNNER_TEMP/logs/all.log"
           docker ps --all > "$RUNNER_TEMP/logs/ps.txt"
       - name: Upload logs
@@ -1632,6 +1633,9 @@ jobs:
           - agent: thread-pattern-agent
             path: platform/agents/debug-agents/thread-pattern-agent
             flag: thread-pattern-agent
+          - agent: stub-client-agent
+            path: platform/e2e/stub-client-agent
+            flag: stub-client-agent
           - agent: agent-template
             path: agent-template/agent_template
             flag: template-agent
