@@ -23,9 +23,14 @@ export function PageError() {
   if (import.meta.env.DEV) console.error(error);
   const detail = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : null;
   return (
-    <div role="alert" className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-base-100 p-6 text-center">
+    <div
+      role="alert"
+      className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-base-100 p-6 text-center"
+    >
       <h1 className="m-0 text-lg font-semibold text-base-content">Something went wrong</h1>
-      <p className="m-0 text-sm text-base-content/60">Reload the page to try again.{detail ? ` (${detail})` : ""}</p>
+      <p className="m-0 text-sm text-base-content/60">
+        Reload the page to try again.{detail ? ` (${detail})` : ""}
+      </p>
       <Button variant="primary" size="sm" label="Reload" onClick={() => window.location.reload()} />
     </div>
   );

@@ -78,8 +78,14 @@ const HANDLE_CLASS = "!size-px !min-h-0 !min-w-0 !border-0 !bg-transparent";
 function DetailRow({ label, value, error = false }: { label: string; value: string; error?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5 font-mono">
-      <span className={`w-4.5 shrink-0 text-[8.5px] leading-3 ${error ? "text-error" : "text-base-content/50"}`}>{label}</span>
-      <span className={`min-w-0 flex-1 truncate text-[9px] leading-3 ${error ? "text-error" : "text-base-content/70"}`}>
+      <span
+        className={`w-4.5 shrink-0 text-[8.5px] leading-3 ${error ? "text-error" : "text-base-content/50"}`}
+      >
+        {label}
+      </span>
+      <span
+        className={`min-w-0 flex-1 truncate text-[9px] leading-3 ${error ? "text-error" : "text-base-content/70"}`}
+      >
         {value}
       </span>
     </div>
@@ -95,7 +101,10 @@ export function WorkflowAgentNode({ data }: NodeProps<AgentNode>) {
     >
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
       <div className="flex min-w-0 items-center justify-between gap-1.5">
-        <span className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content" title={data.name}>
+        <span
+          className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content"
+          title={data.name}
+        >
           {data.name}
         </span>
         <StatusPill {...STATUS_PILL[data.status]} />
@@ -118,9 +127,14 @@ export function WorkflowCheckpointNode({ data }: NodeProps<CheckpointNode>) {
   return (
     <div className="relative flex size-10.5 items-center justify-center">
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
-      <span aria-hidden="true" className="size-8 shrink-0 rotate-45 rounded border-[1.5px] border-primary bg-primary/20" />
+      <span
+        aria-hidden="true"
+        className="size-8 shrink-0 rotate-45 rounded border-[1.5px] border-primary bg-primary/20"
+      />
       <div className="absolute left-full top-1/2 ml-2 flex -translate-y-1/2 flex-col whitespace-nowrap font-mono uppercase">
-        <span className="text-[9px] font-medium leading-3 tracking-[0.03em] text-base-content">{data.name}</span>
+        <span className="text-[9px] font-medium leading-3 tracking-[0.03em] text-base-content">
+          {data.name}
+        </span>
         <span className="text-[7.5px] leading-3 tracking-[0.04em] text-base-content/50">Checkpoint</span>
       </div>
       <Handle type="source" position={Position.Bottom} isConnectable={false} className={HANDLE_CLASS} />
@@ -172,10 +186,16 @@ export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
       <Handle type="target" position={Position.Top} isConnectable={false} className={HANDLE_CLASS} />
       <div className={`flex flex-col gap-2 ${ghost ? "opacity-70" : ""}`}>
         <div className="flex min-w-0 items-center justify-between gap-1.5">
-          <span className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content" title={data.name}>
+          <span
+            className="min-w-0 truncate text-xs font-semibold leading-4 text-base-content"
+            title={data.name}
+          >
             {data.name}
           </span>
-          <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`} />
+          <span
+            aria-hidden="true"
+            className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[data.tone]}`}
+          />
         </div>
         <div className="flex items-center gap-1.5">
           <PortDot tone={data.inputTone} error={invalid} />
@@ -208,8 +228,16 @@ export function WorkflowSkillNode({ data, selected }: NodeProps<SkillNode>) {
 export function WorkflowConnectEndpoint({ data }: NodeProps<ConnectEndpointNode>) {
   return (
     <div className="relative flex size-2.5 items-center justify-center">
-      <Handle type="target" position={Position.Top} isConnectable={false} className={`${HANDLE_CLASS} top-1/2!`} />
-      <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-primary bg-base-content/80" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className={`${HANDLE_CLASS} top-1/2!`}
+      />
+      <span
+        aria-hidden="true"
+        className="size-2.5 rounded-full border-[1.5px] border-primary bg-base-content/80"
+      />
       <span className="absolute left-full top-1/2 ml-2.5 -translate-y-1/2 whitespace-nowrap font-mono text-[9px] leading-3 tracking-[0.04em] text-base-content/50">
         {data.label}
       </span>

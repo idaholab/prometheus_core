@@ -15,10 +15,18 @@ import type { Language } from "highlight.js";
 
 export default function moose(): Language {
   // case-insensitive helper (hljs can't take per-rule regex flags)
-  const ci = (w: string) => w.split("").map((c) => (/[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c)).join("");
+  const ci = (w: string) =>
+    w
+      .split("")
+      .map((c) => (/[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c))
+      .join("");
   // longest-first so QUAD4 isn't split into QUAD + 4 (the Prism grammar had this bug)
   const alt = (words: string, f: (w: string) => string = ci) =>
-    words.split("|").sort((a, b) => b.length - a.length).map(f).join("|");
+    words
+      .split("|")
+      .sort((a, b) => b.length - a.length)
+      .map(f)
+      .join("|");
 
   const PARSED = "\\w+<<<.*?>>>";
 

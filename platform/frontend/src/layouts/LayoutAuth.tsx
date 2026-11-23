@@ -41,11 +41,7 @@ export function LayoutAuth({ title, subtitle, onSubmit, children }: LayoutAuthPr
         {/* Brand lockup */}
         <div className="flex justify-center lg:justify-start">
           <div className="flex w-fit flex-col items-center text-center ">
-            <img
-              src="/logo_dark.png"
-              alt="Prometheus"
-              className="w-72 max-w-full sm:w-96 lg:w-md"
-            />
+            <img src="/logo_dark.png" alt="Prometheus" className="w-72 max-w-full sm:w-96 lg:w-md" />
             <span className="-mt-4.5 text-base text-base-content/50 sm:text-lg">
               AI orchestration for nuclear engineering
             </span>

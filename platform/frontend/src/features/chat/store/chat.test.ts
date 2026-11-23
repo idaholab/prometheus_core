@@ -37,7 +37,12 @@ vi.mock("@/lib/api/client", () => {
   }
   const api = new Proxy(
     {},
-    { get: (_t, k: string) => (...a: unknown[]) => (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a) },
+    {
+      get:
+        (_t, k: string) =>
+        (...a: unknown[]) =>
+          (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a),
+    },
   );
   return { ApiError: StubApiError, api };
 });

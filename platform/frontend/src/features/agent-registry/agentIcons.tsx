@@ -10,7 +10,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { Activity, Box, Database, FileText, Grid3x3, Shield, Thermometer, Wind, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Box,
+  Database,
+  FileText,
+  Grid3x3,
+  Shield,
+  Thermometer,
+  Wind,
+  type LucideIcon,
+} from "lucide-react";
 import type { AgentIcon } from "./store/agents";
 
 /** The lucide icon for each agent icon key of the store. */

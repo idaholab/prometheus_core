@@ -21,7 +21,15 @@ const BASE = { usedLabel: "1.2 GB", totalLabel: "10 GB", percent: 12 };
 test("storage_panel_wires_chips_and_no_match: the selected chip is pressed and a click reports its type", async () => {
   const user = userEvent.setup();
   const onSelectType = vi.fn();
-  render(<StoragePanel {...BASE} artifacts={[]} selectedType="mesh" onSelectType={onSelectType} noMatches={false} />);
+  render(
+    <StoragePanel
+      {...BASE}
+      artifacts={[]}
+      selectedType="mesh"
+      onSelectType={onSelectType}
+      noMatches={false}
+    />,
+  );
 
   expect(screen.getByRole("button", { name: "Meshes" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "false");
@@ -41,7 +49,9 @@ test("storage_panel_wires_chips_and_no_match: noMatches shows No matching artifa
   expect(screen.getByText("No matching artifacts.")).toBeInTheDocument();
   expect(screen.queryByText("No rows yet.")).not.toBeInTheDocument();
 
-  rerender(<StoragePanel {...BASE} artifacts={[]} selectedType={ALL} onSelectType={() => {}} noMatches={false} />);
+  rerender(
+    <StoragePanel {...BASE} artifacts={[]} selectedType={ALL} onSelectType={() => {}} noMatches={false} />,
+  );
 
   expect(screen.getByText("No rows yet.")).toBeInTheDocument();
   expect(screen.queryByText("No matching artifacts.")).not.toBeInTheDocument();

@@ -58,8 +58,5 @@ test("collapses duplicate delivery of the same mesh dataset", () => {
     props: { datasetId: "exodus-dataset" },
   };
 
-  assert.deepEqual(
-    dedupeElements([first, duplicate], classifyElement),
-    [first],
-  );
+  assert.deepEqual(dedupeElements([first, duplicate], classifyElement), [first]);
 });

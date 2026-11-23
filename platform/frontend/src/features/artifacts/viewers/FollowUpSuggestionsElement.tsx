@@ -19,7 +19,7 @@ interface FollowUpSuggestionsProps {
 }
 
 export function FollowUpSuggestionsElement({ element, onSend }: ViewerProps) {
-  const props = ((element as { props?: FollowUpSuggestionsProps }).props) ?? {};
+  const props = (element as { props?: FollowUpSuggestionsProps }).props ?? {};
   const suggestions = props.suggestions ?? [];
   const title = props.title ?? "What would you like to do next?";
 

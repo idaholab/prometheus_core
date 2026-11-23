@@ -35,7 +35,8 @@ const LEFTOVER_CLASS = /className=.*[^A-Za-z0-9_-](btn|badge)([^A-Za-z0-9_]|$)/;
 const HEX_COLOUR = /#[0-9a-fA-F]{3,8}\b/;
 const STRING_LITERAL = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g;
 const SHARED_UI_IMPORT = /from\s+["'](@\/components\/ui\/|\.\/ui\/)/;
-const BUTTON_IMPORT = /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s+["'](@\/components\/ui\/Button|\.\/ui\/Button)["']/;
+const BUTTON_IMPORT =
+  /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s+["'](@\/components\/ui\/Button|\.\/ui\/Button)["']/;
 
 /**
  * The only raw `<button>` elements allowed in the in-scope files. None has a
@@ -44,13 +45,48 @@ const BUTTON_IMPORT = /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s+["'](@\/compon
  * that file; any other raw `<button>` fails the test.
  */
 const RAW_BUTTON_ALLOWLIST: ReadonlyArray<{ file: string; marker: string; count: number; why: string }> = [
-  { file: "features/chat/Chat.tsx", marker: "aria-label={`Remove ", count: 1, why: "attachment remove (blueprint Out of scope)" },
-  { file: "features/dashboard/StatusPanel.tsx", marker: "aria-label={label}", count: 1, why: "rail button (blueprint Out of scope)" },
-  { file: "features/dashboard/StatusPanel.tsx", marker: 'role="tab"', count: 2, why: "Jobs and Artifacts tabs (blueprint Out of scope)" },
-  { file: "features/chat/Chat.tsx", marker: "onClick={() => setOpen((v) => !v)}", count: 1, why: "tool-call history toggle, not a site" },
-  { file: "features/shell/Header.tsx", marker: "onClick={() => setTheme(nextTheme)}", count: 1, why: "user menu item, not a site" },
-  { file: "features/shell/Header.tsx", marker: "onClick={onToggleSettings}", count: 1, why: "user menu item, not a site" },
-  { file: "features/shell/Header.tsx", marker: "onClick={onLogout}", count: 1, why: "user menu item, not a site" },
+  {
+    file: "features/chat/Chat.tsx",
+    marker: "aria-label={`Remove ",
+    count: 1,
+    why: "attachment remove (blueprint Out of scope)",
+  },
+  {
+    file: "features/dashboard/StatusPanel.tsx",
+    marker: "aria-label={label}",
+    count: 1,
+    why: "rail button (blueprint Out of scope)",
+  },
+  {
+    file: "features/dashboard/StatusPanel.tsx",
+    marker: 'role="tab"',
+    count: 2,
+    why: "Jobs and Artifacts tabs (blueprint Out of scope)",
+  },
+  {
+    file: "features/chat/Chat.tsx",
+    marker: "onClick={() => setOpen((v) => !v)}",
+    count: 1,
+    why: "tool-call history toggle, not a site",
+  },
+  {
+    file: "features/shell/Header.tsx",
+    marker: "onClick={() => setTheme(nextTheme)}",
+    count: 1,
+    why: "user menu item, not a site",
+  },
+  {
+    file: "features/shell/Header.tsx",
+    marker: "onClick={onToggleSettings}",
+    count: 1,
+    why: "user menu item, not a site",
+  },
+  {
+    file: "features/shell/Header.tsx",
+    marker: "onClick={onLogout}",
+    count: 1,
+    why: "user menu item, not a site",
+  },
 ];
 
 /** Skips a quoted literal that opens at `start`; returns the index after it. */
@@ -148,7 +184,9 @@ test("in_scope_screens_use_shared_primitives", () => {
     if (BUTTON_IMPORT.test(source)) {
       assert.ok(buttons.length > 0, `${file} imports Button but no <Button element was found`);
     } else if (buttons.length > 0) {
-      violations.push(`${file}: renders <Button> without importing it from @/components/ui/Button or ./ui/Button`);
+      violations.push(
+        `${file}: renders <Button> without importing it from @/components/ui/Button or ./ui/Button`,
+      );
     }
     for (const button of buttons) {
       const attrs = button.topLevelAttributes;
@@ -170,7 +208,9 @@ test("in_scope_screens_use_shared_primitives", () => {
     }
     for (const [entry, count] of seen) {
       if (count !== entry.count) {
-        violations.push(`${file}: ${count} raw <button> with ${entry.marker}, allowlist expects ${entry.count}`);
+        violations.push(
+          `${file}: ${count} raw <button> with ${entry.marker}, allowlist expects ${entry.count}`,
+        );
       }
     }
 

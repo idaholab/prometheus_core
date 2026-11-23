@@ -20,7 +20,9 @@ import { E2E_ADMIN, signInAsAdmin } from "./global-setup";
 // Start with no session, so each call below is what signs in (or fails to)
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test("signing in to a stack that already has its admin gives a session the backend accepts", async ({ request }) => {
+test("signing in to a stack that already has its admin gives a session the backend accepts", async ({
+  request,
+}) => {
   // The premise: the admin exists, so this is the sign-in branch, not the create one
   const setup = await request.get("/api/setup/status");
   expect(await setup.json()).toEqual({ needs_setup: false });
@@ -37,7 +39,9 @@ test("signing in to a stack that already has its admin gives a session the backe
 
 test("a wrong password is refused and leaves no session", async ({ request }) => {
   // Posted directly: signInAsAdmin would create the admin with this password on a stack with no users
-  const signIn = await request.post("/api/auth/login", { data: { ...E2E_ADMIN, password: "not-the-password" } });
+  const signIn = await request.post("/api/auth/login", {
+    data: { ...E2E_ADMIN, password: "not-the-password" },
+  });
   expect(signIn.status()).toBe(401);
   expect(await signIn.json()).toEqual({ detail: "Invalid credentials" });
 

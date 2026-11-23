@@ -42,10 +42,24 @@ function featureBoundary(own) {
 }
 
 export default defineConfig([
-  globalIgnores(["dist", "dist-playground", "coverage", "public", "test-results", "test-results-full", "playwright-report", "playwright-report-full", "blob-report"]),
+  globalIgnores([
+    "dist",
+    "dist-playground",
+    "coverage",
+    "public",
+    "test-results",
+    "test-results-full",
+    "playwright-report",
+    "playwright-report-full",
+    "blob-report",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
-    extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat["recommended-latest"]],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs.flat["recommended-latest"],
+    ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,

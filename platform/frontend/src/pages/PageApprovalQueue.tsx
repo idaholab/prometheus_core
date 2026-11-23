@@ -40,7 +40,13 @@ const CHECKPOINTS: Checkpoint[] = [
       generated: "14 min ago",
       metrics: [
         { id: "cell-count", name: "Cell Count", value: "42,198 hex", status: "pass", threshold: "40k" },
-        { id: "orthogonal-quality", name: "Orthogonal Quality", value: "0.88", status: "pass", threshold: "0.7" },
+        {
+          id: "orthogonal-quality",
+          name: "Orthogonal Quality",
+          value: "0.88",
+          status: "pass",
+          threshold: "0.7",
+        },
         { id: "aspect-ratio", name: "Aspect Ratio", value: "3.2 max", status: "warn", threshold: "3.0" },
         { id: "skewness", name: "Skewness", value: "0.31 avg", status: "pass", threshold: "0.5" },
         { id: "volume-change", name: "Volume Change", value: "0.2%", status: "pass", threshold: "0.5%" },

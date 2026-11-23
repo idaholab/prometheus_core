@@ -10,12 +10,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import IFCViewerEngine, { EquipmentItem, PipeRunItem } from "./IFCViewerEngine";
 import type { TreeGroup } from "./treeGrouping";
 
@@ -81,31 +76,21 @@ const IfcViewer = forwardRef<IFCViewerHandles, Props>(
       setPanMode: (active) => {
         engineRef.current?.setPanMode(active);
       },
-      toggleProjection: () =>
-        engineRef.current?.toggleProjection() ?? Promise.resolve(),
-      getProjectionMode: () =>
-        engineRef.current?.getProjectionMode() ?? "Perspective",
+      toggleProjection: () => engineRef.current?.toggleProjection() ?? Promise.resolve(),
+      getProjectionMode: () => engineRef.current?.getProjectionMode() ?? "Perspective",
       enumerateCategories: (categories) =>
-        engineRef.current?.enumerateCategories(categories) ??
-        Promise.resolve([]),
-      enumerateEquipment: () =>
-        engineRef.current?.enumerateEquipment() ?? Promise.resolve([]),
+        engineRef.current?.enumerateCategories(categories) ?? Promise.resolve([]),
+      enumerateEquipment: () => engineRef.current?.enumerateEquipment() ?? Promise.resolve([]),
       setEquipmentVisible: (key, visible) =>
-        engineRef.current?.setEquipmentVisible(key, visible) ??
-        Promise.resolve(),
-      enumeratePipeRuns: () =>
-        engineRef.current?.enumeratePipeRuns() ?? Promise.resolve([]),
+        engineRef.current?.setEquipmentVisible(key, visible) ?? Promise.resolve(),
+      enumeratePipeRuns: () => engineRef.current?.enumeratePipeRuns() ?? Promise.resolve([]),
       setPipeRunVisible: (key, visible) =>
         engineRef.current?.setPipeRunVisible(key, visible) ?? Promise.resolve(),
       setPipeMemberVisible: (key, visible) =>
-        engineRef.current?.setPipeMemberVisible(key, visible) ??
-        Promise.resolve(),
-      enumerateWallGroups: () =>
-        engineRef.current?.enumerateWallGroups() ?? Promise.resolve([]),
-      enumerateRoofGroups: () =>
-        engineRef.current?.enumerateRoofGroups() ?? Promise.resolve([]),
-      enumerateColumnGroups: () =>
-        engineRef.current?.enumerateColumnGroups() ?? Promise.resolve([]),
+        engineRef.current?.setPipeMemberVisible(key, visible) ?? Promise.resolve(),
+      enumerateWallGroups: () => engineRef.current?.enumerateWallGroups() ?? Promise.resolve([]),
+      enumerateRoofGroups: () => engineRef.current?.enumerateRoofGroups() ?? Promise.resolve([]),
+      enumerateColumnGroups: () => engineRef.current?.enumerateColumnGroups() ?? Promise.resolve([]),
       setTreeGroupVisible: (key, visible) => {
         engineRef.current?.setTreeGroupVisible(key, visible);
       },
@@ -153,13 +138,7 @@ const IfcViewer = forwardRef<IFCViewerHandles, Props>(
       };
     }, [modelUrl, wasmCdnPath]);
 
-    return (
-      <div
-        ref={hostRef}
-        className={`w-full h-full ${className}`}
-        style={style}
-      />
-    );
+    return <div ref={hostRef} className={`w-full h-full ${className}`} style={style} />;
   },
 );
 

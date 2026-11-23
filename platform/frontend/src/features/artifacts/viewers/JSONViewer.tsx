@@ -84,9 +84,7 @@ export function JSONViewer({ element }: ViewerProps) {
           <FileJson size={14} className="text-base-content/50" />
           <span className="font-medium">{name}</span>
           {ready && <span className="badge badge-sm badge-ghost">{lines.length} lines</span>}
-          {ready && !valid && (
-            <span className="badge badge-sm badge-warning badge-outline">unparsed</span>
-          )}
+          {ready && !valid && <span className="badge badge-sm badge-warning badge-outline">unparsed</span>}
         </button>
         {ready && (
           <button

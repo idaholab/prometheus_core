@@ -51,13 +51,15 @@ function NavItemLink({
       end={to === "/"}
       onClick={() => onSelect?.(item.id)}
       title={item.label}
-      className={({ isActive }) => `flex items-center rounded-lg border-l-2 text-sm transition-colors cursor-pointer ${
-        collapsed ? "size-9 justify-center" : "w-full gap-2.5 px-2.5 py-2"
-      } ${
-        isActive
-          ? "border-primary bg-primary/15 font-semibold text-base-content"
-          : "border-transparent text-base-content/60 hover:bg-base-300 hover:text-base-content"
-      }`}
+      className={({ isActive }) =>
+        `flex items-center rounded-lg border-l-2 text-sm transition-colors cursor-pointer ${
+          collapsed ? "size-9 justify-center" : "w-full gap-2.5 px-2.5 py-2"
+        } ${
+          isActive
+            ? "border-primary bg-primary/15 font-semibold text-base-content"
+            : "border-transparent text-base-content/60 hover:bg-base-300 hover:text-base-content"
+        }`
+      }
     >
       <span className="flex size-[18px] shrink-0 items-center justify-center">{item.icon}</span>
       {!collapsed && <span className="truncate">{item.label}</span>}
@@ -72,14 +74,7 @@ function NavItemLink({
  * own since the history block (and the "New Chat" button inside it) is hidden
  * while collapsed.
  */
-export function LeftPanel({
-  isOpen,
-  onToggle,
-  navPaths,
-  onNavSelect,
-  onNewChat,
-  children,
-}: Props) {
+export function LeftPanel({ isOpen, onToggle, navPaths, onNavSelect, onNewChat, children }: Props) {
   const collapsed = !isOpen;
   const isAdmin = useCurrentUser()?.role === "admin";
 

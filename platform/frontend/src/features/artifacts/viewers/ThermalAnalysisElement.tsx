@@ -66,11 +66,7 @@ function ValueTree({ value }: { value: unknown }) {
       <ul className="ml-4 mt-2 list-disc space-y-1.5">
         {value.map((item, index) => (
           <li key={index}>
-            {isPlainObject(item) || Array.isArray(item) ? (
-              <ValueTree value={item} />
-            ) : (
-              formatValue(item)
-            )}
+            {isPlainObject(item) || Array.isArray(item) ? <ValueTree value={item} /> : formatValue(item)}
           </li>
         ))}
       </ul>
@@ -137,12 +133,8 @@ export function ThermalAnalysisElement({ element }: ViewerProps) {
             Thermal Analysis — Failed
           </div>
           <div className="text-lg font-bold">{name}</div>
-          {description ? (
-            <div className="mt-1 text-sm text-base-content/70">{description}</div>
-          ) : null}
-          <div className="mt-3 rounded-lg bg-error/10 p-4 text-sm text-error">
-            {analysis.error}
-          </div>
+          {description ? <div className="mt-1 text-sm text-base-content/70">{description}</div> : null}
+          <div className="mt-3 rounded-lg bg-error/10 p-4 text-sm text-error">{analysis.error}</div>
         </div>
       </div>
     );
@@ -180,15 +172,9 @@ export function ThermalAnalysisElement({ element }: ViewerProps) {
       <div className="card-body p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-primary">
-              Thermal Analysis
-            </div>
-            <div className="text-lg font-bold">
-              {String(analysis.material_id ?? name)}
-            </div>
-            {description ? (
-              <div className="mt-1 text-sm text-base-content/70">{description}</div>
-            ) : null}
+            <div className="text-xs font-semibold uppercase tracking-wide text-primary">Thermal Analysis</div>
+            <div className="text-lg font-bold">{String(analysis.material_id ?? name)}</div>
+            {description ? <div className="mt-1 text-sm text-base-content/70">{description}</div> : null}
           </div>
           <div className={`badge ${statusBadgeClass(status)} badge-outline uppercase font-semibold`}>
             {status}

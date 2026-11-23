@@ -29,11 +29,7 @@ function CodeBlock({ children, className }: { children?: React.ReactNode; classN
   const isBlock = code.includes("\n");
 
   if (!isBlock) {
-    return (
-      <code className={`px-1 py-0.5 rounded bg-base-300 text-sm ${className ?? ""}`}>
-        {children}
-      </code>
-    );
+    return <code className={`px-1 py-0.5 rounded bg-base-300 text-sm ${className ?? ""}`}>{children}</code>;
   }
 
   const handleCopy = () => {
@@ -68,9 +64,7 @@ const markdownComponents = {
       <table className="table table-sm">{children}</table>
     </div>
   ),
-  thead: ({ children }: { children?: React.ReactNode }) => (
-    <thead className="bg-base-300">{children}</thead>
-  ),
+  thead: ({ children }: { children?: React.ReactNode }) => <thead className="bg-base-300">{children}</thead>,
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="text-xl font-bold mt-4 mb-2">{children}</h1>
   ),

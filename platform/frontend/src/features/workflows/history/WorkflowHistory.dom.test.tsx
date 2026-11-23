@@ -17,8 +17,21 @@ import { WorkflowHistory } from "./WorkflowHistory.tsx";
 import type { WorkflowVersion } from "./VersionItem.tsx";
 
 const VERSIONS: WorkflowVersion[] = [
-  { id: "v1.2.0", version: "v1.2.0", summary: "+ QA Gate after analyses", date: "2 days ago", author: "V. Kerimov", latest: true },
-  { id: "v1.1.0", version: "v1.1.0", summary: "Swapped Thermal agent v1.8→v2.0", date: "Oct 1", author: "Dr. Halsey" },
+  {
+    id: "v1.2.0",
+    version: "v1.2.0",
+    summary: "+ QA Gate after analyses",
+    date: "2 days ago",
+    author: "V. Kerimov",
+    latest: true,
+  },
+  {
+    id: "v1.1.0",
+    version: "v1.1.0",
+    summary: "Swapped Thermal agent v1.8→v2.0",
+    date: "Oct 1",
+    author: "Dr. Halsey",
+  },
   { id: "v1.0.0", version: "v1.0.0", summary: "Initial template", date: "Sep 12", author: "platform-team" },
 ];
 

@@ -74,7 +74,10 @@ function useTheme() {
       const html = document.documentElement;
       setIsDark(html.classList.contains("dark") || html.getAttribute("data-theme") === "dark");
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -82,7 +85,7 @@ function useTheme() {
 }
 
 export function MeshViewerElement({ element }: ViewerProps) {
-  const props = ((element as { props?: MeshProps }).props) ?? {};
+  const props = (element as { props?: MeshProps }).props ?? {};
   const datasetId = props.datasetId ?? "mesh";
   const baseUrl = props.baseUrl ?? "";
   const metadata = props.metadata ?? {};
@@ -235,18 +238,20 @@ export function MeshViewerElement({ element }: ViewerProps) {
           </div>
         </div>
       ) : (
-        <div className="relative w-full bg-base-300/40" style={{ height: isFullscreen ? undefined : height, flex: isFullscreen ? 1 : undefined }}>
-          <MeshViewer
-            ref={meshRef}
-            allowPicking={allowPicking}
-            onPick={setPickedInfo}
-          />
+        <div
+          className="relative w-full bg-base-300/40"
+          style={{ height: isFullscreen ? undefined : height, flex: isFullscreen ? 1 : undefined }}
+        >
+          <MeshViewer ref={meshRef} allowPicking={allowPicking} onPick={setPickedInfo} />
 
           {showControls && (
             <MeshViewerControls
               numTimesteps={numTimesteps}
               currentTimestep={currentTimestep}
-              onTimestepChange={(i) => { setIsPlaying(false); setCurrentTimestep(i); }}
+              onTimestepChange={(i) => {
+                setIsPlaying(false);
+                setCurrentTimestep(i);
+              }}
               isPlaying={isPlaying}
               onTogglePlay={() => setIsPlaying((p) => !p)}
               timeLabel={formatTime(timeValues[currentTimestep])}
@@ -262,13 +267,21 @@ export function MeshViewerElement({ element }: ViewerProps) {
 
           {pickedInfo && (
             <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-base-100/90 backdrop-blur border border-base-300 rounded-lg px-3 py-2 text-xs">
-              <span><span className="text-base-content/50 mr-1">Cell</span><span className="font-mono text-primary">{pickedInfo.cellId}</span></span>
+              <span>
+                <span className="text-base-content/50 mr-1">Cell</span>
+                <span className="font-mono text-primary">{pickedInfo.cellId}</span>
+              </span>
               <span>
                 <span className="text-base-content/50 mr-1">Pos</span>
-                <span className="font-mono text-primary">({pickedInfo.position.map((p) => p.toFixed(2)).join(", ")})</span>
+                <span className="font-mono text-primary">
+                  ({pickedInfo.position.map((p) => p.toFixed(2)).join(", ")})
+                </span>
               </span>
               {pickedInfo.value !== null && (
-                <span><span className="text-base-content/50 mr-1">Val</span><span className="font-mono text-primary">{pickedInfo.value.toExponential(3)}</span></span>
+                <span>
+                  <span className="text-base-content/50 mr-1">Val</span>
+                  <span className="font-mono text-primary">{pickedInfo.value.toExponential(3)}</span>
+                </span>
               )}
             </div>
           )}

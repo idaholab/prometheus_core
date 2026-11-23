@@ -18,7 +18,10 @@ import { BUILDER_MODES, type BuilderMode } from "@/features/workflows/builderMod
 /** The badge's tone. Text stays base-content so it passes AA on the tint in both themes. */
 const TONE_CLASSES = {
   info: { badge: "border-info/60 bg-info/10 hover:border-info hover:bg-info/20", dot: "bg-info" },
-  warning: { badge: "border-warning/60 bg-warning/10 hover:border-warning hover:bg-warning/20", dot: "bg-warning" },
+  warning: {
+    badge: "border-warning/60 bg-warning/10 hover:border-warning hover:bg-warning/20",
+    dot: "bg-warning",
+  },
 } as const;
 
 const MODES: BuilderMode[] = ["run", "template"];
@@ -98,7 +101,10 @@ export function BuilderModeBadge({ mode, workflowName, onChange }: BuilderModeBa
       <button
         ref={badgeRef}
         type="button"
-        className={buttonClassName({ size: "sm" }, { shape: `gap-2 font-normal ${TONE_CLASSES[tone].badge}` })}
+        className={buttonClassName(
+          { size: "sm" },
+          { shape: `gap-2 font-normal ${TONE_CLASSES[tone].badge}` },
+        )}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

@@ -48,8 +48,8 @@ const allCategoryKeys = VISIBILITY_TOGGLES.map((t) => t.key);
 // have sub-pieces (layered wall/roof panels, columns with base plates), as in
 // Alchemy's StepModelViewer. label is the tree section's heading.
 const GROUPABLE: { key: VisibilityCategory; label: string }[] = [
-  { key: "walls",   label: "Walls" },
-  { key: "roofs",   label: "Roof" },
+  { key: "walls", label: "Walls" },
+  { key: "roofs", label: "Roof" },
   { key: "columns", label: "Columns" },
 ];
 
@@ -64,15 +64,15 @@ type ProjectionMode = "Perspective" | "Orthographic";
 // The WebGL canvas does not follow DaisyUI, so it gets the app theme's colour
 // itself: the same pair the mesh viewer uses (MeshViewerElement.tsx).
 const CANVAS_BACKGROUND: Record<Theme, [number, number, number]> = {
-  dark:  [0.08, 0.08, 0.12],
+  dark: [0.08, 0.08, 0.12],
   light: [0.91, 0.91, 0.94],
 };
 
 export function IFCViewerElement({ element }: ViewerProps) {
-  const props    = ((element as { props?: IFCProps }).props) ?? {};
-  const fileUrl  = props.fileUrl ?? element.url ?? null;
+  const props = (element as { props?: IFCProps }).props ?? {};
+  const fileUrl = props.fileUrl ?? element.url ?? null;
   const filename = props.filename ?? element.name ?? "model.ifc";
-  const height   = props.height ?? "560px";
+  const height = props.height ?? "560px";
 
   const ifcViewerRef = useRef<IFCViewerHandles>(null);
   const [theme] = useTheme();
@@ -81,16 +81,16 @@ export function IFCViewerElement({ element }: ViewerProps) {
   const [visibility, setVisibility] = useState<Record<VisibilityCategory, boolean>>(defaultVisibility);
   const [presentCategories, setPresentCategories] = useState<VisibilityCategory[]>(allCategoryKeys);
 
-  const [equipmentItems,      setEquipmentItems]      = useState<LabeledItem[]>([]);
+  const [equipmentItems, setEquipmentItems] = useState<LabeledItem[]>([]);
   const [equipmentVisibility, setEquipmentVisibility] = useState<Record<string, boolean>>({});
 
-  const [pipeRuns,         setPipeRuns]         = useState<PipeRunItem[]>([]);
+  const [pipeRuns, setPipeRuns] = useState<PipeRunItem[]>([]);
   const [memberVisibility, setMemberVisibility] = useState<Record<string, boolean>>({});
 
-  const [groupSections,        setGroupSections]        = useState<ElementGroupSection[]>([]);
+  const [groupSections, setGroupSections] = useState<ElementGroupSection[]>([]);
   const [treeMemberVisibility, setTreeMemberVisibility] = useState<Record<string, boolean>>({});
 
-  const [panMode,        setPanMode]        = useState(false);
+  const [panMode, setPanMode] = useState(false);
   const [projectionMode, setProjectionMode] = useState<ProjectionMode>("Perspective");
 
   useEffect(() => {
@@ -128,13 +128,17 @@ export function IFCViewerElement({ element }: ViewerProps) {
       return [[], [], []];
     });
 
-    const sections: ElementGroupSection[] = GROUPABLE
-      .map((g, i) => ({ key: g.key, title: g.label, groups: grouped[i] }))
-      .filter((sec) => sec.groups.length > 0);
+    const sections: ElementGroupSection[] = GROUPABLE.map((g, i) => ({
+      key: g.key,
+      title: g.label,
+      groups: grouped[i],
+    })).filter((sec) => sec.groups.length > 0);
     setGroupSections(sections);
-    setTreeMemberVisibility(Object.fromEntries(
-      sections.flatMap((sec) => sec.groups.flatMap((g) => g.members.map((m) => [m.key, true]))),
-    ));
+    setTreeMemberVisibility(
+      Object.fromEntries(
+        sections.flatMap((sec) => sec.groups.flatMap((g) => g.members.map((m) => [m.key, true]))),
+      ),
+    );
 
     const [present, equipment, runs] = await Promise.all([
       viewer.enumerateCategories(allCategoryKeys),
@@ -230,9 +234,7 @@ export function IFCViewerElement({ element }: ViewerProps) {
     );
   }
 
-  const downloads: DownloadItem[] = [
-    { key: "ifc", label: "IFC", href: fileUrl, downloadName: filename },
-  ];
+  const downloads: DownloadItem[] = [{ key: "ifc", label: "IFC", href: fileUrl, downloadName: filename }];
 
   return (
     <div
@@ -269,9 +271,9 @@ export function IFCViewerElement({ element }: ViewerProps) {
             onToggleMember: handleTogglePipeMember,
           }}
           onReset={() => ifcViewerRef.current?.fitToFrame()}
-          onTop={()   => ifcViewerRef.current?.setTopView()}
+          onTop={() => ifcViewerRef.current?.setTopView()}
           onFront={() => ifcViewerRef.current?.setFrontView()}
-          onSide={()  => ifcViewerRef.current?.setSideView()}
+          onSide={() => ifcViewerRef.current?.setSideView()}
           panMode={panMode}
           onTogglePan={handleTogglePan}
           projectionMode={projectionMode}

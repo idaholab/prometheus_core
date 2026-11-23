@@ -60,7 +60,11 @@ test("DataTable makes only sortable columns with a value into sort buttons, and 
     "Aris Thorne",
   ]);
   // A null value sorts last in either direction.
-  assert.deepEqual(names(render({ defaultSort: { id: "seen" } })), ["Sarah Chen", "Elena Rostova", "Aris Thorne"]);
+  assert.deepEqual(names(render({ defaultSort: { id: "seen" } })), [
+    "Sarah Chen",
+    "Elena Rostova",
+    "Aris Thorne",
+  ]);
   assert.deepEqual(names(render({ defaultSort: { id: "seen", desc: true } })), [
     "Elena Rostova",
     "Sarah Chen",
@@ -74,23 +78,39 @@ test("DataTable search matches any valued column case-insensitively, and columnF
   assert.deepEqual(names(render({ search: "edit" })), [], "columns without a value aren't searched");
 
   assert.deepEqual(names(render({ columnFilters: { role: "reviewer" } })), ["Sarah Chen", "Elena Rostova"]);
-  assert.deepEqual(names(render({ columnFilters: { role: "review" } })), [], "filters are exact, not substring");
+  assert.deepEqual(
+    names(render({ columnFilters: { role: "review" } })),
+    [],
+    "filters are exact, not substring",
+  );
   assert.equal(names(render({ columnFilters: { role: "" } })).length, 3, "an empty filter means All");
   assert.deepEqual(names(render({ search: "sarah", columnFilters: { role: "reviewer" } })), ["Sarah Chen"]);
 });
 
 test("DataTable tells an empty table apart from one whose rows are all filtered out", () => {
-  assert.match(render({ data: [], empty: "No people yet." }), /<\/table><\/div><p [^>]*>No people yet\.<\/p><\/div>$/);
-  assert.match(render({ search: "zzz", noMatches: "Nothing matches." }), /<\/table><\/div><p [^>]*>Nothing matches\.<\/p><\/div>$/);
+  assert.match(
+    render({ data: [], empty: "No people yet." }),
+    /<\/table><\/div><p [^>]*>No people yet\.<\/p><\/div>$/,
+  );
+  assert.match(
+    render({ search: "zzz", noMatches: "Nothing matches." }),
+    /<\/table><\/div><p [^>]*>Nothing matches\.<\/p><\/div>$/,
+  );
   assert.doesNotMatch(render(), /<p /, "no message while rows show");
 });
 
 test("DataTable caps its height only when maxHeight is given", () => {
-  assert.match(render({ maxHeight: "20rem" }), /^<div [^>]*><div class="overflow-auto" style="max-height:20rem">/);
+  assert.match(
+    render({ maxHeight: "20rem" }),
+    /^<div [^>]*><div class="overflow-auto" style="max-height:20rem">/,
+  );
   assert.match(render(), /^<div [^>]*><div class="overflow-auto">/);
 });
 
 test("DataTable's card can shrink inside a flex parent, so a wide table scrolls inside it, not the page", () => {
-  const card = render().match(/^<div class="([^"]*)"/)?.[1].split(" ") ?? [];
+  const card =
+    render()
+      .match(/^<div class="([^"]*)"/)?.[1]
+      .split(" ") ?? [];
   for (const cls of ["w-full", "min-w-0", "overflow-hidden"]) assert.ok(card.includes(cls), cls);
 });

@@ -66,7 +66,10 @@ export function TweakStepInspector({ step }: { step: TweakedStep | null }) {
       {step ? (
         <>
           <div className="flex min-w-0 items-center gap-2">
-            <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[step.tone]}`} />
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[step.tone]}`}
+            />
             <p className="m-0 min-w-0 truncate text-[15px] font-semibold text-base-content" title={step.name}>
               {step.name}
             </p>
@@ -75,7 +78,11 @@ export function TweakStepInspector({ step }: { step: TweakedStep | null }) {
             <label htmlFor={agentId} className={LABEL_CLASSES}>
               Agent
             </label>
-            <select id={agentId} className="select select-sm w-full font-mono text-xs" defaultValue={step.agent}>
+            <select
+              id={agentId}
+              className="select select-sm w-full font-mono text-xs"
+              defaultValue={step.agent}
+            >
               {[step.agent, ...step.agentOptions.filter((agent) => agent !== step.agent)].map((agent) => (
                 <option key={agent}>{agent}</option>
               ))}

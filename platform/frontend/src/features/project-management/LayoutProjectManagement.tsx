@@ -10,7 +10,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { countMembersByRole, type ProjectManagementState, type TeamMember } from "./store/projectManagementModel";
+import {
+  countMembersByRole,
+  type ProjectManagementState,
+  type TeamMember,
+} from "./store/projectManagementModel";
 import { Users } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RbacSection } from "./RbacSection";
@@ -60,7 +64,13 @@ function renderBody({
     );
   }
   if (status === "empty") {
-    return <EmptyState icon={<Users size={24} />} title="No team members yet" hint="Invited users will display here" />;
+    return (
+      <EmptyState
+        icon={<Users size={24} />}
+        title="No team members yet"
+        hint="Invited users will display here"
+      />
+    );
   }
   return (
     <div className="flex flex-col gap-8 px-6 py-6">

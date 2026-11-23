@@ -35,7 +35,10 @@ function watch(page: Page): string[] {
     const url = new URL(response.url());
     if (!url.pathname.startsWith("/api/") || EXPECTED.some((pattern) => pattern.test(url.pathname))) return;
     const status = response.status();
-    if (status >= 400) problems.push(`${status >= 500 ? "server error" : "request refused"}: ${status} ${response.request().method()} ${url.pathname}`);
+    if (status >= 400)
+      problems.push(
+        `${status >= 500 ? "server error" : "request refused"}: ${status} ${response.request().method()} ${url.pathname}`,
+      );
   });
   return problems;
 }

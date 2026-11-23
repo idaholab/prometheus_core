@@ -59,12 +59,8 @@ export function ReferenceElement({ element }: ViewerProps) {
         ) : (
           <p className="text-sm font-medium text-base-content break-words">{title}</p>
         )}
-        {description && (
-          <p className="text-sm text-base-content/70 mt-0.5 break-words">{description}</p>
-        )}
-        {parts.length > 0 && (
-          <p className="text-xs text-base-content/50 mt-1">{parts.join(" · ")}</p>
-        )}
+        {description && <p className="text-sm text-base-content/70 mt-0.5 break-words">{description}</p>}
+        {parts.length > 0 && <p className="text-xs text-base-content/50 mt-1">{parts.join(" · ")}</p>}
       </div>
     </div>
   );

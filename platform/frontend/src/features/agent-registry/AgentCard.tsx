@@ -45,7 +45,9 @@ export function AgentCard({ agent }: { agent: Agent }) {
           <h3 className="m-0 truncate font-semibold text-base-content" title={agent.name}>
             {agent.name}
           </h3>
-          <p className="m-0 mt-1 min-h-[2lh] line-clamp-2 text-sm text-base-content/60">{agent.description}</p>
+          <p className="m-0 mt-1 min-h-[2lh] line-clamp-2 text-sm text-base-content/60">
+            {agent.description}
+          </p>
         </div>
         <div className="divider my-0" />
         <div className="flex items-center justify-between gap-2">
