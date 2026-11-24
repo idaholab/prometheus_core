@@ -34,7 +34,7 @@ export function PdfViewerElement({ element }: ViewerProps) {
   return (
     <div className="border border-base-300 rounded-lg overflow-hidden my-2 bg-base-200/40 max-w-3xl">
       <div className="flex items-center justify-between px-3 py-2 border-b border-base-300 bg-base-200/60">
-        <p className="text-sm font-medium text-base-content truncate">{name}</p>
+        <p className="m-0 text-sm font-medium text-base-content truncate">{name}</p>
         <a
           href={url}
           download={name}
