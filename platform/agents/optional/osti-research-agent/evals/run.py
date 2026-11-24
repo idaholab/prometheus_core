@@ -184,6 +184,10 @@ async def _run_engine(
         # Kept out of the agent's JSON; saved here so a refused answer can be
         # read with the grader's full gaps.
         result["_answer_drafts"] = final.answer_drafts if final else []
+        # What the run searched and how it chose papers, so a run that read
+        # the wrong papers can be checked against what it could have read.
+        result["_question_topic"] = final.question_topic if final else None
+        result["_searched_papers"] = final.searched_papers if final else {}
 
         # Persist the full transcript for the manual spot-check.
         out_dir = workdir / engine / qid

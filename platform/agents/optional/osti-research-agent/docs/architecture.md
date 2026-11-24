@@ -131,8 +131,8 @@ flowchart TD
     CALL([read_top_candidates]) --> BUDGET{"paper or time budget used,<br/>or 2 exact findings?"}
     BUDGET -- yes --> STOPPED([stop: true, nothing read])
     BUDGET -- no --> RANK["Rank every unread search result against the question<br/>BM25 + embedding similarity, fused by RRF"]
-    RANK --> GUARD["Skip results that share no word with the question"]
-    GUARD --> TOP["Take the top 3"]
+    RANK --> GUARD["Reading order from the question's topic:<br/>names subject + quantity, then subject only,<br/>then no abstract; skip results never naming the subject"]
+    GUARD --> TOP["Take the first 3"]
     TOP --> P1["paper 1"] & P2["paper 2"] & P3["paper 3"]
     P1 & P2 & P3 --> EACH[["For each, in parallel:<br/>download → parse → analyze and verify"]]
     EACH -- "download or parse failed" --> NEXT["Start the next paper in rank order<br/>(a failed paper uses no budget)"]
@@ -272,14 +272,45 @@ abstract, fused by RRF (Σ 1/(60 + rank)):
 **Code, not the model, picks the papers.** `read_top_candidates` reads the
 top 3 in that order in parallel (download, parse, analyze and verify, through
 the same tools and checks as before). A paper whose download or parse fails
-gives its place to the next one in rank order. It skips hits that share no
-word with the question (a BM25 score of 0): the ranking orders candidates but
-never says that none of them fit. The orchestrator calls it at most twice,
+gives its place to the next one in that order.
+
+**Which papers are worth reading** comes from the question's topic: one
+model call per run through the run's text completion (`llm_steps.question_topic`,
+prompt `prompts/question_topic.txt`, 30 s limit) names the question's *subject*
+(the material, fuel, code, benchmark or method it is about, with the
+variants a paper would use: 316L and 316H for 316, Alloy 718 for Inconel
+718) and the asked *quantity* (thermal conductivity, fatigue life), but not
+the conditions (burnup, irradiation). `rerank.reading_order` then puts the
+ranked hits in tiers, keeping the rank order inside each:
+
+1. title or abstract names the subject and the quantity;
+2. names the subject only;
+3. no abstract to check, but the title shares a word with the question.
+
+A hit whose title and abstract never name the subject is skipped. Names
+match as whole phrases in any word order, singular or plural, and however a
+designation is written (`316L`, `316 L`, `SS 316`, `UO<sub>2</sub>`), so
+"Alloy 718" matches "718 alloy" but not "alloy 617 ... 718 MPa". A question
+about a class ("structural steels") or a broad field gets no subject: hits
+are then kept by sharing a word with the question, as they are when the
+topic call fails, and the quantity still orders them. When nothing unread
+names the subject, the tool says so and asks for another search. The
+progress log shows the subject in use ("Reading papers about ...").
+
+On the November full eval this would have skipped 5 of the 6 papers the
+`inconel-718-fatigue` run read (316, V-4Cr-4Ti, A709 and others, let in on
+"fatigue" or "irradiation"), and 2 of the 48 papers that gave a finding
+across the questions that ran: a review whose abstract names no grade of
+316, and an HTGR report that writes "Modular HTGR 350". For
+`uo2-thermal-conductivity` the topic is not enough: every paper it read was
+about UO2, and its OSTI searches returned only one paper naming UO2 and
+thermal conductivity together. The orchestrator calls it at most twice,
 `MAX_PAPERS_ANALYZED` = 6 papers in all, and searches again between the two
 batches using what each paper reported instead. It stops once two papers give
 an `exact` finding; whether those agree is for the answer to say. The
 orchestrator has no `download_paper`, `parse_paper` or `analyze_paper` tool.
-The keep-going nudge lists unread hits in the same ranked order. On the
+The keep-going nudge lists the same papers in the same order, and is not
+sent when none is left. On the
 `ss316-creep-400c` question's real searches, the five papers about creep of
 316 itself were found 21st to 26th of 26 and ranked 1st to 5th.
 

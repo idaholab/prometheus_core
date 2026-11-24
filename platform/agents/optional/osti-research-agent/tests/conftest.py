@@ -42,6 +42,15 @@ def _no_network_grader(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_model_retry_waits(monkeypatch):
+    """Model calls wait 2-20 s before each retry in production; tests keep
+    the same number of attempts with no wait."""
+    from research_agent.core import llm
+
+    monkeypatch.setattr(llm, "RETRY_DELAYS_S", (0.0,) * len(llm.RETRY_DELAYS_S))
+
+
+@pytest.fixture(autouse=True)
 def _no_arxiv_spacing(monkeypatch, tmp_path):
     """arXiv requests are spaced 3 s (API) and 15 s (PDFs) apart in
     production; tests run without the gap, and with gate files of their own

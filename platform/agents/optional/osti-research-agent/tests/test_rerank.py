@@ -16,6 +16,8 @@ import asyncio
 import json
 import math
 
+import pytest
+
 from research_agent import rerank
 from research_agent.core import deep_runner
 from research_agent.core.config import AgentConfig
@@ -319,11 +321,135 @@ def test_rank_candidates_with_nothing_unread():
 def test_nudge_lists_unread_results_in_ranked_order():
     ctx = _ctx()
     ctx.search_hits = {
-        "1": {"title": "Zirconium oxide in steam", "origin": "osti"},
+        "1": {"title": "Stainless steel oxide in steam", "origin": "osti"},
         "2": {"title": "Creep of 316 stainless steel at 400 C and 15 MPa", "origin": "osti"},
+        "3": {"title": "Zirconium hydride reorientation", "origin": "osti"},
     }
 
     nudge = asyncio.run(deep_runner.keep_going_nudge(ctx))
 
     assert "most relevant to the question first" in nudge
-    assert nudge.index("- 2: Creep of 316") < nudge.index("- 1: Zirconium")
+    assert nudge.index("- 2: Creep of 316") < nudge.index("- 1: Stainless")
+    # Only what read_top_candidates would read is listed.
+    assert "Zirconium" not in nudge
+
+
+def test_no_nudge_when_no_unread_result_is_related():
+    ctx = _ctx()
+    ctx.search_hits = {"3": {"title": "Zirconium hydride reorientation", "origin": "osti"}}
+
+    assert asyncio.run(deep_runner.keep_going_nudge(ctx)) is None
+
+
+# --- the question's topic: matching names and the reading order -------------
+
+
+def test_tokenize_drops_formula_markup():
+    assert rerank.tokenize("High burnup UO<sub>2</sub> fuel") == ["high", "burnup", "uo2", "fuel"]
+
+
+def _names(text):
+    return rerank.name_tokens(text)
+
+
+
+@pytest.mark.parametrize(
+    "text, name",
+    [
+        ("Types 304 and 316 Stainless Steel", "316 stainless steel"),
+        ("wrought and AM 316 L austenitic stainless steel", "316L"),
+        ("solution-annealed 718 alloy", "Alloy 718"),
+        ("IN 718 bar stock", "IN718"),
+        ("SS 316 tube", "SS316"),
+        ("High burnup UO<sub>2</sub> fuel", "UO2"),
+        ("thermal-hydraulic system codes", "system thermal-hydraulics code"),
+        ("creep at 400.5 C", "400.5 C"),
+    ],
+)
+def test_a_name_matches_however_it_is_written(text, name):
+    assert rerank.mentions(_names(text), name)
+
+
+@pytest.mark.parametrize(
+    "text, name",
+    [
+        ("creep of alloy 617 at 718 MPa", "Alloy 718"),  # the words, not the phrase
+        ("(U,Pu)O2 solid solutions", "UO2"),
+        ("316H stainless steel", "316L"),
+        ("Zircaloy-4 cladding", "Zry-4"),
+        ("anything", ""),
+    ],
+)
+def test_a_name_does_not_match_other_things(text, name):
+    assert not rerank.mentions(_names(text), name)
+
+
+def test_usable_names_drop_blanks_duplicates_and_bare_numbers():
+    assert rerank.QuestionTopic.usable(["Alloy 718", " ", "718", "Alloy 718", "4.5"]) == (
+        "Alloy 718",
+    )
+
+
+INCONEL = "How does irradiation affect the fatigue life of Inconel 718?"
+INCONEL_TOPIC = rerank.QuestionTopic(
+    subject=("Inconel 718", "Alloy 718"), quantity=("fatigue life", "fatigue")
+)
+
+
+def test_a_paper_naming_subject_and_quantity_is_read_first():
+    hit = {"title": "Fatigue of irradiated Alloy 718", "description": "cycles"}
+
+    assert rerank.relevance_tier(INCONEL, INCONEL_TOPIC, hit) == rerank.TIER_SUBJECT_AND_QUANTITY
+
+
+def test_a_paper_naming_only_the_subject_comes_next():
+    hit = {"title": "Tensile tests of Inconel 718", "description": "after irradiation"}
+
+    assert rerank.relevance_tier(INCONEL, INCONEL_TOPIC, hit) == rerank.TIER_SUBJECT
+
+
+def test_a_paper_about_another_material_is_skipped():
+    # From the eval: read for "fatigue" and "irradiation", never names 718.
+    hit = {
+        "title": "High-temperature fatigue life of type 316 stainless steel "
+        "containing irradiation induced helium",
+        "description": "Low-cycle fatigue tests of HFIR-irradiated 316.",
+    }
+
+    assert rerank.relevance_tier(INCONEL, INCONEL_TOPIC, hit) is None
+
+
+def test_a_title_without_an_abstract_is_read_last_if_it_shares_a_word():
+    untitled = {"title": "Irradiation effects report", "description": ""}
+    unrelated = {"title": "Zirconium hydride report", "description": ""}
+
+    assert rerank.relevance_tier(INCONEL, INCONEL_TOPIC, untitled) == rerank.TIER_NO_ABSTRACT
+    assert rerank.relevance_tier(INCONEL, INCONEL_TOPIC, unrelated) is None
+
+
+def test_with_no_subject_word_overlap_decides_and_the_quantity_orders():
+    topic = rerank.QuestionTopic(subject=(), quantity=("helium embrittlement",))
+    question = "What causes helium embrittlement in structural steels?"
+
+    named = {"title": "Helium embrittlement of F82H", "description": "x"}
+    related = {"title": "Steels for fusion", "description": "x"}
+    unrelated = {"title": "Zirconium hydrides", "description": "x"}
+
+    assert rerank.relevance_tier(question, topic, named) == rerank.TIER_SUBJECT_AND_QUANTITY
+    assert rerank.relevance_tier(question, topic, related) == rerank.TIER_SUBJECT
+    assert rerank.relevance_tier(question, topic, unrelated) is None
+
+
+def test_reading_order_groups_by_tier_and_keeps_rank_order_within_one():
+    ranked = [
+        ("a", {"title": "Inconel 718 creep", "description": "x"}, {"score": 0.9}),
+        ("b", {"title": "316 fatigue", "description": "x"}, {"score": 0.8}),
+        ("c", {"title": "Alloy 718 fatigue", "description": "x"}, {"score": 0.7}),
+        ("d", {"title": "Inconel 718 fatigue life", "description": "x"}, {"score": 0.6}),
+    ]
+
+    order, skipped = rerank.reading_order(INCONEL, INCONEL_TOPIC, ranked)
+
+    assert [sid for sid, _, _ in order] == ["c", "d", "a"]
+    assert [rank["tier"] for _, _, rank in order] == [0, 0, 1]
+    assert skipped == 1

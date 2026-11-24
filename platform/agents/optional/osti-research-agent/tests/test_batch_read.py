@@ -246,7 +246,9 @@ def test_no_time_left_reads_nothing():
     assert "time budget nearly exhausted" in out["reason"]
 
 
-def test_shares_a_question_term():
-    assert batch.shares_a_question_term(QUESTION, {"title": "Creep of Inconel"})
-    assert not batch.shares_a_question_term(QUESTION, {"title": "Zirconium hydrides"})
-    assert batch.shares_a_question_term(QUESTION, {"title": "x", "description": "at 400 C"})
+def test_without_a_topic_a_hit_sharing_a_question_word_is_kept():
+    from research_agent.rerank import relevance_tier
+
+    assert relevance_tier(QUESTION, None, {"title": "Creep of Inconel"}) is not None
+    assert relevance_tier(QUESTION, None, {"title": "Zirconium hydrides"}) is None
+    assert relevance_tier(QUESTION, None, {"title": "x", "description": "at 400 C"}) is not None

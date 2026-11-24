@@ -22,3 +22,4 @@ def _load_prompt(name: str) -> str:
 
 
 FOLLOWUP_FROM_FINDINGS_PROMPT_TEMPLATE = _load_prompt("followup_from_findings.txt")
+QUESTION_TOPIC_PROMPT_TEMPLATE = _load_prompt("question_topic.txt")

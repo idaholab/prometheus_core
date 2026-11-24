@@ -288,15 +288,23 @@ def test_analyzer_returns_the_closest_condition_however_far():
 # --- keep-going nudge ------------------------------------------------------
 
 
+NUDGE_QUESTION = "What is the creep rate of 316?"
+
+
 def _nudge_ctx(**config):
     from research_agent.tools import RunContext
 
     ctx = RunContext(
-        config=AgentConfig(litellm_base_url="http://unused", **config), complete=None
+        config=AgentConfig(litellm_base_url="http://unused", **config),
+        complete=None,
+        question=NUDGE_QUESTION,
     )
+    # Every unread hit shares a word with the question, so each is one the
+    # nudge may list.
     ctx.search_hits = {
         "706175": {"title": "Creep of 316 at 500-871 C", "origin": "osti"},
-        "10.1_x": {"title": "OA paper", "origin": "openalex", "oa_pdf_url": "https://arxiv.org/x"},
+        "10.1_x": {"title": "OA creep paper", "origin": "openalex",
+                   "oa_pdf_url": "https://arxiv.org/x"},
         "10.1_y": {"title": "Paywalled", "origin": "openalex", "oa_pdf_url": None},
         "read": {"title": "Already read", "origin": "osti"},
     }
@@ -309,7 +317,7 @@ def test_nudge_lists_only_unread_downloadable_results():
 
     assert "6 paper slot(s)" in nudge
     assert "Call `read_top_candidates` now" in nudge
-    assert "706175: Creep of 316 at 500-871 C" in nudge and "10.1_x: OA paper" in nudge
+    assert "706175: Creep of 316 at 500-871 C" in nudge and "10.1_x: OA creep paper" in nudge
     assert "Paywalled" not in nudge and "Already read" not in nudge
 
 
@@ -355,7 +363,8 @@ def _run_rounds(monkeypatch, find_on_round=None):
     async def go():
         return [
             e async for e in deep_runner.run_deep(
-                "q", AgentConfig(litellm_base_url="http://unused"), "r", complete=None
+                NUDGE_QUESTION, AgentConfig(litellm_base_url="http://unused"), "r",
+                complete=None,
             )
         ]
 
@@ -367,7 +376,7 @@ def test_empty_rounds_are_sent_back_at_most_twice(monkeypatch):
 
     assert len(graph.inputs) == 1 + deep_runner.MAX_NUDGES
     second = graph.inputs[1]
-    assert second[0].content == "q"  # the question is kept
+    assert second[0].content == NUDGE_QUESTION  # the question is kept
     assert "paper slot(s)" in second[-1].content  # the nudge is last
     assert events[-1].status == "no_results"
 

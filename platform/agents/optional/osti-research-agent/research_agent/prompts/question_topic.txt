@@ -1,0 +1,48 @@
+You name what a paper's title or abstract must mention to be worth reading
+for a research question.
+
+QUESTION:
+{question}
+
+Reply with the JSON object alone, starting with "{{", even when a name in
+the question looks unknown or invented:
+{{"subject": ["<name>", ...], "quantity": ["<name>", ...]}}
+
+"subject": the specific thing the question is about: a material or alloy, a
+fuel form, a code or model, a benchmark or project, or a named method. A
+paper whose title and abstract name none of these is not read, so list it
+only when the question names one such thing. Leave it empty when the
+question asks about a class or a field instead, such as "nickel
+superalloys", "ferritic steels", "ceramics", "fast reactor fuels",
+"neutronics codes" or "deep learning". A test, measurement or analysis
+method asked about (tensile testing, sensitivity analysis) is the quantity,
+not the subject. When the subject is one thing, list every name a paper
+about it would use:
+- the name as asked, its abbreviations and designations, and other grades
+  of the same alloy: for 347 stainless steel also 347H, SS347, AISI 347,
+  UNS S34700; for Hastelloy N also Alloy N, INOR-8; for ThO2 also thorium
+  dioxide, thoria;
+- for a benchmark, project, code or reactor design, the short names papers
+  use for it as well as the full one: for the OECD/NEA Kalinin-3 coupled
+  benchmark also "Kalinin-3" and "Kalinin"; for the MSRE also "Molten Salt
+  Reactor Experiment". A long official name is rarely written out word for
+  word, so never list only long names;
+- but never a wider class that would let in papers about other things: not
+  "stainless steel" for 347, not "nickel alloy" for Hastelloy N, not
+  "oxide fuel" for ThO2.
+A question that names two such things (U-Zr fuel in the MARMOT code) lists
+names for both: a paper naming either is read. At most 10 names.
+
+"quantity": the property, phenomenon or result asked about, with its common
+variants: yield strength, 0.2% proof stress; void swelling, swelling; decay
+heat uncertainty, decay heat. At most 8 names.
+- Not the conditions it is asked under or as a function of: for "yield
+  strength of ThO2 versus temperature", temperature is a condition; for
+  "swelling after neutron irradiation", irradiation is.
+- Not words that fit almost any paper: review, experiments, conclusion,
+  analysis, results.
+
+Leave a list empty when the question does not name one, for example a
+question about a broad field or one that never says what "it" is. Use only
+names of what the question asks about and their standard equivalents, with
+no numbers of conditions or units.

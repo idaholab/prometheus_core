@@ -19,9 +19,10 @@ prometheus_api's LLMClient for its own auth/tracing, but adapts it to this
 same `complete()` shape before handing it to the pipeline - see agent.py.
 """
 
+import asyncio
 import base64
 import logging
-from typing import TYPE_CHECKING, Awaitable, Callable, List, Literal
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Literal, TypeVar
 
 import httpx
 
@@ -37,6 +38,58 @@ CompleteFn = Callable[..., Awaitable[str]]
 VlmCompleteFn = Callable[..., Awaitable[str]]
 # text -> embedding vector
 EmbedFn = Callable[[str], Awaitable[List[float]]]
+
+T = TypeVar("T")
+
+# Waits before each retry of a model call that failed transiently. They add
+# up to about 30 s: the LiteLLM proxy has answered 404 "page not found" for
+# a model that works for about 15 s at a time, failing every call made then.
+RETRY_DELAYS_S = (2.0, 8.0, 20.0)
+# Statuses worth retrying: the proxy's passing 404, rate limits and server
+# errors. Other 4xx (bad request, auth) fail the same way every time.
+RETRY_STATUSES = frozenset({404, 408, 409, 429, 500, 502, 503, 504, 529})
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True for a model-call error that a later attempt may not hit.
+
+    Timeouts are not retried: the call already waited its full timeout, and
+    a retry would double that against the run's time budget."""
+    if isinstance(exc, (httpx.TimeoutException, asyncio.TimeoutError)):
+        return False
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in RETRY_STATUSES
+    try:
+        import litellm
+    except ImportError:  # pragma: no cover - litellm is a runtime dependency
+        return False
+    if isinstance(exc, litellm.Timeout):
+        return False
+    if isinstance(exc, litellm.APIConnectionError):
+        return True
+    return getattr(exc, "status_code", None) in RETRY_STATUSES
+
+
+async def with_retries(call: Callable[[], Awaitable[T]], what: str) -> T:
+    """Await ``call()``, retrying a transient failure after each delay in
+    ``RETRY_DELAYS_S``. The last failure, or any other error, is raised."""
+    for delay in RETRY_DELAYS_S:
+        try:
+            return await call()
+        except Exception as exc:
+            if not is_transient(exc):
+                raise
+            logger.warning(
+                "%s failed (%s: %s); retrying in %.0f s",
+                what,
+                type(exc).__name__,
+                str(exc)[:200],
+                delay,
+            )
+        await asyncio.sleep(delay)
+    return await call()
 
 
 def chat_model(
@@ -58,11 +111,13 @@ def chat_model(
     "tool_choice: type "tool" and "any" are not supported for this model" -
     and LangChain's structured output (``create_agent(response_format=...)``)
     always forces one.
-    """
-    from langchain_litellm import ChatLiteLLM
 
+    Every model call, streamed or not, retries a transient failure (see
+    ``with_retries``); ``ChatLiteLLM``'s own retry skips the proxy's 404.
+    """
     route = config.model_route(role)
-    model_class = ChatLiteLLM if forced_tool_choice else _auto_tool_choice_class()
+    retrying, auto_tool_choice = _chat_model_classes()
+    model_class = retrying if forced_tool_choice else auto_tool_choice
     return model_class(
         api_base=route.base_url.rstrip("/"),
         api_key=route.api_key or "not-needed",
@@ -71,24 +126,34 @@ def chat_model(
     )
 
 
-_AUTO_TOOL_CHOICE_CLASS = None
+_CHAT_MODEL_CLASSES = None
 
 
-def _auto_tool_choice_class():
-    """``ChatLiteLLM`` whose ``bind_tools`` never forces a tool call (built
-    once, lazily, so importing this module never imports langchain_litellm)."""
-    global _AUTO_TOOL_CHOICE_CLASS
-    if _AUTO_TOOL_CHOICE_CLASS is None:
+def _chat_model_classes():
+    """The two ``ChatLiteLLM`` subclasses ``chat_model`` builds: one that
+    retries transient failures, and one that also never forces a tool call.
+    Built once, lazily, so importing this module never imports
+    langchain_litellm."""
+    global _CHAT_MODEL_CLASSES
+    if _CHAT_MODEL_CLASSES is None:
         from langchain_litellm import ChatLiteLLM
 
-        class AutoToolChoiceChatLiteLLM(ChatLiteLLM):
+        class RetryingChatLiteLLM(ChatLiteLLM):
+            # Both the agents' streamed calls and plain ainvoke land here.
+            async def acompletion_with_retry(self, run_manager=None, **kwargs: Any) -> Any:
+                return await with_retries(
+                    lambda: self.client.acompletion(**kwargs),
+                    f"Model call to {self.model}",
+                )
+
+        class AutoToolChoiceChatLiteLLM(RetryingChatLiteLLM):
             def bind_tools(self, tools, *, tool_choice=None, **kwargs):
                 if tool_choice not in (None, False, "auto", "none"):
                     tool_choice = "auto"
                 return super().bind_tools(tools, tool_choice=tool_choice, **kwargs)
 
-        _AUTO_TOOL_CHOICE_CLASS = AutoToolChoiceChatLiteLLM
-    return _AUTO_TOOL_CHOICE_CLASS
+        _CHAT_MODEL_CLASSES = (RetryingChatLiteLLM, AutoToolChoiceChatLiteLLM)
+    return _CHAT_MODEL_CLASSES
 
 
 class LiteLLMClient:
@@ -100,23 +165,26 @@ class LiteLLMClient:
         self._model = model
 
     async def complete(self, prompt: str, *, max_tokens: int) -> str:
+        """One completion; a transient failure is retried (``with_retries``)."""
         headers = {}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
-        async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=headers,
-                json={
-                    "model": self._model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": max_tokens,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        async def post() -> dict:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": self._model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": max_tokens,
+                    },
+                )
+                response.raise_for_status()
+                return response.json()
 
+        data = await with_retries(post, f"Completion from {self._model}")
         return data["choices"][0]["message"]["content"] or ""
 
 

@@ -10,16 +10,21 @@
 #
 # SPDX-License-Identifier: MIT
 """Small LLM helpers shared by the deep-agent engine: lenient JSON
-extraction from model replies, and follow-up query suggestions built from
-verified findings."""
+extraction from model replies, the question's topic for choosing papers, and
+follow-up query suggestions built from verified findings."""
 
+import asyncio
 import json
 import logging
 import re
 from typing import Any, Dict, List, Optional
 
 from research_agent.core.llm import CompleteFn
-from research_agent.prompt_templates import FOLLOWUP_FROM_FINDINGS_PROMPT_TEMPLATE
+from research_agent.prompt_templates import (
+    FOLLOWUP_FROM_FINDINGS_PROMPT_TEMPLATE,
+    QUESTION_TOPIC_PROMPT_TEMPLATE,
+)
+from research_agent.rerank import QuestionTopic
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +48,46 @@ def extract_json_from_text(text: str) -> Optional[Any]:
             pass
 
     return None
+
+
+# Names kept per list; the prompt asks for at most 10 subjects and 8
+# quantities.
+_MAX_TOPIC_NAMES = 10
+# The topic is looked up before the first batch is read, so a slow proxy
+# must not hold the run up: past this, papers are kept by sharing a word
+# with the question.
+TOPIC_TIMEOUT_S = 30.0
+
+
+async def question_topic(question: str, complete: CompleteFn) -> Optional[QuestionTopic]:
+    """The question's subject and asked quantity, for choosing which papers
+    to read (``rerank.relevance_tier``), or None if the model call fails or
+    returns no usable JSON. Papers are then kept by sharing a word with the
+    question, as before."""
+    try:
+        reply = await asyncio.wait_for(
+            complete(QUESTION_TOPIC_PROMPT_TEMPLATE.format(question=question), max_tokens=400),
+            TOPIC_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Question topic unavailable: no reply in %.0f s", TOPIC_TIMEOUT_S)
+        return None
+    except Exception as exc:
+        logger.warning("Question topic unavailable: %s", exc)
+        return None
+    parsed = extract_json_from_text(reply or "")
+    if not isinstance(parsed, dict):
+        logger.warning("Question topic unavailable: no JSON object in %r", (reply or "")[:200])
+        return None
+
+    def names(key: str) -> tuple:
+        value = parsed.get(key)
+        items = value if isinstance(value, list) else []
+        return QuestionTopic.usable([str(v) for v in items if isinstance(v, str)])[
+            :_MAX_TOPIC_NAMES
+        ]
+
+    return QuestionTopic(subject=names("subject"), quantity=names("quantity"))
 
 
 async def suggest_followup_from_findings(

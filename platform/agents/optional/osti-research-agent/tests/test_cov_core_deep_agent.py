@@ -358,11 +358,23 @@ def test_analyzer_with_no_text_and_explicit_decline(tmp_path):
     assert verifier.calls == 0
 
 
-def test_verifier_without_any_ai_text_is_a_protocol_failure():
+def test_verifier_without_any_ai_text_is_a_protocol_failure(caplog):
     state = {"messages": [ToolMessage(content="x", tool_call_id="t"), AIMessage(content="")]}
 
     with pytest.raises(VerifierProtocolError, match="neither a structured response"):
         _verification_payload(state)
+    assert "its last message began: '(no text)'" in caplog.text
+
+
+def test_verifier_prose_reply_is_logged_when_it_has_no_json(caplog):
+    prose = "The candidate looks right. " + "x" * 1000
+    state = {"messages": [AIMessage(content=prose)]}
+
+    with pytest.raises(VerifierProtocolError):
+        _verification_payload(state)
+    assert "its last message began: 'The candidate looks right." in caplog.text
+    # Only the start of a long reply is logged.
+    assert "x" * 400 not in caplog.text
 
 
 def test_grep_string_output_counts_and_unknown_match_label_fails(tmp_path, caplog):

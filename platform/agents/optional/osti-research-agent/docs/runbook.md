@@ -30,16 +30,16 @@ defaults.
 | `EMBEDDING_MODEL` | `embedding` | LiteLLM alias for the knowledge-store embeddings |
 | `MAX_PDF_MB` | `50` | maximum download size for arbitrary non-OSTI PDF URLs |
 | `DOWNLOAD_ALLOWED_DOMAINS` | built-in list | comma-separated hosts PDFs may be downloaded from (subdomains included). Others are never fetched, and search results only offer `oa_pdf_url` for them; a host that answers 401/403 is dropped for the rest of the run. The OSTI purl path is always allowed. Default list: `research_agent/download_policy.py` |
-| `DOCLING_TIMEOUT_S` | `480` | timeout for the isolated Docling conversion process. Docling runs single-threaded at about 2-3 s a page, so this fits papers of roughly 150-180 pages; a longer paper falls back to PyMuPDF text (no tables or figures) |
+| `DOCLING_TIMEOUT_S` | `480` | timeout for the isolated Docling conversion process. Docling runs single-threaded at about 2-3 s a page for mostly-text papers, but table-heavy ones are slower: a 96-page report with 29 tables took 539 s in `accurate` mode (about 5.6 s a page) and 324 s in `fast`. A paper that runs over falls back to PyMuPDF text (no tables or figures), and that fallback is not cached, so the paper costs the full timeout again on every run. Raise it (720 s fits that report) when `TOTAL_BUDGET_S` leaves room |
 | `DOCLING_IMAGES_SCALE` | `2.0` | page-image render scale; memory grows with its square, so `1.0` needs about a quarter. Lower it if the worker is killed out of memory ("exited -9") |
-| `DOCLING_TABLE_MODE` | `accurate` | TableFormer mode, `accurate` or `fast` (less memory and time, rougher table structure) |
+| `DOCLING_TABLE_MODE` | `accurate` | TableFormer mode, `accurate` or `fast` (less memory and about 40% less time, rougher table structure). On a 96-page report, `fast` kept every value in its row but scrambled the column headers of 16 of 29 tables, for example merging "Rupture life (hr)" and "Minimum creep rate (%/hr)". An analyzer could then read the wrong column, so prefer a longer `DOCLING_TIMEOUT_S` over `fast` |
 | `PARSE_OCR` | `auto` | `on`/`off` force OCR for scanned PDFs |
 | `ANALYZE_FIGURES` | `false` | enable the figure VLM pass |
 | `MAX_FIGURES` | `12` | maximum figures considered per paper |
 | `MIN_FIGURE_AREA` | `10000` | skip smaller decorative images by pixel area |
 | `REDIS_URL` | — | unset ⇒ no memory/caching (everything degrades gracefully) |
 
-**Budget guidance.** Parsing costs ~1–5 min per paper (about 2–3 s a page). With the 900 s budget the
+**Budget guidance.** Parsing costs ~1–5 min per paper (about 2–3 s a page, up to about 6 s a page for table-heavy papers). With the 900 s budget the
 deepagent orchestrator is told (in `prompts/orchestrator.md`) it has ~13 minutes;
 `tools/context.BUDGET_FLOOR_S` (90 s) stops new expensive work early so writing
 and grading the answer, and fact storage, always run. If p90 latency creeps up, lower

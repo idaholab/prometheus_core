@@ -79,6 +79,10 @@ class FinalResult(BaseModel):
     # Every answer submitted to submit_answer, with its outcome and the
     # grader's gaps, for the evaluation's transcript. Also excluded.
     answer_drafts: List[Dict[str, Any]] = Field(default_factory=list, exclude=True)
+    # The question's subject and asked quantity used to choose papers
+    # (rerank.QuestionTopic as {subject, quantity}), None if not looked up.
+    # Also excluded; the evaluation saves it.
+    question_topic: Optional[Dict[str, List[str]]] = Field(default=None, exclude=True)
 
 
 AgentEvent = Union[ProgressEvent, FinalResult]

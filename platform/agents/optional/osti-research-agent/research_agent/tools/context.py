@@ -39,6 +39,7 @@ from research_agent.memory import ArtifactCache, PdfCache
 
 if TYPE_CHECKING:
     from research_agent.knowledge import KnowledgeStore
+    from research_agent.rerank import QuestionTopic
 
 # Stop launching new expensive work (downloads, parses) once this little time
 # is left, so the graded answer + fact storage always get to run. Mirrors the pipeline
@@ -116,6 +117,13 @@ class RunContext:
     # Embeddings computed while ranking search hits, by source_id, so a later
     # ranking only embeds new hits.
     hit_embeddings: Dict[str, List[float]] = field(default_factory=dict, repr=False)
+    # The question's subject and asked quantity (llm_steps.question_topic),
+    # looked up once per run by candidates_to_read. None when the lookup
+    # failed: hits are then kept by sharing a word with the question.
+    question_topic: Optional["QuestionTopic"] = None
+    question_topic_looked_up: bool = False
+    # Two read_top_candidates calls in parallel must share one lookup.
+    question_topic_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     # Papers whose parse was attempted, counted before parsing so a PDF that
     # keeps failing to parse still uses up its slot. This is the paper budget;
     # FinalResult.papers_analyzed reports analyses instead.
@@ -186,6 +194,43 @@ class RunContext:
         )
         hits = dict(unread)
         return [(r["source_id"], hits[r["source_id"]], r) for r in ranks]
+
+    async def topic(self) -> Optional["QuestionTopic"]:
+        """The question's topic, looked up on first use (one model call per
+        run, however many batches are read)."""
+        async with self.question_topic_lock:
+            if not self.question_topic_looked_up:
+                from research_agent import llm_steps
+
+                if self.complete is not None:
+                    self.question_topic = await llm_steps.question_topic(
+                        self.question, self.complete
+                    )
+                self.question_topic_looked_up = True
+                if self.question_topic is not None:
+                    progress.emit(
+                        "Reading papers about "
+                        + (", ".join(self.question_topic.subject) or "(no named subject)"),
+                        {
+                            "subject": list(self.question_topic.subject),
+                            "quantity": list(self.question_topic.quantity),
+                        },
+                    )
+        return self.question_topic
+
+    async def candidates_to_read(self) -> Tuple[List[Tuple[str, dict, dict]], int]:
+        """``ranked_unread_hits`` in reading order, and how many were skipped
+        as unrelated (``rerank.reading_order``): papers naming the question's
+        subject and quantity first, then the subject only, then papers with
+        no abstract to check. Without a subject, any paper sharing a word
+        with the question is kept."""
+        from research_agent.rerank import reading_order
+
+        if not self.unread_hits():
+            return [], 0
+        # The topic call and the ranking's embedding call run side by side.
+        ranked, topic = await asyncio.gather(self.ranked_unread_hits(), self.topic())
+        return reading_order(self.question, topic, ranked)
 
     def openalex_key_kwargs(self) -> Dict[str, str]:
         """``{"api_key": ...}`` for the OpenAlex calls when a key is

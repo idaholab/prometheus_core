@@ -33,6 +33,7 @@ import logging
 import math
 import re
 from collections import Counter
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 
 from research_agent.knowledge import cosine
@@ -61,11 +62,134 @@ _STOPWORDS = frozenset(
 )
 # Words, and numbers with their decimal point ("15", "0.5", "316l").
 _TOKEN = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
+# OSTI titles mark chemical formulas up: "UO<sub>2</sub>". The tags are
+# dropped so the formula reads "UO2", as a question writes it.
+_MARKUP_TAG = re.compile(r"</?(?:sub|sup|i|b|em|strong)>", re.IGNORECASE)
 
 
 def tokenize(text: str) -> List[str]:
-    """Lowercase word and number tokens, without stopwords."""
-    return [t for t in _TOKEN.findall((text or "").lower()) if t not in _STOPWORDS]
+    """Lowercase word and number tokens, without stopwords or markup tags."""
+    text = _MARKUP_TAG.sub("", text or "").lower()
+    return [t for t in _TOKEN.findall(text) if t not in _STOPWORDS]
+
+
+def _singular(token: str) -> str:
+    """A crude singular, applied to both sides of a match: "codes" and
+    "code", "properties" and "property" compare equal."""
+    if len(token) > 4 and token.endswith("ies"):
+        return token[:-3] + "y"
+    if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+    return token
+
+
+# Where letters meet digits inside a token ("316l", "ss316", "uo2", "in718").
+_LETTER_DIGIT = re.compile(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])")
+_DECIMAL = re.compile(r"[0-9]+\.[0-9]+")
+
+
+def name_tokens(text: str) -> List[str]:
+    """The tokens ``mentions`` matches: ``tokenize``'s, singular, and split
+    where letters meet digits, so a designation reads the same however it
+    is written: "316L", "316 L" and "316-L" all give ["316", "l"]."""
+    out: List[str] = []
+    # Stopwords are kept: "IN 718" must keep its "in".
+    for token in _TOKEN.findall(_MARKUP_TAG.sub("", text or "").lower()):
+        if _DECIMAL.fullmatch(token):
+            out.append(token)
+            continue
+        out.extend(_singular(part) for part in _LETTER_DIGIT.split(token) if part)
+    return out
+
+
+def mentions(text_tokens: Sequence[str], name: str) -> bool:
+    """Whether ``name``'s tokens occur next to each other, in any order, in
+    ``text_tokens`` (``name_tokens`` of the text): "stainless steel 304"
+    matches "304 stainless steel" and "alloy 718" matches "718 alloy", but
+    "alloy 718" does not match "alloy 617 ... 718 MPa"."""
+    phrase = sorted(name_tokens(name))
+    if not phrase:
+        return False
+    n = len(phrase)
+    return any(
+        sorted(text_tokens[i : i + n]) == phrase for i in range(len(text_tokens) - n + 1)
+    )
+
+
+@dataclass(frozen=True)
+class QuestionTopic:
+    """What a paper must name to be worth reading for a question
+    (``llm_steps.question_topic``): the ``subject`` (a material, fuel, code,
+    benchmark or method) and the ``quantity`` asked about, each as the names
+    a title or abstract would use. Either may be empty."""
+
+    subject: Tuple[str, ...] = ()
+    quantity: Tuple[str, ...] = ()
+
+    @staticmethod
+    def usable(names: Sequence[str]) -> Tuple[str, ...]:
+        """``names`` without blanks, duplicates, and names that are only
+        numbers: a bare "718" would match "718 MPa"."""
+        out: List[str] = []
+        for name in names:
+            tokens = name_tokens(str(name))
+            if not tokens or all(t.replace(".", "").isdigit() for t in tokens):
+                continue
+            if str(name).strip() not in out:
+                out.append(str(name).strip())
+        return tuple(out)
+
+
+# Reading tiers: papers that name the subject and the quantity first, then the
+# subject only, then those whose title alone can't tell (no abstract).
+TIER_SUBJECT_AND_QUANTITY = 0
+TIER_SUBJECT = 1
+TIER_NO_ABSTRACT = 2
+
+
+def _has_abstract(hit: dict) -> bool:
+    return bool(str(hit.get("abstract") or hit.get("description") or "").strip())
+
+
+def relevance_tier(question: str, topic: Optional[QuestionTopic], hit: dict) -> Optional[int]:
+    """Where ``hit`` goes in the reading order, or None to skip it.
+
+    With a known subject, a hit whose title and abstract never name it is
+    skipped; one with no abstract to check is read last if it shares a word
+    with the question. Without one (no topic, or a broad question), any hit
+    sharing a word with the question is kept, as before topics existed. Among
+    the kept hits, those naming the asked quantity come first."""
+    text = hit_text(hit)
+    tokens = name_tokens(text)
+    shares_a_word = bool(set(tokenize(question)) & set(tokenize(text)))
+    if topic is not None and topic.subject:
+        if not any(mentions(tokens, name) for name in topic.subject):
+            if not _has_abstract(hit) and shares_a_word:
+                return TIER_NO_ABSTRACT
+            return None
+    elif not shares_a_word:
+        return None
+    if topic is not None and any(mentions(tokens, name) for name in topic.quantity):
+        return TIER_SUBJECT_AND_QUANTITY
+    return TIER_SUBJECT
+
+
+def reading_order(
+    question: str,
+    topic: Optional[QuestionTopic],
+    ranked: Sequence[Tuple[str, dict, dict]],
+) -> Tuple[List[Tuple[str, dict, dict]], int]:
+    """``ranked`` (best first) regrouped by ``relevance_tier``, keeping the
+    rank order within each tier, and how many hits were skipped. Each kept
+    entry's rank dict gains its ``tier``."""
+    kept = []
+    for source_id, hit, rank in ranked:
+        tier = relevance_tier(question, topic, hit)
+        if tier is not None:
+            kept.append((source_id, hit, {**rank, "tier": tier}))
+    # Stable sort: the ranking still orders papers within a tier.
+    kept.sort(key=lambda entry: entry[2]["tier"])
+    return kept, len(ranked) - len(kept)
 
 
 def hit_text(hit: dict) -> str:

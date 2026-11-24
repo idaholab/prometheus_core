@@ -143,7 +143,9 @@ report.json                  the same as data ("complete": false if the run stop
 out/deepagent/<qid>/
   result.json                the FinalResult: answer, findings, provenance, status,
                              plus _answer_drafts: each submitted answer, its outcome
-                             and the grader's full gaps
+                             and the grader's full gaps; _question_topic: the
+                             subject and quantity used to choose papers; and
+                             _searched_papers: every search hit with its abstract
   progress.log               every progress message, with seconds since the start
 ```
 

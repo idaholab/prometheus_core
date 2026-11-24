@@ -13,9 +13,13 @@
 """``read_top_candidates``: code, not the model, picks which papers to read.
 
 Each call ranks every unread search hit against the question
-(``RunContext.ranked_unread_hits``: BM25 + embedding, fused by RRF), then
-downloads, parses and analyzes the top ``BATCH_SIZE`` in parallel. A paper
-whose download or parse fails gives its slot to the next one in rank order.
+(``RunContext.ranked_unread_hits``: BM25 + embedding, fused by RRF) and puts
+them in reading order (``RunContext.candidates_to_read``): papers whose title
+or abstract names the question's subject and asked quantity first, then the
+subject only, then papers with no abstract to check; papers that never name
+the subject are skipped. It then downloads, parses and analyzes the first
+``BATCH_SIZE`` in parallel. A paper whose download or parse fails gives its
+slot to the next one in that order.
 The run reads at most ``max_papers_analyzed`` papers (6: two batches of 3).
 
 The download, parse and analyze steps are the existing tools, called from
@@ -33,7 +37,6 @@ import json
 import logging
 from typing import Awaitable, Callable, Dict, List, Optional
 
-from research_agent.rerank import tokenize
 from research_agent.tools import progress
 from research_agent.tools.context import RunContext
 
@@ -47,16 +50,15 @@ EXACT_FINDINGS_TO_STOP = 2
 Step = Callable[[dict], Awaitable[str]]
 
 
-def shares_a_question_term(question: str, hit: dict) -> bool:
-    """Whether the hit's title or abstract contains any word of the question.
-
-    The ranking orders candidates but never says "none of these fit"; a hit
-    with no word in common with the question (a BM25 score of 0) is skipped
-    rather than read just for being next in line."""
-    from research_agent.rerank import hit_text
-
-    terms = set(tokenize(question))
-    return bool(terms & set(tokenize(hit_text(hit))))
+def _nothing_related(ctx: RunContext, skipped: int) -> str:
+    """Why no unread result is worth reading, naming the subject when known."""
+    topic = ctx.question_topic
+    if topic is not None and topic.subject:
+        return (
+            f"none of the {skipped} unread search result(s) names "
+            f"{' or '.join(topic.subject[:3])} in its title or abstract"
+        )
+    return "no unread search result shares a word with the question"
 
 
 def stop_reason(ctx: RunContext) -> Optional[str]:
@@ -111,17 +113,17 @@ async def read_top_candidates(
         return {"read": [], "stop": True, "reason": reason,
                 "packages": ctx.analysis_packages()}
 
-    ranked = await ctx.ranked_unread_hits()
-    queue = [(sid, hit) for sid, hit, _ in ranked if shares_a_question_term(ctx.question, hit)]
+    ordered, skipped = await ctx.candidates_to_read()
+    queue = [(sid, hit) for sid, hit, _ in ordered]
     rank_of = {sid: i for i, (sid, _) in enumerate(queue)}
-    skipped = len(ranked) - len(queue)
     slots = min(BATCH_SIZE, ctx.config.max_papers_analyzed - ctx.papers_attempted)
     if not queue:
         return {
             "read": [],
             "stop": False,
-            "reason": "no unread search result shares a word with the question",
+            "reason": _nothing_related(ctx, skipped),
             "instruction": "Search again with a reformulated query, then call this again.",
+            "skipped_unrelated": skipped,
             "packages": ctx.analysis_packages(),
         }
 

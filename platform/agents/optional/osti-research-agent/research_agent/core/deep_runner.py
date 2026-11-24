@@ -383,6 +383,14 @@ async def build_final_result(question: str, ctx: RunContext) -> FinalResult:
         suggested_queries=suggested_queries,
         searched_papers=dict(ctx.search_hits),
         answer_drafts=list(ctx.answer_drafts),
+        question_topic=(
+            {
+                "subject": list(ctx.question_topic.subject),
+                "quantity": list(ctx.question_topic.quantity),
+            }
+            if ctx.question_topic is not None
+            else None
+        ),
     )
 
 
@@ -396,13 +404,15 @@ _NUDGE_RESULTS = 8
 async def keep_going_nudge(ctx: RunContext) -> Optional[str]:
     """A follow-up instruction when the orchestrator stopped with nothing
     verified but could still read more, else None. Lists the unread results
-    ranked against the question (``RunContext.ranked_unread_hits``), best
-    first."""
+    ``read_top_candidates`` would read, in its order
+    (``RunContext.candidates_to_read``); with none, there is no nudge."""
     if ctx.findings or ctx.budget_reason() is not None:
         return None
     if not ctx.unread_hits():
         return None
-    ranked = await ctx.ranked_unread_hits()
+    ranked, _ = await ctx.candidates_to_read()
+    if not ranked:
+        return None
     slots = ctx.config.max_papers_analyzed - ctx.papers_attempted
     lines = [
         f"You stopped with no verified findings, but {slots} paper slot(s) and "

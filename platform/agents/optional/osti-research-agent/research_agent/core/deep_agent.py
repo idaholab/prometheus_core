@@ -421,6 +421,12 @@ def _verification_payload(result: dict) -> Any:
 
     parsed = llm_steps.extract_json_from_text(text)
     if not isinstance(parsed, dict):
+        # The reply itself shows why: prose instead of JSON, a cut-off
+        # answer, or no text at all.
+        logger.warning(
+            "Verifier reply has no JSON verdict; its last message began: %r",
+            text[:400] if text else "(no text)",
+        )
         raise VerifierProtocolError(
             "verifier returned neither a structured response nor a JSON verdict"
         )

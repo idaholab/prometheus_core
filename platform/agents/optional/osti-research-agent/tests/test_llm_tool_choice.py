@@ -54,7 +54,7 @@ def test_unforced_choices_pass_through(choice):
 def test_default_model_still_forces_when_asked():
     model = chat_model(_config(), "verifier")
 
-    assert type(model) is ChatLiteLLM
+    assert isinstance(model, ChatLiteLLM)
     assert _bound_tool_choice(model, "any") == "required"
 
 
