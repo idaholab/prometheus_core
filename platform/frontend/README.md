@@ -91,7 +91,7 @@ Notes:
 
 Data from the backend goes through [RTK Query](https://redux-toolkit.js.org/rtk-query/overview), which fetches, caches and refetches it. Screens use its hooks and don't call `lib/api/client.ts` themselves. Admin is the first user; other screens move when their real API lands. Chat and its event stream, the signed-in session and the page header keep their own stores.
 
-- **One API, in `src/lib/api/baseApi.ts`.** It uses the same `/api` base and session cookie as `client.ts`. Errors reach screens as `{ status, message }`, where `message` is the backend's `detail`. A 401 from any request sends the user to Login and back to the page afterward (wired in `App.tsx`).
+- **One API, in `src/lib/api/baseApi.ts`.** It uses the same `/api` base and session cookie as `client.ts`. Errors reach screens as `{ status, message }`, where `message` is the backend's `detail`, or a generic message when the body isn't JSON (a proxy's error page). A 401 from any request sends the user to Login and back to the page afterward (wired in `App.tsx`).
 - **Endpoints live in their feature.** A feature adds its endpoints with `baseApi.injectEndpoints` in its own file, as `features/admin/adminApi.ts` does, and exports the hooks it generates.
 - **The store is in `src/lib/api/store.ts`.** It holds only RTK Query's cache. Tests call `createAppStore()` for a fresh cache each.
 

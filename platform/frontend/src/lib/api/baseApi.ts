@@ -60,10 +60,13 @@ export const baseQuery: BaseQueryFn<string | FetchArgs, unknown, ApiQueryError> 
   const result = await rawBaseQuery(args, api, extraOptions);
   if (!result.error) return { data: result.data, meta: result.meta };
 
-  const { status } = result.error;
+  // A body that isn't JSON (an HTML error page from nginx or a proxy) comes back
+  // as PARSING_ERROR, with the real HTTP status in originalStatus.
+  const { error } = result;
+  const status = error.status === "PARSING_ERROR" ? error.originalStatus : error.status;
   if (status === 401) unauthorizedHandler?.();
   if (typeof status === "number") {
-    return { error: { status, message: messageFrom(result.error.data, `Request failed (${status})`) } };
+    return { error: { status, message: messageFrom(error.data, `Request failed (${status})`) } };
   }
   return { error: { status: "network", message: "The server is unreachable" } };
 };

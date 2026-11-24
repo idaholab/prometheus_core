@@ -75,6 +75,14 @@ describe("errors", () => {
     expect(result.error).toEqual({ status: 500, message: "Request failed (500)" });
   });
 
+  test("a body that isn't JSON (a proxy's error page) keeps its HTTP status", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response("<html>502 Bad Gateway</html>", { status: 502, headers: { "content-type": "text/html" } }),
+    );
+    const result = await runProbe();
+    expect(result.error).toEqual({ status: 502, message: "Request failed (502)" });
+  });
+
   test("a network failure reads as the server being unreachable", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     const result = await runProbe();
@@ -91,6 +99,21 @@ describe("a 401", () => {
     const result = await runProbe();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(result.error).toEqual({ status: 401, message: "Not authenticated" });
+  });
+
+  test("with a body that isn't JSON still calls the handler", async () => {
+    const handler = vi.fn();
+    onUnauthorized(handler);
+    fetchMock.mockResolvedValueOnce(
+      new Response("<html>401 Authorization Required</html>", {
+        status: 401,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    const result = await runProbe();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(result.error).toEqual({ status: 401, message: "Request failed (401)" });
   });
 
   test("with no handler registered is just an error", async () => {
