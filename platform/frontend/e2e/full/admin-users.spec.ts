@@ -19,10 +19,25 @@
  * behavior spec until the platform has one (TESTING.md, "Rules for every test").
  *
  * The user it creates has a made-up name that's unique per run, and the test
- * deletes it, so the e2e stack ends as it started. Every test starts signed in
- * as the e2e admin (global-setup.ts). */
+ * deletes it, so the e2e stack ends as it started. If the test fails before
+ * then, afterEach deletes that user through the API. Every test starts signed
+ * in as the e2e admin (global-setup.ts). */
 import type { Page } from "@playwright/test";
+import type { AdminUser } from "../../src/lib/api/types";
 import { expect, test } from "./fixtures";
+
+// Unique per run, so a rerun against the same stack never finds an old user
+const username = `e2e-user-${Date.now()}`;
+
+// Deletes this run's user if the test stopped before its own delete. Only this
+// run's name, so it can't touch anyone else's. `request` shares the page's
+// signed-in session
+test.afterEach(async ({ request }) => {
+  const users = await request.get("/api/admin/users");
+  if (!users.ok()) return;
+  const leftover = ((await users.json()) as AdminUser[]).find((user) => user.username === username);
+  if (leftover) await request.delete(`/api/admin/users/${encodeURIComponent(leftover.id)}`);
+});
 
 /** The Users table row for `username`. */
 function userRow(page: Page, username: string) {
@@ -41,9 +56,6 @@ function userRow(page: Page, username: string) {
  * - and nothing on the way throws or gets a failed /api request (fixtures.ts).
  */
 test("an admin creates, edits and deletes a local user", async ({ page }) => {
-  // Unique per run, so a rerun against the same stack never finds an old user
-  const username = `e2e-user-${Date.now()}`;
-
   await page.goto("/");
   await page.getByRole("link", { name: "Admin", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
