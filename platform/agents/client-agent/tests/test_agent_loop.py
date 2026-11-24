@@ -2027,7 +2027,7 @@ def test_marker_honours_the_underscore_spelling_and_warns_on_an_unknown_value(ca
         "type": "object",
         "properties": {
             "message": {"type": "string", "x_prometheus_source": "user_message"},
-            "note": {"type": "string", "x-prometheus-source": "user-message"},
+            "note": {"type": "string", "x_prometheus_source": "user-message"},
         },
     }
     with caplog.at_level(logging.WARNING, logger="orchestrator.agent_loop"):

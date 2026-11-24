@@ -119,7 +119,7 @@ parser), mark that top-level string property:
     "message": {
       "type": "string",
       "description": "The request, in the user's own words.",
-      "x-prometheus-source": "user_message"
+      "x_prometheus_source": "user_message"
     }
   },
   "required": ["message"]

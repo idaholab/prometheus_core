@@ -148,7 +148,7 @@ Loop state lives in the conversation record in Valkey (`conversation:{id}`):
 }
 ```
 
-`user_request_parts` fills skill fields marked `"x-prometheus-source": "user_message"`.
+`user_request_parts` fills skill fields marked `"x_prometheus_source": "user_message"`.
 Those fields are hidden from the model, which never writes them (see
 [Adding agents](adding-agents.md#receiving-the-users-own-words)).
 

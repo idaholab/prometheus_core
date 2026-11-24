@@ -89,9 +89,9 @@ ASK_USER_TOOL = "ask_user"
 ORCHESTRATOR_PARAMS = {"artifacts", "conversation_id"}
 
 #: Input-schema property extension: a skill marks a top-level string field with
-#: ``"x-prometheus-source": "user_message"`` to receive the user's message for the
+#: ``"x_prometheus_source": "user_message"`` to receive the user's message for the
 #: turn exactly as typed, instead of the orchestrator model's rewording of it.
-VERBATIM_SOURCE_KEY = "x-prometheus-source"
+VERBATIM_SOURCE_KEY = "x_prometheus_source"
 #: Spellings accepted for the key, as for ``x_input_source`` / ``x-input-source``.
 _VERBATIM_SOURCE_KEYS = (VERBATIM_SOURCE_KEY, "x_prometheus_source")
 VERBATIM_USER_MESSAGE = "user_message"

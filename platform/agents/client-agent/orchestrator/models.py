@@ -50,7 +50,7 @@ class AgentState(TypedDict):
     turn_tool_inputs: Dict[str, Any]
 
     # The user's own words for the request in progress, sent to skill fields
-    # marked ``x-prometheus-source: user_message`` (agent_loop.USER_REQUEST_PARTS),
+    # marked ``x_prometheus_source: user_message`` (agent_loop.USER_REQUEST_PARTS),
     # and whether a skill has run since, so the next typed message starts anew.
     user_request_parts: NotRequired[List[str]]
     user_request_delivered: NotRequired[bool]
