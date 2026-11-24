@@ -30,8 +30,8 @@ type StatusTab = "jobs" | "artifacts";
 function useConversationArtifacts(items: ChatState["items"]): ArtifactMeta[] {
   const byId = new Map<string, ArtifactMeta>();
   for (const item of items) {
-    const artifacts = item.kind === "assistant" || item.kind === "needs_info" ? item.artifacts : undefined;
-    for (const artifact of artifacts ?? []) byId.set(artifact.artifact_id, artifact);
+    if (item.kind !== "assistant" && item.kind !== "needs_info") continue;
+    for (const artifact of item.artifacts) byId.set(artifact.artifact_id, artifact);
   }
   return [...byId.values()];
 }

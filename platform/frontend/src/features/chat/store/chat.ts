@@ -76,7 +76,7 @@ export interface NeedsInfoItem extends BaseItem {
   message: string;
   fields: FormField[];
   /** Outputs the turn produced before it paused at this form (e.g. a workflow step's plots). */
-  artifacts?: ArtifactMeta[];
+  artifacts: ArtifactMeta[];
   submitted: boolean;
 }
 export interface PlanItem extends BaseItem {

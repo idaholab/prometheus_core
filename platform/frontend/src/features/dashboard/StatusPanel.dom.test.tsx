@@ -123,13 +123,14 @@ describe("the Artifacts tab list", () => {
           recommendedMaterials: [],
           followUpSuggestions: [],
         },
-        // A form whose turn published nothing carries no artifacts at all.
+        // A form whose turn published nothing.
         {
           kind: "needs_info",
           id: "ni-1",
           turnId: "t1",
           message: "Gate 1: approve?",
           fields: [],
+          artifacts: [],
           submitted: true,
         },
         {
