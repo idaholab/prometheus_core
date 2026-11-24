@@ -37,7 +37,7 @@ import logging
 from typing import Any, Callable, Coroutine, Optional
 
 from app.a2a_client import A2AClient, ConversationResponse
-from app.contract import ChatMessageResponse, ChatStatus, UploadDescriptor
+from app.contract import ArtifactMeta, ChatMessageResponse, ChatStatus, UploadDescriptor
 from app.contract import normalize_followup_questions as _normalize_followup_questions
 from app.services.artifacts import is_user_upload, shape_artifacts
 from app.services.mesh.service import enrich_mesh_artifacts
@@ -88,8 +88,8 @@ async def _turn_artifacts(
     sid: str,
     *,
     conversation_id: str,
-) -> list:
-    """Persist the conversation catalog and shape this turn's new artifacts.
+) -> list[ArtifactMeta]:
+    """Persist the conversation catalog (a Valkey write) and shape this turn's new artifacts.
 
     Shared by the terminal and ``needs_info`` branches, since either can end a turn
     that produced artifacts (a workflow step that pauses at a review form still
