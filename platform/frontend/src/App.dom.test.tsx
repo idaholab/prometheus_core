@@ -111,6 +111,21 @@ test("a 401 drops the previous user's cached server data", async () => {
   await vi.waitFor(() => expect(probe.endpoints.cached.select()(appStore.getState()).data).toBeUndefined());
 });
 
+test("several 401s at once end the session and go to Login once", async () => {
+  render(<App />);
+  expect(await screen.findByText("Admin page")).toBeInTheDocument();
+
+  await request(401);
+  expect(await screen.findByText("Login page")).toBeInTheDocument();
+  // Later ones (the other lists, a mutation) find the user already on Login
+  await request(401);
+  await request(401);
+
+  expect(chat.suspendForReauth).toHaveBeenCalledOnce();
+  expect(auth.setCurrentUser).toHaveBeenCalledOnce();
+  expect(routing.router?.state.location.search).toBe(`?next=${encodeURIComponent("/admin?tab=users")}`);
+});
+
 test("other errors leave the user where they are", async () => {
   render(<App />);
   expect(await screen.findByText("Admin page")).toBeInTheDocument();

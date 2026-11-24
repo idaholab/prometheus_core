@@ -14,10 +14,20 @@ import { useEffect, useState } from "react";
 import { Provider } from "react-redux";
 import { RouterProvider } from "react-router";
 import { endSession } from "@/app/endSession";
-import { loginPathFor } from "@/app/paths";
+import { loginPathFor, PATHS } from "@/app/paths";
 import { createAppRouter } from "@/app/router";
 import { onUnauthorized } from "@/lib/api/baseApi";
 import { appStore } from "@/lib/api/store";
+
+type AppRouter = ReturnType<typeof createAppRouter>;
+
+/** A request found the session gone: end it, then Login, and back to this page after. */
+function sendToLogin(router: AppRouter): void {
+  const { pathname, search } = router.state.location;
+  // Already there (several requests can 401 at once): nothing more to do
+  if (pathname === PATHS.login) return;
+  void endSession("lost", () => router.navigate(loginPathFor(pathname + search), { replace: true }));
+}
 
 /**
  * The app: every screen is a route (app/router.tsx). Sign-in, first-run setup
@@ -33,10 +43,7 @@ export default function App() {
   const [router] = useState(createAppRouter);
 
   useEffect(() => {
-    onUnauthorized(() => {
-      const { pathname, search } = router.state.location;
-      void endSession("lost", () => router.navigate(loginPathFor(pathname + search), { replace: true }));
-    });
+    onUnauthorized(() => sendToLogin(router));
     return () => onUnauthorized(null);
   }, [router]);
 
