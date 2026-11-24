@@ -57,7 +57,7 @@ def test_postgres_accepts_connection(docker_compose_up, container_id):
             "-U",
             "admin",
             "-d",
-            "admin",
+            "prometheus",
             "-c",
             "SELECT 1;",
         ],
@@ -79,13 +79,13 @@ def test_postgres_admin_database_exists(docker_compose_up, container_id):
             "-d",
             "postgres",
             "-c",
-            "SELECT datname FROM pg_database WHERE datname = 'admin';",
+            "SELECT datname FROM pg_database WHERE datname = 'prometheus';",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0
-    assert "admin" in result.stdout
+    assert "prometheus" in result.stdout
 
 
 def test_postgres_admin_user_exists(docker_compose_up, container_id):

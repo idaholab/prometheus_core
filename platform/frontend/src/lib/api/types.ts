@@ -46,15 +46,7 @@ export type RenderHint =
   | "unknown";
 
 export type FieldInputType =
-  | "text"
-  | "number"
-  | "email"
-  | "password"
-  | "date"
-  | "datetime"
-  | "textarea"
-  | "select"
-  | "checkbox";
+  "text" | "number" | "email" | "password" | "date" | "datetime" | "textarea" | "select" | "checkbox";
 
 // --- needs_info form schema -------------------------------------------------
 
@@ -99,7 +91,13 @@ export interface ArtifactMeta {
   citation?: Citation | null;
   producer_agent_id?: string | null;
   created_at?: string | null;
+  /** `inline` in the message body (default) or `panel`: only in the side
+   * artifact panel. Set by the producing agent; mirrors `ArtifactMeta.display`
+   * in backend/app/contract.py. */
+  display?: ArtifactDisplay;
 }
+
+export type ArtifactDisplay = "inline" | "panel";
 
 // --- uploads ----------------------------------------------------------------
 
@@ -130,10 +128,11 @@ export interface ChatMessageResponse {
   // plan_ready
   plan?: Record<string, unknown> | null;
   auto_approve?: boolean;
+  // completed | answer | recommendation | needs_info (outputs made before the form)
+  artifacts?: ArtifactMeta[] | null;
   // completed | answer | recommendation
   report?: string | null;
   response_text?: string | null;
-  artifacts?: ArtifactMeta[] | null;
   recommended_materials?: string[] | null;
   follow_up_suggestions?: string[] | null;
   // backgrounded

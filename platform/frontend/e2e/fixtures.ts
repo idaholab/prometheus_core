@@ -35,7 +35,9 @@ export const test = base.extend({
       unstubbed.push(`${request.method()} ${new URL(request.url()).pathname}`);
       return route.fulfill({ status: 404, json: { detail: "Not stubbed" } satisfies ErrorBody });
     });
-    await page.route("/api/setup/status", (route) => route.fulfill({ json: { needs_setup: false } satisfies SetupStatus }));
+    await page.route("/api/setup/status", (route) =>
+      route.fulfill({ json: { needs_setup: false } satisfies SetupStatus }),
+    );
     await page.route("/api/auth/me", (route) =>
       route.fulfill({ status: 401, json: { detail: "Not authenticated" } satisfies ErrorBody }),
     );

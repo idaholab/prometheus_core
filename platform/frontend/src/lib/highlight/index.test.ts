@@ -16,23 +16,23 @@ import { test } from "vitest";
 import { highlightToHtml } from "./index.ts";
 
 const SAMPLES: Record<string, string> = {
-  bash: "#!/bin/bash\necho \"hi\"\n",
+  bash: '#!/bin/bash\necho "hi"\n',
   c: "#include <stdio.h>\nint main(void) { return 0; }\n",
   cmake: "cmake_minimum_required(VERSION 3.20)\nproject(demo)\n",
   cpp: "#include <vector>\nclass A { public: int x; };\n",
   diff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n",
   dockerfile: "FROM python:3.13\nRUN echo hi\n",
   fortran: "program demo\n  print *, 'hi'\nend program demo\n",
-  ini: "[section]\nkey = \"value\"\n",
+  ini: '[section]\nkey = "value"\n',
   javascript: "const x = () => 1;\n",
-  json: "{\"a\": [1, 2, true]}\n",
+  json: '{"a": [1, 2, true]}\n',
   makefile: "all:\n\techo hi\n",
   moose: "[Mesh]\n  type = GeneratedMesh\n[]\n",
   plaintext: "just some text\n",
   python: "def f(x):\n    return x + 1\n",
   sql: "SELECT a FROM t WHERE b = 1;\n",
   typescript: "const x: number = 1;\n",
-  xml: "<a b=\"1\"><c/></a>\n",
+  xml: '<a b="1"><c/></a>\n',
   yaml: "a:\n  - 1\n  - b\n",
 };
 

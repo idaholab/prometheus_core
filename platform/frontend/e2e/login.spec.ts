@@ -15,7 +15,12 @@
  * accessible name the way the component tests do. The shared stubs and the
  * unstubbed-call check come from ./fixtures. */
 import type { Request } from "@playwright/test";
-import type { ConfigResponse, ConversationHistoryResponse, SessionResponse, User } from "../src/lib/api/types";
+import type {
+  ConfigResponse,
+  ConversationHistoryResponse,
+  SessionResponse,
+  User,
+} from "../src/lib/api/types";
 import { expect, test, type ErrorBody } from "./fixtures";
 
 /** Checks the sign-in request carries what was typed, as the backend expects it. */

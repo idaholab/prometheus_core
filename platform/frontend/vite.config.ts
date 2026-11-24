@@ -19,11 +19,7 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 const BACKEND_TARGET = process.env.VITE_BACKEND_URL || "http://localhost:8600";
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    nodePolyfills({ include: ["events"] }),
-  ],
+  plugins: [react(), tailwindcss(), nodePolyfills({ include: ["events"] })],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
@@ -83,13 +79,7 @@ export default defineConfig({
       // HMR websocket close uncleanly, and Vite's client answers an unclean close
       // by calling location.reload() -- silently destroying the live conversation,
       // since the transcript lives only in module memory.
-      ignored: [
-        "**/.venv/**",
-        "**/__pycache__/**",
-        "**/.*_cache/**",
-        "**/tests/**",
-        "**/dist/**",
-      ],
+      ignored: ["**/.venv/**", "**/__pycache__/**", "**/.*_cache/**", "**/tests/**", "**/dist/**"],
       // Polling (also forced by CHOKIDAR_USEPOLLING in docker-compose.yml) is here
       // because host filesystem events don't reliably reach the container on
       // Docker Desktop. 1000ms is ample for a hand-edit workflow and costs ~10x

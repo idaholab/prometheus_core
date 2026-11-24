@@ -1,0 +1,22 @@
+# Build and test output
+dist
+dist-playground
+coverage
+test-results
+test-results-full
+playwright-report
+playwright-report-full
+blob-report
+
+# Vendored bundles and static assets, served as-is
+public
+
+# Generated or managed by npm
+package-lock.json
+
+# Test samples are fixtures; their exact bytes matter
+e2e/samples
+viewer-check-data
+
+# Docs: Prettier would rewrap prose and tables that people edit by hand
+*.md

@@ -26,6 +26,19 @@ If you are developing a production application, we recommend updating the config
 - Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
 - Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
 
+## Formatting
+
+Code is formatted with [Prettier](https://prettier.io) (settings in `.prettierrc.json`, skipped files in `.prettierignore`). It installs with the other dev dependencies, so there's nothing extra to set up.
+
+```bash
+npm run format        # format everything (also: make format)
+npm run format:check  # fail if anything isn't formatted (also: make format-check)
+```
+
+CI runs `make format-check` in the `platform: frontend npm` job (that job calls the Makefile for each check, so the targets stay working), so an unformatted file fails the PR; `npm run format` fixes it. `make check` runs it too. To format on save, install the Prettier extension for your editor (VS Code: `esbenp.prettier-vscode` with "Format On Save"; JetBrains: Settings, Prettier, "On save"). It picks up the project settings and version.
+
+Markdown is not formatted, so docs keep their hand-written line breaks and tables. ESLint's style rules that would conflict are turned off (`eslint-config-prettier`), so ESLint checks code and Prettier checks layout.
+
 ## Where code and tests go
 
 Code is grouped by the product area it belongs to, so the work for one screen or flow stays in one folder:
@@ -77,7 +90,7 @@ Notes:
 ## Testing
 
 ```bash
-npm test             # run every test once (also: make test; make check runs lint + typecheck + test)
+npm test             # run every test once (also: make test; make check runs format-check + lint + typecheck + test)
 npm run test:watch   # rerun on save
 ```
 
@@ -117,8 +130,10 @@ npm run test:e2e:full    # in frontend/: run e2e/full/ against it (also: make te
 make down-e2e            # in platform/: stop it and delete its data
 ```
 
-`make up-e2e` needs no LLM key and nothing for DeepLynx. The stack sets a made-up LLM profile and key and made-up DeepLynx credentials of its own, because the stack won't start without a profile and every agent refuses to start without DeepLynx credentials, and the tests never send a chat turn or reach DeepLynx. Your real `LLM_*`, `EMBEDDING_API_KEY` and `DEEPLYNX_*` values in `platform/.env` don't reach this stack. On a fresh clone it creates `.env` with its secrets and asks only whether to build the SDK image locally. It saves no LLM profile and no DeepLynx answer, so your first `make up` still asks for those.
+`make up-e2e` needs no LLM key and nothing for DeepLynx. The backend sends chat turns to a stub agent, `platform/e2e/stub-client-agent`, instead of the client agent: it gives the same answer to every message (its `TEXT_ANSWER`) and never calls an LLM, so `e2e/full/chat.spec.ts` knows the reply in advance. The stub doesn't save chats, so Chat History stays empty in this stack. When a prompt names a mesh, an IFC model, a diagram or JSON, the stub's reply carries that sample from `e2e/samples/` as an artifact, which `e2e/full/viewers.spec.ts` opens in each viewer. The IFC viewer loads web-ifc from unpkg, so that test needs network access. The stack still sets a made-up LLM profile and key and made-up DeepLynx credentials of its own, because the stack won't start without a profile and every agent refuses to start without DeepLynx credentials, and nothing in it calls a model or reaches DeepLynx. Your real `LLM_*`, `EMBEDDING_API_KEY` and `DEEPLYNX_*` values in `platform/.env` don't reach this stack. On a fresh clone it creates `.env` with its secrets and asks only whether to build the SDK image locally. It saves no LLM profile and no DeepLynx answer, so your first `make up` still asks for those.
 
 The e2e stack is its own compose project on its own ports, so it runs beside a dev stack without touching it. Its ports are on `127.0.0.1` only, so other machines can't reach it, because its test admin's password is in the repo. To do the same for your dev stack, set `PUBLISH_ADDR=127.0.0.1` in `platform/.env`. Rebuild it with `make up-e2e` after changing the frontend, since it serves the production build. The first run creates a test admin, `e2e-admin`, which only exists in the e2e stack. Each test starts signed in as it; a test that signs in itself starts from an empty `storageState`, as `e2e/full/sign-in.spec.ts` does (through the form) and `e2e/full/sign-in-api.spec.ts` does (through the API, including a wrong password and a stack that already has its admin).
 
 Import `test` and `expect` from `e2e/full/fixtures.ts`. Nothing is faked there, but a test fails if the page throws or an `/api` call fails or is refused (any status of 400 or more, except the answers the fixture expects). Each run writes to its own folder under `test-results-full/` (set `E2E_RUN_ID` to name it), so two runs at once don't delete each other's files; a failed test keeps its trace in that folder, and `rm -rf test-results-full` clears the old ones. CI's `platform: frontend e2e full` job uploads them as `frontend-e2e-full-report`. That job reports on every pull request but isn't a required check yet.
+
+The platform has no behavior specs yet, so these tests stand in for them. Keep one feature per spec file, say what the feature is in a comment at the top of the file, and give each test a `Behavior:` comment that a reader can follow without the code: who does what, and what they should then see (given, when, then). Say why a test needs the whole stack when a faked test might seem enough. Where a Confluence spec has a requirement ID for the behavior, start the test's name with it, as in `"ROUTE-1: ..."`. `e2e/full/screens.spec.ts` is the example: it opens every main screen from the sidebar and from its own address.

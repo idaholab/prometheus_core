@@ -47,16 +47,12 @@ function stepLabel(step: PlanStep): { title: string; subtitle?: string } {
   if (typeof step === "string") return { title: step };
   const title = step.name ?? step.agent ?? step.description ?? step.prompt ?? "Step";
   const subtitle =
-    step.name && step.description
-      ? step.description
-      : step.agent && step.name
-        ? step.agent
-        : undefined;
+    step.name && step.description ? step.description : step.agent && step.name ? step.agent : undefined;
   return { title, subtitle };
 }
 
 export function PlanViewerElement({ element }: ViewerProps) {
-  const props = ((element as { props?: PlanViewerProps }).props) ?? {};
+  const props = (element as { props?: PlanViewerProps }).props ?? {};
   const plan = props.plan ?? {};
   const steps = plan.steps ?? [];
   const workflowType = plan.workflow_type ?? "sequential";
@@ -79,9 +75,7 @@ export function PlanViewerElement({ element }: ViewerProps) {
         )}
       </div>
 
-      {intent && (
-        <p className="text-sm text-base-content/60 italic">{intent}</p>
-      )}
+      {intent && <p className="text-sm text-base-content/60 italic">{intent}</p>}
 
       <ol className="space-y-2">
         {steps.map((step, i) => {
@@ -91,9 +85,7 @@ export function PlanViewerElement({ element }: ViewerProps) {
               <span className="text-sm text-base-content/50 w-5 shrink-0 tabular-nums">{i + 1}.</span>
               <div className="flex-1 min-w-0">
                 <span className="text-sm text-base-content block">{title}</span>
-                {subtitle && (
-                  <p className="text-xs text-base-content/50 mt-0.5">{subtitle}</p>
-                )}
+                {subtitle && <p className="text-xs text-base-content/50 mt-0.5">{subtitle}</p>}
               </div>
             </li>
           );
@@ -111,7 +103,11 @@ export function PlanViewerElement({ element }: ViewerProps) {
           </button>
           {detailsOpen && (
             <div className="mt-2 space-y-1 text-xs text-base-content/60">
-              {workflowId && <p>Workflow ID: <code className="text-base-content/80">{workflowId}</code></p>}
+              {workflowId && (
+                <p>
+                  Workflow ID: <code className="text-base-content/80">{workflowId}</code>
+                </p>
+              )}
               {selectionSource && <p>Selection source: {selectionSource}</p>}
               {skills.length > 0 && <p>Skills: {skills.join(" → ")}</p>}
             </div>

@@ -18,7 +18,9 @@ import { PageAgentRegistry } from "./PageAgentRegistry.tsx";
 const NO_MATCH_TEXT = "No matching agents";
 
 function cardNames(): string[] {
-  return screen.queryAllByRole("article").map((card) => within(card).getByRole("heading", { level: 3 }).textContent ?? "");
+  return screen
+    .queryAllByRole("article")
+    .map((card) => within(card).getByRole("heading", { level: 3 }).textContent ?? "");
 }
 
 test("agent registry: search and domain chip filter the cards, no match shows the empty state, All restores 8", async () => {

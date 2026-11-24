@@ -56,7 +56,12 @@ const STATES: Record<StateId, BuilderState> = {
   base: { label: "Base (D.2)", nodes: BUILDER_NODES, wires: BUILDER_WIRES, inspected: INSPECTED_NODE },
   empty: { label: "Empty canvas (D.3)", nodes: [], wires: [], inspected: null },
   dragging: { label: "Dragging skill (D.4)", nodes: DRAGGING_NODES, wires: [], inspected: INSPECTED_NODE },
-  insert: { label: "Insert on edge (D.5)", nodes: INSERT_NODES, wires: INSERT_WIRES, inspected: INSPECTED_NODE },
+  insert: {
+    label: "Insert on edge (D.5)",
+    nodes: INSERT_NODES,
+    wires: INSERT_WIRES,
+    inspected: INSPECTED_NODE,
+  },
   invalid: {
     label: "Invalid connection (D.6)",
     nodes: INVALID_NODES,
@@ -88,7 +93,11 @@ export function BuilderStatesHarness() {
             {STATES[id].label}
           </button>
         ))}
-        <button type="button" className="btn btn-sm ml-auto" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+        <button
+          type="button"
+          className="btn btn-sm ml-auto"
+          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+        >
           {theme === "light" ? "Dark theme" : "Light theme"}
         </button>
       </div>

@@ -576,17 +576,23 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Matches the node image in frontend/Dockerfile
-          node-version: "22.23.3"
+          node-version: "22.23.5"
           cache: npm
           cache-dependency-path: platform/frontend/package-lock.json
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      # The steps call the Makefile, so CI also checks the targets developers
+      # run. Install stays npm ci: a clean, exact install from the lockfile
+      # (make install runs npm install, which may update it).
+      # Fails on any file Prettier would change; `make format` fixes it
+      - name: Format
+        run: make format-check
       - name: Lint
-        run: npm run lint
+        run: make lint
       - name: Typecheck
-        run: npm run typecheck
+        run: make typecheck
       - name: Tests
-        run: npm run test:coverage
+        run: make test-coverage
       # The shared coverage action reads Python's coverage report, so the
       # frontend's summary, path prefix and upload are done here instead
       - name: Coverage summary
@@ -608,7 +614,7 @@ jobs:
           disable_search: true
           fail_ci_if_error: true
       - name: Build
-        run: npm run build
+        run: make build
 
   platform-frontend-e2e:
     # Playwright against the built frontend on its own; each test stubs /api
@@ -631,7 +637,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Matches the node image in frontend/Dockerfile
-          node-version: "22.23.3"
+          node-version: "22.23.5"
           cache: npm
           cache-dependency-path: platform/frontend/package-lock.json
       - name: Install dependencies
@@ -873,7 +879,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Matches the frontend jobs
-          node-version: "22.23.3"
+          node-version: "22.23.5"
           cache: npm
           cache-dependency-path: platform/backend/openapi/package-lock.json
       - name: Install Redocly
@@ -1379,8 +1385,9 @@ jobs:
 
   platform-frontend-e2e-full:
     # The frontend's full-stack e2e tests (frontend/e2e/full/) against the e2e
-    # stack: the whole platform, served by nginx. The tests don't send a chat
-    # turn, so no LLM key or DeepLynx is needed. Not a required check yet; the
+    # stack: the whole platform, served by nginx, with a stub agent answering
+    # chat turns (platform/e2e/stub-client-agent), so no LLM key or DeepLynx
+    # is needed. Not a required check yet; the
     # team will decide when it blocks merges (PPLT-321)
     name: "platform: frontend e2e full"
     needs: [gitleaks, platform-compose]
@@ -1412,7 +1419,7 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Matches the node image in frontend/Dockerfile
-          node-version: "22.23.3"
+          node-version: "22.23.5"
           cache: npm
           cache-dependency-path: platform/frontend/package-lock.json
       - name: Install dependencies
@@ -1451,7 +1458,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
-          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.agents.e2e.yml \
+          docker compose -p prometheus_e2e -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.agents.e2e.yml \
             --profile prod logs --no-color --timestamps > "$RUNNER_TEMP/logs/all.log"
           docker ps --all > "$RUNNER_TEMP/logs/ps.txt"
       - name: Upload logs
@@ -1632,6 +1639,9 @@ jobs:
           - agent: thread-pattern-agent
             path: platform/agents/debug-agents/thread-pattern-agent
             flag: thread-pattern-agent
+          - agent: stub-client-agent
+            path: platform/e2e/stub-client-agent
+            flag: stub-client-agent
           - agent: agent-template
             path: agent-template/agent_template
             flag: template-agent

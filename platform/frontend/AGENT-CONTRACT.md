@@ -9,6 +9,10 @@
 > contract — see [`backend/CONTRACT.md`](../backend/CONTRACT.md)
 > (machine definition: `backend/app/contract.py`). The backend now performs
 > element/artifact classification server-side and hands the frontend `render_hint`s.
+> Placement is now chosen per artifact too: an agent sets `metadata.display` to
+> `panel` to show an artifact only in the side artifact panel (see "Artifact
+> `display`" in `backend/CONTRACT.md`). The `display="inline"`-only rule below
+> applies to the old Chainlit `step.elements` only.
 
 This document defines how backend agents must emit elements so the frontend can render them without custom per-agent handling. The frontend maintains a `VIEWER_REGISTRY` keyed on element type and custom element name. As long as agents follow this contract, new agent outputs are automatically routed to the correct viewer.
 

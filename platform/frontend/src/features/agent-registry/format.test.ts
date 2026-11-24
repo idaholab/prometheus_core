@@ -13,12 +13,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import {
-  formatLatency,
-  formatRunTime,
-  formatUptime,
-  formatVersion,
-} from "./format.ts";
+import { formatLatency, formatRunTime, formatUptime, formatVersion } from "./format.ts";
 
 test("run time uses seconds, minutes and hours and drops a zero lower unit", () => {
   assert.equal(formatRunTime(45), "45s");

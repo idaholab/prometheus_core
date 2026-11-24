@@ -75,6 +75,8 @@ export interface NeedsInfoItem extends BaseItem {
   turnId: string;
   message: string;
   fields: FormField[];
+  /** Outputs the turn produced before it paused at this form (e.g. a workflow step's plots). */
+  artifacts: ArtifactMeta[];
   submitted: boolean;
 }
 export interface PlanItem extends BaseItem {
@@ -89,13 +91,7 @@ export interface ErrorItem extends BaseItem {
   kind: "error";
   text: string;
 }
-export type ChatItem =
-  | UserItem
-  | AssistantItem
-  | ToolItem
-  | NeedsInfoItem
-  | PlanItem
-  | ErrorItem;
+export type ChatItem = UserItem | AssistantItem | ToolItem | NeedsInfoItem | PlanItem | ErrorItem;
 
 // --- state ------------------------------------------------------------------
 
@@ -216,9 +212,7 @@ function itemsFromTranscript(messages: ConversationMessage[], artifacts: Artifac
 /** Mark the in-flight turn's ToolStep done (leaves its progress trace collapsed). */
 function finalizeTurnProgress(turnId: string): void {
   setItems((items) =>
-    items.map((it) =>
-      it.kind === "tool" && it.turnId === turnId ? { ...it, done: true } : it,
-    ),
+    items.map((it) => (it.kind === "tool" && it.turnId === turnId ? { ...it, done: true } : it)),
   );
 }
 
@@ -256,6 +250,7 @@ function applyResponse(res: ChatMessageResponse): void {
             turnId: res.turn_id,
             message: res.message ?? "",
             fields,
+            artifacts: res.artifacts ?? [],
             submitted: false,
           },
         ]);
@@ -363,9 +358,7 @@ function onTaskDone(e: TaskDoneEvent): void {
   awaitedTaskIds.delete(e.task_id);
   // Close out the task's progress ToolStep.
   setItems((items) =>
-    items.map((it) =>
-      it.kind === "tool" && it.taskId === e.task_id ? { ...it, done: true } : it,
-    ),
+    items.map((it) => (it.kind === "tool" && it.taskId === e.task_id ? { ...it, done: true } : it)),
   );
   if (e.response) {
     applyResponse(e.response);
@@ -550,10 +543,7 @@ async function post(body: ChatMessageRequest): Promise<void> {
 async function sendTurn(query: string, uploads: UploadDescriptor[] = []): Promise<void> {
   const text = query.trim();
   if (!text && uploads.length === 0) return;
-  setItems((items) => [
-    ...items,
-    { id: nextId("user"), kind: "user", text: text || "(uploaded file)" },
-  ]);
+  setItems((items) => [...items, { id: nextId("user"), kind: "user", text: text || "(uploaded file)" }]);
   await post({ query: text, upload_ids: uploads.length ? uploads : null });
 }
 
@@ -576,9 +566,7 @@ async function submitFollowup(itemId: string, answers: Record<string, unknown>):
 async function decidePlan(itemId: string, approved: boolean): Promise<void> {
   setItems((items) =>
     items.map((it) =>
-      it.id === itemId && it.kind === "plan"
-        ? { ...it, decided: approved ? "approved" : "rejected" }
-        : it,
+      it.id === itemId && it.kind === "plan" ? { ...it, decided: approved ? "approved" : "rejected" } : it,
     ),
   );
   await post({ query: "", plan_approved: approved, plan_rejected: !approved });

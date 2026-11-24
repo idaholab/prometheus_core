@@ -80,12 +80,20 @@ export function NodeInspector({ node }: { node: InspectedNode | null }) {
         <>
           <div className="flex flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
-              <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[node.tone]}`} />
-              <p className="m-0 min-w-0 truncate text-[15px] font-semibold text-base-content" title={node.name}>
+              <span
+                aria-hidden="true"
+                className={`size-2 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[node.tone]}`}
+              />
+              <p
+                className="m-0 min-w-0 truncate text-[15px] font-semibold text-base-content"
+                title={node.name}
+              >
                 {node.name}
               </p>
             </div>
-            <p className="m-0 break-all font-mono text-[9px] text-base-content/50">skill_id: {node.skillId}</p>
+            <p className="m-0 break-all font-mono text-[9px] text-base-content/50">
+              skill_id: {node.skillId}
+            </p>
           </div>
           <FieldGroup label="Inputs" fields={node.inputs} />
           <FieldGroup label={node.outputs.length === 1 ? "Output" : "Outputs"} fields={node.outputs} />

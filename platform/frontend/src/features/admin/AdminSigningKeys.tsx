@@ -101,11 +101,18 @@ export function AdminSigningKeys() {
         <div>
           <h3>Signing Keys</h3>
           <p className="text-xs text-base-content/50">
-            Point every agent's <code>JWKS_URL</code> at this backend's{" "}
-            <code>/.well-known/jwks.json</code> instead of distributing a public key by hand.
+            Point every agent's <code>JWKS_URL</code> at this backend's <code>/.well-known/jwks.json</code>{" "}
+            instead of distributing a public key by hand.
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus />} label={generating ? "Generating..." : "Generate key"} loading={generating} onClick={handleGenerate} />
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus />}
+          label={generating ? "Generating..." : "Generate key"}
+          loading={generating}
+          onClick={handleGenerate}
+        />
       </div>
 
       {error && (
@@ -146,12 +153,31 @@ export function AdminSigningKeys() {
                       {key.retired_at ? new Date(key.retired_at).toLocaleString() : "—"}
                     </td>
                     <td className="flex gap-1 justify-end">
-                      <Button variant="ghost" size="xs" icon={copiedId === key.id ? <Check /> : <Copy />} ariaLabel="Copy public key" onClick={() => handleCopy(key)} />
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={copiedId === key.id ? <Check /> : <Copy />}
+                        ariaLabel="Copy public key"
+                        onClick={() => handleCopy(key)}
+                      />
                       {!key.is_active && !key.retired_at && (
-                        <Button variant="ghost" size="xs" label="Activate" disabled={busyId === key.id} onClick={() => handleActivate(key)} />
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          label="Activate"
+                          disabled={busyId === key.id}
+                          onClick={() => handleActivate(key)}
+                        />
                       )}
                       {!key.retired_at && (
-                        <Button variant="error" soft size="xs" label="Retire" disabled={busyId === key.id} onClick={() => handleRetire(key)} />
+                        <Button
+                          variant="error"
+                          soft
+                          size="xs"
+                          label="Retire"
+                          disabled={busyId === key.id}
+                          onClick={() => handleRetire(key)}
+                        />
                       )}
                     </td>
                   </tr>

@@ -73,7 +73,9 @@ vi.mock("@/pages/PageAgentRegistry", () => ({
 }));
 vi.mock("@/pages/PageApprovalQueue", () => ({ PageApprovalQueue: () => <p>Approval Queue page</p> }));
 vi.mock("@/pages/PageDataManagement", () => ({ PageDataManagement: () => <p>Data Management page</p> }));
-vi.mock("@/pages/PageProjectManagement", () => ({ PageProjectManagement: () => <p>Project Management page</p> }));
+vi.mock("@/pages/PageProjectManagement", () => ({
+  PageProjectManagement: () => <p>Project Management page</p>,
+}));
 
 // jsdom has no matchMedia; the header's theme toggle reads it.
 vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -190,25 +192,38 @@ const SECTIONS = [
   { url: "/agent-registry", link: "Agent Registry", title: "Agent Registry", body: "Agent Registry page" },
   { url: "/workflows", link: "Workflows", title: "Workflows", body: /^Workflows page/ },
   { url: "/approval-queue", link: "Approval Queue", title: "Approval Queue", body: "Approval Queue page" },
-  { url: "/project-management", link: "Project Management", title: "Project Management", body: "Project Management page" },
-  { url: "/data-management", link: "Data Management", title: "Data Management", body: "Data Management page" },
+  {
+    url: "/project-management",
+    link: "Project Management",
+    title: "Project Management",
+    body: "Project Management page",
+  },
+  {
+    url: "/data-management",
+    link: "Data Management",
+    title: "Data Management",
+    body: "Data Management page",
+  },
   { url: "/jobs-console", link: "Jobs Console", title: "Jobs Console", body: "Coming soon" },
   { url: "/admin", link: "Admin", title: "Admin", body: "Admin page" },
 ];
 
-test.each(SECTIONS)("$url opens $link, marks it current, and titles the page", async ({ url, link, title, body }) => {
-  setCurrentUser(ADMIN);
-  open(url);
+test.each(SECTIONS)(
+  "$url opens $link, marks it current, and titles the page",
+  async ({ url, link, title, body }) => {
+    setCurrentUser(ADMIN);
+    open(url);
 
-  expect(await screen.findByText(body)).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: link })).toHaveAttribute("aria-current", "page");
-  for (const other of SECTIONS.filter((s) => s.link !== link)) {
-    expect(screen.getByRole("link", { name: other.link })).not.toHaveAttribute("aria-current");
-  }
-  expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
-  const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
-  expect(within(crumbs).getByText(title)).toHaveAttribute("aria-current", "page");
-});
+    expect(await screen.findByText(body)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: link })).toHaveAttribute("aria-current", "page");
+    for (const other of SECTIONS.filter((s) => s.link !== link)) {
+      expect(screen.getByRole("link", { name: other.link })).not.toHaveAttribute("aria-current");
+    }
+    expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
+    const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumbs).getByText(title)).toHaveAttribute("aria-current", "page");
+  },
+);
 
 test("forward returns to the page that back left", async () => {
   const user = userEvent.setup();
@@ -274,7 +289,14 @@ test("opening a past conversation from the history goes Home", async () => {
   api.getRecentConversations.mockResolvedValue({
     available: true,
     conversations: [
-      { conversation_id: "c-1", title: "Corrosion study", query: "", status: "done", timestamp: "", pending: false },
+      {
+        conversation_id: "c-1",
+        title: "Corrosion study",
+        query: "",
+        status: "done",
+        timestamp: "",
+        pending: false,
+      },
     ],
   });
   const router = open("/workflows");

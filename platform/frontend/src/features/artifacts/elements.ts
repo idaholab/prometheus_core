@@ -35,17 +35,17 @@ export type ElementKind =
   | "pdf"
   | "file"
   | "image"
-  | "json"           // CollapsibleJson custom element
-  | "suggestions"    // FollowUpSuggestions custom element
-  | "plan_viewer"    // PlanViewer custom element
-  | "ifc"            // IFCViewer custom element
-  | "mesh"           // MeshViewer custom element — shared by Exodus and STL
-  | "mermaid"        // Mermaid custom element
-  | "thermal"        // ThermalAnalysisViewer custom element
-  | "report"         // markdown report rendered inline (render_hint === "report")
-  | "code"           // plain source text, e.g. YAML (render_hint === "code")
-  | "table"          // CSV / TSV sortable table (render_hint === "table")
-  | "reference"      // citation card (render_hint === "reference")
+  | "json" // CollapsibleJson custom element
+  | "suggestions" // FollowUpSuggestions custom element
+  | "plan_viewer" // PlanViewer custom element
+  | "ifc" // IFCViewer custom element
+  | "mesh" // MeshViewer custom element — shared by Exodus and STL
+  | "mermaid" // Mermaid custom element
+  | "thermal" // ThermalAnalysisViewer custom element
+  | "report" // markdown report rendered inline (render_hint === "report")
+  | "code" // plain source text, e.g. YAML (render_hint === "code")
+  | "table" // CSV / TSV sortable table (render_hint === "table")
+  | "reference" // citation card (render_hint === "reference")
   | "unknown";
 
 // Standalone element shape. Previously `IElement & {…}` from @chainlit/react-client;
@@ -101,31 +101,44 @@ export function classifyElement(el: AnyElement): ElementKind {
 
   if (type === "custom") {
     switch (el.name) {
-      case "IFCViewer":           return "ifc";
+      case "IFCViewer":
+        return "ifc";
       // Confirmed: backend emits this custom element as "MeshViewer" for BOTH
       // Exodus and STL artifacts (components/stl_integration.py /
       // exodus_integration.py — both route through MeshDataset.to_chainlit_element()
       // using the shared COMPONENT_NAME="MeshViewer"). There is no separate
       // "ExodusViewer" name on the wire.
-      case "MeshViewer":          return "mesh";
-      case "CollapsibleJson":     return "json";
-      case "FollowUpSuggestions": return "suggestions";
-      case "PlanViewer":          return "plan_viewer";
-      case "MermaidViewer":       return "mermaid";
+      case "MeshViewer":
+        return "mesh";
+      case "CollapsibleJson":
+        return "json";
+      case "FollowUpSuggestions":
+        return "suggestions";
+      case "PlanViewer":
+        return "plan_viewer";
+      case "MermaidViewer":
+        return "mermaid";
       // Backend COMPONENT_NAME is "ThermalAnalysisViewer", not "ThermalAnalysis"
       // (see prometheus.thermal_analysis.result.v1 plugin __init__.py).
-      case "ThermalAnalysisViewer": return "thermal";
-      case "ReportViewer":        return "report";
-      case "CodeViewer":          return "code";
-      case "TableViewer":         return "table";
-      case "ReferenceViewer":     return "reference";
-      case "SVGViewer":           return "image";
-      default:                    return "unknown";
+      case "ThermalAnalysisViewer":
+        return "thermal";
+      case "ReportViewer":
+        return "report";
+      case "CodeViewer":
+        return "code";
+      case "TableViewer":
+        return "table";
+      case "ReferenceViewer":
+        return "reference";
+      case "SVGViewer":
+        return "image";
+      default:
+        return "unknown";
     }
   }
 
-  if (type === "pdf")   return "pdf";
-  if (type === "file")  return isImageFile(el) ? "image" : "file";
+  if (type === "pdf") return "pdf";
+  if (type === "file") return isImageFile(el) ? "image" : "file";
   if (type === "image") return "image";
 
   return "unknown";
@@ -171,31 +184,31 @@ const MeshViewerElement = import.meta.env.DEV
 const MermaidElement = lazy(() => import("./viewers/MermaidElement"));
 // Lazy so highlight.js and its grammars load only when a code artifact is shown.
 const CodeElement = lazy(() => import("./viewers/CodeElement"));
-import { PdfViewerElement }                from "./viewers/PdfViewerElement";
-import { FileDownloadElement }             from "./viewers/FileDownloadElement";
-import { ImageViewerElement }              from "./viewers/ImageViewerElement";
-import { JSONViewer }                      from "./viewers/JSONViewer";
-import { FollowUpSuggestionsElement }      from "./viewers/FollowUpSuggestionsElement";
-import { PlanViewerElement }               from "./viewers/PlanViewerElement";
-import { ThermalAnalysisElement }          from "./viewers/ThermalAnalysisElement";
-import { ReportElement }                   from "./viewers/ReportElement";
-import { TableElement }                    from "./viewers/TableElement";
-import { ReferenceElement }                from "./viewers/ReferenceElement";
+import { PdfViewerElement } from "./viewers/PdfViewerElement";
+import { FileDownloadElement } from "./viewers/FileDownloadElement";
+import { ImageViewerElement } from "./viewers/ImageViewerElement";
+import { JSONViewer } from "./viewers/JSONViewer";
+import { FollowUpSuggestionsElement } from "./viewers/FollowUpSuggestionsElement";
+import { PlanViewerElement } from "./viewers/PlanViewerElement";
+import { ThermalAnalysisElement } from "./viewers/ThermalAnalysisElement";
+import { ReportElement } from "./viewers/ReportElement";
+import { TableElement } from "./viewers/TableElement";
+import { ReferenceElement } from "./viewers/ReferenceElement";
 
 export const VIEWER_REGISTRY: Partial<Record<ElementKind, ViewerComponent | null>> = {
-  ifc:          IFCViewerElement,
-  mesh:         MeshViewerElement, // wired and live — see notes above
-  pdf:          PdfViewerElement,
-  file:         FileDownloadElement,
-  image:        ImageViewerElement,
-  json:         JSONViewer,
-  suggestions:  FollowUpSuggestionsElement,
-  plan_viewer:  PlanViewerElement,
-  mermaid:      MermaidElement,
-  thermal:      ThermalAnalysisElement,
-  report:       ReportElement,
-  code:         CodeElement,
-  table:        TableElement,
-  reference:    ReferenceElement,
-  unknown:      null,
+  ifc: IFCViewerElement,
+  mesh: MeshViewerElement, // wired and live — see notes above
+  pdf: PdfViewerElement,
+  file: FileDownloadElement,
+  image: ImageViewerElement,
+  json: JSONViewer,
+  suggestions: FollowUpSuggestionsElement,
+  plan_viewer: PlanViewerElement,
+  mermaid: MermaidElement,
+  thermal: ThermalAnalysisElement,
+  report: ReportElement,
+  code: CodeElement,
+  table: TableElement,
+  reference: ReferenceElement,
+  unknown: null,
 };

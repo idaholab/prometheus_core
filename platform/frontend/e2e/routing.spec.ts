@@ -66,7 +66,9 @@ async function stubSignedInApp(page: Page) {
       } satisfies ConversationDetailResponse,
     }),
   );
-  await page.route("/api/events", (route) => route.fulfill({ headers: { "content-type": "text/event-stream" }, body: "" }));
+  await page.route("/api/events", (route) =>
+    route.fulfill({ headers: { "content-type": "text/event-stream" }, body: "" }),
+  );
 }
 
 test("a page keeps its URL across a reload", async ({ page }) => {

@@ -37,7 +37,12 @@ vi.mock("@/lib/api/client", () => {
   }
   const api = new Proxy(
     {},
-    { get: (_t, k: string) => (...a: unknown[]) => (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a) },
+    {
+      get:
+        (_t, k: string) =>
+        (...a: unknown[]) =>
+          (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a),
+    },
   );
   return { ApiError: StubApiError, api };
 });
@@ -157,4 +162,57 @@ test("a reload shows the resume marker during getConfig() and drops it when getC
 
   assert.equal(readState().resumingConversationId, null);
   assert.equal(readState().ready, true);
+});
+
+test("a needs_info turn keeps the artifacts produced before it paused at the form", async () => {
+  installStorage(null);
+  const png = { artifact_id: "a1", name: "status.png", mime_type: "image/png", render_hint: "image" };
+  g.__chatTestApi = {
+    getConfig: async () => ({}),
+    createSession: async () => ({ conversation_id: "conv-new", auto_approve_steps: false }),
+    sendMessage: async () => ({
+      turn_id: "t1",
+      status: "needs_info",
+      message: "### Gate 2\n\nApprove?",
+      followup_questions: [{ id: "gate_action", label: "Decision?", input_type: "select", required: true }],
+      artifacts: [png],
+    }),
+  };
+
+  await chatStore.bootstrap("p");
+  await chatStore.sendTurn("run it");
+
+  const items = readState().items as Array<Record<string, unknown>>;
+  const ni = items.find((it) => it.kind === "needs_info");
+  assert.ok(ni, "a needs_info item is rendered");
+  assert.deepEqual(ni.artifacts, [png]);
+});
+
+test("a needs_info turn with no questions still shows its artifacts, as a plain reply", async () => {
+  installStorage(null);
+  const png = { artifact_id: "a1", name: "status.png", mime_type: "image/png", render_hint: "image" };
+  g.__chatTestApi = {
+    getConfig: async () => ({}),
+    createSession: async () => ({ conversation_id: "conv-new", auto_approve_steps: false }),
+    sendMessage: async () => ({
+      turn_id: "t1",
+      status: "needs_info",
+      message: "Here's the status.",
+      followup_questions: [],
+      artifacts: [png],
+    }),
+  };
+
+  await chatStore.bootstrap("p");
+  await chatStore.sendTurn("run it");
+
+  const items = readState().items as Array<Record<string, unknown>>;
+  assert.equal(
+    items.find((it) => it.kind === "needs_info"),
+    undefined,
+    "no empty form",
+  );
+  const reply = items.find((it) => it.kind === "assistant");
+  assert.ok(reply, "the message renders as an assistant reply");
+  assert.deepEqual(reply.artifacts, [png]);
 });

@@ -24,6 +24,8 @@ Each skill returns one sample as an inline text artifact. Optional inputs shape 
 - ``lines``: cut the sample to its first N lines, or pad it to N lines with numbered
   filler lines; ``0`` yields an empty file.
 - ``routing``: which signals the backend gets to route on (file name, MIME type, or both).
+- ``display``: ``inline`` (default) shows the sample in the reply; ``panel`` sets the
+  artifact's ``metadata.display`` so it shows only in the side panel and opens there.
 """
 
 import hashlib
@@ -45,6 +47,7 @@ SAMPLES_DIR = Path(__file__).resolve().parent / "samples"
 MAX_LINES = 20000
 
 ROUTING_MODES = ("both", "extension", "mime")
+DISPLAY_MODES = ("inline", "panel")
 
 # Name used in "mime" routing: deliberately has no extension or well-known basename.
 NEUTRAL_NAME = "sample"
@@ -212,6 +215,10 @@ class CodeRenderDebugAgent(PrometheusAgent):
             )
         name, mime_type = resolved
 
+        display = str(params.get("display") or "inline").strip().lower()
+        if display not in DISPLAY_MODES:
+            return self._error(f"display must be one of: {', '.join(DISPLAY_MODES)}")
+
         body = build_body(spec, lines)
         line_count = len(body.splitlines())
         encoded = body.encode("utf-8")
@@ -235,6 +242,7 @@ class CodeRenderDebugAgent(PrometheusAgent):
                 text_body=body,
                 size_bytes=len(encoded),
                 tags=["debug", "code", spec.language],
+                metadata={"display": "panel"} if display == "panel" else {},
             ),
         )
         await self.send_text_artifact(context, event_queue, text=body, name=name, artifact_id=artifact_id)
@@ -246,6 +254,7 @@ class CodeRenderDebugAgent(PrometheusAgent):
             "artifact_name": name,
             "mime_type": mime_type,
             "routing": routing,
+            "display": display,
             "line_count": line_count,
             "sha256": sha256,
         }

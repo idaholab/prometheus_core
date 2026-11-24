@@ -255,3 +255,33 @@ def test_registration_reaches_the_status_view(client, monkeypatch):
     assert before <= datetime.fromisoformat(rows[0]["registered_at"]) <= after
     assert rows[0]["reachable"] is True
     assert [skill["id"] for skill in rows[0]["skills"]] == ["analyze_thermal"]
+
+
+def _documented(path: str, method: str, code: str) -> list[str]:
+    from app.main import app
+
+    examples = app.openapi()["paths"][path][method]["responses"][code]["content"]["application/json"]["examples"]
+    return [example["value"]["detail"] for example in examples.values()]
+
+
+def test_errors_match_their_openapi_examples(client, monkeypatch):
+    """The agent-secret and per-route errors are the ones AGENT_SECRET_RESPONSES and
+    the route responses= document, so the two can't drift apart."""
+    wrong = client.get("/v1/agents", headers={"Authorization": "Bearer wrong"})
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"] in _documented("/v1/agents", "get", "401")
+
+    missing = client.delete("/v1/agents/thermal-agent", headers=AUTH)
+    assert missing.status_code == 404
+    # The example names thermal-agent, so the message matches exactly.
+    assert missing.json()["detail"] in _documented("/v1/agents/{agent_id}", "delete", "404")
+
+    client.post("/v1/agents", json={**REGISTRATION, "agent_card_params": {**CARD, "url": ""}}, headers=AUTH)
+    no_url = client.post("/a2a/thermal-agent", json={}, headers=AUTH)
+    assert no_url.status_code == 502
+    assert no_url.json()["detail"] in _documented("/a2a/{agent_name}", "post", "502")
+
+    monkeypatch.setattr(settings, "agent_secret", "")
+    unset = client.get("/v1/agents", headers={"Authorization": "Bearer "})
+    assert unset.status_code == 503
+    assert unset.json()["detail"] in _documented("/v1/agents", "get", "503")

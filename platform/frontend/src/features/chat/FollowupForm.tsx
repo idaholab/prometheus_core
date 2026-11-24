@@ -118,7 +118,17 @@ export function FollowupForm({
         return (
           <input
             {...common}
-            type={f.input_type === "password" ? "password" : f.input_type === "email" ? "email" : f.input_type === "date" ? "date" : f.input_type === "datetime" ? "datetime-local" : "text"}
+            type={
+              f.input_type === "password"
+                ? "password"
+                : f.input_type === "email"
+                  ? "email"
+                  : f.input_type === "date"
+                    ? "date"
+                    : f.input_type === "datetime"
+                      ? "datetime-local"
+                      : "text"
+            }
             placeholder={f.placeholder ?? ""}
           />
         );
@@ -143,7 +153,13 @@ export function FollowupForm({
           {f.help && <p className="text-xs text-base-content/60">{f.help}</p>}
         </div>
       ))}
-      <Button variant="primary" size="sm" type="submit" label="Submit" disabled={disabled || missingRequired} />
+      <Button
+        variant="primary"
+        size="sm"
+        type="submit"
+        label="Submit"
+        disabled={disabled || missingRequired}
+      />
     </form>
   );
 }

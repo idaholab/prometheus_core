@@ -40,7 +40,7 @@ when no skill fits, and never invents a required value.
 
 ## How a turn ends
 
-One `ChatStatus` per turn (`backend/app/contract.py:35`; `orchestrator/chat_flow.py:112-193`; deck 01, A11):
+One `ChatStatus` per turn (`class ChatStatus` in `backend/app/contract.py`; `orchestrator/chat_flow.py:112-193`; deck 01, A11):
 
 | status | when |
 |---|---|

@@ -143,7 +143,8 @@ export function AdminOidcProviders() {
   };
 
   const handleDelete = async (provider: OidcProvider) => {
-    if (!window.confirm(`Delete identity provider "${provider.display_name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete identity provider "${provider.display_name}"? This cannot be undone.`))
+      return;
     try {
       await api.deleteOidcProvider(provider.id);
       refresh();
@@ -200,8 +201,21 @@ export function AdminOidcProviders() {
                     />
                   </td>
                   <td className="flex gap-1 justify-end">
-                    <Button variant="ghost" size="xs" icon={<Pencil />} ariaLabel="Edit provider" onClick={() => openEdit(provider)} />
-                    <Button variant="error" soft size="xs" icon={<Trash2 />} ariaLabel="Delete provider" onClick={() => handleDelete(provider)} />
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<Pencil />}
+                      ariaLabel="Edit provider"
+                      onClick={() => openEdit(provider)}
+                    />
+                    <Button
+                      variant="error"
+                      soft
+                      size="xs"
+                      icon={<Trash2 />}
+                      ariaLabel="Delete provider"
+                      onClick={() => handleDelete(provider)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -296,7 +310,9 @@ export function AdminOidcProviders() {
             </div>
             <div className="form-control">
               <label className="label pb-1">
-                <span className="label-text text-xs uppercase tracking-wider">Default role for new accounts</span>
+                <span className="label-text text-xs uppercase tracking-wider">
+                  Default role for new accounts
+                </span>
               </label>
               <select
                 className="select select-bordered w-full"
@@ -312,7 +328,14 @@ export function AdminOidcProviders() {
             <form method="dialog">
               <Button variant="ghost" size="sm" type="submit" label="Cancel" />
             </form>
-            <Button variant="primary" size="sm" type="submit" label={creating ? "Creating..." : "Create"} loading={creating} onClick={submitCreate} />
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              label={creating ? "Creating..." : "Create"}
+              loading={creating}
+              onClick={submitCreate}
+            />
           </div>
         </div>
         <form method="dialog" className="modal-backdrop">
@@ -361,7 +384,9 @@ export function AdminOidcProviders() {
             </div>
             <div className="form-control">
               <label className="label pb-1">
-                <span className="label-text text-xs uppercase tracking-wider">New client secret (optional)</span>
+                <span className="label-text text-xs uppercase tracking-wider">
+                  New client secret (optional)
+                </span>
               </label>
               <input
                 className="input input-bordered w-full"
@@ -383,7 +408,9 @@ export function AdminOidcProviders() {
             </div>
             <div className="form-control">
               <label className="label pb-1">
-                <span className="label-text text-xs uppercase tracking-wider">Default role for new accounts</span>
+                <span className="label-text text-xs uppercase tracking-wider">
+                  Default role for new accounts
+                </span>
               </label>
               <select
                 className="select select-bordered w-full"
@@ -410,7 +437,14 @@ export function AdminOidcProviders() {
             <form method="dialog">
               <Button variant="ghost" size="sm" type="submit" label="Cancel" />
             </form>
-            <Button variant="primary" size="sm" type="submit" label={saving ? "Saving..." : "Save"} loading={saving} onClick={submitEdit} />
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              label={saving ? "Saving..." : "Save"}
+              loading={saving}
+              onClick={submitEdit}
+            />
           </div>
         </div>
         <form method="dialog" className="modal-backdrop">

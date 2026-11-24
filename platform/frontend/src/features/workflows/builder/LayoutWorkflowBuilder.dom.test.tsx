@@ -119,12 +119,11 @@ test("with unsaved structural changes, switching to this run asks first, and Kee
     "You have unsaved structural changes to the template (1 node added, 2 wires changed). A run can only change step settings, so these changes would be dropped.",
   );
   // Then the backdrop's close button
-  expect(within(dialog).getAllByRole("button").map((b) => b.textContent)).toEqual([
-    "Keep editing",
-    "Save template first",
-    "Discard and switch",
-    "close",
-  ]);
+  expect(
+    within(dialog)
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(["Keep editing", "Save template first", "Discard and switch", "close"]);
 
   await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -198,11 +197,11 @@ test("the History tab shows the version list and hides the commit buttons and th
 
   expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
   const list = screen.getByRole("region", { name: "Version history" });
-  expect(within(list).getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
-    "v1.2.0",
-    "v1.1.0",
-    "v1.0.0",
-  ]);
+  expect(
+    within(list)
+      .getAllByRole("article")
+      .map((item) => item.getAttribute("aria-label")),
+  ).toEqual(["v1.2.0", "v1.1.0", "v1.0.0"]);
   expect(within(list).getByRole("article", { name: "v1.2.0" })).toHaveAttribute("aria-current", "true");
   const details = screen.getByRole("region", { name: "Version details" });
   expect(within(details).getByRole("heading", { level: 2, name: "v1.2.0" })).toBeInTheDocument();

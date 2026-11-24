@@ -106,7 +106,7 @@ platform. A crash: `docker compose -p <project> logs --no-log-prefix --since <n>
 
 1. Write a numbered timeline by time and call id: per LLM step, what it saw, the calls, what the
    platform and the agent did. End with the last `MODEL TEXT`, cut to 3 lines.
-2. Name the end state (`prometheus_platform/backend/app/contract.py:35-48`; `chat_flow.py:112-193`):
+2. Name the end state (`class ChatStatus` in `prometheus_platform/backend/app/contract.py`; `chat_flow.py:112-193`):
 
    | final entry | history type | status |
    |---|---|---|

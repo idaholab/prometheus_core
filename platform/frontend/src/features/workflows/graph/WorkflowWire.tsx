@@ -51,7 +51,10 @@ function InsertMenu() {
               i === 0 ? "bg-base-content/10" : ""
             }`}
           >
-            <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`} />
+            <span
+              aria-hidden="true"
+              className={`size-1.5 shrink-0 rounded-full ${SKILL_TONE_DOT_CLASSES[tone]}`}
+            />
             {label}
           </button>
         </li>
@@ -74,7 +77,14 @@ export function WorkflowWire({
   targetPosition,
   data,
 }: EdgeProps<WireEdge>) {
-  const [path, midX, midY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const [path, midX, midY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
   const dashed = data?.dashed || data?.invalid;
   const style = {
     ...(dashed ? { strokeDasharray: "5 4" } : {}),

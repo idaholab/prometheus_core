@@ -75,5 +75,8 @@ test("languageForArtifact: MIME first, and generic .txt/.log do not override a t
   assert.equal(languageForArtifact({ name: "artifact.txt", uri: null, mime_type: "text/plain" }), undefined);
   // With no text MIME, .txt/.log still map to plaintext.
   assert.equal(languageForArtifact({ name: "run.log", uri: null }), "plaintext");
-  assert.equal(languageForArtifact({ name: "run.log", uri: null, mime_type: "application/octet-stream" }), "plaintext");
+  assert.equal(
+    languageForArtifact({ name: "run.log", uri: null, mime_type: "application/octet-stream" }),
+    "plaintext",
+  );
 });

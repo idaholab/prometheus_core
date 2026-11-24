@@ -6,6 +6,6 @@
     "lint": "redocly lint openapi.json"
   },
   "devDependencies": {
-    "@redocly/cli": "^2.77.0"
+    "@redocly/cli": "^2.79.0"
   }
 }

@@ -76,12 +76,17 @@ export function VersionDetail({ detail }: VersionDetailProps) {
       </div>
 
       <section aria-label="Changes in this version" className="flex flex-col gap-2">
-        <SectionLabel variant="panel" as="h3">Changes in this version</SectionLabel>
+        <SectionLabel variant="panel" as="h3">
+          Changes in this version
+        </SectionLabel>
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {changes.map((change) => {
             const marker = CHANGE_MARKERS[change.kind];
             return (
-              <li key={change.text} className="flex min-w-0 items-start gap-2.5 text-[13px] text-base-content/90">
+              <li
+                key={change.text}
+                className="flex min-w-0 items-start gap-2.5 text-[13px] text-base-content/90"
+              >
                 {/* Sizes go on each span: the base layer sets span font-size, so it isn't inherited. */}
                 <span
                   aria-hidden="true"
@@ -99,7 +104,9 @@ export function VersionDetail({ detail }: VersionDetailProps) {
 
       {invalidated && (
         <section aria-label="Invalidated by this change" className="flex flex-col gap-2">
-          <SectionLabel variant="panel" as="h3">Invalidated by this change</SectionLabel>
+          <SectionLabel variant="panel" as="h3">
+            Invalidated by this change
+          </SectionLabel>
           <p className="m-0 flex min-w-0 items-start gap-2.5 rounded-lg border border-error/50 bg-error/10 px-4 py-3 text-xs text-error">
             <AlertTriangle aria-hidden="true" size={14} className="mt-px shrink-0 text-warning" />
             <span className="min-w-0 wrap-break-word text-xs">{invalidated}</span>
@@ -108,7 +115,9 @@ export function VersionDetail({ detail }: VersionDetailProps) {
       )}
 
       <section aria-label="Run history" className="flex flex-col gap-3">
-        <SectionLabel variant="panel" as="h3">Run history</SectionLabel>
+        <SectionLabel variant="panel" as="h3">
+          Run history
+        </SectionLabel>
         {/* As many 10rem columns as fit, so the cards wrap rather than squeeze. */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
           {stats.map((stat) => (

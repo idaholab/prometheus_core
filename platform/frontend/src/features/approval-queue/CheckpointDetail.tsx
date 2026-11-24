@@ -71,7 +71,13 @@ export function CheckpointDetail({ checkpoint }: CheckpointDetailProps) {
       </header>
 
       <div className="flex min-w-0 flex-col gap-4">
-        <Tabs tabs={DETAIL_TABS} selected={tab} onChange={setTab} label="Checkpoint details" panelId={panelId} />
+        <Tabs
+          tabs={DETAIL_TABS}
+          selected={tab}
+          onChange={setTab}
+          label="Checkpoint details"
+          panelId={panelId}
+        />
         <div id={panelId} role="tabpanel" aria-label={tabLabel} className="min-w-0">
           {tab === "artifact-preview" && artifact ? (
             <ArtifactPreview artifact={artifact} />

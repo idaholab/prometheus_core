@@ -46,7 +46,12 @@ function Harness({ items }: { items: readonly Item[] }) {
   const filter = useListFilter(items, CONFIG);
   return (
     <>
-      <SearchInput placeholder="Search" label="Search items" value={filter.query} onChange={filter.setQuery} />
+      <SearchInput
+        placeholder="Search"
+        label="Search items"
+        value={filter.query}
+        onChange={filter.setQuery}
+      />
       <FilterChips chips={CHIPS} selected={filter.facet} label="Kind" onSelect={filter.setFacet} />
       <ul aria-label="Items">
         {filter.visible.map((item) => (

@@ -29,7 +29,9 @@ test("the header shows the version, where it came from and Restore", () => {
 test("each change reads with its kind, and the invalidation is shown", () => {
   render(<VersionDetail detail={V120} />);
 
-  const changes = within(screen.getByRole("region", { name: "Changes in this version" })).getAllByRole("listitem");
+  const changes = within(screen.getByRole("region", { name: "Changes in this version" })).getAllByRole(
+    "listitem",
+  );
   expect(changes.map((item) => item.textContent)).toEqual([
     "+Added: Added QA Gate checkpoint after the parallel analyses",
     "~Changed: SME Review moved below the new QA Gate",
@@ -50,7 +52,10 @@ test("run history has a stat card for each figure, and the projects it ran in", 
     "StatusActivecurrent latest",
   ]);
   const projects = within(within(runs).getByRole("list", { name: "Run in" })).getAllByRole("listitem");
-  expect(projects.map((item) => item.textContent)).toEqual(["MARVEL Reactor Project9 runs", "Fuel Assembly QA — RC-73 runs"]);
+  expect(projects.map((item) => item.textContent)).toEqual([
+    "MARVEL Reactor Project9 runs",
+    "Fuel Assembly QA — RC-73 runs",
+  ]);
 });
 
 test("Restore this version does nothing yet and logs no errors", async () => {

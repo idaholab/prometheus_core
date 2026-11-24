@@ -16,4 +16,5 @@ export { Chat } from "./Chat";
 export { ChatHistory } from "./ChatHistory";
 export { ChatTypeSelect } from "./ChatTypeSelect";
 export { chatStore, useAuthLost, useChatState } from "./store/chat";
+export type { ChatState } from "./store/chat";
 export { chatProfileName, useChatType } from "./useChatType";

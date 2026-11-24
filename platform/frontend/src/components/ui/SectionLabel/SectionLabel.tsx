@@ -44,9 +44,7 @@ export function SectionLabel({
   className = "",
 }: SectionLabelProps) {
   return (
-    <Heading
-      className={`m-0 font-normal uppercase leading-normal ${VARIANT_CLASSES[variant]} ${className}`}
-    >
+    <Heading className={`m-0 font-normal uppercase leading-normal ${VARIANT_CLASSES[variant]} ${className}`}>
       {children}
     </Heading>
   );

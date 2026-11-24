@@ -22,14 +22,23 @@ const mermaid = vi.hoisted(() => ({
 vi.mock("mermaid", () => ({ default: mermaid }));
 
 // jsdom has no matchMedia; useTheme reads it when data-theme is unset.
-vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+}));
 
 import { MermaidElement } from "./MermaidElement.tsx";
 
 const renderDiagram = () =>
   render(
     <MermaidElement
-      element={{ type: "custom", name: "MermaidViewer", props: { diagram: "graph TD\n  A-->B", title: "flow" } }}
+      element={{
+        type: "custom",
+        name: "MermaidViewer",
+        props: { diagram: "graph TD\n  A-->B", title: "flow" },
+      }}
     />,
   );
 

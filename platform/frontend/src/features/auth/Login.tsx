@@ -74,11 +74,7 @@ export function Login({ onSuccess }: Props) {
   };
 
   return (
-    <LayoutAuth
-      title="Sign in"
-      subtitle="Enter your INL credentials to continue"
-      onSubmit={handleSubmit}
-    >
+    <LayoutAuth title="Sign in" subtitle="Enter your INL credentials to continue" onSubmit={handleSubmit}>
       <AuthError message={error} />
 
       <AuthField

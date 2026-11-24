@@ -26,12 +26,10 @@
 
 // A piece of an insulated-metal-panel wall face: the capture is the panel name,
 // e.g. "Envelope Panel - Side Wall at X Max"; the second group is the layer.
-export const WALL_PANEL_PIECE =
-  /^(Envelope Panel - (?:Side|End) Wall .+) - (Outer Skin|Core|Inner Liner)$/i;
+export const WALL_PANEL_PIECE = /^(Envelope Panel - (?:Side|End) Wall .+) - (Outer Skin|Core|Inner Liner)$/i;
 
 // The roof is authored identically to a wall face.
-export const ROOF_PANEL_PIECE =
-  /^(Envelope Panel - Roof.*) - (Outer Skin|Core|Inner Liner)$/i;
+export const ROOF_PANEL_PIECE = /^(Envelope Panel - Roof.*) - (Outer Skin|Core|Inner Liner)$/i;
 
 // Flashing closing the joints. Corner flashing runs vertically between two wall
 // faces, so it follows the walls; eave/rake flashing caps the roof edge.
@@ -100,9 +98,7 @@ function groupPanelPieces(
 
   const groups: NameGroup[] = [];
   for (const [label, members] of panels) {
-    members.sort(
-      (a, b) => PIECE_ORDER.indexOf(a.label) - PIECE_ORDER.indexOf(b.label),
-    );
+    members.sort((a, b) => PIECE_ORDER.indexOf(a.label) - PIECE_ORDER.indexOf(b.label));
     groups.push({ label, members });
   }
   groups.sort(byLabel);
@@ -116,31 +112,18 @@ function groupPanelPieces(
 }
 
 export function groupWallPieces(items: NamedItem[]): NameGroup[] {
-  return groupPanelPieces(
-    items,
-    WALL_PANEL_PIECE,
-    CORNER_FLASHING,
-    "Corner Flashing",
-  );
+  return groupPanelPieces(items, WALL_PANEL_PIECE, CORNER_FLASHING, "Corner Flashing");
 }
 
 export function groupRoofPieces(items: NamedItem[]): NameGroup[] {
-  return groupPanelPieces(
-    items,
-    ROOF_PANEL_PIECE,
-    EDGE_FLASHING,
-    "Eave & Rake Flashing",
-  );
+  return groupPanelPieces(items, ROOF_PANEL_PIECE, EDGE_FLASHING, "Eave & Rake Flashing");
 }
 
 // Each column becomes a group with the column shaft as its first member and its
 // base-plate assembly (plate + anchor bolts + hex nuts) nested under it, matched
 // by the "Base Plate for <column name>" prefix. Returns [] when no column has
 // any base-plate member, so the caller keeps the flat Columns toggle.
-export function groupColumnsWithBasePlates(
-  columns: NamedItem[],
-  candidates: NamedItem[],
-): NameGroup[] {
+export function groupColumnsWithBasePlates(columns: NamedItem[], candidates: NamedItem[]): NameGroup[] {
   // Column name → the base-plate pieces bolted to it.
   const platesByColumn = new Map<string, { id: number; label: string }[]>();
   for (const cand of candidates) {

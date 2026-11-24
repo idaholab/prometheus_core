@@ -135,8 +135,7 @@ const ViewerOverlayPanels: React.FC<Props> = ({
     camera: true,
     download: true,
   });
-  const toggleSection = (id: string) =>
-    setSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleSection = (id: string) => setSections((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const toggleGroupOpen = (groupKey: string) =>
@@ -149,9 +148,7 @@ const ViewerOverlayPanels: React.FC<Props> = ({
   const hasEquipment = !!equipment && equipment.items.length > 0;
   const groupSections: GroupSectionData[] = [
     ...(elementGroups ?? []),
-    ...(pipes && pipes.groups.length > 0
-      ? [{ key: "pipes", title: "Pipe Runs", ...pipes }]
-      : []),
+    ...(pipes && pipes.groups.length > 0 ? [{ key: "pipes", title: "Pipe Runs", ...pipes }] : []),
   ].filter((s) => s.groups.length > 0);
   const hasDownloads = !!downloads && downloads.length > 0;
 
@@ -353,14 +350,7 @@ type FloatingPanelProps = {
   children: React.ReactNode;
 };
 
-const FloatingPanel: React.FC<FloatingPanelProps> = ({
-  title,
-  icon,
-  side,
-  open,
-  onToggleOpen,
-  children,
-}) => {
+const FloatingPanel: React.FC<FloatingPanelProps> = ({ title, icon, side, open, onToggleOpen, children }) => {
   const posClass = side === "left" ? "left-2" : "right-2";
 
   if (!open) {
@@ -405,13 +395,7 @@ type SectionProps = {
   children: React.ReactNode;
 };
 
-const Section: React.FC<SectionProps> = ({
-  title,
-  icon,
-  isOpen,
-  onToggleOpen,
-  children,
-}) => (
+const Section: React.FC<SectionProps> = ({ title, icon, isOpen, onToggleOpen, children }) => (
   <div className="border-b border-base-300 last:border-b-0">
     <button
       type="button"
@@ -464,9 +448,7 @@ const ListSection: React.FC<ListSectionProps> = ({
               ) : (
                 <EyeOff size={14} className="text-base-content/40 shrink-0" />
               )}
-              <span className={on ? "" : "text-base-content/40 line-through"}>
-                {item.label}
-              </span>
+              <span className={on ? "" : "text-base-content/40 line-through"}>{item.label}</span>
             </button>
           </li>
         );
@@ -490,10 +472,7 @@ type GroupedTreeSectionProps = {
 
 type GroupState = "all" | "none" | "mixed";
 
-function getGroupState(
-  group: TreeGroup,
-  memberVisibility: Record<string, boolean>,
-): GroupState {
+function getGroupState(group: TreeGroup, memberVisibility: Record<string, boolean>): GroupState {
   if (group.members.length === 0) return "none";
   const onCount = group.members.filter((m) => memberVisibility[m.key]).length;
   if (onCount === 0) return "none";
@@ -502,10 +481,8 @@ function getGroupState(
 }
 
 const GroupEyeIcon: React.FC<{ state: GroupState }> = ({ state }) => {
-  if (state === "all")
-    return <Eye size={14} className="text-primary shrink-0" />;
-  if (state === "none")
-    return <EyeOff size={14} className="text-base-content/40 shrink-0" />;
+  if (state === "all") return <Eye size={14} className="text-primary shrink-0" />;
+  if (state === "none") return <EyeOff size={14} className="text-base-content/40 shrink-0" />;
   return <Minus size={14} className="text-warning shrink-0" />;
 };
 
@@ -547,11 +524,7 @@ const GroupedTreeSection: React.FC<GroupedTreeSectionProps> = ({
                   onClick={() => onToggleGroupOpen(group.key)}
                   disabled={disabled}
                 >
-                  {groupOpen ? (
-                    <ChevronDown size={12} />
-                  ) : (
-                    <ChevronRight size={12} />
-                  )}
+                  {groupOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
                 <button
                   type="button"
@@ -560,13 +533,7 @@ const GroupedTreeSection: React.FC<GroupedTreeSectionProps> = ({
                   onClick={() => onToggleGroup(group.key)}
                 >
                   <GroupEyeIcon state={groupState} />
-                  <span
-                    className={
-                      groupState === "none"
-                        ? "text-base-content/40 line-through"
-                        : ""
-                    }
-                  >
+                  <span className={groupState === "none" ? "text-base-content/40 line-through" : ""}>
                     {group.label}
                   </span>
                 </button>
@@ -586,16 +553,9 @@ const GroupedTreeSection: React.FC<GroupedTreeSectionProps> = ({
                           {on ? (
                             <Eye size={13} className="text-primary shrink-0" />
                           ) : (
-                            <EyeOff
-                              size={13}
-                              className="text-base-content/40 shrink-0"
-                            />
+                            <EyeOff size={13} className="text-base-content/40 shrink-0" />
                           )}
-                          <span
-                            className={
-                              on ? "" : "text-base-content/40 line-through"
-                            }
-                          >
+                          <span className={on ? "" : "text-base-content/40 line-through"}>
                             {member.label}
                           </span>
                         </button>

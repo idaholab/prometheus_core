@@ -29,8 +29,5 @@ test("uses an artifact description as the visible label without changing its fil
 });
 
 test("uses the filename when the artifact has no description", () => {
-  assert.deepEqual(
-    artifactFilePresentation({ name: "valve.e" }),
-    { label: "valve.e", filename: "valve.e" },
-  );
+  assert.deepEqual(artifactFilePresentation({ name: "valve.e" }), { label: "valve.e", filename: "valve.e" });
 });

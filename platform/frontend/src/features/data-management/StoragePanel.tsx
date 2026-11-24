@@ -90,7 +90,15 @@ const COLUMNS: DataTableColumn<ArtifactRow>[] = [
  * The artifact storage bar and the generated artifacts registry. Props only;
  * the chips report the selected artifact type, and the run IDs do nothing yet.
  */
-export function StoragePanel({ usedLabel, totalLabel, percent, artifacts, selectedType, onSelectType, noMatches }: Props) {
+export function StoragePanel({
+  usedLabel,
+  totalLabel,
+  percent,
+  artifacts,
+  selectedType,
+  onSelectType,
+  noMatches,
+}: Props) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="card min-w-0 bg-base-200 border border-base-300">

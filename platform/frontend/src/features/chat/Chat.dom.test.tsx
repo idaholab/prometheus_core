@@ -42,7 +42,10 @@ vi.mock("@/lib/api/client", () => {
       this.name = "ApiError";
     }
   }
-  return { ApiError: StubApiError, api: { uploadFile: mocks.uploadFile } };
+  return {
+    ApiError: StubApiError,
+    api: { uploadFile: mocks.uploadFile, artifactContentUrl: (id: string) => `/api/artifacts/${id}/content` },
+  };
 });
 
 // jsdom has no ResizeObserver; Chat observes the message list once it has messages.
@@ -331,5 +334,68 @@ describe("composer_drag_state", () => {
 
     expect(dropOnWindow(["Files"]).defaultPrevented).toBe(true);
     expect(dropOnWindow(["text/plain", "text/uri-list"]).defaultPrevented).toBe(false);
+  });
+});
+
+describe("needs_info_renders_turn_artifacts", () => {
+  test("artifacts produced before a follow-up form render with it", () => {
+    renderChat({
+      items: [
+        {
+          id: "ni-1",
+          kind: "needs_info",
+          turnId: "t1",
+          message: "Gate 2: approve?",
+          fields: [{ id: "gate_action", label: "Decision?", input_type: "text", required: true }],
+          artifacts: [
+            {
+              artifact_id: "a1",
+              name: "criterion_status.png",
+              mime_type: "image/png",
+              description: "Criterion status chart",
+              tags: [],
+              render_hint: "image",
+            },
+          ],
+          submitted: false,
+        },
+      ] as ComposerState["items"],
+    });
+    const message = screen.getByText("Gate 2: approve?");
+    const img = document.querySelector('img[src="/api/artifacts/a1/content"]');
+    const form = document.querySelector("form");
+    expect(img).not.toBeNull();
+    expect(form).not.toBeNull();
+    // Between the message and the form.
+    expect(message.compareDocumentPosition(img!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(img!.compareDocumentPosition(form!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("a panel-only artifact on a form isn't rendered above it", () => {
+    const image = (id: string, display?: "panel") => ({
+      artifact_id: id,
+      name: `${id}.png`,
+      mime_type: "image/png",
+      description: "",
+      tags: [],
+      render_hint: "image",
+      ...(display ? { display } : {}),
+    });
+    renderChat({
+      items: [
+        {
+          id: "ni-1",
+          kind: "needs_info",
+          turnId: "t1",
+          message: "Gate 2: approve?",
+          fields: [{ id: "gate_action", label: "Decision?", input_type: "text", required: true }],
+          artifacts: [image("inline"), image("side", "panel")],
+          submitted: false,
+        },
+      ] as ComposerState["items"],
+    });
+    expect(document.querySelector('img[src="/api/artifacts/inline/content"]')).not.toBeNull();
+    expect(document.querySelector('img[src="/api/artifacts/side/content"]')).toBeNull();
+    expect(screen.queryByText("side.png")).toBeNull();
   });
 });
