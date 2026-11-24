@@ -26,8 +26,7 @@
 const FILE_PREFIX = "file://";
 
 export type ResolvedUri =
-  | { ok: true; url: string }
-  | { ok: false; reason: "unsupported_scheme" | "needs_server_proxy"; uri: string };
+  { ok: true; url: string } | { ok: false; reason: "unsupported_scheme" | "needs_server_proxy"; uri: string };
 
 /**
  * Resolve an artifact URI to something a <img>/<iframe>/fetch() can use.

@@ -44,15 +44,11 @@ function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
     >
       <div className="card-body gap-1.5 p-3">
         <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 truncate text-sm font-semibold text-base-content">
-            {artifact.name}
-          </span>
+          <span className="min-w-0 truncate text-sm font-semibold text-base-content">{artifact.name}</span>
           <Tag mono label={artifact.render_hint} />
         </div>
         {artifact.description && (
-          <p className="m-0 line-clamp-2 text-xs leading-snug text-base-content/60">
-            {artifact.description}
-          </p>
+          <p className="m-0 line-clamp-2 text-xs leading-snug text-base-content/60">{artifact.description}</p>
         )}
       </div>
     </a>
@@ -109,7 +105,7 @@ interface StatusPanelProps {
  * Collapses to a 64px icon rail (Figma `status-rail-collapsed`), symmetric with
  * the left sidebar: a PanelRight toggle on top, then one icon per tab. Clicking
  * a tab icon expands the rail straight to that tab. The open/closed width lives
- * on Home's `<aside>`; `tab` stays here so it survives a collapse/expand.
+ * on LayoutHome's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
 export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");

@@ -12,8 +12,8 @@
 
 import { useState } from "react";
 import { usePageHeader } from "@/features/shell";
-import { WorkflowBuilder } from "@/features/workflows";
-import { WorkflowConsole } from "@/features/workflows";
+import { LayoutWorkflowBuilder } from "@/features/workflows";
+import { LayoutWorkflowConsole } from "@/features/workflows";
 import type { BuilderMode, WorkflowGraphNode, WorkflowGraphWire } from "@/features/workflows";
 import type { WorkflowPlan } from "@/features/workflows";
 import type { WorkflowTemplate } from "@/features/workflows";
@@ -35,32 +35,67 @@ const EXAMPLE_NODES: WorkflowGraphNode[] = [
     id: "retrieve",
     type: "agent",
     position: { x: 286, y: 16 },
-    data: { name: "Retrieve Material", status: "done", input: "material_id", output: "material_data", est: "8s", width: 200 },
+    data: {
+      name: "Retrieve Material",
+      status: "done",
+      input: "material_id",
+      output: "material_data",
+      est: "8s",
+      width: 200,
+    },
   },
   {
     id: "radiation",
     type: "agent",
     position: { x: 94, y: 190 },
-    data: { name: "Radiation", status: "queued", input: "material_data", output: "rad_result", est: "40s", width: 176 },
+    data: {
+      name: "Radiation",
+      status: "queued",
+      input: "material_data",
+      output: "rad_result",
+      est: "40s",
+      width: 176,
+    },
   },
   {
     id: "corrosion",
     type: "agent",
     position: { x: 298, y: 190 },
-    data: { name: "Corrosion", status: "queued", input: "material_data", output: "corr_result", est: "35s", width: 176 },
+    data: {
+      name: "Corrosion",
+      status: "queued",
+      input: "material_data",
+      output: "corr_result",
+      est: "35s",
+      width: 176,
+    },
   },
   {
     id: "thermal",
     type: "agent",
     position: { x: 502, y: 190 },
-    data: { name: "Thermal", status: "queued", input: "material_data", output: "therm_result", est: "50s", width: 176 },
+    data: {
+      name: "Thermal",
+      status: "queued",
+      input: "material_data",
+      output: "therm_result",
+      est: "50s",
+      width: 176,
+    },
   },
   { id: "sme-review", type: "checkpoint", position: { x: 365, y: 359 }, data: { name: "SME Review" } },
   {
     id: "synthesize",
     type: "agent",
     position: { x: 276, y: 460 },
-    data: { name: "Synthesize Report", status: "blocked", input: "3 results", output: "final_report", est: "15s", width: 220 },
+    data: {
+      name: "Synthesize Report",
+      status: "blocked",
+      input: "3 results",
+      output: "final_report",
+      est: "15s",
+      width: 220,
+    },
   },
 ];
 const EXAMPLE_WIRES: WorkflowGraphWire[] = [
@@ -141,12 +176,12 @@ type BuilderStart = { mode: BuilderMode; isNew: boolean };
 /**
  * Workflows section page: owns the page's data and header, and which view is
  * showing: the Workflow Console, or the Builder opened from its "Modify Plan"
- * (in either mode) or "+ New Workflow". Layout lives in WorkflowConsole and
- * WorkflowBuilder.
+ * (in either mode) or "+ New Workflow". Layout lives in LayoutWorkflowConsole and
+ * LayoutWorkflowBuilder.
  *
- * Until the router lands (RT-1), the Builder is a view here rather than its
- * own route. ProjectView remounts this page on every sidebar click, so
- * clicking Workflows from the Builder returns to the Console.
+ * The Builder is a view here rather than its own route until PPLT-240 gives
+ * it a URL. LayoutApp remounts this page on every sidebar click, so clicking
+ * Workflows from the Builder returns to the Console.
  */
 export function PageWorkflows() {
   const [builder, setBuilder] = useState<BuilderStart | null>(null);
@@ -170,7 +205,7 @@ function ConsoleView({
 }) {
   usePageHeader({ title: "Workflow Console" });
   return (
-    <WorkflowConsole
+    <LayoutWorkflowConsole
       templates={TEMPLATES}
       selectedId={SELECTED_TEMPLATE_ID}
       plan={EXAMPLE_PLAN}
@@ -192,7 +227,7 @@ function BuilderView({ start }: { start: BuilderStart }) {
     if (next === "run") setUnsaved(false);
   };
   return (
-    <WorkflowBuilder
+    <LayoutWorkflowBuilder
       // Placeholder name until naming a new workflow is designed. D.3 keeps the template's.
       name={SELECTED_TEMPLATE_NAME}
       mode={mode}

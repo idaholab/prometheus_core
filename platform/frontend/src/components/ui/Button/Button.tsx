@@ -11,6 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import type { ReactNode } from "react";
+import { useNavigate } from "react-router";
 import { buttonClassName, type ButtonSize, type ButtonStyle } from "./buttonStyle";
 
 export type { ButtonSize, ButtonStyle, ButtonVariant } from "./buttonStyle";
@@ -45,8 +46,8 @@ const TOOLTIP_PLACEMENT_CLASSES = {
 interface ButtonCommonProps extends ButtonStyle {
   onClick?: () => void;
   /**
-   * Route to open on click. Not wired yet: until the router lands, buttons
-   * that navigate should pass `onClick` instead.
+   * Route to open on click, after `onClick` if both are set. Use a path from
+   * app/paths.ts. A button with `navTo` must render inside the router.
    */
   navTo?: string;
   disabled?: boolean;
@@ -94,6 +95,27 @@ type ButtonProps = TextButtonProps | IconButtonProps;
  * `muted={false}`), primary only when `active`.
  */
 export function Button(props: ButtonProps) {
+  // Only a button with navTo uses the router, so the rest render anywhere
+  // (tests, the dev review pages) without one.
+  if (props.navTo) return <NavButton {...props} navTo={props.navTo} />;
+  return <ButtonView {...props} />;
+}
+
+function NavButton(props: ButtonProps & { navTo: string }) {
+  const navigate = useNavigate();
+  const { onClick, navTo } = props;
+  return (
+    <ButtonView
+      {...props}
+      onClick={() => {
+        onClick?.();
+        void navigate(navTo);
+      }}
+    />
+  );
+}
+
+function ButtonView(props: ButtonProps) {
   const {
     label,
     icon,
@@ -108,14 +130,6 @@ export function Button(props: ButtonProps) {
     className = "",
   } = props;
   const iconOnly = label === undefined;
-
-  // TODO(router): wire up navTo once the router lands; until then, buttons
-  // that navigate pass onClick.
-  // const navigate = useNavigate();
-  const handleClick = () => {
-    onClick?.();
-    // if (!onClick && props.navTo) navigate(props.navTo);
-  };
 
   const iconSize = ICON_SIZE_CLASSES[size];
   const iconSlot = loading ? (
@@ -148,7 +162,7 @@ export function Button(props: ButtonProps) {
     <button
       type={type}
       className={classes}
-      onClick={handleClick}
+      onClick={onClick}
       disabled={disabled || loading}
       aria-label={iconOnly ? props.ariaLabel : undefined}
       aria-pressed={active || undefined}

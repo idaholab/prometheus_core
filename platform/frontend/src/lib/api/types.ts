@@ -46,15 +46,7 @@ export type RenderHint =
   | "unknown";
 
 export type FieldInputType =
-  | "text"
-  | "number"
-  | "email"
-  | "password"
-  | "date"
-  | "datetime"
-  | "textarea"
-  | "select"
-  | "checkbox";
+  "text" | "number" | "email" | "password" | "date" | "datetime" | "textarea" | "select" | "checkbox";
 
 // --- needs_info form schema -------------------------------------------------
 

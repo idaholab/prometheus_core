@@ -28,7 +28,10 @@ const row = (conversation_id: string, query: string): HistoryRowLike => ({
   pending: false,
 });
 
-const serverRows = (): HistoryRowLike[] => [row("older-1", "first older chat"), row("older-2", "second older chat")];
+const serverRows = (): HistoryRowLike[] => [
+  row("older-1", "first older chat"),
+  row("older-2", "second older chat"),
+];
 
 const open = (overrides: Partial<OpenConversation> = {}): OpenConversation => ({
   conversationId: "new-chat",

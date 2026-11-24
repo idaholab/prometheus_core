@@ -34,26 +34,24 @@ After confirmation, it creates a new directory with all files ready to go.
 
 ### Run the generated agent
 
-=== "pip"
-
-    ```bash
-    cd <output-directory>
-    cp .env.example .env          # edit with your settings
-    pip install -r requirements.txt
-    python agent.py
-    ```
-
 === "uv"
 
     ```bash
-    cd ../<output-directory> && uv run agent.py
+    cd ../<output-directory>
+    cp .env.example .env          # only if setup didn't create one
+    uv sync && source .venv/bin/activate
+    AGENT_SECRET_REQUIRED=false python agent.py
     ```
 
-=== "Docker
+    Install `prometheus_api` at the platform's commit first; the
+    [agent template README](https://github.com/idaholab/prometheus_core/blob/devel/agent-template/README.md#run-it)
+    has the command.
+
+=== "Docker"
 
     ```bash
-    docker build -t my-agent .
-    docker run -p 8000:8000 --env-file .env my-agent
+    cd ../<output-directory>
+    make up                       # set PROMETHEUS_API_BASE_IMAGE_HASH in .env first
     ```
 
 ## Generated files
@@ -62,13 +60,17 @@ The template produces these files:
 
 | File | Purpose |
 |------|---------|
-| `agent.py` | Agent implementation -- subclass of `PrometheusAgent` with `process_analysis()` to customize |
+| `agent.py` | Agent implementation -- subclass of `PrometheusAgent` with `_execute()` to customize |
 | `agent_card.json` | A2A agent metadata (name, description, skills, capabilities) |
+| `prompts/` | LLM prompt templates, loaded with `load_prompt()` |
 | `workflows/` | Optional agent-owned workflow templates published through the served agent card |
 | `.env.example` | Environment variable template |
-| `Dockerfile` | Container config with health check and proxy support |
-| `requirements.txt` | Python dependencies (`a2a-sdk`, `pydantic`, `httpx`, `uvicorn`, `prometheus-api[agent]`) |
-| `pyproject.toml` | Package metadata |
+| `Dockerfile` | Container build on the Prometheus SDK base image, with proxy build args |
+| `docker-compose.yml` | Service definition with the `/healthz` health check; `docker-compose.net_*.yml` select the network mode |
+| `Makefile` | `make up`, `make up-fg`, tests and checks |
+| `pyproject.toml` | Package metadata and Python dependencies |
+| `uv.lock` | Locked dependency versions; the Docker build installs from it |
+| `tests/` | pytest tests for the agent |
 | `README.md` | Agent-specific documentation |
 | `.python-version` | Pinned to 3.12 |
 
@@ -88,7 +90,7 @@ The setup script replaces these tokens across all files:
 
 ## Customizing the agent
 
-### Override `process_analysis`
+### Override `_execute`
 
 The only method you need to implement:
 
@@ -96,7 +98,7 @@ The only method you need to implement:
 from prometheus_api.agent import PrometheusAgent
 
 class MyAgent(PrometheusAgent):
-    async def process_analysis(self, params, context, event_queue):
+    async def _execute(self, params, context, event_queue):
         input_data = params.get("input_data")
         if not input_data:
             raise ValueError("input_data is required")
@@ -109,22 +111,11 @@ class MyAgent(PrometheusAgent):
 
 ### Send progress updates
 
-For long-running tasks:
+For long-running tasks, use the base class helper rather than building A2A events by hand:
 
 ```python
-from prometheus_api.agent import (
-    TaskState, TaskStatus, TaskStatusUpdateEvent,
-)
-
-async def process_analysis(self, params, context, event_queue):
-    await event_queue.enqueue_event(
-        TaskStatusUpdateEvent(
-            taskId=context.task_id,
-            contextId=context.context_id,
-            final=False,
-            status=TaskStatus(state=TaskState.working),
-        )
-    )
+async def _execute(self, params, context, event_queue):
+    await self.send_status_update(context, event_queue, message="Loading input data...")
     # ... continue processing
 ```
 
@@ -174,7 +165,7 @@ class MyAgent(PrometheusAgent):
         super().__init__("My Agent")
         self.storage_config = ConnectionConfig.from_env()
 
-    async def process_analysis(self, params, context, event_queue):
+    async def _execute(self, params, context, event_queue):
         with StorageClient(self.storage_config) as client:
             item = client.items.create(ItemCreate(
                 name="Analysis Result",
@@ -204,9 +195,11 @@ See `.env.example` for the full list including proxy settings.
 
 The generated Dockerfile:
 
-- Base image: `python:3.11-slim`
-- Supports `HTTP_PROXY` / `HTTPS_PROXY` build args
-- Health check on `/healthz` endpoint every 30 seconds
+- Base image: the Prometheus SDK image, `${PROMETHEUS_API_BASE_IMAGE_REPO}:${PROMETHEUS_API_BASE_IMAGE_HASH}`, which bundles Python 3.12 and `prometheus_api`. Change the hash, not the `FROM` line.
+- Installs dependencies from `uv.lock` (`uv sync --locked`); the build stops if `uv.lock` is missing
+- Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` build args
+
+The health check on `/healthz` is in the generated `docker-compose.yml` (every 15 seconds), not the Dockerfile.
 
 ### Docker Compose (multi-agent)
 

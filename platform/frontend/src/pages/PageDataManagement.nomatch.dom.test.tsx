@@ -16,7 +16,7 @@ import { expect, test, vi } from "vitest";
 import { PageDataManagement } from "./PageDataManagement.tsx";
 
 /* The real store with every mesh artifact removed, so the Meshes chip matches nothing.
- * The sources stay, so the page status stays "ready". The barrel and DataManagement
+ * The sources stay, so the page status stays "ready". The barrel and LayoutDataManagement
  * import this same module, so the mock reaches the page. */
 vi.mock("@/features/data-management/store/dataManagement", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/features/data-management/store/dataManagement")>();
@@ -39,7 +39,9 @@ vi.mock("@/features/data-management/store/dataManagement", async (importOriginal
 const CHIP_NAMES = ["All", "Reports", "Meshes", "Results"];
 
 function bodyRows(): HTMLElement[] {
-  return within(screen.getByRole("table", { name: "Generated artifacts" })).getAllByRole("row").slice(1);
+  return within(screen.getByRole("table", { name: "Generated artifacts" }))
+    .getAllByRole("row")
+    .slice(1);
 }
 
 function chips(): HTMLElement {
@@ -58,7 +60,11 @@ test("data management: a type chip with no artifact shows No matching artifacts.
   expect(bodyRows()).toHaveLength(0);
   expect(screen.getByText("No matching artifacts.")).toBeInTheDocument();
   expect(screen.queryByText("No rows yet.")).not.toBeInTheDocument();
-  expect(within(chips()).getAllByRole("button").map((b) => b.textContent)).toEqual(CHIP_NAMES);
+  expect(
+    within(chips())
+      .getAllByRole("button")
+      .map((b) => b.textContent),
+  ).toEqual(CHIP_NAMES);
   expect(within(chips()).getByRole("button", { name: "Meshes" })).toHaveAttribute("aria-pressed", "true");
 
   await user.click(within(chips()).getByRole("button", { name: "All" }));

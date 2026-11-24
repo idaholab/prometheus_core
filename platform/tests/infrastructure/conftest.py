@@ -72,15 +72,19 @@ def infrastructure_services() -> set[str]:
 
 
 def _extract_compose_var_refs(compose_text: str) -> list[tuple[str, bool]]:
-    """Extract all ${VAR}, ${VAR:-default} and ${VAR:?error} references from compose file.
+    """Extract all ${VAR}, ${VAR:-default}, ${VAR:+alt} and ${VAR:?error} references from compose file.
 
     Returns list of (var_name, has_default) tuples. ``:?`` makes a var required, so it
-    has no default.
+    has no default. ``:+`` is blank while the var is unset, so it counts as having one,
+    and so does the ``${VAR}`` inside ``${VAR:+${VAR}:}``, which is only read when set.
     """
     results = []
-    for match in re.finditer(r"\$\{([^}]+)\}", compose_text):
+    optional = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\+", compose_text))
+    for match in re.finditer(r"\$\{([^${}]+)\}", compose_text):
         expr = match.group(1)
-        if ":-" in expr:
+        if expr in optional:
+            results.append((expr, True))
+        elif ":-" in expr:
             var_name = expr.split(":-")[0]
             results.append((var_name, True))
         elif ":?" in expr:

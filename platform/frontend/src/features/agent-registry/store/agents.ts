@@ -31,14 +31,7 @@ export const AGENT_DOMAINS = [
 ] as const;
 export type AgentDomain = (typeof AGENT_DOMAINS)[number];
 export type AgentIcon =
-  | "box"
-  | "grid"
-  | "activity"
-  | "wind"
-  | "thermometer"
-  | "shield"
-  | "database"
-  | "file-text";
+  "box" | "grid" | "activity" | "wind" | "thermometer" | "shield" | "database" | "file-text";
 
 export interface Agent {
   id: string;

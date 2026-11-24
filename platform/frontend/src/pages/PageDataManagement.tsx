@@ -12,12 +12,12 @@
 
 import { ARTIFACT_FILTER, toggleSource, useDataManagement } from "@/features/data-management";
 import { usePageHeader } from "@/features/shell";
-import { DataManagement } from "@/features/data-management";
+import { LayoutDataManagement } from "@/features/data-management";
 import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Data Management section page: owns the page's data, header and artifact filter
- * state. Layout lives in DataManagement. Route params will land here with the router.
+ * state. Layout lives in LayoutDataManagement. Route params go here.
  */
 export function PageDataManagement() {
   usePageHeader({ title: "Data Sources & Artifact Persistence" });
@@ -26,7 +26,7 @@ export function PageDataManagement() {
   const { facet, setFacet, visible, noMatches } = useListFilter(artifacts, ARTIFACT_FILTER);
 
   return (
-    <DataManagement
+    <LayoutDataManagement
       status={status}
       sources={sources}
       storage={storage}

@@ -10,7 +10,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { countMembersByRole, type ProjectManagementState, type TeamMember } from "./store/projectManagementModel";
+import {
+  countMembersByRole,
+  type ProjectManagementState,
+  type TeamMember,
+} from "./store/projectManagementModel";
 import { Users } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RbacSection } from "./RbacSection";
@@ -32,7 +36,7 @@ type ProjectManagementProps = ProjectManagementState & {
  * registry and the role-based access control schema. Display only;
  * PageProjectManagement supplies the data and the header title.
  */
-export function ProjectManagement(props: ProjectManagementProps) {
+export function LayoutProjectManagement(props: ProjectManagementProps) {
   return <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{renderBody(props)}</div>;
 }
 
@@ -60,7 +64,13 @@ function renderBody({
     );
   }
   if (status === "empty") {
-    return <EmptyState icon={<Users size={24} />} title="No team members yet" hint="Invited users will display here" />;
+    return (
+      <EmptyState
+        icon={<Users size={24} />}
+        title="No team members yet"
+        hint="Invited users will display here"
+      />
+    );
   }
   return (
     <div className="flex flex-col gap-8 px-6 py-6">

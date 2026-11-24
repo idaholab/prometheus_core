@@ -163,8 +163,21 @@ export function AdminUsers() {
                     {user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "never"}
                   </td>
                   <td className="flex gap-1 justify-end">
-                    <Button variant="ghost" size="xs" icon={<Pencil />} ariaLabel="Edit user" onClick={() => openEdit(user)} />
-                    <Button variant="error" soft size="xs" icon={<Trash2 />} ariaLabel="Delete user" onClick={() => handleDelete(user)} />
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<Pencil />}
+                      ariaLabel="Edit user"
+                      onClick={() => openEdit(user)}
+                    />
+                    <Button
+                      variant="error"
+                      soft
+                      size="xs"
+                      icon={<Trash2 />}
+                      ariaLabel="Delete user"
+                      onClick={() => handleDelete(user)}
+                    />
                   </td>
                 </tr>
               ))}

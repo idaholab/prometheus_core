@@ -20,8 +20,20 @@ const setBackground = vi.hoisted(() => vi.fn());
 
 // jsdom has no matchMedia (useTheme reads it when data-theme is unset) and no
 // ResizeObserver (the overlay panels use it).
-vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
-vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: false,
+  media: query,
+  addEventListener() {},
+  removeEventListener() {},
+}));
 
 vi.mock("./IFCViewer", () => ({
   default: forwardRef<object, { onLoad?: () => void }>(function StubViewer({ onLoad }, ref) {
@@ -30,6 +42,9 @@ vi.mock("./IFCViewer", () => ({
       enumerateCategories: async () => [],
       enumerateEquipment: async () => [],
       enumeratePipeRuns: async () => [],
+      enumerateWallGroups: async () => [],
+      enumerateRoofGroups: async () => [],
+      enumerateColumnGroups: async () => [],
     }));
     // Load once, as the real engine does: the element passes a new handler each render.
     const onLoadRef = useRef(onLoad);
@@ -46,7 +61,9 @@ const DARK = [0.08, 0.08, 0.12];
 const LIGHT = [0.91, 0.91, 0.94];
 
 const renderModel = () =>
-  render(<IFCViewerElement element={{ type: "custom", name: "IFCViewer", props: { fileUrl: "/model.ifc" } }} />);
+  render(
+    <IFCViewerElement element={{ type: "custom", name: "IFCViewer", props: { fileUrl: "/model.ifc" } }} />,
+  );
 
 const lastBackground = () => setBackground.mock.calls.at(-1)?.[0];
 

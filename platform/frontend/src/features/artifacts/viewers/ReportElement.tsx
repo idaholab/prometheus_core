@@ -47,7 +47,12 @@ export function ReportElement({ element }: ViewerProps) {
           {name}
         </p>
         {url && (
-          <a href={url} download={name} className="btn btn-ghost btn-xs shrink-0" aria-label={`Download ${name}`}>
+          <a
+            href={url}
+            download={name}
+            className="btn btn-ghost btn-xs shrink-0"
+            aria-label={`Download ${name}`}
+          >
             <FileDown size={13} />
             Download
           </a>

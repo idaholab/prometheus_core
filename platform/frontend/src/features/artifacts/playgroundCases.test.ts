@@ -23,7 +23,9 @@ import { artifactToElement } from "./artifactAdapter.ts";
 const modules = import.meta.glob<{ default: ViewerCase }>("@/dev/viewer-playground/cases/*.case.ts", {
   eager: true,
 });
-const cases = Object.entries(modules).map(([path, mod]) => [path.split("/").pop() ?? path, mod.default] as const);
+const cases = Object.entries(modules).map(
+  ([path, mod]) => [path.split("/").pop() ?? path, mod.default] as const,
+);
 
 function caseNamed(file: string): ViewerCase {
   const found = cases.find(([name]) => name === file);

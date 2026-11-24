@@ -1,0 +1,77 @@
+# This file is part of Prometheus
+# https://inl.gov/super-intelligence/prometheus/
+#
+# Copyright 2026 Battelle Energy Alliance, LLC
+# All rights reserved, see NOTICE.txt for full restrictions
+# https://github.com/idaholab/prometheus_core/blob/main/NOTICE.txt
+#
+# Licensed under the MIT License, please see LICENSE for details
+# https://github.com/idaholab/prometheus_core/blob/main/LICENSE
+#
+# SPDX-License-Identifier: MIT
+
+# The e2e stack's own services: e2e/stub-client-agent answers chat turns
+# instead of the client-agent, so a chat needs no LLM key, and hands out the
+# viewer samples for the viewer tests. `make up-e2e` adds
+# this file (E2E_TESTING=true). See platform/frontend/README.md, "Against the
+# full platform".
+#
+# The client-agent still starts beside the stub; the backend just doesn't send
+# it anything. YAML anchors don't cross compose files, so the values the base
+# file shares through x-common-env are written out here.
+services:
+  backend:
+    environment:
+      CLIENT_AGENT_URL: http://stub-client-agent:8000
+
+  stub-client-agent:
+    build:
+      context: ./e2e/stub-client-agent
+      # The viewer samples the stub hands out, shared with the viewer playground
+      additional_contexts:
+        samples: ./frontend/e2e/samples
+      args:
+        - PROMETHEUS_API_BASE_IMAGE_REPO=${PROMETHEUS_API_BASE_IMAGE_REPO}
+        - PROMETHEUS_API_BASE_IMAGE_HASH=${PROMETHEUS_API_BASE_IMAGE_HASH}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-}
+    networks:
+      - agent-network
+    environment:
+      AGENT_PORT: 8000
+      SAMPLES_PORT: 8100
+      SAMPLES_BASE_URL: http://stub-client-agent:8100
+      EXTERNAL_AGENT_URL: http://stub-client-agent:8000
+      AGENT_SECRET: ${AGENT_SECRET}
+      AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
+      REGISTRY_URL: ${REGISTRY_URL:-http://backend:8000}
+      # The SDK sends this as its registry token; the backend registry checks AGENT_SECRET.
+      LITELLM_MASTER_KEY: ${AGENT_SECRET}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # The SDK checks these at startup. The stub never connects to DeepLynx, so
+      # the made-up values `make up-e2e` sets are enough (see E2E_STACK)
+      DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}
+      DEEPLYNX_KEY: ${DEEPLYNX_KEY:-}
+      DEEPLYNX_SECRET: ${DEEPLYNX_SECRET:-}
+      DEEPLYNX_JWT_TOKEN: ${DEEPLYNX_JWT_TOKEN:-}
+      DEEPLYNX_ORG_ID: ${DEEPLYNX_ORG_ID:-}
+      DEEPLYNX_PROJECT_ID: ${DEEPLYNX_PROJECT_ID:-}
+      JWKS_URL: ${JWKS_URL:-http://backend:8000/.well-known/jwks.json}
+      USER_IDENTITY_PUBLIC_KEY: ${USER_IDENTITY_PUBLIC_KEY:-}
+      USER_IDENTITY_ISS: ${USER_IDENTITY_ISS:-prometheus-platform}
+      USER_IDENTITY_AUD: ${USER_IDENTITY_AUD:-prometheus-agents}
+      USER_IDENTITY_REQUIRED: ${USER_IDENTITY_REQUIRED:-true}
+      PYTHONDONTWRITEBYTECODE: 1
+    depends_on:
+      backend:
+        condition: service_healthy
+    # /healthz is served by the PrometheusAgent base class once uvicorn is up
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped

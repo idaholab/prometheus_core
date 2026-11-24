@@ -15,6 +15,8 @@
 from typing import Any, Dict, List, Optional
 from ..models.item import Item
 from ..models.pagination import Page, PageInfo
+from .. import paging
+from ..paging import parse_paginated
 from .base import BaseResource
 
 
@@ -82,8 +84,7 @@ class SearchResource(BaseResource):
         Returns:
             Paginated search results
         """
-        if not 1 <= page_size <= 500:
-            raise ValueError("page_size must be between 1 and 500")
+        paging.check_page_size(page_size)
         if page < 1:
             raise ValueError("page must be 1 or greater")
 
@@ -141,36 +142,52 @@ class SearchResource(BaseResource):
         return self._parse_search_results(response.json(), page, page_size)
 
     def recent(self, limit: int = 100) -> List[Item]:
-        """Get recently created or updated items.
+        """Get the most recently updated items in the active project, newest first.
+
+        Pages through ``GET /organizations/{org}/query/records/paginated`` sorted by date,
+        ``MAX_PAGE_SIZE`` items at a time, until ``limit`` items are collected or the server
+        has no further page.
 
         Args:
-            limit: Maximum number of items to return
+            limit: Maximum number of items to return (at least 1)
 
         Returns:
-            List of recent items
+            List of recent items, most recently updated first
+
+        Raises:
+            ValueError: If ``limit`` is less than 1
 
         Example:
             ```python
             recent_items = client.search.recent(limit=50)
             ```
         """
-        params = {
-            "limit": limit,
-            "sort_by": "updated_at",
-            "sort_order": "desc",
-        }
+        if limit < 1:
+            raise ValueError(f"limit must be 1 or greater for search.recent, got {limit}")
 
-        response = self._client._request("GET", f"{self._base_path}/records", params=params)
+        page_size = min(limit, paging.MAX_PAGE_SIZE)
+        items: List[Item] = []
+        page = 1
+        while len(items) < limit:
+            response = self._client._request(
+                "GET",
+                f"/organizations/{self._client.config.organization_id}/query/records/paginated",
+                params={
+                    "projectIds": [self._client.config.project_id],
+                    "sortBy": paging.SORT_DATE_NEW,
+                    "PageNumber": page,
+                    "PageSize": page_size,
+                },
+            )
+            result = self._parse_paginated_results(response.json())
+            items.extend(result.items)
+            # An empty page ends paging even if the server claims a next one, so a server
+            # that never stops cannot hang the loop.
+            if not result.items or not result.page_info.has_next:
+                break
+            page += 1
 
-        data = response.json()
-
-        # API may return list directly or wrapped in dict
-        if isinstance(data, list):
-            items = data
-        else:
-            items = data.get("records", [])
-
-        return [self._parse_item(item_data) for item_data in items]
+        return items[:limit]
 
     def _parse_search_results(self, data: Any, page: int, page_size: int) -> Page[Item]:
         """Parse search results into a Page object.
@@ -203,29 +220,9 @@ class SearchResource(BaseResource):
 
         return Page(items=items, page_info=page_info)
 
-    def _parse_paginated_results(self, data: Dict[str, Any]) -> Page[Item]:
-        """Parse a PaginatedResponse<QueryRecordViewResponseDto> payload.
-
-        Args:
-            data: Raw API response matching the C# PaginatedResponse<T> shape:
-                {"items": [...], "pageNumber": int, "pageSize": int,
-                "totalCount": int, "totalPages": int,
-                "hasPrevious": bool, "hasNext": bool}
-
-        Returns:
-            Paginated results
-        """
-        items = [self._parse_item(item_data) for item_data in data["items"]]
-
-        page_info = PageInfo(
-            page_number=data["pageNumber"],
-            page_size=data["pageSize"],
-            total_count=data["totalCount"],
-            has_next=data["hasNext"],
-            has_previous=data["hasPrevious"],
-        )
-
-        return Page(items=items, page_info=page_info)
+    def _parse_paginated_results(self, data: Any) -> Page[Item]:
+        """Parse a ``PaginatedResponse<QueryRecordViewResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "query/records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse item data from search results.

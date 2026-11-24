@@ -135,9 +135,7 @@ export function ChatHistory({ onNewChat, onOpenConversation }: Props) {
               }
               onDeleted={() => {
                 setDeletedIds((prev) => new Set(prev).add(c.conversation_id));
-                setConversations((prev) =>
-                  prev.filter((it) => it.conversation_id !== c.conversation_id),
-                );
+                setConversations((prev) => prev.filter((it) => it.conversation_id !== c.conversation_id));
               }}
             />
           ))}

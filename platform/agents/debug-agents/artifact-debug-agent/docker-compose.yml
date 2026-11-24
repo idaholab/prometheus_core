@@ -11,7 +11,7 @@ services:
     extra_hosts:
       - "prometheus.host.internal:host-gateway"
     ports:
-      - "${ARTIFACT_DEBUG_PORT:-8008}:8000"
+      - "${PUBLISH_ADDR:+${PUBLISH_ADDR}:}${ARTIFACT_DEBUG_PORT:-8008}:8000"
     networks:
       - agent-network
     environment:

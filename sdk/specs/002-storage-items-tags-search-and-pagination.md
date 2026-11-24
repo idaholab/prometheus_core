@@ -12,8 +12,8 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-02: Item create and bulk create MUST default a missing or empty `description` to the item's `name` (DeepLynx rejects an empty description with `400 The Description field is required`), and a missing `original_id` to a client-generated value.
 - REQ-002-03: Item create with tag names MUST resolve/add those tags and refetch the created item.
 - REQ-002-04: Item update MUST use `PUT /records/{item_id}` and include only fields explicitly provided on `ItemUpdate`.
-- REQ-002-05: Item list MUST return `Page[Item]` and compute `has_next`/`has_previous` for both list-shaped and wrapped DeepLynx responses.
-- REQ-002-06: `iter_all(...)` MUST repeatedly call `list(...)` until `page_info.has_next` is false.
+- REQ-002-05: Item list MUST GET `/organizations/{org}/projects/{project}/records/paginated` with `PageNumber` and `PageSize` (plus caller filters, which MUST be limited to `dataSourceId`, `fileType`, `hideArchived` and `isInsightEligible`: any other key MUST raise `ValueError` before a request is sent, because the server ignores unknown parameters and would return unfiltered items; `page_size` MUST be between 1 and 500, else `ValueError`, because the server refuses larger pages with a bare HTTP 400), return `Page[Item]`, and take `total_count`, `has_next` and `has_previous` from the server's `PaginatedResponse` (`totalCount`, `hasNext`, `hasPrevious`). A null or missing `items` MUST be treated as an empty page.
+- REQ-002-06: `iter_all(...)` MUST repeatedly call `list(...)` until `page_info.has_next` is false or a page has no items, so a server that keeps reporting a next page of empty results cannot loop forever.
 - REQ-002-07: Bulk create MUST POST all item payloads to `/records/bulk` and parse both list-shaped and wrapped responses.
 - REQ-002-08: Tag operations MUST use project-scoped `/projects/{project_id}/tags` endpoints, normalize whitespace, reject empty names, skip duplicate names, and require resolved IDs to be positive integers.
 - REQ-002-09: `ItemsResource.add_tags(...)` and async equivalent MUST call `/records/{item_id}/tags` once per tag using singular `tagId` query parameters.
@@ -22,6 +22,9 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - REQ-002-12: Item/search parsing MUST accept DeepLynx camelCase fields and JSON-string `properties` or `tags`, producing typed `Item` and `Tag` values.
 - REQ-002-13: Sync and async item create/update payloads and search query parsing MUST remain aligned.
 - REQ-002-14: Sync and async advanced query MUST accept a list of structured filters and project IDs, optionally accept text search, validate page numbers and page sizes, POST matching payloads to `/organizations/{org}/query/records/advanced/paginated`, and parse server pagination into `Page[Item]`.
+- REQ-002-15: `recent(limit=100)` MUST return up to `limit` items of the active project, most recently updated first, by paging `GET /organizations/{org}/query/records/paginated` (`projectIds`, `sortBy` = date-newest, `PageNumber`, `PageSize` of at most 500) until `limit` items are collected, `hasNext` is false or a page has no items; a null `items` MUST be an empty page and a `limit` below 1 MUST raise `ValueError`.
+- REQ-002-16: `items.list`, `items.iter_all`, `search.recent` and `search.advanced_query`, sync and async, MUST raise `StorageClientError` naming the route and the received type when a paginated route answers with a body that is not a JSON object, instead of failing with an `AttributeError`.
+- REQ-002-17: The paginated parsers MUST require `pageNumber`, `pageSize`, `totalCount`, `hasNext` and `hasPrevious` and raise `StorageClientError` naming the missing ones, instead of defaulting them (a missing `hasNext` read as false would end paging after one page with no error). `items` MAY be null or absent.
 
 ## Behavior
 - BEH-002-01: GIVEN a tag list with duplicate and blank names WHEN IDs are resolved THEN each non-empty normalized name is resolved once.
@@ -46,7 +49,7 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - `SearchResource.query(query: str, page: int = 1, page_size: int = 100) -> Page[Item]`
 - `SearchResource.advanced_query(filters: list[dict], project_ids: list[int], text_search: str | None = None, page: int = 1, page_size: int = 25) -> Page[Item]`
 - `SearchResource.by_tags(tags: list[str], match_all: bool = False, page: int = 1, page_size: int = 100) -> Page[Item]`
-- `SearchResource.recent(limit: int = 100) -> list[Item]`
+- `SearchResource.recent(limit: int = 100) -> list[Item]` (newest first; raises `ValueError` if `limit < 1`)
 - `AsyncSearchResource.query/advanced_query/by_tags/recent` with an `advanced_query(...)` signature matching `SearchResource`
 - `paginate_iterator(fetch_page: Callable[[int, int], list[T]], page_size: int = 100, start_page: int = 1) -> Iterator[T]`
 
@@ -60,5 +63,5 @@ Expose DeepLynx records as typed `Item` objects with predictable CRUD, tagging, 
 - Search result ranking and filtering correctness remain DeepLynx responsibilities.
 
 ## Open questions
-- `remove_tags(...)`, `by_tags(...)`, and `recent(...)` have less unit coverage than create/update/query paths.
+- `remove_tags(...)` and `by_tags(...)` have less unit coverage than create/update/query paths. `by_tags(...)` calls a route that no longer exists in Nexus and is being reworked.
 - Page totals are inferred for some list-shaped responses; callers needing exact totals must rely on backend response support.

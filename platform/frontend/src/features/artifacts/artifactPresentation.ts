@@ -21,10 +21,7 @@ export function artifactFilePresentation(element: ArtifactFileElement): {
 } {
   const filename = element.name?.trim() || "Attachment";
   const description = element.props?.description;
-  const label =
-    typeof description === "string" && description.trim()
-      ? description.trim()
-      : filename;
+  const label = typeof description === "string" && description.trim() ? description.trim() : filename;
 
   return { label, filename };
 }

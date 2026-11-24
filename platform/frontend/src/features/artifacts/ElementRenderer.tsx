@@ -27,28 +27,19 @@
 
 import { Component, Suspense } from "react";
 import { AlertCircle } from "lucide-react";
-import {
-  classifyElement,
-  VIEWER_REGISTRY,
-  type AnyElement,
-  type ViewerProps,
-} from "./elements";
-import {
-  dedupeElements,
-  elementKey,
-} from "./elementDeduplication";
+import { classifyElement, VIEWER_REGISTRY, type AnyElement, type ViewerProps } from "./elements";
+import { dedupeElements, elementKey } from "./elementDeduplication";
 import { NoViewerFallback } from "./viewers/FileDownloadElement";
 
 // ---------------------------------------------------------------------------
 // Error boundary
 // ---------------------------------------------------------------------------
 
-class ViewerErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { crashed: boolean }
-> {
+class ViewerErrorBoundary extends Component<{ children: React.ReactNode }, { crashed: boolean }> {
   state = { crashed: false };
-  static getDerivedStateFromError() { return { crashed: true }; }
+  static getDerivedStateFromError() {
+    return { crashed: true };
+  }
   render() {
     if (this.state.crashed) {
       return (
@@ -67,12 +58,16 @@ class ViewerErrorBoundary extends Component<
 // ---------------------------------------------------------------------------
 
 function ElementRenderer({ element, onSend }: ViewerProps) {
-  const kind   = classifyElement(element);
+  const kind = classifyElement(element);
   const Viewer = VIEWER_REGISTRY[kind];
 
-  const inner = Viewer
-    ? <Suspense fallback={null}><Viewer element={element} onSend={onSend} /></Suspense>
-    : <NoViewerFallback element={element} />;
+  const inner = Viewer ? (
+    <Suspense fallback={null}>
+      <Viewer element={element} onSend={onSend} />
+    </Suspense>
+  ) : (
+    <NoViewerFallback element={element} />
+  );
 
   return <ViewerErrorBoundary>{inner}</ViewerErrorBoundary>;
 }
@@ -95,11 +90,7 @@ export function ElementList({
   return (
     <div className="mt-2 space-y-1">
       {uniqueElements.map((el, i) => (
-        <ElementRenderer
-          key={elementKey(el) || i}
-          element={el}
-          onSend={onSend}
-        />
+        <ElementRenderer key={elementKey(el) || i} element={el} onSend={onSend} />
       ))}
     </div>
   );

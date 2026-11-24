@@ -12,7 +12,7 @@
 
 import { useId, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
-interface AuthLayoutProps {
+interface LayoutAuthProps {
   title: string;
   subtitle?: ReactNode;
   onSubmit: () => void;
@@ -24,7 +24,7 @@ interface AuthLayoutProps {
  * Page background + brand lockup on the left, form card on the right.
  * Stacks vertically below `lg`, side-by-side at `lg` and up.
  */
-export function AuthLayout({ title, subtitle, onSubmit, children }: AuthLayoutProps) {
+export function LayoutAuth({ title, subtitle, onSubmit, children }: LayoutAuthProps) {
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     onSubmit();
@@ -41,11 +41,7 @@ export function AuthLayout({ title, subtitle, onSubmit, children }: AuthLayoutPr
         {/* Brand lockup */}
         <div className="flex justify-center lg:justify-start">
           <div className="flex w-fit flex-col items-center text-center ">
-            <img
-              src="/logo_dark.png"
-              alt="Prometheus"
-              className="w-72 max-w-full sm:w-96 lg:w-md"
-            />
+            <img src="/logo_dark.png" alt="Prometheus" className="w-72 max-w-full sm:w-96 lg:w-md" />
             <span className="-mt-4.5 text-base text-base-content/50 sm:text-lg">
               AI orchestration for nuclear engineering
             </span>

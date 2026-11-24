@@ -42,6 +42,11 @@ function getSnapshot(): User | null {
   return state;
 }
 
+/** The current user, read outside React (route loaders). */
+export function getCurrentUser(): User | null {
+  return state;
+}
+
 /** Subscribe a component to the current user (null while unauthenticated). */
 export function useCurrentUser(): User | null {
   return useSyncExternalStore(subscribe, getSnapshot);

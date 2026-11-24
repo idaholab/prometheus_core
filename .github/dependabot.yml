@@ -24,6 +24,7 @@ updates:
       - /platform/backend
       - /platform/ctl
       - /platform/docs
+      - /platform/e2e/stub-client-agent
       - /platform/tests
     schedule:
       interval: weekly

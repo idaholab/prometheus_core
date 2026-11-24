@@ -23,6 +23,8 @@ const CI = !!process.env.CI;
  */
 export default defineConfig({
   testDir: "e2e",
+  // e2e/full/ runs against the e2e stack, with its own config: playwright.full.config.ts
+  testIgnore: "full/**",
   forbidOnly: CI,
   // One retry in CI tells a flaky test apart from a broken one in the report,
   // but a test that only passes on its retry still fails the run

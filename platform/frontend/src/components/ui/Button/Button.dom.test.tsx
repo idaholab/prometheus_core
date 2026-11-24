@@ -15,6 +15,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Bell } from "lucide-react";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { expect, test, vi } from "vitest";
 import { Button } from "./Button.tsx";
 
@@ -55,4 +56,22 @@ test("a button with no onClick can be clicked without error", async () => {
   render(<Button label="Later" />);
   await user.click(screen.getByRole("button", { name: "Later" }));
   expect(screen.getByRole("button", { name: "Later" })).toBeEnabled();
+});
+
+test("navTo opens the route after onClick runs", async () => {
+  const user = userEvent.setup();
+  const onClick = vi.fn();
+  const router = createMemoryRouter(
+    [
+      { path: "/", element: <Button label="Open workflows" navTo="/workflows" onClick={onClick} /> },
+      { path: "/workflows", element: <p>Workflows</p> },
+    ],
+    { initialEntries: ["/"] },
+  );
+  render(<RouterProvider router={router} />);
+
+  await user.click(screen.getByRole("button", { name: "Open workflows" }));
+  expect(onClick).toHaveBeenCalledOnce();
+  expect(await screen.findByText("Workflows")).toBeInTheDocument();
+  expect(router.state.location.pathname).toBe("/workflows");
 });

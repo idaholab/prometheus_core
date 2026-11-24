@@ -10,7 +10,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { formatBytes, storagePercent, type DataManagementState, type SourceStatus } from "./store/dataManagement";
+import {
+  formatBytes,
+  storagePercent,
+  type DataManagementState,
+  type SourceStatus,
+} from "./store/dataManagement";
 import { Database } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionLabel } from "@/components/ui/SectionLabel";
@@ -39,7 +44,7 @@ interface Props extends DataManagementState {
  * storage panel on the right (Figma G.1), stacked below `lg:`. Display only;
  * PageDataManagement supplies the data. Passes display strings to the parts.
  */
-export function DataManagement({
+export function LayoutDataManagement({
   status,
   sources,
   storage,

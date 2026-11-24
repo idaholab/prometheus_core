@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 import { usePageHeader } from "@/features/shell";
-import { ApprovalQueue } from "@/features/approval-queue";
+import { LayoutApprovalQueue } from "@/features/approval-queue";
 import type { QueueCounter } from "@/features/approval-queue";
 import type { Checkpoint } from "@/features/approval-queue";
 
@@ -40,7 +40,13 @@ const CHECKPOINTS: Checkpoint[] = [
       generated: "14 min ago",
       metrics: [
         { id: "cell-count", name: "Cell Count", value: "42,198 hex", status: "pass", threshold: "40k" },
-        { id: "orthogonal-quality", name: "Orthogonal Quality", value: "0.88", status: "pass", threshold: "0.7" },
+        {
+          id: "orthogonal-quality",
+          name: "Orthogonal Quality",
+          value: "0.88",
+          status: "pass",
+          threshold: "0.7",
+        },
         { id: "aspect-ratio", name: "Aspect Ratio", value: "3.2 max", status: "warn", threshold: "3.0" },
         { id: "skewness", name: "Skewness", value: "0.31 avg", status: "pass", threshold: "0.5" },
         { id: "volume-change", name: "Volume Change", value: "0.2%", status: "pass", threshold: "0.5%" },
@@ -84,11 +90,11 @@ const CHECKPOINTS: Checkpoint[] = [
 
 /**
  * Approval Queue section page: owns the page's data and header. Layout lives in
- * ApprovalQueue. Route params and filters will land here with the router.
+ * LayoutApprovalQueue. Route params and filters go here.
  */
 export function PageApprovalQueue() {
   usePageHeader({ title: "Human-in-the-Loop Checkpoint Console" });
 
   // The first checkpoint is selected, as in E.1. Changing the selection lands with AQ-5.
-  return <ApprovalQueue counters={COUNTERS} checkpoints={CHECKPOINTS} selectedId={CHECKPOINTS[0].id} />;
+  return <LayoutApprovalQueue counters={COUNTERS} checkpoints={CHECKPOINTS} selectedId={CHECKPOINTS[0].id} />;
 }

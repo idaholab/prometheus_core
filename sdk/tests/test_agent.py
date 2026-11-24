@@ -1339,8 +1339,8 @@ workflows:
             == expected
         )
 
-    @pytest.mark.parametrize("server_filters", [True, False])
-    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, server_filters):
+    @pytest.mark.parametrize("in_recent", [True, False])
+    def test_resumed_task_reuses_its_execution_record(self, monkeypatch, in_recent):
         """Covers REQ-009-23 and BEH-009-10: answering an INPUT_REQUIRED form
         resumes the same task id, whose record already exists; the request
         must run, reusing that record."""
@@ -1355,17 +1355,23 @@ workflows:
             async def create(self, item):
                 raise APIError("duplicate key value violates unique constraint")
 
-            async def list(self, page=1, page_size=100, filters=None):
-                hits = [mine] if server_filters else others
-                return SimpleNamespace(items=hits)
-
             async def iter_all(self, page_size=100, filters=None):
+                # The real client rejects filters the paginated route would ignore.
+                from prometheus_api.storage_client.paging import check_list_filters
+
+                check_list_filters(filters)
                 for record in [*others, mine]:
                     yield record
+
+        class Search:
+            async def recent(self, limit=100):
+                assert limit == 500
+                return [*others, mine] if in_recent else others
 
         class Client:
             def __init__(self, config):
                 self.items = Items()
+                self.search = Search()
 
             async def __aenter__(self):
                 return self
@@ -1420,8 +1426,13 @@ workflows:
                 yield
 
         class Client:
+            @staticmethod
+            async def _recent(limit=100):
+                return []
+
             def __init__(self, config):
                 self.items = Items()
+                self.search = SimpleNamespace(recent=self._recent)
 
             async def __aenter__(self):
                 return self

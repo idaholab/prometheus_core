@@ -34,63 +34,60 @@ export type MeshViewerHandles = {
   getEngine: () => MeshViewerEngine | null;
 };
 
-const MeshViewer = forwardRef<MeshViewerHandles, Props>(({
-  background,
-  edgeColor,
-  allowPicking = true,
-  onPick,
-  className = "",
-  style,
-}, ref) => {
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const engineRef = useRef<MeshViewerEngine | null>(null);
+const MeshViewer = forwardRef<MeshViewerHandles, Props>(
+  ({ background, edgeColor, allowPicking = true, onPick, className = "", style }, ref) => {
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const engineRef = useRef<MeshViewerEngine | null>(null);
 
-  const onPickRef = useRef(onPick);
-  useEffect(() => { onPickRef.current = onPick; });
-
-  useImperativeHandle(ref, () => ({
-    loadTimestep: (url) => engineRef.current?.loadTimestep(url) ?? Promise.resolve(),
-    applyVariableColoring: (varName, range) =>
-      engineRef.current?.applyVariableColoring(varName, range) ?? [0, 1],
-    clearVariableColoring: () => engineRef.current?.clearVariableColoring(),
-    setColorPreset: (name) => engineRef.current?.setColorPreset(name),
-    setScalarRange: (range) => engineRef.current?.setScalarRange(range),
-    resetCamera: () => engineRef.current?.resetCamera(),
-    setBackground: (rgb) => engineRef.current?.setBackground(rgb),
-    setEdgeColor: (rgb) => engineRef.current?.setEdgeColor(rgb),
-    getEngine: () => engineRef.current,
-  }));
-
-  useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-
-    const engine = new MeshViewerEngine({
-      container: el,
-      background,
-      edgeColor,
-      allowPicking,
-      onPick: (result) => onPickRef.current?.(result),
+    const onPickRef = useRef(onPick);
+    useEffect(() => {
+      onPickRef.current = onPick;
     });
-    engineRef.current = engine;
 
-    const handleResize = () => engine.resize();
-    window.addEventListener("resize", handleResize);
+    useImperativeHandle(ref, () => ({
+      loadTimestep: (url) => engineRef.current?.loadTimestep(url) ?? Promise.resolve(),
+      applyVariableColoring: (varName, range) =>
+        engineRef.current?.applyVariableColoring(varName, range) ?? [0, 1],
+      clearVariableColoring: () => engineRef.current?.clearVariableColoring(),
+      setColorPreset: (name) => engineRef.current?.setColorPreset(name),
+      setScalarRange: (range) => engineRef.current?.setScalarRange(range),
+      resetCamera: () => engineRef.current?.resetCamera(),
+      setBackground: (rgb) => engineRef.current?.setBackground(rgb),
+      setEdgeColor: (rgb) => engineRef.current?.setEdgeColor(rgb),
+      getEngine: () => engineRef.current,
+    }));
 
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      engine.dispose();
-      engineRef.current = null;
-    };
-    // Intentionally omitting background/edgeColor/allowPicking — these are
-    // applied via the imperative setBackground/setEdgeColor handles when they
-    // change (e.g. on theme switch), not by tearing down and rebuilding the
-    // whole vtk.js render window.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    useEffect(() => {
+      const el = hostRef.current;
+      if (!el) return;
 
-  return <div ref={hostRef} className={`w-full h-full ${className}`} style={style} />;
-});
+      const engine = new MeshViewerEngine({
+        container: el,
+        background,
+        edgeColor,
+        allowPicking,
+        onPick: (result) => onPickRef.current?.(result),
+      });
+      engineRef.current = engine;
+
+      const handleResize = () => engine.resize();
+      window.addEventListener("resize", handleResize);
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        engine.dispose();
+        engineRef.current = null;
+      };
+      // Intentionally omitting background/edgeColor/allowPicking — these are
+      // applied via the imperative setBackground/setEdgeColor handles when they
+      // change (e.g. on theme switch), not by tearing down and rebuilding the
+      // whole vtk.js render window.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return <div ref={hostRef} className={`w-full h-full ${className}`} style={style} />;
+  },
+);
 
 MeshViewer.displayName = "MeshViewer";
 

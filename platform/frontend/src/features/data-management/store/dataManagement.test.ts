@@ -82,7 +82,11 @@ test("toggleSource flips one source in a new snapshot and notifies; an unknown i
     const others = before.sources.filter((s) => s.id !== id);
     assert.equal(others.length, 5);
     for (const s of others) {
-      assert.equal(after.sources.find((a) => a.id === s.id), s, `source ${s.id} must keep its object`);
+      assert.equal(
+        after.sources.find((a) => a.id === s.id),
+        s,
+        `source ${s.id} must keep its object`,
+      );
     }
     assert.equal(listener.mock.calls.length, 1);
 

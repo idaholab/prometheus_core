@@ -12,12 +12,12 @@
 
 import { AGENT_FILTER, useAgents } from "@/features/agent-registry";
 import { usePageHeader } from "@/features/shell";
-import { AgentRegistry } from "@/features/agent-registry";
+import { LayoutAgentRegistry } from "@/features/agent-registry";
 import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Agent Registry section page: owns the page's data, header and filter state.
- * Layout lives in AgentRegistry. Route params will land here with the router.
+ * Layout lives in LayoutAgentRegistry. Route params go here.
  */
 export function PageAgentRegistry() {
   usePageHeader({ title: "Agent Registry" });
@@ -25,7 +25,7 @@ export function PageAgentRegistry() {
   const { query, setQuery, facet, setFacet, visible, noMatches } = useListFilter(agents, AGENT_FILTER);
 
   return (
-    <AgentRegistry
+    <LayoutAgentRegistry
       agents={visible}
       status={status}
       query={query}

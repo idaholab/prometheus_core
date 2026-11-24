@@ -35,10 +35,24 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
       <div className="flex min-w-0 flex-col gap-3">
         <figure className="relative m-0 flex aspect-3/2 min-h-56 flex-col items-center justify-center gap-4 rounded-lg border border-base-content/10 bg-base-300 p-4 text-center">
           <div role="toolbar" aria-label="Preview controls" className="absolute right-3 top-3 flex gap-2">
-            <Button icon={<RotateCw />} ariaLabel="Reset view" outline subtle size="sm" tooltipPlacement="left" />
+            <Button
+              icon={<RotateCw />}
+              ariaLabel="Reset view"
+              outline
+              subtle
+              size="sm"
+              tooltipPlacement="left"
+            />
             <Button icon={<ZoomIn />} ariaLabel="Zoom" outline subtle size="sm" tooltipPlacement="left" />
             <Button icon={<Move />} ariaLabel="Pan" outline subtle size="sm" tooltipPlacement="left" />
-            <Button icon={<Download />} ariaLabel="Download preview" outline subtle size="sm" tooltipPlacement="left" />
+            <Button
+              icon={<Download />}
+              ariaLabel="Download preview"
+              outline
+              subtle
+              size="sm"
+              tooltipPlacement="left"
+            />
           </div>
           <Grid3x3 aria-hidden="true" size={56} strokeWidth={1} className="text-base-content/30" />
           <figcaption className="text-sm text-base-content/50">{previewLabel}</figcaption>
@@ -78,7 +92,9 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
           <span className="font-mono text-[11px] font-bold uppercase text-base-content">
             {requirement.id} ({requirement.version})
           </span>
-          <p className="m-0 wrap-break-word text-[13px] text-base-content/80">&ldquo;{requirement.text}&rdquo;</p>
+          <p className="m-0 wrap-break-word text-[13px] text-base-content/80">
+            &ldquo;{requirement.text}&rdquo;
+          </p>
         </blockquote>
       </section>
     </div>

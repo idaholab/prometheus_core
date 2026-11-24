@@ -123,7 +123,8 @@ export function SplitButton({
   const move = (from: number, step: 1 | -1) => {
     if (enabled.length === 0) return;
     const at = enabled.indexOf(from);
-    const next = at === -1 ? (step === 1 ? 0 : enabled.length - 1) : (at + step + enabled.length) % enabled.length;
+    const next =
+      at === -1 ? (step === 1 ? 0 : enabled.length - 1) : (at + step + enabled.length) % enabled.length;
     setActive(enabled[next]);
   };
 
@@ -165,10 +166,7 @@ export function SplitButton({
     buttonClassName({ ...style, wide: stretch && style.wide }, { shape: `join-item ${shape}` });
 
   return (
-    <div
-      ref={rootRef}
-      className={`relative inline-flex ${style.wide ? "w-full" : ""} ${className}`.trim()}
-    >
+    <div ref={rootRef} className={`relative inline-flex ${style.wide ? "w-full" : ""} ${className}`.trim()}>
       <div className={`join ${style.wide ? "w-full" : ""}`}>
         <button
           type="button"

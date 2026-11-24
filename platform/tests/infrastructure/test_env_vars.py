@@ -424,6 +424,29 @@ def test_init_env_leaves_a_complete_env_unwritten(tmp_path, env_example_path, mo
     assert (env.read_text(), env.stat().st_mtime_ns) == before
 
 
+def test_init_env_skip_llm_asks_saves_and_requires_no_profile(tmp_path, env_example_path, monkeypatch, capsys):
+    """INIT_ENV_SKIP_LLM=true (`make up-e2e`): no profile is fine, and none is asked for or saved.
+
+    Not even one from the environment: that would put the e2e stack's placeholder in .env.
+    """
+    init_env, env, asked = _new_env(tmp_path, env_example_path, monkeypatch, ["", ""])
+    monkeypatch.setenv("INIT_ENV_SKIP_LLM", "true")
+    monkeypatch.setattr(init_env, "choose", lambda options, labels, default: pytest.fail("offered the LLM menu"))
+    monkeypatch.setattr(init_env.getpass, "getpass", lambda prompt: pytest.fail("asked for a key"))
+
+    assert init_env.main() == 0
+    assert len(asked) == 2, "the LOCAL_* questions are still asked"
+    written = init_env.values(env.read_text())
+    assert written["LLM_CONFIG_PROFILE"] == "" and written["LLM_API_KEY"] == ""
+    assert written["AGENT_SECRET"], "the secrets are still generated"
+    assert "[ERROR]" not in capsys.readouterr().err
+
+    monkeypatch.delenv("INIT_ENV_SKIP_LLM")
+    monkeypatch.delenv("LLM_CONFIG_PROFILE")
+    monkeypatch.setattr(init_env, "interactive", lambda: False)
+    assert init_env.main() == 1, "without it the profile is required again"
+
+
 def test_init_env_rejects_unknown_profile(tmp_path, env_example_path, monkeypatch, capsys):
     init_env = _load_init_env()
     example = tmp_path / ".env.example"

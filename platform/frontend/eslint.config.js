@@ -16,6 +16,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
+import prettierConfig from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
 
 /* Folder rules (see the README's "Where code and tests go"):
@@ -41,10 +42,24 @@ function featureBoundary(own) {
 }
 
 export default defineConfig([
-  globalIgnores(["dist", "dist-playground", "coverage", "public", "test-results", "playwright-report", "blob-report"]),
+  globalIgnores([
+    "dist",
+    "dist-playground",
+    "coverage",
+    "public",
+    "test-results",
+    "test-results-full",
+    "playwright-report",
+    "playwright-report-full",
+    "blob-report",
+  ]),
   {
     files: ["**/*.{ts,tsx}"],
-    extends: [js.configs.recommended, tseslint.configs.recommended, reactHooks.configs.flat["recommended-latest"]],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs.flat["recommended-latest"],
+    ],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -74,7 +89,9 @@ export default defineConfig([
   })),
   // Playwright tests and their config run in Node, not the browser
   {
-    files: ["e2e/**/*.ts", "playwright.config.ts"],
+    files: ["e2e/**/*.ts", "playwright.config.ts", "playwright.full.config.ts"],
     languageOptions: { globals: globals.node },
   },
+  // Last: turns off ESLint rules that would fight Prettier's formatting
+  prettierConfig,
 ]);

@@ -47,7 +47,9 @@ test("Modify Plan's main click opens the Builder changing this run", async () =>
   await user.click(screen.getByRole("button", { name: "Modify Plan" }));
 
   expect(screen.getByRole("button", { name: /Changing:/ })).toHaveTextContent("this run");
-  expect(screen.getByText(/Changes apply to this run only\. The template \(v1\.2\.0\) is untouched\./)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Changes apply to this run only\. The template \(v1\.2\.0\) is untouched\./),
+  ).toBeInTheDocument();
   expect(commitButtons()).toEqual(["Save as variant", "Propose new version", "Run once"]);
   expect(screen.getByRole("region", { name: "Canvas" })).not.toHaveTextContent("Drag a skill here to begin");
 });
@@ -64,7 +66,9 @@ test("Edit the template opens the Builder changing the template, and switching t
 
   expect(screen.getByRole("button", { name: /Changing:/ })).toHaveTextContent("the template");
   expect(
-    screen.getByText("Editing the template. Saving creates v1.3.0 for everyone who uses Comprehensive Material Analysis."),
+    screen.getByText(
+      "Editing the template. Saving creates v1.3.0 for everyone who uses Comprehensive Material Analysis.",
+    ),
   ).toBeInTheDocument();
   expect(commitButtons()).toEqual(["Validate", "Save", "Run Workflow"]);
 

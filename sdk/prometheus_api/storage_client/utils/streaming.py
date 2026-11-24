@@ -13,7 +13,7 @@
 """Streaming utilities for large file uploads."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 import uuid
 
 if TYPE_CHECKING:
@@ -64,13 +64,19 @@ class ChunkedUploader:
 
         # Upload chunks
         try:
+            sent = 0
             with open(file_path, "rb") as f:
                 for chunk_num in range(total_chunks):
                     chunk_data = f.read(self.chunk_size)
+                    if not chunk_data:
+                        break
                     self._upload_chunk(upload_id, chunk_num, chunk_data)
+                    sent += 1
 
-            # Complete upload
-            return self._complete_upload(upload_id, file_name, description, total_chunks)
+            # Complete with the number of chunks actually sent. The server's own suggested
+            # count (from the start response) can be lower, and completing with a lower count
+            # answers 200 but stores only that many chunks.
+            return self._complete_upload(upload_id, file_name, description, sent)
 
         except Exception as e:
             # Attempt to cancel upload on error
@@ -94,14 +100,14 @@ class ChunkedUploader:
             "POST",
             f"{self.client.files._base_path}/files/upload/start",
             json={
-                "file_name": file_name,
-                "file_size": file_size,
-                "chunk_size": self.chunk_size,
+                "fileName": file_name,
+                "fileSize": file_size,
+                "chunkSize": self.chunk_size,
             },
         )
 
         data = response.json()
-        upload_id = data.get("upload_id") if isinstance(data, dict) else None
+        upload_id = data.get("uploadId") if isinstance(data, dict) else None
         return str(upload_id or uuid.uuid4())
 
     def _upload_chunk(self, upload_id: str, chunk_num: int, chunk_data: bytes) -> None:
@@ -119,8 +125,8 @@ class ChunkedUploader:
             f"{self.client.files._base_path}/files/upload/chunk",
             files=files,
             data={
-                "upload_id": upload_id,
-                "chunk_number": chunk_num,
+                "uploadId": upload_id,
+                "chunkNumber": chunk_num,
             },
         )
 
@@ -138,14 +144,20 @@ class ChunkedUploader:
         Returns:
             File metadata
         """
-        payload = {
-            "upload_id": upload_id,
-            "file_name": file_name,
-            "total_chunks": total_chunks,
+        payload: Dict[str, Any] = {
+            "uploadId": upload_id,
+            "fileName": file_name,
+            "totalChunks": total_chunks,
         }
 
         if description:
-            payload["description"] = description
+            # The server ignores a top-level ``description`` and invents its own; the caller's
+            # travels in ``metadata``, whose Name, Description and Properties are all required.
+            payload["metadata"] = {
+                "Name": file_name,
+                "Description": description,
+                "Properties": {},
+            }
 
         response = self.client._request(
             "POST", f"{self.client.files._base_path}/files/upload/complete", json=payload
@@ -203,13 +215,19 @@ class AsyncChunkedUploader:
 
         # Upload chunks
         try:
+            sent = 0
             with open(file_path, "rb") as f:
                 for chunk_num in range(total_chunks):
                     chunk_data = f.read(self.chunk_size)
+                    if not chunk_data:
+                        break
                     await self._upload_chunk(upload_id, chunk_num, chunk_data)
+                    sent += 1
 
-            # Complete upload
-            return await self._complete_upload(upload_id, file_name, description, total_chunks)
+            # Complete with the number of chunks actually sent. The server's own suggested
+            # count (from the start response) can be lower, and completing with a lower count
+            # answers 200 but stores only that many chunks.
+            return await self._complete_upload(upload_id, file_name, description, sent)
 
         except Exception as e:
             # Attempt to cancel upload on error
@@ -233,14 +251,14 @@ class AsyncChunkedUploader:
             "POST",
             f"{self.client.files._base_path}/files/upload/start",
             json={
-                "file_name": file_name,
-                "file_size": file_size,
-                "chunk_size": self.chunk_size,
+                "fileName": file_name,
+                "fileSize": file_size,
+                "chunkSize": self.chunk_size,
             },
         )
 
         data = response.json()
-        upload_id = data.get("upload_id") if isinstance(data, dict) else None
+        upload_id = data.get("uploadId") if isinstance(data, dict) else None
         return str(upload_id or uuid.uuid4())
 
     async def _upload_chunk(self, upload_id: str, chunk_num: int, chunk_data: bytes) -> None:
@@ -258,8 +276,8 @@ class AsyncChunkedUploader:
             f"{self.client.files._base_path}/files/upload/chunk",
             files=files,
             data={
-                "upload_id": upload_id,
-                "chunk_number": chunk_num,
+                "uploadId": upload_id,
+                "chunkNumber": chunk_num,
             },
         )
 
@@ -277,14 +295,20 @@ class AsyncChunkedUploader:
         Returns:
             File metadata
         """
-        payload = {
-            "upload_id": upload_id,
-            "file_name": file_name,
-            "total_chunks": total_chunks,
+        payload: Dict[str, Any] = {
+            "uploadId": upload_id,
+            "fileName": file_name,
+            "totalChunks": total_chunks,
         }
 
         if description:
-            payload["description"] = description
+            # The server ignores a top-level ``description`` and invents its own; the caller's
+            # travels in ``metadata``, whose Name, Description and Properties are all required.
+            payload["metadata"] = {
+                "Name": file_name,
+                "Description": description,
+                "Properties": {},
+            }
 
         response = await self.client._request(
             "POST", f"{self.client.files._base_path}/files/upload/complete", json=payload

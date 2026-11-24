@@ -328,6 +328,46 @@ distribution table, key generation steps, and rotation guide.
 
 ---
 
+## Agent workload identity (which agent is calling)
+
+Every agent presents the same `Bearer <AGENT_SECRET>`. That proves *some* agent is
+calling, but not *which* one. Backend routes that need to know (the `/v1`
+service-to-service routes) read the agent name from the source that
+`AGENT_IDENTITY_SOURCE` (`agent-identity-source` in `backend/app/config.yml`) selects:
+
+| Value | Where | Agent name comes from |
+| --- | --- | --- |
+| `trusted-name` (default) | Docker Compose | The `X-Agent-Name` request header. Any agent can claim any name. |
+| `istio` | Kubernetes with Istio sidecars | The SPIFFE ID in the sidecar's `x-forwarded-client-cert` header, looked up in the agent registry. The request's own name claim is ignored. |
+
+In `istio` mode an agent's registration (`POST /v1/agents`) binds its SPIFFE ID
+(`spiffe://<trust-domain>/ns/<ns>/sa/<service-account>`) to its name. Only the same
+workload can re-register or delete a bound entry. One workload holds one name: if it
+registers under a new name (an agent renamed but keeping its ServiceAccount), the entry
+under its old name is removed. Requests that arrive without a verified identity get 401.
+Requests from a workload that hasn't registered get 403.
+
+Entries without a binding stay open. An entry written in `trusted-name` mode, or before
+the switch to `istio`, has no SPIFFE ID. The first workload that registers it under
+`istio` claims it, and until then any workload can overwrite or delete it. Clear the
+registry when you switch to `istio` so that every entry is bound: delete the Valkey keys
+`prometheus:agent-registry` and `prometheus:agent-registry:spiffe` (what
+`make clear-agent-registry` does under Compose).
+
+The header can be trusted only under these conditions. Set them up before you switch
+to `istio`:
+
+- **STRICT mTLS** on the backend's namespace (`PeerAuthentication` with
+  `mtls.mode: STRICT`). Istio's sidecar then replaces any client-supplied
+  `x-forwarded-client-cert` with the verified one.
+- **No sidecar bypass.** Add a NetworkPolicy that admits only sidecar traffic, or bind
+  the backend to the pod's loopback, so no pod can reach the backend port directly and
+  set the header itself.
+- **One ServiceAccount per agent.** The certificate identifies the workload. Agents
+  that share a ServiceAccount look identical to the backend.
+
+---
+
 ## Mesh/IFC dataset isolation (decision: no per-user path namespacing)
 
 `GET /api/artifacts/mesh/{dataset_id}/{filename}` (`backend/app/routers/artifacts.py`)

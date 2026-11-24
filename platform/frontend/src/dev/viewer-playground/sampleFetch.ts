@@ -19,7 +19,8 @@ export type SampleRoutes = Record<string, string>;
  * - `missing`: an unmapped `/api/` path; answer 404 so the page never calls the backend.
  * - `passthrough`: any other URL (unpkg for web-ifc, Vite assets); fetch it unchanged.
  */
-export type SampleResolution = { kind: "sample"; url: string } | { kind: "missing" } | { kind: "passthrough" };
+export type SampleResolution =
+  { kind: "sample"; url: string } | { kind: "missing" } | { kind: "passthrough" };
 
 function requestPath(input: RequestInfo | URL): string {
   const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

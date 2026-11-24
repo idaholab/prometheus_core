@@ -11,7 +11,19 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Square, ChevronDown, ChevronRight, Wrench, Paperclip, X, FileText, Loader2, AlertCircle } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Square,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  Paperclip,
+  X,
+  FileText,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import { api } from "@/lib/api/client";
 import { chatStore, useChatState } from "./store/chat";
 import type { ChatItem, NeedsInfoItem, PlanItem, ToolItem } from "./store/chat";
@@ -54,7 +66,11 @@ function ToolStep({ item }: { item: ToolItem }) {
           disabled={!hasHistory}
         >
           {hasHistory ? (
-            open ? <ChevronDown size={13} /> : <ChevronRight size={13} />
+            open ? (
+              <ChevronDown size={13} />
+            ) : (
+              <ChevronRight size={13} />
+            )
           ) : (
             <span className="w-3.25" />
           )}
@@ -92,7 +108,7 @@ function PlanCard({
   onDecide: (approved: boolean) => void;
 }) {
   const steps = Array.isArray((item.plan as { steps?: unknown[] })?.steps)
-    ? ((item.plan as { steps: unknown[] }).steps)
+    ? (item.plan as { steps: unknown[] }).steps
     : [];
   return (
     <div className="mt-2 rounded-xl border border-base-300 bg-base-200 p-4 max-w-xl space-y-3">
@@ -105,7 +121,13 @@ function PlanCard({
       )}
       {item.decided === null && !item.autoApprove ? (
         <div className="flex gap-2">
-          <Button variant="primary" size="sm" label="Approve" disabled={disabled} onClick={() => onDecide(true)} />
+          <Button
+            variant="primary"
+            size="sm"
+            label="Approve"
+            disabled={disabled}
+            onClick={() => onDecide(true)}
+          />
           <Button outline size="sm" label="Reject" disabled={disabled} onClick={() => onDecide(false)} />
         </div>
       ) : item.decided ? (
@@ -148,7 +170,7 @@ function hasFiles(dt: DataTransfer | null | undefined): boolean {
 // ---------------------------------------------------------------------------
 
 interface ChatProps {
-  // Owned by the parent (ProjectView) so that, once a second panel (artifact
+  // Owned by the parent (LayoutHome) so that, once a second panel (artifact
   // viewer) is added alongside Chat, each panel scrolls independently and
   // the scrollbar sits at the panel boundary rather than hugging the
   // narrower max-w-4xl message column. Chat still owns all the scroll
@@ -347,10 +369,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
       spacer.style.minHeight = "0px";
       return;
     }
-    const needed = Math.max(
-      0,
-      userTop + el.clientHeight - USER_MESSAGE_TOP_PADDING - heightWithoutSpacer,
-    );
+    const needed = Math.max(0, userTop + el.clientHeight - USER_MESSAGE_TOP_PADDING - heightWithoutSpacer);
     spacer.style.minHeight = `${Math.ceil(needed)}px`;
   }, [scrollContainerRef]);
 
@@ -365,8 +384,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
 
     const elRect = el.getBoundingClientRect();
     const userTop = el.scrollTop + userMsg.getBoundingClientRect().top - elRect.top;
-    const latestContentBottom =
-      el.scrollTop + latestContent.getBoundingClientRect().bottom - elRect.top;
+    const latestContentBottom = el.scrollTop + latestContent.getBoundingClientRect().bottom - elRect.top;
     return Math.max(
       userTop - USER_MESSAGE_TOP_PADDING,
       latestContentBottom - el.clientHeight + LATEST_MESSAGE_BOTTOM_PADDING,
@@ -374,13 +392,16 @@ export function Chat({ scrollContainerRef }: ChatProps) {
     );
   }, [scrollContainerRef]);
 
-  const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const top = getLatestScrollTop();
-    if (Math.abs(top - el.scrollTop) > 1) el.scrollTo({ top, behavior });
-    if (behavior === "auto") lastScrollTopRef.current = el.scrollTop;
-  }, [getLatestScrollTop, scrollContainerRef]);
+  const scrollToLatest = useCallback(
+    (behavior: ScrollBehavior) => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      const top = getLatestScrollTop();
+      if (Math.abs(top - el.scrollTop) > 1) el.scrollTo({ top, behavior });
+      if (behavior === "auto") lastScrollTopRef.current = el.scrollTop;
+    },
+    [getLatestScrollTop, scrollContainerRef],
+  );
 
   useLayoutEffect(() => {
     updateSpacer();
@@ -391,9 +412,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
     const smooth = pendingUserScrollRef.current && newUserMessage;
     if (smooth) pendingUserScrollRef.current = false;
     scrollToLatest(
-      smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "smooth"
-        : "auto",
+      smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto",
     );
   }, [awaiting, items, scrollToLatest, updateSpacer, userCount]);
 
@@ -447,9 +466,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
     followLatestRef.current = true;
     setShowScrollToLatest(false);
     updateSpacer();
-    scrollToLatest(
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    );
+    scrollToLatest(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
   };
 
   const handleSend = (content = input.trim()) => {
@@ -563,10 +580,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
     <div className="flex flex-col flex-1 w-full overflow-hidden">
       <div className="relative flex flex-1 min-h-0 overflow-hidden">
         {resuming ? (
-          <div
-            className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4"
-            role="status"
-          >
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4" role="status">
             <span className="loading loading-spinner w-16 h-16 text-primary" />
             <p className="text-lg text-base-content/70">Loading conversation&hellip;</p>
           </div>
@@ -577,11 +591,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
             <div className="flex shrink-0 items-center justify-end px-6 pb-4 pt-6">
               <StatusPill tone="success" label="Active" />
             </div>
-            <div
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto"
-            >
+            <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
               <div ref={messageListRef} className="max-w-4xl mx-auto p-5 space-y-5">
                 {items.map((item, i) => renderItem(item, i))}
 
@@ -605,9 +615,7 @@ export function Chat({ scrollContainerRef }: ChatProps) {
         {hasMessages && (
           <div
             className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 transition-all duration-200 motion-reduce:transition-none ${
-              showScrollToLatest
-                ? "translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-2 opacity-0"
+              showScrollToLatest ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0"
             }`}
             // React 18 types lack `inert`; React 18 renders the attribute only as a string.
             {...(!showScrollToLatest && { inert: "" })}
@@ -660,7 +668,11 @@ export function Chat({ scrollContainerRef }: ChatProps) {
                     }`}
                     title={a.error ?? `${a.file.name} (${formatBytes(a.file.size)})`}
                   >
-                    {a.uploading ? <Loader2 size={12} className="animate-spin" role="img" aria-label="Uploading" /> : <FileText size={12} />}
+                    {a.uploading ? (
+                      <Loader2 size={12} className="animate-spin" role="img" aria-label="Uploading" />
+                    ) : (
+                      <FileText size={12} />
+                    )}
                     <span className="max-w-45 truncate">{a.file.name}</span>
                     <span className="text-base-content/50">{formatBytes(a.file.size)}</span>
                     <button

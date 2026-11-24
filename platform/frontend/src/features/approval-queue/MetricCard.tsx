@@ -51,7 +51,9 @@ export function MetricCard({ metric }: MetricCardProps) {
       </div>
       <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-2 gap-y-1">
         <span className="min-w-0 wrap-break-word text-sm font-bold text-base-content">{value}</span>
-        <span className="shrink-0 text-[10px] uppercase leading-4 text-base-content/50">Threshold: {threshold}</span>
+        <span className="shrink-0 text-[10px] uppercase leading-4 text-base-content/50">
+          Threshold: {threshold}
+        </span>
       </div>
     </article>
   );

@@ -182,7 +182,9 @@ export function MermaidElement({ element }: ViewerProps) {
       </div>
 
       <div className={view === "diagram" ? "block" : "hidden"}>
-        {status === "loading" && <div className="mb-2 text-xs text-base-content/60">Rendering diagram...</div>}
+        {status === "loading" && (
+          <div className="mb-2 text-xs text-base-content/60">Rendering diagram...</div>
+        )}
         {status === "error" && <div className="mb-2 text-xs text-error">Mermaid render failed: {error}</div>}
         {downloadError && <div className="mb-2 text-xs text-error">{downloadError}</div>}
 

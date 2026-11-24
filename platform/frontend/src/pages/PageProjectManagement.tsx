@@ -13,12 +13,12 @@
 import { useMemo } from "react";
 import { usePageHeader } from "@/features/shell";
 import { TEAM_FILTER, useProjectManagement } from "@/features/project-management";
-import { ProjectManagement } from "@/features/project-management";
+import { LayoutProjectManagement } from "@/features/project-management";
 import { useListFilter } from "@/lib/listFilter";
 
 /**
  * Project Management section page: owns the page's data, header and filter state.
- * Layout lives in ProjectManagement. Route params will land here with the router.
+ * Layout lives in LayoutProjectManagement. Route params go here.
  */
 export function PageProjectManagement() {
   usePageHeader({ title: "Access Control & Team Hub" });
@@ -28,7 +28,7 @@ export function PageProjectManagement() {
   const visibleMembers = useMemo(() => [...visible], [visible]);
 
   return (
-    <ProjectManagement
+    <LayoutProjectManagement
       status={status}
       members={members}
       roles={roles}

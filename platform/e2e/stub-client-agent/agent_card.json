@@ -1,0 +1,27 @@
+{
+  "name": "Stub Client Agent",
+  "description": "Stands in for the client-agent in the frontend's end-to-end tests. Answers each chat turn with a fixed reply, and with a sample mesh, IFC model, diagram or JSON file when the prompt asks for one. Never calls an LLM.",
+  "version": "1.0.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "answer_chat",
+      "name": "Answer Chat",
+      "description": "Return a fixed answer to a chat prompt, with a sample artifact when the prompt names a mesh, an IFC model, a diagram or JSON.",
+      "usage_notes": "End-to-end tests only. Always the same answer for the same prompt, apart from artifact ids.",
+      "requires_approval": false,
+      "expected_duration_seconds": 1,
+      "output_format": "ConversationResponse",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "The chat prompt."}
+        },
+        "required": ["query"]
+      }
+    }
+  ]
+}

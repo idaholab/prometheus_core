@@ -15,6 +15,8 @@
 from typing import Any, Dict, List, Optional
 from ..models.item import Item, Tag
 from ..models.pagination import Page, PageInfo
+from .. import paging
+from ..paging import parse_paginated
 from .base import AsyncBaseResource
 
 
@@ -51,8 +53,7 @@ class AsyncSearchResource(AsyncBaseResource):
         page_size: int = 25,
     ) -> Page[Item]:
         """Perform an advanced, server-paginated search asynchronously."""
-        if not 1 <= page_size <= 500:
-            raise ValueError("page_size must be between 1 and 500")
+        paging.check_page_size(page_size)
         if page < 1:
             raise ValueError("page must be 1 or greater")
 
@@ -91,21 +92,40 @@ class AsyncSearchResource(AsyncBaseResource):
         return self._parse_search_results(response.json(), page, page_size)
 
     async def recent(self, limit: int = 100) -> List[Item]:
-        """Get recently created or updated items asynchronously."""
-        params = {
-            "limit": limit,
-            "sort_by": "updated_at",
-            "sort_order": "desc",
-        }
+        """Get the most recently updated items in the active project, newest first.
 
-        response = await self._client._request("GET", f"{self._base_path}/records", params=params)
+        Mirrors ``SearchResource.recent``: pages through the paginated, date-sorted query route
+        until ``limit`` items are collected or the server has no further page.
 
-        data = response.json()
-        if isinstance(data, list):
-            items = data
-        else:
-            items = data.get("records", [])
-        return [self._parse_item(item_data) for item_data in items]
+        Raises:
+            ValueError: If ``limit`` is less than 1
+        """
+        if limit < 1:
+            raise ValueError(f"limit must be 1 or greater for search.recent, got {limit}")
+
+        page_size = min(limit, paging.MAX_PAGE_SIZE)
+        items: List[Item] = []
+        page = 1
+        while len(items) < limit:
+            response = await self._client._request(
+                "GET",
+                f"/organizations/{self._client.config.organization_id}/query/records/paginated",
+                params={
+                    "projectIds": [self._client.config.project_id],
+                    "sortBy": paging.SORT_DATE_NEW,
+                    "PageNumber": page,
+                    "PageSize": page_size,
+                },
+            )
+            result = self._parse_paginated_results(response.json())
+            items.extend(result.items)
+            # An empty page ends paging even if the server claims a next one, so a server
+            # that never stops cannot hang the loop.
+            if not result.items or not result.page_info.has_next:
+                break
+            page += 1
+
+        return items[:limit]
 
     def _parse_search_results(self, data: Any, page: int, page_size: int) -> Page[Item]:
         """Parse search results into a Page object."""
@@ -128,19 +148,9 @@ class AsyncSearchResource(AsyncBaseResource):
 
         return Page(items=items, page_info=page_info)
 
-    def _parse_paginated_results(self, data: Dict[str, Any]) -> Page[Item]:
-        """Parse a PaginatedResponse<QueryRecordViewResponseDto> payload."""
-        items = [self._parse_item(item_data) for item_data in data["items"]]
-
-        page_info = PageInfo(
-            page_number=data["pageNumber"],
-            page_size=data["pageSize"],
-            total_count=data["totalCount"],
-            has_next=data["hasNext"],
-            has_previous=data["hasPrevious"],
-        )
-
-        return Page(items=items, page_info=page_info)
+    def _parse_paginated_results(self, data: Any) -> Page[Item]:
+        """Parse a ``PaginatedResponse<QueryRecordViewResponseDto>`` into a ``Page[Item]``."""
+        return parse_paginated(data, "query/records/paginated", self._parse_item)
 
     def _parse_item(self, data: Dict[str, Any]) -> Item:
         """Parse item data from search results."""

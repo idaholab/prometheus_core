@@ -15,7 +15,12 @@
  * accessible name the way the component tests do. The shared stubs and the
  * unstubbed-call check come from ./fixtures. */
 import type { Request } from "@playwright/test";
-import type { ConfigResponse, ConversationHistoryResponse, SessionResponse, User } from "../src/lib/api/types";
+import type {
+  ConfigResponse,
+  ConversationHistoryResponse,
+  SessionResponse,
+  User,
+} from "../src/lib/api/types";
 import { expect, test, type ErrorBody } from "./fixtures";
 
 /** Checks the sign-in request carries what was typed, as the backend expects it. */
@@ -101,6 +106,6 @@ test("signing in opens the app as the user the server returned", async ({ page }
   expectLogin(await login, "someone", "the-password");
 
   await expect(page.getByRole("button", { name: "New chat" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Admin", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Admin", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in" })).toHaveCount(0);
 });

@@ -14,14 +14,14 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { ALL } from "@/lib/listFilter";
-import { AgentRegistry } from "./AgentRegistry.tsx";
+import { LayoutAgentRegistry } from "./LayoutAgentRegistry.tsx";
 
 test("agent registry with no agents keeps the toolbar wired to its props and shows the empty state", async () => {
   const user = userEvent.setup();
   const onQueryChange = vi.fn();
   const onDomainChange = vi.fn();
   render(
-    <AgentRegistry
+    <LayoutAgentRegistry
       agents={[]}
       status="empty"
       query="x"
