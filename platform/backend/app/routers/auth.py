@@ -89,7 +89,7 @@ _LOGIN_RESPONSES = {
     **error(status.HTTP_401_UNAUTHORIZED, "The username or password is wrong.", "Invalid credentials"),
     **error(
         status.HTTP_422_UNPROCESSABLE_ENTITY,
-        "The body has no username or no password.",
+        "The body has no non-empty username and password strings, or isn't a JSON object or form data.",
         "username and password required",
     ),
 }
