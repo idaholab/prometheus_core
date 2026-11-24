@@ -345,6 +345,25 @@ async def test_needs_info_depth_cap_stops_looping(session_store):
     assert "restate" in (capped.response_text or "").lower()
 
 
+async def test_needs_info_depth_cap_keeps_the_capped_turns_artifacts(session_store):
+    """The turn that hits the cap can still have published outputs before asking again;
+    they reach chat on the capped answer and land in the catalog."""
+    await _seed(session_store)
+    ni = _resp(status="needs_info", followup_questions=[{"field": "f", "question": "Q?"}])
+    for _ in range(chat_service._MAX_CONSECUTIVE_NEEDS_INFO):
+        await chat_service.map_response(ni, "t", session_store, SID, conversation_id="c1", auto_approve=False)
+    last = _resp(
+        status="needs_info",
+        followup_questions=[{"field": "f", "question": "Q?"}],
+        artifacts=[{"artifact_id": "a1", "name": "full"}],
+        new_artifacts=[{"artifact_id": "a1", "name": "status.png", "mime_type": "image/png"}],
+    )
+    capped = await chat_service.map_response(last, "t", session_store, SID, conversation_id="c1", auto_approve=False)
+    assert capped.status == ChatStatus.ANSWER.value
+    assert capped.artifacts is not None and [a.artifact_id for a in capped.artifacts] == ["a1"]
+    assert (await _stored(session_store)).artifacts == [{"artifact_id": "a1", "name": "full"}]
+
+
 async def test_needs_info_counter_resets_on_other_status(session_store):
     await _seed(session_store)
     ni = _resp(status="needs_info", followup_questions=[{"field": "f", "question": "Q?"}])

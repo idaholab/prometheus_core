@@ -275,10 +275,14 @@ async def map_response(
         count = await store.bump_needs_info(sid, conversation_id=conversation_id)
         if count is not None and count > _MAX_CONSECUTIVE_NEEDS_INFO:
             await store.reset_needs_info(sid, conversation_id=conversation_id)
+            # The capped turn may still have published outputs before asking again
+            # (a review gate looping on "request more evidence"); keep them.
+            shaped = await _turn_artifacts(response, store, sid, conversation_id=conversation_id)
             return ChatMessageResponse(
                 turn_id=turn_id,
                 status=ChatStatus.ANSWER,
                 response_text=_TOO_MANY_FOLLOWUPS_MESSAGE,
+                artifacts=shaped or None,
             )
 
     if status == "needs_info":
