@@ -7,7 +7,7 @@
 
 Table oidc_providers {
   id uuid [pk, not null]
-  provider_id text
+  provider_id text [not null]
   name text [not null]
   issuer_url text [not null]
   client_id text [not null]
@@ -29,6 +29,7 @@ Table users {
   display_name text
   is_sys_admin boolean [not null, default: false]
   created_at timestamptz [default: `now()`]
+  last_login timestamptz [default: `now()`]
 
   indexes {
     email [unique, name: 'uq_users_email']

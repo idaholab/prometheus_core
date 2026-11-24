@@ -41,7 +41,7 @@ The diagram is the source of truth for how tables relate. The sections below des
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `provider_id` | text | Human/URL-safe identifier; unique |
+| `provider_id` | text | Human/URL-safe identifier; unique. Required |
 | `name` | text | Display name. Required |
 | `issuer_url` | text | OIDC issuer (discovery base URL). Required |
 | `client_id` | text | OAuth client ID. Required |
@@ -65,6 +65,7 @@ The diagram is the source of truth for how tables relate. The sections below des
 | `display_name` | text | |
 | `is_sys_admin` | boolean | Platform-wide administrator flag. Required, default `false` |
 | `created_at` | timestamptz | |
+| `last_login` | timestamptz | |
 
 **Referenced by:** `user_identities`, `organization_users`, `project_user_roles`, and (non-MVP) grants, sessions, plans, workflows, approvals.
 
