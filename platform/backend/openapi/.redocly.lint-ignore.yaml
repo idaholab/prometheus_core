@@ -14,7 +14,25 @@
 # When the lint fails, Redocly suggests --generate-ignore-file. Don't run it to
 # make a route pass: it ignores the new problems and replaces this header. Run
 # it only when adding a rule, then restore this header.
+#
+# The operation-4xx-response entries are the exception to "remove when fixed":
+# they're the routes that can't answer with a 4xx, so there's nothing to fix.
+# Each entry exempts one method on one path, so a new method on the same path
+# is still checked. Only add a route here if it can't answer with a 4xx; if it
+# can, document the response with app/api_responses.py.
 openapi.json:
+  operation-4xx-response:
+    # Health probes; /readyz reports failure with a 503
+    - '#/paths/~1healthz/get/responses'
+    - '#/paths/~1readyz/get/responses'
+    # Public signing keys
+    - '#/paths/~1.well-known~1jwks.json/get/responses'
+    # Whether the first admin exists
+    - '#/paths/~1api~1setup~1status/get/responses'
+    # Always 200, even with no or a bad cookie
+    - '#/paths/~1api~1auth~1logout/post/responses'
+    # Public list of login options
+    - '#/paths/~1api~1auth~1providers/get/responses'
   operation-description:
     - '#/paths/~1healthz/get/description'
     - '#/paths/~1readyz/get/description'
