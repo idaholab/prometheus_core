@@ -11,7 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 /* App's wiring around the router: the Redux store is provided, and a 401 from
- * any RTK Query request forgets the user and sends them to Login, then back.
+ * any RTK Query request ends the session as a lost one and sends the user to
+ * Login, then back.
  * The route table is swapped for a tiny memory router so the test can see
  * where App navigates; the real routes are covered by app/router.dom.test.tsx. */
 import { act, render, screen } from "@testing-library/react";
@@ -22,6 +23,12 @@ const auth = vi.hoisted(() => ({ setCurrentUser: vi.fn() }));
 vi.mock("@/features/auth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/auth")>()),
   setCurrentUser: auth.setCurrentUser,
+}));
+
+const chat = vi.hoisted(() => ({ clear: vi.fn(), suspendForReauth: vi.fn() }));
+vi.mock("@/features/chat", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/chat")>()),
+  chatStore: chat,
 }));
 
 const routing = vi.hoisted(() => ({ router: null as ReturnType<typeof createMemoryRouter> | null }));
@@ -48,6 +55,8 @@ const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
   auth.setCurrentUser.mockReset();
+  chat.clear.mockReset();
+  chat.suspendForReauth.mockReset();
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -75,6 +84,9 @@ test("a 401 from any request forgets the user and goes to Login, then back to th
   await request(401);
 
   expect(auth.setCurrentUser).toHaveBeenCalledWith(null);
+  // As a lost chat session does: chat stops, but keeps its conversation for after sign-in
+  expect(chat.suspendForReauth).toHaveBeenCalledOnce();
+  expect(chat.clear).not.toHaveBeenCalled();
   expect(await screen.findByText("Login page")).toBeInTheDocument();
   expect(routing.router?.state.location.search).toBe(`?next=${encodeURIComponent("/admin?tab=users")}`);
 });

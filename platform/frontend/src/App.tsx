@@ -13,9 +13,9 @@
 import { useEffect, useState } from "react";
 import { Provider } from "react-redux";
 import { RouterProvider } from "react-router";
+import { endSession } from "@/app/endSession";
 import { loginPathFor } from "@/app/paths";
 import { createAppRouter } from "@/app/router";
-import { setCurrentUser } from "@/features/auth";
 import { onUnauthorized } from "@/lib/api/baseApi";
 import { appStore } from "@/lib/api/store";
 
@@ -34,9 +34,8 @@ export default function App() {
 
   useEffect(() => {
     onUnauthorized(() => {
-      setCurrentUser(null);
       const { pathname, search } = router.state.location;
-      void router.navigate(loginPathFor(pathname + search), { replace: true });
+      void endSession("lost", () => router.navigate(loginPathFor(pathname + search), { replace: true }));
     });
     return () => onUnauthorized(null);
   }, [router]);

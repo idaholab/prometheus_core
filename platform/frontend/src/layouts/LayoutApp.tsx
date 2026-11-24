@@ -13,9 +13,9 @@
 import { Fragment, useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { api } from "@/lib/api/client";
-import { setCurrentUser } from "@/features/auth";
 import { chatProfileName, chatStore, ChatHistory, useAuthLost, useChatType } from "@/features/chat";
 import { Header, LeftPanel, navLabel, SettingsPanel } from "@/features/shell";
+import { endSession } from "@/app/endSession";
 import { loginPathFor, NAV_PATHS, navIdForPath, PATHS } from "@/app/paths";
 import { PageHome } from "@/pages/PageHome";
 
@@ -57,9 +57,9 @@ export function LayoutApp() {
   // come back to this page.
   useEffect(() => {
     if (!authLost) return;
-    chatStore.suspendForReauth();
-    setCurrentUser(null);
-    navigate(loginPathFor(location.pathname + location.search), { replace: true });
+    void endSession("lost", () =>
+      navigate(loginPathFor(location.pathname + location.search), { replace: true }),
+    );
   }, [authLost, navigate, location.pathname, location.search]);
 
   const handleLogout = async () => {
@@ -68,12 +68,10 @@ export function LayoutApp() {
     } catch {
       /* clear client state regardless */
     }
-    // clear(), not disconnect(): also forgets this tab's remembered
-    // conversation id, so signing in as someone else doesn't try to resume the
-    // previous user's conversation.
-    chatStore.clear();
-    setCurrentUser(null);
-    navigate(PATHS.login, { replace: true });
+    // "logout", not "lost": also forgets this tab's remembered conversation
+    // id, so signing in as someone else doesn't try to resume the previous
+    // user's conversation.
+    await endSession("logout", () => navigate(PATHS.login, { replace: true }));
   };
 
   // New chat: switch to Home, then a fresh conversation_id + cleared transcript
