@@ -94,6 +94,7 @@ Data from the backend goes through [RTK Query](https://redux-toolkit.js.org/rtk-
 - **One API, in `src/lib/api/baseApi.ts`.** It uses the same `/api` base and session cookie as `client.ts`. Errors reach screens as `{ status, message }`, where `message` is the backend's `detail`, or a generic message when the body isn't JSON (a proxy's error page). A 401 from any request sends the user to Login and back to the page afterward (wired in `App.tsx`).
 - **Endpoints live in their feature.** A feature adds its endpoints with `baseApi.injectEndpoints` in its own file, as `features/admin/adminApi.ts` does, and exports the hooks it generates.
 - **The store is in `src/lib/api/store.ts`.** It holds only RTK Query's cache. Tests call `createAppStore()` for a fresh cache each.
+- **A session ends in one place, `src/app/endSession.ts`.** Logging out, a lost event stream and a 401 all go through it: it stops chat, forgets the user, goes to Login, and then empties the cache, so the next user in the tab never sees the previous one's data.
 
 To add an endpoint:
 
