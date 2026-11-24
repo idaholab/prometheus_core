@@ -112,10 +112,11 @@ async def _read_credentials(request: Request) -> tuple[Optional[str], Optional[s
             return None, None
         if not isinstance(data, dict):
             return None, None
-        return data.get("username"), data.get("password")
-    form = await request.form()
-    username = form.get("username")
-    password = form.get("password")
+        username, password = data.get("username"), data.get("password")
+    else:
+        form = await request.form()
+        username, password = form.get("username"), form.get("password")
+    # A JSON number or list, or a form file upload, is no username: 422, not a 500.
     return (
         username if isinstance(username, str) else None,
         password if isinstance(password, str) else None,

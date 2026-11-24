@@ -147,6 +147,10 @@ async def test_login_answers_as_its_openapi_entry_documents(monkeypatch, wire_db
     missing = client.post("/api/auth/login", json={"username": "alice"})
     assert (missing.status_code, missing.json()["detail"]) == (422, "username and password required")
 
+    for body in ({"username": "alice", "password": 12345}, {"username": ["alice"], "password": "s3cret"}):
+        not_strings = client.post("/api/auth/login", json=body)
+        assert (not_strings.status_code, not_strings.json()["detail"]) == (422, "username and password required")
+
 
 # --------------------------------------------------------------------------- #
 # AU-5 — /api/config is authenticated
