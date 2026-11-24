@@ -69,7 +69,8 @@ ADMIN_RESPONSES: Responses = {
 AGENT_SECRET_RESPONSES: Responses = {
     **error(
         status.HTTP_401_UNAUTHORIZED,
-        "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+        "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` "
+        "send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
         "Invalid or missing agent credentials",
     ),
     **error(
