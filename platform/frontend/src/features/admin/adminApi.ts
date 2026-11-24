@@ -28,6 +28,15 @@ import type {
   SigningKey,
 } from "@/lib/api/types";
 
+/**
+ * How old, in seconds, a cached list can be when a screen mounts before it is
+ * fetched again. Coming back to a tab shows the cached list at once and
+ * refreshes it once it's this old; a list the /admin loader has just fetched
+ * isn't fetched a second time. Changes refetch their list straight away
+ * through its tag, whatever its age.
+ */
+export const LIST_MAX_AGE_SECONDS = 30;
+
 /** The backend's message for a failed Admin request, or `fallback`. */
 export function errorMessage(error: unknown, fallback: string): string {
   const message = (error as Partial<ApiQueryError> | undefined)?.message;

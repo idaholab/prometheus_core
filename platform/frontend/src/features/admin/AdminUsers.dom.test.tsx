@@ -11,14 +11,16 @@
 // SPDX-License-Identifier: MIT
 
 /* Admin > Users with the real RTK Query cache and a stubbed fetch: its loading,
- * error and empty states, and that leaving the tab and coming back shows the
- * cached list at once and then refreshes it. The full create, edit and delete
- * flow is covered end to end in e2e/full/admin-users.spec.ts. */
+ * error and empty states, how often it fetches (the /admin loader's prefetch is
+ * not fetched again, a list older than LIST_MAX_AGE_SECONDS is), and that
+ * coming back to the tab shows the cached list at once. The full create, edit
+ * and delete flow is covered end to end in e2e/full/admin-users.spec.ts. */
 import { render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { AdminUser } from "@/lib/api/types";
 import { createAppStore } from "@/lib/api/store";
+import { adminApi, LIST_MAX_AGE_SECONDS } from "./adminApi.ts";
 import { AdminUsers } from "./AdminUsers.tsx";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -54,7 +56,10 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 test("shows Loading until the list arrives, then the users", async () => {
   let resolve!: (r: Response) => void;
@@ -79,13 +84,43 @@ test("a failed load shows the backend's message", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Database is down");
 });
 
-test("coming back to the tab shows the cached list at once, then refreshes it", async () => {
+test("a list the loader started is fetched once, whether it's still loading or already in", async () => {
+  // Still in flight when the page mounts: the page joins that request
+  fetchMock.mockImplementation(() => Promise.resolve(respond(200, [user("someone")])));
+  const inFlight = createAppStore();
+  void inFlight.dispatch(adminApi.endpoints.listAdminUsers.initiate());
+  const first = renderUsers(inFlight);
+  expect(await screen.findByRole("cell", { name: "someone" })).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  first.unmount();
+
+  // Already in when the page mounts: shown from the cache, no second request
+  fetchMock.mockClear();
+  const settled = createAppStore();
+  await settled.dispatch(adminApi.endpoints.listAdminUsers.initiate());
+  renderUsers(settled);
+  expect(screen.getByRole("cell", { name: "someone" })).toBeInTheDocument();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test("coming back to the tab shows the cached list at once, and refreshes it once it's old", async () => {
+  // Only the clock is faked; timers and promises run for real
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const start = Date.now();
   fetchMock.mockResolvedValueOnce(respond(200, [user("first")]));
   const { store, unmount } = renderUsers();
   expect(await screen.findByRole("cell", { name: "first" })).toBeInTheDocument();
   unmount();
 
-  // The refresh hangs until released, to see what shows meanwhile
+  // Back within the max age: the cached list, and no request
+  vi.setSystemTime(start + (LIST_MAX_AGE_SECONDS - 1) * 1000);
+  renderUsers(store).unmount();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  // Back after it: the cached list at once, then the refreshed one
+  vi.setSystemTime(start + (LIST_MAX_AGE_SECONDS + 1) * 1000);
   let resolve!: (r: Response) => void;
   fetchMock.mockReturnValueOnce(new Promise((r) => (resolve = r)));
   renderUsers(store);

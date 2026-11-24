@@ -22,6 +22,7 @@ import {
   useDeleteAdminUserMutation,
   useListAdminUsersQuery,
   useUpdateAdminUserMutation,
+  LIST_MAX_AGE_SECONDS,
 } from "./adminApi";
 
 /**
@@ -33,10 +34,11 @@ import {
  *
  * Server data comes from RTK Query (adminApi.ts): the list is cached, and a
  * create, edit or delete invalidates it so it refetches. Coming back to the
- * tab shows the cached list at once while it refreshes.
+ * tab shows the cached list at once, and refreshes it once it's older than
+ * LIST_MAX_AGE_SECONDS.
  */
 export function AdminUsers() {
-  const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: true });
+  const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
   const users = list.data ?? null;
   const [createUser] = useCreateAdminUserMutation();
   const [updateUser] = useUpdateAdminUserMutation();

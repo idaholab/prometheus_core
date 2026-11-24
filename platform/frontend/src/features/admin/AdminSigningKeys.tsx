@@ -21,6 +21,7 @@ import {
   useGenerateSigningKeyMutation,
   useListSigningKeysQuery,
   useRetireSigningKeyMutation,
+  LIST_MAX_AGE_SECONDS,
 } from "./adminApi";
 
 /** An inactive key is waiting to be activated, so it warns; a retired key is done. */
@@ -40,7 +41,7 @@ const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone>
  * list, so it refetches.
  */
 export function AdminSigningKeys() {
-  const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: true });
+  const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
   const keys = list.data ?? null;
   const [generateKey] = useGenerateSigningKeyMutation();
   const [activateKey] = useActivateSigningKeyMutation();

@@ -21,6 +21,7 @@ import {
   useDeleteOidcProviderMutation,
   useListOidcProvidersQuery,
   useUpdateOidcProviderMutation,
+  LIST_MAX_AGE_SECONDS,
 } from "./adminApi";
 
 const DEFAULT_SCOPES = "openid profile email";
@@ -35,7 +36,7 @@ const DEFAULT_SCOPES = "openid profile email";
  * invalidates the list, so it refetches.
  */
 export function AdminOidcProviders() {
-  const list = useListOidcProvidersQuery(undefined, { refetchOnMountOrArgChange: true });
+  const list = useListOidcProvidersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
   const providers = list.data ?? null;
   const [createProvider] = useCreateOidcProviderMutation();
   const [updateProvider] = useUpdateOidcProviderMutation();

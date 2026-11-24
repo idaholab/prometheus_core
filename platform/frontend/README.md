@@ -105,12 +105,12 @@ To add an endpoint:
 In a screen:
 
 ```tsx
-const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: true });
+const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
 const users = list.data ?? null;   // null until the first load: show the loading state
 const [createUser] = useCreateAdminUserMutation();
 ```
 
-`refetchOnMountOrArgChange` shows the cached list at once when the user comes back to the screen, then refreshes it.
+`refetchOnMountOrArgChange` with a number of seconds shows the cached list at once when the user comes back to the screen, and fetches it again only when it's older than that, so a list a loader has just fetched isn't fetched twice. A change refetches its list straight away through its tag, whatever its age.
 
 **Starting a query before the page renders:** a route `loader` can call a feature's helper that dispatches the query's `initiate()` without awaiting it, as the `/admin` route does with `prefetchAdminUsers()`. The page's own hook then picks up the request already in flight.
 
