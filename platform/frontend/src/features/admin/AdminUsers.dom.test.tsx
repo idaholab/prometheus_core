@@ -11,11 +11,12 @@
 // SPDX-License-Identifier: MIT
 
 /* Admin > Users with the real RTK Query cache and a stubbed fetch: its loading,
- * error and empty states, how often it fetches (the /admin loader's prefetch is
+ * error and empty states, a create the backend rejects, how often it fetches (the /admin loader's prefetch is
  * not fetched again, a list older than LIST_MAX_AGE_SECONDS is), and that
  * coming back to the tab shows the cached list at once. The full create, edit
  * and delete flow is covered end to end in e2e/full/admin-users.spec.ts. */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Provider } from "react-redux";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { AdminUser } from "@/lib/api/types";
@@ -51,7 +52,14 @@ function renderUsers(store = createAppStore()) {
   };
 }
 
+// jsdom has no modal dialogs: showModal and close just set the open attribute
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute("open");
+  };
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -82,6 +90,27 @@ test("a failed load shows the backend's message", async () => {
   fetchMock.mockResolvedValueOnce(respond(500, { detail: "Database is down" }));
   renderUsers();
   expect(await screen.findByRole("alert")).toHaveTextContent("Database is down");
+});
+
+test("a duplicate username shows the backend's message in the dialog, which stays open", async () => {
+  const user_ = userEvent.setup();
+  fetchMock.mockImplementation(async (input) => {
+    const req = input as Request;
+    return req.method === "POST"
+      ? respond(409, { detail: "Username already exists" })
+      : respond(200, [user("someone")]);
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  await user_.click(screen.getByRole("button", { name: "New user" }));
+  const dialog = screen.getByRole("dialog", { name: "New user" });
+  await user_.type(within(dialog).getByLabelText("Username"), "someone");
+  await user_.type(within(dialog).getByLabelText("Password"), "pw");
+  await user_.click(within(dialog).getByRole("button", { name: "Create" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Username already exists");
+  expect(dialog).toHaveAttribute("open");
 });
 
 test("a failed refresh shows its error in place of the rows from before it", async () => {

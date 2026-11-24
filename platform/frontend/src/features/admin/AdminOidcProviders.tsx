@@ -218,7 +218,7 @@ export function AdminOidcProviders() {
                       variant="ghost"
                       size="xs"
                       icon={<Pencil />}
-                      ariaLabel="Edit provider"
+                      ariaLabel={`Edit ${provider.display_name}`}
                       onClick={() => openEdit(provider)}
                     />
                     <Button
@@ -226,7 +226,7 @@ export function AdminOidcProviders() {
                       soft
                       size="xs"
                       icon={<Trash2 />}
-                      ariaLabel="Delete provider"
+                      ariaLabel={`Delete ${provider.display_name}`}
                       onClick={() => handleDelete(provider)}
                     />
                   </td>
@@ -244,9 +244,11 @@ export function AdminOidcProviders() {
         </div>
       )}
 
-      <dialog ref={createDialogRef} className="modal">
+      <dialog ref={createDialogRef} className="modal" aria-labelledby="oidc-create-title">
         <div className="modal-box max-w-md">
-          <h3 className="font-medium mb-3">New identity provider</h3>
+          <h3 id="oidc-create-title" className="font-medium mb-3">
+            New identity provider
+          </h3>
           <div className="space-y-3">
             {createError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -254,10 +256,11 @@ export function AdminOidcProviders() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-provider-id">
                 <span className="label-text text-xs uppercase tracking-wider">Provider ID</span>
               </label>
               <input
+                id="oidc-create-provider-id"
                 className="input input-bordered w-full"
                 placeholder="okta"
                 value={createProviderId}
@@ -269,10 +272,11 @@ export function AdminOidcProviders() {
               </span>
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-display-name">
                 <span className="label-text text-xs uppercase tracking-wider">Display name</span>
               </label>
               <input
+                id="oidc-create-display-name"
                 className="input input-bordered w-full"
                 placeholder="Okta"
                 value={createDisplayName}
@@ -280,10 +284,11 @@ export function AdminOidcProviders() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-issuer-url">
                 <span className="label-text text-xs uppercase tracking-wider">Issuer URL</span>
               </label>
               <input
+                id="oidc-create-issuer-url"
                 className="input input-bordered w-full"
                 placeholder="https://your-org.okta.com"
                 value={createIssuerUrl}
@@ -291,20 +296,22 @@ export function AdminOidcProviders() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-client-id">
                 <span className="label-text text-xs uppercase tracking-wider">Client ID</span>
               </label>
               <input
+                id="oidc-create-client-id"
                 className="input input-bordered w-full"
                 value={createClientId}
                 onChange={(e) => setCreateClientId(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-client-secret">
                 <span className="label-text text-xs uppercase tracking-wider">Client secret</span>
               </label>
               <input
+                id="oidc-create-client-secret"
                 className="input input-bordered w-full"
                 type="password"
                 value={createClientSecret}
@@ -312,22 +319,24 @@ export function AdminOidcProviders() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-scopes">
                 <span className="label-text text-xs uppercase tracking-wider">Scopes</span>
               </label>
               <input
+                id="oidc-create-scopes"
                 className="input input-bordered w-full"
                 value={createScopes}
                 onChange={(e) => setCreateScopes(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-create-default-role">
                 <span className="label-text text-xs uppercase tracking-wider">
                   Default role for new accounts
                 </span>
               </label>
               <select
+                id="oidc-create-default-role"
                 className="select select-bordered w-full"
                 value={createDefaultRole}
                 onChange={(e) => setCreateDefaultRole(e.target.value)}
@@ -356,9 +365,11 @@ export function AdminOidcProviders() {
         </form>
       </dialog>
 
-      <dialog ref={editDialogRef} className="modal">
+      <dialog ref={editDialogRef} className="modal" aria-labelledby="oidc-edit-title">
         <div className="modal-box max-w-md">
-          <h3 className="font-medium mb-3">Edit {editing?.display_name}</h3>
+          <h3 id="oidc-edit-title" className="font-medium mb-3">
+            Edit {editing?.display_name}
+          </h3>
           <div className="space-y-3">
             {editError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -366,42 +377,46 @@ export function AdminOidcProviders() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-display-name">
                 <span className="label-text text-xs uppercase tracking-wider">Display name</span>
               </label>
               <input
+                id="oidc-edit-display-name"
                 className="input input-bordered w-full"
                 value={editDisplayName}
                 onChange={(e) => setEditDisplayName(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-issuer-url">
                 <span className="label-text text-xs uppercase tracking-wider">Issuer URL</span>
               </label>
               <input
+                id="oidc-edit-issuer-url"
                 className="input input-bordered w-full"
                 value={editIssuerUrl}
                 onChange={(e) => setEditIssuerUrl(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-client-id">
                 <span className="label-text text-xs uppercase tracking-wider">Client ID</span>
               </label>
               <input
+                id="oidc-edit-client-id"
                 className="input input-bordered w-full"
                 value={editClientId}
                 onChange={(e) => setEditClientId(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-client-secret">
                 <span className="label-text text-xs uppercase tracking-wider">
                   New client secret (optional)
                 </span>
               </label>
               <input
+                id="oidc-edit-client-secret"
                 className="input input-bordered w-full"
                 type="password"
                 placeholder="Leave blank to keep current secret"
@@ -410,22 +425,24 @@ export function AdminOidcProviders() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-scopes">
                 <span className="label-text text-xs uppercase tracking-wider">Scopes</span>
               </label>
               <input
+                id="oidc-edit-scopes"
                 className="input input-bordered w-full"
                 value={editScopes}
                 onChange={(e) => setEditScopes(e.target.value)}
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="oidc-edit-default-role">
                 <span className="label-text text-xs uppercase tracking-wider">
                   Default role for new accounts
                 </span>
               </label>
               <select
+                id="oidc-edit-default-role"
                 className="select select-bordered w-full"
                 value={editDefaultRole}
                 onChange={(e) => setEditDefaultRole(e.target.value)}

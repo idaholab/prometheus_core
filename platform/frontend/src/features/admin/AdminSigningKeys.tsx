@@ -166,7 +166,7 @@ export function AdminSigningKeys() {
                         variant="ghost"
                         size="xs"
                         icon={copiedId === key.id ? <Check /> : <Copy />}
-                        ariaLabel="Copy public key"
+                        ariaLabel={`Copy public key ${key.kid}`}
                         onClick={() => handleCopy(key)}
                       />
                       {!key.is_active && !key.retired_at && (
