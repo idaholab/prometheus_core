@@ -32,6 +32,9 @@ from prometheus_api.contract import (  # noqa: F401
     ConversationStatus,
 )
 
+# The longest time GET /workflows/templates on the client-agent may take.
+WORKFLOW_TEMPLATES_TIMEOUT_S = 10.0
+
 
 def response_from_payload(data: Dict[str, Any]) -> ConversationResponse:
     """Build a ConversationResponse from a client-agent response payload dict.
@@ -84,6 +87,19 @@ class A2AClient:
             payload = response.json()
         if not isinstance(payload, dict) or not payload.get("upload_id"):
             raise ValueError("Upload staging response did not include upload_id")
+        return payload
+
+    async def list_workflow_templates(self) -> Dict[str, Any]:
+        """Return the client-agent's compiled workflow library (``GET /workflows/templates``)."""
+        async with httpx.AsyncClient(timeout=WORKFLOW_TEMPLATES_TIMEOUT_S) as client:
+            response = await client.get(
+                f"{self.agent_url}/workflows/templates",
+                headers={"Authorization": f"Bearer {self.agent_secret}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Workflow templates response is not a JSON object")
         return payload
 
     async def _file_chunks(self, file_path: Path, chunk_size: int = 1024 * 1024):

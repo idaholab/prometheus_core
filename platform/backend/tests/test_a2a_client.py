@@ -21,9 +21,10 @@ is required.
 import json
 import uuid
 
+import httpx
 import pytest
 
-from app.a2a_client import A2AClient
+from app.a2a_client import WORKFLOW_TEMPLATES_TIMEOUT_S, A2AClient
 from app import task_events
 
 
@@ -133,6 +134,61 @@ def test_extract_from_status_rejects_malformed(bad):
     client = A2AClient("http://agent.local", "s")
     with pytest.raises(ValueError):
         client._extract_from_status(bad)
+
+
+def _templates_transport(monkeypatch, handler):
+    """Route every ``httpx.AsyncClient`` the client builds through ``handler``; return the seen requests."""
+    seen: list = []
+    real_async_client = httpx.AsyncClient
+
+    def recording(request):
+        seen.append(request)
+        return handler(request)
+
+    def client(**kwargs):
+        return real_async_client(transport=httpx.MockTransport(recording), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", client)
+    return seen
+
+
+def test_list_workflow_templates_gets_library_with_bearer(monkeypatch):
+    body = {"enabled": True, "workflows": [{"workflow_id": "heat-survey"}], "errors": []}
+    seen = _templates_transport(monkeypatch, lambda request: httpx.Response(200, json=body))
+    client = A2AClient("http://agent.local/", "sekret")
+
+    payload = _run(client.list_workflow_templates())
+
+    assert payload == body
+    (request,) = seen
+    assert request.method == "GET"
+    assert str(request.url) == "http://agent.local/workflows/templates"
+    assert request.headers["Authorization"] == "Bearer sekret"
+    # The short library timeout, not the client's 900 s turn timeout.
+    assert WORKFLOW_TEMPLATES_TIMEOUT_S == 10.0
+    assert request.extensions["timeout"] == dict.fromkeys(("connect", "read", "write", "pool"), 10.0)
+
+
+def test_list_workflow_templates_raises_on_non_2xx(monkeypatch):
+    _templates_transport(monkeypatch, lambda request: httpx.Response(503, json={"detail": "down"}))
+    client = A2AClient("http://agent.local", "s")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _run(client.list_workflow_templates())
+
+
+@pytest.mark.parametrize("body", [[], "library", None], ids=["list", "string", "null"])
+def test_list_workflow_templates_rejects_non_object_body(monkeypatch, body):
+    # The JSON text itself: ``json=None`` would send no body at all.
+    content = json.dumps(body).encode()
+    _templates_transport(
+        monkeypatch,
+        lambda request: httpx.Response(200, content=content, headers={"Content-Type": "application/json"}),
+    )
+    client = A2AClient("http://agent.local", "s")
+
+    with pytest.raises(ValueError, match="not a JSON object"):
+        _run(client.list_workflow_templates())
 
 
 def test_task_events_helpers():

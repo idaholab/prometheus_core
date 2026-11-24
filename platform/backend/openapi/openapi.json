@@ -3959,6 +3959,227 @@
           }
         }
       }
+    },
+    "/api/workflows": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "List workflow templates",
+        "description": "Every workflow template, sorted by `name`, then `workflow_id`, without its inputs or graph.\n\nWhen the workflow library is unreachable or off, answers 200 with `available: false`\nand no workflows, rather than an error.",
+        "operationId": "list_workflows",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The session token that login sets. Browsers send it automatically.",
+              "title": "Prometheus Session"
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Get a workflow template",
+        "description": "One workflow template with its inputs and its graph of nodes and edges.",
+        "operationId": "get_workflow",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The workflow's library id, as `GET /api/workflows` lists it.",
+              "title": "Workflow Id"
+            },
+            "description": "The workflow's library id, as `GET /api/workflows` lists it."
+          },
+          {
+            "name": "prometheus_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The session token that login sets. Browsers send it automatically.",
+              "title": "Prometheus Session"
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session: the session cookie is missing, invalid or expired, or the session was logged out.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Not authenticated",
+                    "value": {
+                      "detail": "Not authenticated"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Invalid or expired session",
+                    "value": {
+                      "detail": "Invalid or expired session"
+                    }
+                  },
+                  "example_3": {
+                    "summary": "Session has been logged out",
+                    "value": {
+                      "detail": "Session has been logged out"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The workflow library has no template with this id.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Workflow not found",
+                    "value": {
+                      "detail": "Workflow not found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The workflow library is unreachable or off.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Workflow library is unavailable",
+                    "value": {
+                      "detail": "Workflow library is unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5157,6 +5378,163 @@
         "title": "FormField",
         "description": "A single follow-up form field.\n\nMatches the props consumed by ``frontend/src/components/chat/FollowupForm.tsx``\nand the normalized shape produced by ``normalize_followup_questions`` below\n(ported from ``message_handler._handle_needs_info``)."
       },
+      "GraphEdge": {
+        "properties": {
+          "edge_id": {
+            "type": "string",
+            "title": "Edge Id",
+            "description": "The edge's id, `<workflow_id>-e<n>`."
+          },
+          "from_node": {
+            "type": "string",
+            "title": "From Node",
+            "description": "The `node_id` the edge starts at."
+          },
+          "to_node": {
+            "type": "string",
+            "title": "To Node",
+            "description": "The `node_id` the edge ends at."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "data",
+              "order"
+            ],
+            "title": "Kind",
+            "description": "`data` when the target reads the source's output, `order` when it only runs after it."
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port",
+            "description": "The target input port of a `data` edge; null for an `order` edge."
+          }
+        },
+        "type": "object",
+        "required": [
+          "edge_id",
+          "from_node",
+          "to_node",
+          "kind",
+          "port"
+        ],
+        "title": "GraphEdge",
+        "description": "One edge of a workflow graph."
+      },
+      "GraphNode": {
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "title": "Node Id",
+            "description": "The step id, unique within the workflow; it holds no `.`."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "skill",
+              "checkpoint",
+              "qa_gate"
+            ],
+            "title": "Kind",
+            "description": "What the node does."
+          },
+          "skill_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Id",
+            "description": "The skill the step calls; null for a node that calls none."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "The skill's name from its agent card when known, else the step id."
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name",
+            "description": "The registry key of the agent that serves the skill; null when no registered agent does."
+          },
+          "is_final": {
+            "type": "boolean",
+            "title": "Is Final",
+            "description": "Whether the step's output is the workflow's result."
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNodeInput"
+            },
+            "type": "array",
+            "title": "Inputs",
+            "description": "The step's input ports, in parameter order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_id",
+          "kind",
+          "skill_id",
+          "label",
+          "agent_name",
+          "is_final",
+          "inputs"
+        ],
+        "title": "GraphNode",
+        "description": "One node of a workflow graph: one step of the template."
+      },
+      "GraphNodeInput": {
+        "properties": {
+          "port": {
+            "type": "string",
+            "title": "Port",
+            "description": "The step parameter the value fills; nested parameters join with `.`."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Where the value comes from: `input.<path>` for a workflow input, `context.<key>` for a conversation context value, or `step.<step_id>.<path>` for another node's output (a step id holds no `.`, so split at the second dot); null for a literal value."
+          },
+          "optional": {
+            "type": "boolean",
+            "title": "Optional",
+            "description": "Whether the step runs without this value; false when the path is under the workflow's required inputs."
+          }
+        },
+        "type": "object",
+        "required": [
+          "port",
+          "source",
+          "optional"
+        ],
+        "title": "GraphNodeInput",
+        "description": "One input port of a graph node and where its value comes from."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5811,6 +6189,359 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Workflow": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id",
+            "description": "The library id of the workflow; the value `ChatMessageRequest.workflow_id` takes to run it."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The display name."
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "What the workflow does."
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "The group the workflow is listed under; `General` when none is set."
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "The workflow definition's version."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "agent_card"
+            ],
+            "title": "Source",
+            "description": "`local` for a client-agent workflow file, `agent_card` for a workflow an agent card declares."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Who maintains the workflow; null when not set."
+          },
+          "complexity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complex",
+                  "moderate",
+                  "simple"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complexity",
+            "description": "How complex the workflow is; null when not set."
+          },
+          "estimated_runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Runtime Seconds",
+            "description": "The expected run time in seconds; null when not set."
+          },
+          "speedup": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speedup",
+            "description": "The speed-up over the manual baseline, unformatted; null when not set."
+          },
+          "requires_approval": {
+            "type": "boolean",
+            "title": "Requires Approval",
+            "description": "Whether chat pauses for the user's approval of the workflow before it runs."
+          },
+          "agent_count": {
+            "type": "integer",
+            "title": "Agent Count",
+            "description": "The number of distinct agents over the `skill` nodes."
+          },
+          "checkpoint_count": {
+            "type": "integer",
+            "title": "Checkpoint Count",
+            "description": "The number of `checkpoint` nodes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "name",
+          "summary",
+          "category",
+          "version",
+          "source",
+          "owner",
+          "complexity",
+          "estimated_runtime_seconds",
+          "speedup",
+          "requires_approval",
+          "agent_count",
+          "checkpoint_count"
+        ],
+        "title": "Workflow",
+        "description": "One row of ``GET /api/workflows``, sorted by ``name``, then ``workflow_id``."
+      },
+      "WorkflowDetail": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id",
+            "description": "The library id of the workflow; the value `ChatMessageRequest.workflow_id` takes to run it."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The display name."
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "What the workflow does."
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "The group the workflow is listed under; `General` when none is set."
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "The workflow definition's version."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "agent_card"
+            ],
+            "title": "Source",
+            "description": "`local` for a client-agent workflow file, `agent_card` for a workflow an agent card declares."
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner",
+            "description": "Who maintains the workflow; null when not set."
+          },
+          "complexity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complex",
+                  "moderate",
+                  "simple"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complexity",
+            "description": "How complex the workflow is; null when not set."
+          },
+          "estimated_runtime_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Runtime Seconds",
+            "description": "The expected run time in seconds; null when not set."
+          },
+          "speedup": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speedup",
+            "description": "The speed-up over the manual baseline, unformatted; null when not set."
+          },
+          "requires_approval": {
+            "type": "boolean",
+            "title": "Requires Approval",
+            "description": "Whether chat pauses for the user's approval of the workflow before it runs."
+          },
+          "agent_count": {
+            "type": "integer",
+            "title": "Agent Count",
+            "description": "The number of distinct agents over the `skill` nodes."
+          },
+          "checkpoint_count": {
+            "type": "integer",
+            "title": "Checkpoint Count",
+            "description": "The number of `checkpoint` nodes."
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/WorkflowInputs",
+            "description": "The input paths the workflow declares."
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraph",
+            "description": "The workflow's steps and the edges between them."
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "name",
+          "summary",
+          "category",
+          "version",
+          "source",
+          "owner",
+          "complexity",
+          "estimated_runtime_seconds",
+          "speedup",
+          "requires_approval",
+          "agent_count",
+          "checkpoint_count",
+          "inputs",
+          "graph"
+        ],
+        "title": "WorkflowDetail",
+        "description": "Returned by ``GET /api/workflows/{workflow_id}``: one template with its inputs and graph."
+      },
+      "WorkflowGraph": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "title": "Workflow Id",
+            "description": "The workflow the graph belongs to."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "dag",
+              "sequential",
+              "parallel"
+            ],
+            "title": "Mode",
+            "description": "How the workflow runs its steps."
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array",
+            "title": "Nodes",
+            "description": "The steps, in definition order."
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array",
+            "title": "Edges",
+            "description": "The data and order edges between the steps."
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "mode",
+          "nodes",
+          "edges"
+        ],
+        "title": "WorkflowGraph",
+        "description": "The nodes and edges of one workflow template."
+      },
+      "WorkflowInputs": {
+        "properties": {
+          "required": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required",
+            "description": "The input paths the workflow needs before it runs."
+          },
+          "optional": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Optional",
+            "description": "The input paths the workflow uses when they are given."
+          }
+        },
+        "type": "object",
+        "required": [
+          "required",
+          "optional"
+        ],
+        "title": "WorkflowInputs",
+        "description": "The input paths a workflow declares."
+      },
+      "WorkflowListResponse": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "False when the workflow library is unreachable or off; `workflows` is then empty."
+          },
+          "workflows": {
+            "items": {
+              "$ref": "#/components/schemas/Workflow"
+            },
+            "type": "array",
+            "title": "Workflows",
+            "description": "The workflows, by `name`, then `workflow_id`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "workflows"
+        ],
+        "title": "WorkflowListResponse",
+        "description": "Returned by ``GET /api/workflows``.\n\n``available`` is ``False`` when the client-agent workflow library cannot be read\nor is off: the endpoint degrades to an empty list with a 200, as ``GET /api/agents`` does."
       }
     },
     "securitySchemes": {
@@ -5886,6 +6617,10 @@
     {
       "name": "agents",
       "description": "The registered agents and their live status: when each one registered, its skills, and whether the backend can reach it now."
+    },
+    {
+      "name": "workflows",
+      "description": "Workflow templates: the list, and one template with its graph."
     }
   ]
 }

@@ -355,7 +355,11 @@ ui:
 | `category` | string or null | `null` | Catalog category. Defaults to `General` in catalog output. |
 | `display_name` | string or null | `null` | Catalog display name. Defaults to `name`. |
 | `summary` | string or null | `null` | Catalog summary. Defaults to `description`. |
+| `complexity` | `complex`, `moderate`, `simple`, or null | `null` | How complex the workflow is. The Workflow Console shows it when set. |
+| `speedup` | number or null | `null` | The speed-up over the manual baseline, as a raw number (`2.5`, not `"2.5x"`). The Workflow Console shows it when set. |
 | `input_overrides` | object | `{}` | Per-input display hints for workflow input forms. |
+
+`complexity` and `speedup` are optional. When a workflow does not set them, `GET /api/workflows` returns them as `null`.
 
 Input override fields:
 

@@ -305,6 +305,8 @@ workflow wins and the duplicate is reported in the workflow refresh errors.
 Before an agent-provided workflow starts, the client-agent calls the contributing agent's direct
 `/healthz` endpoint. If the contributing agent has been disconnected or scaled down, the workflow start is
 rejected instead of executing a stale catalog entry.
+Agent-owned workflows appear in the Workflow Console automatically, through `GET /api/workflows`; the
+backend reads them from the client-agent's workflow library.
 
 ## Agent endpoints
 

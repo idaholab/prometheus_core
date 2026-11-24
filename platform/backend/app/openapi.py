@@ -129,6 +129,7 @@ TAG_ADMIN_OIDC_PROVIDERS = "admin-oidc-providers"
 TAG_ADMIN_SIGNING_KEYS = "admin-signing-keys"
 TAG_AGENT_REGISTRY = "agent-registry"
 TAG_AGENTS = "agents"
+TAG_WORKFLOWS = "workflows"
 
 TAGS: list[dict[str, Any]] = [
     {"name": TAG_HEALTH, "description": "Liveness probe for load balancers and orchestrators."},
@@ -213,4 +214,5 @@ TAGS: list[dict[str, Any]] = [
             "and whether the backend can reach it now."
         ),
     },
+    {"name": TAG_WORKFLOWS, "description": "Workflow templates: the list, and one template with its graph."},
 ]
