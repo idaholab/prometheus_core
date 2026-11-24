@@ -37,9 +37,10 @@ const DEFAULT_SCOPES = "openid profile email";
  */
 export function AdminOidcProviders() {
   const list = useListOidcProvidersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
-  // A failed load shows its error in place of the table, never rows from before it
-  const loadError = list.isError ? errorMessage(list.error, "Could not load identity providers") : "";
-  const providers = list.isError ? null : (list.data ?? null);
+  // A failed load shows its error in place of the table, never rows from before
+  // it. RTK keeps the error while the list refetches, so it stays up until a load succeeds
+  const loadError = list.error ? errorMessage(list.error, "Could not load identity providers") : "";
+  const providers = list.error ? null : (list.data ?? null);
   const [createProvider] = useCreateOidcProviderMutation();
   const [updateProvider] = useUpdateOidcProviderMutation();
   const [deleteProvider] = useDeleteOidcProviderMutation();

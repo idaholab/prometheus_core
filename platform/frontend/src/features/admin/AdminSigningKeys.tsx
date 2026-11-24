@@ -42,9 +42,10 @@ const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone>
  */
 export function AdminSigningKeys() {
   const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
-  // A failed load shows its error in place of the table, never rows from before it
-  const loadError = list.isError ? errorMessage(list.error, "Could not load signing keys") : "";
-  const keys = list.isError ? null : (list.data ?? null);
+  // A failed load shows its error in place of the table, never rows from before
+  // it. RTK keeps the error while the list refetches, so it stays up until a load succeeds
+  const loadError = list.error ? errorMessage(list.error, "Could not load signing keys") : "";
+  const keys = list.error ? null : (list.data ?? null);
   const [generateKey] = useGenerateSigningKeyMutation();
   const [activateKey] = useActivateSigningKeyMutation();
   const [retireKey] = useRetireSigningKeyMutation();
