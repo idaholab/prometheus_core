@@ -33,12 +33,12 @@ API_TITLE = "Prometheus Backend"
 # dependencies with --no-install-project, so there is no distribution to query.
 API_VERSION = "0.1.0"
 
-# The repository's license. OpenAPI 3.1 takes an SPDX identifier, and the URL is the
-# same LICENSE every source file's header points at.
+# The repository's license, as an SPDX identifier. OpenAPI 3.1 makes identifier and
+# url mutually exclusive, and the identifier names the license without depending on
+# a branch name.
 API_LICENSE: dict[str, str] = {
     "name": "MIT",
     "identifier": "MIT",
-    "url": "https://github.com/idaholab/prometheus_core/blob/main/LICENSE",
 }
 
 
