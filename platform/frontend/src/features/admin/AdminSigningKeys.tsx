@@ -42,12 +42,13 @@ const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone>
  */
 export function AdminSigningKeys() {
   const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
-  const keys = list.data ?? null;
+  // A failed load shows its error in place of the table, never rows from before it
+  const loadError = list.isError ? errorMessage(list.error, "Could not load signing keys") : "";
+  const keys = list.isError ? null : (list.data ?? null);
   const [generateKey] = useGenerateSigningKeyMutation();
   const [activateKey] = useActivateSigningKeyMutation();
   const [retireKey] = useRetireSigningKeyMutation();
   const [actionError, setActionError] = useState("");
-  const error = list.error ? errorMessage(list.error, "Could not load signing keys") : actionError;
   const [generating, setGenerating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -118,13 +119,17 @@ export function AdminSigningKeys() {
         />
       </div>
 
-      {error && (
+      {actionError && (
         <div role="alert" className="alert alert-error text-xs">
-          {error}
+          {actionError}
         </div>
       )}
 
-      {keys === null ? (
+      {loadError ? (
+        <div role="alert" className="alert alert-error text-xs">
+          {loadError}
+        </div>
+      ) : keys === null ? (
         <div className="text-sm text-base-content/50">Loading...</div>
       ) : (
         <div className="overflow-x-auto">

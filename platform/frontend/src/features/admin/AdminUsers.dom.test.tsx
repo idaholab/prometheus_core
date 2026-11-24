@@ -84,6 +84,19 @@ test("a failed load shows the backend's message", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Database is down");
 });
 
+test("a failed refresh shows its error in place of the rows from before it", async () => {
+  fetchMock.mockResolvedValueOnce(respond(200, [user("someone")]));
+  const { store } = renderUsers();
+  expect(await screen.findByRole("cell", { name: "someone" })).toBeInTheDocument();
+
+  // Still on the screen when the list refetches and fails (say the admin was demoted)
+  fetchMock.mockResolvedValueOnce(respond(403, { detail: "Admin only" }));
+  store.dispatch(adminApi.util.invalidateTags(["AdminUser"]));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Admin only");
+  expect(screen.queryByRole("cell", { name: "someone" })).not.toBeInTheDocument();
+});
+
 test("a list the loader started is fetched once, whether it's still loading or already in", async () => {
   // Still in flight when the page mounts: the page joins that request
   fetchMock.mockImplementation(() => Promise.resolve(respond(200, [user("someone")])));

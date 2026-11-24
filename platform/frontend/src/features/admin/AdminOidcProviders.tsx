@@ -37,12 +37,13 @@ const DEFAULT_SCOPES = "openid profile email";
  */
 export function AdminOidcProviders() {
   const list = useListOidcProvidersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
-  const providers = list.data ?? null;
+  // A failed load shows its error in place of the table, never rows from before it
+  const loadError = list.isError ? errorMessage(list.error, "Could not load identity providers") : "";
+  const providers = list.isError ? null : (list.data ?? null);
   const [createProvider] = useCreateOidcProviderMutation();
   const [updateProvider] = useUpdateOidcProviderMutation();
   const [deleteProvider] = useDeleteOidcProviderMutation();
   const [deleteError, setDeleteError] = useState("");
-  const error = list.error ? errorMessage(list.error, "Could not load identity providers") : deleteError;
 
   const createDialogRef = useRef<HTMLDialogElement>(null);
   const [createProviderId, setCreateProviderId] = useState("");
@@ -173,13 +174,17 @@ export function AdminOidcProviders() {
         <Button variant="primary" size="sm" icon={<Plus />} label="New provider" onClick={openCreate} />
       </div>
 
-      {error && (
+      {deleteError && (
         <div role="alert" className="alert alert-error text-xs">
-          {error}
+          {deleteError}
         </div>
       )}
 
-      {providers === null ? (
+      {loadError ? (
+        <div role="alert" className="alert alert-error text-xs">
+          {loadError}
+        </div>
+      ) : providers === null ? (
         <div className="text-sm text-base-content/50">Loading...</div>
       ) : (
         <div className="overflow-x-auto">
