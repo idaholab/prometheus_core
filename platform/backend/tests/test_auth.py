@@ -116,6 +116,61 @@ async def test_login_endpoint_authenticates_against_db(monkeypatch, wire_db_sess
     assert bad.status_code == 401
 
 
+async def test_login_answers_as_its_openapi_entry_documents(monkeypatch, wire_db_session):
+    """Login accepts every documented body type and gives the documented errors.
+
+    The route reads its body itself, so its request body and 4xx responses are
+    declared by hand in app/routers/auth.py; this keeps them true.
+    """
+    from app import security
+    from app.db.models import User as UserRow
+    from app.main import app
+    from app.passwords import hash_password
+
+    monkeypatch.setattr(security.settings, "jwt_secret", "test-secret", raising=False)
+    wire_db_session.add(
+        UserRow(username="alice", password_hash=hash_password("s3cret"), role="admin", provider="credentials")
+    )
+    await wire_db_session.commit()
+
+    operation = app.openapi()["paths"]["/api/auth/login"]["post"]
+    content = operation["requestBody"]["content"]
+    assert set(content) == {"application/json", "application/x-www-form-urlencoded", "multipart/form-data"}
+
+    def documented(code: str) -> list[str]:
+        examples = operation["responses"][code]["content"]["application/json"]["examples"]
+        return [example["value"]["detail"] for example in examples.values()]
+
+    # The documented field names are the ones _read_credentials reads: a body built
+    # from them logs in, so renaming one side alone fails here.
+    schema = content["application/json"]["schema"]
+    assert set(schema["required"]) == set(schema["properties"]) == {"username", "password"}
+    good = {"username": "alice", "password": "s3cret"}
+    assert set(good) == set(schema["required"])
+
+    client = TestClient(app)
+    assert client.post("/api/auth/login", json=good).status_code == 200
+    assert client.post("/api/auth/login", data=good).status_code == 200
+    assert client.post("/api/auth/login", files={k: (None, v) for k, v in good.items()}).status_code == 200
+
+    wrong = client.post("/api/auth/login", data={**good, "password": "wrong"})
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"] in documented("401")
+
+    for bad in (
+        {"username": "alice"},
+        {"username": "alice", "password": 12345},
+        {"username": ["alice"], "password": "s3cret"},
+    ):
+        resp = client.post("/api/auth/login", json=bad)
+        assert resp.status_code == 422
+        assert resp.json()["detail"] in documented("422")
+
+    missing_form = client.post("/api/auth/login", data={"username": "alice"})
+    assert missing_form.status_code == 422
+    assert missing_form.json()["detail"] in documented("422")
+
+
 # --------------------------------------------------------------------------- #
 # AU-5 — /api/config is authenticated
 # --------------------------------------------------------------------------- #

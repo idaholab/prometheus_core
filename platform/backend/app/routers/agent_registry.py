@@ -62,6 +62,7 @@ from starlette.background import BackgroundTask
 
 from app.agent_identity import SPIFFE_INDEX_KEY, caller_spiffe_id
 from app.agent_store import REGISTRY_KEY, load_all, load_entry
+from app.api_responses import AGENT_SECRET_RESPONSES, Responses, error
 from app.config import settings
 from app.openapi import TAG_AGENT_REGISTRY
 from app.redis_client import RedisClient, get_redis
@@ -90,7 +91,9 @@ def require_agent_secret(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing agent credentials")
 
 
-router = APIRouter(tags=[TAG_AGENT_REGISTRY], dependencies=[Depends(require_agent_secret)])
+router = APIRouter(
+    tags=[TAG_AGENT_REGISTRY], dependencies=[Depends(require_agent_secret)], responses=AGENT_SECRET_RESPONSES
+)
 
 
 def _make_client() -> httpx.AsyncClient:
@@ -124,6 +127,24 @@ def _public_entry(stored: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# The errors the individual routes raise, beyond the router-wide agent-secret ones.
+_NOT_REGISTERED: Responses = error(
+    404, "No agent is registered under that name.", "Agent 'thermal-agent' is not registered"
+)
+# Under AGENT_IDENTITY_SOURCE=istio, a name stays bound to the workload that registered it.
+_OTHER_WORKLOAD: Responses = error(
+    403,
+    "Under Istio identity, the name is registered by a different workload.",
+    "Agent 'thermal-agent' is registered by another workload",
+)
+_UNREACHABLE: Responses = error(
+    502,
+    "The agent is registered without a URL, or the backend couldn't connect to it.",
+    "Agent 'thermal-agent' registered without a URL",
+    "Agent 'thermal-agent' is unreachable",
+)
+
+
 async def _load(redis: RedisClient, agent_name: str) -> Dict[str, Any]:
     stored = await load_entry(redis, agent_name)
     if stored is None:
@@ -136,7 +157,7 @@ def _bound(raw: Optional[str | bytes]) -> Optional[str]:
     return None if raw is None else cast(Optional[str], json.loads(raw).get("spiffe_id"))
 
 
-@router.post("/v1/agents")
+@router.post("/v1/agents", responses=_OTHER_WORKLOAD)
 async def register_agent(
     body: AgentRegistration, request: Request, redis: RedisClient = Depends(get_redis)
 ) -> Dict[str, Any]:
@@ -179,7 +200,7 @@ async def list_agents(redis: RedisClient = Depends(get_redis)) -> List[Dict[str,
     return [_public_entry(stored) for stored in await load_all(redis)]
 
 
-@router.delete("/v1/agents/{agent_id}")
+@router.delete("/v1/agents/{agent_id}", responses={**_NOT_REGISTERED, **_OTHER_WORKLOAD})
 async def delete_agent(agent_id: str, request: Request, redis: RedisClient = Depends(get_redis)) -> Dict[str, str]:
     spiffe_id = _require_spiffe_id(request)
 
@@ -202,12 +223,12 @@ async def delete_agent(agent_id: str, request: Request, redis: RedisClient = Dep
     return {"agent_id": agent_id}
 
 
-@router.get("/a2a/{agent_name}")
+@router.get("/a2a/{agent_name}", responses=_NOT_REGISTERED)
 async def get_agent_card(agent_name: str, redis: RedisClient = Depends(get_redis)) -> Dict[str, Any]:
     return cast(Dict[str, Any], (await _load(redis, agent_name))["agent_card_params"])
 
 
-@router.post("/a2a/{agent_name}")
+@router.post("/a2a/{agent_name}", responses={**_NOT_REGISTERED, **_UNREACHABLE})
 async def proxy_a2a(agent_name: str, request: Request, redis: RedisClient = Depends(get_redis)) -> Any:
     stored = await _load(redis, agent_name)
     target: Optional[str] = (stored["agent_card_params"].get("url") or "").strip() or None

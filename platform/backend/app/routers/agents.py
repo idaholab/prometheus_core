@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, HTTPException, Path, status as http_status
 from pydantic import ValidationError
 from redis.exceptions import RedisError
 
@@ -236,7 +236,7 @@ async def list_agent_status(
     },
 )
 async def get_agent_status(
-    agent_name: str,
+    agent_name: str = Path(description="The agent's name in the registry."),
     redis: RedisClient = Depends(get_redis),
     claims: TokenClaims = Depends(current_claims),
 ) -> AgentStatus:

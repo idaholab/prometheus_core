@@ -22,15 +22,15 @@ React app's ``fetch("/user")`` probe. ``/login/{provider_id}`` and
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api_responses import AUTH_RESPONSES, ENCRYPTION_RESPONSES
+from app.api_responses import AUTH_RESPONSES, ENCRYPTION_RESPONSES, error
 from app.config import settings
 from app.db import get_db_session
 from app.db.models import OidcProvider
@@ -57,13 +57,53 @@ class LoginResult(BaseModel):
     user: User
 
 
+# Documentation only: _read_credentials reads the body itself, so FastAPI never
+# parses it with this model. Its docstring and field descriptions are public.
+class LoginRequest(BaseModel):
+    """A local account's username and password, as JSON or form fields."""
+
+    username: str = Field(description="The local account's username.")
+    # writeOnly and the password format make /docs mask it in "Try it out"
+    password: str = Field(
+        description="The local account's password.",
+        json_schema_extra={"format": "password", "writeOnly": True},
+    )
+
+
+# Declared by hand because the handler reads the body itself (see _read_credentials),
+# so FastAPI can't infer it. The schema is inlined: a model only named here isn't in
+# components/schemas, so a $ref to it wouldn't resolve.
+_LOGIN_REQUEST_SCHEMA = LoginRequest.model_json_schema()
+_LOGIN_OPENAPI_EXTRA: dict[str, Any] = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": _LOGIN_REQUEST_SCHEMA},
+            "application/x-www-form-urlencoded": {"schema": _LOGIN_REQUEST_SCHEMA},
+            "multipart/form-data": {"schema": _LOGIN_REQUEST_SCHEMA},
+        },
+    }
+}
+
+_LOGIN_RESPONSES = {
+    **error(status.HTTP_401_UNAUTHORIZED, "The username or password is wrong.", "Invalid credentials"),
+    **error(
+        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "The body has no non-empty username and password strings, or isn't a JSON object or form data.",
+        "username and password required",
+    ),
+}
+
+
 class ProviderInfo(BaseModel):
     provider_id: str
     display_name: str
 
 
 async def _read_credentials(request: Request) -> tuple[Optional[str], Optional[str]]:
-    """Extract ``(username, password)`` from a JSON or form-encoded request body.
+    """Extract ``(username, password)`` from a JSON or form request body.
+
+    Any non-JSON body is read as a form, so urlencoded and multipart both work.
 
     FastAPI can't declare both ``Body`` and ``Form`` params on one endpoint (the
     presence of ``Form`` forces multipart/form decoding), so dispatch on the
@@ -77,17 +117,18 @@ async def _read_credentials(request: Request) -> tuple[Optional[str], Optional[s
             return None, None
         if not isinstance(data, dict):
             return None, None
-        return data.get("username"), data.get("password")
-    form = await request.form()
-    username = form.get("username")
-    password = form.get("password")
+        username, password = data.get("username"), data.get("password")
+    else:
+        form = await request.form()
+        username, password = form.get("username"), form.get("password")
+    # A JSON number or list, or a form file upload, is no username: 422, not a 500.
     return (
         username if isinstance(username, str) else None,
         password if isinstance(password, str) else None,
     )
 
 
-@router.post("/login", response_model=LoginResult)
+@router.post("/login", response_model=LoginResult, responses=_LOGIN_RESPONSES, openapi_extra=_LOGIN_OPENAPI_EXTRA)
 async def login(request: Request, response: Response, db: AsyncSession = Depends(get_db_session)) -> LoginResult:
     """Accept form-encoded or JSON ``{username, password}`` and set the cookie."""
     username, password = await _read_credentials(request)
