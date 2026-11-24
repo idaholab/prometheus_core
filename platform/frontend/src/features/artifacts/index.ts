@@ -13,5 +13,5 @@
 // What the rest of the app may import from features/artifacts. Anything else
 // in this folder is internal to it.
 export { ElementList } from "./ElementRenderer";
-export { artifactsToElements } from "./artifactAdapter";
+export { artifactToElement, artifactsToElements, inlineArtifacts, isPanelOnly } from "./artifactAdapter";
 export type { AnyElement } from "./elements";

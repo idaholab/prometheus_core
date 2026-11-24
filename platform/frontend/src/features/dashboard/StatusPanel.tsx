@@ -10,12 +10,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useState } from "react";
-import { Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, Cpu, FolderOpen, PanelRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { ElementList, artifactToElement, isPanelOnly } from "@/features/artifacts";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tag } from "@/components/ui/Tag";
 import { api } from "@/lib/api/client";
-import { useChatState } from "@/features/chat";
+import { useChatState, type ChatState } from "@/features/chat";
 import type { ArtifactMeta } from "@/lib/api/types";
 
 type StatusTab = "jobs" | "artifacts";
@@ -24,8 +26,7 @@ type StatusTab = "jobs" | "artifacts";
  * by id. A resumed conversation gives each assistant turn the artifacts it
  * produced (see `itemsFromTranscript` in `features/chat/store/chat.ts`), so this matches
  * the live session. */
-function useConversationArtifacts(): ArtifactMeta[] {
-  const { items } = useChatState();
+function useConversationArtifacts(items: ChatState["items"]): ArtifactMeta[] {
   const byId = new Map<string, ArtifactMeta>();
   for (const item of items) {
     if (item.kind !== "assistant") continue;
@@ -34,12 +35,91 @@ function useConversationArtifacts(): ArtifactMeta[] {
   return [...byId.values()];
 }
 
-function ArtifactCard({ artifact }: { artifact: ArtifactMeta }) {
+/** Render hints with an in-panel viewer; others open the raw file in a tab. */
+const PANEL_VIEWABLE = new Set(["code", "report", "json", "table", "image", "pdf"]);
+
+function canOpenInPanel(artifact: ArtifactMeta): boolean {
+  return PANEL_VIEWABLE.has(artifact.render_hint);
+}
+
+/**
+ * Calls `onArrive` with the newest panel-only artifact that arrives live, so
+ * the panel can open it. Artifacts that come with a conversation's transcript
+ * (a sidebar switch, or recovering the open conversation after a reload) are
+ * not new: everything seen while a resume is in flight, or in the first render,
+ * is only recorded.
+ */
+function usePanelArrivals(
+  artifacts: ArtifactMeta[],
+  resuming: boolean,
+  onArrive: (artifact: ArtifactMeta) => void,
+): void {
+  const seen = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const first = seen.current === null;
+    const known = (seen.current ??= new Set());
+    const unseen = artifacts.filter((a) => !known.has(a.artifact_id));
+    for (const a of unseen) known.add(a.artifact_id);
+    if (first || resuming) return;
+    const newest = [...unseen].reverse().find((a) => isPanelOnly(a) && canOpenInPanel(a));
+    if (newest) onArrive(newest);
+  }, [artifacts, resuming, onArrive]);
+}
+
+/**
+ * An artifact open in the panel. The viewer keeps its own header (name, copy,
+ * download), so the panel adds no title or padding around it: the viewer's
+ * card sits flush with the panel edges and fills its height. Its inline
+ * limits (height caps, max width, border, margin) are lifted here. The
+ * "All artifacts" control above it, or the Artifacts tab, returns to the list.
+ * PPLT-362's shared viewer frame replaces this.
+ */
+function ArtifactViewer({ artifact, onBack }: { artifact: ArtifactMeta; onBack: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-4 py-1.5">
+        <Button variant="ghost" size="xs" icon={<ChevronLeft />} label="All artifacts" onClick={onBack} />
+      </div>
+      <ArtifactViewerBody artifact={artifact} />
+    </div>
+  );
+}
+
+function ArtifactViewerBody({ artifact }: { artifact: ArtifactMeta }) {
+  return (
+    <div
+      data-testid="panel-viewer"
+      className={[
+        "flex min-h-0 flex-1 flex-col overflow-hidden border-t border-base-300",
+        // ElementList's wrapper, then the viewer's card: fill the panel.
+        "[&>div]:m-0 [&>div]:flex [&>div]:min-h-0 [&>div]:flex-1 [&>div]:flex-col",
+        "[&>div>*]:m-0 [&>div>*]:flex [&>div>*]:min-h-0 [&>div>*]:flex-1 [&>div>*]:flex-col",
+        "[&>div>*]:max-w-none [&>div>*]:rounded-none [&>div>*]:border-0",
+        // The viewer's body (everything after its header row) fills and scrolls,
+        // and a code block's background fills it too.
+        "[&>div>*>*:last-child]:min-h-0 [&>div>*>*:last-child]:flex-1 [&>div>*>*:last-child]:overflow-auto",
+        "[&_pre]:flex [&_pre]:flex-col [&_pre>code]:flex-1",
+        // Inline height caps (code and table max-h-96, image 70vh, PDF 600px).
+        "[&_[class*=max-h-]]:max-h-none [&_iframe]:h-full",
+      ].join(" ")}
+    >
+      <ElementList elements={[artifactToElement(artifact)]} />
+    </div>
+  );
+}
+
+function ArtifactCard({ artifact, onOpen }: { artifact: ArtifactMeta; onOpen: () => void }) {
+  const viewable = canOpenInPanel(artifact);
   return (
     <a
       href={api.artifactContentUrl(artifact.artifact_id)}
       target="_blank"
       rel="noreferrer"
+      onClick={(event) => {
+        if (!viewable) return;
+        event.preventDefault();
+        onOpen();
+      }}
       className="card border border-base-300 bg-base-200 transition-colors hover:border-primary/40 hover:bg-base-300"
     >
       <div className="card-body gap-1.5 p-3">
@@ -95,6 +175,8 @@ interface StatusPanelProps {
   onCollapse: () => void;
   /** Expand the panel back to its full width. */
   onExpand: () => void;
+  /** Told whether an artifact viewer is open, so the layout can widen the panel. */
+  onViewerOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -107,9 +189,29 @@ interface StatusPanelProps {
  * a tab icon expands the rail straight to that tab. The open/closed width lives
  * on LayoutHome's `<aside>`; `tab` stays here so it survives a collapse/expand.
  */
-export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProps) {
+export function StatusPanel({ collapsed, onCollapse, onExpand, onViewerOpenChange }: StatusPanelProps) {
   const [tab, setTab] = useState<StatusTab>("jobs");
-  const artifacts = useConversationArtifacts();
+  const { items, resumingConversationId } = useChatState();
+  const artifacts = useConversationArtifacts(items);
+  const resuming = resumingConversationId !== null;
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = artifacts.find((a) => a.artifact_id === openId) ?? null;
+  const viewerShowing = !collapsed && tab === "artifacts" && opened !== null;
+  useEffect(() => {
+    onViewerOpenChange?.(viewerShowing);
+  }, [viewerShowing, onViewerOpenChange]);
+
+  // A new panel-only artifact (e.g. a generated MOOSE input) opens itself,
+  // since the message no longer shows it inline.
+  const openArrival = useCallback(
+    (artifact: ArtifactMeta) => {
+      setTab("artifacts");
+      setOpenId(artifact.artifact_id);
+      if (collapsed) onExpand();
+    },
+    [collapsed, onExpand],
+  );
+  usePanelArrivals(artifacts, resuming, openArrival);
 
   if (collapsed) {
     const openTo = (next: StatusTab) => {
@@ -138,8 +240,8 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between px-6 pt-6">
-        <div role="tablist" className="tabs tabs-border">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-6 pt-6">
+        <div role="tablist" className="tabs tabs-border mr-auto">
           <button
             role="tab"
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "jobs" ? "tab-active" : ""}`}
@@ -150,7 +252,11 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           <button
             role="tab"
             className={`tab text-xs font-bold uppercase tracking-wide ${tab === "artifacts" ? "tab-active" : ""}`}
-            onClick={() => setTab("artifacts")}
+            onClick={() => {
+              // Also the way back to the list from an open artifact.
+              setTab("artifacts");
+              setOpenId(null);
+            }}
           >
             Artifacts{artifacts.length > 0 && ` (${artifacts.length})`}
           </button>
@@ -172,10 +278,16 @@ export function StatusPanel({ collapsed, onCollapse, onExpand }: StatusPanelProp
           title="No Artifacts Yet"
           hint="Generated artifacts will display here"
         />
+      ) : opened ? (
+        <ArtifactViewer artifact={opened} onBack={() => setOpenId(null)} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
           {artifacts.map((artifact) => (
-            <ArtifactCard key={artifact.artifact_id} artifact={artifact} />
+            <ArtifactCard
+              key={artifact.artifact_id}
+              artifact={artifact}
+              onOpen={() => setOpenId(artifact.artifact_id)}
+            />
           ))}
         </div>
       )}
