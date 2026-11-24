@@ -365,4 +365,32 @@ describe("needs_info_renders_turn_artifacts", () => {
     const img = document.querySelector('img[src="/api/artifacts/a1/content"]');
     expect(img).not.toBeNull();
   });
+
+  test("a panel-only artifact on a form isn't rendered above it", () => {
+    const image = (id: string, display?: "panel") => ({
+      artifact_id: id,
+      name: `${id}.png`,
+      mime_type: "image/png",
+      description: "",
+      tags: [],
+      render_hint: "image",
+      ...(display ? { display } : {}),
+    });
+    renderChat({
+      items: [
+        {
+          id: "ni-1",
+          kind: "needs_info",
+          turnId: "t1",
+          message: "Gate 2: approve?",
+          fields: [{ id: "gate_action", label: "Decision?", input_type: "text", required: true }],
+          artifacts: [image("inline"), image("side", "panel")],
+          submitted: false,
+        },
+      ] as ComposerState["items"],
+    });
+    expect(document.querySelector('img[src="/api/artifacts/inline/content"]')).not.toBeNull();
+    expect(document.querySelector('img[src="/api/artifacts/side/content"]')).toBeNull();
+    expect(screen.queryByText("side.png")).toBeNull();
+  });
 });

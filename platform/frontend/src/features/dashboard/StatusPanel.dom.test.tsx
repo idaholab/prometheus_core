@@ -110,7 +110,7 @@ describe("the Artifacts tab list", () => {
     expect(screen.getByText("Verified MOOSE input")).toBeInTheDocument();
   });
 
-  test("lists artifacts from turns that paused at a form", async () => {
+  test("lists artifacts from turns that paused at a form, and skips a form with none", async () => {
     const user = userEvent.setup();
     const report = artifact("report");
     renderPanel({
@@ -123,9 +123,18 @@ describe("the Artifacts tab list", () => {
           recommendedMaterials: [],
           followUpSuggestions: [],
         },
+        // A form whose turn published nothing carries no artifacts at all.
         {
           kind: "needs_info",
           id: "ni-1",
+          turnId: "t1",
+          message: "Gate 1: approve?",
+          fields: [],
+          submitted: true,
+        },
+        {
+          kind: "needs_info",
+          id: "ni-2",
           turnId: "t2",
           message: "Gate 2: approve?",
           fields: [],
