@@ -198,6 +198,42 @@ test("editing a provider sends only a new secret when one is typed, and refetche
   expect(patch).not.toHaveProperty("client_secret");
 });
 
+test("a new client secret is sent with the edit", async () => {
+  const user = userEvent.setup();
+  serve({
+    "GET /api/admin/oidc-providers": [respond(200, [provider("Okta")])],
+    "PATCH /api/admin/oidc-providers/okta": [respond(200, provider("Okta"))],
+  });
+  renderProviders();
+  await screen.findByRole("cell", { name: "Okta" });
+
+  await user.click(screen.getByRole("button", { name: "Edit Okta" }));
+  const dialog = screen.getByRole("dialog", { name: "Edit Okta" });
+  await user.type(within(dialog).getByLabelText("New client secret (optional)"), "rotated");
+  await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+  await vi.waitFor(() => expect(dialog).not.toHaveAttribute("open"));
+  const patch = (await bodyOf("PATCH /api/admin/oidc-providers/okta")) as Record<string, unknown>;
+  expect(patch.client_secret).toBe("rotated");
+});
+
+test("an edit the backend rejects shows its message in the dialog, which stays open", async () => {
+  const user = userEvent.setup();
+  serve({
+    "GET /api/admin/oidc-providers": [respond(200, [provider("Okta")])],
+    "PATCH /api/admin/oidc-providers/okta": [respond(422, { detail: "Issuer URL is not reachable" })],
+  });
+  renderProviders();
+  await screen.findByRole("cell", { name: "Okta" });
+
+  await user.click(screen.getByRole("button", { name: "Edit Okta" }));
+  const dialog = screen.getByRole("dialog", { name: "Edit Okta" });
+  await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Issuer URL is not reachable");
+  expect(dialog).toHaveAttribute("open");
+});
+
 test("deleting a provider asks first, then sends the request and refetches the list", async () => {
   const user = userEvent.setup();
   const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);

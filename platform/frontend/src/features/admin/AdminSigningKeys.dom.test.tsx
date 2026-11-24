@@ -167,6 +167,20 @@ test("a failed action shows its message and keeps the list", async () => {
   expect(screen.getByRole("cell", { name: "k-1" })).toBeInTheDocument();
 });
 
+test("a failed retire shows its message", async () => {
+  const user = userEvent.setup();
+  serve({
+    "GET /api/admin/signing-keys": [respond(200, [key("k-1", { is_active: true })])],
+    "POST /api/admin/signing-keys/k-1/retire": [respond(409, { detail: "Can't retire the only active key" })],
+  });
+  renderKeys();
+  await screen.findByRole("cell", { name: "k-1" });
+
+  await user.click(within(row("k-1")).getByRole("button", { name: "Retire" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Can't retire the only active key");
+});
+
 test("a failed action's message stays when the list also fails to load", async () => {
   const user = userEvent.setup();
   serve({

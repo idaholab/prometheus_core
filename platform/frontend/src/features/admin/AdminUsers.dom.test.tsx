@@ -11,7 +11,8 @@
 // SPDX-License-Identifier: MIT
 
 /* Admin > Users with the real RTK Query cache and a stubbed fetch: its loading,
- * error and empty states, a create the backend rejects, how often it fetches (the /admin loader's prefetch is
+ * error and empty states, editing and deleting a user (and each being
+ * rejected), a create the backend rejects, how often it fetches (the /admin loader's prefetch is
  * not fetched again, a list older than LIST_MAX_AGE_SECONDS is), and that
  * coming back to the tab shows the cached list at once. The full create, edit
  * and delete flow is covered end to end in e2e/full/admin-users.spec.ts. */
@@ -41,6 +42,25 @@ function respond(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+/** Answer each request from `routes`, keyed by "METHOD /path"; the last answer for a key repeats. */
+function serve(routes: Record<string, Response[]>) {
+  fetchMock.mockImplementation(async (input) => {
+    const req = input as Request;
+    const answers = routes[`${req.method} ${new URL(req.url).pathname}`];
+    if (!answers) throw new Error(`unexpected ${req.method} ${req.url}`);
+    return (answers.length > 1 ? answers.shift() : answers[0])!.clone();
+  });
+}
+
+/** The JSON body of the request matching "METHOD /path". */
+async function bodyOf(match: string): Promise<unknown> {
+  const call = fetchMock.mock.calls.find(([input]) => {
+    const req = input as Request;
+    return `${req.method} ${new URL(req.url).pathname}` === match;
+  });
+  return (call![0] as Request).clone().json();
+}
+
 function renderUsers(store = createAppStore()) {
   return {
     store,
@@ -67,6 +87,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 test("shows Loading until the list arrives, then the users", async () => {
@@ -111,6 +132,102 @@ test("a duplicate username shows the backend's message in the dialog, which stay
 
   expect(await within(dialog).findByRole("alert")).toHaveTextContent("Username already exists");
   expect(dialog).toHaveAttribute("open");
+});
+
+test("editing a user sends its role and active flag, no password unless one is typed, and refetches", async () => {
+  const user_ = userEvent.setup();
+  serve({
+    "GET /api/admin/users": [
+      respond(200, [user("someone")]),
+      respond(200, [{ ...user("someone"), role: "admin" }]),
+    ],
+    "PATCH /api/admin/users/someone": [respond(200, { ...user("someone"), role: "admin" })],
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  await user_.click(screen.getByRole("button", { name: "Edit someone" }));
+  const dialog = screen.getByRole("dialog", { name: "Edit someone" });
+  await user_.selectOptions(within(dialog).getByLabelText("Role"), "admin");
+  await user_.click(within(dialog).getByRole("button", { name: "Save" }));
+
+  const row = screen.getByRole("cell", { name: "someone" }).closest("tr") as HTMLElement;
+  expect(await within(row).findByText("admin")).toBeInTheDocument();
+  expect(dialog).not.toHaveAttribute("open");
+  expect(await bodyOf("PATCH /api/admin/users/someone")).toEqual({ role: "admin", is_active: true });
+});
+
+test("a new password is sent with the edit", async () => {
+  const user_ = userEvent.setup();
+  serve({
+    "GET /api/admin/users": [respond(200, [user("someone")])],
+    "PATCH /api/admin/users/someone": [respond(200, user("someone"))],
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  await user_.click(screen.getByRole("button", { name: "Edit someone" }));
+  const dialog = screen.getByRole("dialog", { name: "Edit someone" });
+  await user_.type(within(dialog).getByLabelText("New password (optional)"), "new-pw");
+  await user_.click(within(dialog).getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
+  expect(await bodyOf("PATCH /api/admin/users/someone")).toEqual({
+    role: "user",
+    is_active: true,
+    password: "new-pw",
+  });
+});
+
+test("an edit the backend rejects shows its message in the dialog, which stays open", async () => {
+  const user_ = userEvent.setup();
+  serve({
+    "GET /api/admin/users": [respond(200, [user("someone")])],
+    "PATCH /api/admin/users/someone": [respond(409, { detail: "Can't demote the last admin" })],
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  await user_.click(screen.getByRole("button", { name: "Edit someone" }));
+  const dialog = screen.getByRole("dialog", { name: "Edit someone" });
+  await user_.click(within(dialog).getByRole("button", { name: "Save" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Can't demote the last admin");
+  expect(dialog).toHaveAttribute("open");
+});
+
+test("deleting a user asks first, then sends the request and refetches the list", async () => {
+  const user_ = userEvent.setup();
+  vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  serve({
+    "GET /api/admin/users": [respond(200, [user("someone")]), respond(200, [])],
+    "DELETE /api/admin/users/someone": [new Response(null, { status: 204 })],
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  // Cancelled: nothing is sent
+  await user_.click(screen.getByRole("button", { name: "Delete someone" }));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  await user_.click(screen.getByRole("button", { name: "Delete someone" }));
+  expect(await screen.findByText("No users yet.")).toBeInTheDocument();
+});
+
+test("a failed delete shows its message and keeps the list", async () => {
+  const user_ = userEvent.setup();
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  serve({
+    "GET /api/admin/users": [respond(200, [user("someone")])],
+    "DELETE /api/admin/users/someone": [respond(409, { detail: "Can't delete yourself" })],
+  });
+  renderUsers();
+  await screen.findByRole("cell", { name: "someone" });
+
+  await user_.click(screen.getByRole("button", { name: "Delete someone" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Can't delete yourself");
+  expect(screen.getByRole("cell", { name: "someone" })).toBeInTheDocument();
 });
 
 test("a failed refresh shows its error in place of the rows from before it", async () => {
