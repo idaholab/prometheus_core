@@ -5,8 +5,7 @@
     "description": "The JSON/SSE API behind the Prometheus Platform's React frontend. The backend\nauthenticates users, holds per-browser session state, relays chat turns to the\nclient-agent orchestrator, and streams progress back over Server-Sent Events.\n\n## Authentication\n\nAuthentication is a session cookie (`prometheus_session` by default; the name is\nconfigurable). It is an HttpOnly, `SameSite=Lax` JWT issued by a successful login\nand sent automatically by the browser on every request. Routes that need it answer\n`401` without a valid, unrevoked cookie; `/api/admin/*` routes additionally answer\n`403` unless the user has the `admin` role.\n\nPublic routes: `/healthz`, `/.well-known/jwks.json`, `/api/setup/*`, and every\n`/api/auth/*` route except `GET /api/auth/me`.\n\n## Typical flow\n\n1. **First run:** `GET /api/setup/status`; if not bootstrapped,\n   `POST /api/setup/bootstrap` creates the first admin and logs them in.\n2. **Log in:** `GET /api/auth/providers` lists the login options. Then either\n   `POST /api/auth/login` (username and password), or follow the browser redirect\n   from `GET /api/auth/login/{provider_id}` (OIDC).\n3. **Start a conversation:** `POST /api/sessions` binds a new `conversation_id` to\n   the session. The id lives server-side and is never sent in a request body.\n4. **Open the event stream:** `GET /api/events` (one per browser session) for\n   status updates and background-task progress.\n5. **Chat:** `POST /api/chat/messages`, optionally attaching files staged with\n   `POST /api/uploads`. Fetch artifacts with\n   `GET /api/artifacts/{artifact_id}/content`.\n6. **History:** `/api/conversations/*` lists, reopens, renames and deletes past\n   conversations.\n\n## Errors\n\nErrors are JSON of the form `{\"detail\": \"<message>\"}`, and the message is meant to\nbe shown to the user. The exception is request validation performed by the\nframework itself, which returns `422` with `detail` as a list of field errors.\n\nA chat turn that fails while talking to the agent is **not** an HTTP error: it\nreturns `200` with `status: \"error\"` and a `message`, so the conversation can render\nit inline.\n\n## Wire contract\n\nEvery payload is defined by the Pydantic models in `app/contract.py` and explained,\nwith examples, in `CONTRACT.md` alongside this service.\n",
     "license": {
       "name": "MIT",
-      "identifier": "MIT",
-      "url": "https://github.com/idaholab/prometheus_core/blob/main/LICENSE"
+      "identifier": "MIT"
     },
     "version": "0.1.0"
   },
@@ -163,11 +162,15 @@
                 "properties": {
                   "username": {
                     "type": "string",
-                    "title": "Username"
+                    "title": "Username",
+                    "description": "The local account's username."
                   },
                   "password": {
                     "type": "string",
-                    "title": "Password"
+                    "format": "password",
+                    "title": "Password",
+                    "description": "The local account's password.",
+                    "writeOnly": true
                   }
                 },
                 "type": "object",
@@ -176,7 +179,7 @@
                   "password"
                 ],
                 "title": "LoginRequest",
-                "description": "The body of ``POST /api/auth/login``, as JSON or form-encoded fields.\n\nDocumentation only: :func:`_read_credentials` reads the body itself, so FastAPI\nnever parses it with this model."
+                "description": "A local account's username and password, as JSON or form fields."
               }
             },
             "application/x-www-form-urlencoded": {
@@ -184,11 +187,15 @@
                 "properties": {
                   "username": {
                     "type": "string",
-                    "title": "Username"
+                    "title": "Username",
+                    "description": "The local account's username."
                   },
                   "password": {
                     "type": "string",
-                    "title": "Password"
+                    "format": "password",
+                    "title": "Password",
+                    "description": "The local account's password.",
+                    "writeOnly": true
                   }
                 },
                 "type": "object",
@@ -197,7 +204,32 @@
                   "password"
                 ],
                 "title": "LoginRequest",
-                "description": "The body of ``POST /api/auth/login``, as JSON or form-encoded fields.\n\nDocumentation only: :func:`_read_credentials` reads the body itself, so FastAPI\nnever parses it with this model."
+                "description": "A local account's username and password, as JSON or form fields."
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "title": "Username",
+                    "description": "The local account's username."
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "title": "Password",
+                    "description": "The local account's password.",
+                    "writeOnly": true
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "title": "LoginRequest",
+                "description": "A local account's username and password, as JSON or form fields."
               }
             }
           },
@@ -233,7 +265,7 @@
             }
           },
           "422": {
-            "description": "The body has no username or no password.",
+            "description": "The body has no non-empty username and password strings, or isn't a JSON object or form data.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3425,7 +3457,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3492,7 +3524,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3574,7 +3606,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3600,6 +3632,24 @@
                     "summary": "AGENT_SECRET is not configured on the backend",
                     "value": {
                       "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No agent is registered under that name.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' is not registered",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is not registered"
                     }
                   }
                 },
@@ -3654,7 +3704,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3680,6 +3730,24 @@
                     "summary": "AGENT_SECRET is not configured on the backend",
                     "value": {
                       "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No agent is registered under that name.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' is not registered",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is not registered"
                     }
                   }
                 },
@@ -3730,7 +3798,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3756,6 +3824,48 @@
                     "summary": "AGENT_SECRET is not configured on the backend",
                     "value": {
                       "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No agent is registered under that name.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' is not registered",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is not registered"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The agent is registered without a URL, or the backend couldn't connect to it.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' registered without a URL",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' registered without a URL"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "Agent 'thermal-agent' is unreachable",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is unreachable"
                     }
                   }
                 },
