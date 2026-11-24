@@ -16,6 +16,8 @@
  */
 import { setCurrentUser } from "@/features/auth";
 import { chatStore } from "@/features/chat";
+import { baseApi } from "@/lib/api/baseApi";
+import { appStore } from "@/lib/api/store";
 
 /**
  * - `"logout"`: the user signed out. Chat forgets this tab's conversation, so
@@ -25,10 +27,16 @@ import { chatStore } from "@/features/chat";
  */
 export type SessionEnd = "logout" | "lost";
 
-/** End the session, then `leave` (navigate to Login). */
+/**
+ * End the session, then `leave` (navigate to Login). The server-data cache is
+ * dropped either way, so the next user in this tab never sees the previous
+ * one's lists. That happens after leaving: a reset makes every mounted query
+ * fetch again, and on the old page that request would come back 401.
+ */
 export async function endSession(how: SessionEnd, leave: () => void | Promise<void>): Promise<void> {
   if (how === "logout") chatStore.clear();
   else chatStore.suspendForReauth();
   setCurrentUser(null);
   await leave();
+  appStore.dispatch(baseApi.util.resetApiState());
 }

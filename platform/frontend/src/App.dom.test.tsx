@@ -49,7 +49,8 @@ vi.mock("@/app/router", async () => {
 });
 
 const { default: App } = await import("./App.tsx");
-const { baseQuery } = await import("@/lib/api/baseApi");
+const { baseApi, baseQuery } = await import("@/lib/api/baseApi");
+const { appStore } = await import("@/lib/api/store");
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -89,6 +90,25 @@ test("a 401 from any request forgets the user and goes to Login, then back to th
   expect(chat.clear).not.toHaveBeenCalled();
   expect(await screen.findByText("Login page")).toBeInTheDocument();
   expect(routing.router?.state.location.search).toBe(`?next=${encodeURIComponent("/admin?tab=users")}`);
+});
+
+test("a 401 drops the previous user's cached server data", async () => {
+  const probe = baseApi.injectEndpoints({
+    endpoints: (build) => ({ cached: build.query<string[], void>({ query: () => "/cached" }) }),
+    overrideExisting: true,
+  });
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify(["alice"]), { status: 200, headers: { "content-type": "application/json" } }),
+  );
+  await appStore.dispatch(probe.endpoints.cached.initiate());
+  expect(probe.endpoints.cached.select()(appStore.getState()).data).toEqual(["alice"]);
+
+  render(<App />);
+  expect(await screen.findByText("Admin page")).toBeInTheDocument();
+  await request(401);
+
+  expect(await screen.findByText("Login page")).toBeInTheDocument();
+  await vi.waitFor(() => expect(probe.endpoints.cached.select()(appStore.getState()).data).toBeUndefined());
 });
 
 test("other errors leave the user where they are", async () => {
