@@ -63,7 +63,11 @@ class LoginRequest(BaseModel):
     """A local account's username and password, as JSON or form fields."""
 
     username: str = Field(description="The local account's username.")
-    password: str = Field(description="The local account's password.")
+    # writeOnly and the password format make /docs mask it in "Try it out"
+    password: str = Field(
+        description="The local account's password.",
+        json_schema_extra={"format": "password", "writeOnly": True},
+    )
 
 
 # Declared by hand because the handler reads the body itself (see _read_credentials),
