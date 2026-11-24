@@ -255,7 +255,11 @@ class ArtifactMeta(BaseModel):
     # Where the frontend shows it: ``inline`` in the message body (default) or
     # ``panel``, only in the side artifact panel. Set by the producing agent
     # through ``metadata.display``; anything else is ``inline``.
-    display: ArtifactDisplay = "inline"
+    display: ArtifactDisplay = Field(
+        default="inline",
+        description="Where to show the artifact: `inline` in the message body, or `panel`, only in the "
+        "side artifact panel.",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -609,10 +613,10 @@ class AgentSkillSummary(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    id: str
-    name: str = ""
-    description: str = ""
-    tags: list[str] = Field(default_factory=list)
+    id: str = Field(description="The skill's id in the agent card.")
+    name: str = Field(default="", description="The skill's display name.")
+    description: str = Field(default="", description="What the skill does, from the agent card.")
+    tags: list[str] = Field(default_factory=list, description="The skill's tags; `[]` if the card lists none.")
 
 
 class AgentStatus(BaseModel):
@@ -628,14 +632,18 @@ class AgentStatus(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    agent_name: str
-    name: str = ""
-    description: str = ""
-    version: str = ""
-    registered_at: Optional[str] = None
-    reachable: bool
-    checked_at: str
-    skills: list[AgentSkillSummary] = Field(default_factory=list)
+    agent_name: str = Field(description="The agent's name in the registry, used in its routes.")
+    name: str = Field(default="", description="The display name from the agent card.")
+    description: str = Field(default="", description="What the agent does, from the agent card.")
+    version: str = Field(default="", description="The agent card's version.")
+    registered_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 UTC time of the agent's last registration; null for an entry stored before "
+        "the backend recorded it.",
+    )
+    reachable: bool = Field(description="Whether the agent's `GET /healthz` answered 2xx within 2 s.")
+    checked_at: str = Field(description="ISO 8601 UTC time the reachability probes finished.")
+    skills: list[AgentSkillSummary] = Field(default_factory=list, description="The skills on the agent card.")
 
 
 class AgentListResponse(BaseModel):
@@ -645,6 +653,6 @@ class AgentListResponse(BaseModel):
     empty list with a 200, as ``GET /api/conversations/recent`` does.
     """
 
-    available: bool
-    checked_at: str
-    agents: list[AgentStatus] = Field(default_factory=list)
+    available: bool = Field(description="False when the registry (Valkey) is unreachable; `agents` is then empty.")
+    checked_at: str = Field(description="ISO 8601 UTC time the reachability probes finished.")
+    agents: list[AgentStatus] = Field(default_factory=list, description="The registered agents, by `agent_name`.")

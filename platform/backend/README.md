@@ -104,7 +104,7 @@ written once, in the place FastAPI reads it:
 | Request and response bodies | Pydantic models, with `response_model=`. Don't parse the raw `Request` |
 | Model fields | `Field(description="…")`, plus `examples=` on request bodies that aren't trivial |
 | Errors | `responses=` built from the shared entries in `app/api_responses.py`, plus the route's own errors |
-| Authentication | `Depends(current_claims)`, `current_user` or `require_admin` from `app/security.py`, or `require_agent_secret` on the agent registry. Never a bare `APIKeyCookie` or `HTTPBearer`: those only check that a credential is present, not that it's valid. Until these dependencies declare security schemes ([PPLT-339](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-339)), a new route fails `security-defined` |
+| Authentication | `Depends(current_claims)`, `current_user` or `require_admin` from `app/security.py`, or `require_agent_secret` on the agent registry. Never a bare `APIKeyCookie` or `HTTPBearer`: those only check that a credential is present, not that it's valid. To pass `security-defined`, a session-cookie router also lists `Depends(SESSION_COOKIE)` from `app/openapi.py`, as `app/routers/agents.py` does: it only declares the scheme, and `current_claims` still does the check. The other dependencies don't declare a scheme yet ([PPLT-339](https://nstinl.atlassian-us-gov-mod.net/browse/PPLT-339)) |
 | Streams, files and redirects | `response_class=`, plus the right content type in `responses=` |
 | Tag | One, from the catalog in `app/openapi.py` |
 
