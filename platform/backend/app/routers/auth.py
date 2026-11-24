@@ -26,7 +26,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,15 +57,13 @@ class LoginResult(BaseModel):
     user: User
 
 
+# Documentation only: _read_credentials reads the body itself, so FastAPI never
+# parses it with this model. Its docstring and field descriptions are public.
 class LoginRequest(BaseModel):
-    """The body of ``POST /api/auth/login``, as JSON or form-encoded fields.
+    """A local account's username and password, as JSON or form fields."""
 
-    Documentation only: :func:`_read_credentials` reads the body itself, so FastAPI
-    never parses it with this model.
-    """
-
-    username: str
-    password: str
+    username: str = Field(description="The local account's username.")
+    password: str = Field(description="The local account's password.")
 
 
 # Declared by hand because the handler reads the body itself (see _read_credentials),
