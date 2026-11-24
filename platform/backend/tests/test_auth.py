@@ -134,12 +134,19 @@ async def test_login_answers_as_its_openapi_entry_documents(monkeypatch, wire_db
     await wire_db_session.commit()
 
     operation = app.openapi()["paths"]["/api/auth/login"]["post"]
-    assert set(operation["requestBody"]["content"]) == {"application/json", "application/x-www-form-urlencoded"}
+    assert set(operation["requestBody"]["content"]) == {
+        "application/json",
+        "application/x-www-form-urlencoded",
+        "multipart/form-data",
+    }
     assert {"401", "422"} <= set(operation["responses"])
 
     client = TestClient(app)
     form = client.post("/api/auth/login", data={"username": "alice", "password": "s3cret"})
     assert form.status_code == 200
+
+    multipart = client.post("/api/auth/login", files={"username": (None, "alice"), "password": (None, "s3cret")})
+    assert multipart.status_code == 200
 
     wrong = client.post("/api/auth/login", data={"username": "alice", "password": "wrong"})
     assert (wrong.status_code, wrong.json()["detail"]) == (401, "Invalid credentials")

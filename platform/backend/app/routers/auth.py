@@ -80,6 +80,7 @@ _LOGIN_OPENAPI_EXTRA: dict[str, Any] = {
         "content": {
             "application/json": {"schema": _LOGIN_REQUEST_SCHEMA},
             "application/x-www-form-urlencoded": {"schema": _LOGIN_REQUEST_SCHEMA},
+            "multipart/form-data": {"schema": _LOGIN_REQUEST_SCHEMA},
         },
     }
 }
@@ -100,7 +101,9 @@ class ProviderInfo(BaseModel):
 
 
 async def _read_credentials(request: Request) -> tuple[Optional[str], Optional[str]]:
-    """Extract ``(username, password)`` from a JSON or form-encoded request body.
+    """Extract ``(username, password)`` from a JSON or form request body.
+
+    Any non-JSON body is read as a form, so urlencoded and multipart both work.
 
     FastAPI can't declare both ``Body`` and ``Form`` params on one endpoint (the
     presence of ``Form`` forces multipart/form decoding), so dispatch on the
