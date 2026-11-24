@@ -1856,7 +1856,7 @@
         ],
         "summary": "List Agent Status",
         "description": "Every registered agent with its live reachability, sorted by ``agent_name``.",
-        "operationId": "list_agent_status_api_agents_get",
+        "operationId": "list_agent_status",
         "security": [
           {
             "sessionCookie": []
@@ -1876,8 +1876,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -1941,7 +1943,7 @@
         ],
         "summary": "Get Agent Status",
         "description": "One registered agent with its live reachability and the time it was checked.",
-        "operationId": "get_agent_status_api_agents__agent_name__get",
+        "operationId": "get_agent_status",
         "security": [
           {
             "sessionCookie": []
@@ -1954,8 +1956,10 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "The agent's name in the registry.",
               "title": "Agent Name"
-            }
+            },
+            "description": "The agent's name in the registry."
           },
           {
             "name": "prometheus_session",
@@ -1970,8 +1974,10 @@
                   "type": "null"
                 }
               ],
+              "description": "The session token that login sets. Browsers send it automatically.",
               "title": "Prometheus Session"
-            }
+            },
+            "description": "The session token that login sets. Browsers send it automatically."
           }
         ],
         "responses": {
@@ -3457,7 +3463,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`. Under `AGENT_IDENTITY_SOURCE=istio`, registering and removing an agent also need a verified workload identity.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3468,6 +3474,12 @@
                     "summary": "Invalid or missing agent credentials",
                     "value": {
                       "detail": "Invalid or missing agent credentials"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "No verified workload identity on the request",
+                    "value": {
+                      "detail": "No verified workload identity on the request"
                     }
                   }
                 }
@@ -3524,7 +3536,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`. Under `AGENT_IDENTITY_SOURCE=istio`, registering and removing an agent also need a verified workload identity.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3535,6 +3547,12 @@
                     "summary": "Invalid or missing agent credentials",
                     "value": {
                       "detail": "Invalid or missing agent credentials"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "No verified workload identity on the request",
+                    "value": {
+                      "detail": "No verified workload identity on the request"
                     }
                   }
                 }
@@ -3553,6 +3571,24 @@
                     "summary": "AGENT_SECRET is not configured on the backend",
                     "value": {
                       "detail": "AGENT_SECRET is not configured on the backend"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Under Istio identity, the name is registered by a different workload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' is registered by another workload",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is registered by another workload"
                     }
                   }
                 }
@@ -3606,7 +3642,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`. Under `AGENT_IDENTITY_SOURCE=istio`, registering and removing an agent also need a verified workload identity.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3614,6 +3650,12 @@
                     "summary": "Invalid or missing agent credentials",
                     "value": {
                       "detail": "Invalid or missing agent credentials"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "No verified workload identity on the request",
+                    "value": {
+                      "detail": "No verified workload identity on the request"
                     }
                   }
                 },
@@ -3650,6 +3692,24 @@
                     "summary": "Agent 'thermal-agent' is not registered",
                     "value": {
                       "detail": "Agent 'thermal-agent' is not registered"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Under Istio identity, the name is registered by a different workload.",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example_1": {
+                    "summary": "Agent 'thermal-agent' is registered by another workload",
+                    "value": {
+                      "detail": "Agent 'thermal-agent' is registered by another workload"
                     }
                   }
                 },
@@ -3704,7 +3764,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`. Under `AGENT_IDENTITY_SOURCE=istio`, registering and removing an agent also need a verified workload identity.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3712,6 +3772,12 @@
                     "summary": "Invalid or missing agent credentials",
                     "value": {
                       "detail": "Invalid or missing agent credentials"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "No verified workload identity on the request",
+                    "value": {
+                      "detail": "No verified workload identity on the request"
                     }
                   }
                 },
@@ -3798,7 +3864,7 @@
             }
           },
           "401": {
-            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`.",
+            "description": "The `Authorization` header isn't `Bearer <AGENT_SECRET>`. Agents built on `prometheus_api` send `LITELLM_MASTER_KEY` here, so set it to `${AGENT_SECRET}`. Under `AGENT_IDENTITY_SOURCE=istio`, registering and removing an agent also need a verified workload identity.",
             "content": {
               "application/json": {
                 "examples": {
@@ -3806,6 +3872,12 @@
                     "summary": "Invalid or missing agent credentials",
                     "value": {
                       "detail": "Invalid or missing agent credentials"
+                    }
+                  },
+                  "example_2": {
+                    "summary": "No verified workload identity on the request",
+                    "value": {
+                      "detail": "No verified workload identity on the request"
                     }
                   }
                 },
@@ -4064,18 +4136,21 @@
         "properties": {
           "available": {
             "type": "boolean",
-            "title": "Available"
+            "title": "Available",
+            "description": "False when the registry (Valkey) is unreachable; `agents` is then empty."
           },
           "checked_at": {
             "type": "string",
-            "title": "Checked At"
+            "title": "Checked At",
+            "description": "ISO 8601 UTC time the reachability probes finished."
           },
           "agents": {
             "items": {
               "$ref": "#/components/schemas/AgentStatus"
             },
             "type": "array",
-            "title": "Agents"
+            "title": "Agents",
+            "description": "The registered agents, by `agent_name`."
           }
         },
         "type": "object",
@@ -4118,16 +4193,19 @@
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "title": "Id",
+            "description": "The skill's id in the agent card."
           },
           "name": {
             "type": "string",
             "title": "Name",
+            "description": "The skill's display name.",
             "default": ""
           },
           "description": {
             "type": "string",
             "title": "Description",
+            "description": "What the skill does, from the agent card.",
             "default": ""
           },
           "tags": {
@@ -4135,7 +4213,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Tags"
+            "title": "Tags",
+            "description": "The skill's tags; `[]` if the card lists none."
           }
         },
         "type": "object",
@@ -4149,21 +4228,25 @@
         "properties": {
           "agent_name": {
             "type": "string",
-            "title": "Agent Name"
+            "title": "Agent Name",
+            "description": "The agent's name in the registry, used in its routes."
           },
           "name": {
             "type": "string",
             "title": "Name",
+            "description": "The display name from the agent card.",
             "default": ""
           },
           "description": {
             "type": "string",
             "title": "Description",
+            "description": "What the agent does, from the agent card.",
             "default": ""
           },
           "version": {
             "type": "string",
             "title": "Version",
+            "description": "The agent card's version.",
             "default": ""
           },
           "registered_at": {
@@ -4175,22 +4258,26 @@
                 "type": "null"
               }
             ],
-            "title": "Registered At"
+            "title": "Registered At",
+            "description": "ISO 8601 UTC time of the agent's last registration; null for an entry stored before the backend recorded it."
           },
           "reachable": {
             "type": "boolean",
-            "title": "Reachable"
+            "title": "Reachable",
+            "description": "Whether the agent's `GET /healthz` answered 2xx within 2 s."
           },
           "checked_at": {
             "type": "string",
-            "title": "Checked At"
+            "title": "Checked At",
+            "description": "ISO 8601 UTC time the reachability probes finished."
           },
           "skills": {
             "items": {
               "$ref": "#/components/schemas/AgentSkillSummary"
             },
             "type": "array",
-            "title": "Skills"
+            "title": "Skills",
+            "description": "The skills on the agent card."
           }
         },
         "type": "object",
@@ -4321,6 +4408,7 @@
               "panel"
             ],
             "title": "Display",
+            "description": "Where to show the artifact: `inline` in the message body, or `panel`, only in the side artifact panel.",
             "default": "inline"
           }
         },
