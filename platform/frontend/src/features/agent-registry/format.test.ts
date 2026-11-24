@@ -13,18 +13,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import { formatLatency, formatRunTime, formatUptime, formatVersion } from "./format.ts";
-
-test("run time uses seconds, minutes and hours and drops a zero lower unit", () => {
-  assert.equal(formatRunTime(45), "45s");
-  assert.equal(formatRunTime(320), "5m 20s");
-  assert.equal(formatRunTime(4500), "1h 15m");
-  assert.equal(formatRunTime(1120), "18m 40s");
-  assert.equal(formatRunTime(720), "12m");
-  assert.equal(formatRunTime(90), "1m 30s");
-  assert.equal(formatRunTime(2), "2s");
-  assert.equal(formatRunTime(3600), "1h");
-});
+import { formatLatency, formatUptime, formatVersion } from "./format.ts";
 
 test("uptime is a percentage that keeps its decimals", () => {
   assert.equal(formatUptime(100), "100%");

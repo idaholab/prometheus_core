@@ -20,6 +20,7 @@ export { WorkflowHistory } from "./history/WorkflowHistory";
 export type { WorkflowGraphNode, WorkflowGraphWire } from "./graph/WorkflowGraph";
 export type { WorkflowPlan } from "./console/WorkflowPlanner";
 export type { WorkflowTemplate } from "./console/WorkflowTemplateCard";
+export { toPlan, toTemplate } from "./console/workflowView";
 export {
   BUILDER_NODES,
   BUILDER_WIRES,

@@ -15,19 +15,6 @@
  * (so `node --test` can load them).
  */
 
-/** A run time in seconds as `45s`, `5m 20s` or `1h 15m`; a zero lower unit is dropped. */
-export function formatRunTime(s: number): string {
-  if (s < 60) return `${s}s`;
-  if (s < 3600) {
-    const minutes = Math.floor(s / 60);
-    const seconds = s % 60;
-    return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
-  }
-  const hours = Math.floor(s / 3600);
-  const minutes = Math.floor((s % 3600) / 60);
-  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
-}
-
 /** An uptime percentage as `99.8%`. */
 export function formatUptime(p: number): string {
   return `${p}%`;

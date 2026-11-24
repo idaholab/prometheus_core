@@ -25,11 +25,15 @@ const STATUS_PILL: Record<WorkflowStepStatus, ComponentProps<typeof StatusPill>>
 
 export interface AgentNodeData extends Record<string, unknown> {
   name: string;
-  status: WorkflowStepStatus;
+  /** Run status of the step; unset for a template, which draws no pill. */
+  status?: WorkflowStepStatus;
   input: string;
   output: string;
-  /** Display string, e.g. "40s". */
-  est: string;
+  /**
+   * Estimated time as a display string, e.g. "40s"; unset for a template step,
+   * which has no estimate. The EST row is then hidden.
+   */
+  est?: string;
   /** Node width in px; D.1 sizes nodes to their content. */
   width: number;
 }
@@ -92,7 +96,7 @@ function DetailRow({ label, value, error = false }: { label: string; value: stri
   );
 }
 
-/** One agent step (Figma D.1): name and status, input and output ports, and estimated time. */
+/** One agent step (Figma D.1): name and status, input and output ports, and estimated time when set. */
 export function WorkflowAgentNode({ data }: NodeProps<AgentNode>) {
   return (
     <div
@@ -107,11 +111,11 @@ export function WorkflowAgentNode({ data }: NodeProps<AgentNode>) {
         >
           {data.name}
         </span>
-        <StatusPill {...STATUS_PILL[data.status]} />
+        {data.status && <StatusPill {...STATUS_PILL[data.status]} />}
       </div>
       <DetailRow label="IN" value={data.input} />
       <DetailRow label="OUT" value={data.output} />
-      <DetailRow label="EST" value={data.est} />
+      {data.est && <DetailRow label="EST" value={data.est} />}
       <Handle type="source" position={Position.Bottom} isConnectable={false} className={HANDLE_CLASS} />
     </div>
   );

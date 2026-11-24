@@ -28,10 +28,12 @@ export interface WorkflowPlan {
   nodes: WorkflowGraphNode[];
   wires: WorkflowGraphWire[];
   agents: number;
-  /** Display string, e.g. "3hr 40s". */
-  pipelineTime: string;
-  /** Display string, e.g. "2 Active". */
+  /** Display string, e.g. "1h 15m"; null when the template sets none, and the row is hidden. */
+  pipelineTime: string | null;
+  /** Display string, e.g. "2". */
   checkpoints: string;
+  /** The chat pauses for the user's approval before the workflow runs. */
+  requiresApproval: boolean;
   /** The plan's workflow template, e.g. "Comprehensive Material Analysis", named in Modify Plan's menu. */
   templateName: string;
   inputs: string[];
@@ -108,14 +110,22 @@ export function WorkflowPlanner({
                 {plan.agents} {plan.agents === 1 ? "Agent" : "Agents"}
               </dd>
             </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-base-content/60">Pipeline Time</dt>
-              <dd className="m-0 text-primary">{plan.pipelineTime}</dd>
-            </div>
+            {plan.pipelineTime !== null && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-base-content/60">Pipeline Time</dt>
+                <dd className="m-0 text-primary">{plan.pipelineTime}</dd>
+              </div>
+            )}
             <div className="flex justify-between gap-2">
               <dt className="text-base-content/60">Checkpoints</dt>
               <dd className="m-0 text-primary">{plan.checkpoints}</dd>
             </div>
+            {plan.requiresApproval && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-base-content/60">Approval</dt>
+                <dd className="m-0 text-primary">Required before run</dd>
+              </div>
+            )}
           </dl>
         </div>
         <FileList label="Input Requirements" files={plan.inputs} />

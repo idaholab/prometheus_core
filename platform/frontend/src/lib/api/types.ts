@@ -257,6 +257,92 @@ export interface OidcProviderUpdate {
   is_enabled?: boolean;
 }
 
+// --- workflows ----------------------------------------------------------------
+
+export type WorkflowComplexity = "complex" | "moderate" | "simple";
+
+/** `local` for a client-agent workflow file, `agent_card` for a workflow an agent card declares. */
+export type WorkflowSource = "local" | "agent_card";
+
+/** One row of `GET /api/workflows` (`Workflow` in `contract.py`). */
+export interface Workflow {
+  /** The library id; the value `ChatMessageRequest.workflow_id` takes to run it. */
+  workflow_id: string;
+  name: string;
+  summary: string;
+  /** `General` when none is set. */
+  category: string;
+  version: string;
+  source: WorkflowSource;
+  owner: string | null;
+  complexity: WorkflowComplexity | null;
+  estimated_runtime_seconds: number | null;
+  /** Raw speed-up over the manual baseline, e.g. 2.0; the UI formats "2.0x". */
+  speedup: number | null;
+  /** Whether chat pauses for the user's approval before the workflow runs. */
+  requires_approval: boolean;
+  /** Distinct agents over the `skill` nodes. */
+  agent_count: number;
+  checkpoint_count: number;
+}
+
+export interface GraphNodeInput {
+  port: string;
+  source: string | null;
+  optional: boolean;
+}
+
+export interface GraphNode {
+  node_id: string;
+  kind: "skill" | "checkpoint" | "qa_gate";
+  skill_id: string | null;
+  /** The skill's name from its agent card when known, else the step id. */
+  label: string;
+  /** Null when no registered agent serves the skill. */
+  agent_name: string | null;
+  /** Whether the step's output is the workflow's result. */
+  is_final: boolean;
+  inputs: GraphNodeInput[];
+}
+
+/** `data` when the target reads the source's output, `order` when it only runs after it. */
+export type GraphEdgeKind = "data" | "order";
+
+export interface GraphEdge {
+  edge_id: string;
+  from_node: string;
+  to_node: string;
+  kind: GraphEdgeKind;
+  /** The target input port of a `data` edge; null for an `order` edge. */
+  port: string | null;
+}
+
+export interface WorkflowGraph {
+  workflow_id: string;
+  mode: "dag" | "sequential" | "parallel";
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+/** The input paths a workflow declares. */
+export interface WorkflowInputs {
+  required: string[];
+  optional: string[];
+}
+
+/** `GET /api/workflows/{workflow_id}`: one template with its inputs and graph. */
+export interface WorkflowDetail extends Workflow {
+  inputs: WorkflowInputs;
+  graph: WorkflowGraph;
+}
+
+/** `GET /api/workflows`. `available` is false when the client-agent workflow library is
+ * unreachable or off; `workflows` is then empty (200, as `GET /api/agents`). */
+export interface WorkflowListResponse {
+  available: boolean;
+  workflows: Workflow[];
+}
+
 /** Body of `POST /api/sessions` (`CreateSessionRequest` in `contract.py`).
  *
  * Rebind ordering: the server applies a rebind (`POST /sessions`, `/resume`) only
