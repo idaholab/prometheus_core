@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- base (shared) ----
-FROM node:22.23.3-bookworm-slim@sha256:3ed98443660ff48413b5af19ecefce3b9d50845a901a43420d47cc63a9fddbe9 AS base
+FROM node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS base
 WORKDIR /app
 
 RUN apt-get update \
@@ -62,7 +62,7 @@ RUN npm run build
 # ---- prod ----
 # The unprivileged variant runs as UID 101 and keeps its pid and temp files in
 # /tmp, so it works with a read-only root filesystem.
-FROM nginx/nginx-unprivileged:1.31.8-alpine@sha256:26277f4923331a5ecda9096c0e378de65a30a5037129a8036c3ef5d9feee833d AS prod
+FROM nginx/nginx-unprivileged:1.31.9-alpine@sha256:60214a103e6f38e953ff957f34b1f2e97a9db801ab2df3821da955d0fe6cadd6 AS prod
 # The nginx image renders /etc/nginx/templates/*.template at start, substituting
 # ${BACKEND_UPSTREAM}. It renders into /tmp rather than conf.d/, which isn't
 # writable with a read-only root (nginx would then start on the stock config,
