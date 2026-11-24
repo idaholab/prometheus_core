@@ -128,10 +128,11 @@ export interface ChatMessageResponse {
   // plan_ready
   plan?: Record<string, unknown> | null;
   auto_approve?: boolean;
+  // completed | answer | recommendation | needs_info (outputs made before the form)
+  artifacts?: ArtifactMeta[] | null;
   // completed | answer | recommendation
   report?: string | null;
   response_text?: string | null;
-  artifacts?: ArtifactMeta[] | null;
   recommended_materials?: string[] | null;
   follow_up_suggestions?: string[] | null;
   // backgrounded

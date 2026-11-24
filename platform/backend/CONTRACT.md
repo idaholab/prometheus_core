@@ -134,7 +134,9 @@ Plan approval / rejection:
 
 One model covers every `status`; only the status-relevant fields are populated.
 
-**`needs_info`** — `followup_questions` is a list of normalized `FormField`s:
+**`needs_info`** — `followup_questions` is a list of normalized `FormField`s. `artifacts`
+(omitted when empty) holds outputs the turn produced before it paused at the form, shaped
+as in `completed`:
 
 ```json
 {
@@ -165,6 +167,16 @@ One model covers every `status`; only the status-relevant fields are populated.
         { "label": "SS316", "value": "SS316" },
         { "label": "SS347", "value": "ss347" }
       ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "art-7",
+      "name": "criterion_status.png",
+      "mime_type": "image/png",
+      "description": "Criterion status chart",
+      "tags": [],
+      "render_hint": "image"
     }
   ]
 }
