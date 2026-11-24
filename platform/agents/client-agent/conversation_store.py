@@ -251,10 +251,11 @@ def stamp_turn_artifacts(
     conversation catalog (Prometheus Artifact Contract, "Frontend viewer ownership").
     The target is the turn's last assistant entry with content: its ``final_report``
     when there is one, which the transcript collapses with the matching
-    ``agent_response_*`` entry, so each id renders once. A turn with no such entry (a
-    follow-up question, a plan rejection) gets no stamp; the live reply showed no
-    artifacts either. Ids already on the entry are kept. Returns whether *history*
-    changed.
+    ``agent_response_*`` entry, so each id renders once. A turn that paused at a
+    follow-up form is stamped on that form's entry, whose content is the form's
+    message. A turn with no such entry (a plan rejection, a form with an empty
+    message) gets no stamp. Ids already on the entry are kept. Returns whether
+    *history* changed.
     """
     ids = [str(i) for i in artifact_ids if i]
     if not ids or not turn_id:

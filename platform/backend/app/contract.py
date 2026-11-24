@@ -322,6 +322,8 @@ class ChatMessageResponse(BaseModel):
     # status == completed | answer | recommendation
     report: Optional[str] = None
     response_text: Optional[str] = None
+    # Also set on needs_info: a turn that pauses at a follow-up form can still have
+    # produced artifacts (e.g. a workflow step published outputs, then a review gate paused).
     artifacts: Optional[list[ArtifactMeta]] = None
     recommended_materials: Optional[list[str]] = None
     follow_up_suggestions: Optional[list[str]] = None

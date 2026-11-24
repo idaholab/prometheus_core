@@ -74,7 +74,11 @@ def test_status_vocabulary_matches_upstream():
 # Minimal, representative payload per status. Deliberately sparse: map_response must
 # not require optional fields to be present for any status.
 _STATUS_PAYLOADS = {
-    "needs_info": {"followup_questions": [{"field": "material", "question": "Which material?"}]},
+    "needs_info": {
+        "followup_questions": [{"field": "material", "question": "Which material?"}],
+        "new_artifacts": [{"artifact_id": "a1", "name": "status.png", "mime_type": "image/png"}],
+        "artifacts": [{"artifact_id": "a1", "name": "status.png"}],
+    },
     "plan_ready": {"plan": {"steps": [{"name": "step-1"}]}, "message": "Plan ready"},
     "executing": {"message": "Executing the plan…"},
     "completed": {

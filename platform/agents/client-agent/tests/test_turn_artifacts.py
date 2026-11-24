@@ -69,7 +69,7 @@ def test_identical_replies_of_two_turns_each_get_their_own_ids():
 
 
 def test_a_turn_without_a_reply_gets_no_stamp():
-    # A follow-up question or a plan rejection: no content-bearing reply.
+    # A plan rejection, or a form with an empty message: no content-bearing reply.
     history = [
         _entry("user", "go", "T1", "t1"),
         _entry("assistant", "", "T1", "t2"),

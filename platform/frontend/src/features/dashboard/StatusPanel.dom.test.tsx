@@ -109,6 +109,47 @@ describe("the Artifacts tab list", () => {
     expect(screen.getAllByText("shared.txt")).toHaveLength(1);
     expect(screen.getByText("Verified MOOSE input")).toBeInTheDocument();
   });
+
+  test("lists artifacts from turns that paused at a form, and skips a form with none", async () => {
+    const user = userEvent.setup();
+    const report = artifact("report");
+    renderPanel({
+      items: [
+        {
+          kind: "assistant",
+          id: "a1",
+          text: "",
+          artifacts: [report],
+          recommendedMaterials: [],
+          followUpSuggestions: [],
+        },
+        // A form whose turn published nothing.
+        {
+          kind: "needs_info",
+          id: "ni-1",
+          turnId: "t1",
+          message: "Gate 1: approve?",
+          fields: [],
+          artifacts: [],
+          submitted: true,
+        },
+        {
+          kind: "needs_info",
+          id: "ni-2",
+          turnId: "t2",
+          message: "Gate 2: approve?",
+          fields: [],
+          artifacts: [artifact("criterion_status"), report],
+          submitted: false,
+        },
+      ] as ChatState["items"],
+      resumingConversationId: null,
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Artifacts (2)" }));
+    expect(screen.getAllByText("report.txt")).toHaveLength(1);
+    expect(screen.getByText("criterion_status.txt")).toBeInTheDocument();
+  });
 });
 
 describe("opening an artifact from the Artifacts tab", () => {

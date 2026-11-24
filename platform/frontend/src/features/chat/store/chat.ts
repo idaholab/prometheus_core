@@ -75,6 +75,8 @@ export interface NeedsInfoItem extends BaseItem {
   turnId: string;
   message: string;
   fields: FormField[];
+  /** Outputs the turn produced before it paused at this form (e.g. a workflow step's plots). */
+  artifacts: ArtifactMeta[];
   submitted: boolean;
 }
 export interface PlanItem extends BaseItem {
@@ -248,6 +250,7 @@ function applyResponse(res: ChatMessageResponse): void {
             turnId: res.turn_id,
             message: res.message ?? "",
             fields,
+            artifacts: res.artifacts ?? [],
             submitted: false,
           },
         ]);

@@ -134,7 +134,7 @@ The canonical final response object for conversation-facing flows must be:
 
 Additional fields by status:
 
-- `needs_info`: `followup_questions`
+- `needs_info`: `followup_questions` (plus `new_artifacts` when the turn produced outputs before pausing)
 - `plan_ready`: `plan`
 - `completed`: `report`, `tool_results`
 - `recommendation|answer`: `response_text`, optional `recommended_materials`

@@ -37,7 +37,7 @@ import logging
 from typing import Any, Callable, Coroutine, Optional
 
 from app.a2a_client import A2AClient, ConversationResponse
-from app.contract import ChatMessageResponse, ChatStatus, UploadDescriptor
+from app.contract import ArtifactMeta, ChatMessageResponse, ChatStatus, UploadDescriptor
 from app.contract import normalize_followup_questions as _normalize_followup_questions
 from app.services.artifacts import is_user_upload, shape_artifacts
 from app.services.mesh.service import enrich_mesh_artifacts
@@ -82,12 +82,57 @@ def normalize_followup_questions(response: ConversationResponse) -> list:
     return _normalize_followup_questions(response.followup_questions or [])
 
 
-def _map_needs_info(response: ConversationResponse, turn_id: str) -> ChatMessageResponse:
+async def _turn_artifacts(
+    response: ConversationResponse,
+    store: SessionStore,
+    sid: str,
+    *,
+    conversation_id: str,
+) -> list[ArtifactMeta]:
+    """Persist the conversation catalog (a Valkey write) and shape this turn's new artifacts.
+
+    Shared by the terminal and ``needs_info`` branches, since either can end a turn
+    that produced artifacts (a workflow step that pauses at a review form still
+    published its outputs first).
+
+    - Filters ``new_artifacts``, dropping user-uploaded echoes
+      (``metadata.source == "user-upload"``; message_handler.py:672) and all
+      artifacts on slash-command turns.
+    - Persists the full ``response.artifacts`` catalog onto the session so task 07's
+      ``GET /api/artifacts/{id}/content`` can resolve ids for the whole
+      conversation, not just this turn. Truthy, not ``is not None`` (T-7): an
+      ``artifacts=[]`` turn must not wipe the accumulated catalog.
+    - The catalog write is guarded on ``conversation_id`` (see :func:`map_response`).
+    """
+    metadata = response.message_metadata or {}
+    is_slash_command = bool(metadata.get("slash_command"))
+
+    raw_new = [] if is_slash_command else (response.new_artifacts or [])
+    new_artifacts = [artifact for artifact in raw_new if not is_user_upload(artifact)]
+
+    if response.artifacts:
+        await store.set_artifacts(sid, response.artifacts, conversation_id=conversation_id)
+
+    return shape_artifacts(new_artifacts)
+
+
+async def _map_needs_info(
+    response: ConversationResponse,
+    turn_id: str,
+    store: SessionStore,
+    sid: str,
+    *,
+    conversation_id: str,
+) -> ChatMessageResponse:
+    """Follow-up branch. Carries the turn's new artifacts too: a workflow that pauses at
+    a review form has usually just published the outputs the reviewer needs to see."""
+    shaped = await _turn_artifacts(response, store, sid, conversation_id=conversation_id)
     return ChatMessageResponse(
         turn_id=turn_id,
         status=ChatStatus.NEEDS_INFO,
         message=response.message,
         followup_questions=normalize_followup_questions(response),
+        artifacts=shaped or None,
     )
 
 
@@ -124,13 +169,8 @@ async def _map_final(
 ) -> ChatMessageResponse:
     """Terminal branch (ports ``_handle_final_response``, minus rendering).
 
-    - Filters ``new_artifacts``, dropping user-uploaded echoes
-      (``metadata.source == "user-upload"``; message_handler.py:672).
-    - Persists the full ``response.artifacts`` catalog onto the session so task 07's
-      ``GET /api/artifacts/{id}/content`` can resolve ids for the whole
-      conversation, not just this turn.
+    - Filters, shapes and persists artifacts via :func:`_turn_artifacts`.
     - Pulls ``follow_up_suggestions`` from ``message_metadata``.
-    - Shapes artifacts via task 07's metadata builder (no rendering).
 
     The catalog write is guarded on ``conversation_id`` (see :func:`map_response`), so
     a late-arriving response for an abandoned conversation can't stomp the catalog of
@@ -140,18 +180,7 @@ async def _map_final(
     discard it as stale on its side too.
     """
     metadata = response.message_metadata or {}
-    is_slash_command = bool(metadata.get("slash_command"))
-
-    raw_new = [] if is_slash_command else (response.new_artifacts or [])
-    new_artifacts = [artifact for artifact in raw_new if not is_user_upload(artifact)]
-
-    # Persist the full conversation catalog for later content fetches (task 07).
-    # Truthy, not ``is not None`` (T-7): an ``artifacts=[]`` turn must not wipe the
-    # accumulated catalog that later ``GET /api/artifacts/{id}/content`` calls resolve.
-    if response.artifacts:
-        await store.set_artifacts(sid, response.artifacts, conversation_id=conversation_id)
-
-    shaped = shape_artifacts(new_artifacts)
+    shaped = await _turn_artifacts(response, store, sid, conversation_id=conversation_id)
     text = _coerce_final_text(response, len(shaped)) or None
 
     suggestions = metadata.get("follow_up_suggestions") or None
@@ -246,14 +275,18 @@ async def map_response(
         count = await store.bump_needs_info(sid, conversation_id=conversation_id)
         if count is not None and count > _MAX_CONSECUTIVE_NEEDS_INFO:
             await store.reset_needs_info(sid, conversation_id=conversation_id)
+            # The capped turn may still have published outputs before asking again
+            # (a review gate looping on "request more evidence"); keep them.
+            shaped = await _turn_artifacts(response, store, sid, conversation_id=conversation_id)
             return ChatMessageResponse(
                 turn_id=turn_id,
                 status=ChatStatus.ANSWER,
                 response_text=_TOO_MANY_FOLLOWUPS_MESSAGE,
+                artifacts=shaped or None,
             )
 
     if status == "needs_info":
-        return _map_needs_info(response, turn_id)
+        return await _map_needs_info(response, turn_id, store, sid, conversation_id=conversation_id)
     if status == "plan_ready":
         return _map_plan_ready(response, turn_id, auto_approve=auto_approve)
     if status in ("completed", "answer", "recommendation"):

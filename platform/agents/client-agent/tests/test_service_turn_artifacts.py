@@ -100,7 +100,17 @@ def _ids(refs):
     return [r["artifact_id"] for r in refs]
 
 
-def test_new_artifacts_are_the_ids_the_turn_produced(orchestrator, monkeypatch):
+# A turn can publish outputs and then pause at a form or an approval gate; what it
+# produced is reported the same way as for a turn that finishes.
+_FINAL_OR_PAUSED = {
+    "completed": {"report": "plotted"},
+    "needs_info": {"message": "Gate 2: approve?", "followup_questions": [{"field": "f", "question": "Q?"}]},
+    "plan_ready": {"message": "Plan ready", "plan": {"steps": []}},
+}
+
+
+@pytest.mark.parametrize("status", list(_FINAL_OR_PAUSED))
+def test_new_artifacts_are_the_ids_the_turn_produced(orchestrator, monkeypatch, status):
     turn_ids = []
 
     async def fake_chat(request):
@@ -108,7 +118,7 @@ def test_new_artifacts_are_the_ids_the_turn_produced(orchestrator, monkeypatch):
         task_tracking.record_produced_artifacts(["a2"])  # what the dispatch reported
         orchestrator.artifact_registry.add("a3")  # registered by a turn running meanwhile
         turn_ids.append(task_tracking.current_turn_id())
-        return service_mod.ConversationResponse(conversation_id=CONV, status="completed", report="plotted")
+        return service_mod.ConversationResponse(conversation_id=CONV, status=status, **_FINAL_OR_PAUSED[status])
 
     monkeypatch.setattr(service_mod, "chat", fake_chat)
 
