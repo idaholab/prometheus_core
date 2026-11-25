@@ -62,7 +62,7 @@ make test-e2e    # npm run test:e2e             (Playwright end-to-end tests, he
 make check       # format-check + lint + typecheck + test (not the end-to-end tests)
 ```
 
-The end-to-end tests need a browser first (`npx playwright install chromium`); CI runs them in the `platform: frontend e2e` job.
+The end-to-end tests need a browser; `make test-e2e` installs the one the current Playwright needs (`make e2e-browsers` on its own). CI runs them in the `platform: frontend e2e` job.
 
 Config comes from `frontend/config.ts` plus `VITE_*` env vars (e.g. `VITE_BACKEND_URL`); there is no `config.yml`.
 

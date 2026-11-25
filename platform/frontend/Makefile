@@ -2,7 +2,7 @@
 ##@ Frontend React
 ##@
 
-.PHONY: dev build lint format format-check typecheck test test-coverage test-e2e test-e2e-full check install
+.PHONY: dev build lint format format-check typecheck test test-coverage e2e-browsers test-e2e test-e2e-full check install
 
 dev: ##@ Start Vite dev server
 	npm run dev -- --port 5150
@@ -28,10 +28,17 @@ test: ##@ Run the unit and component tests (vitest)
 test-coverage: ##@ Run the unit and component tests with a coverage report (as CI does)
 	npm run test:coverage
 
-test-e2e: ##@ Run the end-to-end tests (Playwright, headless Chromium)
+# The browser build Playwright needs changes with its version, so a Playwright
+# bump leaves every e2e test failing with "Executable doesn't exist". This
+# fetches the build the installed Playwright wants, or returns at once if it's
+# already there. CI installs its own (with --with-deps, for Linux packages).
+e2e-browsers: ##@ Install the browser the end-to-end tests run in (quick when it's already there)
+	npx playwright install --only-shell chromium
+
+test-e2e: e2e-browsers ##@ Run the end-to-end tests (Playwright, headless Chromium)
 	npm run test:e2e
 
-test-e2e-full: ##@ Run the end-to-end tests against the e2e stack (start the stack first: make up-e2e in platform/)
+test-e2e-full: e2e-browsers ##@ Run the end-to-end tests against the e2e stack (start the stack first: make up-e2e in platform/)
 	npm run test:e2e:full
 
 check: ##@ Run format-check + lint + typecheck + test; the end-to-end tests are separate (make test-e2e)

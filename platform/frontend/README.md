@@ -112,7 +112,7 @@ npm run test:e2e      # build the app, serve it on port 5160 and run e2e/ in hea
 npm run test:e2e:ui   # Playwright's UI mode, to step through a test and watch it run
 ```
 
-The first run needs a browser: `npx playwright install chromium`.
+`make test-e2e` and `make test-e2e-full` install the browser the tests need first, so a Playwright update can't leave them without one. The `npm run` commands don't; after a Playwright update, run `make e2e-browsers` once before using them.
 
 End-to-end tests use [Playwright](https://playwright.dev) and live in `e2e/` as `*.spec.ts`, apart from the Vitest suite, so `npm test` stays fast and never runs them. They load the built app in a real browser. Nothing runs behind it, so each test answers the `/api` calls it needs with `page.route`. Find elements by role and accessible name, the same way the component tests do. `e2e/login.spec.ts` is the example. Import `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`: each test then starts as a signed-out visitor with the sign-in calls stubbed, and fails if the app makes an `/api` call that no stub answers.
 
