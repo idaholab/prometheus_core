@@ -1,0 +1,1061 @@
+{
+  "version": "1.0.0",
+  "note": "Catalog of agentic design-pattern families and architectures used by setup_agent.py to scaffold an agent's _execute. Pattern names are the field-standard names; descriptions, when_to_use, steps and topology are our own wording and structural interpretation. `reference` links to public material for further reading; no third-party source code or prose is reproduced. Families follow the common literature (Reflection, Planning, Tool Use, Multi-Agent; plus Retrieval, Memory, Routing), with Sampling & Search and Specialty.",
+  "topologies": {
+    "linear": "Straight chain of steps.",
+    "loop": "The last step cycles back to the first until the result is good enough.",
+    "cycle": "Tight back-edge between the last two steps (e.g. think / act / observe).",
+    "parallel": "Fan out to N independent runs, then aggregate.",
+    "tree": "A coordinator fans out to the middle steps, then converges."
+  },
+  "families": [
+    {
+      "slug": "reflection_refinement",
+      "name": "Reflection & Refinement",
+      "description": "The agent drafts, critiques its own output, and revises in a loop — improving a single answer by self-review, with no external systems involved.",
+      "when_to_use": "A first draft is often flawed and self-critique reliably improves it.",
+      "needs": "Just an LLM — no tools or external data.",
+      "cost": "Medium: several LLM calls (one per critique/revise round).",
+      "reference": "https://www.deeplearning.ai/the-batch/agentic-design-patterns-part-2-reflection/"
+    },
+    {
+      "slug": "retrieval",
+      "name": "Retrieval",
+      "description": "The agent grounds its answer in evidence pulled from an external, read-only corpus or index at query time, rather than relying on parametric memory.",
+      "when_to_use": "Answers must be grounded in a corpus or cite sources, not model memory.",
+      "needs": "An external read-only document store or index to pull from.",
+      "cost": "Low–medium: retrieval + 1–2 LLM calls; corrective variants add passes.",
+      "reference": "https://arxiv.org/abs/2005.11401"
+    },
+    {
+      "slug": "planning_chaining",
+      "name": "Planning & Chaining",
+      "description": "The agent decomposes a goal into an ordered sequence of sub-steps, executes them, and replans on failure — optionally searching over plans.",
+      "when_to_use": "A goal is big enough to decompose into ordered steps, with replanning.",
+      "needs": "Usually tools to run steps; optionally a search budget (ToT/LATS).",
+      "cost": "Medium–high: planning + per-step execution; search multiplies calls.",
+      "reference": "https://www.deeplearning.ai/the-batch/agentic-design-patterns-part-4-planning/"
+    },
+    {
+      "slug": "tool_use_actions",
+      "name": "Tool Use & Actions",
+      "description": "The agent acts on the world by calling out to an external tool, API, or MCP server, then incorporates the observation — reasoning interleaved with action.",
+      "when_to_use": "The task needs an external action: call an API, run code, drive a tool.",
+      "needs": "One or more tools / an MCP server the agent calls out to.",
+      "cost": "Low–medium: a few LLM calls; cost scales with tool round-trips.",
+      "reference": "https://www.deeplearning.ai/the-batch/agentic-design-patterns-part-3-tool-use/"
+    },
+    {
+      "slug": "memory",
+      "name": "Memory",
+      "description": "The agent reads from and writes to a persistent store that survives across turns and sessions, accumulating experience it can reuse later.",
+      "when_to_use": "Long-running / repeat use where the agent should learn across sessions.",
+      "needs": "A persistent read-write store (vector/graph/DB) spanning turns.",
+      "cost": "Medium: recall + write each turn; store grows over time.",
+      "reference": "https://arxiv.org/abs/2310.08560"
+    },
+    {
+      "slug": "routing_governance",
+      "name": "Routing & Governance",
+      "description": "The agent gates or routes work with a deterministic (non-LLM) decision — approving, blocking, escalating to a human, or dispatching to the right path.",
+      "when_to_use": "Actions carry risk/cost, or requests must route to the right path.",
+      "needs": "A deterministic check/policy (gate), optionally human approval.",
+      "cost": "Low: the gate is a cheap Python branch; safety over extra LLM spend.",
+      "reference": "https://www.anthropic.com/engineering/building-effective-agents"
+    },
+    {
+      "slug": "sampling_search",
+      "name": "Sampling & Search",
+      "description": "The agent draws many samples from a space — LLM reasoning paths OR a numerical/parameter space — evaluates each, and aggregates: vote for the best (self-consistency, ensemble) or keep the whole distribution (Monte Carlo forward uncertainty quantification, simulator ensembles). Fan out, then aggregate.",
+      "when_to_use": "You must explore many samples and aggregate — pick the best answer, or quantify a distribution (forward UQ / Monte Carlo over a model).",
+      "needs": "An LLM and/or an external model/simulator to evaluate per sample; optionally a scorer to rank.",
+      "cost": "High: N samples means N× the per-sample cost (LLM calls or simulator runs).",
+      "reference": "https://arxiv.org/abs/2203.11171"
+    },
+    {
+      "slug": "multi_agent",
+      "name": "Multi-Agent",
+      "description": "Multiple specialized agents coordinate — a supervisor routing to specialists, a shared workspace, debate, or multi-perspective research — then converge.",
+      "when_to_use": "Work splits into distinct roles/perspectives better handled separately.",
+      "needs": "Multiple agents (often A2A), each possibly with its own tools.",
+      "cost": "High: many agents × their own calls; coordination overhead.",
+      "reference": "https://www.deeplearning.ai/the-batch/agentic-design-patterns-part-5-multi-agent-collaboration/"
+    },
+    {
+      "slug": "specialty",
+      "name": "Specialty",
+      "description": "Patterns with an unusual shape that no standard family fits — written constitutions, learned self-improvement over an archive, rule-driven cellular dynamics.",
+      "when_to_use": "Unusual structure no standard family fits (constitutions, CA, self-evolve).",
+      "needs": "Varies by pattern — stated per architecture.",
+      "cost": "Varies — outliers; check the specific architecture.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures"
+    }
+  ],
+  "architectures": [
+    {
+      "slug": "reflection",
+      "name": "Reflection",
+      "family": "reflection_refinement",
+      "description": "Draft an answer, critique it against the goal, then revise. A generate-critique-revise loop that improves a single answer.",
+      "when_to_use": "A first draft is usually close but flawed, and a self-critique pass reliably improves it.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "draft",
+          "Produce an initial answer to the task."
+        ],
+        [
+          "critique",
+          "Critique the draft against the goal; list concrete flaws."
+        ],
+        [
+          "revise",
+          "Revise the draft using the critique. Loop if not good enough."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "reflexion",
+      "name": "Reflexion",
+      "family": "reflection_refinement",
+      "description": "Reflection plus verbal self-feedback stored across attempts: the agent writes lessons from a failed try and conditions the next try on them.",
+      "when_to_use": "Multi-attempt tasks with a success signal, where remembering why the last attempt failed helps the next.",
+      "reference": "https://arxiv.org/abs/2303.11366",
+      "steps": [
+        [
+          "attempt",
+          "Attempt the task."
+        ],
+        [
+          "evaluate",
+          "Check the attempt against a success signal."
+        ],
+        [
+          "reflect",
+          "If failed, write a short lesson; store it for the next try."
+        ],
+        [
+          "retry",
+          "Retry conditioned on accumulated lessons."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "chain_of_verification",
+      "name": "Chain of Verification",
+      "family": "reflection_refinement",
+      "description": "Produce an answer, generate independent verification questions, answer those, and reconcile — catching unsupported claims.",
+      "when_to_use": "Factual answers where hallucinated details must be caught before returning.",
+      "reference": "https://arxiv.org/abs/2309.11495",
+      "steps": [
+        [
+          "answer",
+          "Produce a candidate answer."
+        ],
+        [
+          "plan_checks",
+          "Generate independent verification questions."
+        ],
+        [
+          "verify",
+          "Answer each verification question."
+        ],
+        [
+          "reconcile",
+          "Revise the answer to drop unsupported claims."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "self_discover",
+      "name": "Self-Discover",
+      "family": "reflection_refinement",
+      "description": "The agent selects and composes reasoning modules into a task-specific plan before solving, rather than using a fixed prompt structure.",
+      "when_to_use": "Diverse problem types where the best reasoning structure differs per task.",
+      "reference": "https://arxiv.org/abs/2402.03620",
+      "steps": [
+        [
+          "select_modules",
+          "Select reasoning modules relevant to the task."
+        ],
+        [
+          "compose_plan",
+          "Compose the selected modules into a task plan."
+        ],
+        [
+          "solve",
+          "Execute the composed plan to solve the task."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "mental_loop",
+      "name": "Mental Loop",
+      "family": "reflection_refinement",
+      "description": "The agent simulates outcomes of candidate actions in an internal model before committing, a lightweight look-ahead.",
+      "when_to_use": "Decisions where cheaply imagining consequences avoids an expensive wrong action.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "propose_actions",
+          "Propose a few candidate actions."
+        ],
+        [
+          "simulate",
+          "Simulate each action's likely outcome internally."
+        ],
+        [
+          "commit",
+          "Commit to the action with the best simulated outcome."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "self_consistency",
+      "name": "Self-Consistency",
+      "family": "sampling_search",
+      "description": "Sample several independent reasoning paths and take the majority/consensus answer.",
+      "when_to_use": "Short-answer problems where independent samples agree more often than any single path is right.",
+      "reference": "https://arxiv.org/abs/2203.11171",
+      "steps": [
+        [
+          "sample",
+          "Sample N independent reasoning paths for the task."
+        ],
+        [
+          "aggregate",
+          "Take the majority / consensus answer across samples."
+        ]
+      ],
+      "topology": "parallel"
+    },
+    {
+      "slug": "forward_sampling_uq",
+      "name": "Forward Sampling / Monte Carlo UQ",
+      "family": "sampling_search",
+      "description": "Draw samples from input distributions, run a forward model or simulator once per sample, and aggregate the output distribution — mean, variance, confidence intervals. Keeps the whole distribution rather than voting a single best answer.",
+      "when_to_use": "Propagating input uncertainty through a model or simulator: forward UQ, Monte Carlo, parameter sweeps, simulator ensembles. Pair with Tool Use to call the simulator per sample.",
+      "reference": "https://en.wikipedia.org/wiki/Uncertainty_quantification",
+      "steps": [
+        [
+          "define_distributions",
+          "Define input parameter distributions to sample."
+        ],
+        [
+          "draw_samples",
+          "Draw N samples from the input space."
+        ],
+        [
+          "evaluate",
+          "Run the forward model/simulator once per sample (a tool call)."
+        ],
+        [
+          "aggregate",
+          "Aggregate the output distribution: mean, variance, intervals."
+        ]
+      ],
+      "topology": "parallel"
+    },
+    {
+      "slug": "tree_of_thoughts",
+      "name": "Tree of Thoughts",
+      "family": "planning_chaining",
+      "description": "Search a tree of partial reasoning states with explicit expand/evaluate/backtrack, rather than a single chain.",
+      "when_to_use": "Puzzles or planning where dead ends are common and backtracking pays off.",
+      "reference": "https://arxiv.org/abs/2305.10601",
+      "steps": [
+        [
+          "expand",
+          "Expand candidate next thoughts from the current state."
+        ],
+        [
+          "evaluate",
+          "Score each candidate state."
+        ],
+        [
+          "search",
+          "Select/backtrack; repeat until a solution state is reached."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "lats",
+      "name": "LATS",
+      "family": "planning_chaining",
+      "description": "Language Agent Tree Search: Monte-Carlo-style search over actions with reflection and value estimates guiding expansion.",
+      "when_to_use": "Tool-using tasks with a scorable outcome where guided search beats greedy acting.",
+      "reference": "https://arxiv.org/abs/2310.04406",
+      "steps": [
+        [
+          "expand",
+          "Expand candidate actions from the current node."
+        ],
+        [
+          "simulate",
+          "Roll out / estimate value for candidates."
+        ],
+        [
+          "reflect",
+          "Reflect on failures to guide the next expansion."
+        ],
+        [
+          "select",
+          "Select the best trajectory."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "ensemble",
+      "name": "Ensemble",
+      "family": "sampling_search",
+      "description": "Run several distinct agents/prompts and aggregate their outputs (vote, merge, or pick) for robustness.",
+      "when_to_use": "You can afford multiple runs and want variance reduction or coverage across approaches.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "run_members",
+          "Run several distinct agents/prompts on the task."
+        ],
+        [
+          "aggregate",
+          "Vote, merge, or pick across member outputs."
+        ]
+      ],
+      "topology": "parallel"
+    },
+    {
+      "slug": "agentic_rag",
+      "name": "Agentic RAG",
+      "family": "retrieval",
+      "description": "The agent decides when and what to retrieve, issuing its own queries as part of reasoning rather than retrieving once up front.",
+      "when_to_use": "Questions needing multiple or iterative lookups the agent must plan itself.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "plan_queries",
+          "Decide what to retrieve for this question."
+        ],
+        [
+          "retrieve",
+          "Issue retrieval queries (iterate as needed)."
+        ],
+        [
+          "answer",
+          "Answer grounded in the retrieved evidence."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "corrective_rag",
+      "name": "Corrective RAG",
+      "family": "retrieval",
+      "description": "Grade retrieved documents for relevance; when they are weak, correct course (re-query or fall back to web/other sources) before answering.",
+      "when_to_use": "Retrieval quality is uneven and answering on bad context must be avoided.",
+      "reference": "https://arxiv.org/abs/2401.15884",
+      "steps": [
+        [
+          "retrieve",
+          "Retrieve candidate documents."
+        ],
+        [
+          "grade",
+          "Grade each document's relevance (deterministic threshold)."
+        ],
+        [
+          "correct",
+          "If weak, re-query or fall back to another source."
+        ],
+        [
+          "answer",
+          "Answer grounded only in sufficiently-relevant evidence."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "self_rag",
+      "name": "Self-RAG",
+      "family": "retrieval",
+      "description": "The model emits reflection tokens deciding whether to retrieve, and critiques its own grounding and support as it generates.",
+      "when_to_use": "Answers must self-assess whether each claim is actually supported by retrieved text.",
+      "reference": "https://arxiv.org/abs/2310.11511",
+      "steps": [
+        [
+          "decide_retrieve",
+          "Decide whether retrieval is needed for this span."
+        ],
+        [
+          "retrieve",
+          "Retrieve if needed."
+        ],
+        [
+          "generate",
+          "Generate while emitting support/critique signals."
+        ],
+        [
+          "verify_support",
+          "Keep only claims the retrieved text supports."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "adaptive_rag",
+      "name": "Adaptive RAG",
+      "family": "retrieval",
+      "description": "Route each query to the cheapest sufficient strategy — no retrieval, single-shot, or iterative — based on estimated difficulty.",
+      "when_to_use": "A mix of easy and hard queries where always-iterating wastes cost and never-iterating fails hard ones.",
+      "reference": "https://arxiv.org/abs/2403.14403",
+      "steps": [
+        [
+          "route",
+          "Estimate difficulty; route to no/single/iterative retrieval."
+        ],
+        [
+          "retrieve",
+          "Retrieve per the chosen strategy."
+        ],
+        [
+          "answer",
+          "Answer grounded in retrieved evidence."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "graph_rag",
+      "name": "GraphRAG",
+      "family": "retrieval",
+      "description": "Retrieve over a knowledge graph (entities + relationships), enabling multi-hop and global-summary questions a flat index cannot answer.",
+      "when_to_use": "Corpora with rich entity relationships and questions that span many documents.",
+      "reference": "https://arxiv.org/abs/2404.16130",
+      "steps": [
+        [
+          "resolve_entities",
+          "Identify entities in the query."
+        ],
+        [
+          "traverse",
+          "Traverse the knowledge graph for multi-hop context."
+        ],
+        [
+          "answer",
+          "Answer grounded in the subgraph."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "episodic_semantic",
+      "name": "Episodic + Semantic Memory",
+      "family": "memory",
+      "description": "Separate stores for specific past episodes and distilled general facts, retrieved to inform new responses.",
+      "when_to_use": "Assistants that should recall both what happened before and what they have learned in general.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "recall",
+          "Retrieve relevant past episodes and semantic facts."
+        ],
+        [
+          "respond",
+          "Respond using recalled memory + the current input."
+        ],
+        [
+          "write_memory",
+          "Write new episodes/facts worth remembering."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "graph_memory",
+      "name": "Graph Memory",
+      "family": "memory",
+      "description": "Persist memory as a typed knowledge graph so relationships between remembered items are first-class and queryable.",
+      "when_to_use": "Memory where connections between facts matter as much as the facts themselves.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "recall",
+          "Query the memory graph for related nodes."
+        ],
+        [
+          "respond",
+          "Respond using the recalled subgraph."
+        ],
+        [
+          "update_graph",
+          "Insert new nodes/edges from this interaction."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "memgpt",
+      "name": "MemGPT",
+      "family": "memory",
+      "description": "Treat the context window like RAM with an OS-style memory manager paging information in and out of a larger store.",
+      "when_to_use": "Conversations or documents far larger than the context window.",
+      "reference": "https://arxiv.org/abs/2310.08560",
+      "steps": [
+        [
+          "page_in",
+          "Page relevant context in from the external store."
+        ],
+        [
+          "respond",
+          "Respond using the active context window."
+        ],
+        [
+          "page_out",
+          "Summarize/evict and persist to the external store."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "voyager",
+      "name": "Voyager",
+      "family": "memory",
+      "description": "Build a growing library of reusable skills from experience, composing learned skills to tackle harder tasks over time.",
+      "when_to_use": "Open-ended environments where the agent should get more capable the longer it runs.",
+      "reference": "https://arxiv.org/abs/2305.16291",
+      "steps": [
+        [
+          "select_skill",
+          "Pick or compose skills from the library for the task."
+        ],
+        [
+          "execute",
+          "Execute; observe success/failure."
+        ],
+        [
+          "learn_skill",
+          "Distill a reusable skill from success; store it."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "agent_workflow_memory",
+      "name": "Agent Workflow Memory",
+      "family": "memory",
+      "description": "Induce reusable workflows from past successful trajectories and reuse them to shortcut future similar tasks.",
+      "when_to_use": "Repetitive task families where remembering a known-good procedure saves rediscovery.",
+      "reference": "https://arxiv.org/abs/2409.07429",
+      "steps": [
+        [
+          "match_workflow",
+          "Match the task to an induced reusable workflow."
+        ],
+        [
+          "execute",
+          "Execute the matched workflow (or solve from scratch)."
+        ],
+        [
+          "induce_workflow",
+          "Induce a new workflow from a successful trajectory."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "tool_use",
+      "name": "Tool Use",
+      "family": "tool_use_actions",
+      "description": "The simplest acting pattern: the model calls a single external tool and incorporates the result.",
+      "when_to_use": "One capability the model lacks (search, calculation, a single API) is enough.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "decide_tool",
+          "Decide which tool to call and with what arguments."
+        ],
+        [
+          "call_tool",
+          "Call the tool. TODO(author): implement the tool."
+        ],
+        [
+          "respond",
+          "Incorporate the tool result into the answer."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "react",
+      "name": "ReAct",
+      "family": "tool_use_actions",
+      "description": "Interleave Thought, Action, and Observation so reasoning guides each tool call and observations guide the next thought.",
+      "when_to_use": "Multi-step tasks needing several tool calls whose results shape subsequent reasoning.",
+      "reference": "https://arxiv.org/abs/2210.03629",
+      "steps": [
+        [
+          "think",
+          "Reason about what to do next (Thought)."
+        ],
+        [
+          "act",
+          "Take an action / call a tool (Action)."
+        ],
+        [
+          "observe",
+          "Record the result (Observation). Loop until done."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "planning",
+      "name": "Planning",
+      "family": "planning_chaining",
+      "description": "Decompose the goal into an explicit plan, execute steps, and replan when steps fail.",
+      "when_to_use": "Tasks long enough that an up-front plan reduces thrashing, with replanning for surprises.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "plan",
+          "Decompose the goal into an explicit ordered plan."
+        ],
+        [
+          "execute",
+          "Execute each step."
+        ],
+        [
+          "replan",
+          "Replan when a step fails or reality diverges."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "pev",
+      "name": "Plan-Execute-Verify",
+      "family": "planning_chaining",
+      "description": "Plan, execute each step, and verify its result before proceeding — accepting, retrying, or escalating per step.",
+      "when_to_use": "Pipelines where a silently wrong intermediate step would corrupt the final result.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "plan",
+          "Plan the steps."
+        ],
+        [
+          "execute",
+          "Execute the current step."
+        ],
+        [
+          "verify",
+          "Verify the step result; accept, retry, or escalate."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "swe_agent",
+      "name": "SWE-Agent",
+      "family": "tool_use_actions",
+      "description": "A sandboxed file-system/coding agent with read/write/run tools that edits a repo and checks its own work.",
+      "when_to_use": "Software tasks that require navigating and modifying a codebase and running checks.",
+      "reference": "https://arxiv.org/abs/2405.15793",
+      "steps": [
+        [
+          "inspect",
+          "Read relevant files in the sandbox."
+        ],
+        [
+          "edit",
+          "Write changes. TODO(author): wire sandboxed fs tools."
+        ],
+        [
+          "run_checks",
+          "Run tests/linters; iterate until green."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "browser_agent",
+      "name": "Browser / Computer Use",
+      "family": "tool_use_actions",
+      "description": "Drive a real browser or computer with categorical actions, gated by a deterministic safety check.",
+      "when_to_use": "Tasks that only a GUI exposes, where unsafe actions must be blocked by a non-LLM gate.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "plan_action",
+          "Choose a categorical browser/computer action."
+        ],
+        [
+          "safety_gate",
+          "Deterministic safety check — block unsafe actions."
+        ],
+        [
+          "act",
+          "Execute the action if the gate passed."
+        ],
+        [
+          "observe",
+          "Observe the new state; loop until done."
+        ]
+      ],
+      "topology": "cycle"
+    },
+    {
+      "slug": "multi_agent",
+      "name": "Multi-Agent (Supervisor + Specialists)",
+      "family": "multi_agent",
+      "description": "A supervisor decomposes the task and routes sub-tasks to specialist agents, then synthesizes their outputs.",
+      "when_to_use": "Work that cleanly splits into distinct expertises coordinated by a lead.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "decompose",
+          "Supervisor splits the task into sub-tasks."
+        ],
+        [
+          "delegate",
+          "Route each sub-task to a specialist. TODO(author): specialists."
+        ],
+        [
+          "synthesize",
+          "Combine specialist outputs into the final answer."
+        ]
+      ],
+      "topology": "tree"
+    },
+    {
+      "slug": "blackboard",
+      "name": "Blackboard",
+      "family": "multi_agent",
+      "description": "Specialists read from and write to a shared workspace, contributing opportunistically until the solution converges.",
+      "when_to_use": "Loosely-ordered collaboration where any specialist may contribute whenever it can help.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "post_problem",
+          "Write the problem to the shared workspace."
+        ],
+        [
+          "contribute",
+          "Specialists read and contribute opportunistically."
+        ],
+        [
+          "converge",
+          "Stop when the workspace holds a complete solution."
+        ]
+      ],
+      "topology": "tree"
+    },
+    {
+      "slug": "debate",
+      "name": "Debate",
+      "family": "multi_agent",
+      "description": "N agents argue a question over K rounds; a judge or deterministic rule resolves the stronger position.",
+      "when_to_use": "Contested questions where surfacing counter-arguments improves the decision — but watch for group-think.",
+      "reference": "https://arxiv.org/abs/2305.14325",
+      "steps": [
+        [
+          "open",
+          "Each side states its position."
+        ],
+        [
+          "rounds",
+          "Run K rounds of rebuttal between N agents."
+        ],
+        [
+          "judge",
+          "Resolve the stronger position (deterministic rule or judge)."
+        ]
+      ],
+      "topology": "tree"
+    },
+    {
+      "slug": "storm",
+      "name": "STORM",
+      "family": "multi_agent",
+      "description": "Simulate multiple perspectives asking questions, gather grounded answers, and synthesize a structured article.",
+      "when_to_use": "Producing a comprehensive, multi-perspective report or survey from research.",
+      "reference": "https://arxiv.org/abs/2402.14207",
+      "steps": [
+        [
+          "perspectives",
+          "Generate multiple perspectives that ask questions."
+        ],
+        [
+          "answer_questions",
+          "Answer each question with grounded evidence."
+        ],
+        [
+          "synthesize",
+          "Synthesize a structured article from the answers."
+        ]
+      ],
+      "topology": "tree"
+    },
+    {
+      "slug": "meta_controller",
+      "name": "Meta-Controller",
+      "family": "multi_agent",
+      "description": "A router that selects among whole architectures/agents per request, dispatching each task to the best-suited one.",
+      "when_to_use": "A heterogeneous workload where different requests are best served by different patterns.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "route",
+          "Classify the request and select the best sub-architecture."
+        ],
+        [
+          "dispatch",
+          "Dispatch to the chosen sub-agent. TODO(author): sub-agents."
+        ],
+        [
+          "return_result",
+          "Return the sub-agent's result."
+        ]
+      ],
+      "topology": "tree"
+    },
+    {
+      "slug": "dry_run",
+      "name": "Dry-Run",
+      "family": "routing_governance",
+      "description": "Propose an action, simulate it, and require approval (automatic, reviewer, or blocked) before any real effect.",
+      "when_to_use": "Actions with real-world consequences that must be previewed and gated before execution.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "propose",
+          "Propose the action."
+        ],
+        [
+          "simulate",
+          "Simulate its effect without committing."
+        ],
+        [
+          "gate",
+          "Approve automatically, send to a reviewer, or block."
+        ],
+        [
+          "execute",
+          "Execute only if approved."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "reflexive_metacognitive",
+      "name": "Reflexive Metacognitive Routing",
+      "family": "routing_governance",
+      "description": "The agent assesses its own capability for a task and routes to a stronger path or human when confidence is low — the override being a deterministic check.",
+      "when_to_use": "Mixed-difficulty tasks where the agent should know its limits and escalate rather than guess.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "self_assess",
+          "Assess own capability/confidence for this task."
+        ],
+        [
+          "route",
+          "Deterministic check: escalate to a stronger path or human if low."
+        ],
+        [
+          "execute",
+          "Execute on the chosen path."
+        ]
+      ],
+      "topology": "linear"
+    },
+    {
+      "slug": "constitutional_ai",
+      "name": "Constitutional AI",
+      "family": "specialty",
+      "description": "The agent critiques and revises its own outputs against an explicit written set of principles (a constitution).",
+      "when_to_use": "Outputs must conform to stated policies or values and self-governance is preferred to a separate filter.",
+      "reference": "https://arxiv.org/abs/2212.08073",
+      "steps": [
+        [
+          "draft",
+          "Produce a draft response."
+        ],
+        [
+          "critique_vs_constitution",
+          "Critique it against the written principles."
+        ],
+        [
+          "revise",
+          "Revise to comply with the constitution."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "rlhf_self_improvement",
+      "name": "RLHF Self-Improvement",
+      "family": "specialty",
+      "description": "Score candidates on multiple deterministic dimensions, keep the best in an archive, and improve against that composite signal over time.",
+      "when_to_use": "There is a measurable multi-dimensional quality signal and you want the agent to improve across runs.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "generate",
+          "Generate candidate outputs."
+        ],
+        [
+          "score",
+          "Score on multiple deterministic dimensions."
+        ],
+        [
+          "archive",
+          "Keep the best in an archive; improve against the composite."
+        ]
+      ],
+      "topology": "loop"
+    },
+    {
+      "slug": "cellular_automata",
+      "name": "Cellular Automata",
+      "family": "specialty",
+      "description": "Apply LLM-expressed local rules repeatedly over a grid of cells to produce emergent global behavior.",
+      "when_to_use": "Modeling spatial or emergent dynamics from simple local rules.",
+      "reference": "https://github.com/FareedKhan-dev/all-agentic-architectures",
+      "steps": [
+        [
+          "init_grid",
+          "Initialize the grid state."
+        ],
+        [
+          "apply_rules",
+          "Apply local LLM-expressed rules to every cell."
+        ],
+        [
+          "step",
+          "Advance the grid; repeat for N steps."
+        ]
+      ],
+      "topology": "cycle"
+    }
+  ],
+  "frameworks": [
+    {
+      "slug": "langgraph",
+      "name": "LangGraph",
+      "pip_install": "langgraph",
+      "import_module": "langgraph.graph",
+      "base_entrypoint": "StateGraph nodes + edges, compiled and invoked",
+      "docs": "https://langchain-ai.github.io/langgraph/",
+      "recommended_for": [
+        "retrieval",
+        "planning_chaining",
+        "memory"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "pydantic_ai",
+      "name": "Pydantic AI",
+      "pip_install": "pydantic-ai",
+      "import_module": "pydantic_ai",
+      "base_entrypoint": "Agent(...) with a typed result model, run_sync",
+      "docs": "https://ai.pydantic.dev/",
+      "recommended_for": [
+        "reflection_refinement",
+        "routing_governance"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "crewai",
+      "name": "CrewAI",
+      "pip_install": "crewai",
+      "import_module": "crewai",
+      "base_entrypoint": "Agent / Task / Crew().kickoff()",
+      "docs": "https://docs.crewai.com/",
+      "recommended_for": [
+        "multi_agent"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "smolagents",
+      "name": "smolagents",
+      "pip_install": "smolagents",
+      "import_module": "smolagents",
+      "base_entrypoint": "CodeAgent(tools=[...]).run",
+      "docs": "https://huggingface.co/docs/smolagents",
+      "recommended_for": [
+        "tool_use_actions"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "ag2",
+      "name": "AG2 (AutoGen)",
+      "pip_install": "ag2",
+      "import_module": "autogen",
+      "base_entrypoint": "ConversableAgent + initiate_chat",
+      "docs": "https://docs.ag2.ai/",
+      "recommended_for": [
+        "multi_agent"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "strands",
+      "name": "Strands",
+      "pip_install": "strands-agents",
+      "import_module": "strands",
+      "base_entrypoint": "Agent(...) callable loop with in-process guardrails",
+      "docs": "https://strandsagents.com/",
+      "recommended_for": [
+        "tool_use_actions"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "openai_agents",
+      "name": "OpenAI Agents SDK",
+      "pip_install": "openai-agents",
+      "import_module": "agents",
+      "base_entrypoint": "Agent(...) + Runner.run",
+      "docs": "https://openai.github.io/openai-agents-python/",
+      "recommended_for": [
+        "sampling_search"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "google_adk",
+      "name": "Google ADK",
+      "pip_install": "google-adk",
+      "import_module": "google.adk",
+      "base_entrypoint": "LlmAgent + Runner",
+      "docs": "https://google.github.io/adk-docs/",
+      "recommended_for": [
+        "planning_chaining"
+      ],
+      "status": "supported"
+    },
+    {
+      "slug": "claude_agent_sdk",
+      "name": "Claude Agent SDK",
+      "pip_install": "claude-agent-sdk",
+      "import_module": "claude_agent_sdk",
+      "base_entrypoint": "ClaudeSDKClient / query() loop",
+      "docs": "https://docs.claude.com/en/api/agent-sdk/overview",
+      "recommended_for": [
+        "specialty"
+      ],
+      "status": "supported"
+    }
+  ]
+}
