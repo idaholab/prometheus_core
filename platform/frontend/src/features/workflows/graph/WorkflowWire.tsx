@@ -10,17 +10,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, type Edge, type EdgeProps } from "@xyflow/react";
 import { Plus } from "lucide-react";
 import { SKILL_TONE_DOT_CLASSES, type SkillTone } from "@/features/workflows/skillTone";
-
-export interface WireData extends Record<string, unknown> {
-  dashed?: boolean;
-  /** A connection of the wrong type (D.6): drawn dashed in red. */
-  invalid?: boolean;
-  /** Shows the "+" insert button at the wire's midpoint, with its menu open (D.5). */
-  insertMenu?: boolean;
-}
+import { wirePath, wireStyle, type WireData } from "./wireStyle";
 
 export type WireEdge = Edge<WireData, "wire">;
 
@@ -64,9 +57,12 @@ function InsertMenu() {
 }
 
 /**
- * A wire between two steps: a curve in the primary colour, dashed when
- * `dashed`, dashed in red when `invalid` (D.6). With `insertMenu` it carries a
- * "+" at its midpoint and the insert menu to the right (D.5).
+ * A wire between two steps: a curve in the primary colour, bowed aside when it
+ * runs straight down past a row (`wirePath`). Its stroke (`wireStyle`), first
+ * match wins: dashed in red when `invalid` (D.6), dashed when `dashed` (D.2),
+ * dotted in a muted primary when its `kind` is `order` (the target only waits
+ * for the source), else solid. With `insertMenu` it carries a "+" at its
+ * midpoint and the insert menu to the right (D.5).
  */
 export function WorkflowWire({
   sourceX,
@@ -77,7 +73,7 @@ export function WorkflowWire({
   targetPosition,
   data,
 }: EdgeProps<WireEdge>) {
-  const [path, midX, midY] = getBezierPath({
+  const [path, midX, midY] = wirePath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -85,11 +81,7 @@ export function WorkflowWire({
     targetY,
     targetPosition,
   });
-  const dashed = data?.dashed || data?.invalid;
-  const style = {
-    ...(dashed ? { strokeDasharray: "5 4" } : {}),
-    ...(data?.invalid ? { stroke: "var(--color-error)" } : {}),
-  };
+  const style = wireStyle(data);
 
   return (
     <>

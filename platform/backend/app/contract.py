@@ -656,3 +656,113 @@ class AgentListResponse(BaseModel):
     available: bool = Field(description="False when the registry (Valkey) is unreachable; `agents` is then empty.")
     checked_at: str = Field(description="ISO 8601 UTC time the reachability probes finished.")
     agents: list[AgentStatus] = Field(default_factory=list, description="The registered agents, by `agent_name`.")
+
+
+# ---------------------------------------------------------------------------
+# Workflows (GET /api/workflows, GET /api/workflows/{workflow_id})
+# ---------------------------------------------------------------------------
+
+Complexity = Literal["complex", "moderate", "simple"]
+
+
+class GraphNodeInput(BaseModel):
+    """One input port of a graph node and where its value comes from."""
+
+    port: str = Field(description="The step parameter the value fills; nested parameters join with `.`.")
+    source: Optional[str] = Field(
+        description="Where the value comes from: `input.<path>` for a workflow input, `context.<key>` for a "
+        "conversation context value, or `step.<step_id>.<path>` for another node's output (a step id holds "
+        "no `.`, so split at the second dot); null for a literal value."
+    )
+    optional: bool = Field(
+        description="Whether the step runs without this value; false when the path is under the workflow's "
+        "required inputs."
+    )
+
+
+class GraphNode(BaseModel):
+    """One node of a workflow graph: one step of the template."""
+
+    node_id: str = Field(description="The step id, unique within the workflow; it holds no `.`.")
+    kind: Literal["skill", "checkpoint", "qa_gate"] = Field(description="What the node does.")
+    skill_id: Optional[str] = Field(description="The skill the step calls; null for a node that calls none.")
+    label: str = Field(description="The skill's name from its agent card when known, else the step id.")
+    agent_name: Optional[str] = Field(
+        description="The registry key of the agent that serves the skill; null when no registered agent does."
+    )
+    is_final: bool = Field(description="Whether the step's output is the workflow's result.")
+    inputs: list[GraphNodeInput] = Field(description="The step's input ports, in parameter order.")
+
+
+class GraphEdge(BaseModel):
+    """One edge of a workflow graph."""
+
+    edge_id: str = Field(description="The edge's id, `<workflow_id>-e<n>`.")
+    from_node: str = Field(description="The `node_id` the edge starts at.")
+    to_node: str = Field(description="The `node_id` the edge ends at.")
+    kind: Literal["data", "order"] = Field(
+        description="`data` when the target reads the source's output, `order` when it only runs after it."
+    )
+    port: Optional[str] = Field(description="The target input port of a `data` edge; null for an `order` edge.")
+
+
+class WorkflowGraph(BaseModel):
+    """The nodes and edges of one workflow template."""
+
+    workflow_id: str = Field(description="The workflow the graph belongs to.")
+    mode: Literal["dag", "sequential", "parallel"] = Field(description="How the workflow runs its steps.")
+    nodes: list[GraphNode] = Field(description="The steps, in definition order.")
+    edges: list[GraphEdge] = Field(description="The data and order edges between the steps.")
+
+
+class WorkflowInputs(BaseModel):
+    """The input paths a workflow declares."""
+
+    required: list[str] = Field(description="The input paths the workflow needs before it runs.")
+    optional: list[str] = Field(description="The input paths the workflow uses when they are given.")
+
+
+class Workflow(BaseModel):
+    """One row of ``GET /api/workflows``, sorted by ``name``, then ``workflow_id``."""
+
+    workflow_id: str = Field(
+        description="The library id of the workflow; the value `ChatMessageRequest.workflow_id` takes to run it."
+    )
+    name: str = Field(description="The display name.")
+    summary: str = Field(description="What the workflow does.")
+    category: str = Field(description="The group the workflow is listed under; `General` when none is set.")
+    version: str = Field(description="The workflow definition's version.")
+    source: Literal["local", "agent_card"] = Field(
+        description="`local` for a client-agent workflow file, `agent_card` for a workflow an agent card declares."
+    )
+    owner: Optional[str] = Field(description="Who maintains the workflow; null when not set.")
+    complexity: Optional[Complexity] = Field(description="How complex the workflow is; null when not set.")
+    estimated_runtime_seconds: Optional[int] = Field(description="The expected run time in seconds; null when not set.")
+    speedup: Optional[float] = Field(
+        description="The speed-up over the manual baseline, unformatted; null when not set."
+    )
+    requires_approval: bool = Field(
+        description="Whether chat pauses for the user's approval of the workflow before it runs."
+    )
+    agent_count: int = Field(description="The number of distinct agents over the `skill` nodes.")
+    checkpoint_count: int = Field(description="The number of `checkpoint` nodes.")
+
+
+class WorkflowDetail(Workflow):
+    """Returned by ``GET /api/workflows/{workflow_id}``: one template with its inputs and graph."""
+
+    inputs: WorkflowInputs = Field(description="The input paths the workflow declares.")
+    graph: WorkflowGraph = Field(description="The workflow's steps and the edges between them.")
+
+
+class WorkflowListResponse(BaseModel):
+    """Returned by ``GET /api/workflows``.
+
+    ``available`` is ``False`` when the client-agent workflow library cannot be read
+    or is off: the endpoint degrades to an empty list with a 200, as ``GET /api/agents`` does.
+    """
+
+    available: bool = Field(
+        description="False when the workflow library is unreachable or off; `workflows` is then empty."
+    )
+    workflows: list[Workflow] = Field(description="The workflows, by `name`, then `workflow_id`.")

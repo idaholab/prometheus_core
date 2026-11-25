@@ -91,6 +91,13 @@ def _agent_card_from_record(record: Dict[str, Any]) -> Tuple[str, Dict[str, Any]
     return agent_id, record
 
 
+def workflow_source_type(workflow: CompiledWorkflow) -> str:
+    """Return `agent_card` for a workflow merged from an agent card, else `local`."""
+    if workflow.source_path.parts and workflow.source_path.parts[0] == "agent_cards":
+        return "agent_card"
+    return "local"
+
+
 @dataclass
 class WorkflowSnapshot:
     """Immutable registry snapshot."""
@@ -141,11 +148,6 @@ class WorkflowRegistry:
         for workflow in self.list_all():
             ui = workflow.definition.ui
             metadata = workflow.definition.metadata
-            source_type = (
-                "agent_card"
-                if workflow.source_path.parts and workflow.source_path.parts[0] == "agent_cards"
-                else "local"
-            )
             cards.append(
                 {
                     "id": workflow.definition.id,
@@ -153,10 +155,12 @@ class WorkflowRegistry:
                     "display_name": ui.display_name or workflow.definition.name,
                     "summary": ui.summary or workflow.definition.description,
                     "category": ui.category or "General",
+                    "complexity": ui.complexity,
+                    "speedup": ui.speedup,
                     "requires_approval": bool(metadata.requires_approval),
                     "estimated_duration_seconds": metadata.estimated_duration_seconds,
                     "owner": metadata.owner,
-                    "source": source_type,
+                    "source": workflow_source_type(workflow),
                 }
             )
         cards.sort(key=lambda item: (item["category"], item["display_name"], item["id"]))

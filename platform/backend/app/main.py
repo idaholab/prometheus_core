@@ -38,6 +38,7 @@ from app.routers import (
     sessions,
     setup,
     uploads,
+    workflows,
 )
 from app import redis_client, security
 from app.services.events import EventBus
@@ -150,3 +151,4 @@ app.include_router(admin_users.router)
 app.include_router(admin_keys.router)
 app.include_router(admin_oidc.router)
 app.include_router(agent_registry.router)
+app.include_router(workflows.router)

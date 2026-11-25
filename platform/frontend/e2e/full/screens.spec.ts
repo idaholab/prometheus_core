@@ -23,9 +23,12 @@
  * What a screen shows is not checked here: each screen's own behavior belongs
  * in its component tests. These tests only prove the screen opened. Most
  * screens still show placeholder data, so each one is recognized by a part of
- * its layout that no other screen has, not by its data. Admin is the exception:
- * it lists the real users, so seeing the e2e admin there also proves the
- * screen reached the backend through nginx.
+ * its layout that no other screen has, not by its data. Admin and Workflows are
+ * the exceptions. Admin lists the real users, so seeing the e2e admin there also
+ * proves the screen reached the backend through nginx. Workflows is recognized
+ * by its settled template list, a loaded plan or the unavailable-library alert
+ * (the e2e client-agent serves no templates), so that no request is cut by the
+ * next navigation.
  *
  * Every test starts signed in as the e2e admin (global-setup.ts), who can see
  * every screen, Admin included. */
@@ -55,7 +58,14 @@ const SCREENS: Screen[] = [
     link: "Workflows",
     path: "/workflows",
     title: "Workflow Console",
-    content: (main) => main.getByRole("heading", { name: "Workflow Templates" }),
+    // The settled list: a loaded plan, or the alert of a library that is unavailable (the e2e
+    // client-agent is a stub), so no template request is still in flight when the test moves on.
+    // The stub serves no /workflows/templates, so on the e2e stack the check takes the alert branch;
+    // the loaded-plan branch runs only against a real client-agent.
+    content: (main) =>
+      main
+        .getByRole("button", { name: "Approve & Execute Pipeline" })
+        .or(main.getByRole("alert").filter({ hasText: "The workflow library is unavailable." })),
   },
   {
     link: "Approval Queue",

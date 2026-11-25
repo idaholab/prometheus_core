@@ -78,6 +78,8 @@ class WorkflowUi(BaseModel):
     category: Optional[str] = None
     display_name: Optional[str] = None
     summary: Optional[str] = None
+    complexity: Optional[Literal["complex", "moderate", "simple"]] = None
+    speedup: Optional[float] = None
     input_overrides: Dict[str, WorkflowUiInputOverride] = Field(default_factory=dict)
 
 

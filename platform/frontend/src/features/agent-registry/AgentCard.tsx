@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import type { Agent, AgentStatus } from "./store/agents";
 import { AGENT_ICONS } from "./agentIcons";
-import { formatLatency, formatRunTime, formatUptime, formatVersion } from "./format";
+import { formatRunTime } from "@/lib/duration";
+import { formatLatency, formatUptime, formatVersion } from "./format";
 
 const STATUS_PILL: Record<AgentStatus, ComponentProps<typeof StatusPill>> = {
   healthy: { label: "ONLINE", tone: "success" },

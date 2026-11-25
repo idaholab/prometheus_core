@@ -655,3 +655,188 @@ When Valkey is unreachable, the route answers `503` with
   ]
 }
 ```
+
+## Workflows
+
+A read view of the workflow templates for the browser (`app/routers/workflows.py`). A
+template is a reusable definition: a name, a version, its inputs and a graph of steps. It is
+not a workflow run. These routes use the session cookie (OpenAPI scheme `sessionCookie`). A
+request without a valid session answers `401`: the `detail` is `Not authenticated` with no
+cookie, `Invalid or expired session` for a bad token, and `Session has been logged out` after
+logout. Any role may read.
+
+**Source.** The templates come from the client-agent's compiled workflow library: the YAML
+files in `platform/agents/client-agent/workflows/` plus the `workflows[]` of every discovered
+agent card. On every request, the backend calls the client-agent's `GET /workflows/templates`
+with `Authorization: Bearer <AGENT_SECRET>` and a 10 s timeout (`A2AClient.list_workflow_templates`
+in `app/a2a_client.py`). The client-agent gives one template per workflow id, its newest
+version. The backend stores nothing and caches nothing.
+
+**Degrade.** The list does not fail when the library cannot be read. When the client-agent is
+unreachable, times out, answers non-2xx or a body that is not a JSON object, or reports the
+library off (`ENABLE_WORKFLOW_LIBRARY`), `GET /api/workflows` answers `200` with
+`{"available": false, "workflows": []}`, as `GET /api/agents` does. The detail route cannot
+degrade to empty: in the same cases it answers `503` with
+`{"detail": "Workflow library is unavailable"}`.
+
+**Malformed entries.** The backend validates each template on its own against `WorkflowDetail`.
+A template that does not validate is dropped, and the backend logs one warning with its
+`workflow_id`. The other templates stay, and the request does not fail.
+
+**Running a template in chat.** The listed `workflow_id` is the value that
+`ChatMessageRequest.workflow_id` takes in `POST /api/chat/messages`. Every listed template can
+run in chat, because chat and these routes read the same library. When `requires_approval` is
+`true`, chat pauses the workflow for the user's approval before it runs.
+
+**Row fields (`Workflow`).** Every key is always present; a nullable field is `null`, never
+absent.
+
+| Field | Type | Value |
+|---|---|---|
+| `workflow_id` | string | The library id, for example `comprehensive_material_analysis`. |
+| `name` | string | `ui.display_name`, else the definition's `name`. |
+| `summary` | string | `ui.summary`, else the definition's `description`. |
+| `category` | string | `ui.category`, else `General`. |
+| `version` | string | The definition's `version`, free text, for example `"1.0.0"`. |
+| `source` | `local` \| `agent_card` | `local` for a client-agent YAML file, `agent_card` for an agent card's `workflows[]`. |
+| `owner` | string or null | `metadata.owner`; an agent-card workflow without one takes the contributing agent's id. |
+| `complexity` | `complex` \| `moderate` \| `simple` \| null | `ui.complexity`. |
+| `estimated_runtime_seconds` | integer or null | `metadata.estimated_duration_seconds`. |
+| `speedup` | number or null | `ui.speedup`, the raw speed-up over the manual baseline (`2.0`, not `"2.0x"`); the frontend formats it. |
+| `requires_approval` | boolean | `metadata.requires_approval`. |
+| `agent_count` | integer | The number of distinct non-null `agent_name` values over the nodes with `kind: "skill"`. |
+| `checkpoint_count` | integer | The number of nodes with `kind: "checkpoint"`. The library has no checkpoint steps today, so it is `0`. |
+
+**Detail fields (`WorkflowDetail`).** The detail has every `Workflow` field, plus:
+
+- `inputs` (`WorkflowInputs`): `required` and `optional`, the input paths that the definition
+  declares.
+- `graph` (`WorkflowGraph`): `workflow_id`, `mode` (`dag`, `sequential` or `parallel`, from
+  `execution.mode`), `nodes` in definition order, and `edges`.
+
+**Nodes (`GraphNode`).** One node per step. `node_id` is the step id, and it contains no `.`.
+`kind` is `skill`, `checkpoint` or `qa_gate`; every library step is a `skill` node today.
+`skill_id` is the skill that the step calls. `label` is the skill's name from its agent card
+when discovery knows the skill, else the step id. `agent_name` is the registry key of the
+agent that serves the skill (the `agent_name` of `GET /api/agents`); it is `null` when no
+discovered agent serves the skill. `is_final` is `true` for the step whose output is the
+workflow's result.
+
+**Node inputs (`GraphNodeInput`).** One entry per step parameter, in parameter order. `port`
+is the parameter name; a nested parameter joins its keys with `.` (`tool_results.radiation`).
+`source` is one of:
+
+- `input.<path>`: a workflow input.
+- `context.<key>`: a conversation context value.
+- `step.<step_id>.<path>`: the output of another node. Split it at the second `.`, because a
+  step id contains no `.`.
+- `null`: a literal value.
+
+`optional` is `false` for an `input.<path>` source under the definition's `inputs.required`,
+even when the step marks the parameter `optional: true`. So `input.context.temperature_c` is
+required in `comprehensive_material_analysis`. Otherwise, `optional` is the parameter's
+`optional` flag, `false` by default.
+
+**Edges (`GraphEdge`).** `edge_id` is `<workflow_id>-e<n>`, numbered from 1. `kind` is one of:
+
+- `data`: the target node reads the source node's output. There is one `data` edge per
+  `step.<step_id>.*` source, one per (`from_node`, `to_node`, `port`). `port` is the target's
+  input port.
+- `order`: the target node only runs after the source node. There is one `order` edge per
+  `depends_on` entry that no data source of the target refers to. `port` is `null`.
+
+No edge uses a placeholder port, such as `after`, to express order.
+
+### `GET /api/workflows` → `WorkflowListResponse`
+
+Every template, sorted by `name`, then `workflow_id`, without `inputs` and `graph`. A library
+with no templates answers `200` with `available: true` and an empty `workflows`.
+
+```json
+{
+  "available": true,
+  "workflows": [
+    {
+      "workflow_id": "comprehensive_material_analysis",
+      "name": "Comprehensive Material Analysis",
+      "summary": "Full multi-domain assessment with data retrieval and specialist analysis.",
+      "category": "Safety",
+      "version": "1.0.0",
+      "source": "local",
+      "owner": "materials-team",
+      "complexity": null,
+      "estimated_runtime_seconds": 270,
+      "speedup": null,
+      "requires_approval": true,
+      "agent_count": 5,
+      "checkpoint_count": 0
+    }
+  ]
+}
+```
+
+### `GET /api/workflows/{workflow_id}` → `WorkflowDetail`
+
+One template: the fields of `Workflow`, plus `inputs` and `graph`. A `workflow_id` that the
+library does not have answers `404` with `{"detail": "Workflow not found"}`. When the library
+cannot be read or is off, the route answers `503` with
+`{"detail": "Workflow library is unavailable"}`.
+
+The example shows two of the five nodes of `comprehensive_material_analysis`, two inputs of
+each, and two of its seven edges (three `order`, four `data`).
+
+```json
+{
+  "workflow_id": "comprehensive_material_analysis",
+  "name": "Comprehensive Material Analysis",
+  "summary": "Full multi-domain assessment with data retrieval and specialist analysis.",
+  "category": "Safety",
+  "version": "1.0.0",
+  "source": "local",
+  "owner": "materials-team",
+  "complexity": null,
+  "estimated_runtime_seconds": 270,
+  "speedup": null,
+  "requires_approval": true,
+  "agent_count": 5,
+  "checkpoint_count": 0,
+  "inputs": {
+    "required": ["material_id", "context.temperature_c"],
+    "optional": ["context.pressure_mpa", "context.neutron_flux_n_cm2_s", "context.operating_hours"]
+  },
+  "graph": {
+    "workflow_id": "comprehensive_material_analysis",
+    "mode": "dag",
+    "nodes": [
+      {
+        "node_id": "analyze_radiation",
+        "kind": "skill",
+        "skill_id": "analyze_radiation_damage",
+        "label": "Analyze Radiation Damage",
+        "agent_name": "radiation-damage-analysis-agent",
+        "is_final": false,
+        "inputs": [
+          { "port": "material_id", "source": "input.material_id", "optional": false },
+          { "port": "context.temperature_c", "source": "input.context.temperature_c", "optional": false }
+        ]
+      },
+      {
+        "node_id": "synthesize_report",
+        "kind": "skill",
+        "skill_id": "synthesize_material_analysis",
+        "label": "Synthesize Material Analysis",
+        "agent_name": "synthesis-agent",
+        "is_final": true,
+        "inputs": [
+          { "port": "tool_results.radiation", "source": "step.analyze_radiation.result", "optional": false },
+          { "port": "context", "source": "input.context", "optional": true }
+        ]
+      }
+    ],
+    "edges": [
+      { "edge_id": "comprehensive_material_analysis-e1", "from_node": "retrieve_material", "to_node": "analyze_radiation", "kind": "order", "port": null },
+      { "edge_id": "comprehensive_material_analysis-e5", "from_node": "analyze_radiation", "to_node": "synthesize_report", "kind": "data", "port": "tool_results.radiation" }
+    ]
+  }
+}
+```

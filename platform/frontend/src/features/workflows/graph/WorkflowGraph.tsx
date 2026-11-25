@@ -24,10 +24,13 @@ import {
   type SkillNode,
 } from "./WorkflowGraphNodes";
 import { WorkflowWire, type WireEdge } from "./WorkflowWire";
+import type { GraphEdgeKind } from "@/lib/api/types";
 
 export type WorkflowGraphNode = AgentNode | CheckpointNode | SkillNode | ConnectEndpointNode;
 
 export interface WorkflowGraphWire {
+  /** Edge id; defaults to `from->to`. Set it when two wires join the same pair of nodes. */
+  id?: string;
   from: string;
   to: string;
   /** Drawn dashed, e.g. a wire still being connected (D.2). */
@@ -36,6 +39,11 @@ export interface WorkflowGraphWire {
   invalid?: boolean;
   /** Shows the "+" insert button and its menu on the wire (D.5). */
   insertMenu?: boolean;
+  /**
+   * `order`: the target only runs after the source and reads no data; drawn dotted.
+   * Unset or `data` draws a solid wire.
+   */
+  kind?: GraphEdgeKind;
 }
 
 interface WorkflowGraphProps {
@@ -67,19 +75,19 @@ const FIT_VIEW_OPTIONS = { padding: 0.08 };
  * Workflow DAG (Figma D.1, WF-1) on React Flow: agent nodes and checkpoints
  * (D.1), or skill nodes and a connect endpoint (D.2), joined by curved wires
  * (WorkflowWire), which can also show an insert menu (D.5) or an invalid
- * connection (D.6).
+ * connection (D.6), or be drawn dotted as an order-only dependency.
  * Display only, so dragging, connecting, selecting, zooming and panning are
  * all off; a node's `selected` field only sets its style.
  */
 export function WorkflowGraph({ nodes, wires, fit = true, className = "" }: WorkflowGraphProps) {
   const edges = useMemo<WireEdge[]>(
     () =>
-      wires.map(({ from, to, dashed, invalid, insertMenu }) => ({
-        id: `${from}->${to}`,
+      wires.map(({ id, from, to, dashed, invalid, insertMenu, kind }) => ({
+        id: id ?? `${from}->${to}`,
         type: "wire",
         source: from,
         target: to,
-        data: { dashed, invalid, insertMenu },
+        data: { dashed, invalid, insertMenu, kind },
       })),
     [wires],
   );

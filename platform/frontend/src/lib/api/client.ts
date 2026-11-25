@@ -39,6 +39,8 @@ import type {
   SigningKey,
   UploadDescriptor,
   User,
+  WorkflowDetail,
+  WorkflowListResponse,
 } from "./types";
 
 const API_BASE = "/api";
@@ -259,5 +261,19 @@ export const api = {
 
   deleteOidcProvider(id: string): Promise<void> {
     return request<void>(`/admin/oidc-providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // --- workflows (session cookie; any role) ---
+  /** GET /api/workflows — { available, workflows }, sorted by name, without inputs and graph. */
+  listWorkflows(): Promise<WorkflowListResponse> {
+    return request<WorkflowListResponse>("/workflows");
+  },
+
+  /**
+   * GET /api/workflows/{workflow_id} — one template with its inputs and graph; ApiError(404) when
+   * unknown, ApiError(503) when the library is unavailable.
+   */
+  getWorkflow(workflowId: string): Promise<WorkflowDetail> {
+    return request<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}`);
   },
 };
