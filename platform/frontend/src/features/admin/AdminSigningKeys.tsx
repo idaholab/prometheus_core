@@ -10,12 +10,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, Copy, Plus } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
 import type { SigningKey } from "@/lib/api/types";
 import { Button } from "@/components/ui/Button";
 import { StatusPill, type StatusPillTone } from "@/components/ui/StatusPill";
+import {
+  errorMessage,
+  useActivateSigningKeyMutation,
+  useGenerateSigningKeyMutation,
+  useListSigningKeysQuery,
+  useRetireSigningKeyMutation,
+  LIST_MAX_AGE_SECONDS,
+} from "./adminApi";
 
 /** An inactive key is waiting to be activated, so it warns; a retired key is done. */
 const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone> = {
@@ -29,31 +36,31 @@ const KEY_STATUS_TONE: Record<"active" | "inactive" | "retired", StatusPillTone>
  * plane (app/identity.py::mint_for_user() -- see backend/app/routers/admin_keys.py).
  * No modal needed here (unlike AdminUsers) -- generate takes no input, and
  * activate/retire are one-click actions on an existing row.
+ *
+ * Server data comes from RTK Query (adminApi.ts); each action invalidates the
+ * list, so it refetches.
  */
 export function AdminSigningKeys() {
-  const [keys, setKeys] = useState<SigningKey[] | null>(null);
-  const [error, setError] = useState("");
+  const list = useListSigningKeysQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
+  // A failed load shows its error in place of the table, never rows from before
+  // it. RTK keeps the error while the list refetches, so it stays up until a load succeeds
+  const loadError = list.error ? errorMessage(list.error, "Could not load signing keys") : "";
+  const keys = list.error ? null : (list.data ?? null);
+  const [generateKey] = useGenerateSigningKeyMutation();
+  const [activateKey] = useActivateSigningKeyMutation();
+  const [retireKey] = useRetireSigningKeyMutation();
+  const [actionError, setActionError] = useState("");
   const [generating, setGenerating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const refresh = () => {
-    api
-      .listSigningKeys()
-      .then((list) => setKeys(list))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load signing keys"));
-  };
-
-  useEffect(refresh, []);
-
   const handleGenerate = async () => {
     setGenerating(true);
-    setError("");
+    setActionError("");
     try {
-      await api.generateSigningKey();
-      refresh();
+      await generateKey().unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not generate key");
+      setActionError(errorMessage(err, "Could not generate key"));
     } finally {
       setGenerating(false);
     }
@@ -61,12 +68,11 @@ export function AdminSigningKeys() {
 
   const handleActivate = async (key: SigningKey) => {
     setBusyId(key.id);
-    setError("");
+    setActionError("");
     try {
-      await api.activateSigningKey(key.id);
-      refresh();
+      await activateKey(key.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not activate key");
+      setActionError(errorMessage(err, "Could not activate key"));
     } finally {
       setBusyId(null);
     }
@@ -74,12 +80,11 @@ export function AdminSigningKeys() {
 
   const handleRetire = async (key: SigningKey) => {
     setBusyId(key.id);
-    setError("");
+    setActionError("");
     try {
-      await api.retireSigningKey(key.id);
-      refresh();
+      await retireKey(key.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not retire key");
+      setActionError(errorMessage(err, "Could not retire key"));
     } finally {
       setBusyId(null);
     }
@@ -115,13 +120,17 @@ export function AdminSigningKeys() {
         />
       </div>
 
-      {error && (
+      {actionError && (
         <div role="alert" className="alert alert-error text-xs">
-          {error}
+          {actionError}
         </div>
       )}
 
-      {keys === null ? (
+      {loadError ? (
+        <div role="alert" className="alert alert-error text-xs">
+          {loadError}
+        </div>
+      ) : keys === null ? (
         <div className="text-sm text-base-content/50">Loading...</div>
       ) : (
         <div className="overflow-x-auto">
@@ -157,7 +166,7 @@ export function AdminSigningKeys() {
                         variant="ghost"
                         size="xs"
                         icon={copiedId === key.id ? <Check /> : <Copy />}
-                        ariaLabel="Copy public key"
+                        ariaLabel={`Copy public key ${key.kid}`}
                         onClick={() => handleCopy(key)}
                       />
                       {!key.is_active && !key.retired_at && (

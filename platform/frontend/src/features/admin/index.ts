@@ -14,3 +14,4 @@
 // in this folder is internal to it.
 export { LayoutAdmin } from "./LayoutAdmin";
 export type { AdminSubTab } from "./LayoutAdmin";
+export { prefetchAdminUsers } from "./adminApi";

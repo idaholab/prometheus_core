@@ -15,7 +15,8 @@
  * comes from the loaders in ./guards, which run before a route renders. To add
  * a screen: add its path to PATHS, a pages/PageX.tsx, and an entry here.
  */
-import { createBrowserRouter, type RouteObject } from "react-router";
+import { createBrowserRouter, type LoaderFunctionArgs, type RouteObject } from "react-router";
+import { prefetchAdminUsers } from "@/features/admin";
 import { LayoutApp } from "@/layouts/LayoutApp";
 import { PageAdmin } from "@/pages/PageAdmin";
 import { PageAgentRegistry } from "@/pages/PageAgentRegistry";
@@ -30,6 +31,14 @@ import { PageSetup } from "@/pages/PageSetup";
 import { PageWorkflows } from "@/pages/PageWorkflows";
 import { guestOnly, requireAdmin, requireUser, setupOnly } from "./guards";
 import { PATHS } from "./paths";
+
+/** Admin: the admin guard first, then start loading the users list (the
+ * default sub-tab) so it's usually there when the page paints. */
+async function adminLoader(args: LoaderFunctionArgs) {
+  await requireAdmin(args);
+  prefetchAdminUsers();
+  return null;
+}
 
 /** Child paths are relative to the shell's "/". */
 const child = (path: string) => path.slice(1);
@@ -55,7 +64,7 @@ export const routes: RouteObject[] = [
           { path: child(PATHS.projectManagement), element: <PageProjectManagement /> },
           { path: child(PATHS.dataManagement), element: <PageDataManagement /> },
           { path: child(PATHS.jobsConsole), element: <PageJobsConsole /> },
-          { path: child(PATHS.admin), loader: requireAdmin, element: <PageAdmin /> },
+          { path: child(PATHS.admin), loader: adminLoader, element: <PageAdmin /> },
           { path: "*", element: <PageNotFound /> },
         ],
       },

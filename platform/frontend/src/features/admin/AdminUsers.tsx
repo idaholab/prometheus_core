@@ -10,13 +10,20 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Pencil, Plus, Shield, Trash2, User } from "lucide-react";
-import { api, ApiError } from "@/lib/api/client";
 import type { AdminUser } from "@/lib/api/types";
 import { Button } from "@/components/ui/Button";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Tag } from "@/components/ui/Tag";
+import {
+  errorMessage,
+  useCreateAdminUserMutation,
+  useDeleteAdminUserMutation,
+  useListAdminUsersQuery,
+  useUpdateAdminUserMutation,
+  LIST_MAX_AGE_SECONDS,
+} from "./adminApi";
 
 /**
  * Admin > Users. First table component in this codebase -- plain DaisyUI
@@ -24,10 +31,22 @@ import { Tag } from "@/components/ui/Tag";
  * (DaisyUI's modal pattern), also a first here; controlled via refs rather
  * than a boolean + conditional render so DaisyUI's open/close transition and
  * backdrop-click-to-close (`method="dialog"` inside the form) work for free.
+ *
+ * Server data comes from RTK Query (adminApi.ts): the list is cached, and a
+ * create, edit or delete invalidates it so it refetches. Coming back to the
+ * tab shows the cached list at once, and refreshes it once it's older than
+ * LIST_MAX_AGE_SECONDS.
  */
 export function AdminUsers() {
-  const [users, setUsers] = useState<AdminUser[] | null>(null);
-  const [error, setError] = useState("");
+  const list = useListAdminUsersQuery(undefined, { refetchOnMountOrArgChange: LIST_MAX_AGE_SECONDS });
+  // A failed load shows its error in place of the table, never rows from before
+  // it. RTK keeps the error while the list refetches, so it stays up until a load succeeds
+  const loadError = list.error ? errorMessage(list.error, "Could not load users") : "";
+  const users = list.error ? null : (list.data ?? null);
+  const [createUser] = useCreateAdminUserMutation();
+  const [updateUser] = useUpdateAdminUserMutation();
+  const [deleteUser] = useDeleteAdminUserMutation();
+  const [deleteError, setDeleteError] = useState("");
 
   const createDialogRef = useRef<HTMLDialogElement>(null);
   const [createUsername, setCreateUsername] = useState("");
@@ -43,15 +62,6 @@ export function AdminUsers() {
   const [editPassword, setEditPassword] = useState("");
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  const refresh = () => {
-    api
-      .listAdminUsers()
-      .then((list) => setUsers(list))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load users"));
-  };
-
-  useEffect(refresh, []);
 
   const openCreate = () => {
     setCreateUsername("");
@@ -69,11 +79,10 @@ export function AdminUsers() {
     setCreating(true);
     setCreateError("");
     try {
-      await api.createAdminUser({ username: createUsername, password: createPassword, role: createRole });
+      await createUser({ username: createUsername, password: createPassword, role: createRole }).unwrap();
       createDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : "Could not create user");
+      setCreateError(errorMessage(err, "Could not create user"));
     } finally {
       setCreating(false);
     }
@@ -93,15 +102,17 @@ export function AdminUsers() {
     setSaving(true);
     setEditError("");
     try {
-      await api.updateAdminUser(editing.id, {
-        role: editRole,
-        is_active: editActive,
-        ...(editPassword ? { password: editPassword } : {}),
-      });
+      await updateUser({
+        id: editing.id,
+        patch: {
+          role: editRole,
+          is_active: editActive,
+          ...(editPassword ? { password: editPassword } : {}),
+        },
+      }).unwrap();
       editDialogRef.current?.close();
-      refresh();
     } catch (err) {
-      setEditError(err instanceof ApiError ? err.message : "Could not update user");
+      setEditError(errorMessage(err, "Could not update user"));
     } finally {
       setSaving(false);
     }
@@ -109,11 +120,11 @@ export function AdminUsers() {
 
   const handleDelete = async (user: AdminUser) => {
     if (!window.confirm(`Delete user "${user.username}"? This cannot be undone.`)) return;
+    setDeleteError("");
     try {
-      await api.deleteAdminUser(user.id);
-      refresh();
+      await deleteUser(user.id).unwrap();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete user");
+      setDeleteError(errorMessage(err, "Could not delete user"));
     }
   };
 
@@ -124,13 +135,17 @@ export function AdminUsers() {
         <Button variant="primary" size="sm" icon={<Plus />} label="New user" onClick={openCreate} />
       </div>
 
-      {error && (
+      {deleteError && (
         <div role="alert" className="alert alert-error text-xs">
-          {error}
+          {deleteError}
         </div>
       )}
 
-      {users === null ? (
+      {loadError ? (
+        <div role="alert" className="alert alert-error text-xs">
+          {loadError}
+        </div>
+      ) : users === null ? (
         <div className="text-sm text-base-content/50">Loading...</div>
       ) : (
         <div className="overflow-x-auto">
@@ -167,7 +182,7 @@ export function AdminUsers() {
                       variant="ghost"
                       size="xs"
                       icon={<Pencil />}
-                      ariaLabel="Edit user"
+                      ariaLabel={`Edit ${user.username}`}
                       onClick={() => openEdit(user)}
                     />
                     <Button
@@ -175,7 +190,7 @@ export function AdminUsers() {
                       soft
                       size="xs"
                       icon={<Trash2 />}
-                      ariaLabel="Delete user"
+                      ariaLabel={`Delete ${user.username}`}
                       onClick={() => handleDelete(user)}
                     />
                   </td>
@@ -193,9 +208,11 @@ export function AdminUsers() {
         </div>
       )}
 
-      <dialog ref={createDialogRef} className="modal">
+      <dialog ref={createDialogRef} className="modal" aria-labelledby="admin-create-title">
         <div className="modal-box max-w-sm">
-          <h3 className="font-medium mb-3">New user</h3>
+          <h3 id="admin-create-title" className="font-medium mb-3">
+            New user
+          </h3>
           <div className="space-y-3">
             {createError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -203,10 +220,11 @@ export function AdminUsers() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-username">
                 <span className="label-text text-xs uppercase tracking-wider">Username</span>
               </label>
               <input
+                id="admin-create-username"
                 className="input input-bordered w-full"
                 value={createUsername}
                 onChange={(e) => setCreateUsername(e.target.value)}
@@ -214,10 +232,11 @@ export function AdminUsers() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-password">
                 <span className="label-text text-xs uppercase tracking-wider">Password</span>
               </label>
               <input
+                id="admin-create-password"
                 className="input input-bordered w-full"
                 type="password"
                 value={createPassword}
@@ -225,10 +244,11 @@ export function AdminUsers() {
               />
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-create-role">
                 <span className="label-text text-xs uppercase tracking-wider">Role</span>
               </label>
               <select
+                id="admin-create-role"
                 className="select select-bordered w-full"
                 value={createRole}
                 onChange={(e) => setCreateRole(e.target.value)}
@@ -257,9 +277,11 @@ export function AdminUsers() {
         </form>
       </dialog>
 
-      <dialog ref={editDialogRef} className="modal">
+      <dialog ref={editDialogRef} className="modal" aria-labelledby="admin-edit-title">
         <div className="modal-box max-w-sm">
-          <h3 className="font-medium mb-3">Edit {editing?.username}</h3>
+          <h3 id="admin-edit-title" className="font-medium mb-3">
+            Edit {editing?.username}
+          </h3>
           <div className="space-y-3">
             {editError && (
               <div role="alert" className="alert alert-error text-xs">
@@ -267,10 +289,11 @@ export function AdminUsers() {
               </div>
             )}
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-edit-role">
                 <span className="label-text text-xs uppercase tracking-wider">Role</span>
               </label>
               <select
+                id="admin-edit-role"
                 className="select select-bordered w-full"
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value)}
@@ -291,10 +314,11 @@ export function AdminUsers() {
               </label>
             </div>
             <div className="form-control">
-              <label className="label pb-1">
+              <label className="label pb-1" htmlFor="admin-edit-password">
                 <span className="label-text text-xs uppercase tracking-wider">New password (optional)</span>
               </label>
               <input
+                id="admin-edit-password"
                 className="input input-bordered w-full"
                 type="password"
                 placeholder="Leave blank to keep current password"
