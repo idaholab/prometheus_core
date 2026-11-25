@@ -128,8 +128,9 @@ A few rules apply repository-wide:
   every directory with a tracked `uv.lock`, so a new uv project is checked as
   soon as its lockfile is committed. Also add its directory to the uv entry in
   `.github/dependabot.yml`; a test fails until you do.
-- **Coverage floors.** `sdk/` enforces a minimum coverage (`fail_under` in
-  `pyproject.toml`). Add tests with your change, and don't lower the floor.
+- **Tests and coverage.** [TESTING.md](TESTING.md) says which tests a change
+  needs and how much coverage is enough. Add tests with your change, and never
+  lower a `fail_under` floor in a `pyproject.toml`.
 - **No secrets.** CI scans every commit with gitleaks. Never commit `.env` files,
   API keys, tokens, or credentials, even in tests or examples.
 
