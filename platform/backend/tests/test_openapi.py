@@ -40,6 +40,7 @@ from app.routers import (
     sessions,
     setup,
     uploads,
+    workflows,
 )
 
 ROUTERS = [
@@ -59,6 +60,7 @@ ROUTERS = [
     sessions,
     setup,
     uploads,
+    workflows,
 ]
 
 

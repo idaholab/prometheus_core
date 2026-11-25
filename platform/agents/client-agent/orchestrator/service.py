@@ -27,6 +27,7 @@ from artifact_handling import merge_artifact_catalogs
 from capability_cache import get_capability_cache
 from conversation_store import get_conversation, record_turn_artifacts
 from workflow_library import get_workflow_registry, verify_workflow_source_health
+from workflow_library.graph import workflow_template
 
 from . import runtime, task_tracking
 from .chat_flow import chat
@@ -184,6 +185,24 @@ class OrchestratorAgent(PrometheusAgent):
                 "errors": registry.snapshot.errors,
             }
         )
+
+    async def _workflow_templates_endpoint(self, request: Request) -> JSONResponse:
+        """Return the newest version of each workflow, shaped as the backend `WorkflowDetail`."""
+        if not runtime.ENABLE_WORKFLOW_LIBRARY:
+            return JSONResponse({"enabled": False, "workflows": [], "errors": []})
+
+        cache = get_capability_cache()
+        capabilities = await cache.get_capabilities()
+        capabilities_by_skill = {cap.skill_id: cap for cap in capabilities}
+
+        registry = get_workflow_registry()
+        snapshot = registry.snapshot
+        workflows = []
+        for workflow_id in sorted(snapshot.by_id):
+            workflow = registry.get(workflow_id)
+            if workflow is not None:
+                workflows.append(workflow_template(workflow, capabilities_by_skill))
+        return JSONResponse({"enabled": True, "workflows": workflows, "errors": snapshot.errors})
 
     async def _workflow_input_form_endpoint(self, request: Request) -> JSONResponse:
         """Return unresolved required inputs for a workflow template."""
@@ -698,5 +717,6 @@ class OrchestratorAgent(PrometheusAgent):
         app.add_route("/uploads/stage", self._stage_upload_endpoint, methods=["POST"])
         app.add_route("/discovery/refresh", self._refresh_endpoint, methods=["POST"])
         app.add_route("/workflows/catalog", self._workflow_catalog_endpoint, methods=["GET"])
+        app.add_route("/workflows/templates", self._workflow_templates_endpoint, methods=["GET"])
         app.add_route("/workflows/{workflow_id}/input-form", self._workflow_input_form_endpoint, methods=["GET"])
         app.add_route("/workflows/{workflow_id}/start", self._workflow_start_endpoint, methods=["POST"])

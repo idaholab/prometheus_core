@@ -261,6 +261,8 @@ def test_registry_loads_agent_card_workflows() -> None:
             "display_name": "Quick Thermal Check",
             "summary": "Quick thermal analysis",
             "category": "Thermal",
+            "complexity": None,
+            "speedup": None,
             "requires_approval": False,
             "estimated_duration_seconds": None,
             "owner": "thermal-agent",
