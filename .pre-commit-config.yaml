@@ -1,0 +1,45 @@
+# Install once per clone with `make hooks` from the repo root
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  # Same gitleaks version as the gitleaks job in .github/workflows/test.yml;
+  # update both together
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
+    hooks:
+      - id: gitleaks
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: sdk-ruff-format-check
+        name: "sdk: ruff format check"
+        entry: uv run --directory sdk ruff format --check .
+        language: system
+        files: ^sdk/
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: sdk-ruff-check
+        name: "sdk: ruff check"
+        entry: uv run --directory sdk ruff check .
+        language: system
+        files: ^sdk/
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: sdk-mypy
+        name: "sdk: mypy"
+        entry: uv run --directory sdk mypy prometheus_api/
+        language: system
+        files: ^sdk/
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: sdk-unit-tests
+        name: "sdk: unit tests"
+        entry: uv run --directory sdk pytest -m "not integration" --cov
+        language: system
+        files: ^sdk/
+        pass_filenames: false
+        stages: [pre-push]
