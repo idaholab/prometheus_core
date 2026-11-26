@@ -519,7 +519,7 @@ function disconnect(): void {
  * turn's late reply, and another tab's `turn_done` are all ignored. `settle()`, `stop()`,
  * `reset()`, `loadConversation()` and the auth teardowns end the wait with `endWait()`.
  */
-let activeTurn: { id: string; conversationId: string | null; postPending: boolean } | null = null;
+let activeTurn: { id: string; postPending: boolean } | null = null;
 
 /** Stop waiting on the active turn: `activeTurn`, its pending re-check and `awaiting`
  * always change together, here. */
@@ -531,18 +531,11 @@ function endWait(): void {
 
 /** End turn `turnId` with `res`, once. Returns whether it was the turn being waited on. */
 function settle(turnId: string, res: ChatMessageResponse): boolean {
-  const turn = activeTurn;
-  if (!turn || turn.id !== turnId) return false;
+  if (activeTurn?.id !== turnId) return false;
   // Cleared before applyResponse: an auto-approved plan starts the next turn from
   // inside it, and that turn must find the slot free.
   endWait();
-  if (state.conversationId === turn.conversationId) {
-    applyResponse(res);
-  } else {
-    // The user switched conversation after sending: the reply is persisted and shows
-    // when that conversation is reopened. Let the history list refresh its status.
-    bumpHistory();
-  }
+  applyResponse(res);
   return true;
 }
 
@@ -616,10 +609,11 @@ async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<
  * or the new turn would take the slot and the running one's reply would be dropped. */
 async function post(body: ChatMessageRequest): Promise<void> {
   const turnId = newTurnId();
-  // The conversation is captured now: if the user switches before the turn ends,
-  // the result belongs to this one, not to whatever is on screen (see `settle`). The
-  // backend applies the same guard to its own session writes (`services/chat.py`).
-  activeTurn = { id: turnId, conversationId: state.conversationId, postPending: true };
+  // Switching conversation (`reset`, `loadConversation`) ends the wait, so a turn only
+  // ever settles into the conversation it was sent from. The reply is persisted and shows
+  // when that conversation is reopened; the backend guards its own session writes the
+  // same way (`services/chat.py`).
+  activeTurn = { id: turnId, postPending: true };
   set({ awaiting: true });
   try {
     const res = await api.sendMessage({ ...body, turn_id: turnId });
