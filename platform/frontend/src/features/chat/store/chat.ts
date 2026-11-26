@@ -599,6 +599,8 @@ async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<
   };
 }
 
+/** Start a turn. Callers return early while `activeTurn` is set: one turn at a time,
+ * or the new turn would take the slot and the running one's reply would be dropped. */
 async function post(body: ChatMessageRequest): Promise<void> {
   const turnId = newTurnId();
   // The conversation is captured now: if the user switches before the turn ends,
@@ -630,13 +632,14 @@ function onTurnDone(e: TurnDoneEvent): void {
 /** Send a user turn (optionally with staged uploads). */
 async function sendTurn(query: string, uploads: UploadDescriptor[] = []): Promise<void> {
   const text = query.trim();
-  if (!text && uploads.length === 0) return;
+  if (activeTurn || (!text && uploads.length === 0)) return;
   setItems((items) => [...items, { id: nextId("user"), kind: "user", text: text || "(uploaded file)" }]);
   await post({ query: text, upload_ids: uploads.length ? uploads : null });
 }
 
 /** Answer a needs_info form (keys are FormField.id). */
 async function submitFollowup(itemId: string, answers: Record<string, unknown>): Promise<void> {
+  if (activeTurn) return;
   let query = "";
   setItems((items) =>
     items.map((it) => {
@@ -652,6 +655,7 @@ async function submitFollowup(itemId: string, answers: Record<string, unknown>):
 
 /** Approve or reject a pending plan. */
 async function decidePlan(itemId: string, approved: boolean): Promise<void> {
+  if (activeTurn) return;
   setItems((items) =>
     items.map((it) =>
       it.id === itemId && it.kind === "plan" ? { ...it, decided: approved ? "approved" : "rejected" } : it,

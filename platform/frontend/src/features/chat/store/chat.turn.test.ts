@@ -428,3 +428,16 @@ test("a stopped turn's pending re-check can't end the next turn", async () => {
     vi.useRealTimers();
   }
 });
+
+test("a second send while a turn is running is refused, so the first reply still lands", async () => {
+  const first = await send("first");
+  void chatStore.sendTurn("second");
+  await tick();
+  assert.equal(sends.length, 1, "no second POST");
+  assert.deepEqual(kinds(), ["user:first"]);
+
+  sends[0].reply.resolve(answer(first, "R1"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:first", "assistant:R1"]);
+  assert.equal(readState().awaiting, false);
+});
