@@ -113,7 +113,7 @@ async def _turn_artifacts(
     if response.artifacts:
         await store.set_artifacts(sid, response.artifacts, conversation_id=conversation_id)
 
-    return shape_artifacts(new_artifacts)
+    return shape_artifacts(new_artifacts, conversation_id=conversation_id)
 
 
 async def _map_needs_info(

@@ -10,10 +10,20 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""GET /api/artifacts/{artifact_id}/content — resolve + stream artifact bytes (D3).
+"""Artifact content routes — resolve + stream artifact bytes (D3).
 
-Auth-required. Looks the id up in the session's artifact catalog (populated by the
-turn orchestrator, task 04), resolves its URI to local bytes via
+``GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`` is the
+route ``ArtifactMeta.content_url`` names. It checks the caller may read the
+conversation, then reads the artifact from that conversation's catalog in Valkey
+(``artifacts:conv:{id}:by_id``, written by the agents' ``ArtifactRegistry``). It does
+not depend on the session: the session catalog follows whichever conversation the
+login last bound, and every tab of that login shares it, so a tab showing one
+conversation while another tab opens a second one would 404 on its own artifacts.
+
+``GET /api/artifacts/{artifact_id}/content`` is the older, session-scoped route. It
+stays until no client builds its URL.
+
+Both are auth-required, resolve the artifact's URI to local bytes via
 ``uri_resolver.resolve_to_local_path`` (``file://`` / ``http(s)://`` / ``deeplynx://``),
 and streams the file with the correct ``Content-Type`` and an ``inline`` disposition.
 For inline-only artifacts (``json_body`` / text, no URI) it serializes the content
@@ -39,8 +49,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status as http_s
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
+import asyncio
+
 from app import uri_resolver
 from app.api_responses import AUTH_RESPONSES
+from app.config import settings
+from app.conversation_state import ConversationStateClient
 from app.openapi import TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
@@ -73,6 +87,34 @@ def _find_artifact(session: SessionState, artifact_id: str) -> Optional[dict[str
     return None
 
 
+# One client reused across requests, as in routers/conversations.py.
+_client_cache: dict = {}
+
+
+def _client() -> ConversationStateClient:
+    cls = ConversationStateClient
+    inst = _client_cache.get(cls)
+    if inst is None:
+        inst = cls(settings.redis_url)
+        _client_cache[cls] = inst
+    return inst
+
+
+def _lookup(conversation_id: str, artifact_id: str, user_id: str, bound: bool) -> Optional[dict[str, Any]]:
+    """Blocking access check + catalog read, run in a worker thread.
+
+    ``None`` when Valkey is down, the caller may not read the conversation, or the
+    artifact is not in its catalog. The caller maps all of them to one 404, so a
+    non-owner can't probe which ids exist.
+    """
+    client = _client()
+    if not client.available:
+        return None
+    if not bound and not client.owns(user_id, conversation_id):
+        return None
+    return client.get_artifact(conversation_id, artifact_id)
+
+
 def _download_filename(name: str, extension: str) -> str:
     """Ensure a safe basename carrying ``extension`` (ports ``_download_filename``)."""
     filename = Path(str(name or "artifact")).name or "artifact"
@@ -95,6 +137,28 @@ def _content_disposition(filename: str, disposition: str) -> dict[str, str]:
     return {"Content-Disposition": f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"}
 
 
+@router.get("/conversations/{conversation_id}/artifacts/{artifact_id}/content")
+async def get_conversation_artifact_content(
+    conversation_id: str,
+    artifact_id: str,
+    request: Request,
+    claims: TokenClaims = Depends(current_claims),
+) -> Response:
+    """Stream an artifact of a conversation the caller may read.
+
+    Readable means the caller owns the conversation (``user:convs:{sub}``) or their
+    session is bound to it. The second case covers a first turn whose ownership
+    record is not visible yet; it is sound because a session's ``conversation_id`` is
+    only server-minted or set by an ownership-checked resume.
+    """
+    session = await get_store(request).get(claims.sid)
+    bound = session is not None and session.conversation_id == conversation_id
+    artifact = await asyncio.to_thread(_lookup, conversation_id, artifact_id, claims.sub, bound)
+    if artifact is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+    return await _serve(artifact, artifact_id)
+
+
 @router.get("/artifacts/{artifact_id}/content")
 async def get_artifact_content(
     artifact_id: str,
@@ -110,7 +174,11 @@ async def get_artifact_content(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail=f"Artifact {artifact_id!r} is not in this session's catalog.",
         )
+    return await _serve(artifact, artifact_id)
 
+
+async def _serve(artifact: dict[str, Any], artifact_id: str) -> Response:
+    """Stream one raw catalog dict: its resolved URI, else its inline content."""
     name = str(artifact.get("name") or "artifact")
     mime_type = artifact.get("mime_type") or ""
     uri = artifact.get("uri") or ""

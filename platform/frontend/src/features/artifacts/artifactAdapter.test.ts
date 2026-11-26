@@ -45,3 +45,11 @@ test("json artifact with an inline body keeps it as CollapsibleJson data", () =>
   assert.deepEqual(element.props?.data, { status: "ok", values: [1, 2, 3], nested: { flag: true } });
   assert.equal(element.props?.url, "/api/artifacts/art-1/content");
 });
+
+test("an artifact's content_url wins over the session-scoped route", () => {
+  const element = artifactToElement(
+    jsonArtifact({ json_body: null, content_url: "/api/conversations/c1/artifacts/art-1/content" }),
+  );
+
+  assert.equal(element.props?.url, "/api/conversations/c1/artifacts/art-1/content");
+});

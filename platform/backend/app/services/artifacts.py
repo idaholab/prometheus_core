@@ -39,6 +39,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 from app.contract import ArtifactDisplay, ArtifactMeta, Citation, RenderHint
 
@@ -448,8 +449,16 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
     )
 
 
-def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
+def artifact_content_url(conversation_id: str, artifact_id: str) -> str:
+    """The conversation-scoped content route for one artifact."""
+    return f"/api/conversations/{quote(conversation_id, safe='')}/artifacts/{quote(artifact_id, safe='')}/content"
+
+
+def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str = "") -> Optional[ArtifactMeta]:
     """Map one raw catalog dict to :class:`ArtifactMeta`, or ``None`` to skip it.
+
+    With a ``conversation_id``, ``content_url`` points at that conversation's content
+    route, which reads the conversation's catalog rather than the caller's session.
 
     Returns ``None`` for ``conversation_message`` records (not user-facing) and
     for non-dict inputs, so callers can ``filter``/``None``-drop the result.
@@ -461,8 +470,9 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
 
     metadata = artifact.get("metadata") or {}
     tags = artifact.get("tags")
+    artifact_id = artifact_identity(artifact)
     return ArtifactMeta(
-        artifact_id=artifact_identity(artifact),
+        artifact_id=artifact_id,
         name=str(artifact.get("name") or ""),
         mime_type=artifact.get("mime_type"),
         json_type=artifact.get("json_type") or metadata.get("json_type"),
@@ -471,6 +481,7 @@ def to_artifact_meta(artifact: dict[str, Any]) -> Optional[ArtifactMeta]:
         tags=list(tags) if isinstance(tags, list) else [],
         json_body=artifact.get("json_body"),
         render_hint=classify_render_hint(artifact),
+        content_url=artifact_content_url(conversation_id, artifact_id) if conversation_id else "",
         citation=_citation_from(metadata),
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),
@@ -493,11 +504,11 @@ def is_user_upload(artifact: dict[str, Any]) -> bool:
     return (artifact.get("metadata") or {}).get("source") == "user-upload"
 
 
-def shape_artifacts(artifacts: list[dict[str, Any]]) -> list[ArtifactMeta]:
-    """Shape a list of raw catalog dicts, dropping skipped/invalid entries."""
+def shape_artifacts(artifacts: list[dict[str, Any]], *, conversation_id: str) -> list[ArtifactMeta]:
+    """Shape a list of one conversation's raw catalog dicts, dropping skipped/invalid entries."""
     shaped: list[ArtifactMeta] = []
     for artifact in artifacts:
-        meta = to_artifact_meta(artifact)
+        meta = to_artifact_meta(artifact, conversation_id=conversation_id)
         if meta is not None:
             shaped.append(meta)
     return shaped

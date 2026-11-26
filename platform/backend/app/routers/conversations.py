@@ -180,7 +180,7 @@ async def _build_detail(conv_id: str, parts: dict[str, Any]) -> ConversationDeta
         # User uploads stay in the session catalog (the content proxy and later turns
         # resolve them) but not in the response: the Artifact Contract excludes them
         # from rendering, and the live turn already drops them from `new_artifacts`.
-        artifacts=shape_artifacts([a for a in raw_artifacts if not is_user_upload(a)]),
+        artifacts=shape_artifacts([a for a in raw_artifacts if not is_user_upload(a)], conversation_id=conv_id),
     )
 
 

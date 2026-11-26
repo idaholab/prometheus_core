@@ -174,6 +174,22 @@ class ConversationStateClient:
                 artifacts.append(parsed)
         return artifacts
 
+    def get_artifact(self, conv_id: str, artifact_id: str) -> Optional[Dict[str, Any]]:
+        """One raw catalog dict from ``artifacts:conv:{conv_id}:by_id``, or ``None``.
+
+        ``None`` also on a missing client, empty ids, a Redis error or a corrupt value,
+        so the content route maps every miss to the same 404.
+        """
+        client = self.client
+        if client is None or not conv_id or not artifact_id:
+            return None
+        try:
+            raw = client.hget(f"artifacts:conv:{conv_id}:by_id", artifact_id)
+            parsed = json.loads(raw) if raw else None
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
     # --------------------------------------------------------------------- #
     # Per-user metadata (title override / soft delete) — ``conv:meta:{id}``
     # --------------------------------------------------------------------- #

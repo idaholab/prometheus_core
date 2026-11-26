@@ -452,3 +452,81 @@ def test_artifact_display_comes_from_producer_metadata(metadata, expected) -> No
     assert meta is not None
     assert meta.display == expected
     assert meta.render_hint == "code"  # display never changes how it renders
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/conversations/{cid}/artifacts/{aid}/content
+# --------------------------------------------------------------------------- #
+
+
+class _CatalogClient:
+    """Stand-in for ConversationStateClient: an owner index plus artifact catalogs."""
+
+    def __init__(self, *, owned: set[tuple[str, str]], catalogs: dict[str, dict[str, dict]]):
+        self.available = True
+        self._owned = owned
+        self._catalogs = catalogs
+
+    def owns(self, user_id: str, conv_id: str) -> bool:
+        return (user_id, conv_id) in self._owned
+
+    def get_artifact(self, conv_id: str, artifact_id: str):
+        return self._catalogs.get(conv_id, {}).get(artifact_id)
+
+
+def _patch_catalog(monkeypatch, **kwargs) -> None:
+    from app.routers import artifacts as artifacts_router
+
+    fake = _CatalogClient(**kwargs)
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: fake)
+
+
+_PLOT = {"artifact_id": "a1", "name": "plot.json", "json_body": {"x": 1}, "mime_type": "application/json"}
+
+
+async def test_conversation_content_serves_an_owned_conversation_the_session_left(monkeypatch, session_store):
+    """Another tab rebinding the shared session must not break this tab's artifacts."""
+    _patch_catalog(monkeypatch, owned={("alice", "c-old")}, catalogs={"c-old": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store, artifacts=[])  # session bound to c1
+
+    resp = client.get("/api/conversations/c-old/artifacts/a1/content")
+    assert resp.status_code == 200
+    assert resp.json() == {"x": 1}
+    # The session-scoped route can't see it: that is the bug this route fixes.
+    assert client.get("/api/artifacts/a1/content").status_code == 404
+
+
+async def test_conversation_content_serves_the_bound_conversation_before_ownership(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned=set(), catalogs={"c1": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 200
+
+
+async def test_conversation_content_404s_for_another_users_conversation(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned={("bob", "c-bob")}, catalogs={"c-bob": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    resp = client.get("/api/conversations/c-bob/artifacts/a1/content")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Artifact not found"
+
+
+async def test_conversation_content_404s_for_an_artifact_of_another_conversation(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned={("alice", "c2")}, catalogs={"c1": {"a1": _PLOT}, "c2": {}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c2/artifacts/a1/content").status_code == 404
+
+
+def test_conversation_content_requires_auth():
+    from app.main import app
+
+    assert TestClient(app).get("/api/conversations/c1/artifacts/a1/content").status_code == 401
+
+
+def test_shaped_artifacts_name_their_conversation_content_route():
+    from app.services.artifacts import shape_artifacts
+
+    [meta] = shape_artifacts([{"artifact_id": "a b", "name": "x"}], conversation_id="c/1")
+    assert meta.content_url == "/api/conversations/c%2F1/artifacts/a%20b/content"

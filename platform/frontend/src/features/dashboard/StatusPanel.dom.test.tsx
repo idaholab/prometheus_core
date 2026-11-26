@@ -34,7 +34,7 @@ vi.mock("@/features/artifacts", () => ({
   ),
 }));
 vi.mock("@/lib/api/client", () => ({
-  api: { artifactContentUrl: (id: string) => `/api/artifacts/${id}/content` },
+  api: { artifactContentUrl: (a: { artifact_id: string }) => `/api/artifacts/${a.artifact_id}/content` },
 }));
 
 function artifact(id: string, overrides: Partial<ArtifactMeta> = {}): ArtifactMeta {

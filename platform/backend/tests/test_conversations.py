@@ -836,3 +836,27 @@ async def test_superseded_resume_does_not_rebind_or_seed_the_session(monkeypatch
     # And a resume that arrives late with an older seq cannot rebind at all.
     assert client.post("/api/conversations/A/resume", json={"bind_seq": 15}).status_code == 200
     assert (await session_store.get_or_create("sid-conv")).conversation_id == "B"
+
+
+def test_get_artifact_reads_one_catalog_entry(monkeypatch):
+    import json as _json
+
+    from app.conversation_state import ConversationStateClient
+
+    stored = {
+        ("artifacts:conv:c1:by_id", "a1"): _json.dumps({"artifact_id": "a1"}),
+        ("artifacts:conv:c1:by_id", "bad"): "{not json",
+    }
+
+    class _FakeRedis:
+        def hget(self, key, field):
+            return stored.get((key, field))
+
+    c = ConversationStateClient("redis://x")
+    monkeypatch.setattr(type(c), "client", property(lambda self: _FakeRedis()))
+
+    assert c.get_artifact("c1", "a1") == {"artifact_id": "a1"}
+    assert c.get_artifact("c1", "missing") is None
+    assert c.get_artifact("c1", "bad") is None
+    assert c.get_artifact("c2", "a1") is None
+    assert c.get_artifact("", "a1") is None

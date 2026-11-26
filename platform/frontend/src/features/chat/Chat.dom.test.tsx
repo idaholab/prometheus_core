@@ -44,7 +44,10 @@ vi.mock("@/lib/api/client", () => {
   }
   return {
     ApiError: StubApiError,
-    api: { uploadFile: mocks.uploadFile, artifactContentUrl: (id: string) => `/api/artifacts/${id}/content` },
+    api: {
+      uploadFile: mocks.uploadFile,
+      artifactContentUrl: (a: { artifact_id: string }) => `/api/artifacts/${a.artifact_id}/content`,
+    },
   };
 });
 
