@@ -328,6 +328,10 @@ Read it once when the client lost track of a turn (see **Delivery** above). If i
 and its `turn_done` is still coming; a turn whose worker died now answers `404`. Don't poll
 it: `turn_done` is the normal path.
 
+While the turn's POST is still in flight, `404` can also mean "not started yet": the POST
+validates the request before the turn starts. A client that reads `404` then waits for the
+POST reply rather than ending the turn.
+
 ---
 
 ## `GET /api/events` — Server-Sent Events

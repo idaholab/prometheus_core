@@ -243,6 +243,21 @@ test("a stream reconnect asks once where the awaited turn stands", async () => {
   assert.equal(readState().awaiting, false);
 });
 
+test("a reconnect lookup that reads 404 while the POST is in flight leaves the turn to the POST", async () => {
+  const id = await send("q");
+  getTurn = async () => {
+    throw new ApiError(404, "No such turn."); // not started yet, or a backend without the route
+  };
+  stream().onOpen?.();
+  await tick();
+  assert.deepEqual(kinds(), ["user:q"]);
+  assert.equal(readState().awaiting, true);
+
+  sends[0].reply.resolve(answer(id, "a"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+});
+
 test("a stream (re)connect with no turn in flight reads nothing", async () => {
   stream().onOpen?.(); // getTurn would reject the test
   await tick();

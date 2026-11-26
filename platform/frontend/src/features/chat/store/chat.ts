@@ -516,7 +516,7 @@ function disconnect(): void {
  * turn's late reply, and another tab's `turn_done` are all ignored. `stop()`, `reset()`,
  * `loadConversation()` and the auth teardowns clear it along with `awaiting`.
  */
-let activeTurn: { id: string; conversationId: string | null } | null = null;
+let activeTurn: { id: string; conversationId: string | null; postPending: boolean } | null = null;
 
 /** End turn `turnId` with `res`, once. Returns whether it was the turn being waited on. */
 function settle(turnId: string, res: ChatMessageResponse): boolean {
@@ -580,7 +580,10 @@ async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<
     turn = await api.getTurn(turnId);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
-      // Never started, expired, or its worker stopped: nothing will settle it.
+      // While the POST is in flight, 404 can mean "not started yet" (or a backend with
+      // no turn lookup), and the POST reply still settles the turn. Otherwise the turn
+      // never started, expired, or its worker stopped: nothing will settle it.
+      if (!isRecheck && activeTurn?.id === turnId && activeTurn.postPending) return;
       settle(turnId, errorResponse(turnId, "Error communicating with agent."));
     }
     return; // unreachable backend: the stream's reconnect calls this again
@@ -607,12 +610,13 @@ async function post(body: ChatMessageRequest): Promise<void> {
   // The conversation is captured now: if the user switches before the turn ends,
   // the result belongs to this one, not to whatever is on screen (see `settle`). The
   // backend applies the same guard to its own session writes (`services/chat.py`).
-  activeTurn = { id: turnId, conversationId: state.conversationId };
+  activeTurn = { id: turnId, conversationId: state.conversationId, postPending: true };
   set({ awaiting: true });
   try {
     const res = await api.sendMessage({ ...body, turn_id: turnId });
     settle(turnId, res);
   } catch (err) {
+    if (activeTurn?.id === turnId) activeTurn.postPending = false;
     if (mayStillBeRunning(err)) {
       await recoverTurn(turnId);
     } else {
