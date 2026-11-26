@@ -570,7 +570,7 @@ test("another tab's status events add no progress step", async () => {
   assert.deepEqual(kinds(), ["user:q"]);
 });
 
-/* --- the other ways a wait ends ------------------------------------------------------ */
+/* --- the other ways a wait ends, and a stopped turn's pause ------------------------- */
 
 test("switching away and back ignores the old turn's turn_done", async () => {
   const id = await send("q");
@@ -608,4 +608,26 @@ test("after clear (logout) the old turn is no longer awaited", async () => {
   await tick();
   assert.deepEqual(kinds(), []);
   assert.equal(readState().awaiting, false);
+});
+
+test("a stopped turn that paused at a form adds no form; the next message is sent as usual", async () => {
+  const id = await send("q");
+  chatStore.stop();
+  stream().onTurnDone?.({
+    type: "turn_done",
+    turn_id: id,
+    response: {
+      turn_id: id,
+      status: "needs_info",
+      message: "Which material?",
+      followup_questions: [{ id: "m", label: "Material", input_type: "text", required: true }],
+    },
+  });
+  sends[0].reply.resolve({ turn_id: id, status: "needs_info", message: "Which material?" });
+  await tick();
+  assert.deepEqual(kinds(), ["user:q"]);
+
+  await send("steel");
+  assert.equal(sends.length, 2);
+  assert.equal(sends[1].body.query, "steel");
 });
