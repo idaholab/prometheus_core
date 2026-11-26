@@ -324,9 +324,14 @@ its worker renews every 20 s, so a turn whose worker died reads `404` within a m
 ```
 
 Read it once when the client lost track of a turn (see **Delivery** above). If it says
-`running`, read it once more after the lease (60 s): a live turn still answers `running`
-and its `turn_done` is still coming; a turn whose worker died now answers `404`. Don't poll
-it: `turn_done` is the normal path.
+`running`, or the read itself fails, read it again after the lease (60 s): a live turn
+still answers `running` and its `turn_done` is still coming; a turn whose worker died now
+answers `404`. The web client does this at most twice per turn. Don't poll it: `turn_done`
+is the normal path.
+
+While the turn's POST is still in flight, `404` can also mean "not started yet": the POST
+validates the request before the turn starts. A client that reads `404` then waits for the
+POST reply rather than ending the turn.
 
 ---
 

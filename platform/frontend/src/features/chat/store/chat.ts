@@ -40,10 +40,12 @@ import type {
   StatusEvent,
   TaskDoneEvent,
   TaskProgressEvent,
+  TurnDoneEvent,
   UploadDescriptor,
 } from "@/lib/api/types";
 import { artifactsPerTurn } from "./transcriptArtifacts";
 import { readOpenConversationId, saveOpenConversationId } from "./openConversation";
+import { newTurnId } from "./turnId";
 
 // --- item model -------------------------------------------------------------
 
@@ -98,6 +100,7 @@ export type ChatItem = UserItem | AssistantItem | ToolItem | NeedsInfoItem | Pla
 export interface ChatState {
   ready: boolean;
   items: ChatItem[];
+  /** The conversation on screen has a turn in flight (see `turns`). Derived in `set()`. */
   awaiting: boolean;
   conversationId: string | null;
   /** The conversation id of a resume that is still in flight, else `null`.
@@ -156,6 +159,8 @@ function emit(): void {
 }
 function set(patch: Partial<ChatState>): void {
   state = { ...state, ...patch };
+  // Derived, never set directly: whether the conversation on screen has a turn in flight.
+  state.awaiting = state.conversationId !== null && turns.has(state.conversationId);
   // Mirror every conversation-id change into per-tab storage, so a page reload
   // (see `bootstrap()`) resumes where it left off. Hooked here rather than at
   // each of the three call sites (bootstrap / reset / loadConversation) so a
@@ -320,6 +325,11 @@ function appendError(text: string): void {
 // --- SSE handlers -----------------------------------------------------------
 
 function onStatus(e: StatusEvent): void {
+  // Only the progress of the on-screen conversation's awaited turn: a stopped or settled
+  // turn, another conversation's, or another tab's would otherwise update or re-create a
+  // step that never finishes. Returning to a conversation re-creates its step from the
+  // next event, which carries the whole history.
+  if (onScreenTurn()?.id !== e.turn_id) return;
   const history = e.history ?? [e.message];
   setItems((items) => {
     const idx = items.findIndex((it) => it.kind === "tool" && it.turnId === e.turn_id);
@@ -491,6 +501,12 @@ function connect(): void {
     onStatus,
     onTaskProgress,
     onTaskDone,
+    onTurnDone,
+    // On every (re)connect: a turn_done published while the stream was down went
+    // nowhere, so ask once where each awaited turn stands.
+    onOpen: () => {
+      for (const turn of [...turns.values()]) void recoverTurn(turn.id);
+    },
     onError: (info) => void onStreamError(info),
   });
 }
@@ -500,55 +516,188 @@ function disconnect(): void {
   closeStream = null;
 }
 
-async function post(body: ChatMessageRequest): Promise<void> {
-  // Captured before the await: if the user starts a new chat or resumes a
-  // different past conversation (chatStore.reset/loadConversation) while this
-  // turn is still in flight, `state.conversationId` changes out from under us.
-  // The response, when it lands, belongs to `conversationId` — not to whatever
-  // is now on screen — so every effect below is guarded against that. The
-  // backend applies the same guard on its side (see `services/chat.py`'s
-  // `stale` handling) for its own session-state mutations; this is the
-  // matching frontend half, for what gets rendered.
-  const conversationId = state.conversationId;
-  const isCurrent = () => state.conversationId === conversationId;
+interface AwaitedTurn {
+  id: string;
+  conversationId: string;
+  /** Its POST has not answered yet (see `recoverTurn`). */
+  postPending: boolean;
+  rechecksLeft: number;
+  /** Its one pending re-check, if any (see `scheduleRecheck`). */
+  recheck: ReturnType<typeof setTimeout> | null;
+}
 
-  set({ awaiting: true });
+/**
+ * The turn each conversation is waiting on, by conversation id. One per conversation, any
+ * number of conversations: the user may switch away from a running turn, send in another
+ * conversation, and come back. A turn's result can reach the page two ways with the same
+ * body (`backend/CONTRACT.md`, "Delivery"): its POST reply and a `turn_done` event, which
+ * reaches this tab whichever conversation is on screen (the session's stream carries
+ * them all). Whichever arrives first settles the turn through `settle()`, which acts only
+ * while the turn is still awaited, so the second copy, a stopped turn's late reply and
+ * another tab's `turn_done` are all ignored.
+ */
+const turns = new Map<string, AwaitedTurn>();
+
+function findTurn(turnId: string): AwaitedTurn | undefined {
+  for (const turn of turns.values()) if (turn.id === turnId) return turn;
+  return undefined;
+}
+
+function onScreenTurn(): AwaitedTurn | undefined {
+  return state.conversationId === null ? undefined : turns.get(state.conversationId);
+}
+
+/** Stop waiting on `turn`: drop it and its pending re-check, and re-derive `awaiting`. */
+function endWait(turn: AwaitedTurn): void {
+  if (turn.recheck) clearTimeout(turn.recheck);
+  turns.delete(turn.conversationId);
+  set({});
+}
+
+/** Stop waiting on every turn (re-auth, logout): their session is gone. */
+function endAllWaits(): void {
+  for (const turn of [...turns.values()]) endWait(turn);
+}
+
+/** End turn `turnId` with `res`, once. Returns whether it was a turn being waited on. */
+function settle(turnId: string, res: ChatMessageResponse): boolean {
+  const turn = findTurn(turnId);
+  if (!turn) return false;
+  // Ended before applyResponse: an auto-approved plan starts the next turn from inside
+  // it, and that turn must find its conversation's slot free.
+  endWait(turn);
+  if (state.conversationId === turn.conversationId) {
+    applyResponse(res);
+  } else {
+    // Its conversation isn't on screen: the reply is persisted and shows when it is
+    // reopened. Let the history list refresh that conversation's status.
+    bumpHistory();
+  }
+  return true;
+}
+
+function errorResponse(turnId: string, message: string): ChatMessageResponse {
+  return { turn_id: turnId, status: "error", message };
+}
+
+/** Whether a failed POST may still have reached the backend, so the turn may be running:
+ * a network failure (fetch's TypeError), a gateway giving up on a long request, or a 409
+ * (this turn id was already sent, e.g. a retried request: the first copy is running). */
+function mayStillBeRunning(err: unknown): boolean {
+  if (err instanceof ApiError) return [409, 502, 503, 504].includes(err.status);
+  return true;
+}
+
+/** A running turn's state is a lease its worker renews; this is how long it lasts
+ * (`backend/CONTRACT.md`, `GET /api/chat/turns/{turn_id}`). After it, a turn whose worker
+ * died reads 404, so one more read tells "still running" from "will never finish". */
+export const TURN_LEASE_MS = 60_000;
+/** Margin past the lease, so the re-check doesn't land just before it runs out. */
+const RECHECK_MARGIN_MS = 5_000;
+/** Re-checks per turn. One is enough unless the worker died just after renewing, or a
+ * lookup failed outright; the second covers those, and the cap keeps it from polling. */
+export const MAX_RECHECKS = 2;
+
+/**
+ * Ask the backend where turn `turnId` stands, after this tab lost track of it: its POST
+ * failed at the network level, or the event stream reconnected (a `turn_done` sent while
+ * it was down went nowhere). Not a poll:
+ * - `done` settles the turn, and a 404 ends it with an error;
+ * - `running` normally means `turn_done` is still coming. But the worker running it may
+ *   have just died, and its lease outlives it by up to a minute, so another read is
+ *   scheduled after the lease;
+ * - a failed lookup (backend unreachable) schedules the same read: the stream's reconnect
+ *   would also ask, but only if the stream dropped too.
+ * At most `MAX_RECHECKS` such reads per turn; after them `turn_done`, the next reconnect
+ * or Stop ends the wait.
+ */
+async function recoverTurn(turnId: string): Promise<void> {
+  let turn;
   try {
-    const res = await api.sendMessage(body);
-    if (isCurrent()) {
-      applyResponse(res);
-    } else {
-      // Not lost — it's safely persisted server-side and will show up if this
-      // conversation is reopened (see loadConversation) — just not rendered
-      // into whatever conversation is currently on screen. Still worth letting
-      // the history list know something changed (e.g. its status).
-      bumpHistory();
-    }
+    turn = await api.getTurn(turnId);
   } catch (err) {
-    if (isCurrent()) {
-      const text =
+    if (err instanceof ApiError && err.status === 404) {
+      // While the POST is in flight, 404 can mean "not started yet" (or a backend with
+      // no turn lookup), and the POST reply still settles the turn. Otherwise the turn
+      // never started, expired, or its worker stopped: nothing will settle it.
+      if (findTurn(turnId)?.postPending) return;
+      settle(turnId, errorResponse(turnId, "Error communicating with agent."));
+      return;
+    }
+    scheduleRecheck(turnId);
+    return;
+  }
+  if (turn.state === "done" && turn.response) {
+    settle(turnId, turn.response);
+    return;
+  }
+  scheduleRecheck(turnId);
+}
+
+/** Arm the one pending re-check of awaited turn `turnId`, if it has none and any are
+ * left. Not while its POST is in flight: the reply settles it, and a failure looks it up. */
+function scheduleRecheck(turnId: string): void {
+  const turn = findTurn(turnId);
+  if (!turn || turn.postPending || turn.recheck || turn.rechecksLeft <= 0) return;
+  turn.rechecksLeft -= 1;
+  turn.recheck = setTimeout(() => {
+    turn.recheck = null;
+    if (findTurn(turnId) === turn) void recoverTurn(turnId);
+  }, TURN_LEASE_MS + RECHECK_MARGIN_MS);
+}
+
+/** Start a turn in the conversation on screen. Callers return early while it already has
+ * one (`awaiting`): a second would take its slot, and the first one's reply would be
+ * dropped. Other conversations' turns are unaffected. */
+async function post(body: ChatMessageRequest): Promise<void> {
+  const turnId = newTurnId();
+  // The turn belongs to the conversation it was sent from, whatever is on screen when it
+  // ends (see `settle`). The backend guards its session writes the same way
+  // (`services/chat.py`).
+  const conversationId = state.conversationId;
+  if (conversationId === null) return;
+  const turn: AwaitedTurn = {
+    id: turnId,
+    conversationId,
+    postPending: true,
+    rechecksLeft: MAX_RECHECKS,
+    recheck: null,
+  };
+  turns.set(conversationId, turn);
+  set({});
+  try {
+    const res = await api.sendMessage({ ...body, turn_id: turnId });
+    settle(turnId, res);
+  } catch (err) {
+    turn.postPending = false;
+    if (mayStillBeRunning(err)) {
+      await recoverTurn(turnId);
+    } else {
+      const message =
         err instanceof ApiError
           ? `Error communicating with agent: ${err.message}`
           : "Error communicating with agent.";
-      appendError(text);
-    }
-  } finally {
-    if (isCurrent()) {
-      set({ awaiting: false });
+      settle(turnId, errorResponse(turnId, message));
     }
   }
+}
+
+/** A finished turn announced over the event stream (see `turns`). */
+function onTurnDone(e: TurnDoneEvent): void {
+  settle(e.turn_id, e.response);
 }
 
 /** Send a user turn (optionally with staged uploads). */
 async function sendTurn(query: string, uploads: UploadDescriptor[] = []): Promise<void> {
   const text = query.trim();
-  if (!text && uploads.length === 0) return;
+  if (state.awaiting || (!text && uploads.length === 0)) return;
   setItems((items) => [...items, { id: nextId("user"), kind: "user", text: text || "(uploaded file)" }]);
   await post({ query: text, upload_ids: uploads.length ? uploads : null });
 }
 
 /** Answer a needs_info form (keys are FormField.id). */
 async function submitFollowup(itemId: string, answers: Record<string, unknown>): Promise<void> {
+  if (state.awaiting) return;
   let query = "";
   setItems((items) =>
     items.map((it) => {
@@ -564,6 +713,7 @@ async function submitFollowup(itemId: string, answers: Record<string, unknown>):
 
 /** Approve or reject a pending plan. */
 async function decidePlan(itemId: string, approved: boolean): Promise<void> {
+  if (state.awaiting) return;
   setItems((items) =>
     items.map((it) =>
       it.id === itemId && it.kind === "plan" ? { ...it, decided: approved ? "approved" : "rejected" } : it,
@@ -572,9 +722,13 @@ async function decidePlan(itemId: string, approved: boolean): Promise<void> {
   await post({ query: "", plan_approved: approved, plan_rejected: !approved });
 }
 
-/** Client-side stop — no server cancel endpoint exists yet (Decision D). */
+/** Client-side stop of the on-screen conversation's turn — no server cancel endpoint
+ * exists yet (Decision D). */
 function stop(): void {
-  set({ awaiting: false });
+  const turn = onScreenTurn();
+  if (!turn) return;
+  finalizeTurnProgress(turn.id);
+  endWait(turn);
 }
 
 /** New chat: fresh conversation_id + cleared transcript (no full reload). */
@@ -583,8 +737,9 @@ async function reset(profile?: string): Promise<void> {
   awaitedTaskIds.clear();
   // Clearing `resumingConversationId` drops the spinner of any resume still in
   // flight; taking a new bind seq supersedes it, so it can apply neither its
-  // transcript here nor its binding on the server.
-  set({ items: [], awaiting: false, resumingConversationId: null });
+  // transcript here nor its binding on the server. A running turn keeps running: its
+  // conversation shows it again when reopened (see `turns`).
+  set({ items: [], resumingConversationId: null });
   const seq = nextBindSeq();
   try {
     const session = await api.createSession(profile, seq);
@@ -603,7 +758,7 @@ async function reset(profile?: string): Promise<void> {
 async function loadConversation(conversationId: string): Promise<void> {
   disconnect();
   awaitedTaskIds.clear();
-  set({ items: [], awaiting: false });
+  set({ items: [] });
   const seq = nextBindSeq();
   try {
     await applyResume(conversationId, seq);
@@ -642,7 +797,8 @@ export const chatStore = {
     nextBindSeq(); // supersede an in-flight rebind; its session is gone
     bootstrapGen += 1; // and an in-flight bootstrap, so it cannot mark the store ready
     bootstrapping = false;
-    set({ ready: false, authLost: false, awaiting: false, resumingConversationId: null, items: [] });
+    endAllWaits();
+    set({ ready: false, authLost: false, resumingConversationId: null, items: [] });
   },
   /** Drop every trace of the signed-in user's chat: close the stream, forget
    * awaited tasks and the remembered conversation id, and reset state. Called
@@ -655,6 +811,7 @@ export const chatStore = {
     saveOpenConversationId(null);
     bootstrapGen += 1;
     bootstrapping = false;
+    endAllWaits();
     state = initialState;
     emit();
   },

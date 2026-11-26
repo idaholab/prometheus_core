@@ -470,6 +470,8 @@ export function Chat({ scrollContainerRef }: ChatProps) {
   };
 
   const handleSend = (content = input.trim()) => {
+    // One turn at a time (the store refuses too); keep the draft until this one ends.
+    if (awaiting) return;
     if (!content && !readyDescriptors.length) return;
     if (uploadingCount > 0) return;
     followLatestRef.current = true;
