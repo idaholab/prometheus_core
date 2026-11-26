@@ -210,6 +210,17 @@ test("a dropped POST the backend never saw ends the turn with an error", async (
   void id;
 });
 
+test("a 409 (turn id already sent) keeps waiting for the running copy's turn_done", async () => {
+  const id = await send("q");
+  getTurn = async () => ({ turn_id: id, state: "running" });
+  sends[0].reply.reject(new ApiError(409, "This session already sent a turn with this turn_id"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:q"]);
+  assert.equal(readState().awaiting, true);
+  stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+  assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+});
+
 test("a backend error reply is shown as is, with no lookup", async () => {
   await send("q");
   sends[0].reply.reject(new ApiError(422, "bad request"));

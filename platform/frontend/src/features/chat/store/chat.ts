@@ -542,9 +542,10 @@ function errorResponse(turnId: string, message: string): ChatMessageResponse {
 }
 
 /** Whether a failed POST may still have reached the backend, so the turn may be running:
- * a network failure (fetch's TypeError) or a gateway giving up on a long request. */
+ * a network failure (fetch's TypeError), a gateway giving up on a long request, or a 409
+ * (this turn id was already sent, e.g. a retried request: the first copy is running). */
 function mayStillBeRunning(err: unknown): boolean {
-  if (err instanceof ApiError) return err.status === 502 || err.status === 503 || err.status === 504;
+  if (err instanceof ApiError) return [409, 502, 503, 504].includes(err.status);
   return true;
 }
 
