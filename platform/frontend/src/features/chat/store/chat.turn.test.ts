@@ -459,14 +459,25 @@ test("repeated reconnects keep a single pending re-check", async () => {
       return { turn_id: id, state: "running" };
     };
     sends[0].reply.reject(new TypeError("Failed to fetch"));
-    await flush();
+    await flush(); // the POST failure's lookup arms the re-check
+    await vi.advanceTimersByTimeAsync(30_000);
     stream().onOpen?.();
+    await flush();
+    await vi.advanceTimersByTimeAsync(10_000);
     stream().onOpen?.();
     await flush();
     assert.equal(looked.length, 3, "each reconnect reads once");
-    await vi.advanceTimersByTimeAsync(2 * TURN_LEASE_MS);
-    await flush();
-    assert.equal(looked.length, 4, "but only one re-check is scheduled");
+    // Still the first one: due 65 s after the first lookup, not after a reconnect.
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 5_000 - 40_000 - 1);
+    assert.equal(looked.length, 3, "not before it is due");
+    await vi.advanceTimersByTimeAsync(1);
+    assert.equal(looked.length, 4, "the one re-check, on time");
+    // A reconnect that armed its own timer would fire at 30 s + 65 s = 95 s. The next
+    // re-check comes 65 s after the first one (130 s), and it is the last.
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS);
+    assert.equal(looked.length, 4, "no second timer from the reconnects");
+    await vi.advanceTimersByTimeAsync(10 * TURN_LEASE_MS);
+    assert.equal(looked.length, 5, "one lookup per reconnect, plus the capped re-checks");
   } finally {
     vi.useRealTimers();
   }
