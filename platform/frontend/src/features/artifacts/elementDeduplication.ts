@@ -30,19 +30,29 @@ function stringProp(element: DeduplicatedElement, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+// An artifact id names exactly one artifact, so it outranks every other signal: two
+// artifacts that only share a display name (two "plot.png"s, two JSON results called
+// "result") are different resources and must both render. The same artifact delivered
+// twice still collapses, because both copies carry its id.
 function resourceSignature(element: DeduplicatedElement): string {
+  const artifactId = stringProp(element, "artifact_id") || stringProp(element, "artifactId");
   if (element.type === "custom") {
     const component = (element.name ?? "").trim();
     const resource =
-      stringProp(element, "name") ||
+      artifactId ||
       stringProp(element, "datasetId") ||
-      stringProp(element, "artifactId") ||
-      stringProp(element, "artifact_id") ||
-      stringProp(element, "baseUrl");
+      stringProp(element, "baseUrl") ||
+      stringProp(element, "name");
     return [component, resource].filter(Boolean).join(":").toLowerCase();
   }
 
-  return ((element.name ?? "").trim() || element.url || element.path || elementId(element)).toLowerCase();
+  return (
+    artifactId ||
+    element.url ||
+    element.path ||
+    (element.name ?? "").trim() ||
+    elementId(element)
+  ).toLowerCase();
 }
 
 function duplicateKey(element: DeduplicatedElement): string {
