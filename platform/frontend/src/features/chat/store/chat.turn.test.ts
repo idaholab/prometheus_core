@@ -106,9 +106,17 @@ beforeEach(async () => {
   };
   sends = [];
   getTurn = () => Promise.reject(new Error("getTurn not expected"));
+  let sessions = 0;
   g.__chatTestApi = {
     getConfig: async () => ({}),
-    createSession: async () => ({ conversation_id: "conv-A", auto_approve_steps: false }),
+    // The first session is conv-A; each New chat after it is a fresh conversation.
+    createSession: async () => {
+      sessions += 1;
+      return {
+        conversation_id: sessions === 1 ? "conv-A" : `conv-new-${sessions}`,
+        auto_approve_steps: false,
+      };
+    },
     getRecentConversations: async () => ({ conversations: [] }),
     resumeConversation: async (id) => ({
       conversation_id: id,
@@ -572,21 +580,96 @@ test("another tab's status events add no progress step", async () => {
 
 /* --- the other ways a wait ends, and a stopped turn's pause ------------------------- */
 
-test("switching away and back ignores the old turn's turn_done", async () => {
+test("switching away and back to a running turn waits for it again, and shows its reply", async () => {
   const id = await send("q");
   await chatStore.loadConversation("conv-B");
+  assert.equal(readState().awaiting, false, "conv-B has no turn running");
   await chatStore.loadConversation("conv-A");
+  assert.equal(readState().awaiting, true, "conv-A's turn is still running");
   stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
-  assert.deepEqual(kinds(), []);
+  assert.deepEqual(kinds(), ["assistant:a"]);
   assert.equal(readState().awaiting, false);
 });
 
-test("a new chat ignores the old turn's turn_done", async () => {
+test("a turn that ends while its conversation is away only refreshes the history list", async () => {
   const id = await send("q");
-  await chatStore.reset();
+  await chatStore.loadConversation("conv-B");
+  const version = readState().historyVersion as number;
   stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
   assert.deepEqual(kinds(), []);
+  assert.equal(readState().historyVersion, version + 1);
+  await chatStore.loadConversation("conv-A");
+  assert.equal(readState().awaiting, false, "its reply comes from the transcript now");
+});
+
+test("a new chat can send while the previous conversation's turn runs", async () => {
+  const first = await send("q");
+  await chatStore.reset();
   assert.equal(readState().awaiting, false);
+  const second = await send("q2");
+  assert.equal(sends.length, 2);
+  stream().onTurnDone?.({ type: "turn_done", turn_id: first, response: answer(first, "a") });
+  assert.deepEqual(kinds(), ["user:q2"], "conv-A's reply doesn't land in the new chat");
+  assert.equal(readState().awaiting, true, "the new chat's own turn still runs");
+  sends[1].reply.resolve(answer(second, "a2"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:q2", "assistant:a2"]);
+});
+
+test("each conversation waits on its own turn", async () => {
+  const a = await send("qa");
+  await chatStore.loadConversation("conv-B");
+  const b = await send("qb");
+  assert.equal(sends.length, 2, "sending in conv-B isn't blocked by conv-A's turn");
+
+  sends[0].reply.resolve(answer(a, "ra"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:qb"]);
+  assert.equal(readState().awaiting, true);
+
+  sends[1].reply.resolve(answer(b, "rb"));
+  await tick();
+  assert.deepEqual(kinds(), ["user:qb", "assistant:rb"]);
+  assert.equal(readState().awaiting, false);
+});
+
+test("stop ends only the turn of the conversation on screen", async () => {
+  await send("qa");
+  await chatStore.loadConversation("conv-B");
+  await send("qb");
+  chatStore.stop();
+  assert.equal(readState().awaiting, false);
+  await chatStore.loadConversation("conv-A");
+  assert.equal(readState().awaiting, true, "conv-A's turn is still awaited");
+});
+
+test("a reconnect looks up every awaited turn", async () => {
+  const a = await send("qa");
+  await chatStore.loadConversation("conv-B");
+  const b = await send("qb");
+  const looked: string[] = [];
+  getTurn = async (t) => {
+    looked.push(t);
+    return { turn_id: t, state: "running" };
+  };
+  stream().onOpen?.();
+  await tick();
+  assert.deepEqual(looked.sort(), [a, b].sort());
+});
+
+test("another conversation's status adds no step; back on it, the next status does", async () => {
+  const a = await send("qa");
+  await chatStore.loadConversation("conv-B");
+  stream().onStatus?.({ type: "status", turn_id: a, message: "Calling an agent" });
+  assert.deepEqual(kinds(), []);
+  await chatStore.loadConversation("conv-A");
+  stream().onStatus?.({
+    type: "status",
+    turn_id: a,
+    message: "Still going",
+    history: ["Calling an agent", "Still going"],
+  });
+  assert.deepEqual(kinds(), ["tool"]);
 });
 
 test("after suspendForReauth the old turn is no longer awaited", async () => {
