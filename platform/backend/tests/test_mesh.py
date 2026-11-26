@@ -488,3 +488,25 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
     # Second call is a cache hit (manifest already present) — same id, still valid.
     dataset_id2, _, _ = service._convert_sync(stl_path, cache_root, "sphere.stl", "", "model/stl")
     assert dataset_id2 == dataset_id
+
+
+def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path):
+    """VTK reads an unparseable file as an empty mesh rather than raising; that must
+    not be cached as the file's mesh, or every later view serves it."""
+    pytest.importorskip("vtk")
+    from app.services.mesh.cache import is_cached
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    request = ConvertRequest(input_path=bad, output_dir=cache_root, timestep_mode="all")
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        convert_exodus(request, cache_root=cache_root)
+
+    assert not any(is_cached(cache_root, d.name) for d in cache_root.iterdir())
+    assert not any(cache_root.iterdir())

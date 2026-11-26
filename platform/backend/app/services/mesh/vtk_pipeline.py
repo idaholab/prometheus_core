@@ -203,10 +203,16 @@ def run_conversion(request: ConvertRequest) -> dict:
     if not input_path.exists():
         raise InvalidExodusFileError(f"File not found: {input_path}")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     reader = create_exodus_reader(input_path)
     metadata = extract_metadata(reader)
+    # VTK's Exodus reader logs an error but does not raise on a file it can't open: it
+    # yields an empty mesh. Converting that would write a manifest, which the
+    # content-hash cache then serves as this file's mesh forever. Refuse before
+    # anything is written.
+    if not metadata.num_nodes:
+        raise InvalidExodusFileError(f"No geometry read from {input_path.name}; not a readable Exodus II file")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Disable all result arrays, then enable the requested ones (or all if none named).
     for name in metadata.nodal_variables:
