@@ -48,7 +48,12 @@ vi.mock("@/lib/api/client", () => {
   }
   const api = new Proxy(
     {},
-    { get: (_t, k: string) => (...a: unknown[]) => (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a) },
+    {
+      get:
+        (_t, k: string) =>
+        (...a: unknown[]) =>
+          (globalThis as unknown as { __chatTestApi: Api }).__chatTestApi[k](...a),
+    },
   );
   return { ApiError: StubApiError, api };
 });
@@ -65,7 +70,8 @@ const g = globalThis as unknown as {
 tapChatState();
 const readState = () => g.__chatTestTap();
 const items = () => readState().items as Item[];
-const kinds = () => items().map((it) => (it.kind === "assistant" || it.kind === "user" ? `${it.kind}:${it.text}` : it.kind));
+const kinds = () =>
+  items().map((it) => (it.kind === "assistant" || it.kind === "user" ? `${it.kind}:${it.text}` : it.kind));
 const stream = () => {
   assert.ok(g.__chatTestStream, "stream not connected");
   return g.__chatTestStream;
@@ -104,7 +110,12 @@ beforeEach(async () => {
     getConfig: async () => ({}),
     createSession: async () => ({ conversation_id: "conv-A", auto_approve_steps: false }),
     getRecentConversations: async () => ({ conversations: [] }),
-    resumeConversation: async (id) => ({ conversation_id: id, auto_approve_steps: false, messages: [], artifacts: [] }),
+    resumeConversation: async (id) => ({
+      conversation_id: id,
+      auto_approve_steps: false,
+      messages: [],
+      artifacts: [],
+    }),
     sendMessage: (body) => {
       const reply = deferred<ChatMessageResponse>();
       sends.push({ body: body as ChatMessageRequest, reply });
@@ -229,7 +240,11 @@ test("a stream (re)connect with no turn in flight reads nothing", async () => {
 
 test("another turn's turn_done (another tab) is ignored", async () => {
   await send("q");
-  stream().onTurnDone?.({ type: "turn_done", turn_id: "other-tab-turn", response: answer("other-tab-turn", "x") });
+  stream().onTurnDone?.({
+    type: "turn_done",
+    turn_id: "other-tab-turn",
+    response: answer("other-tab-turn", "x"),
+  });
   assert.deepEqual(kinds(), ["user:q"]);
   assert.equal(readState().awaiting, true);
 });

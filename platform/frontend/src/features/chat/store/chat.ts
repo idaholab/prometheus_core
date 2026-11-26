@@ -613,7 +613,9 @@ async function post(body: ChatMessageRequest): Promise<void> {
       await recoverTurn(turnId);
     } else {
       const message =
-        err instanceof ApiError ? `Error communicating with agent: ${err.message}` : "Error communicating with agent.";
+        err instanceof ApiError
+          ? `Error communicating with agent: ${err.message}`
+          : "Error communicating with agent.";
       settle(turnId, errorResponse(turnId, message));
     }
   }
