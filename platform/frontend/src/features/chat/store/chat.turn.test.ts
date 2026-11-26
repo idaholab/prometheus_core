@@ -467,3 +467,30 @@ test("a second send while a turn is running is refused, so the first reply still
   assert.deepEqual(kinds(), ["user:first", "assistant:R1"]);
   assert.equal(readState().awaiting, false);
 });
+
+test("stop finishes the turn's progress step, and the stopped turn's later status is ignored", async () => {
+  const id = await send("q");
+  const tools = () => items().filter((it) => it.kind === "tool") as { done?: boolean; name?: string }[];
+  stream().onStatus?.({ type: "status", turn_id: id, message: "Calling an agent" });
+  assert.deepEqual(
+    tools().map((t) => t.done),
+    [false],
+  );
+
+  chatStore.stop();
+  assert.deepEqual(
+    tools().map((t) => t.done),
+    [true],
+  );
+  stream().onStatus?.({ type: "status", turn_id: id, message: "Still going" });
+  assert.deepEqual(
+    tools().map((t) => [t.name, t.done]),
+    [["Calling an agent", true]],
+  );
+});
+
+test("another tab's status events add no progress step", async () => {
+  await send("q");
+  stream().onStatus?.({ type: "status", turn_id: "other-tab-turn", message: "x" });
+  assert.deepEqual(kinds(), ["user:q"]);
+});

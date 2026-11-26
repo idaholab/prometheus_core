@@ -322,6 +322,9 @@ function appendError(text: string): void {
 // --- SSE handlers -----------------------------------------------------------
 
 function onStatus(e: StatusEvent): void {
+  // Only the awaited turn's progress: a stopped turn, a settled one, or another tab's
+  // would otherwise update or re-create a step that never finishes.
+  if (activeTurn?.id !== e.turn_id) return;
   const history = e.history ?? [e.message];
   setItems((items) => {
     const idx = items.findIndex((it) => it.kind === "tool" && it.turnId === e.turn_id);
@@ -671,6 +674,7 @@ async function decidePlan(itemId: string, approved: boolean): Promise<void> {
 
 /** Client-side stop — no server cancel endpoint exists yet (Decision D). */
 function stop(): void {
+  if (activeTurn) finalizeTurnProgress(activeTurn.id);
   activeTurn = null;
   cancelRecheck();
   set({ awaiting: false });
