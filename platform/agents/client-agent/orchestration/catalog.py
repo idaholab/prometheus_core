@@ -98,7 +98,9 @@ def _advertised_parameters(input_schema: Dict[str, Any]) -> Dict[str, Any]:
     properties_by_path = flatten_schema_properties(schema)
     for path, mode in extract_artifact_field_paths(schema).items():
         prop = properties_by_path.get(path)
-        if prop is None:
+        # Both helpers walk the schema the same way, so every artifact path has a
+        # property; the guard only protects against a future divergence.
+        if prop is None:  # pragma: no cover
             continue
         hint = (
             "List of artifact_ids of existing conversation artifacts."
