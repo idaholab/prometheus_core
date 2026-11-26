@@ -45,6 +45,7 @@ import type {
 } from "@/lib/api/types";
 import { artifactsPerTurn } from "./transcriptArtifacts";
 import { readOpenConversationId, saveOpenConversationId } from "./openConversation";
+import { newTurnId } from "./turnId";
 
 // --- item model -------------------------------------------------------------
 
@@ -599,7 +600,7 @@ async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<
 }
 
 async function post(body: ChatMessageRequest): Promise<void> {
-  const turnId = crypto.randomUUID();
+  const turnId = newTurnId();
   // The conversation is captured now: if the user switches before the turn ends,
   // the result belongs to this one, not to whatever is on screen (see `settle`). The
   // backend applies the same guard to its own session writes (`services/chat.py`).
