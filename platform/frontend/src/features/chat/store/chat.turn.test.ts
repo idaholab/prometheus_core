@@ -20,7 +20,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { ApiError } from "@/lib/api/client";
 import type { EventStreamHandlers } from "@/lib/api/events";
 import type { ChatMessageRequest, ChatMessageResponse } from "@/lib/api/types";
-import { TURN_LEASE_MS, chatStore, useChatState as tapChatState } from "./chat.ts";
+import { MAX_RECHECKS, TURN_LEASE_MS, chatStore, useChatState as tapChatState } from "./chat.ts";
 
 vi.mock("react", () => ({
   useSyncExternalStore: (_sub: unknown, get: () => unknown) => {
@@ -326,7 +326,7 @@ test("an auto-approved plan delivered by turn_done starts the next turn", async 
   assert.equal(readState().awaiting, true, "the approval turn is in flight");
 });
 
-/* --- the one re-check after the lease (backend/CONTRACT.md, GET /api/chat/turns) -------- */
+/* --- the re-checks after the lease (backend/CONTRACT.md, GET /api/chat/turns) -------- */
 
 /** Flush the promise chain a timer callback starts. */
 const flush = async () => {
@@ -362,7 +362,7 @@ test("a 'running' lookup is checked once more after the lease; a dead worker's t
   }
 });
 
-test("the re-check happens once: a live turn answering 'running' again isn't polled", async () => {
+test("re-checks are capped: a live turn answering 'running' again isn't polled", async () => {
   const id = await send("q");
   vi.useFakeTimers();
   try {
@@ -375,10 +375,52 @@ test("the re-check happens once: a live turn answering 'running' again isn't pol
     await flush();
     await vi.advanceTimersByTimeAsync(10 * TURN_LEASE_MS);
     await flush();
-    assert.deepEqual(looked, [id, id], "one lookup, one re-check, nothing more");
+    assert.equal(looked.length, 1 + MAX_RECHECKS, "one lookup, the capped re-checks, nothing more");
     assert.equal(readState().awaiting, true);
 
     stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+    assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a lookup that fails outright after a dropped POST is retried after the lease", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    getTurn = async () => {
+      reads += 1;
+      if (reads === 1) throw new TypeError("Failed to fetch"); // backend briefly unreachable
+      return { turn_id: id, state: "done", response: answer(id, "a") };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await vi.advanceTimersByTimeAsync(0);
+    assert.equal(readState().awaiting, true);
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 10_000);
+    assert.equal(reads, 2);
+    assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("no re-check is armed while the POST is in flight", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    getTurn = async () => {
+      reads += 1;
+      return { turn_id: id, state: "running" };
+    };
+    stream().onOpen?.(); // a reconnect mid-turn reads once
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(3 * TURN_LEASE_MS);
+    assert.equal(reads, 1, "the pending POST settles the turn, not a timer");
+    sends[0].reply.resolve(answer(id, "a"));
+    await vi.advanceTimersByTimeAsync(0);
     assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
   } finally {
     vi.useRealTimers();

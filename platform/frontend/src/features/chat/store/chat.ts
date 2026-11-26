@@ -519,7 +519,7 @@ function disconnect(): void {
  * turn's late reply, and another tab's `turn_done` are all ignored. `settle()`, `stop()`,
  * `reset()`, `loadConversation()` and the auth teardowns end the wait with `endWait()`.
  */
-let activeTurn: { id: string; postPending: boolean } | null = null;
+let activeTurn: { id: string; postPending: boolean; rechecksLeft: number } | null = null;
 
 /** Stop waiting on the active turn: `activeTurn`, its pending re-check and `awaiting`
  * always change together, here. */
@@ -557,6 +557,8 @@ function mayStillBeRunning(err: unknown): boolean {
 export const TURN_LEASE_MS = 60_000;
 /** Margin past the lease, so the re-check doesn't land just before it runs out. */
 const RECHECK_MARGIN_MS = 5_000;
+/** Re-checks per turn, so a turn is never polled. */
+export const MAX_RECHECKS = 1;
 
 /** The single pending re-check, for `activeTurn` only. */
 let recheck: { turnId: string; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -572,11 +574,14 @@ function cancelRecheck(): void {
  * it was down went nowhere). Not a poll:
  * - `done` settles the turn, and a 404 ends it with an error;
  * - `running` normally means `turn_done` is still coming. But the worker running it may
- *   have just died, and its lease outlives it by up to a minute, so one more read is
- *   scheduled after the lease. That read never schedules another: `running` again means
- *   the turn is alive, and `turn_done` or the next reconnect covers it.
+ *   have just died, and its lease outlives it by up to a minute, so another read is
+ *   scheduled after the lease;
+ * - a failed lookup (backend unreachable) schedules the same read: the stream's reconnect
+ *   would also ask, but only if the stream dropped too.
+ * At most `MAX_RECHECKS` such reads per turn; after them `turn_done`, the next reconnect
+ * or Stop ends the wait.
  */
-async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<void> {
+async function recoverTurn(turnId: string): Promise<void> {
   let turn;
   try {
     turn = await api.getTurn(turnId);
@@ -585,22 +590,31 @@ async function recoverTurn(turnId: string, { isRecheck = false } = {}): Promise<
       // While the POST is in flight, 404 can mean "not started yet" (or a backend with
       // no turn lookup), and the POST reply still settles the turn. Otherwise the turn
       // never started, expired, or its worker stopped: nothing will settle it.
-      if (!isRecheck && activeTurn?.id === turnId && activeTurn.postPending) return;
+      if (activeTurn?.id === turnId && activeTurn.postPending) return;
       settle(turnId, errorResponse(turnId, "Error communicating with agent."));
+      return;
     }
-    return; // unreachable backend: the stream's reconnect calls this again
+    scheduleRecheck(turnId);
+    return;
   }
   if (turn.state === "done" && turn.response) {
     settle(turnId, turn.response);
     return;
   }
-  if (isRecheck || activeTurn?.id !== turnId || recheck?.turnId === turnId) return;
-  cancelRecheck();
+  scheduleRecheck(turnId);
+}
+
+/** Arm the one pending re-check of the active turn `turnId`, if none is and any are left.
+ * Not while its POST is in flight: the reply settles the turn, and a failure looks it up. */
+function scheduleRecheck(turnId: string): void {
+  const turn = activeTurn;
+  if (turn?.id !== turnId || turn.postPending || recheck || turn.rechecksLeft <= 0) return;
+  turn.rechecksLeft -= 1;
   recheck = {
     turnId,
     timer: setTimeout(() => {
       recheck = null;
-      if (activeTurn?.id === turnId) void recoverTurn(turnId, { isRecheck: true });
+      if (activeTurn?.id === turnId) void recoverTurn(turnId);
     }, TURN_LEASE_MS + RECHECK_MARGIN_MS),
   };
 }
@@ -613,7 +627,7 @@ async function post(body: ChatMessageRequest): Promise<void> {
   // ever settles into the conversation it was sent from. The reply is persisted and shows
   // when that conversation is reopened; the backend guards its own session writes the
   // same way (`services/chat.py`).
-  activeTurn = { id: turnId, postPending: true };
+  activeTurn = { id: turnId, postPending: true, rechecksLeft: MAX_RECHECKS };
   set({ awaiting: true });
   try {
     const res = await api.sendMessage({ ...body, turn_id: turnId });
