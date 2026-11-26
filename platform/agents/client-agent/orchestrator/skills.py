@@ -16,7 +16,7 @@ import json
 from typing import Any, Dict
 
 from capability_cache import get_capability_cache
-from param_schema import (
+from orchestration.param_schema import (
     extract_required_param_paths,
     has_param_path,
     normalize_params_for_input_schema,

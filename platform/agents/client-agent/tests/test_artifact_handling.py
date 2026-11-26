@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 
-from artifact_handling import merge_artifact_catalogs
+from orchestration.artifact_handling import merge_artifact_catalogs
 
 
 def test_merge_artifact_catalogs_preserves_existing_and_incoming() -> None:

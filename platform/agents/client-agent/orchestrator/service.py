@@ -23,7 +23,7 @@ from prometheus_api.agent import ArtifactReference, EventQueue, PrometheusAgent,
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from artifact_handling import merge_artifact_catalogs
+from orchestration.artifact_handling import merge_artifact_catalogs
 from capability_cache import get_capability_cache
 from conversation_store import get_conversation, record_turn_artifacts
 from workflow_library import get_workflow_registry, verify_workflow_source_health

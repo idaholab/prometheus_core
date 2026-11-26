@@ -16,7 +16,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["orchestrator*", "workflow_library*"]
+include = ["orchestration*", "orchestrator*", "workflow_library*"]
 
 [tool.coverage.run]
 source = ["."]

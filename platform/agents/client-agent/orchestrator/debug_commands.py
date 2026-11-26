@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import task_graph
-from artifact_handling import merge_artifact_catalogs, summarize_artifacts_for_context
+from orchestration.artifact_handling import merge_artifact_catalogs, summarize_artifacts_for_context
 from capability_cache import get_capability_cache
 from tool_discovery import discover_agents
 from workflow_library import get_workflow_registry, workflow_slug

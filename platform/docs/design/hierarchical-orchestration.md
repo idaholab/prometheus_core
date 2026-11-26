@@ -2,11 +2,11 @@
 
 | | |
 | --- | --- |
-| **Status** | Design, not built. Proposed 2026-11-18. |
+| **Status** | Design. Proposed 2026-11-18; refactor split decided 2026-11-24 (D-11 to D-13). Step 4a in progress, nothing else built. |
 | **Approver** | Daniel Schwen |
 | **Jira** | Not yet filed. Tasks are listed in [section 13](#13-implementation-plan). |
 | **Related** | [Mid-Execution User Approval](user-approval.md) (the approval record that this design carries across levels), [Request-Scoped Agent Objects and Backend Task State](request-scoped-agent.md) (the per-task state store that sub-orchestrators use), [agent-loop-orchestration.md](../docs/dev-docs/agent-loop-orchestration.md) (today's loop) |
-| **Depends on** | The user-approval build (PPLT-390 to PPLT-395) and the agent-state API with its SDK client (branches `feat/agent-state-api`, `feat/agent-state-sdk-client`, `feat/agent-state-sdk-context`). None of these is merged to `devel` yet. |
+| **Depends on** | The user-approval build (PPLT-390 to PPLT-395) and the agent-state API with its SDK client (branches `feat/agent-state-api`, `feat/agent-state-sdk-client`, `feat/agent-state-sdk-context`). None of these is merged to `devel` yet. The loop refactor (steps 4a–6b) depends on none of them. |
 
 Today the platform has a single orchestrator, the client-agent. It sees every
 specialist skill as one flat list of tools. This document proposes
@@ -66,8 +66,8 @@ sub-orchestrator bundles.
 
 **Goals**
 
-- G-1. The generic loop lives in the SDK as a base class, and the client-agent
-  becomes one subclass of it.
+- G-1. The generic loop lives in the SDK as a base class, `PrometheusOrchestrator`,
+  and the client-agent becomes one subclass of it, `TopLevelOrchestrator`.
 - G-2. A new domain orchestrator is configuration only (a card, a prompt and an
   agent allowlist) and needs no new Python.
 - G-3. Hierarchies of any depth, with no cycles.
@@ -103,8 +103,16 @@ sub-orchestrator bundles.
 | D-6 | **A sub-orchestrator's own `requires_approval` pause is an in-flight `request_user_approval`**, not a final `INPUT_REQUIRED`. | No state to persist; reuses the approval card and record as they are. |
 | D-7 | **Answers route down by path-prefixed question ids** (`c2/c5/inlet_temperature`). | Deterministic, no name clashes, no new backend store. |
 | D-8 | **The orchestrator base class lives in the SDK** (`prometheus_api.orchestration`). | Reusable by any agent, including outside the platform (for example `bim_agent`). |
-| D-9 | **A level in between may fill a child's missing inputs only from what it already holds** (its brief, its own earlier results, artifacts), recorded as `inputSource=context`. It never fills inputs marked user-only and never invents a value; everything else goes up unchanged. | Fewer interruptions without hiding guesses from the user. |
+| D-9 | **A level in between may fill a child's missing inputs only from what it already holds** (its brief, its own earlier results, artifacts), recorded as `inputSource=context`. It never fills inputs marked user-only and never invents a value; everything else goes up unchanged. How it decides is D-13. | Fewer interruptions without hiding guesses from the user. |
 | D-10 | **A sub-orchestrator's paused loop state lives in the backend agent-state API, keyed by its own A2A `taskId`.** | Agents never touch Valkey ([request-scoped RS-5](request-scoped-agent.md#2-decisions-2026-11-06)); state is owner-checked and versioned; it survives a restart. |
+
+**Decisions of 2026-11-24 (the refactor):**
+
+| # | Decision | Rationale |
+| --- | --- | --- |
+| D-11 | **Shape in place, then lift.** The generic code is first gathered in an SDK-shaped package, `agents/client-agent/orchestration/`, which may not import any client-agent module or Valkey (an import-guard test enforces it). When it is self-contained, it is copied into `prometheus_api.orchestration` and the client-agent switches over with one base-image bump. | Each step is a small, mostly-rename PR that changes no behaviour, and fixing a seam needs no base-image bump. |
+| D-12 | **Workflow templates stay top-level only.** `workflow_library`, workflow tools and the workflow endpoints remain in the client-agent and plug into the loop through the `extra_tools` hook. | Keeps the SDK free of the registry's Redis and health checks; a workflow step can still call `delegate` (Q-7). |
+| D-13 | **A sub-orchestrator handles a child's `INPUT_REQUIRED` with rules first, then its LLM.** Rules fill what they can (`known_facts`, earlier results, `resolvable_from_context`). What is left goes to the LLM as a tool result for one turn: it answers from its own context (recorded as `inputSource=context` and listed in `assumptions`) or calls `request_context` to pass the questions up. Only the top level ever talks to the user. | The rules catch exact matches cheaply; the LLM catches what only domain knowledge links, and every value it supplies stays visible. |
 
 ## 4. Architecture
 
@@ -131,15 +139,17 @@ as there is no cycle.
 
 ```mermaid
 classDiagram
-  PrometheusAgent <|-- OrchestratorBase
-  OrchestratorBase <|-- TopLevelOrchestrator
-  OrchestratorBase <|-- SubOrchestrator
-  OrchestratorBase o-- LoopStateStore
+  PrometheusAgent <|-- PrometheusOrchestrator
+  PrometheusOrchestrator <|-- TopLevelOrchestrator
+  PrometheusOrchestrator <|-- SubOrchestrator
+  PrometheusOrchestrator o-- LoopStateStore
   LoopStateStore <|.. ConversationLoopStore
   LoopStateStore <|.. AgentStateLoopStore
-  class OrchestratorBase {
+  class PrometheusOrchestrator {
     +system_prompt(state) str
     +select_tools(capabilities, call_chain) list
+    +handle_blocked(state, catalog) outcome
+    +handle_approval(state, catalog) outcome
     +render_outcome(outcome) result
     +advance(state, catalog)
   }
@@ -155,37 +165,64 @@ classDiagram
   }
 ```
 
-- **`prometheus_api.orchestration.OrchestratorBase(PrometheusAgent)`** holds:
-  - the tool catalog (`build_tool_catalog`, `_skill_spec`);
-  - the loop and its pause/resume state machine (`advance`, `_drive_batch`,
-    `_refresh_status`, `_settle_skill_item`, `apply_answers`, `apply_reply`);
-  - skill dispatch (`invoke_skill`, `call_a2a_agent`);
-  - Task Graph tracking;
-  - the relay that forwards a child's interaction event upward
-    ([section 8](#8-approvals-across-levels));
-  - call-chain handling ([section 6](#6-call-chain-metadata)).
-- **Hooks for subclasses:**
-  - `system_prompt(state)`: the prompt template, rendered with the artifact
-    catalog and recent skill inputs (today's `_system_prompt`, `agent_loop.py:496`).
-  - `select_tools(capabilities, call_chain)`: filtering for visibility, cycles
-    and depth ([section 5.2](#52-visibility-and-allowlists)).
-  - `LoopStateStore`: where paused state lives.
-  - `render_outcome(outcome)`: how a finished, paused or failed loop is
-    returned to the caller.
-- **`TopLevelOrchestrator`** is the client-agent. It keeps:
-  - the `ConversationRequest` ↔ loop mapping (`chat_flow.chat`, `_respond`);
-  - the `conversation:{id}` store (`ConversationLoopStore`);
-  - uploads, workflow endpoints, slash commands and titles;
-  - background detach and the ownership check.
-  Its `render_outcome` produces `needs_info`, `plan_ready`, `completed`, `answer`
-  and `error`.
-- **`SubOrchestrator`** is the new `agents/sub-orchestrator` image. It:
-  - loads one bundle at startup;
-  - exposes a single `delegate` skill;
-  - stores paused state through `AgentStateLoopStore`
-    (`/v1/agent-state/tasks/{task_id}`);
-  - turns its outcome into A2A: a result artifact on completion, a final
-    `INPUT_REQUIRED` on a form pause, and a failed task on error.
+#### What moves into `PrometheusOrchestrator`
+
+Everything every level needs:
+
+| Area | Today | Notes |
+| --- | --- | --- |
+| Tool catalog from skills | `agent_loop.py`: `ToolSpec`, `_tool_name`, `_unique_tool_name`, `_clean_schema`, `_advertised_parameters`, `_skill_spec`, `build_tool_catalog` (the skill part) | Workflow and `ask_user` specs come in through hooks |
+| Schema and artifact helpers | `param_schema.py`, `artifact_handling.py` | No dependencies |
+| Call lifecycle | `_call_record`, `_new_call`, `_validation_problem`, `_missing_user_inputs`, `_refresh_status`, `_finish`, `CallStatus`, `USER_BLOCKING` | |
+| Transcript | `llm_view`, `trim_transcript`, `commit_batch` | |
+| Skill execution | `_invocation_params`, `_run_skill`, `_settle_skill_item` (with the `resolvable_from_context` auto-resume), `_resolve_from_context`, `_a2a_resume_fields`, `_blocked_record`, `_compact_result`, `_record_result`, `_run_call` | The rule-based fill (D-13) is generic |
+| Batch and loop | `_drive_batch`, `advance`, `LoopOutcome` | Its pause points call `handle_blocked` and `handle_approval` |
+| Answers and approval | `apply_answers` (skill `needs_args`, `waiting_input`), `coerce_answer`, `approve_pending`, `reject_pending`, `_form_questions` (skill and specialist questions), `_plan` | |
+| Dispatch | `skills.py` (`invoke_skill`, `find_tool_for_skill`); from `tool_discovery.py`: `call_a2a_agent`, `StructuredTool`, `create_tool_from_skill`, `get_all_tools_dynamic`, `discover_agents`, `get_agent_card`, the `INPUT_REQUIRED` contract check | `is_self_agent` becomes the default rule of `select_tools` |
+| Capabilities | `capability_cache.py` | The Redis store becomes injected; in-memory is the default |
+| Discovery lifecycle | `runtime.py`: tool cache, refresh lock, `refresh_dynamic_components` (skills part), `discovery_refresh_loop`; `_on_startup`, `_on_shutdown`, `/discovery/refresh` | Module globals become instance state |
+| Call middleware | `orchestrator/hooks.py` (`on_request`, `on_event`, `on_result`, `on_error`, `on_turn`) | |
+| Child approval relay | `_interaction_callback` in `skills.py` (user-approval build) | [Section 8](#8-approvals-across-levels) |
+| Ownership check | `service._execute` (`assert_conversation_owner`, `record_conversation_owner`) | Every level needs it ([section 11](#11-security)) |
+| LLM | `runtime.create_llm`, the `medium` flavor, `MAX_LLM_TURNS` | Class attributes; a bundle can override them |
+
+#### What stays in `TopLevelOrchestrator` (the client-agent)
+
+Everything that exists because the user is the next hop, or because it is Valkey-backed:
+
+- the `ConversationRequest` routing in `chat_flow.chat` (plan rejected or approved, follow-up answers,
+  workflow start, free-text reply, new turn), `_respond` producing `ConversationResponse`, and the
+  history entries;
+- `conversation_store.py` (`conversation:{id}`), as the `ConversationLoopStore`;
+- the `ask_user` tool and `apply_reply` (free text supersedes the open calls);
+- `begin_user_turn`, `upload_note`, uploads (`/uploads/stage`) and title generation;
+- `recent_skill_inputs` (reads `conversation_history`) and `prompts/orchestrator_system.txt`;
+- workflows (D-12): `_workflow_spec`, `_run_workflow`, `_pause_workflow`, `_record_step`,
+  `inject_tool_call`, `workflow_tool_for`, the workflow endpoints and `workflow_library/`;
+- slash and debug commands (`debug_commands.py`);
+- turns, Task Graph and background detach (`task_tracking`, `task_graph.py`); the base sees only a
+  `TaskTracker` protocol with a no-op default;
+- Valkey status persistence (`agent:status:{id}`); the base emits through a `StatusSink`;
+- `_response_payload_with_artifacts` and `new_artifacts`.
+
+#### Hooks: where the levels differ
+
+| Hook | Base default | `TopLevelOrchestrator` | `SubOrchestrator` |
+| --- | --- | --- | --- |
+| `system_prompt(state, catalog)` | abstract | template + artifact catalog + recent inputs | bundle prompt + brief + the brief's artifacts |
+| `select_tools(capabilities, call_chain)` | drop self | same, plus rule 2 ([section 5.2](#52-visibility-and-allowlists)) | allowlist, cycle and depth |
+| `extra_tools` / `run_extra_call` | none | workflow tools | none |
+| `interaction_tools()` | none | `ask_user` | `request_context` |
+| `handle_blocked(state, catalog)`, where `_drive_batch` would return `needs_info` | return `needs_info` | a form for the user | rules, then the LLM (D-13); the rest goes up as a final `INPUT_REQUIRED` |
+| `handle_approval(state, catalog)`, where `_drive_batch` would return `needs_approval` | return `needs_approval` | `plan_ready` | in-flight `request_user_approval` (D-6) |
+| `render_outcome(outcome)` | abstract | `ConversationResponse` | result artifact, final `INPUT_REQUIRED`, or failed task |
+| `state_store` (`LoopStateStore`) | `InMemoryLoopStore` | `ConversationLoopStore` | `AgentStateLoopStore` |
+| `status_sink`, `task_tracker` | stream only; no-op | Valkey status + Task Graph | stream only |
+
+- **`SubOrchestrator`** is the new `agents/sub-orchestrator` image. It loads one bundle at startup,
+  exposes a single `delegate` skill, stores paused state through `AgentStateLoopStore`
+  (`/v1/agent-state/tasks/{task_id}`), and turns its outcome into A2A: a result artifact on completion, a
+  final `INPUT_REQUIRED` on a form pause, and a failed task on error.
 
 The loop is shared code; only where it gets its input and where it sends its
 output differ between the two subclasses.
@@ -384,7 +421,7 @@ sequenceDiagram
 
 Changes:
 
-1. **The relay moves into the SDK base.** `OrchestratorBase` forwards every
+1. **The relay moves into the SDK base.** `PrometheusOrchestrator` forwards every
    child `metadata.interaction` status upward as its own non-final WORKING
    status, adding itself to a `via` list. This generalises today's
    `_interaction_callback` in `orchestrator/skills.py`. The top level still
@@ -461,7 +498,9 @@ At each orchestrator, when one or more children return `INPUT_REQUIRED`:
    user-only, look in `known_facts`, earlier tool results and artifacts (D-9;
    this generalises today's `resolvable_from_context` auto-fill in
    `_settle_skill_item`). If every input is filled, resume the child at once,
-   as today.
+   as today. At a sub-orchestrator, what the rules leave open goes to its LLM
+   for one turn, which answers from context or calls `request_context` (D-13).
+   This is the `handle_blocked` hook; the top level asks the user instead.
 2. **Wait for the rest of the batch.** Calls still running in the same batch
    finish first, so the user gets one form per turn, not one per child.
 3. **Collect.** Build one list from every blocked call (`needs_args`,
@@ -576,20 +615,24 @@ specialist changes. Only orchestrators read `prometheus.answers`.
 Each step stays under about 300 changed lines (not counting tests, lockfiles and
 fixtures), merges to `devel` on its own and leaves the build green. The new
 behaviour stays inactive until step 8 ships an image and a bundle is mounted.
-Expand → migrate → contract applies to the loop move (steps 4–6).
+Expand → migrate → contract applies to the loop move (steps 4a–6b). Following D-11, steps 4a–5 shape the
+code inside the client-agent, and steps 6a–6b lift it into the SDK.
 
 | # | Step | Where | Depends on | Details |
 | --- | --- | --- | --- | --- |
 | 1 | **Call chain.** `CallChainEntry` model and `prometheus.callChain` constants in the SDK. The client-agent appends its entry on every dispatch (`call_a2a_agent`). `PrometheusAgent` reads the chain and writes `parent_execution` into its DeepLynx execution record. | sdk, client-agent | – | Unit tests: chain appended once per hop, parent execution set, an empty chain is the same as today. Base-image bump in its own PR. |
 | 2 | **Question ids at the top level.** Stable call ids in `pending_calls`; `MissingInput.id` (defaulting to `name`) and `user_only`. `_form_questions` and `apply_answers` key by `{call_id}/{field}`; questions are no longer merged across calls. The frontend form submits by id. | sdk, client-agent, frontend | 1 | Fixes today's name clash on its own. Tests: two calls asking for the same field get separate answers; old conversations with no call ids get them assigned on load. |
 | 3 | **Approval breadcrumb.** `request_user_approval` copies the chain into the create body; the backend stores `call_chain` on the record and includes it in `approval_requested`, `GET /api/interactions` and `CONTRACT.md`; the card renders the breadcrumb. | sdk, backend, frontend | 1, user-approval build merged | The field is optional, so older agents are unaffected. |
-| 4a | **Expand: loop state store.** In the SDK, create `prometheus_api.orchestration` with the `LoopStateStore` protocol, `InMemoryLoopStore` and the state types (`pending_calls`, call statuses). No callers. | sdk | 2 | Pure addition. |
-| 4b | **Expand: catalog and dispatch.** Copy `build_tool_catalog`, `_skill_spec`, `invoke_skill`, `call_a2a_agent` and the capability cache into `prometheus_api.orchestration`, with `select_tools` as a hook. No callers. | sdk | 4a | Mechanical copy plus the hook; tests move with the code. |
-| 4c | **Expand: loop.** Copy `advance`, `_drive_batch`, `_refresh_status`, `_settle_skill_item`, `apply_answers`, `apply_reply`, `approve_pending`, `reject_pending` and Task Graph tracking into `OrchestratorBase`, using `LoopStateStore`, `system_prompt` and `render_outcome`. Include the generic interaction relay. No callers. | sdk | 4b | May split further per module to stay under 300 lines. |
-| 5 | **Migrate the client-agent.** Base-image bump. `OrchestratorAgent` becomes `TopLevelOrchestrator(OrchestratorBase)` with `ConversationLoopStore` (`conversation:{id}`); `chat_flow` calls into the base. | client-agent | 4c | Behaviour unchanged: the existing client-agent tests must pass unmodified, apart from import paths. |
-| 6 | **Contract.** Delete the client-agent's copies of the moved modules and their now-duplicate tests. | client-agent | 5 | Only deletions. |
-| 7a | **A2A pause/resume in the base.** `render_outcome` for agent mode: prefixed question ids and origins on the way up; split answers by call id and forward `prometheus.answers` on the way down; partial resume. | sdk | 6 | Tests with fake children: depth-2 and depth-3 routing, partial answers, an unknown call id. |
-| 7b | **Agent-state store and in-flight approval.** `AgentStateLoopStore` on the SDK's backend task-state client; `requires_approval` in agent mode through `request_user_approval`; Decline becomes a rejected tool result; `request_context` tool; filling inputs from the brief (D-9). | sdk | 7a, agent-state API merged | Tests: state saved and loaded by `taskId`, 409 retry, `state_missing`, user-only inputs never filled. |
+| 4a | **Package and pure helpers.** Create `agents/client-agent/orchestration/`; move `param_schema.py` and `artifact_handling.py` into it, and `ToolSpec` with the skill catalog helpers (`catalog.py`). Add the import-guard test. | client-agent | – | Pure move. **In progress** (branch `refactor/orchestration-r1-helpers`). |
+| 4b | **Dispatch and capabilities.** Move the A2A client parts of `tool_discovery.py` and `capability_cache.py` into `orchestration/` (`a2a.py`, `capabilities.py`); the cache takes an injected store, and the client-agent passes Redis. | client-agent | 4a | |
+| 4c | **Seams.** `StatusSink`, `TaskTracker` and `LLMFactory` protocols with defaults, and client-agent adapters over `runtime` and `task_tracking`. Move `skills.py` and `hooks.py` into the package. | client-agent | 4b | Tests patch a fake sink instead of `runtime.store_status_update`. |
+| 4d | **Calls and execution.** Move call validation, transcript and skill execution to `orchestration/loop.py`; move the workflow functions to `orchestrator/workflow_tools.py`. | client-agent | 4c | |
+| 4e | **Drive, advance and answers.** Move `_drive_batch`, `advance`, `apply_answers` (built-in kinds), `approve_pending`, `reject_pending`, `_form_questions` and `_plan`, with the `extra_tools`, `interaction_tools`, `handle_blocked` and `handle_approval` hook points. | client-agent | 4d | Land after step 2, or rebase step 2 onto it: both touch `apply_answers` and `_form_questions`. |
+| 5 | **The class.** `orchestration/base.py` with `PrometheusOrchestrator(PrometheusAgent)`: instance-owned catalog, discovery lifecycle, hooks, the ownership check, and `LoopStateStore` with `InMemoryLoopStore`. `OrchestratorAgent` becomes `TopLevelOrchestrator(PrometheusOrchestrator)` with `ConversationLoopStore`; `runtime.py` drops its globals. | client-agent | 4e | Behaviour unchanged: the client-agent tests pass with only import and patch-target edits. |
+| 6a | **Lift (expand).** Copy the package unchanged to `sdk/prometheus_api/orchestration/`, with its tests, the `jsonschema` dependency and an SDK version bump. No callers. | sdk | 5 | |
+| 6b | **Bump and contract.** Base-image bump; the client-agent imports `prometheus_api.orchestration` and deletes its local package. | client-agent | 6a | Only import changes and deletions. |
+| 7a | **A2A pause/resume in the base.** `render_outcome` for agent mode: prefixed question ids and origins on the way up; split answers by call id and forward `prometheus.answers` on the way down; partial resume. | sdk | 6b | Tests with fake children: depth-2 and depth-3 routing, partial answers, an unknown call id. |
+| 7b | **Agent-state store and in-flight approval.** `AgentStateLoopStore` on the SDK's backend task-state client; `requires_approval` in agent mode through `request_user_approval`; Decline becomes a rejected tool result; `request_context` tool; `handle_blocked` for agent mode: rules from the brief, then one LLM turn (D-9, D-13). | sdk | 7a, agent-state API merged | Tests: state saved and loaded by `taskId`, 409 retry, `state_missing`, user-only inputs never filled. |
 | 8 | **Sub-orchestrator image.** `agents/sub-orchestrator`: Dockerfile, compose file with healthcheck, bundle loader (`ORCHESTRATOR_BUNDLE`), `delegate` skill and brief schema, result artifact. Does not register without a bundle. | agents | 7b | `tests/infrastructure/test_healthchecks.py` covers the healthcheck. |
 | 9 | **Visibility.** `scope:` and `prometheus:orchestrator` tags; `agents.yaml` allow and deny lists; cycle and depth guards in `select_tools`; `MAX_ORCHESTRATION_DEPTH`; check at dispatch. The top level's `select_tools` applies rule 2. | sdk, client-agent | 8 | Until specialists are tagged, nothing is hidden (rule 1). |
 | 10 | **Depth-3 debug setup and end-to-end test.** Two debug bundles (`debug-outer` → `debug-inner`) and a `nested-input-debug` agent that asks for an input and then an approval. Playwright test: form with breadcrumb, answer routed to the leaf, approval card with breadcrumb, Accept and Decline, a pause longer than the longest per-hop timeout. Included with `DEBUG_AGENTS=true`. | agents/debug-agents, frontend e2e | 9 | Settles user-approval Q-1 at depth. |
@@ -600,12 +643,15 @@ Expand → migrate → contract applies to the loop move (steps 4–6).
 flowchart LR
   S1["1 Call chain"] --> S2["2 Question ids"]
   S1 --> S3["3 Approval breadcrumb"]
-  S2 --> S4a["4a Loop store"]
-  S4a --> S4b["4b Catalog + dispatch"]
-  S4b --> S4c["4c Loop"]
-  S4c --> S5["5 Migrate client-agent"]
-  S5 --> S6["6 Delete old modules"]
-  S6 --> S7a["7a A2A pause/resume"]
+  S4a["4a Package + helpers"] --> S4b["4b Dispatch + capabilities"]
+  S4b --> S4c["4c Seams"]
+  S4c --> S4d["4d Calls + execution"]
+  S4d --> S4e["4e Drive + answers"]
+  S2 --> S4e
+  S4e --> S5["5 PrometheusOrchestrator class"]
+  S5 --> S6a["6a Copy into SDK"]
+  S6a --> S6b["6b Bump + delete local"]
+  S6b --> S7a["7a A2A pause/resume"]
   S7a --> S7b["7b Agent-state + approval"]
   S7b --> S8["8 Sub-orchestrator image"]
   S8 --> S9["9 Visibility"]
@@ -621,7 +667,7 @@ Steps 1–3 are useful on their own:
 - step 2 fixes today's answer clash;
 - step 3 improves approval attribution.
 
-They can merge before the refactor starts. Steps 4a–6 are a pure refactor with
-no change in behaviour. Every SDK change reaches the agents only through a
+They can merge before the refactor starts. Steps 4a–6b are a pure refactor with
+no change in behaviour, and steps 4a–4d do not depend on steps 1–3. Every SDK change reaches the agents only through a
 base-image bump (`PROMETHEUS_API_BASE_IMAGE_HASH`), which is its own small PR
 after the SDK change is published.
