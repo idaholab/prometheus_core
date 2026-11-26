@@ -147,3 +147,22 @@ def test_every_agent_sets_external_agent_url(project_root, compose_data):
         if svc.get("environment", {}).get("EXTERNAL_AGENT_URL") != f"http://{name}:8000"
     }
     assert not wrong, f"EXTERNAL_AGENT_URL missing or not http://<service>:8000: {wrong}"
+
+
+def test_every_artifact_registering_service_keeps_catalogs(project_root, compose_data):
+    """Artifact catalogs never expire, like the conversations they belong to.
+
+    ArtifactRegistry defaults to a 7-day TTL; a reopened conversation older than that
+    would render with no artifacts. Every service with Valkey access may register.
+    """
+    assert compose_data["x-common-env"]["ARTIFACT_REGISTRY_TTL_SECONDS"] == "${ARTIFACT_REGISTRY_TTL_SECONDS:-0}"
+    services = {}
+    for path in project_root.glob("agents/**/docker-compose.yml"):
+        services.update(yaml.safe_load(path.read_text())["services"])
+
+    wrong = {
+        name: svc.get("environment", {}).get("ARTIFACT_REGISTRY_TTL_SECONDS")
+        for name, svc in services.items()
+        if svc.get("environment", {}).get("ARTIFACT_REGISTRY_TTL_SECONDS") != "${ARTIFACT_REGISTRY_TTL_SECONDS:-0}"
+    }
+    assert not wrong, f"ARTIFACT_REGISTRY_TTL_SECONDS missing or not defaulted to 0: {wrong}"
