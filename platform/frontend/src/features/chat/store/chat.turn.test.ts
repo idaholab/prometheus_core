@@ -328,10 +328,8 @@ test("an auto-approved plan delivered by turn_done starts the next turn", async 
 
 /* --- the re-checks after the lease (backend/CONTRACT.md, GET /api/chat/turns) -------- */
 
-/** Flush the promise chain a timer callback starts. */
-const flush = async () => {
-  for (let i = 0; i < 5; i += 1) await Promise.resolve();
-};
+/** Settle pending promises (and any 0 ms timer) under fake timers. */
+const flush = () => vi.advanceTimersByTimeAsync(0);
 
 test("a 'running' lookup is checked once more after the lease; a dead worker's turn then ends", async () => {
   const id = await send("q");
@@ -396,7 +394,7 @@ test("a worker that dies after a late renewal still ends the turn at the next re
       return { turn_id: id, state: "running" };
     };
     sends[0].reply.reject(new TypeError("Failed to fetch"));
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
     await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 10_000);
     assert.equal(reads, 2);
     assert.equal(readState().awaiting, true, "the first re-check still read 'running'");
@@ -420,7 +418,7 @@ test("a lookup that fails outright after a dropped POST is retried after the lea
       return { turn_id: id, state: "done", response: answer(id, "a") };
     };
     sends[0].reply.reject(new TypeError("Failed to fetch"));
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
     assert.equal(readState().awaiting, true);
     await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 10_000);
     assert.equal(reads, 2);
@@ -440,11 +438,11 @@ test("no re-check is armed while the POST is in flight", async () => {
       return { turn_id: id, state: "running" };
     };
     stream().onOpen?.(); // a reconnect mid-turn reads once
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
     await vi.advanceTimersByTimeAsync(3 * TURN_LEASE_MS);
     assert.equal(reads, 1, "the pending POST settles the turn, not a timer");
     sends[0].reply.resolve(answer(id, "a"));
-    await vi.advanceTimersByTimeAsync(0);
+    await flush();
     assert.deepEqual(kinds(), ["user:q", "assistant:a"]);
   } finally {
     vi.useRealTimers();
