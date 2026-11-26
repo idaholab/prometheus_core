@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import yaml
 
-from param_schema import flatten_schema_properties, has_param_path
+from orchestration.param_schema import flatten_schema_properties, has_param_path
 from .compiler import WorkflowCompileError, compile_workflow
 from .schema import CompiledWorkflow
 

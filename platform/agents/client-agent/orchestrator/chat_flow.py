@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, cast
 
-from artifact_handling import merge_artifacts_into_context, summarize_artifacts_for_context
+from orchestration.artifact_handling import merge_artifacts_into_context, summarize_artifacts_for_context
 from conversation_store import get_conversation, store_conversation
 from workflow_library import find_workflow_by_command, get_workflow_registry
 

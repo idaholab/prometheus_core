@@ -38,6 +38,10 @@ and file upload pre-processing also enter through `OrchestratorAgent`.
 ```text
 agents/client-agent/
   agent.py                         Docker entry point
+  orchestration/                   Generic orchestration code, shaped for the SDK (no client-agent imports)
+    catalog.py                     ToolSpec and the skill tool catalog helpers
+    artifact_handling.py           Artifact catalog normalization, artifact-ref schema paths
+    param_schema.py                JSON-schema path helpers
   orchestrator/
     models.py                      Conversation request/response/state models
     runtime.py                     Environment config, caches, status updates
@@ -48,11 +52,9 @@ agents/client-agent/
     hooks.py                       Call middleware around skill dispatches
     debug_commands.py              Slash command handlers
     utils.py                       Pure parsing/formatting helpers
-  artifact_handling.py             Artifact catalog normalization, artifact-ref schema paths
   capability_cache.py              Redis-backed discovered capability cache
   conversation_store.py            Redis-backed conversation state persistence
   file_upload_handler.py           Uploaded file description and DeepLynx storage
-  param_schema.py                  JSON-schema path helpers
   tool_discovery.py                Agent discovery and A2A transport wrapping
   workflow_library/                Declarative workflow template compiler/executor
   workflows/                       Built-in workflow YAML definitions
@@ -268,7 +270,7 @@ Keep this module free of Redis, HTTP, A2A, or LLM side effects.
 
 ## Supporting Modules
 
-### `artifact_handling.py`
+### `orchestration/artifact_handling.py`
 
 Normalizes artifact catalog entries and finds artifact-reference fields in skill schemas.
 
@@ -311,7 +313,7 @@ Major classes/functions:
 - `infer_file_descriptions(query, uploaded_files, llm)`: Uses the LLM to describe uploaded files for artifact metadata.
 - `upload_files_to_deeplynx(agent, uploaded_files, descriptions, context, event_queue, storage_config)`: Stores uploaded files and registers artifact references.
 
-### `param_schema.py`
+### `orchestration/param_schema.py`
 
 Shared JSON-schema path helpers.
 
@@ -433,7 +435,7 @@ Useful focused runs:
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -p pytest_asyncio.plugin tests/test_agent_loop.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -p pytest_asyncio.plugin tests/test_tool_discovery.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -p pytest_asyncio.plugin tests/test_workflow_library.py
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -p pytest_asyncio.plugin tests/test_artifact_handling.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -p pytest_asyncio.plugin tests/test_artifact_handling.py tests/test_orchestration_imports.py
 ```
 
 Compile-check the split modules:
