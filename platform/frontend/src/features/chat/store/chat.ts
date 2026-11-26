@@ -516,10 +516,18 @@ function disconnect(): void {
  * two ways with the same body (`backend/CONTRACT.md`, "Delivery"): its POST reply and a
  * `turn_done` event. Whichever arrives first settles the turn through `settle()`, which
  * acts only while `activeTurn` still names that turn — so the second copy, a stopped
- * turn's late reply, and another tab's `turn_done` are all ignored. `stop()`, `reset()`,
- * `loadConversation()` and the auth teardowns clear it along with `awaiting`.
+ * turn's late reply, and another tab's `turn_done` are all ignored. `settle()`, `stop()`,
+ * `reset()`, `loadConversation()` and the auth teardowns end the wait with `endWait()`.
  */
 let activeTurn: { id: string; conversationId: string | null; postPending: boolean } | null = null;
+
+/** Stop waiting on the active turn: `activeTurn`, its pending re-check and `awaiting`
+ * always change together, here. */
+function endWait(): void {
+  activeTurn = null;
+  cancelRecheck();
+  if (state.awaiting) set({ awaiting: false });
+}
 
 /** End turn `turnId` with `res`, once. Returns whether it was the turn being waited on. */
 function settle(turnId: string, res: ChatMessageResponse): boolean {
@@ -527,9 +535,7 @@ function settle(turnId: string, res: ChatMessageResponse): boolean {
   if (!turn || turn.id !== turnId) return false;
   // Cleared before applyResponse: an auto-approved plan starts the next turn from
   // inside it, and that turn must find the slot free.
-  activeTurn = null;
-  cancelRecheck();
-  set({ awaiting: false });
+  endWait();
   if (state.conversationId === turn.conversationId) {
     applyResponse(res);
   } else {
@@ -675,9 +681,7 @@ async function decidePlan(itemId: string, approved: boolean): Promise<void> {
 /** Client-side stop — no server cancel endpoint exists yet (Decision D). */
 function stop(): void {
   if (activeTurn) finalizeTurnProgress(activeTurn.id);
-  activeTurn = null;
-  cancelRecheck();
-  set({ awaiting: false });
+  endWait();
 }
 
 /** New chat: fresh conversation_id + cleared transcript (no full reload). */
@@ -687,9 +691,8 @@ async function reset(profile?: string): Promise<void> {
   // Clearing `resumingConversationId` drops the spinner of any resume still in
   // flight; taking a new bind seq supersedes it, so it can apply neither its
   // transcript here nor its binding on the server.
-  activeTurn = null;
-  cancelRecheck();
-  set({ items: [], awaiting: false, resumingConversationId: null });
+  endWait();
+  set({ items: [], resumingConversationId: null });
   const seq = nextBindSeq();
   try {
     const session = await api.createSession(profile, seq);
@@ -708,9 +711,8 @@ async function reset(profile?: string): Promise<void> {
 async function loadConversation(conversationId: string): Promise<void> {
   disconnect();
   awaitedTaskIds.clear();
-  activeTurn = null;
-  cancelRecheck();
-  set({ items: [], awaiting: false });
+  endWait();
+  set({ items: [] });
   const seq = nextBindSeq();
   try {
     await applyResume(conversationId, seq);
@@ -749,9 +751,8 @@ export const chatStore = {
     nextBindSeq(); // supersede an in-flight rebind; its session is gone
     bootstrapGen += 1; // and an in-flight bootstrap, so it cannot mark the store ready
     bootstrapping = false;
-    activeTurn = null;
-    cancelRecheck();
-    set({ ready: false, authLost: false, awaiting: false, resumingConversationId: null, items: [] });
+    endWait();
+    set({ ready: false, authLost: false, resumingConversationId: null, items: [] });
   },
   /** Drop every trace of the signed-in user's chat: close the stream, forget
    * awaited tasks and the remembered conversation id, and reset state. Called
@@ -764,8 +765,7 @@ export const chatStore = {
     saveOpenConversationId(null);
     bootstrapGen += 1;
     bootstrapping = false;
-    activeTurn = null;
-    cancelRecheck();
+    endWait();
     state = initialState;
     emit();
   },
