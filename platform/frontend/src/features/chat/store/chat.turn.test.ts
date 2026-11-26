@@ -569,3 +569,43 @@ test("another tab's status events add no progress step", async () => {
   stream().onStatus?.({ type: "status", turn_id: "other-tab-turn", message: "x" });
   assert.deepEqual(kinds(), ["user:q"]);
 });
+
+/* --- the other ways a wait ends ------------------------------------------------------ */
+
+test("switching away and back ignores the old turn's turn_done", async () => {
+  const id = await send("q");
+  await chatStore.loadConversation("conv-B");
+  await chatStore.loadConversation("conv-A");
+  stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+  assert.deepEqual(kinds(), []);
+  assert.equal(readState().awaiting, false);
+});
+
+test("a new chat ignores the old turn's turn_done", async () => {
+  const id = await send("q");
+  await chatStore.reset();
+  stream().onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+  assert.deepEqual(kinds(), []);
+  assert.equal(readState().awaiting, false);
+});
+
+test("after suspendForReauth the old turn is no longer awaited", async () => {
+  await send("q");
+  const handlers = stream();
+  chatStore.suspendForReauth();
+  assert.equal(readState().awaiting, false);
+  handlers.onOpen?.(); // a late reconnect of the old stream: getTurn would reject the test
+  await tick();
+  assert.deepEqual(kinds(), []);
+});
+
+test("after clear (logout) the old turn is no longer awaited", async () => {
+  const id = await send("q");
+  const handlers = stream();
+  chatStore.clear();
+  handlers.onTurnDone?.({ type: "turn_done", turn_id: id, response: answer(id, "a") });
+  handlers.onOpen?.();
+  await tick();
+  assert.deepEqual(kinds(), []);
+  assert.equal(readState().awaiting, false);
+});
