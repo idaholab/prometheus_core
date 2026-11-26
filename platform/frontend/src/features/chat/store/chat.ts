@@ -557,8 +557,9 @@ function mayStillBeRunning(err: unknown): boolean {
 export const TURN_LEASE_MS = 60_000;
 /** Margin past the lease, so the re-check doesn't land just before it runs out. */
 const RECHECK_MARGIN_MS = 5_000;
-/** Re-checks per turn, so a turn is never polled. */
-export const MAX_RECHECKS = 1;
+/** Re-checks per turn. One is enough unless the worker died just after renewing, or a
+ * lookup failed outright; the second covers those, and the cap keeps it from polling. */
+export const MAX_RECHECKS = 2;
 
 /** The single pending re-check, for `activeTurn` only. */
 let recheck: { turnId: string; timer: ReturnType<typeof setTimeout> } | null = null;

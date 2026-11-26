@@ -385,6 +385,30 @@ test("re-checks are capped: a live turn answering 'running' again isn't polled",
   }
 });
 
+test("a worker that dies after a late renewal still ends the turn at the next re-check", async () => {
+  const id = await send("q");
+  vi.useFakeTimers();
+  try {
+    let reads = 0;
+    getTurn = async () => {
+      reads += 1;
+      if (reads >= 3) throw new ApiError(404, "No such turn."); // the lease finally ran out
+      return { turn_id: id, state: "running" };
+    };
+    sends[0].reply.reject(new TypeError("Failed to fetch"));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 10_000);
+    assert.equal(reads, 2);
+    assert.equal(readState().awaiting, true, "the first re-check still read 'running'");
+    await vi.advanceTimersByTimeAsync(TURN_LEASE_MS + 10_000);
+    assert.equal(reads, 3);
+    assert.deepEqual(kinds(), ["user:q", "error"]);
+    assert.equal(readState().awaiting, false);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("a lookup that fails outright after a dropped POST is retried after the lease", async () => {
   const id = await send("q");
   vi.useFakeTimers();
