@@ -23,6 +23,7 @@ edits exist.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -32,6 +33,9 @@ try:
     import redis
 except ImportError:  # pragma: no cover - only when redis is absent
     redis = None  # type: ignore
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -182,15 +186,23 @@ class ConversationStateClient:
         ``None`` also on a missing client, empty ids, a Redis error or a corrupt value,
         so the content route maps every miss to the same 404.
         """
+        if not conv_id or not artifact_id:
+            return None
         client = self.client
-        if client is None or not conv_id or not artifact_id:
+        if client is None:
+            # Logged because the caller's 404 can't say that Valkey, not the id, failed.
+            logger.warning("artifact %s of %s: Valkey unavailable", artifact_id, conv_id)
             return None
         try:
             raw = client.hget(f"artifacts:conv:{conv_id}:by_id", artifact_id)
             parsed = json.loads(raw) if raw else None
-        except Exception:
+        except Exception as exc:
+            logger.warning("artifact %s of %s: unreadable catalog entry: %s", artifact_id, conv_id, exc)
             return None
-        return parsed if isinstance(parsed, dict) else None
+        if raw and not isinstance(parsed, dict):
+            logger.warning("artifact %s of %s: catalog entry is not an object", artifact_id, conv_id)
+            return None
+        return parsed
 
     # --------------------------------------------------------------------- #
     # Per-user metadata (title override / soft delete) — ``conv:meta:{id}``
