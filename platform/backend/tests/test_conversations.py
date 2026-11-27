@@ -775,6 +775,7 @@ def test_detail_messages_name_the_artifacts_each_turn_produced(monkeypatch):
 
     assert [m["artifact_ids"] for m in body["messages"]] == [[], ["gen"]]
     assert [a["artifact_id"] for a in body["artifacts"]] == ["gen"]
+    assert [a["content_url"] for a in body["artifacts"]] == ["/api/conversations/c1/artifacts/gen/content"]
 
 
 async def test_resume_keeps_a_newer_catalog_written_during_enrichment(monkeypatch, session_store):
