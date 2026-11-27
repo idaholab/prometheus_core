@@ -540,8 +540,10 @@ def test_conversation_content_requires_auth():
 def test_shaped_artifacts_name_their_conversation_content_route():
     from app.services.artifacts import shape_artifacts
 
-    [meta] = shape_artifacts([{"artifact_id": "a b", "name": "x"}], conversation_id="c/1")
-    assert meta.content_url == "/api/conversations/c%2F1/artifacts/a%20b/content"
+    # Ids are quoted. A "/" would be quoted too, but Starlette decodes %2F before
+    # routing, so such an id can't reach the route; real ids are uuid4/hex.
+    [meta] = shape_artifacts([{"artifact_id": "a b", "name": "x"}], conversation_id="c 1")
+    assert meta.content_url == "/api/conversations/c%201/artifacts/a%20b/content"
 
 
 async def test_conversation_content_404s_when_valkey_is_down(monkeypatch, session_store):
@@ -565,3 +567,23 @@ async def test_conversation_content_404s_for_a_deleted_conversation(monkeypatch,
     resp = client.get("/api/conversations/c1/artifacts/a1/content")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Artifact not found"
+
+
+@pytest.mark.parametrize(
+    ("conversation_id", "artifact_id"),
+    [("c1", "a1"), ("c1", "a b"), ("c 1", "a1")],
+    ids=["plain", "space-in-artifact", "space-in-conversation"],
+)
+async def test_the_shaped_content_url_reaches_the_route(monkeypatch, session_store, conversation_id, artifact_id):
+    """The URL shape_artifacts builds is one the router actually serves, so the hard-coded
+    ``/api`` prefix and the quoting can't drift from the route."""
+    from app.services.artifacts import shape_artifacts
+
+    entry = {**_PLOT, "artifact_id": artifact_id}
+    _patch_catalog(monkeypatch, owned={("alice", conversation_id)}, catalogs={conversation_id: {artifact_id: entry}})
+    client = await _authed_client(monkeypatch, session_store)
+    [meta] = shape_artifacts([entry], conversation_id=conversation_id)
+
+    resp = client.get(meta.content_url)
+    assert resp.status_code == 200
+    assert resp.json() == {"x": 1}
