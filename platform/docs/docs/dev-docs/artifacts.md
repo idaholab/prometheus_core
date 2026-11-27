@@ -208,3 +208,5 @@ The client-agent maintains an artifact catalog per conversation. On each turn:
 4. The updated catalog is returned to the frontend and stored in the Chainlit session
 
 This enables multi-step workflows where later agents consume earlier agents' outputs.
+
+An artifact's identity is its `artifact_id` (or, without one, its URI). The chat shows every distinct artifact and hides only repeat deliveries of the same one; it never merges artifacts by name, so two outputs both called `plot.png` both appear. Register each logical output once: an agent that registers the same result again on every call or retry creates a new artifact each time, and the chat shows each copy.

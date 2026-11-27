@@ -68,10 +68,10 @@ function meshManifestProps(body: unknown): Record<string, unknown> | null {
 /** Convert one wire artifact into a viewer-ready element. */
 export function artifactToElement(artifact: ArtifactMeta): AnyElement {
   const element = buildElement(artifact);
-  // Stamp the unique artifact id into props so `dedupeElements` keys on it:
-  // `resourceSignature` derives a custom element's identity from `props.artifact_id`
-  // (among others), and several viewers carry no other distinguishing prop — without
-  // this, two IFC/mermaid/report artifacts sharing a component name would collapse to one.
+  // Stamp the unique artifact id into props: `dedupeElements` keys an element on
+  // `props.artifact_id` first (then the artifact URL, never the display name), so every
+  // artifact stays distinct and a repeat delivery of the same artifact collapses. It is
+  // set after the spread, so it wins over any `artifact_id` a manifest carries.
   element.props = { ...(element.props ?? {}), artifact_id: artifact.artifact_id };
   return element;
 }

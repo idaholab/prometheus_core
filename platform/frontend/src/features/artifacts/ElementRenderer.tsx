@@ -84,7 +84,7 @@ export function ElementList({
   onSend?: (text: string) => void;
 }) {
   if (!elements?.length) return null;
-  const uniqueElements = dedupeElements(elements, classifyElement);
+  const uniqueElements = dedupeElements(elements);
   if (!uniqueElements.length) return null;
 
   return (
