@@ -532,6 +532,16 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
 # mesh_props: on-demand conversion, source index, shared in-flight builds
 # --------------------------------------------------------------------------- #
 
+
+@pytest.fixture(autouse=True)
+def _no_inflight_conversions():
+    """_inflight is module state: a test that dies with a task pending must not leave a
+    dead task for the next test's mesh_props to await."""
+    service._inflight.clear()
+    yield
+    service._inflight.clear()
+
+
 # A real dataset id: compute_dataset_id's 16 hex characters.
 _DATASET = "0123456789abcdef"
 
@@ -587,7 +597,8 @@ async def test_concurrent_mesh_props_share_one_conversion(monkeypatch, tmp_path)
     _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
 
     pending = [asyncio.create_task(service.mesh_props(dict(_MESH))) for _ in range(3)]
-    await asyncio.sleep(0.01)
+    while len(calls) < 1:  # the one shared conversion has reached the gate
+        await asyncio.sleep(0)
     gate.set()
     results = await asyncio.gather(*pending)
 
