@@ -187,7 +187,7 @@ def write_samples(out_dir: Path) -> list[Path]:
     ``diagram.mmd``, ``results.json`` and ``README.md`` are hand-written and are not
     written here.
     """
-    from app.services.mesh.service import _viewer_props, _convert_sync
+    from app.services.mesh.service import _convert_sync, _viewer_props
 
     mesh_dir = out_dir / "mesh"
     mesh_dir.mkdir(parents=True, exist_ok=True)
