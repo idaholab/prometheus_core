@@ -74,3 +74,22 @@ test("a mesh with neither manifest nor mesh_url stays a download", () => {
 
   assert.equal(element.type, "file");
 });
+
+test("an inline mesh body mounts the viewer only when it can render", () => {
+  const files = [{ index: 0, timestep_index: 0, time_value: 0, filename: "surface_t0000.vtp" }];
+  const complete = artifactToElement(
+    jsonArtifact({
+      render_hint: "mesh",
+      json_body: { baseUrl: "/api/artifacts/mesh/d", manifest: { files } },
+    }),
+  );
+  assert.equal(complete.name, "MeshViewer");
+  assert.equal(complete.props?.baseUrl, "/api/artifacts/mesh/d");
+
+  // A partial body (no baseUrl or no files) would mount an empty viewer: fetch instead.
+  const mesh_url = "/api/conversations/c1/artifacts/m1/mesh";
+  for (const json_body of [{ datasetId: "d" }, { baseUrl: "/b", manifest: { files: [] } }]) {
+    const element = artifactToElement(jsonArtifact({ render_hint: "mesh", json_body, mesh_url }));
+    assert.equal(element.props?.meshUrl, mesh_url, JSON.stringify(json_body));
+  }
+});

@@ -43,6 +43,7 @@ import type { ArtifactMeta } from "@/lib/api/types";
 import { languageForArtifact } from "@/lib/highlight/language";
 import { delimiterFor } from "@/lib/table/csv";
 import type { AnyElement } from "./elements";
+import { meshManifestProps } from "./meshManifest";
 
 /** Best-effort mermaid diagram source from an inline body (string or `{diagram|chart|content}`). */
 function mermaidSource(body: unknown): string {
@@ -54,15 +55,6 @@ function mermaidSource(body: unknown): string {
     }
   }
   return "";
-}
-
-/** A mesh body is renderable only if it carries the VTP manifest the MeshViewer needs. */
-function meshManifestProps(body: unknown): Record<string, unknown> | null {
-  if (body && typeof body === "object") {
-    const o = body as Record<string, unknown>;
-    if (o.baseUrl || o.manifest || o.datasetId) return o;
-  }
-  return null;
 }
 
 /** Convert one wire artifact into a viewer-ready element. */

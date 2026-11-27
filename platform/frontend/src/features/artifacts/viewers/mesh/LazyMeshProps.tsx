@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { meshManifestProps } from "@/features/artifacts/meshManifest";
 import { api } from "@/lib/api/client";
 import { useNearViewport } from "./useNearViewport";
 
@@ -49,7 +50,13 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
     let live = true;
     setState({ kind: "loading" });
     api.meshProps(meshUrl).then(
-      (props) => live && setState({ kind: "ready", props }),
+      (body) => {
+        if (!live) return;
+        const props = meshManifestProps(body);
+        setState(
+          props ? { kind: "ready", props } : { kind: "failed", message: "The server returned no mesh data." },
+        );
+      },
       (err: unknown) =>
         live && setState({ kind: "failed", message: err instanceof Error ? err.message : String(err) }),
     );

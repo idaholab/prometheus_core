@@ -49,6 +49,13 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+/** A body the viewer can render: a base URL and a manifest naming a VTP file. */
+const mesh = (datasetId: string) => ({
+  datasetId,
+  baseUrl: `/api/artifacts/mesh/${datasetId}`,
+  manifest: { files: [{ index: 0, timestep_index: 0, time_value: 0, filename: "surface_t0000.vtp" }] },
+});
+
 const renderLazy = () =>
   render(
     <LazyMeshProps meshUrl="/api/m" downloadUrl="/api/c" title="out.e" height="450px">
@@ -57,7 +64,7 @@ const renderLazy = () =>
   );
 
 test("nothing is fetched until the viewer comes near the viewport", async () => {
-  api.meshProps.mockResolvedValue({ datasetId: "ds1" });
+  api.meshProps.mockResolvedValue(mesh("ds1"));
   renderLazy();
 
   expect(api.meshProps).not.toHaveBeenCalled();
@@ -71,7 +78,7 @@ test("nothing is fetched until the viewer comes near the viewport", async () => 
 
 test("a failed conversion shows why, a download link, and retries on request", async () => {
   api.meshProps.mockRejectedValueOnce(new Error("Could not convert out.e for viewing."));
-  api.meshProps.mockResolvedValueOnce({ datasetId: "ds1" });
+  api.meshProps.mockResolvedValueOnce(mesh("ds1"));
   renderLazy();
   enter();
 
@@ -85,8 +92,17 @@ test("a failed conversion shows why, a download link, and retries on request", a
 
 test("without IntersectionObserver it loads at once", async () => {
   vi.stubGlobal("IntersectionObserver", undefined);
-  api.meshProps.mockResolvedValue({ datasetId: "ds2" });
+  api.meshProps.mockResolvedValue(mesh("ds2"));
   renderLazy();
 
   expect(await screen.findByText("viewer ds2")).toBeInTheDocument();
+});
+
+test("a successful response without mesh data shows the failure card", async () => {
+  api.meshProps.mockResolvedValue({ datasetId: "ds3" });
+  renderLazy();
+  enter();
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("The server returned no mesh data.");
+  expect(screen.queryByText(/viewer/)).not.toBeInTheDocument();
 });
