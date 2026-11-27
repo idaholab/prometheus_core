@@ -112,6 +112,10 @@ def _lookup(conversation_id: str, artifact_id: str, user_id: str, bound: bool) -
         return None
     if not bound and not client.owns(user_id, conversation_id):
         return None
+    # A soft-deleted conversation answers 404 everywhere else (``_owned_meta``), and
+    # its artifacts must not outlive the delete either, even in a tab still bound to it.
+    if client.get_meta(conversation_id).get("hidden"):
+        return None
     return client.get_artifact(conversation_id, artifact_id)
 
 

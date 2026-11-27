@@ -462,13 +462,23 @@ def test_artifact_display_comes_from_producer_metadata(metadata, expected) -> No
 class _CatalogClient:
     """Stand-in for ConversationStateClient: an owner index plus artifact catalogs."""
 
-    def __init__(self, *, owned: set[tuple[str, str]], catalogs: dict[str, dict[str, dict]]):
+    def __init__(
+        self,
+        *,
+        owned: set[tuple[str, str]],
+        catalogs: dict[str, dict[str, dict]],
+        hidden: frozenset[str] = frozenset(),
+    ):
         self.available = True
         self._owned = owned
         self._catalogs = catalogs
+        self._hidden = hidden
 
     def owns(self, user_id: str, conv_id: str) -> bool:
         return (user_id, conv_id) in self._owned
+
+    def get_meta(self, conv_id: str) -> dict:
+        return {"hidden": "1"} if conv_id in self._hidden else {}
 
     def get_artifact(self, conv_id: str, artifact_id: str):
         return self._catalogs.get(conv_id, {}).get(artifact_id)
@@ -541,3 +551,15 @@ async def test_conversation_content_404s_when_valkey_is_down(monkeypatch, sessio
     client = await _authed_client(monkeypatch, session_store)
 
     assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 404
+
+
+@pytest.mark.parametrize("owned", [{("alice", "c1")}, set()], ids=["owner", "bound-session"])
+async def test_conversation_content_404s_for_a_deleted_conversation(monkeypatch, session_store, owned):
+    """A soft-deleted conversation's artifacts go with it, for the owner and for a
+    session still bound to it, as detail and resume already do."""
+    _patch_catalog(monkeypatch, owned=owned, catalogs={"c1": {"a1": _PLOT}}, hidden=frozenset({"c1"}))
+    client = await _authed_client(monkeypatch, session_store)  # session bound to c1
+
+    resp = client.get("/api/conversations/c1/artifacts/a1/content")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Artifact not found"
