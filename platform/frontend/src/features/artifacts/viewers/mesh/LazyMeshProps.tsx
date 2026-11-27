@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { meshManifestProps } from "@/features/artifacts/meshManifest";
+import { Button, buttonClassName } from "@/components/ui/Button";
 import { api } from "@/lib/api/client";
 import { MESH_FETCH_TIMEOUT_MS, meshFailureMessage } from "./meshFailure";
 import { useNearViewport } from "./useNearViewport";
@@ -42,7 +43,12 @@ type State =
 
 export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }: Props) {
   const placeholderRef = useRef<HTMLDivElement>(null);
-  const near = useNearViewport(placeholderRef);
+  const inView = useNearViewport(placeholderRef);
+  // The observer's root is the page viewport while the chat scrolls in its own
+  // container (until 5d passes that container), so a visible viewer can still be
+  // "waiting": the user can start it themselves.
+  const [requested, setRequested] = useState(false);
+  const near = inView || requested;
   const [state, setState] = useState<State>({ kind: "waiting" });
   const [attempt, setAttempt] = useState(0);
 
@@ -83,30 +89,37 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
       ref={placeholderRef}
       className="my-2 flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-base-300 bg-base-200/40 p-4 text-sm"
       style={{ minHeight: height }}
-      aria-busy={state.kind !== "failed"}
+      aria-busy={state.kind === "loading"}
     >
       <span className="font-medium text-base-content">{title}</span>
-      {state.kind === "failed" ? (
+      {state.kind === "failed" && (
         <>
           <span role="alert" className="text-error/80">
             {state.message}
           </span>
           <span className="flex gap-2">
-            <button type="button" className="btn btn-xs" onClick={retry}>
-              Retry
-            </button>
+            <Button label="Retry" size="xs" outline onClick={retry} />
             {downloadUrl && (
-              <a className="btn btn-ghost btn-xs" href={downloadUrl} download>
-                Download
+              <a className={buttonClassName({ variant: "ghost", size: "xs" })} href={downloadUrl} download>
+                Download original file
               </a>
             )}
           </span>
+          {downloadUrl && (
+            <span className="text-xs text-base-content/50">
+              The original file opens in a mesh tool such as ParaView.
+            </span>
+          )}
         </>
-      ) : (
+      )}
+      {state.kind === "loading" && (
         <span className="flex items-center gap-2 text-base-content/60">
           <span className="loading loading-spinner loading-xs" />
-          {state.kind === "loading" ? "Preparing mesh…" : "Mesh loads when it scrolls into view"}
+          Preparing mesh… the first view can take a minute.
         </span>
+      )}
+      {state.kind === "waiting" && (
+        <Button label="Load mesh" size="xs" outline onClick={() => setRequested(true)} />
       )}
     </div>
   );

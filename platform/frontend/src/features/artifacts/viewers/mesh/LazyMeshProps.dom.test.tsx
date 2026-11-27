@@ -80,7 +80,12 @@ test("nothing is fetched until the viewer comes near the viewport", async () => 
   renderLazy();
 
   expect(api.meshProps).not.toHaveBeenCalled();
-  expect(screen.getByText("Mesh loads when it scrolls into view")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Load mesh" })).toBeInTheDocument();
+  // Nothing is in flight yet, so the placeholder doesn't claim to be busy.
+  expect(screen.getByRole("button", { name: "Load mesh" }).parentElement).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
 
   enter();
   expect(await screen.findByText("viewer ds1")).toBeInTheDocument();
@@ -95,7 +100,7 @@ test("a failed conversion shows why, a download link, and retries on request", a
   enter();
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Could not convert out.e for viewing.");
-  expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/c");
+  expect(screen.getByRole("link", { name: "Download original file" })).toHaveAttribute("href", "/api/c");
 
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(await screen.findByText("viewer ds1")).toBeInTheDocument();
@@ -158,4 +163,24 @@ test("unmounting aborts the request", () => {
   unmount();
 
   expect(signal?.aborted).toBe(true);
+});
+
+test("the Load mesh button fetches a viewer the observer hasn't reported", async () => {
+  api.meshProps.mockResolvedValue(mesh("ds4"));
+  renderLazy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Load mesh" }));
+
+  expect(await screen.findByText("viewer ds4")).toBeInTheDocument();
+  expect(api.meshProps).toHaveBeenCalledTimes(1);
+});
+
+test("while loading the placeholder is busy and says the first view can take a while", () => {
+  api.meshProps.mockReturnValue(new Promise(() => {}));
+  renderLazy();
+  enter();
+
+  const progress = screen.getByText(/the first view can take a minute/);
+  expect(progress.closest("[aria-busy]")).toHaveAttribute("aria-busy", "true");
+  expect(screen.queryByRole("button", { name: "Load mesh" })).not.toBeInTheDocument();
 });
