@@ -39,6 +39,12 @@ x-common-env: &common-env
   # resources (DeepLynx, SLURM). "env" (default) preserves today's global
   # credential behavior; "vault" activates per-user Vault policies.
   CREDENTIAL_BROKER: ${CREDENTIAL_BROKER:-env}
+  # Artifact catalogs (artifacts:conv:{id}:*) must live as long as the conversation
+  # they belong to, and conversations never expire. The SDK default is 7 days, after
+  # which a reopened conversation has lost its artifacts. 0 = no expiry. Every
+  # service that registers artifacts needs this, so each agent compose file sets it
+  # too. Until artifacts move to Postgres.
+  ARTIFACT_REGISTRY_TTL_SECONDS: ${ARTIFACT_REGISTRY_TTL_SECONDS:-0}
 
 # Containers reach services on the Docker host (e.g. a local DeepLynx) as
 # prometheus.host.internal. A name of our own, rather than host.docker.internal,

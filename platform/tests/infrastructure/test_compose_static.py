@@ -147,3 +147,45 @@ def test_every_agent_sets_external_agent_url(project_root, compose_data):
         if svc.get("environment", {}).get("EXTERNAL_AGENT_URL") != f"http://{name}:8000"
     }
     assert not wrong, f"EXTERNAL_AGENT_URL missing or not http://<service>:8000: {wrong}"
+
+
+# Services that reach Valkey but never register artifacts.
+_VALKEY_WITHOUT_ARTIFACTS = {"redis"}
+_KEEP_CATALOGS = {"0", "${ARTIFACT_REGISTRY_TTL_SECONDS:-0}"}
+
+
+def _environment(service: dict) -> dict:
+    env = service.get("environment") or {}
+    if isinstance(env, list):
+        env = dict(item.split("=", 1) for item in env)
+    return env
+
+
+def test_every_artifact_registering_service_keeps_catalogs(project_root):
+    """Artifact catalogs never expire, like the conversations they belong to.
+
+    ArtifactRegistry defaults to a 7-day TTL; a reopened conversation older than that
+    would render with no artifacts. Every service with Valkey access may register, in
+    any compose file, so each one must resolve (after ``<<: *common-env`` merges) to a
+    TTL of 0.
+    """
+    services = {}
+    paths = [*project_root.glob("docker-compose*.yml"), *project_root.glob("agents/**/docker-compose.yml")]
+    for path in paths:
+        for name, svc in (yaml.safe_load(path.read_text()).get("services") or {}).items():
+            services[f"{path.relative_to(project_root)}:{name}"] = svc
+
+    with_valkey = {
+        key: _environment(svc)
+        for key, svc in services.items()
+        if "REDIS_URL" in _environment(svc) and key.rsplit(":", 1)[1] not in _VALKEY_WITHOUT_ARTIFACTS
+    }
+    for required in ("docker-compose.yml:client-agent", "docker-compose.yml:backend"):
+        assert required in with_valkey, f"{required} no longer sets REDIS_URL; update this test"
+
+    wrong = {
+        key: env.get("ARTIFACT_REGISTRY_TTL_SECONDS")
+        for key, env in with_valkey.items()
+        if env.get("ARTIFACT_REGISTRY_TTL_SECONDS") not in _KEEP_CATALOGS
+    }
+    assert not wrong, f"ARTIFACT_REGISTRY_TTL_SECONDS missing or not 0: {wrong}"

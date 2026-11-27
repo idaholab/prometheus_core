@@ -50,6 +50,8 @@ services:
       LITELLM_MASTER_KEY: ${AGENT_SECRET}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # The stub registers its sample artifacts, which never expire (as in docker-compose.yml)
+      ARTIFACT_REGISTRY_TTL_SECONDS: ${ARTIFACT_REGISTRY_TTL_SECONDS:-0}
       # The SDK checks these at startup. The stub never connects to DeepLynx, so
       # the made-up values `make up-e2e` sets are enough (see E2E_STACK)
       DEEPLYNX_BASE_URL: ${DEEPLYNX_BASE_URL:-https://deeplynx.inl.gov/api/v1}

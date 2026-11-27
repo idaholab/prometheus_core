@@ -23,6 +23,8 @@ services:
       LITELLM_MASTER_KEY: ${AGENT_SECRET}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Keep artifact catalogs as long as their conversations (see platform/docker-compose.yml).
+      ARTIFACT_REGISTRY_TTL_SECONDS: ${ARTIFACT_REGISTRY_TTL_SECONDS:-0}
       AGENT_SECRET_REQUIRED: ${AGENT_SECRET_REQUIRED:-true}
       # Multi-user identity plane (RS256 only): this agent verifies with the
       # public key or JWKS_URL -- it never holds the private key. JWKS_URL
