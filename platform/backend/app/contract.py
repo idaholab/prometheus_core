@@ -256,6 +256,11 @@ class ArtifactMeta(BaseModel):
         "Empty when the backend knows no conversation; the client then uses "
         "`GET /api/artifacts/{artifact_id}/content`.",
     )
+    mesh_url: str = Field(
+        default="",
+        description="For a mesh artifact: where to fetch its MeshViewer props, converted on first request "
+        "(`GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/mesh`). Empty otherwise.",
+    )
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None
     created_at: Optional[str] = None

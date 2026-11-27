@@ -404,6 +404,20 @@ another tab of the same login opens a different conversation. Any miss (not
 readable, not in the catalog, Valkey down) is one **404**, so a guess can't tell
 the cases apart.
 
+## `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/mesh`
+
+Returns the MeshViewer props for a mesh artifact (`datasetId`, `baseUrl`, `manifest`,
+`metadata`, …: the same shape a live turn puts in `json_body`), converting the
+Exodus/STL source on first request. Mesh artifacts with a URI name this route in
+`ArtifactMeta.mesh_url`. Same access rule and 404 as the content route; **404** also
+when the artifact is not a mesh, **422** when it can't be converted.
+
+A repeat request reads the converted dataset through a source index in the mesh
+cache (`.index/`), with no download and no hashing. Concurrent requests for one mesh
+share a single conversion, which finishes even if the browser disconnects. The VTP
+files themselves stay at `GET /api/artifacts/mesh/{dataset_id}/{filename}`, which
+rejects dot-prefixed segments so `.index/` is never served.
+
 ## `GET /api/artifacts/{artifact_id}/content`
 
 The older, session-scoped route: it looks the id up in the session's catalog, which

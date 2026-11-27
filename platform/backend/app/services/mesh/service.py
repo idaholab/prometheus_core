@@ -40,10 +40,13 @@ and the frontend adapter degrades that artifact to a file download.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import multiprocessing
 import shutil
 import tempfile
+import uuid
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
@@ -299,6 +302,101 @@ async def _convert_offloop(
         return None
 
 
+# --------------------------------------------------------------------------- #
+# Source index: artifact source -> converted dataset, without download or hashing
+# --------------------------------------------------------------------------- #
+
+# Dot-prefixed, so the VTP route (which rejects such segments) never serves it.
+_INDEX_DIR = ".index"
+
+
+def _source_key(artifact: dict[str, Any], uri: str) -> str:
+    """Stable key for "this artifact's source bytes": its URI plus the reader choice.
+
+    A catalog URI names immutable content (a DeepLynx item, a staged upload), so the
+    URI is enough to find the dataset a previous conversion produced. The STL/Exodus
+    choice is part of the key because the same bytes convert differently under each.
+    """
+    kind = _mesh_kind(str(artifact.get("name") or ""), uri, _normalize_mime(artifact.get("mime_type")))
+    return hashlib.sha256(f"{kind}|{uri}".encode("utf-8", "replace")).hexdigest()[:32]
+
+
+def _index_path(cache_root: Path, key: str) -> Path:
+    return cache_root / _INDEX_DIR / f"{key}.json"
+
+
+def _read_index(cache_root: Path, key: str) -> Optional[str]:
+    """The dataset id recorded for *key*, if that dataset is still in the cache."""
+    try:
+        dataset_id = json.loads(_index_path(cache_root, key).read_text()).get("dataset_id")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(dataset_id, str) or not (cache_root / dataset_id / "manifest.json").is_file():
+        return None
+    return dataset_id
+
+
+def _write_index(cache_root: Path, key: str, dataset_id: str) -> None:
+    """Record *dataset_id* for *key* atomically (rename), so a reader never sees half a file."""
+    path = _index_path(cache_root, key)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+        tmp.write_text(json.dumps({"dataset_id": dataset_id}))
+        tmp.replace(path)
+    except OSError:
+        logger.warning("mesh: could not write source index for dataset %s", dataset_id, exc_info=True)
+
+
+def _props_from_cache(cache_root: Path, dataset_id: str, title: str) -> Optional[dict[str, Any]]:
+    out = cache_root / dataset_id
+    try:
+        manifest = json.loads((out / "manifest.json").read_text())
+        metadata = json.loads((out / "meta.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return _build_json_body(dataset_id, manifest, metadata, title)
+
+
+# One conversion per source at a time, in this process. A second request for the same
+# mesh awaits the first one's task instead of downloading and converting it again.
+_inflight: dict[str, "asyncio.Task[Optional[dict[str, Any]]]"] = {}
+
+
+async def mesh_props(artifact: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """MeshViewer props for one mesh artifact, converting it on first use.
+
+    ``None`` when the artifact has no URI or the source can't be resolved or converted
+    (logged). A source converted before -- live or on an earlier view -- is a disk read
+    through the source index, with no download and no hashing. Concurrent calls for one
+    source share a single conversion, which runs as its own task: a caller that gives
+    up (a browser that navigated away) doesn't cancel it, so the next view is a hit.
+    """
+    uri = str(artifact.get("uri") or "")
+    if not uri:
+        return None
+    title = str(artifact.get("name") or "") or "Mesh Viewer"
+    cache_root = mesh_cache_root()
+    key = _source_key(artifact, uri)
+
+    dataset_id = _read_index(cache_root, key)
+    if dataset_id is not None:
+        props = _props_from_cache(cache_root, dataset_id, title)
+        if props is not None:
+            return props
+
+    task = _inflight.get(key)
+    if task is None:
+        task = asyncio.create_task(_enrich_one(artifact, uri, cache_root))
+        _inflight[key] = task
+        task.add_done_callback(lambda _t: _inflight.pop(key, None))
+    props = await asyncio.shield(task)
+    if props is not None:
+        _write_index(cache_root, key, str(props["datasetId"]))
+        props = {**props, "title": title}
+    return props
+
+
 async def _enrich_one(artifact: dict[str, Any], uri: str, cache_root: Path) -> Optional[dict[str, Any]]:
     """Resolve + convert one mesh artifact into its ``json_body``, or ``None`` on failure."""
     ident = artifact_identity(artifact)
@@ -357,11 +455,10 @@ async def enrich_mesh_artifact_dicts(artifacts: list[dict[str, Any]]) -> None:
     if not to_convert:
         return
 
-    cache_root = mesh_cache_root()
     bodies: dict[str, dict[str, Any]] = {}
     for ident, artifact in to_convert.items():
         try:
-            body = await _enrich_one(artifact, str(artifact["uri"]), cache_root)
+            body = await mesh_props(artifact)
         except Exception:
             logger.exception("mesh enrichment failed for artifact %s", ident)
             continue

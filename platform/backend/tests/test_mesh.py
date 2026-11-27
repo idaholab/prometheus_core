@@ -426,7 +426,7 @@ def test_reject_unsafe_segment_blocks_traversal():
     _reject_unsafe_segment("surface_t0000.vtp")
 
     # traversal / separators / bad chars are rejected with 400
-    for bad in ["..", "../etc", "a/b", "a\\b", "..%2f", "foo bar", ""]:
+    for bad in ["..", "../etc", "a/b", "a\\b", "..%2f", "foo bar", "", ".index", ".hidden"]:
         with pytest.raises(HTTPException) as exc:
             _reject_unsafe_segment(bad)
         assert exc.value.status_code == 400
@@ -488,3 +488,167 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
     # Second call is a cache hit (manifest already present) — same id, still valid.
     dataset_id2, _, _ = service._convert_sync(stl_path, cache_root, "sphere.stl", "", "model/stl")
     assert dataset_id2 == dataset_id
+
+
+# --------------------------------------------------------------------------- #
+# mesh_props: on-demand conversion, source index, shared in-flight builds
+# --------------------------------------------------------------------------- #
+
+_MESH = {"artifact_id": "m1", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x/mesh.exo"}
+
+
+def _fake_cached_convert(monkeypatch, tmp_path, calls, *, gate=None):
+    """A _convert_offloop that writes a real cache entry, so later reads hit the disk."""
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _convert(local_path, cache_root, name, uri, mime, *, ident):
+        calls.append(uri)
+        if gate is not None:
+            await gate.wait()
+        out = cache_root / "dsAAA"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "manifest.json").write_text(json.dumps(_manifest(point=["T"])))
+        (out / "meta.json").write_text(json.dumps({"num_timesteps": 1, "time_values": [0.0]}))
+        return "dsAAA", _manifest(point=["T"]), {"num_timesteps": 1, "time_values": [0.0]}
+
+    monkeypatch.setattr(service, "_convert_offloop", _convert)
+
+
+async def test_mesh_props_converts_once_then_reads_the_source_index(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+
+    first = await service.mesh_props(dict(_MESH))
+    assert first is not None and first["datasetId"] == "dsAAA"
+
+    async def _no_download(*_a, **_k):
+        raise AssertionError("a source-index hit must not download")
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _no_download)
+    again = await service.mesh_props({**_MESH, "name": "renamed.exo"})
+
+    assert calls == ["file:///x/mesh.exo"]
+    assert again is not None and again["datasetId"] == "dsAAA"
+    assert again["title"] == "renamed.exo"
+
+
+async def test_concurrent_mesh_props_share_one_conversion(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    gate = asyncio.Event()
+    _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
+
+    pending = [asyncio.create_task(service.mesh_props(dict(_MESH))) for _ in range(3)]
+    await asyncio.sleep(0.01)
+    gate.set()
+    results = await asyncio.gather(*pending)
+
+    assert calls == ["file:///x/mesh.exo"]
+    assert all(r is not None and r["datasetId"] == "dsAAA" for r in results)
+
+
+async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    gate = asyncio.Event()
+    _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
+
+    caller = asyncio.create_task(service.mesh_props(dict(_MESH)))
+    await asyncio.sleep(0.01)
+    caller.cancel()
+    gate.set()
+    await asyncio.sleep(0.01)
+
+    assert (tmp_path / "cache" / "dsAAA" / "manifest.json").is_file()
+
+
+async def test_mesh_props_is_none_without_a_uri():
+    assert await service.mesh_props({**_MESH, "uri": ""}) is None
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/conversations/{cid}/artifacts/{aid}/mesh
+# --------------------------------------------------------------------------- #
+
+
+def _patch_catalog(monkeypatch, catalog: dict[str, dict]) -> None:
+    from app.routers import artifacts as artifacts_router
+
+    class _Catalog:
+        available = True
+
+        def owns(self, user_id, conv_id):
+            return (user_id, conv_id) == ("alice", "c1")
+
+        def get_meta(self, conv_id):
+            return {}
+
+        def get_artifact(self, conv_id, artifact_id):
+            return catalog.get(artifact_id) if conv_id == "c1" else None
+
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: _Catalog())
+
+
+def test_mesh_props_route_converts_and_returns_viewer_props(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+
+    assert resp.status_code == 200
+    assert resp.json()["baseUrl"] == "/api/artifacts/mesh/dsAAA"
+
+
+def test_mesh_props_route_404s_for_another_users_conversation(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/conversations/c-bob/artifacts/m1/mesh").status_code == 404
+
+
+def test_mesh_props_route_404s_for_a_non_mesh(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch, {"p1": {"artifact_id": "p1", "name": "plot.png", "mime_type": "image/png"}})
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/conversations/c1/artifacts/p1/mesh").status_code == 404
+
+
+def test_mesh_props_route_422s_when_conversion_fails(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _fail(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(service, "_convert_offloop", _fail)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+    assert resp.status_code == 422
+    assert "mesh.exo" in resp.json()["detail"]
+
+
+def test_vtp_route_never_serves_the_source_index(monkeypatch, tmp_path):
+    index = tmp_path / ".index"
+    index.mkdir()
+    (index / "k.json").write_text("{}")
+
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/artifacts/mesh/.index/k.json").status_code == 400
+
+
+def test_only_mesh_artifacts_with_a_uri_get_a_mesh_url():
+    from app.services.artifacts import shape_artifacts
+
+    mesh, no_uri, png = shape_artifacts(
+        [
+            _MESH,
+            {**_MESH, "artifact_id": "m2", "uri": ""},
+            {"artifact_id": "p1", "name": "a.png", "uri": "file:///a.png"},
+        ],
+        conversation_id="c1",
+    )
+    assert mesh.mesh_url == "/api/conversations/c1/artifacts/m1/mesh"
+    assert no_uri.mesh_url == ""
+    assert png.mesh_url == ""

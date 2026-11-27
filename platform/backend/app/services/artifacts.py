@@ -454,9 +454,13 @@ def _citation_from(metadata: dict[str, Any]) -> Optional[Citation]:
     )
 
 
+def _artifact_route(conversation_id: str, artifact_id: str, leaf: str) -> str:
+    return f"/api/conversations/{quote(conversation_id, safe='')}/artifacts/{quote(artifact_id, safe='')}/{leaf}"
+
+
 def artifact_content_url(conversation_id: str, artifact_id: str) -> str:
     """The conversation-scoped content route for one artifact."""
-    return f"/api/conversations/{quote(conversation_id, safe='')}/artifacts/{quote(artifact_id, safe='')}/content"
+    return _artifact_route(conversation_id, artifact_id, "content")
 
 
 def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str) -> Optional[ArtifactMeta]:
@@ -478,6 +482,7 @@ def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str) -> Optio
     metadata = artifact.get("metadata") or {}
     tags = artifact.get("tags")
     artifact_id = artifact_identity(artifact)
+    render_hint = classify_render_hint(artifact)
     return ArtifactMeta(
         artifact_id=artifact_id,
         name=str(artifact.get("name") or ""),
@@ -487,8 +492,11 @@ def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str) -> Optio
         uri=artifact.get("uri"),
         tags=list(tags) if isinstance(tags, list) else [],
         json_body=artifact.get("json_body"),
-        render_hint=classify_render_hint(artifact),
+        render_hint=render_hint,
         content_url=artifact_content_url(conversation_id, artifact_id) if conversation_id else "",
+        mesh_url=_artifact_route(conversation_id, artifact_id, "mesh")
+        if conversation_id and render_hint == "mesh" and artifact.get("uri")
+        else "",
         citation=_citation_from(metadata),
         producer_agent_id=artifact.get("producer_agent_id"),
         created_at=artifact.get("created_at"),

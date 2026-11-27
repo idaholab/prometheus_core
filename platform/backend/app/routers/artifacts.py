@@ -56,7 +56,7 @@ from app.conversation_state import ConversationStateClient, shared_client
 from app.openapi import SESSION_COOKIE, TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
-from app.services.mesh.service import mesh_cache_root
+from app.services.mesh.service import mesh_cache_root, mesh_props
 from app.sessions import SessionState, get_store
 
 logger = logging.getLogger(__name__)
@@ -179,12 +179,67 @@ async def get_conversation_artifact_content(
     sound because a session's ``conversation_id`` is only server-minted or set by an
     ownership-checked resume.
     """
+    artifact = await _readable_artifact(conversation_id, artifact_id, request, claims)
+    return await _serve(artifact, artifact_id)
+
+
+async def _readable_artifact(
+    conversation_id: str, artifact_id: str, request: Request, claims: TokenClaims
+) -> dict[str, Any]:
+    """The raw catalog dict, if the caller may read *conversation_id*; else a 404."""
     session = await get_store(request).get(claims.sid)
     bound = session is not None and session.conversation_id == conversation_id
     artifact = await asyncio.to_thread(_lookup, conversation_id, artifact_id, claims.sub, bound)
     if artifact is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Artifact not found")
-    return await _serve(artifact, artifact_id)
+    return artifact
+
+
+@router.get(
+    "/conversations/{conversation_id}/artifacts/{artifact_id}/mesh",
+    summary="Get a mesh artifact's viewer data",
+    response_model=dict[str, Any],
+    response_description="The MeshViewer props, the same object a live turn puts in a mesh artifact's "
+    "`json_body`: `datasetId`, `baseUrl`, `title`, `metadata`, `manifest`, `initialTimestep`, "
+    "`initialVariable`, `initialColorPreset`, `height`, `showControls`, `allowPicking`.",
+    dependencies=[Depends(SESSION_COOKIE)],
+    responses={
+        **error(
+            http_status.HTTP_404_NOT_FOUND,
+            "The caller may not read the conversation, the artifact isn't in its catalog, or it isn't a mesh.",
+            "Artifact not found",
+            "Artifact is not a mesh",
+        ),
+        **error(http_status.HTTP_422_UNPROCESSABLE_CONTENT, "The mesh could not be read or converted."),
+    },
+)
+async def get_conversation_artifact_mesh(
+    request: Request,
+    conversation_id: str = _CONVERSATION_ID,
+    artifact_id: str = _ARTIFACT_ID,
+    claims: TokenClaims = Depends(current_claims),
+) -> dict[str, Any]:
+    """Return the MeshViewer data for a mesh artifact (Exodus or STL), converting it to
+    VTP on the first request. `ArtifactMeta.mesh_url` names this route.
+
+    The first request for a mesh can take seconds; later ones read the stored
+    conversion. Requests for the same mesh made while it converts wait for that one
+    conversion. Same access rule as the content route. The VTP files the response
+    points at are served by `GET /api/artifacts/mesh/{dataset_id}/{filename}`.
+    \f
+    See :func:`app.services.mesh.service.mesh_props` for the source index and the
+    shared in-flight conversion.
+    """
+    artifact = await _readable_artifact(conversation_id, artifact_id, request, claims)
+    if classify_render_hint(artifact) != "mesh":
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Artifact is not a mesh")
+    props = await mesh_props(artifact)
+    if props is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Could not convert {artifact.get('name') or 'this mesh'} for viewing.",
+        )
+    return props
 
 
 @router.get("/artifacts/{artifact_id}/content")
@@ -261,7 +316,8 @@ async def _serve(artifact: dict[str, Any], artifact_id: str) -> Response:
 
 def _reject_unsafe_segment(value: str) -> None:
     """Reject any path segment that isn't a single safe name (path-traversal guard)."""
-    if not _MESH_SEGMENT_RE.match(value) or ".." in value:
+    # A leading dot also covers the cache's private ``.index/`` directory.
+    if not _MESH_SEGMENT_RE.match(value) or ".." in value or value.startswith("."):
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Invalid mesh path.")
 
 
