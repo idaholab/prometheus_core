@@ -154,7 +154,12 @@ class StubClientAgent(PrometheusAgent):
         await self.send_status_update(context=context, event_queue=event_queue, message=STATUS_MESSAGE)
         reply = answer(query, conversation_id)
         for artifact in reply.new_artifacts or []:
-            self.artifact_registry.register(ArtifactReference.from_any(artifact, conversation_id=conversation_id))
+            reference = ArtifactReference.from_any(artifact, conversation_id=conversation_id)
+            # from_any returns None for a payload with no uri/json_body/text_body; fail
+            # here with the sample named, not later as a viewer 404 in the e2e run.
+            if reference is None:
+                raise ValueError(f"sample artifact {artifact.get('artifact_id')!r} has no content to register")
+            self.artifact_registry.register(reference)
         return reply.model_dump(exclude_none=True)
 
 
