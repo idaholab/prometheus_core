@@ -414,9 +414,14 @@ async def _convert_and_index(
     """The shared task's body: convert, then record the source index entry.
 
     It writes the index itself, so a conversion whose every caller gave up is still a
-    hit next time.
+    hit next time. It never raises: an unexpected error is logged and becomes ``None``
+    (the route's 422), and nothing is left for asyncio to report as unretrieved.
     """
-    props = await _enrich_one(artifact, uri, cache_root)
+    try:
+        props = await _enrich_one(artifact, uri, cache_root)
+    except Exception:
+        logger.exception("mesh: conversion of %r failed", uri)
+        return None
     if props is not None and key is not None:
         _write_index(cache_root, key, str(props["datasetId"]))
     return props

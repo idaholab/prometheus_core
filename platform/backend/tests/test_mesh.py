@@ -670,6 +670,26 @@ def test_mesh_props_route_422s_when_conversion_fails(monkeypatch, tmp_path):
     assert "mesh.exo" in resp.json()["detail"]
 
 
+def test_mesh_props_route_422s_when_conversion_raises(monkeypatch, tmp_path, caplog):
+    """An unexpected error in the shared task (a storage error, say) is the documented
+    422, not a 500, and it is logged once."""
+    import logging
+
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _boom(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(service, "_enrich_one", _boom)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    with caplog.at_level(logging.ERROR, logger=service.logger.name):
+        resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+
+    assert resp.status_code == 422
+    assert [r.levelno for r in caplog.records if r.name == service.logger.name] == [logging.ERROR]
+
+
 def test_vtp_route_never_serves_the_source_index(monkeypatch, tmp_path):
     index = tmp_path / ".index"
     index.mkdir()
