@@ -64,3 +64,14 @@ test("two artifacts with the same name both survive adapter and dedupe", () => {
   }
 });
 
+test("the stamped artifact id wins over a manifest's own artifact_id", () => {
+  const element = artifactToElement(
+    jsonArtifact({
+      artifact_id: "wire-id",
+      render_hint: "mesh",
+      json_body: { baseUrl: "/api/artifacts/mesh/d", manifest: { files: [] }, artifact_id: "manifest-id" },
+    }),
+  );
+
+  assert.equal(element.props?.artifact_id, "wire-id");
+});
