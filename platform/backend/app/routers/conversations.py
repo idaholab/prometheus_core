@@ -38,7 +38,6 @@ guess at another user's conversation id can't even confirm the id exists.
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 from typing import Any, Optional, cast
 
@@ -61,7 +60,6 @@ from app.openapi import TAG_CONVERSATIONS
 from app.redis_client import get_redis
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import is_user_upload, shape_artifacts
-from app.services.mesh.service import enrich_mesh_artifact_dicts
 from app.sessions import get_store
 from app.task_events import build_task_tree
 
@@ -124,10 +122,6 @@ def _fetch_detail_parts(conv_id: str, user_id: str) -> tuple[bool, dict[str, Any
     exist" from "not yours". A soft-deleted conversation must 404 here too, not only
     drop out of ``recent``: a tab that still remembers its id would otherwise resume
     it on reload and append the next turn to a conversation the user deleted.
-
-    Stops at the *raw* artifact dicts rather than returning a finished response,
-    because mesh enrichment (:func:`_build_detail`) is async and must run on the event
-    loop, not in this thread.
     """
     meta = _owned_meta(conv_id, user_id)
     if meta is None:
@@ -142,23 +136,13 @@ def _fetch_detail_parts(conv_id: str, user_id: str) -> tuple[bool, dict[str, Any
     }
 
 
-async def _build_detail(conv_id: str, parts: dict[str, Any]) -> ConversationDetailResponse:
-    """Turn :func:`_fetch_detail_parts` output into the response, enriching meshes.
+def _build_detail(conv_id: str, parts: dict[str, Any]) -> ConversationDetailResponse:
+    """Turn :func:`_fetch_detail_parts` output into the response.
 
-    Enriches ``parts["raw_artifacts"]`` **in place**, so a caller holding that list (the
-    resume path, which seeds the session catalog from it) sees the enriched dicts.
-
-    The mesh pass is what makes restored conversations mount the interactive
-    MeshViewer: the frontend adapter only builds a viewer element when a mesh
-    artifact's ``json_body`` carries the VTP manifest, and the persisted catalog has
-    ``json_body: None`` (the live turn's manifest is computed on the fly and never
-    written back). Without this the whole restored transcript degrades to download
-    cards. Enrichment is content-hash cached, so a conversation whose meshes were
-    already converted live costs a cache hit -- but a cache miss is a VTK conversion per
-    mesh, which is why the resume path rebinds the session *before* calling this.
+    Mesh artifacts are not converted here: each carries a ``mesh_url`` the viewer
+    fetches when it scrolls into view, so reopening a conversation never waits on VTK.
     """
     raw_artifacts = cast(list[dict[str, Any]], parts["raw_artifacts"])
-    await enrich_mesh_artifact_dicts(raw_artifacts)
 
     messages = cast(list[dict[str, Any]], parts["messages"])
     return ConversationDetailResponse(
@@ -186,7 +170,7 @@ async def get_conversation_detail(
     claims: TokenClaims = Depends(current_claims),
 ) -> ConversationDetailResponse:
     parts = await _fetch_parts_or_404(conversation_id, claims.sub)
-    return await _build_detail(conversation_id, parts)
+    return _build_detail(conversation_id, parts)
 
 
 @router.get("/conversations/{conversation_id}/tasks", response_model=ConversationTasksResponse)
@@ -267,12 +251,8 @@ async def resume_conversation(
     continues it. Returns its transcript + artifact catalog in the same call so
     the frontend can render history and resume in one round-trip.
 
-    Rebinds first, enriches meshes second. Enrichment can take seconds per mesh on a
-    cache miss, and the frontend lets the user click elsewhere meanwhile; the rebind
-    itself is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer click
-    always wins regardless of which request finishes last. The enriched catalog is then
-    written back only if the session is still on this conversation, with the catalog
-    the rebind seeded."""
+    The rebind is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer
+    click always wins regardless of which request finishes last."""
     parts = await _fetch_parts_or_404(conversation_id, claims.sub)
     raw_artifacts = cast(list[dict[str, Any]], parts["raw_artifacts"])
 
@@ -297,14 +277,6 @@ async def resume_conversation(
         bind_seq=body.bind_seq if body else None,
     )
 
-    # _build_detail enriches raw_artifacts in place, so keep the list reset just seeded.
-    seeded = copy.deepcopy(raw_artifacts)
-    detail = await _build_detail(conversation_id, parts)
-    # Required, not cosmetic: artifact_identity hashes json_body for an artifact with no
-    # explicit id, so the ids in this response only resolve against the enriched catalog.
-    # Guarded: skipped if the user has moved on in the meantime, or if a turn or task of
-    # this conversation wrote a newer catalog while the meshes were converting.
-    await store.replace_seeded_artifacts(claims.sid, raw_artifacts, conversation_id=conversation_id, seeded=seeded)
-
+    detail = _build_detail(conversation_id, parts)
     detail.auto_approve_steps = settings.auto_approve_steps
     return detail

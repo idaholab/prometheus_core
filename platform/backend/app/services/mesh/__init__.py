@@ -24,7 +24,7 @@ Layout:
   - ``vtk_pipeline`` / ``stl`` / ``converter`` — the VTK-dependent conversion library
     (``import vtk``). Imported lazily by :mod:`service` so the app (and the offline
     test suite) never pulls VTK just to mount the router.
-  - ``service`` — the app-facing async enrichment (``enrich_mesh_artifacts``) plus the
+  - ``service`` — the app-facing on-request conversion (``mesh_props``) plus the
     cache-root/URL helpers the artifacts router shares. It owns the spawn-based
     ``ProcessPoolExecutor`` that the VTK-dependent modules actually run in, so a crash
     in them costs one artifact rather than the web process.

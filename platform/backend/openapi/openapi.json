@@ -2020,7 +2020,7 @@
           "conversations"
         ],
         "summary": "Resume Conversation",
-        "description": "Rebind the caller's session to a past conversation so the next chat turn\ncontinues it. Returns its transcript + artifact catalog in the same call so\nthe frontend can render history and resume in one round-trip.\n\nRebinds first, enriches meshes second. Enrichment can take seconds per mesh on a\ncache miss, and the frontend lets the user click elsewhere meanwhile; the rebind\nitself is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer click\nalways wins regardless of which request finishes last. The enriched catalog is then\nwritten back only if the session is still on this conversation, with the catalog\nthe rebind seeded.",
+        "description": "Rebind the caller's session to a past conversation so the next chat turn\ncontinues it. Returns its transcript + artifact catalog in the same call so\nthe frontend can render history and resume in one round-trip.\n\nThe rebind is ordered by ``bind_seq`` (see ``SessionStore.reset``), so a newer\nclick always wins regardless of which request finishes last.",
         "operationId": "resume_conversation",
         "parameters": [
           {

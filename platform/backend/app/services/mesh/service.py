@@ -10,22 +10,23 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""App-facing mesh enrichment: populate mesh artifacts' ``json_body`` with a VTP manifest.
+"""App-facing mesh conversion: MeshViewer props for one mesh artifact, on request.
 
-For every artifact the classifier routes to the ``"mesh"`` render hint, this resolves
-the raw Exodus/STL bytes (reusing :func:`app.uri_resolver.resolve_to_local_path`),
-converts them to ``.vtp`` timesteps + a manifest off the event loop (in a *subprocess*
-pool, content-hash cached), and sets ``json_body`` to the exact prop shape
-``frontend/src/viewers/mesh/MeshViewerElement.tsx`` reads. The ``.vtp`` files are served
+:func:`mesh_props` backs ``GET /api/conversations/{cid}/artifacts/{aid}/mesh``, which
+the frontend's MeshViewer calls when it scrolls into view. It resolves the raw
+Exodus/STL bytes (reusing :func:`app.uri_resolver.resolve_to_local_path`), converts them
+to ``.vtp`` timesteps + a manifest off the event loop (in a *subprocess* pool,
+content-hash cached), and returns the exact prop shape
+``frontend/src/features/artifacts/viewers/mesh/MeshViewerElement.tsx`` reads. The ``.vtp`` files are served
 by ``GET /api/artifacts/mesh/{dataset_id}/{filename}`` (see ``routers/artifacts.py``),
 so ``baseUrl`` points there.
 
-On any failure the artifact's ``json_body`` is left unset (``None``) so the frontend
-adapter cleanly degrades to a file download — restoring rendering must never break a turn.
+On any failure it returns ``None``; the route answers 422 and the viewer offers the
+file for download. Nothing converts during a turn or a resume, so VTK never delays one.
 
 IMPORTANT: the VTK-dependent converter modules are imported lazily inside
 :func:`_convert_sync` (which runs in a worker subprocess), so importing this module — as
-``routers/artifacts.py`` and ``services/chat.py`` both do — never pulls in ``vtk``. The
+``routers/artifacts.py`` does — never pulls in ``vtk``. The
 offline backend test suite has no VTK installed, and with the conversion out-of-process
 the web process never imports VTK at all.
 
@@ -33,7 +34,7 @@ WHY A SUBPROCESS AND NOT A THREAD: VTK is a large C++ library reached through Py
 bindings. A segfault or an OOM kill inside it takes down the whole interpreter — which,
 with a thread pool, is the web process, dropping every in-flight conversation on the
 floor (the most plausible source of the unexplained backend restarts seen in dev). In a
-child process the same crash costs exactly one artifact: :func:`_enrich_one` catches it
+child process the same crash costs exactly one artifact: :func:`_convert_one` catches it
 and the frontend adapter degrades that artifact to a file download.
 """
 
@@ -52,14 +53,11 @@ import weakref
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from app import uri_resolver
 from app.config import settings
-from app.services.artifacts import _normalize_mime, artifact_identity, classify_render_hint
-
-if TYPE_CHECKING:  # avoid importing the prometheus_api contract at runtime
-    from app.a2a_client import ConversationResponse
+from app.services.artifacts import _normalize_mime, artifact_identity
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +76,7 @@ _STL_MIMES = {
 }
 
 # Dedicated *process* pool for CPU-bound VTK work. Built lazily so importing this
-# module (which routers/artifacts.py and services/chat.py both do at startup) costs
+# module (which routers/artifacts.py does at startup) costs
 # nothing, and dropped whenever a child dies so the next call rebuilds it.
 #
 # All access happens from the event-loop thread (every caller is a coroutine and none
@@ -178,7 +176,7 @@ def _mesh_kind(name: str, uri: str, mime: str) -> str:
     return "exodus"
 
 
-def _build_json_body(dataset_id: str, manifest: dict, metadata: dict, title: str) -> dict[str, Any]:
+def _viewer_props(dataset_id: str, manifest: dict, metadata: dict, title: str) -> dict[str, Any]:
     """Assemble the MeshViewer prop shape (ported from old MeshDataset.to_props()).
 
     Only ``baseUrl`` differs from the old props: it points at the backend VTP route
@@ -266,8 +264,8 @@ async def _convert_offloop(
     for a slot before their timeout starts.
 
     Returns ``None`` (having logged) when the conversion could not be completed, which
-    the caller turns into an un-enriched artifact. This is the whole "run VTK without
-    risking the web process" concern in one place; :func:`_enrich_one` above it only
+    the caller turns into a 422 and a download offer. This is the whole "run VTK without
+    risking the web process" concern in one place; :func:`_convert_one` above it only
     resolves the source and stamps the result.
 
     The two failures worth naming:
@@ -408,7 +406,7 @@ def _props_from_cache(cache_root: Path, dataset_id: str, title: str) -> Optional
         return None
     if not first_vtp.is_file() or metadata.get("num_nodes") == 0:
         return None
-    return _build_json_body(dataset_id, manifest, metadata, title)
+    return _viewer_props(dataset_id, manifest, metadata, title)
 
 
 def _props_from_index(cache_root: Path, key: str, title: str) -> Optional[dict[str, Any]]:
@@ -467,7 +465,7 @@ async def _convert_and_index(
     (the route's 422), and nothing is left for asyncio to report as unretrieved.
     """
     try:
-        props = await _enrich_one(artifact, uri, cache_root)
+        props = await _convert_one(artifact, uri, cache_root)
     except Exception:
         logger.exception("mesh: conversion of %r failed", uri)
         return None
@@ -476,8 +474,8 @@ async def _convert_and_index(
     return props
 
 
-async def _enrich_one(artifact: dict[str, Any], uri: str, cache_root: Path) -> Optional[dict[str, Any]]:
-    """Resolve + convert one mesh artifact into its ``json_body``, or ``None`` on failure."""
+async def _convert_one(artifact: dict[str, Any], uri: str, cache_root: Path) -> Optional[dict[str, Any]]:
+    """Resolve + convert one mesh artifact into MeshViewer props, or ``None`` on failure."""
     ident = artifact_identity(artifact)
     name = str(artifact.get("name") or "")
     mime = _normalize_mime(artifact.get("mime_type"))
@@ -499,67 +497,4 @@ async def _enrich_one(artifact: dict[str, Any], uri: str, cache_root: Path) -> O
         # download_dir), so this only cleans up http(s)/deeplynx downloads.
         shutil.rmtree(download_dir, ignore_errors=True)
 
-    return _build_json_body(dataset_id, manifest, metadata, name or "Mesh Viewer")
-
-
-async def enrich_mesh_artifact_dicts(artifacts: list[dict[str, Any]]) -> None:
-    """Populate ``json_body`` for every mesh artifact in *artifacts*, in place.
-
-    The list-based core shared by the live turn (:func:`enrich_mesh_artifacts`, which
-    unions a response's ``new_artifacts`` + ``artifacts``) and conversation resume
-    (``routers/conversations.py``, which passes the persisted catalog straight from
-    Redis). Entries are deduped by identity so each dataset is converted once, and the
-    content-hash cache makes any repeat — notably re-rendering a past conversation whose
-    meshes were already converted live — free. Failures are swallowed: the artifact
-    keeps ``json_body: None`` and the frontend adapter degrades to a file download.
-    """
-    all_artifacts: list[dict[str, Any]] = [a for a in artifacts if isinstance(a, dict)]
-    if not all_artifacts:
-        return
-
-    # First occurrence (by identity) of each mesh artifact still needing a body.
-    to_convert: dict[str, dict[str, Any]] = {}
-    for artifact in all_artifacts:
-        ident = artifact_identity(artifact)
-        if ident in to_convert:
-            continue
-        if artifact.get("json_body") is not None:
-            continue
-        if classify_render_hint(artifact) != "mesh":
-            continue
-        if not (artifact.get("uri") or ""):
-            continue
-        to_convert[ident] = artifact
-
-    if not to_convert:
-        return
-
-    bodies: dict[str, dict[str, Any]] = {}
-    for ident, artifact in to_convert.items():
-        try:
-            body = await mesh_props(artifact)
-        except Exception:
-            logger.exception("mesh enrichment failed for artifact %s", ident)
-            continue
-        if body is not None:
-            bodies[ident] = body
-
-    # Apply each computed body to every artifact object sharing that identity.
-    for artifact in all_artifacts:
-        if artifact.get("json_body") is not None:
-            continue
-        body = bodies.get(artifact_identity(artifact))
-        if body is not None:
-            artifact["json_body"] = body
-
-
-async def enrich_mesh_artifacts(response: "ConversationResponse") -> None:
-    """Enrich the mesh artifacts carried by a live turn's *response*, in place.
-
-    Thin wrapper over :func:`enrich_mesh_artifact_dicts`: unions ``new_artifacts``
-    (shaped for the wire) and ``artifacts`` (the persisted catalog) — both point at the
-    same dicts for a shared artifact, so stamping either is enough.
-    """
-    await enrich_mesh_artifact_dicts(
-        list(getattr(response, "new_artifacts", None) or []) + list(getattr(response, "artifacts", None) or [])
-    )
+    return _viewer_props(dataset_id, manifest, metadata, name or "Mesh Viewer")

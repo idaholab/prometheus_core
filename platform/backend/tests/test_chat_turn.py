@@ -624,3 +624,33 @@ def test_post_message_requires_auth(monkeypatch):
     client = TestClient(app)
     resp = client.post("/api/chat/messages", json={"query": "hi"})
     assert resp.status_code == 401
+
+
+async def test_a_turn_returns_meshes_unconverted_with_a_mesh_url(monkeypatch, session_store):
+    """A live turn never waits on VTK: the mesh comes back as the agent sent it, with a
+    ``mesh_url`` the viewer fetches when it scrolls into view."""
+    from app.services.mesh import service as mesh_service
+
+    async def _no_conversion(*_a, **_k):
+        raise AssertionError("a turn must not convert meshes")
+
+    monkeypatch.setattr(mesh_service, "mesh_props", _no_conversion)
+    monkeypatch.setattr(mesh_service, "_convert_one", _no_conversion)
+    await _seed(session_store)
+    mesh = {"artifact_id": "m1", "name": "out.e", "mime_type": "application/x-exodus", "uri": "file:///tmp/out.e"}
+
+    class _Client:
+        async def send(self, **_kwargs):
+            return _resp(status="completed", report="done", artifacts=[mesh], new_artifacts=[mesh])
+
+    mapped = await chat_service.handle_turn(
+        _Client(),  # type: ignore[arg-type]
+        session_store,
+        SID,
+        turn_id="t1",
+        query="mesh please",
+    )
+
+    (artifact,) = mapped.artifacts or []
+    assert artifact.json_body is None
+    assert artifact.mesh_url == "/api/conversations/c1/artifacts/m1/mesh"

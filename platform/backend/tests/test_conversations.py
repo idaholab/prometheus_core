@@ -667,52 +667,11 @@ async def test_resume_rebinds_session_and_returns_transcript(monkeypatch, sessio
     assert session.conversation_id == "c1"
 
 
-def test_detail_mesh_enriches_json_body_so_viewers_restore(monkeypatch):
-    """Resume must run the same mesh pass the live turn does.
-
-    The persisted catalog stores ``json_body: None`` for an Exodus/STL artifact; the
-    frontend adapter only mounts the MeshViewer when ``json_body`` carries the VTP
-    manifest, so without enrichment a restored conversation degrades to download cards.
-    """
-    mesh_artifact = {
-        "artifact_id": "a1",
-        "name": "block.e",
-        "mime_type": "application/x-exodus",
-        "uri": "file:///tmp/block.e",
-        "json_body": None,
-    }
-
-    fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
-    monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [dict(mesh_artifact)], raising=False)
-
-    async def _fake_enrich(artifacts):
-        for artifact in artifacts:
-            artifact["json_body"] = {"datasetId": "d1", "baseUrl": "/api/artifacts/mesh/d1", "manifest": {}}
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _fake_enrich)
-
-    client = _authed_client(monkeypatch)
-    body = client.get("/api/conversations/c1").json()
-
-    (artifact,) = body["artifacts"]
-    assert artifact["render_hint"] == "mesh"
-    assert artifact["json_body"]["baseUrl"] == "/api/artifacts/mesh/d1"
-
-
-async def test_resume_seeds_session_artifacts_with_the_enriched_catalog(monkeypatch, session_store):
-    """``session.artifacts`` (what the content proxy resolves against) must be the
-    catalog resume already read, not a second Redis round-trip."""
+async def test_resume_seeds_session_artifacts_with_the_catalog_it_read(monkeypatch, session_store):
+    """``session.artifacts`` (what the session-scoped content route resolves against)
+    is the catalog resume already read."""
     fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
     monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [{"artifact_id": "a1", "name": "n"}], raising=False)
-
-    calls: list[list[dict]] = []
-
-    async def _fake_enrich(artifacts):
-        calls.append(artifacts)
-        for artifact in artifacts:  # stamp in place, as the real mesh pass does
-            artifact["json_body"] = {"datasetId": "d1"}
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _fake_enrich)
 
     client = _authed_client(monkeypatch)
 
@@ -720,11 +679,6 @@ async def test_resume_seeds_session_artifacts_with_the_enriched_catalog(monkeypa
     session = await session_store.get_or_create("sid-conv")
     assert session.conversation_id == "c1"
     assert [a["artifact_id"] for a in session.artifacts] == ["a1"]
-    # The catalog seeded into the session is the very list the mesh pass stamped -- it
-    # round-trips through Valkey as JSON now, so the check is equality rather than
-    # identity. Equality is the property that matters: a second Redis round-trip would
-    # have returned the *unenriched* rows.
-    assert calls and calls[0] == session.artifacts
 
 
 async def test_detail_and_resume_leave_user_uploads_out_of_the_response(monkeypatch, session_store):
@@ -738,10 +692,6 @@ async def test_detail_and_resume_leave_user_uploads_out_of_the_response(monkeypa
     fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
     monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [dict(a) for a in catalog], raising=False)
 
-    async def _no_enrich(artifacts):
-        return None
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _no_enrich)
     client = _authed_client(monkeypatch)
 
     detail = client.get("/api/conversations/c1").json()
@@ -767,10 +717,6 @@ def test_detail_messages_name_the_artifacts_each_turn_produced(monkeypatch):
         fake, "get_artifacts", lambda conv_id: [{"artifact_id": "gen", "name": "plot.png"}], raising=False
     )
 
-    async def _no_enrich(artifacts):
-        return None
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _no_enrich)
     body = _authed_client(monkeypatch).get("/api/conversations/c1").json()
 
     assert [m["artifact_ids"] for m in body["messages"]] == [[], ["gen"]]
@@ -778,53 +724,19 @@ def test_detail_messages_name_the_artifacts_each_turn_produced(monkeypatch):
     assert [a["content_url"] for a in body["artifacts"]] == ["/api/conversations/c1/artifacts/gen/content"]
 
 
-async def test_resume_keeps_a_newer_catalog_written_during_enrichment(monkeypatch, session_store):
-    """Reload path: a task of c1 finishes while the resume converts meshes.
-
-    ``_map_final`` then writes the agent's full, newer catalog for the same conversation.
-    The resume write-back must not replace it with the older enriched list.
-    """
-    fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
-    monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [{"artifact_id": "old", "name": "n"}], raising=False)
-    # The session is already on c1, so the rebind keeps the awaited-task set.
-    await session_store.reset("sid-conv", "c1", artifacts=[{"artifact_id": "old"}])
-
-    newer = [{"artifact_id": "old", "name": "n"}, {"artifact_id": "new", "name": "task result"}]
-
-    async def _enrich_while_task_finishes(artifacts):
-        assert await session_store.set_artifacts("sid-conv", newer, conversation_id="c1")
-        for artifact in artifacts:
-            artifact["json_body"] = {"datasetId": "d1"}
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _enrich_while_task_finishes)
-    client = _authed_client(monkeypatch)
-
-    assert client.post("/api/conversations/c1/resume").status_code == 200
-
-    session = await session_store.get_or_create("sid-conv")
-    assert session.conversation_id == "c1"
-    assert session.artifacts == newer
-
-
 async def test_superseded_resume_does_not_rebind_or_seed_the_session(monkeypatch, session_store):
     """Click A (slow meshes), then B: the session must end on B whichever finishes last.
 
-    Resume rebinds before the slow enrichment and orders rebinds by ``bind_seq``, and
-    the enriched catalog is written back only while the session is still on A.
+    Rebinds are ordered by ``bind_seq``: a resume of A that lands after B's newer
+    rebind changes nothing.
     """
     fake = _detail_client(monkeypatch, conversations={"A": {}, "B": {}}, owners={"A": "alice", "B": "alice"})
     monkeypatch.setattr(
         fake, "get_artifacts", lambda conv_id: [{"artifact_id": f"{conv_id}-art", "name": "n"}], raising=False
     )
 
-    async def _enrich_while_b_lands(artifacts):
-        if artifacts and artifacts[0]["artifact_id"] == "A-art":
-            # B's resume (a newer click) lands while A is still converting meshes.
-            await session_store.reset("sid-conv", "B", artifacts=[{"artifact_id": "B-art"}], bind_seq=20)
-        for artifact in artifacts:
-            artifact["enriched"] = True
-
-    monkeypatch.setattr(conversations_router, "enrich_mesh_artifact_dicts", _enrich_while_b_lands)
+    # B's resume (a newer click) has already landed.
+    await session_store.reset("sid-conv", "B", artifacts=[{"artifact_id": "B-art"}], bind_seq=20)
     client = _authed_client(monkeypatch)
 
     resp = client.post("/api/conversations/A/resume", json={"bind_seq": 10})
@@ -893,3 +805,24 @@ def test_get_artifact_logs_why_a_lookup_failed(monkeypatch, caplog):
         "artifact list of c1: catalog entry is not an object",
         "artifact a1 of c1: Valkey unavailable",
     ]
+
+
+async def test_detail_and_resume_do_not_convert_meshes(monkeypatch, session_store):
+    """Reopening a conversation never waits on VTK: a mesh comes back as stored, with a
+    ``mesh_url`` the viewer fetches when it scrolls into view."""
+    from app.services.mesh import service as mesh_service
+
+    async def _no_conversion(*_a, **_k):
+        raise AssertionError("a resume must not convert meshes")
+
+    monkeypatch.setattr(mesh_service, "mesh_props", _no_conversion)
+    monkeypatch.setattr(mesh_service, "_convert_one", _no_conversion)
+    mesh = {"artifact_id": "m1", "name": "block.e", "mime_type": "application/x-exodus", "uri": "file:///tmp/block.e"}
+    fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
+    monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [dict(mesh)], raising=False)
+    client = _authed_client(monkeypatch)
+
+    for resp in (client.get("/api/conversations/c1"), client.post("/api/conversations/c1/resume")):
+        (artifact,) = resp.json()["artifacts"]
+        assert artifact["json_body"] is None
+        assert artifact["mesh_url"] == "/api/conversations/c1/artifacts/m1/mesh"

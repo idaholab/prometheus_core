@@ -278,33 +278,6 @@ class SessionStore:
 
         return await self._write_for(sid, conversation_id, queue) is not None
 
-    async def replace_seeded_artifacts(
-        self,
-        sid: str,
-        artifacts: list[dict[str, Any]],
-        *,
-        conversation_id: str,
-        seeded: list[dict[str, Any]],
-    ) -> bool:
-        """Replace the catalog :meth:`reset` seeded with ``seeded`` by ``artifacts``.
-
-        Stricter than :meth:`set_artifacts`: it also skips (``False``) when the stored
-        catalog is no longer the one ``reset`` wrote. A turn or a backgrounded task of the
-        same conversation that finishes in between writes a newer catalog, and an older
-        enriched list must not replace it. ``seeded`` must be the list as ``reset`` got it,
-        before any in-place enrichment.
-        """
-        expected = json.dumps(seeded)
-
-        def unchanged(current: dict[str, Any]) -> bool:
-            return current.get("conversation_id") == conversation_id and current.get("artifacts") == expected
-
-        def queue(pipe: Pipeline) -> None:
-            pipe.hset(_hash_key(sid), "artifacts", json.dumps(artifacts))
-            pipe.expire(_hash_key(sid), self._ttl)
-
-        return await self._guarded(sid, unchanged, queue) is not None
-
     async def reset(
         self,
         sid: str,

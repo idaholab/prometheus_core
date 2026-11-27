@@ -187,7 +187,7 @@ def write_samples(out_dir: Path) -> list[Path]:
     ``diagram.mmd``, ``results.json`` and ``README.md`` are hand-written and are not
     written here.
     """
-    from app.services.mesh.service import _build_json_body, _convert_sync
+    from app.services.mesh.service import _viewer_props, _convert_sync
 
     mesh_dir = out_dir / "mesh"
     mesh_dir.mkdir(parents=True, exist_ok=True)
@@ -204,7 +204,7 @@ def write_samples(out_dir: Path) -> list[Path]:
             shutil.copyfile(cache_root / dataset_id / name, target)
             written.append(target)
 
-    json_body = _build_json_body(dataset_id, manifest, metadata, "Sample part (STL)")
+    json_body = _viewer_props(dataset_id, manifest, metadata, "Sample part (STL)")
     json_body_path = mesh_dir / "json_body.json"
     # Indented, with keys in the order the backend builds them
     json_body_path.write_text(json.dumps(json_body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

@@ -13,7 +13,7 @@
 """Tests for the mesh (Exodus/STL → VTP) restoration.
 
 Most tests are offline (no VTK): the json_body/prop shape, the source-kind picker,
-the enrichment hook (with the VTK conversion + URI resolver stubbed), and the VTP
+on-request conversion (with the VTK conversion + URI resolver stubbed), and the VTP
 route (auth / 404 / path-traversal, serving a pre-seeded cache file). The converter
 round-trip is guarded by ``pytest.importorskip("vtk")`` so it runs only where VTK is
 installed (the container), never breaking the offline suite.
@@ -22,7 +22,6 @@ installed (the container), never breaking the offline suite.
 import asyncio
 import json
 import pickle
-import types
 from concurrent import futures
 from concurrent.futures.process import BrokenProcessPool
 
@@ -58,7 +57,7 @@ def test_mesh_kind(name, uri, mime, expected):
 
 
 # --------------------------------------------------------------------------- #
-# _build_json_body — the exact prop shape MeshViewerElement.tsx reads
+# _viewer_props — the exact prop shape MeshViewerElement.tsx reads
 # --------------------------------------------------------------------------- #
 
 
@@ -73,9 +72,9 @@ def _manifest(point=None, cell=None):
     }
 
 
-def test_build_json_body_shape_and_baseurl():
+def test_viewer_props_shape_and_baseurl():
     metadata = {"num_timesteps": 2, "time_values": [0.0, 1.0]}
-    body = service._build_json_body("ds123", _manifest(point=["temperature"], cell=["block_id"]), metadata, "My Mesh")
+    body = service._viewer_props("ds123", _manifest(point=["temperature"], cell=["block_id"]), metadata, "My Mesh")
 
     assert body["datasetId"] == "ds123"
     assert body["baseUrl"] == "/api/artifacts/mesh/ds123"
@@ -88,15 +87,15 @@ def test_build_json_body_shape_and_baseurl():
     assert body["allowPicking"] is True
 
 
-def test_build_json_body_initial_variable_prefers_point_then_cell_then_none():
+def test_viewer_props_initial_variable_prefers_point_then_cell_then_none():
     m = {"num_timesteps": 1, "time_values": [0.0]}
-    assert service._build_json_body("d", _manifest(point=["p1"], cell=["c1"]), m, "t")["initialVariable"] == "p1"
-    assert service._build_json_body("d", _manifest(cell=["c1"]), m, "t")["initialVariable"] == "c1"
-    assert service._build_json_body("d", _manifest(), m, "t")["initialVariable"] is None
+    assert service._viewer_props("d", _manifest(point=["p1"], cell=["c1"]), m, "t")["initialVariable"] == "p1"
+    assert service._viewer_props("d", _manifest(cell=["c1"]), m, "t")["initialVariable"] == "c1"
+    assert service._viewer_props("d", _manifest(), m, "t")["initialVariable"] is None
 
 
 # --------------------------------------------------------------------------- #
-# enrich_mesh_artifacts — the turn-time hook (VTK + resolver stubbed)
+# mesh conversion helpers (VTK + resolver stubbed)
 # --------------------------------------------------------------------------- #
 
 
@@ -110,95 +109,6 @@ def _stub_resolver(monkeypatch, tmp_path):
 
     monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
     return src
-
-
-async def test_enrich_populates_mesh_json_body(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    calls = []
-
-    async def _fake_convert(local_path, cache_root, name, uri, mime, *, ident):
-        calls.append((name, mime))
-        return "dsAAA", _manifest(point=["temperature"]), {"num_timesteps": 1, "time_values": [0.0]}
-
-    monkeypatch.setattr(service, "_convert_offloop", _fake_convert)
-
-    art = {"artifact_id": "m1", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x/mesh.exo"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert calls  # conversion actually ran
-    assert art["json_body"] is not None
-    assert art["json_body"]["datasetId"] == "dsAAA"
-    assert art["json_body"]["baseUrl"] == "/api/artifacts/mesh/dsAAA"
-    assert art["json_body"]["initialVariable"] == "temperature"
-
-
-async def test_enrich_applies_body_to_all_objects_sharing_identity(monkeypatch, tmp_path):
-    # new_artifacts and the persisted catalog can be distinct dict objects for the same
-    # artifact; both must end up carrying the manifest.
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _fake_convert(*a, **kw):
-        return "ds1", _manifest(), {"num_timesteps": 1, "time_values": [0.0]}
-
-    monkeypatch.setattr(service, "_convert_offloop", _fake_convert)
-
-    new_obj = {"artifact_id": "same", "name": "a.exo", "mime_type": "application/x-exodus", "uri": "file:///a.exo"}
-    cat_obj = {"artifact_id": "same", "name": "a.exo", "mime_type": "application/x-exodus", "uri": "file:///a.exo"}
-    response = types.SimpleNamespace(new_artifacts=[new_obj], artifacts=[cat_obj])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert new_obj["json_body"] is not None
-    assert cat_obj["json_body"] is not None  # distinct object, same identity → enriched
-
-
-async def test_enrich_leaves_non_mesh_untouched(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _boom(*a, **kw):
-        raise AssertionError("conversion must not run for a non-mesh artifact")
-
-    monkeypatch.setattr(service, "_convert_offloop", _boom)
-
-    art = {"artifact_id": "p1", "name": "report.pdf", "mime_type": "application/pdf", "uri": "file:///r.pdf"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert art.get("json_body") is None
-
-
-async def test_enrich_downgrades_gracefully_on_conversion_failure(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _fail(*a, **kw):
-        raise RuntimeError("vtk blew up")
-
-    monkeypatch.setattr(service, "_convert_offloop", _fail)
-
-    art = {"artifact_id": "m2", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x.exo"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)  # must not raise
-
-    assert art.get("json_body") is None  # left null → frontend downgrades to a download
-
-
-async def test_enrich_skips_mesh_without_uri(monkeypatch):
-    async def _boom(*a, **kw):
-        raise AssertionError("conversion must not run without a resolvable uri")
-
-    monkeypatch.setattr(service, "_convert_offloop", _boom)
-
-    art = {"artifact_id": "m3", "name": "mesh.exo", "mime_type": "application/x-exodus"}  # no uri
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert art.get("json_body") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -733,7 +643,7 @@ def test_mesh_props_route_422s_when_conversion_raises(monkeypatch, tmp_path, cap
     async def _boom(*_a, **_k):
         raise OSError("disk full")
 
-    monkeypatch.setattr(service, "_enrich_one", _boom)
+    monkeypatch.setattr(service, "_convert_one", _boom)
     _patch_catalog(monkeypatch, {"m1": _MESH})
 
     with caplog.at_level(logging.ERROR, logger=service.logger.name):
@@ -887,38 +797,6 @@ async def test_the_source_index_is_read_and_written_off_the_event_loop(monkeypat
 
     assert set(seen) == {"read", "write"}
     assert loop_thread not in seen.values()
-
-
-async def test_live_enrichment_converts_once_and_then_hits_the_index(monkeypatch, tmp_path):
-    """The real enrich_mesh_artifact_dicts (the live-turn and resume path) now goes
-    through mesh_props: a second turn naming the same mesh is an index hit."""
-    _stub_resolver(monkeypatch, tmp_path)
-    calls: list[str] = []
-    _fake_cached_convert(monkeypatch, tmp_path, calls)
-
-    first = [dict(_MESH)]
-    await service.enrich_mesh_artifact_dicts(first)
-    second = [dict(_MESH)]
-    await service.enrich_mesh_artifact_dicts(second)
-
-    assert calls == [_MESH["uri"]]
-    assert first[0]["json_body"]["datasetId"] == second[0]["json_body"]["datasetId"] == _DATASET
-    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
-
-
-async def test_live_enrichment_leaves_a_failed_mesh_unconverted(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
-
-    async def _fail(*_a, **_k):
-        return None
-
-    monkeypatch.setattr(service, "_convert_offloop", _fail)
-    artifacts = [dict(_MESH)]
-
-    await service.enrich_mesh_artifact_dicts(artifacts)  # must not raise
-
-    assert artifacts[0].get("json_body") is None
 
 
 async def test_mesh_props_reads_back_what_the_real_converter_cached(monkeypatch, tmp_path):
