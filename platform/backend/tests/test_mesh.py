@@ -601,3 +601,42 @@ async def test_a_converter_error_logs_one_warning_without_a_traceback(monkeypatc
     records = [r for r in caplog.records if r.name == service.logger.name]
     assert [(r.levelno, r.exc_info) for r in records] == [(logging.WARNING, None)]
     assert art.get("json_body") is None
+
+
+async def test_an_unreadable_exodus_turn_degrades_to_a_download_with_one_warning(monkeypatch, tmp_path, caplog):
+    """The user-facing outcome of the guard: the turn doesn't fail, the artifact keeps no
+    viewer props (so it renders as a download card), nothing is cached, and the log has
+    one warning line rather than a traceback. Runs the real _convert_sync in-process."""
+    pytest.importorskip("vtk")
+    import logging
+
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return bad
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    monkeypatch.setattr(service, "mesh_cache_root", lambda: cache_root)
+
+    art = {"artifact_id": "bad", "name": "bad.e", "mime_type": "application/x-exodus", "uri": "file:///bad.e"}
+    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
+    with caplog.at_level(logging.WARNING, logger=service.logger.name):
+        await service.enrich_mesh_artifacts(response)
+
+    assert art.get("json_body") is None
+    assert not any(cache_root.iterdir())
+    records = [r for r in caplog.records if r.name == service.logger.name]
+    assert [r.levelno for r in records] == [logging.WARNING]
+    assert records[0].exc_info is None
+    assert "not convertible" in records[0].getMessage()
+    # The error crosses the process-pool boundary in production, so it must pickle.
+    assert isinstance(pickle.loads(pickle.dumps(InvalidExodusFileError("x"))), InvalidExodusFileError)
