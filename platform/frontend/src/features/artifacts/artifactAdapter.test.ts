@@ -14,7 +14,8 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import type { ArtifactMeta } from "@/lib/api/types";
-import { artifactToElement } from "./artifactAdapter.ts";
+import { artifactToElement, artifactsToElements } from "./artifactAdapter.ts";
+import { dedupeElements } from "./elementDeduplication.ts";
 
 function jsonArtifact(overrides: Partial<ArtifactMeta>): ArtifactMeta {
   return {
@@ -45,3 +46,21 @@ test("json artifact with an inline body keeps it as CollapsibleJson data", () =>
   assert.deepEqual(element.props?.data, { status: "ok", values: [1, 2, 3], nested: { flag: true } });
   assert.equal(element.props?.url, "/api/artifacts/art-1/content");
 });
+
+test("two artifacts with the same name both survive adapter and dedupe", () => {
+  for (const render_hint of ["image", "json"] as const) {
+    const artifacts = [
+      jsonArtifact({ artifact_id: "a1", name: "plot.png", render_hint }),
+      jsonArtifact({ artifact_id: "a2", name: "plot.png", render_hint }),
+    ];
+
+    const elements = dedupeElements(artifactsToElements(artifacts));
+
+    assert.deepEqual(
+      elements.map((e) => e.props?.artifact_id),
+      ["a1", "a2"],
+      render_hint,
+    );
+  }
+});
+
