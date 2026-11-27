@@ -46,6 +46,18 @@ def _execute(params: dict, context_id: str = "ctx-1") -> tuple[dict, AsyncMock]:
     return result, agent.send_status_update
 
 
+def test_a_sample_artifact_is_registered_in_the_conversation_catalog(monkeypatch):
+    """The backend's conversation content route reads the catalog, not the reply."""
+    from prometheus_api.agent.artifacts import ArtifactRegistry
+
+    registered: list = []
+    monkeypatch.setattr(ArtifactRegistry, "register", lambda self, ref: registered.append(ref) or ref)
+    result, _ = _execute({"query": "show me the JSON results", "conversation_id": "conv-1"})
+
+    (artifact,) = result["new_artifacts"]
+    assert [(r.conversation_id, r.artifact_id) for r in registered] == [("conv-1", artifact["artifact_id"])]
+
+
 def test_a_prompt_naming_no_sample_gets_the_fixed_answer_and_no_artifact():
     for query in ("Hello, what can you help me with?", ""):
         result, _ = _execute({"query": query, "conversation_id": "conv-1"})

@@ -530,3 +530,14 @@ def test_shaped_artifacts_name_their_conversation_content_route():
 
     [meta] = shape_artifacts([{"artifact_id": "a b", "name": "x"}], conversation_id="c/1")
     assert meta.content_url == "/api/conversations/c%2F1/artifacts/a%20b/content"
+
+
+async def test_conversation_content_404s_when_valkey_is_down(monkeypatch, session_store):
+    from app.routers import artifacts as artifacts_router
+
+    down = _CatalogClient(owned={("alice", "c1")}, catalogs={"c1": {"a1": _PLOT}})
+    down.available = False
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: down)
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 404

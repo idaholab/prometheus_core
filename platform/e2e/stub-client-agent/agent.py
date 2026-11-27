@@ -32,6 +32,10 @@ showed an empty viewer (PPLT-374). The samples are public test files, so that po
 A2A port keeps the agent's usual auth. The Mermaid sample travels inline, in
 json_body, as Mermaid artifacts do.
 
+Like the real client-agent, it registers each artifact in the conversation's catalog
+(``artifacts:conv:{id}:by_id``) before replying, because the backend's
+conversation-scoped content route reads the artifact from there.
+
 It skips one step of the SDK's request lifecycle: the execution record every agent
 writes to DeepLynx before it runs. The e2e stack has no DeepLynx, and the stub
 stores nothing, so there's nothing to record. PPLT-389 will decide how test stacks
@@ -51,6 +55,7 @@ from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events import EventQueue
 from prometheus_api.agent import PrometheusAgent
 from prometheus_api.agent.base import DelegatingPrometheusAgentExecutor, PrometheusAgentExecutor
+from prometheus_api.agent.artifacts import ArtifactReference
 from prometheus_api.contract import ConversationResponse, ConversationStatus
 
 SAMPLES_DIR = Path(os.getenv("SAMPLES_DIR", str(Path(__file__).resolve().parent / "samples")))
@@ -147,7 +152,10 @@ class StubClientAgent(PrometheusAgent):
         conversation_id = str(params.get("conversation_id") or context.context_id or "")
         # One status update first, so the reply streams in the way a real agent's does
         await self.send_status_update(context=context, event_queue=event_queue, message=STATUS_MESSAGE)
-        return answer(query, conversation_id).model_dump(exclude_none=True)
+        reply = answer(query, conversation_id)
+        for artifact in reply.new_artifacts or []:
+            self.artifact_registry.register(ArtifactReference.from_any(artifact, conversation_id=conversation_id))
+        return reply.model_dump(exclude_none=True)
 
 
 async def serve_samples() -> None:
