@@ -41,6 +41,7 @@ vi.mock("./MeshViewer", () => ({
 
 import type { AnyElement } from "@/features/artifacts/elements";
 import { MeshViewerElement } from "./MeshViewerElement.tsx";
+import { fetchedProps } from "./meshFetch.ts";
 
 const files = [{ index: 0, timestep_index: 0, time_value: 0, filename: "surface_t0000.vtp" }];
 const fetchedBody = {
@@ -56,6 +57,7 @@ const element = (props: Record<string, unknown>): AnyElement =>
   ({ id: "m1", type: "custom", name: "MeshViewer", props }) as AnyElement;
 
 beforeEach(() => {
+  fetchedProps.clear();
   api.meshProps.mockReset();
   loaded.length = 0;
   vi.stubGlobal("IntersectionObserver", undefined); // load at once

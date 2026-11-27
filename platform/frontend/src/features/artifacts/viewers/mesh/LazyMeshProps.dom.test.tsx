@@ -29,7 +29,7 @@ const ApiError = vi.hoisted(
 vi.mock("@/lib/api/client", () => ({ api, ApiError }));
 
 import { LazyMeshProps } from "./LazyMeshProps.tsx";
-import { MESH_FETCH_TIMEOUT_MS } from "./meshFailure.ts";
+import { fetchedProps, MESH_FETCH_TIMEOUT_MS } from "./meshFetch.ts";
 
 /** A controllable IntersectionObserver: `enter()` reports every observed element visible. */
 const observers: { cb: IntersectionObserverCallback; els: Element[] }[] = [];
@@ -56,6 +56,7 @@ const enter = () =>
 
 beforeEach(() => {
   observers.length = 0;
+  fetchedProps.clear();
   api.meshProps.mockReset();
   vi.stubGlobal("IntersectionObserver", FakeObserver);
 });
@@ -203,4 +204,17 @@ test("a viewer that crashes after loading still offers the file", async () => {
 
   expect(await screen.findByRole("alert")).toHaveTextContent("The mesh viewer crashed.");
   expect(screen.getByRole("link", { name: "Download original file" })).toHaveAttribute("href", "/api/c");
+});
+
+test("a remount shows an already fetched mesh at once, without fetching again", async () => {
+  api.meshProps.mockResolvedValue(mesh("ds6"));
+  const first = renderLazy();
+  enter();
+  expect(await screen.findByText("viewer ds6")).toBeInTheDocument();
+  first.unmount();
+
+  renderLazy();
+
+  expect(screen.getByText("viewer ds6")).toBeInTheDocument();
+  expect(api.meshProps).toHaveBeenCalledTimes(1);
 });

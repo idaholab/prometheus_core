@@ -26,3 +26,8 @@ export function meshFailureMessage(err: unknown, timedOut: boolean): string {
   }
   return "The mesh couldn't be prepared. Try again, or download the file.";
 }
+
+/** Props already fetched, per mesh_url, so a remount (a conversation switch, a re-key,
+ * fullscreen) shows the viewer at once instead of "Preparing mesh…" again. Only
+ * successes are kept, so a failed mesh can still be retried. */
+export const fetchedProps = new Map<string, Record<string, unknown>>();

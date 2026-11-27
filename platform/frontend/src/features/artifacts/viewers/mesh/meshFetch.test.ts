@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import { ApiError } from "@/lib/api/client";
-import { meshFailureMessage } from "./meshFailure.ts";
+import { meshFailureMessage } from "./meshFetch.ts";
 
 const GENERIC = "The mesh couldn't be prepared. Try again, or download the file.";
 

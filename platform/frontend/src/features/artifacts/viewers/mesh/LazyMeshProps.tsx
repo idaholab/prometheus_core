@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { meshManifestProps } from "@/features/artifacts/meshManifest";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { api } from "@/lib/api/client";
-import { MESH_FETCH_TIMEOUT_MS, meshFailureMessage } from "./meshFailure";
+import { fetchedProps, MESH_FETCH_TIMEOUT_MS, meshFailureMessage } from "./meshFetch";
 import { MeshCrashBoundary } from "./MeshCrashBoundary";
 import { useNearViewport } from "./useNearViewport";
 
@@ -50,11 +50,14 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
   // "waiting": the user can start it themselves.
   const [requested, setRequested] = useState(false);
   const near = inView || requested;
-  const [state, setState] = useState<State>({ kind: "waiting" });
+  const [state, setState] = useState<State>(() => {
+    const cached = fetchedProps.get(meshUrl);
+    return cached ? { kind: "ready", props: cached } : { kind: "waiting" };
+  });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!near) return;
+    if (!near || fetchedProps.has(meshUrl)) return;
     let live = true;
     let timedOut = false;
     const controller = new AbortController();
@@ -67,6 +70,7 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
       (body) => {
         if (!live) return;
         const props = meshManifestProps(body);
+        if (props) fetchedProps.set(meshUrl, props);
         setState(
           props ? { kind: "ready", props } : { kind: "failed", message: "The server returned no mesh data." },
         );
