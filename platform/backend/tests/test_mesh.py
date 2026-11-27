@@ -976,3 +976,9 @@ async def test_a_failed_conversion_leaves_nothing_behind_and_a_retry_works(monke
     retried = await service.mesh_props(dict(_MESH))
 
     assert retried is not None and retried["datasetId"] == _DATASET
+
+
+def test_the_mesh_route_requires_a_session():
+    from app.main import app
+
+    assert TestClient(app).get("/api/conversations/c1/artifacts/m1/mesh").status_code == 401
