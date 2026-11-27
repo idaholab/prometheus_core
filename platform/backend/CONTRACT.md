@@ -410,13 +410,20 @@ Returns the MeshViewer props for a mesh artifact (`datasetId`, `baseUrl`, `manif
 `metadata`, …: the same shape a live turn puts in `json_body`), converting the
 Exodus/STL source on first request. Mesh artifacts with a URI name this route in
 `ArtifactMeta.mesh_url`. Same access rule and 404 as the content route; **404** also
-when the artifact is not a mesh, **422** when it can't be converted.
+when the artifact is not a mesh, **422** when it has no URI or can't be converted.
 
-A repeat request reads the converted dataset through a source index in the mesh
-cache (`.index/`), with no download and no hashing. Concurrent requests for one mesh
-share a single conversion, which finishes even if the browser disconnects. The VTP
-files themselves stay at `GET /api/artifacts/mesh/{dataset_id}/{filename}`, which
-rejects dot-prefixed segments so `.index/` is never served.
+`mesh_url` is empty for a mesh without a URI: the client then uses `json_body` if it
+holds the props, and otherwise offers the file for download. A mesh artifact may carry
+only `mesh_url`, with `json_body` null, so a client must handle both.
+
+A repeat request for a `deeplynx://` source reads the converted dataset through a
+source index in the mesh cache (`.index/`), with no download and no hashing; other
+sources are downloaded and content-hashed each time. Concurrent requests for one mesh
+share a single conversion, which finishes even if the browser disconnects. That
+sharing is per backend worker process, so with several workers two of them can still
+convert the same mesh. The VTP files themselves stay at
+`GET /api/artifacts/mesh/{dataset_id}/{filename}`, which answers **400** for a
+dot-prefixed segment, so `.index/` is never served.
 
 ## `GET /api/artifacts/{artifact_id}/content`
 
