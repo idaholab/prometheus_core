@@ -389,12 +389,27 @@ data: {"type":"turn_done","turn_id":"7f9c2b1e-…","response":{"turn_id":"7f9c2b
 
 ---
 
-## `GET /api/artifacts/{artifact_id}/content`
+## `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`
 
 Resolves `deeplynx://` / remote URIs and streams the artifact bytes with the
-correct `Content-Type` (task 07). Replaces the frontend's old
-`_render_pdf_artifact` / `_render_remote_file_artifact` / `_render_download_artifact`
-download paths.
+correct `Content-Type` (task 07). `ArtifactMeta.content_url` names this route; the
+frontend fetches from there and doesn't build the URL itself. `content_url` is empty
+when the backend knows no conversation, and the frontend then uses the session-scoped
+route below.
+
+The caller must own the conversation (`user:convs:{user}`) or have their session
+bound to it. The artifact is read from that conversation's catalog
+(`artifacts:conv:{id}:by_id`), not from the session, so it stays reachable when
+another tab of the same login opens a different conversation. Any miss (not
+readable, not in the catalog, Valkey down) is one **404**, so a guess can't tell
+the cases apart.
+
+## `GET /api/artifacts/{artifact_id}/content`
+
+The older, session-scoped route: it looks the id up in the session's catalog, which
+follows whichever conversation the login bound last. It is removed, together with the
+frontend's fallback to it, once the client-agent's ingest matches the registry
+(`text_body`-only artifacts); see idaholab/prometheus_core#525.
 
 ## Chat history
 

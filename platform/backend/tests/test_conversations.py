@@ -775,6 +775,7 @@ def test_detail_messages_name_the_artifacts_each_turn_produced(monkeypatch):
 
     assert [m["artifact_ids"] for m in body["messages"]] == [[], ["gen"]]
     assert [a["artifact_id"] for a in body["artifacts"]] == ["gen"]
+    assert [a["content_url"] for a in body["artifacts"]] == ["/api/conversations/c1/artifacts/gen/content"]
 
 
 async def test_resume_keeps_a_newer_catalog_written_during_enrichment(monkeypatch, session_store):
@@ -836,3 +837,59 @@ async def test_superseded_resume_does_not_rebind_or_seed_the_session(monkeypatch
     # And a resume that arrives late with an older seq cannot rebind at all.
     assert client.post("/api/conversations/A/resume", json={"bind_seq": 15}).status_code == 200
     assert (await session_store.get_or_create("sid-conv")).conversation_id == "B"
+
+
+def test_get_artifact_reads_one_catalog_entry(monkeypatch):
+    import json as _json
+
+    from app.conversation_state import ConversationStateClient
+
+    stored = {
+        ("artifacts:conv:c1:by_id", "a1"): _json.dumps({"artifact_id": "a1"}),
+        ("artifacts:conv:c1:by_id", "bad"): "{not json",
+    }
+
+    class _FakeRedis:
+        def hget(self, key, field):
+            return stored.get((key, field))
+
+    c = ConversationStateClient("redis://x")
+    monkeypatch.setattr(type(c), "client", property(lambda self: _FakeRedis()))
+
+    assert c.get_artifact("c1", "a1") == {"artifact_id": "a1"}
+    assert c.get_artifact("c1", "missing") is None
+    assert c.get_artifact("c1", "bad") is None
+    assert c.get_artifact("c2", "a1") is None
+    assert c.get_artifact("", "a1") is None
+
+
+def test_get_artifact_logs_why_a_lookup_failed(monkeypatch, caplog):
+    """The route answers every miss with the same 404, so the log has to say when the
+    cause was Valkey or a bad entry rather than an unknown id."""
+    import logging
+
+    from app.conversation_state import ConversationStateClient, logger
+
+    stored = {"bad": "{not json", "list": "[1, 2]"}
+
+    class _FakeRedis:
+        def hget(self, key, field):
+            return stored.get(field)
+
+    up = ConversationStateClient("redis://x")
+    monkeypatch.setattr(type(up), "client", property(lambda self: _FakeRedis()))
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        assert up.get_artifact("c1", "missing") is None
+        assert caplog.records == []  # an unknown id is not worth a warning
+        assert up.get_artifact("c1", "bad") is None
+        assert up.get_artifact("c1", "list") is None
+        monkeypatch.setattr(type(up), "client", property(lambda self: None))
+        assert up.get_artifact("c1", "a1") is None
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages == [
+        "artifact bad of c1: unreadable catalog entry: Expecting property name enclosed in double quotes: "
+        "line 1 column 2 (char 1)",
+        "artifact list of c1: catalog entry is not an object",
+        "artifact a1 of c1: Valkey unavailable",
+    ]

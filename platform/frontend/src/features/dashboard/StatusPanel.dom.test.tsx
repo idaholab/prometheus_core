@@ -34,7 +34,10 @@ vi.mock("@/features/artifacts", () => ({
   ),
 }));
 vi.mock("@/lib/api/client", () => ({
-  api: { artifactContentUrl: (id: string) => `/api/artifacts/${id}/content` },
+  api: {
+    artifactContentUrl: (a: { artifact_id: string; content_url?: string }) =>
+      a.content_url || `/api/artifacts/${a.artifact_id}/content`,
+  },
 }));
 
 function artifact(id: string, overrides: Partial<ArtifactMeta> = {}): ArtifactMeta {
@@ -209,6 +212,15 @@ describe("opening an artifact from the Artifacts tab", () => {
     expect(card).toHaveAttribute("href", "/api/artifacts/mesh/content");
     await user.click(card);
     expect(screen.queryByTestId("viewer")).not.toBeInTheDocument();
+  });
+
+  test("the raw-file link uses the artifact's conversation content_url", async () => {
+    const user = userEvent.setup();
+    const content_url = "/api/conversations/c1/artifacts/mesh/content";
+    renderPanel(stateWith([artifact("mesh", { render_hint: "mesh", content_url })]));
+
+    await user.click(screen.getByRole("tab", { name: /Artifacts/ }));
+    expect(screen.getByRole("link", { name: /mesh\.txt/ })).toHaveAttribute("href", content_url);
   });
 });
 

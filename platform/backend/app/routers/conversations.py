@@ -56,7 +56,7 @@ from app.contract import (
     ConversationTasksResponse,
     TaskNodeOut,
 )
-from app.conversation_state import ConversationStateClient
+from app.conversation_state import ConversationStateClient, shared_client
 from app.openapi import TAG_CONVERSATIONS
 from app.redis_client import get_redis
 from app.security import TokenClaims, current_claims
@@ -70,20 +70,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=[TAG_CONVERSATIONS], responses=AUTH_RESPONSES)
 
 
-# One client reused across requests (AU-7): ConversationStateClient caches its Redis
-# connection, so a shared instance avoids a fresh connect + ping per call. Keyed on the
-# class object (not id()) so tests monkeypatching ``ConversationStateClient`` get their
-# own instance without id-reuse hazards, while the class is kept alive as the cache key.
-_client_cache: dict = {}
-
-
 def _client() -> ConversationStateClient:
-    cls = ConversationStateClient
-    inst = _client_cache.get(cls)
-    if inst is None:
-        inst = cls(settings.redis_url)
-        _client_cache[cls] = inst
-    return inst
+    # Looked up here, so tests can patch ``ConversationStateClient`` in this module.
+    return shared_client(ConversationStateClient)
 
 
 def _fetch_recent(limit: int, user_id: str) -> tuple[bool, list[dict]]:
@@ -180,7 +169,7 @@ async def _build_detail(conv_id: str, parts: dict[str, Any]) -> ConversationDeta
         # User uploads stay in the session catalog (the content proxy and later turns
         # resolve them) but not in the response: the Artifact Contract excludes them
         # from rendering, and the live turn already drops them from `new_artifacts`.
-        artifacts=shape_artifacts([a for a in raw_artifacts if not is_user_upload(a)]),
+        artifacts=shape_artifacts([a for a in raw_artifacts if not is_user_upload(a)], conversation_id=conv_id),
     )
 
 

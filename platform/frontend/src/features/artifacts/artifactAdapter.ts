@@ -22,8 +22,8 @@
  * `render_hint`; this function turns that hint into an element the classifier
  * (`classifyElement`) will recognize:
  *
- *   - file bytes (image/pdf/ifc/file/unknown) → `element.url` points at the content
- *     proxy `GET /api/artifacts/{id}/content`; viewers fetch from there.
+ *   - file bytes (image/pdf/ifc/file/unknown) → `element.url` is the artifact's
+ *     `content_url` (the content proxy); viewers fetch from there.
  *   - inline structured data (json/thermal) → props built from `json_body`.
  *   - report/reference → dedicated lightweight viewers (markdown / citation card).
  *
@@ -77,7 +77,7 @@ export function artifactToElement(artifact: ArtifactMeta): AnyElement {
 }
 
 function buildElement(artifact: ArtifactMeta): AnyElement {
-  const url = api.artifactContentUrl(artifact.artifact_id);
+  const url = api.artifactContentUrl(artifact);
   const name = artifact.name || artifact.artifact_id;
   const base = { id: artifact.artifact_id, name };
 
