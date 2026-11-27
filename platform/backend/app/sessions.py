@@ -278,33 +278,6 @@ class SessionStore:
 
         return await self._write_for(sid, conversation_id, queue) is not None
 
-    async def replace_seeded_artifacts(
-        self,
-        sid: str,
-        artifacts: list[dict[str, Any]],
-        *,
-        conversation_id: str,
-        seeded: list[dict[str, Any]],
-    ) -> bool:
-        """Replace the catalog :meth:`reset` seeded with ``seeded`` by ``artifacts``.
-
-        Stricter than :meth:`set_artifacts`: it also skips (``False``) when the stored
-        catalog is no longer the one ``reset`` wrote. A turn or a backgrounded task of the
-        same conversation that finishes in between writes a newer catalog, and an older
-        enriched list must not replace it. ``seeded`` must be the list as ``reset`` got it,
-        before any in-place enrichment.
-        """
-        expected = json.dumps(seeded)
-
-        def unchanged(current: dict[str, Any]) -> bool:
-            return current.get("conversation_id") == conversation_id and current.get("artifacts") == expected
-
-        def queue(pipe: Pipeline) -> None:
-            pipe.hset(_hash_key(sid), "artifacts", json.dumps(artifacts))
-            pipe.expire(_hash_key(sid), self._ttl)
-
-        return await self._guarded(sid, unchanged, queue) is not None
-
     async def reset(
         self,
         sid: str,
@@ -315,6 +288,12 @@ class SessionStore:
         bind_seq: Optional[int] = None,
     ) -> bool:
         """Rebind the session to a conversation, clearing per-conversation state.
+
+        Callers must either have minted ``conversation_id`` themselves or checked that
+        the session's user owns it: the conversation content route lets a session read
+        the conversation it is bound to without an ownership check (a first turn's
+        ownership record may not be visible yet), so binding an unchecked id here would
+        expose another user's artifacts. The same holds for :meth:`ensure_conversation`.
 
         The "New chat" / history-resume path: a different conversation starts with no
         artifact catalog, no awaited background tasks and no follow-up depth. One

@@ -13,7 +13,7 @@
 """Tests for the mesh (Exodus/STL → VTP) restoration.
 
 Most tests are offline (no VTK): the json_body/prop shape, the source-kind picker,
-the enrichment hook (with the VTK conversion + URI resolver stubbed), and the VTP
+on-request conversion (with the VTK conversion + URI resolver stubbed), and the VTP
 route (auth / 404 / path-traversal, serving a pre-seeded cache file). The converter
 round-trip is guarded by ``pytest.importorskip("vtk")`` so it runs only where VTK is
 installed (the container), never breaking the offline suite.
@@ -22,7 +22,6 @@ installed (the container), never breaking the offline suite.
 import asyncio
 import json
 import pickle
-import types
 from concurrent import futures
 from concurrent.futures.process import BrokenProcessPool
 
@@ -58,7 +57,7 @@ def test_mesh_kind(name, uri, mime, expected):
 
 
 # --------------------------------------------------------------------------- #
-# _build_json_body — the exact prop shape MeshViewerElement.tsx reads
+# _viewer_props — the exact prop shape MeshViewerElement.tsx reads
 # --------------------------------------------------------------------------- #
 
 
@@ -73,9 +72,9 @@ def _manifest(point=None, cell=None):
     }
 
 
-def test_build_json_body_shape_and_baseurl():
+def test_viewer_props_shape_and_baseurl():
     metadata = {"num_timesteps": 2, "time_values": [0.0, 1.0]}
-    body = service._build_json_body("ds123", _manifest(point=["temperature"], cell=["block_id"]), metadata, "My Mesh")
+    body = service._viewer_props("ds123", _manifest(point=["temperature"], cell=["block_id"]), metadata, "My Mesh")
 
     assert body["datasetId"] == "ds123"
     assert body["baseUrl"] == "/api/artifacts/mesh/ds123"
@@ -88,15 +87,15 @@ def test_build_json_body_shape_and_baseurl():
     assert body["allowPicking"] is True
 
 
-def test_build_json_body_initial_variable_prefers_point_then_cell_then_none():
+def test_viewer_props_initial_variable_prefers_point_then_cell_then_none():
     m = {"num_timesteps": 1, "time_values": [0.0]}
-    assert service._build_json_body("d", _manifest(point=["p1"], cell=["c1"]), m, "t")["initialVariable"] == "p1"
-    assert service._build_json_body("d", _manifest(cell=["c1"]), m, "t")["initialVariable"] == "c1"
-    assert service._build_json_body("d", _manifest(), m, "t")["initialVariable"] is None
+    assert service._viewer_props("d", _manifest(point=["p1"], cell=["c1"]), m, "t")["initialVariable"] == "p1"
+    assert service._viewer_props("d", _manifest(cell=["c1"]), m, "t")["initialVariable"] == "c1"
+    assert service._viewer_props("d", _manifest(), m, "t")["initialVariable"] is None
 
 
 # --------------------------------------------------------------------------- #
-# enrich_mesh_artifacts — the turn-time hook (VTK + resolver stubbed)
+# mesh conversion helpers (VTK + resolver stubbed)
 # --------------------------------------------------------------------------- #
 
 
@@ -110,95 +109,6 @@ def _stub_resolver(monkeypatch, tmp_path):
 
     monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
     return src
-
-
-async def test_enrich_populates_mesh_json_body(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    calls = []
-
-    async def _fake_convert(local_path, cache_root, name, uri, mime, *, ident):
-        calls.append((name, mime))
-        return "dsAAA", _manifest(point=["temperature"]), {"num_timesteps": 1, "time_values": [0.0]}
-
-    monkeypatch.setattr(service, "_convert_offloop", _fake_convert)
-
-    art = {"artifact_id": "m1", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x/mesh.exo"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert calls  # conversion actually ran
-    assert art["json_body"] is not None
-    assert art["json_body"]["datasetId"] == "dsAAA"
-    assert art["json_body"]["baseUrl"] == "/api/artifacts/mesh/dsAAA"
-    assert art["json_body"]["initialVariable"] == "temperature"
-
-
-async def test_enrich_applies_body_to_all_objects_sharing_identity(monkeypatch, tmp_path):
-    # new_artifacts and the persisted catalog can be distinct dict objects for the same
-    # artifact; both must end up carrying the manifest.
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _fake_convert(*a, **kw):
-        return "ds1", _manifest(), {"num_timesteps": 1, "time_values": [0.0]}
-
-    monkeypatch.setattr(service, "_convert_offloop", _fake_convert)
-
-    new_obj = {"artifact_id": "same", "name": "a.exo", "mime_type": "application/x-exodus", "uri": "file:///a.exo"}
-    cat_obj = {"artifact_id": "same", "name": "a.exo", "mime_type": "application/x-exodus", "uri": "file:///a.exo"}
-    response = types.SimpleNamespace(new_artifacts=[new_obj], artifacts=[cat_obj])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert new_obj["json_body"] is not None
-    assert cat_obj["json_body"] is not None  # distinct object, same identity → enriched
-
-
-async def test_enrich_leaves_non_mesh_untouched(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _boom(*a, **kw):
-        raise AssertionError("conversion must not run for a non-mesh artifact")
-
-    monkeypatch.setattr(service, "_convert_offloop", _boom)
-
-    art = {"artifact_id": "p1", "name": "report.pdf", "mime_type": "application/pdf", "uri": "file:///r.pdf"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert art.get("json_body") is None
-
-
-async def test_enrich_downgrades_gracefully_on_conversion_failure(monkeypatch, tmp_path):
-    _stub_resolver(monkeypatch, tmp_path)
-
-    async def _fail(*a, **kw):
-        raise RuntimeError("vtk blew up")
-
-    monkeypatch.setattr(service, "_convert_offloop", _fail)
-
-    art = {"artifact_id": "m2", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x.exo"}
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)  # must not raise
-
-    assert art.get("json_body") is None  # left null → frontend downgrades to a download
-
-
-async def test_enrich_skips_mesh_without_uri(monkeypatch):
-    async def _boom(*a, **kw):
-        raise AssertionError("conversion must not run without a resolvable uri")
-
-    monkeypatch.setattr(service, "_convert_offloop", _boom)
-
-    art = {"artifact_id": "m3", "name": "mesh.exo", "mime_type": "application/x-exodus"}  # no uri
-    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
-
-    await service.enrich_mesh_artifacts(response)
-
-    assert art.get("json_body") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -270,6 +180,44 @@ async def test_convert_offloop_times_out_and_kills_the_pool(monkeypatch, tmp_pat
     assert service._vtk_executor is None
     assert fake._processes[1].killed is True
     assert fake.shutdown_calls == [{"wait": False, "cancel_futures": True}]
+
+
+async def test_a_queued_conversion_does_not_time_out_while_it_waits(monkeypatch, tmp_path):
+    """A one-worker pool runs jobs one after another. Each conversion takes 0.15 s and the
+    budget is 0.2 s, so a second job's clock must start when it gets the worker, not
+    when it is submitted: otherwise it times out queued and the pool is killed."""
+    monkeypatch.setattr(service.settings, "mesh_workers", 1, raising=False)
+    monkeypatch.setattr(service.settings, "mesh_timeout_seconds", 0.2, raising=False)
+    monkeypatch.setattr(service, "_slots", service.weakref.WeakKeyDictionary())
+
+    class _OneWorker(_FakeExecutor):
+        """Each submitted job finishes 0.15 s after the previous one, like a real
+        single-worker pool working through its queue."""
+
+        def __init__(self) -> None:
+            super().__init__(futures.Future())
+            self._free_at = 0.0
+
+        def submit(self, fn, *args):
+            loop = asyncio.get_running_loop()
+            self._free_at = max(self._free_at, loop.time()) + 0.15
+            future: futures.Future = futures.Future()
+            future.set_running_or_notify_cancel()
+            loop.call_at(self._free_at, future.set_result, (f"ds{len(self.submitted)}", {}, {}))
+            self.submitted.append((fn, args))
+            return future
+
+    fake = _OneWorker()
+    monkeypatch.setattr(service, "_vtk_executor", fake)
+
+    args = (tmp_path / "m.exo", tmp_path, "m.exo", "file:///m.exo", "")
+    one, two = await asyncio.gather(
+        service._convert_offloop(*args, ident="a"),
+        service._convert_offloop(*args, ident="b"),
+    )
+
+    assert one is not None and two is not None
+    assert fake._processes[1].killed is False
 
 
 async def test_stale_pool_failure_leaves_the_replacement_pool_alone(monkeypatch, tmp_path):
@@ -426,7 +374,7 @@ def test_reject_unsafe_segment_blocks_traversal():
     _reject_unsafe_segment("surface_t0000.vtp")
 
     # traversal / separators / bad chars are rejected with 400
-    for bad in ["..", "../etc", "a/b", "a\\b", "..%2f", "foo bar", ""]:
+    for bad in ["..", "../etc", "a/b", "a\\b", "..%2f", "foo bar", "", ".index", ".hidden"]:
         with pytest.raises(HTTPException) as exc:
             _reject_unsafe_segment(bad)
         assert exc.value.status_code == 400
@@ -488,3 +436,467 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
     # Second call is a cache hit (manifest already present) — same id, still valid.
     dataset_id2, _, _ = service._convert_sync(stl_path, cache_root, "sphere.stl", "", "model/stl")
     assert dataset_id2 == dataset_id
+
+
+# --------------------------------------------------------------------------- #
+# mesh_props: on-demand conversion, source index, shared in-flight builds
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(autouse=True)
+def _no_inflight_conversions():
+    """_inflight is module state: a test that dies with a task pending must not leave a
+    dead task for the next test's mesh_props to await."""
+    service._inflight.clear()
+    yield
+    service._inflight.clear()
+
+
+# A real dataset id: compute_dataset_id's 16 hex characters.
+_DATASET = "0123456789abcdef"
+
+_MESH = {
+    "artifact_id": "m1",
+    "name": "mesh.exo",
+    "mime_type": "application/x-exodus",
+    "uri": "deeplynx://organizations/1/projects/2/items/42",
+}
+
+
+def _fake_cached_convert(monkeypatch, tmp_path, calls, *, gate=None):
+    """A _convert_offloop that writes a real cache entry, so later reads hit the disk."""
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _convert(local_path, cache_root, name, uri, mime, *, ident):
+        calls.append(uri)
+        if gate is not None:
+            await gate.wait()
+        out = cache_root / _DATASET
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "manifest.json").write_text(json.dumps(_manifest(point=["T"])))
+        (out / "meta.json").write_text(json.dumps({"num_timesteps": 1, "time_values": [0.0]}))
+        (out / "surface_t0000.vtp").write_text("<VTKFile/>")
+        return _DATASET, _manifest(point=["T"]), {"num_timesteps": 1, "time_values": [0.0]}
+
+    monkeypatch.setattr(service, "_convert_offloop", _convert)
+
+
+async def test_mesh_props_converts_once_then_reads_the_source_index(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+
+    first = await service.mesh_props(dict(_MESH))
+    assert first is not None and first["datasetId"] == _DATASET
+
+    async def _no_download(*_a, **_k):
+        raise AssertionError("a source-index hit must not download")
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _no_download)
+    again = await service.mesh_props({**_MESH, "name": "renamed.exo"})
+
+    assert calls == [_MESH["uri"]]
+    assert again is not None and again["datasetId"] == _DATASET
+    assert again["title"] == "renamed.exo"
+
+
+async def test_concurrent_mesh_props_share_one_conversion(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    gate = asyncio.Event()
+    _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
+
+    pending = [asyncio.create_task(service.mesh_props(dict(_MESH))) for _ in range(3)]
+    while len(calls) < 1:  # the one shared conversion has reached the gate
+        await asyncio.sleep(0)
+    gate.set()
+    results = await asyncio.gather(*pending)
+
+    assert calls == [_MESH["uri"]]
+    assert all(r is not None and r["datasetId"] == _DATASET for r in results)
+
+
+async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    gate = asyncio.Event()
+    _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
+
+    caller = asyncio.create_task(service.mesh_props(dict(_MESH)))
+    while not service._inflight:  # the shared task has started
+        await asyncio.sleep(0)
+    (shared,) = service._inflight.values()
+    caller.cancel()
+    gate.set()
+    await shared
+
+    assert (tmp_path / "cache" / _DATASET / "manifest.json").is_file()
+    # The task, not the gone caller, records the index entry, so the next view is a hit.
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
+
+
+async def test_a_file_source_is_never_indexed(monkeypatch, tmp_path):
+    """A file:// path can be rewritten under the same URI, so each view re-reads it."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    local = {**_MESH, "uri": "file:///out/result.e"}
+
+    await service.mesh_props(dict(local))
+    await service.mesh_props(dict(local))
+
+    assert calls == ["file:///out/result.e", "file:///out/result.e"]
+    assert not (tmp_path / "cache" / ".index").exists()
+
+
+async def test_one_item_with_another_file_gets_its_own_index_entry(monkeypatch, tmp_path):
+    """The resolver downloads metadata.deeplynx_file_id when it is set, so an artifact
+    naming the same item with another file must not reuse, or overwrite, the entry
+    another conversation's artifact wrote."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    first = {**_MESH, "metadata": {"deeplynx_file_id": "f1"}}
+    other = {**_MESH, "artifact_id": "m9", "metadata": {"deeplynx_file_id": "f2"}}
+
+    await service.mesh_props(dict(first))
+    await service.mesh_props(dict(other))
+    await service.mesh_props(dict(first))
+
+    assert len(calls) == 2  # f1 converted, f2 converted, f1 again from the index
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 2
+
+
+async def test_mesh_props_is_none_without_a_uri():
+    assert await service.mesh_props({**_MESH, "uri": ""}) is None
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/conversations/{cid}/artifacts/{aid}/mesh
+# --------------------------------------------------------------------------- #
+
+
+def _patch_catalog(monkeypatch, catalog: dict[str, dict]) -> None:
+    from app.routers import artifacts as artifacts_router
+
+    class _Catalog:
+        available = True
+
+        def owns(self, user_id, conv_id):
+            return (user_id, conv_id) == ("alice", "c1")
+
+        def get_meta(self, conv_id):
+            return {}
+
+        def get_artifact(self, conv_id, artifact_id):
+            return catalog.get(artifact_id) if conv_id == "c1" else None
+
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: _Catalog())
+
+
+def test_mesh_props_route_converts_and_returns_viewer_props(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+
+    assert resp.status_code == 200
+    assert resp.json()["baseUrl"] == f"/api/artifacts/mesh/{_DATASET}"
+
+
+def test_mesh_props_route_404s_for_another_users_conversation(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/conversations/c-bob/artifacts/m1/mesh").status_code == 404
+
+
+def test_mesh_props_route_404s_for_a_non_mesh(monkeypatch, tmp_path):
+    _patch_catalog(monkeypatch, {"p1": {"artifact_id": "p1", "name": "plot.png", "mime_type": "image/png"}})
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/conversations/c1/artifacts/p1/mesh").status_code == 404
+
+
+def test_mesh_props_route_422s_when_conversion_fails(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _fail(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(service, "_convert_offloop", _fail)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+    assert resp.status_code == 422
+    assert "mesh.exo" in resp.json()["detail"]
+
+
+def test_mesh_props_route_422s_when_conversion_raises(monkeypatch, tmp_path, caplog):
+    """An unexpected error in the shared task (a storage error, say) is the documented
+    422, not a 500, and it is logged once."""
+    import logging
+
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _boom(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(service, "_convert_one", _boom)
+    _patch_catalog(monkeypatch, {"m1": _MESH})
+
+    with caplog.at_level(logging.ERROR, logger=service.logger.name):
+        resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
+
+    assert resp.status_code == 422
+    assert [r.levelno for r in caplog.records if r.name == service.logger.name] == [logging.ERROR]
+
+
+def test_vtp_route_never_serves_the_source_index(monkeypatch, tmp_path):
+    index = tmp_path / ".index"
+    index.mkdir()
+    (index / "k.json").write_text("{}")
+
+    client = _authed_client(monkeypatch, tmp_path)
+    assert client.get("/api/artifacts/mesh/.index/k.json").status_code == 400
+
+
+def test_only_mesh_artifacts_with_a_uri_get_a_mesh_url():
+    from app.services.artifacts import shape_artifacts
+
+    mesh, no_uri, png = shape_artifacts(
+        [
+            _MESH,
+            {**_MESH, "artifact_id": "m2", "uri": ""},
+            {"artifact_id": "p1", "name": "a.png", "uri": "file:///a.png"},
+        ],
+        conversation_id="c1",
+    )
+    assert mesh.mesh_url == "/api/conversations/c1/artifacts/m1/mesh"
+    assert no_uri.mesh_url == ""
+    assert png.mesh_url == ""
+
+
+async def test_an_unwritable_source_index_still_returns_the_props(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+
+    # A regular file where the index directory should be: mkdir fails with an OSError.
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("")
+    monkeypatch.setattr(service, "_index_path", lambda _root, key: blocker / f"{key}.json")
+
+    props = await service.mesh_props(dict(_MESH))
+    assert props is not None and props["datasetId"] == _DATASET
+
+
+async def test_a_corrupt_cached_dataset_is_converted_again(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    (tmp_path / "cache" / _DATASET / "meta.json").write_text("{not json")
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == _DATASET
+
+
+async def test_an_index_entry_whose_dataset_was_evicted_is_converted_again(monkeypatch, tmp_path):
+    import shutil
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    shutil.rmtree(tmp_path / "cache" / _DATASET)  # the index still names it
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == _DATASET
+
+
+@pytest.mark.parametrize("damage", ["missing-vtp", "empty-mesh", "no-files"])
+async def test_an_unusable_cached_dataset_is_converted_again(monkeypatch, tmp_path, damage):
+    """An index hit is only served when the dataset can render; old or broken output
+    (no VTP, an empty mesh cached before unreadable files were rejected) converts again."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    out = tmp_path / "cache" / _DATASET
+    if damage == "missing-vtp":
+        (out / "surface_t0000.vtp").unlink()
+    elif damage == "empty-mesh":
+        (out / "meta.json").write_text(json.dumps({"num_nodes": 0}))
+    else:
+        (out / "manifest.json").write_text(json.dumps({**_manifest(), "files": []}))
+
+    await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+
+
+async def test_an_index_entry_naming_an_unsafe_dataset_id_is_ignored(monkeypatch, tmp_path):
+    """A damaged index file must not make the backend read a dataset outside the cache,
+    even one that looks complete."""
+    import shutil
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    shutil.copytree(tmp_path / "cache" / _DATASET, tmp_path / "outside")
+    (index,) = (tmp_path / "cache" / ".index").glob("*.json")
+    index.write_text(json.dumps({"dataset_id": "../outside"}))
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == _DATASET
+
+
+async def test_a_new_converter_version_misses_the_old_index(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    monkeypatch.setattr(service, "CONVERTER_VERSION", "2")
+
+    await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 2
+
+
+async def test_the_source_index_is_read_and_written_off_the_event_loop(monkeypatch, tmp_path):
+    import threading
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real_read, real_write = service._read_index, service._write_index
+
+    def _read(*a):
+        seen["read"] = threading.get_ident()
+        return real_read(*a)
+
+    def _write(*a):
+        seen["write"] = threading.get_ident()
+        return real_write(*a)
+
+    monkeypatch.setattr(service, "_read_index", _read)
+    monkeypatch.setattr(service, "_write_index", _write)
+    await service.mesh_props(dict(_MESH))
+
+    assert set(seen) == {"read", "write"}
+    assert loop_thread not in seen.values()
+
+
+async def test_mesh_props_reads_back_what_the_real_converter_cached(monkeypatch, tmp_path):
+    """Every other mesh_props test fakes the converter's cache layout. Here the real
+    _convert_sync writes it (in-process instead of the pool), so a mismatch between what
+    it writes and what an index hit reads would make the second view fail."""
+    vtk = pytest.importorskip("vtk")
+
+    sphere = vtk.vtkSphereSource()
+    sphere.Update()
+    stl_path = tmp_path / "sphere.stl"
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(str(stl_path))
+    writer.SetInputConnection(sphere.GetOutputPort())
+    writer.Write()
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return stl_path
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    stl = {**_MESH, "name": "sphere.stl", "mime_type": "model/stl"}
+
+    converted = await service.mesh_props(dict(stl))
+
+    async def _no_download(*_a, **_k):
+        raise AssertionError("the second view must be an index hit")
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _no_download)
+    again = await service.mesh_props(dict(stl))
+
+    assert converted is not None and again is not None
+    assert again == converted
+
+
+async def test_a_failed_conversion_leaves_nothing_behind_and_a_retry_works(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    succeed = service._convert_offloop
+
+    async def _fail(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(service, "_convert_offloop", _fail)
+    assert await service.mesh_props(dict(_MESH)) is None
+    assert service._inflight == {}
+    assert not (tmp_path / "cache" / ".index").exists()
+
+    monkeypatch.setattr(service, "_convert_offloop", succeed)
+    retried = await service.mesh_props(dict(_MESH))
+
+    assert retried is not None and retried["datasetId"] == _DATASET
+
+
+def test_the_mesh_route_requires_a_session():
+    from app.main import app
+
+    assert TestClient(app).get("/api/conversations/c1/artifacts/m1/mesh").status_code == 401
+
+
+async def test_a_dataset_converted_before_the_index_existed_is_not_reconverted(monkeypatch, tmp_path):
+    """Meshes converted before this change are in the content-hash cache but not in the
+    source index. Their first view downloads and hashes the source once, finds the
+    cached dataset without running VTK, and writes the index entry."""
+    vtk = pytest.importorskip("vtk")
+    import shutil
+
+    from app.services.mesh import stl
+
+    sphere = vtk.vtkSphereSource()
+    sphere.Update()
+    stl_path = tmp_path / "sphere.stl"
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(str(stl_path))
+    writer.SetInputConnection(sphere.GetOutputPort())
+    writer.Write()
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return stl_path
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    source = {**_MESH, "name": "sphere.stl", "mime_type": "model/stl"}
+    first = await service.mesh_props(dict(source))
+    shutil.rmtree(tmp_path / "cache" / ".index")  # as before the index existed
+
+    def _no_vtk(*_a, **_k):
+        raise AssertionError("a cached dataset must not be converted again")
+
+    monkeypatch.setattr(stl, "convert_stl_sync", _no_vtk)
+    again = await service.mesh_props(dict(source))
+
+    assert again == first
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1

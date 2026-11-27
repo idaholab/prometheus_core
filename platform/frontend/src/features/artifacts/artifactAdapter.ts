@@ -22,17 +22,17 @@
  * `render_hint`; this function turns that hint into an element the classifier
  * (`classifyElement`) will recognize:
  *
- *   - file bytes (image/pdf/ifc/file/unknown) → `element.url` points at the content
- *     proxy `GET /api/artifacts/{id}/content`; viewers fetch from there.
+ *   - file bytes (image/pdf/ifc/file/unknown) → `element.url` is the artifact's
+ *     `content_url` (the content proxy); viewers fetch from there.
  *   - inline structured data (json/thermal) → props built from `json_body`.
  *   - report/reference → dedicated lightweight viewers (markdown / citation card).
  *
- * Notes on the two gaps carried over from the Chainlit stack:
- *   - **mesh**: the old app rendered Exodus/STL via a Chainlit-side VTK→VTP pipeline
- *     that produced a `baseUrl` + `manifest`. The backend has no such pipeline
- *     (the CONTRACT example ships `json_body: null` for a mesh artifact), so unless a
- *     manifest arrives inline we degrade to a file download rather than mount a viewer
- *     with nothing to show. Restoring interactive mesh rendering is a backend follow-up.
+ * Notes on two render hints:
+ *   - **mesh**: the backend converts Exodus/STL to VTP. An inline `json_body` holding a
+ *     renderable manifest mounts the MeshViewer at once; otherwise an artifact with a
+ *     `mesh_url` mounts it lazily, fetching its props from there when it comes into
+ *     view (LazyMeshProps); with neither, it degrades to a file download rather than
+ *     mount a viewer with nothing to show.
  *   - **mermaid**: no agent currently emits mermaid artifacts, and the diagram source
  *     is not a wire field. We extract it best-effort from `json_body`; an empty source
  *     surfaces the viewer's own "no diagram" state.
@@ -43,6 +43,7 @@ import type { ArtifactMeta } from "@/lib/api/types";
 import { languageForArtifact } from "@/lib/highlight/language";
 import { delimiterFor } from "@/lib/table/csv";
 import type { AnyElement } from "./elements";
+import { meshManifestProps } from "./meshManifest";
 
 /** Best-effort mermaid diagram source from an inline body (string or `{diagram|chart|content}`). */
 function mermaidSource(body: unknown): string {
@@ -54,15 +55,6 @@ function mermaidSource(body: unknown): string {
     }
   }
   return "";
-}
-
-/** A mesh body is renderable only if it carries the VTP manifest the MeshViewer needs. */
-function meshManifestProps(body: unknown): Record<string, unknown> | null {
-  if (body && typeof body === "object") {
-    const o = body as Record<string, unknown>;
-    if (o.baseUrl || o.manifest || o.datasetId) return o;
-  }
-  return null;
 }
 
 /** Convert one wire artifact into a viewer-ready element. */
@@ -77,7 +69,7 @@ export function artifactToElement(artifact: ArtifactMeta): AnyElement {
 }
 
 function buildElement(artifact: ArtifactMeta): AnyElement {
-  const url = api.artifactContentUrl(artifact.artifact_id);
+  const url = api.artifactContentUrl(artifact);
   const name = artifact.name || artifact.artifact_id;
   const base = { id: artifact.artifact_id, name };
 
@@ -109,7 +101,18 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
           props: { ...manifest, title: artifact.name || "Mesh Viewer" },
         };
       }
-      // No inline VTP manifest (see module note) → offer the raw file for download.
+      // No inline manifest, but the backend converts on request: mount the viewer
+      // and let it fetch `meshUrl` when it scrolls into view.
+      if (artifact.mesh_url) {
+        return {
+          ...base,
+          type: "custom",
+          name: "MeshViewer",
+          url,
+          props: { meshUrl: artifact.mesh_url, downloadUrl: url, title: artifact.name || "Mesh Viewer" },
+        };
+      }
+      // Neither → offer the raw file for download.
       return { ...base, type: "file", url, props: { description: artifact.description } };
     }
 

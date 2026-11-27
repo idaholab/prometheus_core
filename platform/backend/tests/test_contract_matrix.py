@@ -222,7 +222,7 @@ _ARTIFACT_MATRIX = [
 )
 def test_to_artifact_meta_render_hint(kind, artifact, expected_hint):
     """``to_artifact_meta`` shapes each artifact kind and derives the right hint."""
-    meta = to_artifact_meta(artifact)
+    meta = to_artifact_meta(artifact, conversation_id="c1")
     assert meta is not None, f"{kind} artifact should not be dropped"
     assert meta.render_hint == expected_hint
     assert meta.artifact_id == artifact["artifact_id"]

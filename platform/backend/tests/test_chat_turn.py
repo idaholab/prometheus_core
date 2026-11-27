@@ -77,6 +77,9 @@ async def test_map_completed_shapes_artifacts_and_persists_catalog(session_store
     # user-upload echo is dropped; only the real artifact survives.
     assert mapped.artifacts is not None and len(mapped.artifacts) == 1
     assert mapped.artifacts[0].artifact_id == "a1"
+    # The real call site names the conversation route; an empty conversation id here
+    # would silently fall back to the session route in the frontend.
+    assert mapped.artifacts[0].content_url == "/api/conversations/c1/artifacts/a1/content"
     assert mapped.follow_up_suggestions == ["Do X", "Do Y"]
     # Full catalog persisted onto the session for task-07 content fetches.
     assert (await _stored(session_store)).artifacts == [{"artifact_id": "a1", "name": "full"}]
@@ -621,3 +624,42 @@ def test_post_message_requires_auth(monkeypatch):
     client = TestClient(app)
     resp = client.post("/api/chat/messages", json={"query": "hi"})
     assert resp.status_code == 401
+
+
+async def test_a_turn_returns_meshes_unconverted_with_a_mesh_url(monkeypatch, session_store):
+    """A live turn never waits on VTK: the mesh comes back as the agent sent it, with a
+    ``mesh_url`` the viewer fetches when it scrolls into view."""
+    from app.services.mesh import service as mesh_service
+
+    from app import uri_resolver
+
+    conversions: list[str] = []
+
+    async def _record(*a, **_k):
+        conversions.append(str(a[0]) if a else "?")
+        return None
+
+    # Every conversion downloads its source and runs the VTK pool, whichever code path
+    # calls it. They are recorded, not made to raise: the shared conversion task logs
+    # and swallows errors, so a raise would never reach this test.
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _record)
+    monkeypatch.setattr(mesh_service, "_convert_offloop", _record)
+    await _seed(session_store)
+    mesh = {"artifact_id": "m1", "name": "out.e", "mime_type": "application/x-exodus", "uri": "file:///tmp/out.e"}
+
+    class _Client:
+        async def send(self, **_kwargs):
+            return _resp(status="completed", report="done", artifacts=[mesh], new_artifacts=[mesh])
+
+    mapped = await chat_service.handle_turn(
+        _Client(),  # type: ignore[arg-type]
+        session_store,
+        SID,
+        turn_id="t1",
+        query="mesh please",
+    )
+
+    (artifact,) = mapped.artifacts or []
+    assert artifact.json_body is None
+    assert artifact.mesh_url == "/api/conversations/c1/artifacts/m1/mesh"
+    assert conversions == []

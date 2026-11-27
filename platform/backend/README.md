@@ -185,6 +185,11 @@ live conversation — down with it. In a child it costs exactly one artifact, wh
 file download. Each worker is retired after a single conversion (`max_tasks_per_child=1`)
 because VTK does not reliably release memory between datasets.
 
+Nothing converts during a chat turn or a resume. A mesh artifact carries a `mesh_url`
+(`GET /api/conversations/{cid}/artifacts/{aid}/mesh`), and the frontend's MeshViewer
+requests it when it scrolls into view; the first request converts, later ones read the
+result through the cache's source index.
+
 Consequences worth knowing:
 
 - `PROMETHEUS_MESH_WORKERS` is **per web worker**. With `BACKEND_WORKERS=N` the peak child
@@ -195,7 +200,7 @@ Consequences worth knowing:
   degrades down the same "no mesh data" path.
 - `PROMETHEUS_MESH_CACHE_DIR` should be a persistent volume (compose mounts the `mesh-cache`
   named volume at `/cache/prometheus-mesh`). The cache is content-hash keyed, so anything it
-  retains is a conversion never repeated — including when a past conversation is reopened.
+  retains is a conversion never repeated, including after a backend restart.
 
 ### Session state lives in Valkey
 

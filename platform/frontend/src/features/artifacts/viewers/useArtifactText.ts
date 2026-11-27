@@ -15,7 +15,7 @@
  *
  * Shared text loading for the inline-text viewers (`CodeElement`, `TableElement`,
  * `ReportElement`, `JSONViewer`): use the inline `source` when the element carries one, otherwise
- * fetch the body from the artifact content proxy (`GET /api/artifacts/{id}/content`)
+ * fetch the body from the artifact content proxy (the artifact's `content_url`)
  * with the session cookie. A fetch failure surfaces as `loadState === "error"` so the
  * viewer can degrade to a "couldn't load" line (the download link still works) instead
  * of dropping the artifact.
