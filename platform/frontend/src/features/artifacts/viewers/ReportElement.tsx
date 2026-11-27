@@ -17,7 +17,7 @@
  * than a download (frontend presentation-parity note A-1). Markdown/plain-text
  * report artifacts don't carry their body on the wire, so when no inline `markdown`
  * prop is present this fetches the text from the content proxy
- * (`GET /api/artifacts/{id}/content`) and renders it with the shared Markdown
+ * (the artifact's `content_url`) and renders it with the shared Markdown
  * component. A fetch failure degrades to a "couldn't load" line + download link
  * rather than dropping the artifact.
  */
