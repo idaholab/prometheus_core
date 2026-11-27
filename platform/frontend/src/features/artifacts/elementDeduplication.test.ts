@@ -23,9 +23,6 @@ type TestElement = {
   props?: Record<string, unknown>;
 };
 
-const classifyElement = (element: TestElement) =>
-  element.type === "custom" && element.name === "MeshViewer" ? "mesh" : "file";
-
 test("keeps distinct mesh artifacts from one response", () => {
   const elements: TestElement[] = [
     {
@@ -42,7 +39,7 @@ test("keeps distinct mesh artifacts from one response", () => {
     },
   ];
 
-  assert.deepEqual(dedupeElements(elements, classifyElement), elements);
+  assert.deepEqual(dedupeElements(elements), elements);
 });
 
 test("collapses duplicate delivery of the same mesh artifact", () => {
@@ -59,7 +56,7 @@ test("collapses duplicate delivery of the same mesh artifact", () => {
     props: { datasetId: "exodus-dataset", artifact_id: "exodus" },
   };
 
-  assert.deepEqual(dedupeElements([first, duplicate], classifyElement), [first]);
+  assert.deepEqual(dedupeElements([first, duplicate]), [first]);
 });
 
 test("keeps distinct artifacts that share a display name", () => {
@@ -82,14 +79,14 @@ test("keeps distinct artifacts that share a display name", () => {
     { id: "j2", type: "custom", name: "CollapsibleJson", props: { name: "result", artifact_id: "j2" } },
   ];
 
-  assert.deepEqual(dedupeElements(elements, classifyElement), elements);
+  assert.deepEqual(dedupeElements(elements), elements);
 });
 
 test("collapses the same artifact delivered twice", () => {
   const first: TestElement = { id: "x", type: "image", name: "plot.png", props: { artifact_id: "a1" } };
   const again: TestElement = { id: "y", type: "image", name: "renamed.png", props: { artifact_id: "a1" } };
 
-  assert.deepEqual(dedupeElements([first, again], classifyElement), [first]);
+  assert.deepEqual(dedupeElements([first, again]), [first]);
 });
 
 test("never keys on the display name, even without an artifact id", () => {
@@ -100,14 +97,14 @@ test("never keys on the display name, even without an artifact id", () => {
     { id: "e4", type: "custom", name: "CollapsibleJson", props: { name: "result" } },
   ];
 
-  assert.deepEqual(dedupeElements(elements, classifyElement), elements);
+  assert.deepEqual(dedupeElements(elements), elements);
 });
 
 test("falls back to the artifact URL when there is no artifact id", () => {
   const first: TestElement = { id: "e1", type: "image", name: "a.png", url: "/api/artifacts/a1/content" };
   const again: TestElement = { id: "e2", type: "image", name: "b.png", url: "/api/artifacts/a1/content" };
 
-  assert.deepEqual(dedupeElements([first, again], classifyElement), [first]);
+  assert.deepEqual(dedupeElements([first, again]), [first]);
 });
 
 test("compares artifact ids exactly, without case folding", () => {
@@ -116,5 +113,26 @@ test("compares artifact ids exactly, without case folding", () => {
     { id: "y", type: "image", props: { artifact_id: "art-1" } },
   ];
 
-  assert.deepEqual(dedupeElements(elements, classifyElement), elements);
+  assert.deepEqual(dedupeElements(elements), elements);
+});
+
+test("keeps a file card and an image preview of two different artifacts", () => {
+  const elements: TestElement[] = [
+    {
+      id: "a1",
+      type: "image",
+      name: "plot.png",
+      url: "/api/artifacts/a1/content",
+      props: { artifact_id: "a1" },
+    },
+    {
+      id: "a2",
+      type: "file",
+      name: "plot.png",
+      url: "/api/artifacts/a2/content",
+      props: { artifact_id: "a2" },
+    },
+  ];
+
+  assert.deepEqual(dedupeElements(elements), elements);
 });

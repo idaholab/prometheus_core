@@ -19,8 +19,6 @@ export type DeduplicatedElement = {
   props?: Record<string, unknown>;
 };
 
-type ClassifyElement<T extends DeduplicatedElement> = (element: T) => string;
-
 function elementId(element: DeduplicatedElement): string {
   return element.id ?? "";
 }
@@ -48,27 +46,13 @@ function duplicateKey(element: DeduplicatedElement): string {
   return `${element.type}:${resourceSignature(element)}`;
 }
 
-export function dedupeElements<T extends DeduplicatedElement>(
-  elements: T[],
-  classifyElement: ClassifyElement<T>,
-): T[] {
-  const previewImageKeys = new Set(
-    elements
-      .filter((element) => element.type !== "file" && classifyElement(element) === "image")
-      .map(resourceSignature)
-      .filter(Boolean),
-  );
+// Drops repeat deliveries of the same artifact. A file card and an image preview are
+// only "the same" when they name the same artifact, and the adapter makes exactly one
+// element per artifact, so there is no separate file-vs-preview rule.
+export function dedupeElements<T extends DeduplicatedElement>(elements: T[]): T[] {
   const seen = new Set<string>();
 
   return elements.filter((element) => {
-    if (
-      element.type === "file" &&
-      classifyElement(element) === "image" &&
-      previewImageKeys.has(resourceSignature(element))
-    ) {
-      return false;
-    }
-
     const key = duplicateKey(element);
     if (seen.has(key)) return false;
     seen.add(key);
