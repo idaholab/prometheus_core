@@ -29,7 +29,7 @@ from typing import Optional
 from .cache import compute_dataset_id, get_cache_path, is_cached
 from .exceptions import InvalidExodusFileError
 from .models import ConvertRequest, ConvertResult
-from .vtk_pipeline import create_exodus_reader, extract_metadata, run_conversion
+from .vtk_pipeline import create_exodus_reader, extract_metadata, require_geometry, run_conversion
 
 
 def inspect_exodus(input_path: Path) -> dict:
@@ -40,9 +40,11 @@ def inspect_exodus(input_path: Path) -> dict:
         raise InvalidExodusFileError(f"File not found: {input_path}")
     try:
         reader = create_exodus_reader(input_path)
-        return extract_metadata(reader).to_dict()
+        metadata = extract_metadata(reader)
     except Exception as exc:
         raise InvalidExodusFileError(f"Failed to read Exodus file: {exc}") from exc
+    require_geometry(metadata, input_path)
+    return metadata.to_dict()
 
 
 def convert_exodus(request: ConvertRequest, cache_root: Optional[Path] = None) -> ConvertResult:

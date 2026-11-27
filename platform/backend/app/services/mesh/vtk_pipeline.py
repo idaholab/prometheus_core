@@ -194,6 +194,22 @@ def convert_timestep(
     return polydata
 
 
+def require_geometry(metadata: ExodusMetadata, input_path: Path) -> None:
+    """Raise :class:`InvalidExodusFileError` when the reader read no geometry.
+
+    VTK's Exodus reader logs an error but does not raise on a file it can't open: it
+    yields an empty mesh. Converting that would write a manifest, which the
+    content-hash cache then serves as this file's mesh forever, so callers check this
+    before anything is written.
+
+    ``num_nodes`` is summed over the element blocks :func:`extract_metadata` enabled,
+    which is all of them. If that ever honours a block selection, a readable file with
+    no blocks selected would be rejected here; check before that change lands.
+    """
+    if not metadata.num_nodes:
+        raise InvalidExodusFileError(f"No geometry read from {input_path.name}; not a readable Exodus II file")
+
+
 def run_conversion(request: ConvertRequest) -> dict:
     """Run the full Exodus→VTP conversion, writing VTP files + ``manifest.json`` +
     ``meta.json`` into ``request.output_dir``. Returns the manifest dict."""
@@ -205,12 +221,7 @@ def run_conversion(request: ConvertRequest) -> dict:
 
     reader = create_exodus_reader(input_path)
     metadata = extract_metadata(reader)
-    # VTK's Exodus reader logs an error but does not raise on a file it can't open: it
-    # yields an empty mesh. Converting that would write a manifest, which the
-    # content-hash cache then serves as this file's mesh forever. Refuse before
-    # anything is written.
-    if not metadata.num_nodes:
-        raise InvalidExodusFileError(f"No geometry read from {input_path.name}; not a readable Exodus II file")
+    require_geometry(metadata, input_path)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 

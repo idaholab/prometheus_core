@@ -533,3 +533,21 @@ def test_a_readable_exodus_converts_past_the_empty_mesh_guard(tmp_path):
     assert result.metadata["num_elements"] == 4
     assert (result.output_dir / "manifest.json").is_file()
     assert (result.output_dir / "surface_t0000.vtp").is_file()
+
+
+def test_inspect_exodus_rejects_an_unreadable_file_like_conversion(tmp_path):
+    """Both entry points share one geometry check: inspecting a file VTK can't read
+    must not report it as a valid file with zero nodes."""
+    pytest.importorskip("vtk")
+    from pathlib import Path
+
+    from app.services.mesh.converter import inspect_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        inspect_exodus(bad)
+
+    assert inspect_exodus(Path(__file__).parent / "fixtures" / "mesh" / "square.e")["num_nodes"] == 9
