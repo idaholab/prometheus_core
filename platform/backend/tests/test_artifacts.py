@@ -146,11 +146,13 @@ def test_mime_normalized_with_charset_param():
 
 
 def test_to_artifact_meta_carries_hint_and_skips_conversation_message():
-    meta = to_artifact_meta({"artifact_id": "a1", "name": "r.pdf", "mime_type": "application/pdf"})
+    meta = to_artifact_meta(
+        {"artifact_id": "a1", "name": "r.pdf", "mime_type": "application/pdf"}, conversation_id="c1"
+    )
     assert meta is not None and meta.render_hint == "pdf"
 
-    assert to_artifact_meta({"name": "conversation_message"}) is None
-    assert to_artifact_meta({"metadata": {"kind": "conversation_message"}}) is None
+    assert to_artifact_meta({"name": "conversation_message"}, conversation_id="c1") is None
+    assert to_artifact_meta({"metadata": {"kind": "conversation_message"}}, conversation_id="c1") is None
 
 
 def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
@@ -160,7 +162,8 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
             "artifact_id": "ref1",
             "tags": ["reference"],
             "metadata": {"source": "ASME BPVC", "section": "II-D", "page": 42},
-        }
+        },
+        conversation_id="c1",
     )
     assert meta is not None and meta.render_hint == "reference"
     assert meta.citation is not None
@@ -170,7 +173,7 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
 
 
 def test_to_artifact_meta_citation_absent_when_no_metadata():
-    meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"})
+    meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"}, conversation_id="c1")
     assert meta is not None and meta.citation is None
 
 
@@ -374,10 +377,12 @@ async def test_content_502_when_resolve_fails(monkeypatch, session_store):
     client = await _authed_client(
         monkeypatch,
         session_store,
-        artifacts=[{"artifact_id": "a1", "name": "x", "uri": "deeplynx://org/items/1"}],
+        artifacts=[{"artifact_id": "a1", "name": "x", "uri": "https://store/a1?sig=SENTINEL-token"}],
     )
     resp = client.get("/api/artifacts/a1/content")
     assert resp.status_code == 502
+    assert resp.json()["detail"] == "Could not fetch the artifact's content."
+    assert "SENTINEL" not in resp.text
 
 
 async def test_content_404_when_in_catalog_but_no_content(monkeypatch, session_store):
@@ -448,7 +453,169 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     ],
 )
 def test_artifact_display_comes_from_producer_metadata(metadata, expected) -> None:
-    meta = to_artifact_meta({"artifact_id": "a1", "name": "current.i", "mime_type": "text/plain", "metadata": metadata})
+    meta = to_artifact_meta(
+        {"artifact_id": "a1", "name": "current.i", "mime_type": "text/plain", "metadata": metadata},
+        conversation_id="c1",
+    )
     assert meta is not None
     assert meta.display == expected
     assert meta.render_hint == "code"  # display never changes how it renders
+
+
+# --------------------------------------------------------------------------- #
+# GET /api/conversations/{cid}/artifacts/{aid}/content
+# --------------------------------------------------------------------------- #
+
+
+class _CatalogClient:
+    """Stand-in for ConversationStateClient: an owner index plus artifact catalogs."""
+
+    def __init__(
+        self,
+        *,
+        owned: set[tuple[str, str]],
+        catalogs: dict[str, dict[str, dict]],
+        hidden: frozenset[str] = frozenset(),
+    ):
+        self.available = True
+        self._owned = owned
+        self._catalogs = catalogs
+        self._hidden = hidden
+
+    def owns(self, user_id: str, conv_id: str) -> bool:
+        return (user_id, conv_id) in self._owned
+
+    def get_meta(self, conv_id: str) -> dict:
+        return {"hidden": "1"} if conv_id in self._hidden else {}
+
+    def get_artifact(self, conv_id: str, artifact_id: str):
+        return self._catalogs.get(conv_id, {}).get(artifact_id)
+
+
+def _patch_catalog(monkeypatch, **kwargs) -> None:
+    from app.routers import artifacts as artifacts_router
+
+    fake = _CatalogClient(**kwargs)
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: fake)
+
+
+_PLOT = {"artifact_id": "a1", "name": "plot.json", "json_body": {"x": 1}, "mime_type": "application/json"}
+
+
+async def test_conversation_content_serves_an_owned_conversation_the_session_left(monkeypatch, session_store):
+    """Another tab rebinding the shared session must not break this tab's artifacts."""
+    _patch_catalog(monkeypatch, owned={("alice", "c-old")}, catalogs={"c-old": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store, artifacts=[])  # session bound to c1
+
+    resp = client.get("/api/conversations/c-old/artifacts/a1/content")
+    assert resp.status_code == 200
+    assert resp.json() == {"x": 1}
+    # The session-scoped route can't see it: that is the bug this route fixes.
+    assert client.get("/api/artifacts/a1/content").status_code == 404
+
+
+async def test_conversation_content_serves_the_bound_conversation_before_ownership(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned=set(), catalogs={"c1": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 200
+
+
+async def test_conversation_content_404s_for_another_users_conversation(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned={("bob", "c-bob")}, catalogs={"c-bob": {"a1": _PLOT}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    resp = client.get("/api/conversations/c-bob/artifacts/a1/content")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Artifact not found"
+
+
+async def test_conversation_content_404s_for_an_artifact_of_another_conversation(monkeypatch, session_store):
+    _patch_catalog(monkeypatch, owned={("alice", "c2")}, catalogs={"c1": {"a1": _PLOT}, "c2": {}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c2/artifacts/a1/content").status_code == 404
+
+
+def test_conversation_content_requires_auth():
+    from app.main import app
+
+    assert TestClient(app).get("/api/conversations/c1/artifacts/a1/content").status_code == 401
+
+
+def test_shaped_artifacts_name_their_conversation_content_route():
+    from app.services.artifacts import shape_artifacts
+
+    # Ids are quoted. A "/" would be quoted too, but Starlette decodes %2F before
+    # routing, so such an id can't reach the route; real ids are uuid4/hex.
+    [meta] = shape_artifacts([{"artifact_id": "a b", "name": "x"}], conversation_id="c 1")
+    assert meta.content_url == "/api/conversations/c%201/artifacts/a%20b/content"
+
+
+async def test_conversation_content_404s_when_valkey_is_down(monkeypatch, session_store):
+    from app.routers import artifacts as artifacts_router
+
+    down = _CatalogClient(owned={("alice", "c1")}, catalogs={"c1": {"a1": _PLOT}})
+    down.available = False
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: down)
+    client = await _authed_client(monkeypatch, session_store)
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 404
+
+
+@pytest.mark.parametrize("owned", [{("alice", "c1")}, set()], ids=["owner", "bound-session"])
+async def test_conversation_content_404s_for_a_deleted_conversation(monkeypatch, session_store, owned):
+    """A soft-deleted conversation's artifacts go with it, for the owner and for a
+    session still bound to it, as detail and resume already do."""
+    _patch_catalog(monkeypatch, owned=owned, catalogs={"c1": {"a1": _PLOT}}, hidden=frozenset({"c1"}))
+    client = await _authed_client(monkeypatch, session_store)  # session bound to c1
+
+    resp = client.get("/api/conversations/c1/artifacts/a1/content")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Artifact not found"
+
+
+@pytest.mark.parametrize(
+    ("conversation_id", "artifact_id"),
+    [("c1", "a1"), ("c1", "a b"), ("c 1", "a1")],
+    ids=["plain", "space-in-artifact", "space-in-conversation"],
+)
+async def test_the_shaped_content_url_reaches_the_route(monkeypatch, session_store, conversation_id, artifact_id):
+    """The URL shape_artifacts builds is one the router actually serves, so the hard-coded
+    ``/api`` prefix and the quoting can't drift from the route."""
+    from app.services.artifacts import shape_artifacts
+
+    entry = {**_PLOT, "artifact_id": artifact_id}
+    _patch_catalog(monkeypatch, owned={("alice", conversation_id)}, catalogs={conversation_id: {artifact_id: entry}})
+    client = await _authed_client(monkeypatch, session_store)
+    [meta] = shape_artifacts([entry], conversation_id=conversation_id)
+
+    resp = client.get(meta.content_url)
+    assert resp.status_code == 200
+    assert resp.json() == {"x": 1}
+
+
+async def test_conversation_content_streams_a_file_uri(monkeypatch, session_store, tmp_path):
+    """The URI branch of the shared _serve, through the conversation route."""
+    f = tmp_path / "doc.pdf"
+    f.write_bytes(b"%PDF-1.4 fake")
+    entry = {"artifact_id": "a1", "name": "doc.pdf", "mime_type": "application/pdf", "uri": f"file://{f}"}
+    _patch_catalog(monkeypatch, owned={("alice", "c-old")}, catalogs={"c-old": {"a1": entry}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    resp = client.get("/api/conversations/c-old/artifacts/a1/content")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.content == b"%PDF-1.4 fake"
+
+
+async def test_conversation_content_404s_for_the_bound_session_when_valkey_is_down(monkeypatch, session_store):
+    """The bound shortcut skips the ownership check, not the catalog read."""
+    from app.routers import artifacts as artifacts_router
+
+    down = _CatalogClient(owned=set(), catalogs={"c1": {"a1": _PLOT}})
+    down.available = False
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: down)
+    client = await _authed_client(monkeypatch, session_store)  # session bound to c1
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 404

@@ -77,6 +77,9 @@ async def test_map_completed_shapes_artifacts_and_persists_catalog(session_store
     # user-upload echo is dropped; only the real artifact survives.
     assert mapped.artifacts is not None and len(mapped.artifacts) == 1
     assert mapped.artifacts[0].artifact_id == "a1"
+    # The real call site names the conversation route; an empty conversation id here
+    # would silently fall back to the session route in the frontend.
+    assert mapped.artifacts[0].content_url == "/api/conversations/c1/artifacts/a1/content"
     assert mapped.follow_up_suggestions == ["Do X", "Do Y"]
     # Full catalog persisted onto the session for task-07 content fetches.
     assert (await _stored(session_store)).artifacts == [{"artifact_id": "a1", "name": "full"}]

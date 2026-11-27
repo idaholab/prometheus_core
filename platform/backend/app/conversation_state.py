@@ -23,13 +23,19 @@ edits exist.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from app.config import settings
 
 try:
     import redis
 except ImportError:  # pragma: no cover - only when redis is absent
     redis = None  # type: ignore
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -173,6 +179,30 @@ class ConversationStateClient:
             if isinstance(parsed, dict):
                 artifacts.append(parsed)
         return artifacts
+
+    def get_artifact(self, conv_id: str, artifact_id: str) -> Optional[Dict[str, Any]]:
+        """One raw catalog dict from ``artifacts:conv:{conv_id}:by_id``, or ``None``.
+
+        ``None`` also on a missing client, empty ids, a Redis error or a corrupt value,
+        so the content route maps every miss to the same 404.
+        """
+        if not conv_id or not artifact_id:
+            return None
+        client = self.client
+        if client is None:
+            # Logged because the caller's 404 can't say that Valkey, not the id, failed.
+            logger.warning("artifact %s of %s: Valkey unavailable", artifact_id, conv_id)
+            return None
+        try:
+            raw = client.hget(f"artifacts:conv:{conv_id}:by_id", artifact_id)
+            parsed = json.loads(raw) if raw else None
+        except Exception as exc:
+            logger.warning("artifact %s of %s: unreadable catalog entry: %s", artifact_id, conv_id, exc)
+            return None
+        if raw and not isinstance(parsed, dict):
+            logger.warning("artifact %s of %s: catalog entry is not an object", artifact_id, conv_id)
+            return None
+        return parsed
 
     # --------------------------------------------------------------------- #
     # Per-user metadata (title override / soft delete) — ``conv:meta:{id}``
@@ -319,3 +349,20 @@ class ConversationStateClient:
         if conversation.get("missing_info"):
             return "needs_info"
         return "unknown"
+
+
+# One client per class, reused across requests and routers (AU-7): a client caches its
+# Redis connection, so sharing one avoids a fresh connect + ping per call. Keyed on the
+# class object a caller passes (not id()), so a test that monkeypatches
+# ``ConversationStateClient`` in one router module gets its own instance, and the class
+# is kept alive as the key.
+_shared_clients: dict[type, ConversationStateClient] = {}
+
+
+def shared_client(cls: type[ConversationStateClient] = ConversationStateClient) -> ConversationStateClient:
+    """The process-wide ``cls`` instance for ``settings.redis_url``."""
+    inst = _shared_clients.get(cls)
+    if inst is None:
+        inst = cls(settings.redis_url)
+        _shared_clients[cls] = inst
+    return inst

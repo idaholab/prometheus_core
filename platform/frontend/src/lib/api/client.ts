@@ -47,7 +47,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return fetchJson<T>(`${API_BASE}${path}`, init);
+}
+
+/** Fetch a backend URL as given (one the backend handed out, such as `mesh_url`), with
+ * the same credentials and error mapping as every other API call. */
+async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(url, {
     credentials: "include",
     ...init,
   });
@@ -180,8 +186,18 @@ export const api = {
     });
   },
 
-  /** URL for an artifact's bytes; used directly as an <img>/<embed> src or fetch target. */
-  artifactContentUrl(artifactId: string): string {
-    return `${API_BASE}/artifacts/${encodeURIComponent(artifactId)}/content`;
+  /** GET an artifact's `mesh_url`: the MeshViewer props, converted on first request. */
+  meshProps(meshUrl: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return fetchJson<Record<string, unknown>>(meshUrl, { signal });
+  },
+
+  /** URL for an artifact's bytes; used directly as an <img>/<embed> src or fetch
+   * target. The backend's `content_url` when it sent one (conversation-scoped, so it
+   * keeps working when another tab rebinds the shared session), else the older
+   * session-scoped route. */
+  artifactContentUrl(artifact: { artifact_id: string; content_url?: string }): string {
+    return (
+      artifact.content_url || `${API_BASE}/artifacts/${encodeURIComponent(artifact.artifact_id)}/content`
+    );
   },
 };

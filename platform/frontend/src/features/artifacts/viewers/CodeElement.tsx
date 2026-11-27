@@ -18,7 +18,7 @@
  * (`ReportElement.tsx`'s `#` comments reading as headings, indentation collapsing).
  * Mirrors `ReportElement.tsx`'s fetch-from-`url`-if-no-inline-source behavior: when no
  * inline `source` prop is present, the body is fetched from the content proxy
- * (`GET /api/artifacts/{id}/content`). A fetch failure degrades to a "couldn't load"
+ * (the artifact's `content_url`). A fetch failure degrades to a "couldn't load"
  * line + download link rather than dropping the artifact. The code block styling and
  * copy-button behavior mirror `CodeBlock` in `@/components/Markdown`.
  *

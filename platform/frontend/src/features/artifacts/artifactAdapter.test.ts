@@ -45,3 +45,51 @@ test("json artifact with an inline body keeps it as CollapsibleJson data", () =>
   assert.deepEqual(element.props?.data, { status: "ok", values: [1, 2, 3], nested: { flag: true } });
   assert.equal(element.props?.url, "/api/artifacts/art-1/content");
 });
+
+test("an artifact's content_url wins over the session-scoped route", () => {
+  const element = artifactToElement(
+    jsonArtifact({ json_body: null, content_url: "/api/conversations/c1/artifacts/art-1/content" }),
+  );
+
+  assert.equal(element.props?.url, "/api/conversations/c1/artifacts/art-1/content");
+});
+
+test("a mesh with a mesh_url but no inline manifest mounts the viewer to fetch it", () => {
+  const element = artifactToElement(
+    jsonArtifact({
+      render_hint: "mesh",
+      name: "out.e",
+      content_url: "/api/conversations/c1/artifacts/m1/content",
+      mesh_url: "/api/conversations/c1/artifacts/m1/mesh",
+    }),
+  );
+
+  assert.equal(element.name, "MeshViewer");
+  assert.equal(element.props?.meshUrl, "/api/conversations/c1/artifacts/m1/mesh");
+  assert.equal(element.props?.downloadUrl, "/api/conversations/c1/artifacts/m1/content");
+});
+
+test("a mesh with neither manifest nor mesh_url stays a download", () => {
+  const element = artifactToElement(jsonArtifact({ render_hint: "mesh", name: "out.e" }));
+
+  assert.equal(element.type, "file");
+});
+
+test("an inline mesh body mounts the viewer only when it can render", () => {
+  const files = [{ index: 0, timestep_index: 0, time_value: 0, filename: "surface_t0000.vtp" }];
+  const complete = artifactToElement(
+    jsonArtifact({
+      render_hint: "mesh",
+      json_body: { baseUrl: "/api/artifacts/mesh/d", manifest: { files } },
+    }),
+  );
+  assert.equal(complete.name, "MeshViewer");
+  assert.equal(complete.props?.baseUrl, "/api/artifacts/mesh/d");
+
+  // A partial body (no baseUrl or no files) would mount an empty viewer: fetch instead.
+  const mesh_url = "/api/conversations/c1/artifacts/m1/mesh";
+  for (const json_body of [{ datasetId: "d" }, { baseUrl: "/b", manifest: { files: [] } }]) {
+    const element = artifactToElement(jsonArtifact({ render_hint: "mesh", json_body, mesh_url }));
+    assert.equal(element.props?.meshUrl, mesh_url, JSON.stringify(json_body));
+  }
+});

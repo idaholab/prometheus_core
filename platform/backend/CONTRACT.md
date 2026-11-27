@@ -389,12 +389,48 @@ data: {"type":"turn_done","turn_id":"7f9c2b1e-…","response":{"turn_id":"7f9c2b
 
 ---
 
-## `GET /api/artifacts/{artifact_id}/content`
+## `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`
 
 Resolves `deeplynx://` / remote URIs and streams the artifact bytes with the
-correct `Content-Type` (task 07). Replaces the frontend's old
-`_render_pdf_artifact` / `_render_remote_file_artifact` / `_render_download_artifact`
-download paths.
+correct `Content-Type` (task 07). `ArtifactMeta.content_url` names this route; the
+frontend fetches from there and doesn't build the URL itself. `content_url` is empty
+when the backend knows no conversation, and the frontend then uses the session-scoped
+route below.
+
+The caller must own the conversation (`user:convs:{user}`) or have their session
+bound to it. The artifact is read from that conversation's catalog
+(`artifacts:conv:{id}:by_id`), not from the session, so it stays reachable when
+another tab of the same login opens a different conversation. Any miss (not
+readable, not in the catalog, Valkey down) is one **404**, so a guess can't tell
+the cases apart.
+
+## `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/mesh`
+
+Returns the MeshViewer props for a mesh artifact (`datasetId`, `baseUrl`, `manifest`,
+`metadata`, …: the same shape a live turn puts in `json_body`), converting the
+Exodus/STL source on first request. Mesh artifacts with a URI name this route in
+`ArtifactMeta.mesh_url`. Same access rule and 404 as the content route; **404** also
+when the artifact is not a mesh, **422** when it has no URI or can't be converted.
+
+`mesh_url` is empty for a mesh without a URI: the client then uses `json_body` if it
+holds the props, and otherwise offers the file for download. A mesh artifact may carry
+only `mesh_url`, with `json_body` null, so a client must handle both.
+
+A repeat request for a `deeplynx://` source reads the converted dataset through a
+source index in the mesh cache (`.index/`), with no download and no hashing; other
+sources are downloaded and content-hashed each time. Concurrent requests for one mesh
+share a single conversion, which finishes even if the browser disconnects. That
+sharing is per backend worker process, so with several workers two of them can still
+convert the same mesh. The VTP files themselves stay at
+`GET /api/artifacts/mesh/{dataset_id}/{filename}`, which answers **400** for a
+dot-prefixed segment, so `.index/` is never served.
+
+## `GET /api/artifacts/{artifact_id}/content`
+
+The older, session-scoped route: it looks the id up in the session's catalog, which
+follows whichever conversation the login bound last. It is removed, together with the
+frontend's fallback to it, once the client-agent's ingest matches the registry
+(`text_body`-only artifacts); see idaholab/prometheus_core#525.
 
 ## Chat history
 

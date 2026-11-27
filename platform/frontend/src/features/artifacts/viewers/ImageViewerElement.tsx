@@ -29,7 +29,7 @@ export function ImageViewerElement({ element }: ViewerProps) {
     stringProp(props.name) || element.name || (element.mime === "image/svg+xml" ? "image.svg" : "image");
 
   // Inline SVG > explicit SVG url > the artifact content proxy url set by the
-  // adapter (GET /api/artifacts/{id}/content).
+  // adapter (the artifact's `content_url`).
   const url = (svgContent ? svgDataUrl(svgContent) : "") || svgUrl || element.url || null;
 
   if (!url) return null;
