@@ -587,3 +587,29 @@ async def test_the_shaped_content_url_reaches_the_route(monkeypatch, session_sto
     resp = client.get(meta.content_url)
     assert resp.status_code == 200
     assert resp.json() == {"x": 1}
+
+
+async def test_conversation_content_streams_a_file_uri(monkeypatch, session_store, tmp_path):
+    """The URI branch of the shared _serve, through the conversation route."""
+    f = tmp_path / "doc.pdf"
+    f.write_bytes(b"%PDF-1.4 fake")
+    entry = {"artifact_id": "a1", "name": "doc.pdf", "mime_type": "application/pdf", "uri": f"file://{f}"}
+    _patch_catalog(monkeypatch, owned={("alice", "c-old")}, catalogs={"c-old": {"a1": entry}})
+    client = await _authed_client(monkeypatch, session_store)
+
+    resp = client.get("/api/conversations/c-old/artifacts/a1/content")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.content == b"%PDF-1.4 fake"
+
+
+async def test_conversation_content_404s_for_the_bound_session_when_valkey_is_down(monkeypatch, session_store):
+    """The bound shortcut skips the ownership check, not the catalog read."""
+    from app.routers import artifacts as artifacts_router
+
+    down = _CatalogClient(owned=set(), catalogs={"c1": {"a1": _PLOT}})
+    down.available = False
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: down)
+    client = await _authed_client(monkeypatch, session_store)  # session bound to c1
+
+    assert client.get("/api/conversations/c1/artifacts/a1/content").status_code == 404
