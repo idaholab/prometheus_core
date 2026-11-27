@@ -860,3 +860,43 @@ def test_the_mesh_route_requires_a_session():
     from app.main import app
 
     assert TestClient(app).get("/api/conversations/c1/artifacts/m1/mesh").status_code == 401
+
+
+async def test_a_dataset_converted_before_the_index_existed_is_not_reconverted(monkeypatch, tmp_path):
+    """Meshes converted before this change are in the content-hash cache but not in the
+    source index. Their first view downloads and hashes the source once, finds the
+    cached dataset without running VTK, and writes the index entry."""
+    vtk = pytest.importorskip("vtk")
+    import shutil
+
+    from app.services.mesh import stl
+
+    sphere = vtk.vtkSphereSource()
+    sphere.Update()
+    stl_path = tmp_path / "sphere.stl"
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(str(stl_path))
+    writer.SetInputConnection(sphere.GetOutputPort())
+    writer.Write()
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return stl_path
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    source = {**_MESH, "name": "sphere.stl", "mime_type": "model/stl"}
+    first = await service.mesh_props(dict(source))
+    shutil.rmtree(tmp_path / "cache" / ".index")  # as before the index existed
+
+    def _no_vtk(*_a, **_k):
+        raise AssertionError("a cached dataset must not be converted again")
+
+    monkeypatch.setattr(stl, "convert_stl_sync", _no_vtk)
+    again = await service.mesh_props(dict(source))
+
+    assert again == first
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
