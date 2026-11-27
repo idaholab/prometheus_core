@@ -98,7 +98,7 @@ function viewerData(fetched: Record<string, unknown>): Record<string, unknown> {
   return data;
 }
 
-export function MeshViewerElement({ element, onSend }: ViewerProps) {
+export function MeshViewerElement({ element }: ViewerProps) {
   const props = (element as { props?: MeshProps }).props ?? {};
   if (props.meshUrl && !props.manifest) {
     return (
@@ -113,16 +113,15 @@ export function MeshViewerElement({ element, onSend }: ViewerProps) {
         {(fetched) => (
           <LoadedMeshViewer
             element={{ ...element, props: { ...viewerData(fetched), ...props, meshUrl: undefined } }}
-            onSend={onSend}
           />
         )}
       </LazyMeshProps>
     );
   }
-  return <LoadedMeshViewer element={element} onSend={onSend} />;
+  return <LoadedMeshViewer element={element} />;
 }
 
-function LoadedMeshViewer({ element }: ViewerProps) {
+function LoadedMeshViewer({ element }: Pick<ViewerProps, "element">) {
   const props = (element as { props?: MeshProps }).props ?? {};
   const datasetId = props.datasetId ?? "mesh";
   const baseUrl = props.baseUrl ?? "";
