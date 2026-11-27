@@ -652,3 +652,30 @@ def test_only_mesh_artifacts_with_a_uri_get_a_mesh_url():
     assert mesh.mesh_url == "/api/conversations/c1/artifacts/m1/mesh"
     assert no_uri.mesh_url == ""
     assert png.mesh_url == ""
+
+
+async def test_an_unwritable_source_index_still_returns_the_props(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+
+    # A regular file where the index directory should be: mkdir fails with an OSError.
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("")
+    monkeypatch.setattr(service, "_index_path", lambda _root, key: blocker / f"{key}.json")
+
+    props = await service.mesh_props(dict(_MESH))
+    assert props is not None and props["datasetId"] == "dsAAA"
+
+
+async def test_a_corrupt_cached_dataset_is_converted_again(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    (tmp_path / "cache" / "dsAAA" / "meta.json").write_text("{not json")
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == "dsAAA"
