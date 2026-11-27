@@ -279,10 +279,15 @@ def artifact_identity(artifact: dict[str, Any]) -> str:
 
     Prefers the explicit ``artifact_id`` / ``id``. When neither is present (id-less
     inline artifacts), derives a deterministic synthetic id from the artifact's
-    distinguishing fields so it is still routable via
+    distinguishing fields so it is still routable via the session-scoped
     ``GET /api/artifacts/{id}/content`` and doesn't collide with other id-less
-    artifacts. Both :func:`to_artifact_meta` (wire) and the content route's catalog
-    lookup call this, so the frontend's id round-trips to the same raw dict.
+    artifacts. :func:`to_artifact_meta` (wire) and that route's catalog scan both call
+    this, so the frontend's id round-trips to the same raw dict.
+
+    The conversation-scoped content route reads ``artifacts:conv:{cid}:by_id`` by the
+    id as given and doesn't call this: ``ArtifactRegistry`` always assigns an
+    ``artifact_id`` before it writes that catalog, so its entries never need a
+    synthetic one.
     """
     explicit = str(artifact.get("artifact_id") or artifact.get("id") or "")
     if explicit:
