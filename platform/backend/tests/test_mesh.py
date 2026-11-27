@@ -887,3 +887,35 @@ async def test_the_source_index_is_read_and_written_off_the_event_loop(monkeypat
 
     assert set(seen) == {"read", "write"}
     assert loop_thread not in seen.values()
+
+
+async def test_live_enrichment_converts_once_and_then_hits_the_index(monkeypatch, tmp_path):
+    """The real enrich_mesh_artifact_dicts (the live-turn and resume path) now goes
+    through mesh_props: a second turn naming the same mesh is an index hit."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+
+    first = [dict(_MESH)]
+    await service.enrich_mesh_artifact_dicts(first)
+    second = [dict(_MESH)]
+    await service.enrich_mesh_artifact_dicts(second)
+
+    assert calls == [_MESH["uri"]]
+    assert first[0]["json_body"]["datasetId"] == second[0]["json_body"]["datasetId"] == _DATASET
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
+
+
+async def test_live_enrichment_leaves_a_failed_mesh_unconverted(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _fail(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(service, "_convert_offloop", _fail)
+    artifacts = [dict(_MESH)]
+
+    await service.enrich_mesh_artifact_dicts(artifacts)  # must not raise
+
+    assert artifacts[0].get("json_body") is None
