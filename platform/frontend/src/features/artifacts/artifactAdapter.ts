@@ -27,12 +27,12 @@
  *   - inline structured data (json/thermal) → props built from `json_body`.
  *   - report/reference → dedicated lightweight viewers (markdown / citation card).
  *
- * Notes on the two gaps carried over from the Chainlit stack:
- *   - **mesh**: the old app rendered Exodus/STL via a Chainlit-side VTK→VTP pipeline
- *     that produced a `baseUrl` + `manifest`. The backend has no such pipeline
- *     (the CONTRACT example ships `json_body: null` for a mesh artifact), so unless a
- *     manifest arrives inline we degrade to a file download rather than mount a viewer
- *     with nothing to show. Restoring interactive mesh rendering is a backend follow-up.
+ * Notes on two render hints:
+ *   - **mesh**: the backend converts Exodus/STL to VTP. An inline `json_body` holding a
+ *     renderable manifest mounts the MeshViewer at once; otherwise an artifact with a
+ *     `mesh_url` mounts it lazily, fetching its props from there when it comes into
+ *     view (LazyMeshProps); with neither, it degrades to a file download rather than
+ *     mount a viewer with nothing to show.
  *   - **mermaid**: no agent currently emits mermaid artifacts, and the diagram source
  *     is not a wire field. We extract it best-effort from `json_body`; an empty source
  *     surfaces the viewer's own "no diagram" state.
