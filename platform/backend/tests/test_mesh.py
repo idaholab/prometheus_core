@@ -534,6 +534,13 @@ def test_a_readable_exodus_converts_past_the_empty_mesh_guard(tmp_path):
     assert (result.output_dir / "manifest.json").is_file()
     assert (result.output_dir / "surface_t0000.vtp").is_file()
 
+    # A second conversion of the same file is a cache hit: a cached entry with nodes is served.
+    again = convert_exodus(
+        ConvertRequest(input_path=src, output_dir=cache_root, timestep_mode="all"), cache_root=cache_root
+    )
+    assert again.dataset_id == result.dataset_id
+    assert again.metadata["num_nodes"] == 9
+
 
 def test_inspect_exodus_rejects_an_unreadable_file_like_conversion(tmp_path):
     """Both entry points share one geometry check: inspecting a file VTK can't read
@@ -551,3 +558,26 @@ def test_inspect_exodus_rejects_an_unreadable_file_like_conversion(tmp_path):
         inspect_exodus(bad)
 
     assert inspect_exodus(Path(__file__).parent / "fixtures" / "mesh" / "square.e")["num_nodes"] == 9
+
+
+def test_a_cached_empty_mesh_is_reconverted_and_rejected(tmp_path):
+    """An empty mesh cached before the guard existed is a miss, not a hit."""
+    pytest.importorskip("vtk")
+    from dataclasses import asdict
+
+    from app.services.mesh.cache import compute_dataset_id, get_cache_path
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+    cache_root = tmp_path / "cache"
+    request = ConvertRequest(input_path=bad, output_dir=cache_root, timestep_mode="all")
+    poisoned = get_cache_path(cache_root, compute_dataset_id(bad, asdict(request)))
+    poisoned.mkdir(parents=True)
+    (poisoned / "manifest.json").write_text("{}")
+    (poisoned / "meta.json").write_text(json.dumps({"num_nodes": 0}))
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        convert_exodus(request, cache_root=cache_root)

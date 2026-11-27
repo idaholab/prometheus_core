@@ -61,12 +61,15 @@ def convert_exodus(request: ConvertRequest, cache_root: Optional[Path] = None) -
         if is_cached(cache_root, dataset_id):
             with open(output_dir / "meta.json") as f:
                 metadata = json.load(f)
-            return ConvertResult(
-                dataset_id=dataset_id,
-                output_dir=output_dir,
-                manifest_path=output_dir / "manifest.json",
-                metadata=metadata,
-            )
+            # An entry with no nodes is an empty mesh cached before run_conversion
+            # rejected unreadable files: convert again, which now refuses it.
+            if metadata.get("num_nodes"):
+                return ConvertResult(
+                    dataset_id=dataset_id,
+                    output_dir=output_dir,
+                    manifest_path=output_dir / "manifest.json",
+                    metadata=metadata,
+                )
     else:
         output_dir = request.output_dir
 
