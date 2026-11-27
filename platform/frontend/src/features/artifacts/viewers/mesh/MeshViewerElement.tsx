@@ -88,11 +88,23 @@ function useTheme() {
   return isDark;
 }
 
+/** Props this element sets itself; fetched viewer props must not override them (a
+ * server `height` would move the layout after the placeholder reserved its space). */
+const LOCAL_PROPS = ["title", "height", "downloadUrl", "meshUrl", "artifact_id"] as const;
+
+function viewerData(fetched: Record<string, unknown>): Record<string, unknown> {
+  const data = { ...fetched };
+  for (const key of LOCAL_PROPS) delete data[key];
+  return data;
+}
+
 export function MeshViewerElement({ element, onSend }: ViewerProps) {
   const props = (element as { props?: MeshProps }).props ?? {};
   if (props.meshUrl && !props.manifest) {
     return (
       <LazyMeshProps
+        // A different mesh starts over, waiting to come into view again.
+        key={props.meshUrl}
         meshUrl={props.meshUrl}
         downloadUrl={props.downloadUrl}
         title={props.title ?? "Mesh Viewer"}
@@ -100,7 +112,7 @@ export function MeshViewerElement({ element, onSend }: ViewerProps) {
       >
         {(fetched) => (
           <LoadedMeshViewer
-            element={{ ...element, props: { ...props, ...fetched, meshUrl: undefined } }}
+            element={{ ...element, props: { ...viewerData(fetched), ...props, meshUrl: undefined } }}
             onSend={onSend}
           />
         )}
