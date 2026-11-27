@@ -187,8 +187,8 @@ export const api = {
   },
 
   /** GET an artifact's `mesh_url`: the MeshViewer props, converted on first request. */
-  meshProps(meshUrl: string): Promise<Record<string, unknown>> {
-    return fetchJson<Record<string, unknown>>(meshUrl);
+  meshProps(meshUrl: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return fetchJson<Record<string, unknown>>(meshUrl, { signal });
   },
 
   /** URL for an artifact's bytes; used directly as an <img>/<embed> src or fetch

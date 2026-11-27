@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { meshManifestProps } from "@/features/artifacts/meshManifest";
 import { api } from "@/lib/api/client";
+import { MESH_FETCH_TIMEOUT_MS, meshFailureMessage } from "./meshFailure";
 import { useNearViewport } from "./useNearViewport";
 
 type Props = {
@@ -48,8 +49,14 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
   useEffect(() => {
     if (!near) return;
     let live = true;
+    let timedOut = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, MESH_FETCH_TIMEOUT_MS);
     setState({ kind: "loading" });
-    api.meshProps(meshUrl).then(
+    api.meshProps(meshUrl, controller.signal).then(
       (body) => {
         if (!live) return;
         const props = meshManifestProps(body);
@@ -57,11 +64,13 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
           props ? { kind: "ready", props } : { kind: "failed", message: "The server returned no mesh data." },
         );
       },
-      (err: unknown) =>
-        live && setState({ kind: "failed", message: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => live && setState({ kind: "failed", message: meshFailureMessage(err, timedOut) }),
     );
     return () => {
       live = false;
+      clearTimeout(timer);
+      // The backend finishes the conversion anyway (it is shared and shielded).
+      controller.abort();
     };
   }, [near, meshUrl, attempt]);
 

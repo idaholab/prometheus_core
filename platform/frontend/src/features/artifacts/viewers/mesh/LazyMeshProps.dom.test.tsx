@@ -15,9 +15,21 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ meshProps: vi.fn() }));
-vi.mock("@/lib/api/client", () => ({ api }));
+const ApiError = vi.hoisted(
+  () =>
+    class ApiError extends Error {
+      constructor(
+        public status: number,
+        message: string,
+      ) {
+        super(message);
+      }
+    },
+);
+vi.mock("@/lib/api/client", () => ({ api, ApiError }));
 
 import { LazyMeshProps } from "./LazyMeshProps.tsx";
+import { MESH_FETCH_TIMEOUT_MS } from "./meshFailure.ts";
 
 /** A controllable IntersectionObserver: `enter()` reports every observed element visible. */
 const observers: { cb: IntersectionObserverCallback; els: Element[] }[] = [];
@@ -73,11 +85,11 @@ test("nothing is fetched until the viewer comes near the viewport", async () => 
   enter();
   expect(await screen.findByText("viewer ds1")).toBeInTheDocument();
   expect(api.meshProps).toHaveBeenCalledTimes(1);
-  expect(api.meshProps).toHaveBeenCalledWith("/api/m");
+  expect(api.meshProps).toHaveBeenCalledWith("/api/m", expect.any(AbortSignal));
 });
 
 test("a failed conversion shows why, a download link, and retries on request", async () => {
-  api.meshProps.mockRejectedValueOnce(new Error("Could not convert out.e for viewing."));
+  api.meshProps.mockRejectedValueOnce(new ApiError(422, "Could not convert out.e for viewing."));
   api.meshProps.mockResolvedValueOnce(mesh("ds1"));
   renderLazy();
   enter();
@@ -105,4 +117,45 @@ test("a successful response without mesh data shows the failure card", async () 
 
   expect(await screen.findByRole("alert")).toHaveTextContent("The server returned no mesh data.");
   expect(screen.queryByText(/viewer/)).not.toBeInTheDocument();
+});
+
+test("a request that never answers times out into the failure card", async () => {
+  vi.useFakeTimers();
+  try {
+    let signal: AbortSignal | undefined;
+    api.meshProps.mockImplementation(
+      (_url: string, s: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal = s;
+          s.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
+    );
+    renderLazy();
+    enter();
+    expect(screen.getByText(/Preparing mesh/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(MESH_FETCH_TIMEOUT_MS);
+    });
+
+    expect(signal?.aborted).toBe(true);
+    expect(screen.getByRole("alert")).toHaveTextContent("Preparing the mesh took too long.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("unmounting aborts the request", () => {
+  let signal: AbortSignal | undefined;
+  api.meshProps.mockImplementation((_url: string, s: AbortSignal) => {
+    signal = s;
+    return new Promise(() => {});
+  });
+  const { unmount } = renderLazy();
+  enter();
+
+  unmount();
+
+  expect(signal?.aborted).toBe(true);
 });
