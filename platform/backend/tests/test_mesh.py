@@ -956,3 +956,23 @@ async def test_mesh_props_reads_back_what_the_real_converter_cached(monkeypatch,
 
     assert converted is not None and again is not None
     assert again == converted
+
+
+async def test_a_failed_conversion_leaves_nothing_behind_and_a_retry_works(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    succeed = service._convert_offloop
+
+    async def _fail(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(service, "_convert_offloop", _fail)
+    assert await service.mesh_props(dict(_MESH)) is None
+    assert service._inflight == {}
+    assert not (tmp_path / "cache" / ".index").exists()
+
+    monkeypatch.setattr(service, "_convert_offloop", succeed)
+    retried = await service.mesh_props(dict(_MESH))
+
+    assert retried is not None and retried["datasetId"] == _DATASET
