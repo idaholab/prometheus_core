@@ -30,29 +30,18 @@ function stringProp(element: DeduplicatedElement, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-// An artifact id names exactly one artifact, so it outranks every other signal: two
-// artifacts that only share a display name (two "plot.png"s, two JSON results called
-// "result") are different resources and must both render. The same artifact delivered
-// twice still collapses, because both copies carry its id.
+// An element's identity is the artifact it shows: its artifact id, else its artifact
+// URL, else its own element id. Never a display name or filename: two artifacts that
+// only share a name (two "plot.png"s, two JSON results called "result") are different
+// resources and must both render. The same artifact delivered twice still collapses,
+// because both copies carry its id. Ids are compared exactly, with no case folding.
 function resourceSignature(element: DeduplicatedElement): string {
-  const artifactId = stringProp(element, "artifact_id") || stringProp(element, "artifactId");
+  const resource = stringProp(element, "artifact_id") || (element.url ?? "").trim() || elementId(element);
   if (element.type === "custom") {
     const component = (element.name ?? "").trim();
-    const resource =
-      artifactId ||
-      stringProp(element, "datasetId") ||
-      stringProp(element, "baseUrl") ||
-      stringProp(element, "name");
-    return [component, resource].filter(Boolean).join(":").toLowerCase();
+    return [component, resource].filter(Boolean).join(":");
   }
-
-  return (
-    artifactId ||
-    element.url ||
-    element.path ||
-    (element.name ?? "").trim() ||
-    elementId(element)
-  ).toLowerCase();
+  return resource;
 }
 
 function duplicateKey(element: DeduplicatedElement): string {
