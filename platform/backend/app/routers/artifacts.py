@@ -329,8 +329,9 @@ async def get_mesh_file(
 ) -> Response:
     """Serve a converted VTP timestep for the React MeshViewer (auth-required).
 
-    A mesh artifact's ``json_body.baseUrl`` is ``/api/artifacts/mesh/{dataset_id}``
-    (see ``services/mesh/service.py``); the viewer fetches each
+    The MeshViewer props (from an artifact's ``mesh_url``, or an older catalog's inline
+    ``json_body``) carry ``baseUrl`` = ``/api/artifacts/mesh/{dataset_id}`` (see
+    ``services/mesh/service.py``); the viewer fetches each
     ``${baseUrl}/${filename}`` from here. ``dataset_id`` is a content hash and the
     cached files are session-independent, so the guard is auth + path-traversal
     safety: both segments must be single safe names and the resolved path must stay

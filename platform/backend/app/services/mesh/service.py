@@ -263,8 +263,9 @@ async def _convert_offloop(
     At most ``settings.mesh_workers`` conversions are submitted at once; the rest wait
     for a slot before their timeout starts.
 
-    Returns ``None`` (having logged) when the conversion could not be completed, which
-    the caller turns into a 422 and a download offer. This is the whole "run VTK without
+    Returns ``None`` (having logged) when the conversion could not be completed; it
+    travels up through :func:`_convert_one` and :func:`mesh_props` to the mesh route,
+    which answers 422, and the viewer offers the file for download. This is the whole "run VTK without
     risking the web process" concern in one place; :func:`_convert_one` above it only
     resolves the source and stamps the result.
 

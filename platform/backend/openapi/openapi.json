@@ -1468,7 +1468,7 @@
           "artifacts"
         ],
         "summary": "Get Mesh File",
-        "description": "Serve a converted VTP timestep for the React MeshViewer (auth-required).\n\nA mesh artifact's ``json_body.baseUrl`` is ``/api/artifacts/mesh/{dataset_id}``\n(see ``services/mesh/service.py``); the viewer fetches each\n``${baseUrl}/${filename}`` from here. ``dataset_id`` is a content hash and the\ncached files are session-independent, so the guard is auth + path-traversal\nsafety: both segments must be single safe names and the resolved path must stay\ninside the mesh cache root.",
+        "description": "Serve a converted VTP timestep for the React MeshViewer (auth-required).\n\nThe MeshViewer props (from an artifact's ``mesh_url``, or an older catalog's inline\n``json_body``) carry ``baseUrl`` = ``/api/artifacts/mesh/{dataset_id}`` (see\n``services/mesh/service.py``); the viewer fetches each\n``${baseUrl}/${filename}`` from here. ``dataset_id`` is a content hash and the\ncached files are session-independent, so the guard is auth + path-traversal\nsafety: both segments must be single safe names and the resolved path must stay\ninside the mesh cache root.",
         "operationId": "get_mesh_file",
         "parameters": [
           {
