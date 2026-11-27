@@ -336,6 +336,9 @@ async def _run_in_pool(
 
 # Dot-prefixed, so the VTP route (which rejects such segments) never serves it.
 _INDEX_DIR = ".index"
+# Part of every index key. Bump it when the converter's output changes, and entries
+# from older code stop matching instead of pinning a source to their datasets.
+CONVERTER_VERSION = "1"
 # Dataset ids are compute_dataset_id's 16 hex characters; an index entry naming
 # anything else is ignored, so a damaged index file can't point outside the cache.
 _DATASET_ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -356,7 +359,8 @@ def _source_key(artifact: dict[str, Any], uri: str) -> Optional[str]:
         return None
     file_id = str((artifact.get("metadata") or {}).get("deeplynx_file_id") or "")
     kind = _mesh_kind(str(artifact.get("name") or ""), uri, _normalize_mime(artifact.get("mime_type")))
-    return hashlib.sha256(f"{kind}|{uri}|{file_id}".encode("utf-8", "replace")).hexdigest()[:32]
+    basis = f"{CONVERTER_VERSION}|{kind}|{uri}|{file_id}"
+    return hashlib.sha256(basis.encode("utf-8", "replace")).hexdigest()[:32]
 
 
 def _index_path(cache_root: Path, key: str) -> Path:
@@ -389,11 +393,20 @@ def _write_index(cache_root: Path, key: str, dataset_id: str) -> None:
 
 
 def _props_from_cache(cache_root: Path, dataset_id: str, title: str) -> Optional[dict[str, Any]]:
+    """The viewer props of a cached dataset, or ``None`` unless it is usable.
+
+    Usable means: both JSON files parse, the manifest names at least one VTP file and
+    the first is on disk, and the mesh isn't recorded as empty. ``None`` sends the
+    caller back to a conversion.
+    """
     out = cache_root / dataset_id
     try:
         manifest = json.loads((out / "manifest.json").read_text())
         metadata = json.loads((out / "meta.json").read_text())
-    except (OSError, ValueError):
+        first_vtp = out / str(manifest["files"][0]["filename"])
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not first_vtp.is_file() or metadata.get("num_nodes") == 0:
         return None
     return _build_json_body(dataset_id, manifest, metadata, title)
 

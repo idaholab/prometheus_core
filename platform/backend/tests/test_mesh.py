@@ -799,6 +799,27 @@ async def test_an_index_entry_whose_dataset_was_evicted_is_converted_again(monke
     assert props is not None and props["datasetId"] == _DATASET
 
 
+@pytest.mark.parametrize("damage", ["missing-vtp", "empty-mesh", "no-files"])
+async def test_an_unusable_cached_dataset_is_converted_again(monkeypatch, tmp_path, damage):
+    """An index hit is only served when the dataset can render; old or broken output
+    (no VTP, an empty mesh cached before unreadable files were rejected) converts again."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    out = tmp_path / "cache" / _DATASET
+    if damage == "missing-vtp":
+        (out / "surface_t0000.vtp").unlink()
+    elif damage == "empty-mesh":
+        (out / "meta.json").write_text(json.dumps({"num_nodes": 0}))
+    else:
+        (out / "manifest.json").write_text(json.dumps({**_manifest(), "files": []}))
+
+    await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+
+
 async def test_an_index_entry_naming_an_unsafe_dataset_id_is_ignored(monkeypatch, tmp_path):
     """A damaged index file must not make the backend read a dataset outside the cache,
     even one that looks complete."""
@@ -816,3 +837,16 @@ async def test_an_index_entry_naming_an_unsafe_dataset_id_is_ignored(monkeypatch
 
     assert len(calls) == 2
     assert props is not None and props["datasetId"] == _DATASET
+
+
+async def test_a_new_converter_version_misses_the_old_index(monkeypatch, tmp_path):
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    monkeypatch.setattr(service, "CONVERTER_VERSION", "2")
+
+    await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 2
