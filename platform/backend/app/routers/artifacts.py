@@ -45,17 +45,17 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status as http_status
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Request, status as http_status
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
 import asyncio
 
 from app import uri_resolver
-from app.api_responses import AUTH_RESPONSES
+from app.api_responses import AUTH_RESPONSES, error
 from app.config import settings
 from app.conversation_state import ConversationStateClient
-from app.openapi import TAG_ARTIFACTS
+from app.openapi import SESSION_COOKIE, TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
 from app.services.mesh.service import mesh_cache_root
@@ -137,19 +137,50 @@ def _content_disposition(filename: str, disposition: str) -> dict[str, str]:
     return {"Content-Disposition": f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"}
 
 
-@router.get("/conversations/{conversation_id}/artifacts/{artifact_id}/content")
+_CONVERSATION_ID = PathParam(description="The conversation the artifact belongs to.")
+_ARTIFACT_ID = PathParam(description="The artifact's id, as in `ArtifactMeta.artifact_id`.")
+
+# The bytes' type is the artifact's own MIME type, so the document can only say "a file".
+_FILE_RESPONSE: dict[int | str, dict[str, Any]] = {
+    200: {
+        "description": "The artifact's bytes, with its MIME type as `Content-Type`.",
+        "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}},
+    }
+}
+
+
+@router.get(
+    "/conversations/{conversation_id}/artifacts/{artifact_id}/content",
+    summary="Download an artifact of a conversation",
+    response_class=Response,
+    dependencies=[Depends(SESSION_COOKIE)],
+    responses={
+        **_FILE_RESPONSE,
+        **error(
+            http_status.HTTP_404_NOT_FOUND,
+            "The caller may not read the conversation, the artifact isn't in its catalog, "
+            "or the artifact has nothing to serve.",
+            "Artifact not found",
+        ),
+        **error(http_status.HTTP_502_BAD_GATEWAY, "The artifact's URI could not be resolved."),
+    },
+)
 async def get_conversation_artifact_content(
-    conversation_id: str,
-    artifact_id: str,
     request: Request,
+    conversation_id: str = _CONVERSATION_ID,
+    artifact_id: str = _ARTIFACT_ID,
     claims: TokenClaims = Depends(current_claims),
 ) -> Response:
-    """Stream an artifact of a conversation the caller may read.
+    """Stream an artifact of a conversation the caller may read, inline for viewable
+    types and as an attachment for downloads. `ArtifactMeta.content_url` names this route.
 
-    Readable means the caller owns the conversation (``user:convs:{sub}``) or their
-    session is bound to it. The second case covers a first turn whose ownership
-    record is not visible yet; it is sound because a session's ``conversation_id`` is
-    only server-minted or set by an ownership-checked resume.
+    The caller may read a conversation they own, or the one their session is bound to.
+    Unlike `GET /api/artifacts/{artifact_id}/content`, the result doesn't depend on
+    which conversation the session is on, so every tab of a login can show its own.
+    \f
+    The bound case covers a first turn whose ownership record is not visible yet; it is
+    sound because a session's ``conversation_id`` is only server-minted or set by an
+    ownership-checked resume.
     """
     session = await get_store(request).get(claims.sid)
     bound = session is not None and session.conversation_id == conversation_id
