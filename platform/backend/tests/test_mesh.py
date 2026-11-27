@@ -272,6 +272,44 @@ async def test_convert_offloop_times_out_and_kills_the_pool(monkeypatch, tmp_pat
     assert fake.shutdown_calls == [{"wait": False, "cancel_futures": True}]
 
 
+async def test_a_queued_conversion_does_not_time_out_while_it_waits(monkeypatch, tmp_path):
+    """A one-worker pool runs jobs one after another. Each conversion takes 0.15 s and the
+    budget is 0.2 s, so a second job's clock must start when it gets the worker, not
+    when it is submitted: otherwise it times out queued and the pool is killed."""
+    monkeypatch.setattr(service.settings, "mesh_workers", 1, raising=False)
+    monkeypatch.setattr(service.settings, "mesh_timeout_seconds", 0.2, raising=False)
+    monkeypatch.setattr(service, "_slots", service.weakref.WeakKeyDictionary())
+
+    class _OneWorker(_FakeExecutor):
+        """Each submitted job finishes 0.15 s after the previous one, like a real
+        single-worker pool working through its queue."""
+
+        def __init__(self) -> None:
+            super().__init__(futures.Future())
+            self._free_at = 0.0
+
+        def submit(self, fn, *args):
+            loop = asyncio.get_running_loop()
+            self._free_at = max(self._free_at, loop.time()) + 0.15
+            future: futures.Future = futures.Future()
+            future.set_running_or_notify_cancel()
+            loop.call_at(self._free_at, future.set_result, (f"ds{len(self.submitted)}", {}, {}))
+            self.submitted.append((fn, args))
+            return future
+
+    fake = _OneWorker()
+    monkeypatch.setattr(service, "_vtk_executor", fake)
+
+    args = (tmp_path / "m.exo", tmp_path, "m.exo", "file:///m.exo", "")
+    one, two = await asyncio.gather(
+        service._convert_offloop(*args, ident="a"),
+        service._convert_offloop(*args, ident="b"),
+    )
+
+    assert one is not None and two is not None
+    assert fake._processes[1].killed is False
+
+
 async def test_stale_pool_failure_leaves_the_replacement_pool_alone(monkeypatch, tmp_path):
     """A job still on a replaced pool A breaks with ``BrokenProcessPool`` after B took over.
 

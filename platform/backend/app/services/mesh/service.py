@@ -46,6 +46,7 @@ import logging
 import multiprocessing
 import shutil
 import tempfile
+import weakref
 import uuid
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
@@ -234,6 +235,21 @@ def _convert_sync(local_path: Path, cache_root: Path, name: str, uri: str, mime:
     return result.dataset_id, manifest, result.metadata
 
 
+# One slot per pool worker, so a job waits here, not in the pool's queue. The timeout
+# below then covers running time only: a burst of on-demand views can't time a queued
+# job out, and that timeout can't kill conversions that were running fine. Per event
+# loop, because an asyncio.Semaphore belongs to the loop it first waits on.
+_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = weakref.WeakKeyDictionary()
+
+
+def _conversion_slots() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    slots = _slots.get(loop)
+    if slots is None:
+        slots = _slots[loop] = asyncio.Semaphore(settings.mesh_workers)
+    return slots
+
+
 async def _convert_offloop(
     local_path: Path,
     cache_root: Path,
@@ -244,6 +260,9 @@ async def _convert_offloop(
     ident: str,
 ) -> Optional[tuple[str, dict, dict]]:
     """Run :func:`_convert_sync` in the VTK subprocess pool, bounded by a timeout.
+
+    At most ``settings.mesh_workers`` conversions are submitted at once; the rest wait
+    for a slot before their timeout starts.
 
     Returns ``None`` (having logged) when the conversion could not be completed, which
     the caller turns into an un-enriched artifact. This is the whole "run VTK without
@@ -266,6 +285,14 @@ async def _convert_offloop(
     Exception`` above us and fail an unrelated chat turn. ``Task.cancelling()`` tells the
     two apart.
     """
+    async with _conversion_slots():
+        return await _run_in_pool(local_path, cache_root, name, uri, mime, ident=ident)
+
+
+async def _run_in_pool(
+    local_path: Path, cache_root: Path, name: str, uri: str, mime: str, *, ident: str
+) -> Optional[tuple[str, dict, dict]]:
+    """One conversion on the pool, holding a slot; see :func:`_convert_offloop`."""
     loop = asyncio.get_running_loop()
     executor = _executor()
     try:
