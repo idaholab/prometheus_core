@@ -812,11 +812,19 @@ async def test_detail_and_resume_do_not_convert_meshes(monkeypatch, session_stor
     ``mesh_url`` the viewer fetches when it scrolls into view."""
     from app.services.mesh import service as mesh_service
 
-    async def _no_conversion(*_a, **_k):
-        raise AssertionError("a resume must not convert meshes")
+    from app import uri_resolver
 
-    monkeypatch.setattr(mesh_service, "mesh_props", _no_conversion)
-    monkeypatch.setattr(mesh_service, "_convert_one", _no_conversion)
+    conversions: list[str] = []
+
+    async def _record(*a, **_k):
+        conversions.append(str(a[0]) if a else "?")
+        return None
+
+    # Every conversion downloads its source and runs the VTK pool, whichever code path
+    # calls it. They are recorded, not made to raise: the shared conversion task logs
+    # and swallows errors, so a raise would never reach this test.
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _record)
+    monkeypatch.setattr(mesh_service, "_convert_offloop", _record)
     mesh = {"artifact_id": "m1", "name": "block.e", "mime_type": "application/x-exodus", "uri": "file:///tmp/block.e"}
     fake = _detail_client(monkeypatch, conversations={"c1": {}}, owners={"c1": "alice"})
     monkeypatch.setattr(fake, "get_artifacts", lambda conv_id: [dict(mesh)], raising=False)
@@ -826,3 +834,4 @@ async def test_detail_and_resume_do_not_convert_meshes(monkeypatch, session_stor
         (artifact,) = resp.json()["artifacts"]
         assert artifact["json_body"] is None
         assert artifact["mesh_url"] == "/api/conversations/c1/artifacts/m1/mesh"
+    assert conversions == []
