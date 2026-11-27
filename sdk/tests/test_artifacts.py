@@ -459,3 +459,60 @@ def test_resolver_get_artifact_file_path_resolves_by_id(tmp_path):
         resolver.require_reference("inline-1", conversation_id="")
     with pytest.raises(FileNotFoundError, match="was not found"):
         resolver.require_reference("missing", conversation_id="conv-resolver")
+
+
+class _RecordingRedis:
+    """Just enough of a Redis client for ArtifactRegistry.register, recording expire calls."""
+
+    def __init__(self):
+        self.expired: list[tuple[str, int]] = []
+
+    def hset(self, *args, **kwargs):
+        return 1
+
+    def zadd(self, *args, **kwargs):
+        return 1
+
+    def expire(self, key, ttl):
+        self.expired.append((key, ttl))
+        return True
+
+
+def _register_with_recording_client(registry: ArtifactRegistry) -> _RecordingRedis:
+    client = _RecordingRedis()
+    registry._redis = client
+    registry.register(
+        ArtifactReference(
+            artifact_id="a", conversation_id="c", name="Mesh", description="", uri="file:///tmp/m.e"
+        )
+    )
+    return client
+
+
+def test_artifact_registry_ttl_zero_never_sets_an_expiry(monkeypatch):
+    monkeypatch.setenv("ARTIFACT_REGISTRY_TTL_SECONDS", "0")
+    registry = ArtifactRegistry(redis_url="redis://localhost:0")
+
+    assert registry.ttl_seconds == 0
+    assert _register_with_recording_client(registry).expired == []
+
+
+def test_artifact_registry_default_ttl_expires_every_catalog_key(monkeypatch):
+    monkeypatch.delenv("ARTIFACT_REGISTRY_TTL_SECONDS", raising=False)
+    registry = ArtifactRegistry(redis_url="redis://localhost:0")
+
+    assert registry.ttl_seconds == ArtifactRegistry.DEFAULT_TTL_SECONDS == 7 * 24 * 3600
+    assert sorted(_register_with_recording_client(registry).expired) == [
+        ("artifacts:conv:c:by_id", 604800),
+        ("artifacts:conv:c:name_to_id", 604800),
+        ("artifacts:conv:c:order", 604800),
+    ]
+
+
+def test_artifact_registry_unparsable_ttl_falls_back_to_the_default(monkeypatch):
+    monkeypatch.setenv("ARTIFACT_REGISTRY_TTL_SECONDS", "never")
+
+    assert (
+        ArtifactRegistry(redis_url="redis://localhost:0").ttl_seconds
+        == ArtifactRegistry.DEFAULT_TTL_SECONDS
+    )
