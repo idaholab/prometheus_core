@@ -407,7 +407,9 @@ the cases apart.
 ## `GET /api/artifacts/{artifact_id}/content`
 
 The older, session-scoped route: it looks the id up in the session's catalog, which
-follows whichever conversation the login bound last. Kept until no client uses it.
+follows whichever conversation the login bound last. It is removed, together with the
+frontend's fallback to it, once the client-agent's ingest matches the registry
+(`text_body`-only artifacts); see idaholab/prometheus_core#525.
 
 ## Chat history
 
