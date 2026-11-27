@@ -25,6 +25,7 @@ import { meshManifestProps } from "@/features/artifacts/meshManifest";
 import { Button, buttonClassName } from "@/components/ui/Button";
 import { api } from "@/lib/api/client";
 import { MESH_FETCH_TIMEOUT_MS, meshFailureMessage } from "./meshFailure";
+import { MeshCrashBoundary } from "./MeshCrashBoundary";
 import { useNearViewport } from "./useNearViewport";
 
 type Props = {
@@ -82,7 +83,28 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  if (state.kind === "ready") return <>{children(state.props)}</>;
+  const download = downloadUrl && (
+    <a className={buttonClassName({ variant: "ghost", size: "xs" })} href={downloadUrl} download>
+      Download original file
+    </a>
+  );
+
+  if (state.kind === "ready") {
+    return (
+      <MeshCrashBoundary
+        fallback={
+          <div className="my-2 flex w-full flex-col items-center gap-2 rounded-lg border border-base-300 p-4 text-sm">
+            <span role="alert" className="text-error/80">
+              The mesh viewer crashed.
+            </span>
+            {download}
+          </div>
+        }
+      >
+        {children(state.props)}
+      </MeshCrashBoundary>
+    );
+  }
 
   return (
     <div
@@ -99,11 +121,7 @@ export function LazyMeshProps({ meshUrl, downloadUrl, title, height, children }:
           </span>
           <span className="flex gap-2">
             <Button label="Retry" size="xs" outline onClick={retry} />
-            {downloadUrl && (
-              <a className={buttonClassName({ variant: "ghost", size: "xs" })} href={downloadUrl} download>
-                Download original file
-              </a>
-            )}
+            {download}
           </span>
           {downloadUrl && (
             <span className="text-xs text-base-content/50">

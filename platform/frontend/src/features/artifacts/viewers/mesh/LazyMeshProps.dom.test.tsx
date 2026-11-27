@@ -59,7 +59,10 @@ beforeEach(() => {
   api.meshProps.mockReset();
   vi.stubGlobal("IntersectionObserver", FakeObserver);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 /** A body the viewer can render: a base URL and a manifest naming a VTP file. */
 const mesh = (datasetId: string) => ({
@@ -183,4 +186,21 @@ test("while loading the placeholder is busy and says the first view can take a w
   const progress = screen.getByText(/the first view can take a minute/);
   expect(progress.closest("[aria-busy]")).toHaveAttribute("aria-busy", "true");
   expect(screen.queryByRole("button", { name: "Load mesh" })).not.toBeInTheDocument();
+});
+
+test("a viewer that crashes after loading still offers the file", async () => {
+  api.meshProps.mockResolvedValue(mesh("ds5"));
+  const Crash = () => {
+    throw new Error("WebGL context lost");
+  };
+  vi.spyOn(console, "error").mockImplementation(() => {}); // React logs the caught error
+  render(
+    <LazyMeshProps meshUrl="/api/m" downloadUrl="/api/c" title="out.e" height="450px">
+      {() => <Crash />}
+    </LazyMeshProps>,
+  );
+  enter();
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("The mesh viewer crashed.");
+  expect(screen.getByRole("link", { name: "Download original file" })).toHaveAttribute("href", "/api/c");
 });
