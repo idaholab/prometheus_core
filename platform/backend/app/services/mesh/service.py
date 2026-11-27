@@ -52,6 +52,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from app import uri_resolver
 from app.config import settings
 from app.services.artifacts import _normalize_mime, artifact_identity, classify_render_hint
+from app.services.mesh.exceptions import ConverterError
 
 if TYPE_CHECKING:  # avoid importing the prometheus_api contract at runtime
     from app.a2a_client import ConversationResponse
@@ -362,6 +363,11 @@ async def enrich_mesh_artifact_dicts(artifacts: list[dict[str, Any]]) -> None:
     for ident, artifact in to_convert.items():
         try:
             body = await _enrich_one(artifact, str(artifact["uri"]), cache_root)
+        except ConverterError as exc:
+            # An expected outcome for a file that isn't a readable mesh: one line, no
+            # traceback. The artifact stays a download card.
+            logger.warning("mesh: artifact %s is not convertible: %s", ident, exc)
+            continue
         except Exception:
             logger.exception("mesh enrichment failed for artifact %s", ident)
             continue

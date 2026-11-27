@@ -581,3 +581,23 @@ def test_a_cached_empty_mesh_is_reconverted_and_rejected(tmp_path):
 
     with pytest.raises(InvalidExodusFileError, match="No geometry"):
         convert_exodus(request, cache_root=cache_root)
+
+
+async def test_a_converter_error_logs_one_warning_without_a_traceback(monkeypatch, tmp_path, caplog):
+    import logging
+
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    _stub_resolver(monkeypatch, tmp_path)
+
+    async def _invalid(*a, **kw):
+        raise InvalidExodusFileError("No geometry read from mesh.exo")
+
+    monkeypatch.setattr(service, "_convert_offloop", _invalid)
+    art = {"artifact_id": "m4", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x.exo"}
+    with caplog.at_level(logging.WARNING, logger=service.logger.name):
+        await service.enrich_mesh_artifacts(types.SimpleNamespace(new_artifacts=[art], artifacts=[art]))
+
+    records = [r for r in caplog.records if r.name == service.logger.name]
+    assert [(r.levelno, r.exc_info) for r in records] == [(logging.WARNING, None)]
+    assert art.get("json_body") is None
