@@ -560,12 +560,16 @@ async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tm
     _fake_cached_convert(monkeypatch, tmp_path, calls, gate=gate)
 
     caller = asyncio.create_task(service.mesh_props(dict(_MESH)))
-    await asyncio.sleep(0.01)
+    while not service._inflight:  # the shared task has started
+        await asyncio.sleep(0)
+    (shared,) = service._inflight.values()
     caller.cancel()
     gate.set()
-    await asyncio.sleep(0.01)
+    await shared
 
     assert (tmp_path / "cache" / "dsAAA" / "manifest.json").is_file()
+    # The task, not the gone caller, records the index entry, so the next view is a hit.
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
 
 
 async def test_a_file_source_is_never_indexed(monkeypatch, tmp_path):

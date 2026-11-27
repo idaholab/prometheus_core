@@ -401,14 +401,24 @@ async def mesh_props(artifact: dict[str, Any]) -> Optional[dict[str, Any]]:
     flight = key or f"uri:{uri}"
     task = _inflight.get(flight)
     if task is None:
-        task = asyncio.create_task(_enrich_one(artifact, uri, cache_root))
+        task = asyncio.create_task(_convert_and_index(artifact, uri, cache_root, key))
         _inflight[flight] = task
         task.add_done_callback(lambda _t: _inflight.pop(flight, None))
     props = await asyncio.shield(task)
-    if props is not None:
-        if key is not None:
-            _write_index(cache_root, key, str(props["datasetId"]))
-        props = {**props, "title": title}
+    return {**props, "title": title} if props is not None else None
+
+
+async def _convert_and_index(
+    artifact: dict[str, Any], uri: str, cache_root: Path, key: Optional[str]
+) -> Optional[dict[str, Any]]:
+    """The shared task's body: convert, then record the source index entry.
+
+    It writes the index itself, so a conversion whose every caller gave up is still a
+    hit next time.
+    """
+    props = await _enrich_one(artifact, uri, cache_root)
+    if props is not None and key is not None:
+        _write_index(cache_root, key, str(props["datasetId"]))
     return props
 
 
