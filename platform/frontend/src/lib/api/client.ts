@@ -47,7 +47,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return fetchJson<T>(`${API_BASE}${path}`, init);
+}
+
+/** Fetch a backend URL as given (one the backend handed out, such as `mesh_url`), with
+ * the same credentials and error mapping as every other API call. */
+async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(url, {
     credentials: "include",
     ...init,
   });
@@ -182,7 +188,7 @@ export const api = {
 
   /** GET an artifact's `mesh_url`: the MeshViewer props, converted on first request. */
   meshProps(meshUrl: string): Promise<Record<string, unknown>> {
-    return request<Record<string, unknown>>(meshUrl.replace(/^\/api/, ""));
+    return fetchJson<Record<string, unknown>>(meshUrl);
   },
 
   /** URL for an artifact's bytes; used directly as an <img>/<embed> src or fetch
