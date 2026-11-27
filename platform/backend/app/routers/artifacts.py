@@ -227,9 +227,11 @@ async def _serve(artifact: dict[str, Any], artifact_id: str) -> Response:
         )
         if local_path is None or not local_path.exists():
             shutil.rmtree(cache_dir, ignore_errors=True)
+            # The URI can carry a token (a presigned URL), so it goes to the log only.
+            logger.warning("artifact %s: could not resolve %r", artifact_id, uri)
             raise HTTPException(
                 status_code=http_status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not resolve artifact {artifact_id!r} from {uri!r}.",
+                detail="Could not fetch the artifact's content.",
             )
         effective_mime = mime_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
         return FileResponse(

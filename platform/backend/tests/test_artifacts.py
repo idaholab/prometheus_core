@@ -374,10 +374,12 @@ async def test_content_502_when_resolve_fails(monkeypatch, session_store):
     client = await _authed_client(
         monkeypatch,
         session_store,
-        artifacts=[{"artifact_id": "a1", "name": "x", "uri": "deeplynx://org/items/1"}],
+        artifacts=[{"artifact_id": "a1", "name": "x", "uri": "https://store/a1?sig=SENTINEL-token"}],
     )
     resp = client.get("/api/artifacts/a1/content")
     assert resp.status_code == 502
+    assert resp.json()["detail"] == "Could not fetch the artifact's content."
+    assert "SENTINEL" not in resp.text
 
 
 async def test_content_404_when_in_catalog_but_no_content(monkeypatch, session_store):
