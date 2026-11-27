@@ -411,6 +411,12 @@ def _props_from_cache(cache_root: Path, dataset_id: str, title: str) -> Optional
     return _build_json_body(dataset_id, manifest, metadata, title)
 
 
+def _props_from_index(cache_root: Path, key: str, title: str) -> Optional[dict[str, Any]]:
+    """The props of the dataset the index records for *key*, if it is still usable."""
+    dataset_id = _read_index(cache_root, key)
+    return None if dataset_id is None else _props_from_cache(cache_root, dataset_id, title)
+
+
 # One conversion per source at a time, in this process. A second request for the same
 # mesh awaits the first one's task instead of downloading and converting it again.
 _inflight: dict[str, "asyncio.Task[Optional[dict[str, Any]]]"] = {}
@@ -435,11 +441,10 @@ async def mesh_props(artifact: dict[str, Any]) -> Optional[dict[str, Any]]:
     key = _source_key(artifact, uri)
 
     if key is not None:
-        dataset_id = _read_index(cache_root, key)
-        if dataset_id is not None:
-            props = _props_from_cache(cache_root, dataset_id, title)
-            if props is not None:
-                return props
+        # Disk reads (a manifest can be large), off the event loop.
+        props = await asyncio.to_thread(_props_from_index, cache_root, key, title)
+        if props is not None:
+            return props
 
     # Without a key, concurrent requests for one URI still share a conversion.
     flight = key or f"uri:{uri}"
@@ -467,7 +472,7 @@ async def _convert_and_index(
         logger.exception("mesh: conversion of %r failed", uri)
         return None
     if props is not None and key is not None:
-        _write_index(cache_root, key, str(props["datasetId"]))
+        await asyncio.to_thread(_write_index, cache_root, key, str(props["datasetId"]))
     return props
 
 

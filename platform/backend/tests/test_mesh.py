@@ -850,3 +850,29 @@ async def test_a_new_converter_version_misses_the_old_index(monkeypatch, tmp_pat
 
     assert len(calls) == 2
     assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 2
+
+
+async def test_the_source_index_is_read_and_written_off_the_event_loop(monkeypatch, tmp_path):
+    import threading
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    real_read, real_write = service._read_index, service._write_index
+
+    def _read(*a):
+        seen["read"] = threading.get_ident()
+        return real_read(*a)
+
+    def _write(*a):
+        seen["write"] = threading.get_ident()
+        return real_write(*a)
+
+    monkeypatch.setattr(service, "_read_index", _read)
+    monkeypatch.setattr(service, "_write_index", _write)
+    await service.mesh_props(dict(_MESH))
+
+    assert set(seen) == {"read", "write"}
+    assert loop_thread not in seen.values()
