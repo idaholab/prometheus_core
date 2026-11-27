@@ -44,10 +44,11 @@ import hashlib
 import json
 import logging
 import multiprocessing
+import re
 import shutil
 import tempfile
-import weakref
 import uuid
+import weakref
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
@@ -335,6 +336,9 @@ async def _run_in_pool(
 
 # Dot-prefixed, so the VTP route (which rejects such segments) never serves it.
 _INDEX_DIR = ".index"
+# Dataset ids are compute_dataset_id's 16 hex characters; an index entry naming
+# anything else is ignored, so a damaged index file can't point outside the cache.
+_DATASET_ID_RE = re.compile(r"^[0-9a-f]{16}$")
 
 
 def _source_key(artifact: dict[str, Any], uri: str) -> Optional[str]:
@@ -369,7 +373,7 @@ def _read_index(cache_root: Path, key: str) -> Optional[str]:
         dataset_id = json.loads(_index_path(cache_root, key).read_text()).get("dataset_id")
     except (OSError, ValueError, AttributeError):
         return None
-    return dataset_id if isinstance(dataset_id, str) else None
+    return dataset_id if isinstance(dataset_id, str) and _DATASET_ID_RE.match(dataset_id) else None
 
 
 def _write_index(cache_root: Path, key: str, dataset_id: str) -> None:

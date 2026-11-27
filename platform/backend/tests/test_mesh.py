@@ -532,6 +532,9 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
 # mesh_props: on-demand conversion, source index, shared in-flight builds
 # --------------------------------------------------------------------------- #
 
+# A real dataset id: compute_dataset_id's 16 hex characters.
+_DATASET = "0123456789abcdef"
+
 _MESH = {
     "artifact_id": "m1",
     "name": "mesh.exo",
@@ -548,11 +551,12 @@ def _fake_cached_convert(monkeypatch, tmp_path, calls, *, gate=None):
         calls.append(uri)
         if gate is not None:
             await gate.wait()
-        out = cache_root / "dsAAA"
+        out = cache_root / _DATASET
         out.mkdir(parents=True, exist_ok=True)
         (out / "manifest.json").write_text(json.dumps(_manifest(point=["T"])))
         (out / "meta.json").write_text(json.dumps({"num_timesteps": 1, "time_values": [0.0]}))
-        return "dsAAA", _manifest(point=["T"]), {"num_timesteps": 1, "time_values": [0.0]}
+        (out / "surface_t0000.vtp").write_text("<VTKFile/>")
+        return _DATASET, _manifest(point=["T"]), {"num_timesteps": 1, "time_values": [0.0]}
 
     monkeypatch.setattr(service, "_convert_offloop", _convert)
 
@@ -563,7 +567,7 @@ async def test_mesh_props_converts_once_then_reads_the_source_index(monkeypatch,
     _fake_cached_convert(monkeypatch, tmp_path, calls)
 
     first = await service.mesh_props(dict(_MESH))
-    assert first is not None and first["datasetId"] == "dsAAA"
+    assert first is not None and first["datasetId"] == _DATASET
 
     async def _no_download(*_a, **_k):
         raise AssertionError("a source-index hit must not download")
@@ -572,7 +576,7 @@ async def test_mesh_props_converts_once_then_reads_the_source_index(monkeypatch,
     again = await service.mesh_props({**_MESH, "name": "renamed.exo"})
 
     assert calls == [_MESH["uri"]]
-    assert again is not None and again["datasetId"] == "dsAAA"
+    assert again is not None and again["datasetId"] == _DATASET
     assert again["title"] == "renamed.exo"
 
 
@@ -588,7 +592,7 @@ async def test_concurrent_mesh_props_share_one_conversion(monkeypatch, tmp_path)
     results = await asyncio.gather(*pending)
 
     assert calls == [_MESH["uri"]]
-    assert all(r is not None and r["datasetId"] == "dsAAA" for r in results)
+    assert all(r is not None and r["datasetId"] == _DATASET for r in results)
 
 
 async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tmp_path):
@@ -605,7 +609,7 @@ async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tm
     gate.set()
     await shared
 
-    assert (tmp_path / "cache" / "dsAAA" / "manifest.json").is_file()
+    assert (tmp_path / "cache" / _DATASET / "manifest.json").is_file()
     # The task, not the gone caller, records the index entry, so the next view is a hit.
     assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 1
 
@@ -678,7 +682,7 @@ def test_mesh_props_route_converts_and_returns_viewer_props(monkeypatch, tmp_pat
     resp = _authed_client(monkeypatch, tmp_path / "cache").get("/api/conversations/c1/artifacts/m1/mesh")
 
     assert resp.status_code == 200
-    assert resp.json()["baseUrl"] == "/api/artifacts/mesh/dsAAA"
+    assert resp.json()["baseUrl"] == f"/api/artifacts/mesh/{_DATASET}"
 
 
 def test_mesh_props_route_404s_for_another_users_conversation(monkeypatch, tmp_path):
@@ -764,7 +768,7 @@ async def test_an_unwritable_source_index_still_returns_the_props(monkeypatch, t
     monkeypatch.setattr(service, "_index_path", lambda _root, key: blocker / f"{key}.json")
 
     props = await service.mesh_props(dict(_MESH))
-    assert props is not None and props["datasetId"] == "dsAAA"
+    assert props is not None and props["datasetId"] == _DATASET
 
 
 async def test_a_corrupt_cached_dataset_is_converted_again(monkeypatch, tmp_path):
@@ -772,12 +776,12 @@ async def test_a_corrupt_cached_dataset_is_converted_again(monkeypatch, tmp_path
     calls: list[str] = []
     _fake_cached_convert(monkeypatch, tmp_path, calls)
     await service.mesh_props(dict(_MESH))
-    (tmp_path / "cache" / "dsAAA" / "meta.json").write_text("{not json")
+    (tmp_path / "cache" / _DATASET / "meta.json").write_text("{not json")
 
     props = await service.mesh_props(dict(_MESH))
 
     assert len(calls) == 2
-    assert props is not None and props["datasetId"] == "dsAAA"
+    assert props is not None and props["datasetId"] == _DATASET
 
 
 async def test_an_index_entry_whose_dataset_was_evicted_is_converted_again(monkeypatch, tmp_path):
@@ -787,9 +791,28 @@ async def test_an_index_entry_whose_dataset_was_evicted_is_converted_again(monke
     calls: list[str] = []
     _fake_cached_convert(monkeypatch, tmp_path, calls)
     await service.mesh_props(dict(_MESH))
-    shutil.rmtree(tmp_path / "cache" / "dsAAA")  # the index still names it
+    shutil.rmtree(tmp_path / "cache" / _DATASET)  # the index still names it
 
     props = await service.mesh_props(dict(_MESH))
 
     assert len(calls) == 2
-    assert props is not None and props["datasetId"] == "dsAAA"
+    assert props is not None and props["datasetId"] == _DATASET
+
+
+async def test_an_index_entry_naming_an_unsafe_dataset_id_is_ignored(monkeypatch, tmp_path):
+    """A damaged index file must not make the backend read a dataset outside the cache,
+    even one that looks complete."""
+    import shutil
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    shutil.copytree(tmp_path / "cache" / _DATASET, tmp_path / "outside")
+    (index,) = (tmp_path / "cache" / ".index").glob("*.json")
+    index.write_text(json.dumps({"dataset_id": "../outside"}))
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == _DATASET
