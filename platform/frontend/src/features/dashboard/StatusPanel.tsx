@@ -113,7 +113,7 @@ function ArtifactCard({ artifact, onOpen }: { artifact: ArtifactMeta; onOpen: ()
   const viewable = canOpenInPanel(artifact);
   return (
     <a
-      href={api.artifactContentUrl(artifact.artifact_id)}
+      href={api.artifactContentUrl(artifact)}
       target="_blank"
       rel="noreferrer"
       onClick={(event) => {

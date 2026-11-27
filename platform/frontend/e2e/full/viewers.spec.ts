@@ -128,7 +128,7 @@ test("a mesh in a reply opens in the mesh viewer and draws", async ({ page }) =>
  */
 test("an IFC model in a reply opens in the IFC viewer, draws, and lists its elements", async ({ page }) => {
   const content = page.waitForResponse((response) =>
-    /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
+    /\/api\/conversations\/[^/]+\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
   );
   const main = await ask(page, "open the ifc model", "Here is the IFC model.");
 
@@ -194,7 +194,7 @@ test("a Mermaid diagram in a reply opens in the diagram viewer with every node",
  */
 test("a JSON file in a reply opens in the JSON viewer with its content", async ({ page }) => {
   const content = page.waitForResponse((response) =>
-    /\/api\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
+    /\/api\/conversations\/[^/]+\/artifacts\/[^/]+\/content$/.test(new URL(response.url()).pathname),
   );
   const main = await ask(page, "show me the json results", "Here are the results.");
 

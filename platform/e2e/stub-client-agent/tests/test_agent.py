@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events import EventQueue
 from prometheus_api.agent.base import DelegatingPrometheusAgentExecutor
@@ -44,6 +45,18 @@ def _execute(params: dict, context_id: str = "ctx-1") -> tuple[dict, AsyncMock]:
     context.context_id = context_id
     result = asyncio.run(agent._execute(params, context, AsyncMock(spec=EventQueue)))
     return result, agent.send_status_update
+
+
+def test_a_sample_artifact_is_registered_in_the_conversation_catalog(monkeypatch):
+    """The backend's conversation content route reads the catalog, not the reply."""
+    from prometheus_api.agent.artifacts import ArtifactRegistry
+
+    registered: list = []
+    monkeypatch.setattr(ArtifactRegistry, "register", lambda self, ref: registered.append(ref) or ref)
+    result, _ = _execute({"query": "show me the JSON results", "conversation_id": "conv-1"})
+
+    (artifact,) = result["new_artifacts"]
+    assert [(r.conversation_id, r.artifact_id) for r in registered] == [("conv-1", artifact["artifact_id"])]
 
 
 def test_a_prompt_naming_no_sample_gets_the_fixed_answer_and_no_artifact():
@@ -189,3 +202,25 @@ def test_main_starts_the_samples_server_then_the_agent_on_its_port(monkeypatch):
         _MODULE.main()
 
     assert order == ["samples", ("agent", 8123)]
+
+
+def test_every_sample_artifact_converts_to_a_registrable_reference():
+    """Registration runs through the real ArtifactReference.from_any: every sample must
+    yield a reference with content, or the e2e viewers 404 with no clue why."""
+    from prometheus_api.agent.artifacts import ArtifactReference
+
+    for sample in _MODULE.SAMPLES:
+        artifact = _MODULE.artifact_for(sample, "conv-1")
+        reference = ArtifactReference.from_any(artifact, conversation_id="conv-1")
+
+        assert reference is not None, sample.keyword
+        assert reference.uri or reference.json_body is not None, sample.keyword
+        assert reference.artifact_id == artifact["artifact_id"]
+
+
+def test_a_sample_without_content_fails_loudly(monkeypatch):
+    from prometheus_api.agent.artifacts import ArtifactReference
+
+    monkeypatch.setattr(ArtifactReference, "from_any", staticmethod(lambda *a, **kw: None))
+    with pytest.raises(ValueError, match="has no content to register"):
+        _execute({"query": "show me the JSON results", "conversation_id": "conv-1"})

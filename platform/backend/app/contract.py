@@ -234,8 +234,8 @@ class ArtifactMeta(BaseModel):
     Snake_case per the Prometheus catalog convention (see
     docs/docs/dev-docs/artifacts.md). Superset of ``prometheus_api``'s
     ``ArtifactReference`` fields the frontend needs, plus the derived
-    ``render_hint``. ``json_body`` is inline-only; bytes are fetched via
-    ``GET /api/artifacts/{artifact_id}/content`` (task 07).
+    ``render_hint``. ``json_body`` is inline-only; bytes are fetched from
+    ``content_url``.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -249,6 +249,18 @@ class ArtifactMeta(BaseModel):
     tags: list[str] = Field(default_factory=list)
     json_body: AnyJson = None  # inline only
     render_hint: RenderHint = "unknown"
+    content_url: str = Field(
+        default="",
+        description="Where to fetch the artifact's bytes: "
+        "`GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`. "
+        "Empty when the backend knows no conversation; the client then uses "
+        "`GET /api/artifacts/{artifact_id}/content`.",
+    )
+    mesh_url: str = Field(
+        default="",
+        description="For a mesh artifact: where to fetch its MeshViewer props, converted on first request "
+        "(`GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/mesh`). Empty otherwise.",
+    )
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None
     created_at: Optional[str] = None
