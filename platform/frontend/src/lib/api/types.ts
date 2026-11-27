@@ -88,8 +88,9 @@ export interface ArtifactMeta {
   tags: string[];
   json_body?: unknown;
   render_hint: RenderHint;
-  /** Where to fetch the bytes: the conversation-scoped content route. Absent only on
-   * fixtures and samples, which fall back to the session-scoped route. */
+  /** Where to fetch the bytes: the conversation-scoped content route. Empty when the
+   * backend knows no conversation, and absent on fixtures and samples; both fall back
+   * to the session-scoped route. */
   content_url?: string;
   citation?: Citation | null;
   producer_agent_id?: string | null;

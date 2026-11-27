@@ -459,11 +459,13 @@ def artifact_content_url(conversation_id: str, artifact_id: str) -> str:
     return f"/api/conversations/{quote(conversation_id, safe='')}/artifacts/{quote(artifact_id, safe='')}/content"
 
 
-def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str = "") -> Optional[ArtifactMeta]:
+def to_artifact_meta(artifact: dict[str, Any], *, conversation_id: str) -> Optional[ArtifactMeta]:
     """Map one raw catalog dict to :class:`ArtifactMeta`, or ``None`` to skip it.
 
-    With a ``conversation_id``, ``content_url`` points at that conversation's content
-    route, which reads the conversation's catalog rather than the caller's session.
+    ``content_url`` points at the conversation's content route, which reads the
+    conversation's catalog rather than the caller's session. It is empty when
+    ``conversation_id`` is (the caller knows no conversation); the frontend then uses
+    the session-scoped route.
 
     Returns ``None`` for ``conversation_message`` records (not user-facing) and
     for non-dict inputs, so callers can ``filter``/``None``-drop the result.

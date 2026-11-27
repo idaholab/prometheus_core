@@ -146,11 +146,13 @@ def test_mime_normalized_with_charset_param():
 
 
 def test_to_artifact_meta_carries_hint_and_skips_conversation_message():
-    meta = to_artifact_meta({"artifact_id": "a1", "name": "r.pdf", "mime_type": "application/pdf"})
+    meta = to_artifact_meta(
+        {"artifact_id": "a1", "name": "r.pdf", "mime_type": "application/pdf"}, conversation_id="c1"
+    )
     assert meta is not None and meta.render_hint == "pdf"
 
-    assert to_artifact_meta({"name": "conversation_message"}) is None
-    assert to_artifact_meta({"metadata": {"kind": "conversation_message"}}) is None
+    assert to_artifact_meta({"name": "conversation_message"}, conversation_id="c1") is None
+    assert to_artifact_meta({"metadata": {"kind": "conversation_message"}}, conversation_id="c1") is None
 
 
 def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
@@ -160,7 +162,8 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
             "artifact_id": "ref1",
             "tags": ["reference"],
             "metadata": {"source": "ASME BPVC", "section": "II-D", "page": 42},
-        }
+        },
+        conversation_id="c1",
     )
     assert meta is not None and meta.render_hint == "reference"
     assert meta.citation is not None
@@ -170,7 +173,7 @@ def test_to_artifact_meta_populates_citation_for_reference(monkeypatch):
 
 
 def test_to_artifact_meta_citation_absent_when_no_metadata():
-    meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"})
+    meta = to_artifact_meta({"artifact_id": "a1", "mime_type": "application/pdf"}, conversation_id="c1")
     assert meta is not None and meta.citation is None
 
 
@@ -450,7 +453,10 @@ async def test_content_disposition_escapes_dangerous_filename(monkeypatch, sessi
     ],
 )
 def test_artifact_display_comes_from_producer_metadata(metadata, expected) -> None:
-    meta = to_artifact_meta({"artifact_id": "a1", "name": "current.i", "mime_type": "text/plain", "metadata": metadata})
+    meta = to_artifact_meta(
+        {"artifact_id": "a1", "name": "current.i", "mime_type": "text/plain", "metadata": metadata},
+        conversation_id="c1",
+    )
     assert meta is not None
     assert meta.display == expected
     assert meta.render_hint == "code"  # display never changes how it renders

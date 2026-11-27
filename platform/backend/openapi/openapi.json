@@ -4510,7 +4510,7 @@
           "content_url": {
             "type": "string",
             "title": "Content Url",
-            "description": "Where to fetch the artifact's bytes: `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`.",
+            "description": "Where to fetch the artifact's bytes: `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`. Empty when the backend knows no conversation; the client then uses `GET /api/artifacts/{artifact_id}/content`.",
             "default": ""
           },
           "citation": {

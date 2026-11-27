@@ -392,8 +392,10 @@ data: {"type":"turn_done","turn_id":"7f9c2b1e-…","response":{"turn_id":"7f9c2b
 ## `GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`
 
 Resolves `deeplynx://` / remote URIs and streams the artifact bytes with the
-correct `Content-Type` (task 07). Every `ArtifactMeta` names this route in
-`content_url`; the frontend fetches from there and doesn't build the URL itself.
+correct `Content-Type` (task 07). `ArtifactMeta.content_url` names this route; the
+frontend fetches from there and doesn't build the URL itself. `content_url` is empty
+when the backend knows no conversation, and the frontend then uses the session-scoped
+route below.
 
 The caller must own the conversation (`user:convs:{user}`) or have their session
 bound to it. The artifact is read from that conversation's catalog

@@ -252,7 +252,9 @@ class ArtifactMeta(BaseModel):
     content_url: str = Field(
         default="",
         description="Where to fetch the artifact's bytes: "
-        "`GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`.",
+        "`GET /api/conversations/{conversation_id}/artifacts/{artifact_id}/content`. "
+        "Empty when the backend knows no conversation; the client then uses "
+        "`GET /api/artifacts/{artifact_id}/content`.",
     )
     citation: Optional[Citation] = None  # populated for reference/citation artifacts
     producer_agent_id: Optional[str] = None
