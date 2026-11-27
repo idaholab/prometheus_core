@@ -136,3 +136,20 @@ test("keeps a file card and an image preview of two different artifacts", () => 
 
   assert.deepEqual(dedupeElements(elements), elements);
 });
+
+test("collapses a custom element delivered twice under one artifact id", () => {
+  const first: TestElement = {
+    id: "x",
+    type: "custom",
+    name: "CollapsibleJson",
+    props: { name: "result", artifact_id: "j1" },
+  };
+  const again: TestElement = {
+    id: "y",
+    type: "custom",
+    name: "CollapsibleJson",
+    props: { name: "other", artifact_id: "j1" },
+  };
+
+  assert.deepEqual(dedupeElements([first, again]), [first]);
+});
