@@ -510,3 +510,26 @@ def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path):
 
     assert not any(is_cached(cache_root, d.name) for d in cache_root.iterdir())
     assert not any(cache_root.iterdir())
+
+
+def test_a_readable_exodus_converts_past_the_empty_mesh_guard(tmp_path):
+    pytest.importorskip("vtk")
+    import shutil
+    from pathlib import Path
+
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.models import ConvertRequest
+
+    src = tmp_path / "square.e"
+    shutil.copy(Path(__file__).parent / "fixtures" / "mesh" / "square.e", src)
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+
+    result = convert_exodus(
+        ConvertRequest(input_path=src, output_dir=cache_root, timestep_mode="all"), cache_root=cache_root
+    )
+
+    assert result.metadata["num_nodes"] == 9
+    assert result.metadata["num_elements"] == 4
+    assert (result.output_dir / "manifest.json").is_file()
+    assert (result.output_dir / "surface_t0000.vtp").is_file()
