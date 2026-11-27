@@ -310,15 +310,22 @@ async def _convert_offloop(
 _INDEX_DIR = ".index"
 
 
-def _source_key(artifact: dict[str, Any], uri: str) -> str:
-    """Stable key for "this artifact's source bytes": its URI plus the reader choice.
+def _source_key(artifact: dict[str, Any], uri: str) -> Optional[str]:
+    """Stable key for "this artifact's source bytes", or ``None`` when there is none.
 
-    A catalog URI names immutable content (a DeepLynx item, a staged upload), so the
-    URI is enough to find the dataset a previous conversion produced. The STL/Exodus
-    choice is part of the key because the same bytes convert differently under each.
+    Only a ``deeplynx://`` source names immutable content (uploads are staged there
+    too), so only it is indexed. The key holds what the resolver actually downloads:
+    the URI plus ``metadata.deeplynx_file_id``, which the resolver prefers over the
+    item in the URI, so two artifacts naming one item with different files never share
+    an entry. The STL/Exodus choice is part of the key because the same bytes convert
+    differently under each. A ``file://`` or ``http(s)://`` source can change under the
+    same URI, so it gets no key and is downloaded and content-hashed every time.
     """
+    if not uri.startswith("deeplynx://"):
+        return None
+    file_id = str((artifact.get("metadata") or {}).get("deeplynx_file_id") or "")
     kind = _mesh_kind(str(artifact.get("name") or ""), uri, _normalize_mime(artifact.get("mime_type")))
-    return hashlib.sha256(f"{kind}|{uri}".encode("utf-8", "replace")).hexdigest()[:32]
+    return hashlib.sha256(f"{kind}|{uri}|{file_id}".encode("utf-8", "replace")).hexdigest()[:32]
 
 
 def _index_path(cache_root: Path, key: str) -> Path:
@@ -369,8 +376,10 @@ async def mesh_props(artifact: dict[str, Any]) -> Optional[dict[str, Any]]:
     """MeshViewer props for one mesh artifact, converting it on first use.
 
     ``None`` when the artifact has no URI or the source can't be resolved or converted
-    (logged). A source converted before -- live or on an earlier view -- is a disk read
-    through the source index, with no download and no hashing. Concurrent calls for one
+    (logged). A ``deeplynx://`` source converted before -- live or on an earlier view --
+    is a disk read through the source index, with no download and no hashing; any other
+    source is downloaded and content-hashed, which still finds an earlier conversion of
+    the same bytes. Concurrent calls for one
     source share a single conversion, which runs as its own task: a caller that gives
     up (a browser that navigated away) doesn't cancel it, so the next view is a hit.
     """
@@ -381,20 +390,24 @@ async def mesh_props(artifact: dict[str, Any]) -> Optional[dict[str, Any]]:
     cache_root = mesh_cache_root()
     key = _source_key(artifact, uri)
 
-    dataset_id = _read_index(cache_root, key)
-    if dataset_id is not None:
-        props = _props_from_cache(cache_root, dataset_id, title)
-        if props is not None:
-            return props
+    if key is not None:
+        dataset_id = _read_index(cache_root, key)
+        if dataset_id is not None:
+            props = _props_from_cache(cache_root, dataset_id, title)
+            if props is not None:
+                return props
 
-    task = _inflight.get(key)
+    # Without a key, concurrent requests for one URI still share a conversion.
+    flight = key or f"uri:{uri}"
+    task = _inflight.get(flight)
     if task is None:
         task = asyncio.create_task(_enrich_one(artifact, uri, cache_root))
-        _inflight[key] = task
-        task.add_done_callback(lambda _t: _inflight.pop(key, None))
+        _inflight[flight] = task
+        task.add_done_callback(lambda _t: _inflight.pop(flight, None))
     props = await asyncio.shield(task)
     if props is not None:
-        _write_index(cache_root, key, str(props["datasetId"]))
+        if key is not None:
+            _write_index(cache_root, key, str(props["datasetId"]))
         props = {**props, "title": title}
     return props
 

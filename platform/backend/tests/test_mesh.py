@@ -494,7 +494,12 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
 # mesh_props: on-demand conversion, source index, shared in-flight builds
 # --------------------------------------------------------------------------- #
 
-_MESH = {"artifact_id": "m1", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x/mesh.exo"}
+_MESH = {
+    "artifact_id": "m1",
+    "name": "mesh.exo",
+    "mime_type": "application/x-exodus",
+    "uri": "deeplynx://organizations/1/projects/2/items/42",
+}
 
 
 def _fake_cached_convert(monkeypatch, tmp_path, calls, *, gate=None):
@@ -528,7 +533,7 @@ async def test_mesh_props_converts_once_then_reads_the_source_index(monkeypatch,
     monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _no_download)
     again = await service.mesh_props({**_MESH, "name": "renamed.exo"})
 
-    assert calls == ["file:///x/mesh.exo"]
+    assert calls == [_MESH["uri"]]
     assert again is not None and again["datasetId"] == "dsAAA"
     assert again["title"] == "renamed.exo"
 
@@ -544,7 +549,7 @@ async def test_concurrent_mesh_props_share_one_conversion(monkeypatch, tmp_path)
     gate.set()
     results = await asyncio.gather(*pending)
 
-    assert calls == ["file:///x/mesh.exo"]
+    assert calls == [_MESH["uri"]]
     assert all(r is not None and r["datasetId"] == "dsAAA" for r in results)
 
 
@@ -561,6 +566,38 @@ async def test_a_cancelled_caller_does_not_cancel_the_conversion(monkeypatch, tm
     await asyncio.sleep(0.01)
 
     assert (tmp_path / "cache" / "dsAAA" / "manifest.json").is_file()
+
+
+async def test_a_file_source_is_never_indexed(monkeypatch, tmp_path):
+    """A file:// path can be rewritten under the same URI, so each view re-reads it."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    local = {**_MESH, "uri": "file:///out/result.e"}
+
+    await service.mesh_props(dict(local))
+    await service.mesh_props(dict(local))
+
+    assert calls == ["file:///out/result.e", "file:///out/result.e"]
+    assert not (tmp_path / "cache" / ".index").exists()
+
+
+async def test_one_item_with_another_file_gets_its_own_index_entry(monkeypatch, tmp_path):
+    """The resolver downloads metadata.deeplynx_file_id when it is set, so an artifact
+    naming the same item with another file must not reuse, or overwrite, the entry
+    another conversation's artifact wrote."""
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    first = {**_MESH, "metadata": {"deeplynx_file_id": "f1"}}
+    other = {**_MESH, "artifact_id": "m9", "metadata": {"deeplynx_file_id": "f2"}}
+
+    await service.mesh_props(dict(first))
+    await service.mesh_props(dict(other))
+    await service.mesh_props(dict(first))
+
+    assert len(calls) == 2  # f1 converted, f2 converted, f1 again from the index
+    assert len(list((tmp_path / "cache" / ".index").glob("*.json"))) == 2
 
 
 async def test_mesh_props_is_none_without_a_uri():
