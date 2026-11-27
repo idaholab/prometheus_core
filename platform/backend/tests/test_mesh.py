@@ -679,3 +679,18 @@ async def test_a_corrupt_cached_dataset_is_converted_again(monkeypatch, tmp_path
 
     assert len(calls) == 2
     assert props is not None and props["datasetId"] == "dsAAA"
+
+
+async def test_an_index_entry_whose_dataset_was_evicted_is_converted_again(monkeypatch, tmp_path):
+    import shutil
+
+    _stub_resolver(monkeypatch, tmp_path)
+    calls: list[str] = []
+    _fake_cached_convert(monkeypatch, tmp_path, calls)
+    await service.mesh_props(dict(_MESH))
+    shutil.rmtree(tmp_path / "cache" / "dsAAA")  # the index still names it
+
+    props = await service.mesh_props(dict(_MESH))
+
+    assert len(calls) == 2
+    assert props is not None and props["datasetId"] == "dsAAA"

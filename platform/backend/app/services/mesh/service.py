@@ -326,14 +326,16 @@ def _index_path(cache_root: Path, key: str) -> Path:
 
 
 def _read_index(cache_root: Path, key: str) -> Optional[str]:
-    """The dataset id recorded for *key*, if that dataset is still in the cache."""
+    """The dataset id recorded for *key*, if any.
+
+    The dataset may since have been evicted; :func:`_props_from_cache` then fails to
+    read it and the caller converts again.
+    """
     try:
         dataset_id = json.loads(_index_path(cache_root, key).read_text()).get("dataset_id")
     except (OSError, ValueError, AttributeError):
         return None
-    if not isinstance(dataset_id, str) or not (cache_root / dataset_id / "manifest.json").is_file():
-        return None
-    return dataset_id
+    return dataset_id if isinstance(dataset_id, str) else None
 
 
 def _write_index(cache_root: Path, key: str, dataset_id: str) -> None:
