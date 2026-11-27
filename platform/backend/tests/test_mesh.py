@@ -919,3 +919,40 @@ async def test_live_enrichment_leaves_a_failed_mesh_unconverted(monkeypatch, tmp
     await service.enrich_mesh_artifact_dicts(artifacts)  # must not raise
 
     assert artifacts[0].get("json_body") is None
+
+
+async def test_mesh_props_reads_back_what_the_real_converter_cached(monkeypatch, tmp_path):
+    """Every other mesh_props test fakes the converter's cache layout. Here the real
+    _convert_sync writes it (in-process instead of the pool), so a mismatch between what
+    it writes and what an index hit reads would make the second view fail."""
+    vtk = pytest.importorskip("vtk")
+
+    sphere = vtk.vtkSphereSource()
+    sphere.Update()
+    stl_path = tmp_path / "sphere.stl"
+    writer = vtk.vtkSTLWriter()
+    writer.SetFileName(str(stl_path))
+    writer.SetInputConnection(sphere.GetOutputPort())
+    writer.Write()
+    monkeypatch.setattr(service.settings, "mesh_cache_dir", str(tmp_path / "cache"), raising=False)
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return stl_path
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    stl = {**_MESH, "name": "sphere.stl", "mime_type": "model/stl"}
+
+    converted = await service.mesh_props(dict(stl))
+
+    async def _no_download(*_a, **_k):
+        raise AssertionError("the second view must be an index hit")
+
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _no_download)
+    again = await service.mesh_props(dict(stl))
+
+    assert converted is not None and again is not None
+    assert again == converted
