@@ -490,17 +490,21 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
     assert dataset_id2 == dataset_id
 
 
-def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path):
+@pytest.mark.parametrize(
+    "content",
+    [b"not an exodus file\n", bytes(range(256)) * 8, b""],
+    ids=["text", "random-bytes", "empty"],
+)
+def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path, content):
     """VTK reads an unparseable file as an empty mesh rather than raising; that must
     not be cached as the file's mesh, or every later view serves it."""
     pytest.importorskip("vtk")
-    from app.services.mesh.cache import is_cached
     from app.services.mesh.converter import convert_exodus
     from app.services.mesh.exceptions import InvalidExodusFileError
     from app.services.mesh.models import ConvertRequest
 
     bad = tmp_path / "bad.e"
-    bad.write_text("not an exodus file\n")
+    bad.write_bytes(content)
     cache_root = tmp_path / "cache"
     cache_root.mkdir()
     request = ConvertRequest(input_path=bad, output_dir=cache_root, timestep_mode="all")
@@ -508,8 +512,31 @@ def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path):
     with pytest.raises(InvalidExodusFileError, match="No geometry"):
         convert_exodus(request, cache_root=cache_root)
 
-    assert not any(is_cached(cache_root, d.name) for d in cache_root.iterdir())
     assert not any(cache_root.iterdir())
+
+
+def test_the_guard_rejects_a_readable_file_with_no_nodes(tmp_path, monkeypatch):
+    """The boundary itself: a file VTK opens but that holds no nodes. Such a file can't
+    be generated (vtkExodusIIWriter crashes), so the reader's metadata is patched."""
+    pytest.importorskip("vtk")
+    import dataclasses
+    import shutil
+    from pathlib import Path
+
+    from app.services.mesh import vtk_pipeline
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    src = tmp_path / "square.e"
+    shutil.copy(Path(__file__).parent / "fixtures" / "mesh" / "square.e", src)
+    real = vtk_pipeline.extract_metadata
+    monkeypatch.setattr(vtk_pipeline, "extract_metadata", lambda reader: dataclasses.replace(real(reader), num_nodes=0))
+    out = tmp_path / "out"
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        vtk_pipeline.run_conversion(ConvertRequest(input_path=src, output_dir=out, timestep_mode="all"))
+
+    assert not out.exists()
 
 
 def test_a_readable_exodus_converts_past_the_empty_mesh_guard(tmp_path):
