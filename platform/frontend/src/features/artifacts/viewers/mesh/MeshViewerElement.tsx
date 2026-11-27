@@ -38,8 +38,12 @@ import MeshViewer, { MeshViewerHandles } from "./MeshViewer";
 import MeshViewerControls, { VariableOption } from "./MeshViewerControls";
 import type { ColorPreset, PickResult } from "./MeshViewerEngine";
 import type { ViewerProps } from "@/features/artifacts/elements";
+import { LazyMeshProps } from "./LazyMeshProps";
 
 type MeshProps = {
+  /** Set when the props aren't inline yet: fetch them from here (see LazyMeshProps). */
+  meshUrl?: string;
+  downloadUrl?: string;
   datasetId?: string;
   baseUrl?: string;
   metadata?: {
@@ -84,7 +88,29 @@ function useTheme() {
   return isDark;
 }
 
-export function MeshViewerElement({ element }: ViewerProps) {
+export function MeshViewerElement({ element, onSend }: ViewerProps) {
+  const props = (element as { props?: MeshProps }).props ?? {};
+  if (props.meshUrl && !props.manifest) {
+    return (
+      <LazyMeshProps
+        meshUrl={props.meshUrl}
+        downloadUrl={props.downloadUrl}
+        title={props.title ?? "Mesh Viewer"}
+        height={props.height ?? "450px"}
+      >
+        {(fetched) => (
+          <LoadedMeshViewer
+            element={{ ...element, props: { ...props, ...fetched, meshUrl: undefined } }}
+            onSend={onSend}
+          />
+        )}
+      </LazyMeshProps>
+    );
+  }
+  return <LoadedMeshViewer element={element} onSend={onSend} />;
+}
+
+function LoadedMeshViewer({ element }: ViewerProps) {
   const props = (element as { props?: MeshProps }).props ?? {};
   const datasetId = props.datasetId ?? "mesh";
   const baseUrl = props.baseUrl ?? "";

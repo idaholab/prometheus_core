@@ -109,7 +109,18 @@ function buildElement(artifact: ArtifactMeta): AnyElement {
           props: { ...manifest, title: artifact.name || "Mesh Viewer" },
         };
       }
-      // No inline VTP manifest (see module note) → offer the raw file for download.
+      // No inline manifest, but the backend converts on request: mount the viewer
+      // and let it fetch `meshUrl` when it scrolls into view.
+      if (artifact.mesh_url) {
+        return {
+          ...base,
+          type: "custom",
+          name: "MeshViewer",
+          url,
+          props: { meshUrl: artifact.mesh_url, downloadUrl: url, title: artifact.name || "Mesh Viewer" },
+        };
+      }
+      // Neither → offer the raw file for download.
       return { ...base, type: "file", url, props: { description: artifact.description } };
     }
 

@@ -180,6 +180,11 @@ export const api = {
     });
   },
 
+  /** GET an artifact's `mesh_url`: the MeshViewer props, converted on first request. */
+  meshProps(meshUrl: string): Promise<Record<string, unknown>> {
+    return request<Record<string, unknown>>(meshUrl.replace(/^\/api/, ""));
+  },
+
   /** URL for an artifact's bytes; used directly as an <img>/<embed> src or fetch
    * target. The backend's `content_url` when it sent one (conversation-scoped, so it
    * keeps working when another tab rebinds the shared session), else the older

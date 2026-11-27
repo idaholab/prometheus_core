@@ -53,3 +53,24 @@ test("an artifact's content_url wins over the session-scoped route", () => {
 
   assert.equal(element.props?.url, "/api/conversations/c1/artifacts/art-1/content");
 });
+
+test("a mesh with a mesh_url but no inline manifest mounts the viewer to fetch it", () => {
+  const element = artifactToElement(
+    jsonArtifact({
+      render_hint: "mesh",
+      name: "out.e",
+      content_url: "/api/conversations/c1/artifacts/m1/content",
+      mesh_url: "/api/conversations/c1/artifacts/m1/mesh",
+    }),
+  );
+
+  assert.equal(element.name, "MeshViewer");
+  assert.equal(element.props?.meshUrl, "/api/conversations/c1/artifacts/m1/mesh");
+  assert.equal(element.props?.downloadUrl, "/api/conversations/c1/artifacts/m1/content");
+});
+
+test("a mesh with neither manifest nor mesh_url stays a download", () => {
+  const element = artifactToElement(jsonArtifact({ render_hint: "mesh", name: "out.e" }));
+
+  assert.equal(element.type, "file");
+});

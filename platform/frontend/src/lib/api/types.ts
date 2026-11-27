@@ -92,6 +92,9 @@ export interface ArtifactMeta {
    * backend knows no conversation, and absent on fixtures and samples; both fall back
    * to the session-scoped route. */
   content_url?: string;
+  /** For a mesh artifact: where to fetch its MeshViewer props, converted on first
+   * request. Empty or absent otherwise. */
+  mesh_url?: string;
   citation?: Citation | null;
   producer_agent_id?: string | null;
   created_at?: string | null;
