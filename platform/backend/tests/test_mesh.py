@@ -488,3 +488,182 @@ def test_convert_sync_stl_branch_uses_cache(tmp_path):
     # Second call is a cache hit (manifest already present) — same id, still valid.
     dataset_id2, _, _ = service._convert_sync(stl_path, cache_root, "sphere.stl", "", "model/stl")
     assert dataset_id2 == dataset_id
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"not an exodus file\n", bytes(range(256)) * 8, b""],
+    ids=["text", "random-bytes", "empty"],
+)
+def test_unreadable_exodus_is_rejected_and_not_cached(tmp_path, content):
+    """VTK reads an unparseable file as an empty mesh rather than raising; that must
+    not be cached as the file's mesh, or every later view serves it."""
+    pytest.importorskip("vtk")
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    bad = tmp_path / "bad.e"
+    bad.write_bytes(content)
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    request = ConvertRequest(input_path=bad, output_dir=cache_root, timestep_mode="all")
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        convert_exodus(request, cache_root=cache_root)
+
+    assert not any(cache_root.iterdir())
+
+
+def test_the_guard_rejects_a_readable_file_with_no_nodes(tmp_path, monkeypatch):
+    """The boundary itself: a file VTK opens but that holds no nodes. Such a file can't
+    be generated (vtkExodusIIWriter crashes), so the reader's metadata is patched."""
+    pytest.importorskip("vtk")
+    import dataclasses
+    import shutil
+    from pathlib import Path
+
+    from app.services.mesh import vtk_pipeline
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    src = tmp_path / "square.e"
+    shutil.copy(Path(__file__).parent / "fixtures" / "mesh" / "square.e", src)
+    real = vtk_pipeline.extract_metadata
+    monkeypatch.setattr(vtk_pipeline, "extract_metadata", lambda reader: dataclasses.replace(real(reader), num_nodes=0))
+    out = tmp_path / "out"
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        vtk_pipeline.run_conversion(ConvertRequest(input_path=src, output_dir=out, timestep_mode="all"))
+
+    assert not out.exists()
+
+
+def test_a_readable_exodus_converts_past_the_empty_mesh_guard(tmp_path):
+    pytest.importorskip("vtk")
+    import shutil
+    from pathlib import Path
+
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.models import ConvertRequest
+
+    src = tmp_path / "square.e"
+    shutil.copy(Path(__file__).parent / "fixtures" / "mesh" / "square.e", src)
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+
+    result = convert_exodus(
+        ConvertRequest(input_path=src, output_dir=cache_root, timestep_mode="all"), cache_root=cache_root
+    )
+
+    assert result.metadata["num_nodes"] == 9
+    assert result.metadata["num_elements"] == 4
+    assert (result.output_dir / "manifest.json").is_file()
+    assert (result.output_dir / "surface_t0000.vtp").is_file()
+
+    # A second conversion of the same file is a cache hit: a cached entry with nodes is served.
+    again = convert_exodus(
+        ConvertRequest(input_path=src, output_dir=cache_root, timestep_mode="all"), cache_root=cache_root
+    )
+    assert again.dataset_id == result.dataset_id
+    assert again.metadata["num_nodes"] == 9
+
+
+def test_inspect_exodus_rejects_an_unreadable_file_like_conversion(tmp_path):
+    """Both entry points share one geometry check: inspecting a file VTK can't read
+    must not report it as a valid file with zero nodes."""
+    pytest.importorskip("vtk")
+    from pathlib import Path
+
+    from app.services.mesh.converter import inspect_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        inspect_exodus(bad)
+
+    assert inspect_exodus(Path(__file__).parent / "fixtures" / "mesh" / "square.e")["num_nodes"] == 9
+
+
+def test_a_cached_empty_mesh_is_reconverted_and_rejected(tmp_path):
+    """An empty mesh cached before the guard existed is a miss, not a hit."""
+    pytest.importorskip("vtk")
+    from dataclasses import asdict
+
+    from app.services.mesh.cache import compute_dataset_id, get_cache_path
+    from app.services.mesh.converter import convert_exodus
+    from app.services.mesh.exceptions import InvalidExodusFileError
+    from app.services.mesh.models import ConvertRequest
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+    cache_root = tmp_path / "cache"
+    request = ConvertRequest(input_path=bad, output_dir=cache_root, timestep_mode="all")
+    poisoned = get_cache_path(cache_root, compute_dataset_id(bad, asdict(request)))
+    poisoned.mkdir(parents=True)
+    (poisoned / "manifest.json").write_text("{}")
+    (poisoned / "meta.json").write_text(json.dumps({"num_nodes": 0}))
+
+    with pytest.raises(InvalidExodusFileError, match="No geometry"):
+        convert_exodus(request, cache_root=cache_root)
+
+
+async def test_a_converter_error_logs_one_warning_without_a_traceback(monkeypatch, tmp_path, caplog):
+    import logging
+
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    _stub_resolver(monkeypatch, tmp_path)
+
+    async def _invalid(*a, **kw):
+        raise InvalidExodusFileError("No geometry read from mesh.exo")
+
+    monkeypatch.setattr(service, "_convert_offloop", _invalid)
+    art = {"artifact_id": "m4", "name": "mesh.exo", "mime_type": "application/x-exodus", "uri": "file:///x.exo"}
+    with caplog.at_level(logging.WARNING, logger=service.logger.name):
+        await service.enrich_mesh_artifacts(types.SimpleNamespace(new_artifacts=[art], artifacts=[art]))
+
+    records = [r for r in caplog.records if r.name == service.logger.name]
+    assert [(r.levelno, r.exc_info) for r in records] == [(logging.WARNING, None)]
+    assert art.get("json_body") is None
+
+
+async def test_an_unreadable_exodus_turn_degrades_to_a_download_with_one_warning(monkeypatch, tmp_path, caplog):
+    """The user-facing outcome of the guard: the turn doesn't fail, the artifact keeps no
+    viewer props (so it renders as a download card), nothing is cached, and the log has
+    one warning line rather than a traceback. Runs the real _convert_sync in-process."""
+    pytest.importorskip("vtk")
+    import logging
+
+    from app.services.mesh.exceptions import InvalidExodusFileError
+
+    bad = tmp_path / "bad.e"
+    bad.write_text("not an exodus file\n")
+
+    async def _resolve(uri, *, cache_dir, artifact=None, artifact_id=None):
+        return bad
+
+    async def _convert_in_process(local_path, cache_root, name, uri, mime, *, ident):
+        return service._convert_sync(local_path, cache_root, name, uri, mime)
+
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    monkeypatch.setattr(uri_resolver, "resolve_to_local_path", _resolve)
+    monkeypatch.setattr(service, "_convert_offloop", _convert_in_process)
+    monkeypatch.setattr(service, "mesh_cache_root", lambda: cache_root)
+
+    art = {"artifact_id": "bad", "name": "bad.e", "mime_type": "application/x-exodus", "uri": "file:///bad.e"}
+    response = types.SimpleNamespace(new_artifacts=[art], artifacts=[art])
+    with caplog.at_level(logging.WARNING, logger=service.logger.name):
+        await service.enrich_mesh_artifacts(response)
+
+    assert art.get("json_body") is None
+    assert not any(cache_root.iterdir())
+    records = [r for r in caplog.records if r.name == service.logger.name]
+    assert [r.levelno for r in records] == [logging.WARNING]
+    assert records[0].exc_info is None
+    assert "not convertible" in records[0].getMessage()
+    # The error crosses the process-pool boundary in production, so it must pickle.
+    assert isinstance(pickle.loads(pickle.dumps(InvalidExodusFileError("x"))), InvalidExodusFileError)
