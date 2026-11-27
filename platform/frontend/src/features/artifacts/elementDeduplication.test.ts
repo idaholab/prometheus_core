@@ -153,3 +153,12 @@ test("collapses a custom element delivered twice under one artifact id", () => {
 
   assert.deepEqual(dedupeElements([first, again]), [first]);
 });
+
+test("keeps two mesh artifacts that share a dataset id", () => {
+  const elements: TestElement[] = [
+    { id: "m1", type: "custom", name: "MeshViewer", props: { datasetId: "d", artifact_id: "m1" } },
+    { id: "m2", type: "custom", name: "MeshViewer", props: { datasetId: "d", artifact_id: "m2" } },
+  ];
+
+  assert.deepEqual(dedupeElements(elements), elements);
+});
