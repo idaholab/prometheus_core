@@ -100,6 +100,9 @@ def _lookup(conversation_id: str, artifact_id: str, user_id: str, bound: bool) -
     client = _client()
     if not client.available:
         return None
+    # ``bound`` skips the ownership check. That is sound only because a session's
+    # conversation id is server-minted or set by an ownership-checked resume; see
+    # ``SessionStore.reset``, which every binding goes through.
     if not bound and not client.owns(user_id, conversation_id):
         return None
     # A soft-deleted conversation answers 404 everywhere else (``_owned_meta``), and

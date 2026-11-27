@@ -316,6 +316,12 @@ class SessionStore:
     ) -> bool:
         """Rebind the session to a conversation, clearing per-conversation state.
 
+        Callers must either have minted ``conversation_id`` themselves or checked that
+        the session's user owns it: the conversation content route lets a session read
+        the conversation it is bound to without an ownership check (a first turn's
+        ownership record may not be visible yet), so binding an unchecked id here would
+        expose another user's artifacts. The same holds for :meth:`ensure_conversation`.
+
         The "New chat" / history-resume path: a different conversation starts with no
         artifact catalog, no awaited background tasks and no follow-up depth. One
         transaction so a concurrent reader can't see the new conversation id alongside
