@@ -36,6 +36,7 @@ viewers fetch bytes from here instead of the server building elements (task 07).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import mimetypes
 import re
@@ -49,12 +50,9 @@ from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Reques
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
-import asyncio
-
 from app import uri_resolver
 from app.api_responses import AUTH_RESPONSES, error
-from app.config import settings
-from app.conversation_state import ConversationStateClient
+from app.conversation_state import ConversationStateClient, shared_client
 from app.openapi import SESSION_COOKIE, TAG_ARTIFACTS
 from app.security import TokenClaims, current_claims
 from app.services.artifacts import artifact_download_payload, artifact_identity, classify_render_hint
@@ -87,17 +85,9 @@ def _find_artifact(session: SessionState, artifact_id: str) -> Optional[dict[str
     return None
 
 
-# One client reused across requests, as in routers/conversations.py.
-_client_cache: dict = {}
-
-
 def _client() -> ConversationStateClient:
-    cls = ConversationStateClient
-    inst = _client_cache.get(cls)
-    if inst is None:
-        inst = cls(settings.redis_url)
-        _client_cache[cls] = inst
-    return inst
+    # Looked up here, so tests can patch ``ConversationStateClient`` in this module.
+    return shared_client(ConversationStateClient)
 
 
 def _lookup(conversation_id: str, artifact_id: str, user_id: str, bound: bool) -> Optional[dict[str, Any]]:

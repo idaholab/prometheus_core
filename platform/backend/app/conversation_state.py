@@ -26,6 +26,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from app.config import settings
+
 try:
     import redis
 except ImportError:  # pragma: no cover - only when redis is absent
@@ -335,3 +337,20 @@ class ConversationStateClient:
         if conversation.get("missing_info"):
             return "needs_info"
         return "unknown"
+
+
+# One client per class, reused across requests and routers (AU-7): a client caches its
+# Redis connection, so sharing one avoids a fresh connect + ping per call. Keyed on the
+# class object a caller passes (not id()), so a test that monkeypatches
+# ``ConversationStateClient`` in one router module gets its own instance, and the class
+# is kept alive as the key.
+_shared_clients: dict[type, ConversationStateClient] = {}
+
+
+def shared_client(cls: type[ConversationStateClient] = ConversationStateClient) -> ConversationStateClient:
+    """The process-wide ``cls`` instance for ``settings.redis_url``."""
+    inst = _shared_clients.get(cls)
+    if inst is None:
+        inst = cls(settings.redis_url)
+        _shared_clients[cls] = inst
+    return inst
