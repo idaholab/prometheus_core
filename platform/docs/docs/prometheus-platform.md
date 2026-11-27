@@ -128,6 +128,8 @@ Uploads are sent to the backend; the frontend renders each type with the matchin
 - `.ifc` -- rendered with IFCViewer
 - `.pdf` -- displayed inline
 
+The first time you view a mesh, the backend prepares it for the viewer, which can take a minute for a large file; the viewer says "Preparing mesh…" meanwhile, and later views open at once. If preparing fails, the viewer offers **Retry** and **Download original file**.
+
 ## Frontend components
 
 ### Viewers and custom elements

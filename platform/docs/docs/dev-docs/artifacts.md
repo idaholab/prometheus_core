@@ -175,7 +175,7 @@ the classification below. Any value other than `panel` means inline. See
 The frontend inspects artifact metadata and routes to the appropriate viewer:
 
 1. **IFC files**: Rendered with `IFCViewer.jsx` -- a ThatOpen/OBC-based 3D viewer with orbit controls, section planes, and property inspection
-2. **Mesh files (Exodus, STL)**: Rendered with `MeshViewer.jsx` -- a VTK.js-based mesh viewer. Exodus gets timestep playback, variable selection, and color presets; STL renders as static geometry (the viewer hides the timestep/variable controls when there are none)
+2. **Mesh files (Exodus, STL)**: Rendered with `MeshViewer.jsx` -- a VTK.js-based mesh viewer. Exodus gets timestep playback, variable selection, and color presets; STL renders as static geometry (the viewer hides the timestep/variable controls when there are none). The backend converts a mesh to VTP on request: the artifact carries a `mesh_url`, and the viewer fetches it when it comes into view, so the first view of a mesh waits for the conversion and later views read the cached result
 3. **PDF files**: Rendered inline using Chainlit's built-in `cl.Pdf` element
 4. **Mermaid diagrams**: Rendered with `MermaidViewer.jsx` using the Mermaid.js library
 5. **JSON/text data**: Displayed as formatted text in the chat message
