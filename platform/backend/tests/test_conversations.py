@@ -835,3 +835,44 @@ async def test_detail_and_resume_do_not_convert_meshes(monkeypatch, session_stor
         assert artifact["json_body"] is None
         assert artifact["mesh_url"] == "/api/conversations/c1/artifacts/m1/mesh"
     assert conversions == []
+
+
+async def test_a_resumed_meshs_urls_resolve_against_the_same_catalog(monkeypatch, session_store):
+    """The round trip replace_seeded_artifacts used to protect: the ids resume hands out
+    must be the ones the content and mesh routes find. One real ConversationStateClient
+    over one fakeredis catalog backs both routers."""
+    import json as _json
+
+    import fakeredis
+
+    from app.conversation_state import ConversationStateClient
+    from app.routers import artifacts as artifacts_router
+
+    server = fakeredis.FakeServer()
+    redis = fakeredis.FakeRedis(server=server, decode_responses=True)
+    redis.sadd("user:convs:alice", "c1")
+    redis.set("conversation:c1", _json.dumps({"conversation_history": []}))
+    mesh = {"artifact_id": "m1", "name": "block.e", "mime_type": "application/x-exodus", "uri": "file:///tmp/block.e"}
+    redis.hset("artifacts:conv:c1:by_id", "m1", _json.dumps(mesh))
+
+    real = ConversationStateClient("redis://fake")
+    monkeypatch.setattr(type(real), "client", property(lambda self: redis))
+    monkeypatch.setattr(conversations_router, "ConversationStateClient", lambda _url: real)
+    monkeypatch.setattr(artifacts_router, "ConversationStateClient", lambda _url: real)
+
+    looked_up: list[str] = []
+
+    async def _props(artifact):
+        looked_up.append(artifact["artifact_id"])
+        return {"datasetId": "0123456789abcdef", "baseUrl": "/b", "manifest": {"files": []}}
+
+    # The router imports mesh_props by name, so patch its reference.
+    monkeypatch.setattr(artifacts_router, "mesh_props", _props)
+    client = _authed_client(monkeypatch)
+
+    (artifact,) = client.post("/api/conversations/c1/resume").json()["artifacts"]
+
+    assert client.get(artifact["mesh_url"]).status_code == 200
+    assert looked_up == ["m1"]  # the catalog entry the resumed mesh_url named
+    content = client.get(artifact["content_url"])
+    assert content.status_code != 404  # found; a file:// source that doesn't exist is a 502
